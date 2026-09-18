@@ -1403,8 +1403,15 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     ///         only delay the child's start, which is not the window this test is about.
     ///     </para>
     /// </summary>
-    private sealed class BlockingMarkerStore(TimeSpan delay) : ISandboxMarkerStore
+    private sealed class BlockingMarkerStore : ISandboxMarkerStore
     {
+        private readonly TimeSpan _delay;
+
+        public BlockingMarkerStore(TimeSpan delay)
+        {
+            _delay = delay;
+        }
+
         public string? Write(SandboxProcessMarker marker)
         {
             if (marker.ProcessGroupId is not null)
@@ -1434,7 +1441,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             // A never-set gate waited on with a timeout: the same block a sleep would give, through an API the repo's
             // analyzer wall allows.
             using var gate = new ManualResetEventSlim(initialState: false);
-            _ = gate.Wait(delay);
+            _ = gate.Wait(_delay);
         }
     }
 

@@ -194,9 +194,14 @@ public sealed class PlaybookRetrievalSelectorTests
 
     // Records how many times it is consulted and returns a fixed (out-of-order) subset so the gate and re-order can
     // both be asserted; mirrors the resolver-test fakes but exercises the selector directly.
-    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    private sealed class RecordingRanker : IPlaybookRetrievalRanker
     {
-        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection;
+
+        public RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null)
+        {
+            _selection = selection;
+        }
 
         public int CallCount { get; private set; }
 

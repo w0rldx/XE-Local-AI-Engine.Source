@@ -151,17 +151,29 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
         return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return now;
+            return _now;
         }
     }
 
-    private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder
+    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
     {
-        private byte[]? _key = key;
+        private byte[]? _key;
+
+        public FixedNodeSqliteKeyHolder(byte[] key)
+        {
+            _key = key;
+        }
 
         public ReadOnlyMemory<byte> Key
         {

@@ -143,8 +143,15 @@ internal sealed class FakeAudioTranscoder : IAudioTranscoder
 }
 
 /// <summary>Resolves the node's effective model without touching settings, the catalogue or the hardware profile.</summary>
-internal sealed class FakeTranscriptionRuntimeService(string effectiveModelId) : ITranscriptionRuntimeService
+internal sealed class FakeTranscriptionRuntimeService : ITranscriptionRuntimeService
 {
+    private readonly string _effectiveModelId;
+
+    public FakeTranscriptionRuntimeService(string effectiveModelId)
+    {
+        _effectiveModelId = effectiveModelId;
+    }
+
     public Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct) =>
         throw new NotSupportedException();
 
@@ -161,7 +168,7 @@ internal sealed class FakeTranscriptionRuntimeService(string effectiveModelId) :
         throw new NotSupportedException();
 
     public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) =>
-        Task.FromResult(effectiveModelId);
+        Task.FromResult(_effectiveModelId);
 }
 
 /// <summary>
@@ -244,60 +251,69 @@ internal sealed class TranscriptionStoreReadGate
 ///     because the session state these tests assert is what the store actually wrote. Only the MOMENT the read returns
 ///     to its caller is under the test's control.
 /// </remarks>
-internal sealed class GatedTranscriptionSessionStore(ITranscriptionSessionStore inner, TranscriptionStoreReadGate gate) : ITranscriptionSessionStore
+internal sealed class GatedTranscriptionSessionStore : ITranscriptionSessionStore
 {
+    private readonly ITranscriptionSessionStore _inner;
+    private readonly TranscriptionStoreReadGate _gate;
+
+    public GatedTranscriptionSessionStore(ITranscriptionSessionStore inner, TranscriptionStoreReadGate gate)
+    {
+        _inner = inner;
+        _gate = gate;
+    }
+
     public Task CreateAsync(TranscriptionSessionCreate create, CancellationToken cancellationToken) =>
-        inner.CreateAsync(create, cancellationToken);
+        _inner.CreateAsync(create, cancellationToken);
 
     public async Task<TranscriptionSessionDetailView?> GetWithSegmentsAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var view = await inner.GetWithSegmentsAsync(sessionId, cancellationToken);
-        await gate.HoldIfArmedAsync();
+        var view = await _inner.GetWithSegmentsAsync(sessionId, cancellationToken);
+        await _gate.HoldIfArmedAsync();
         return view;
     }
 
     public Task<IReadOnlyList<TranscriptionSessionSummaryView>> ListAsync(int limit, int offset, CancellationToken cancellationToken) =>
-        inner.ListAsync(limit, offset, cancellationToken);
+        _inner.ListAsync(limit, offset, cancellationToken);
 
     public Task<int> CountAsync(CancellationToken cancellationToken) =>
-        inner.CountAsync(cancellationToken);
+        _inner.CountAsync(cancellationToken);
 
     public Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken) =>
-        inner.DeleteAsync(sessionId, cancellationToken);
+        _inner.DeleteAsync(sessionId, cancellationToken);
 
     public Task<bool> SetStatusAsync(Guid sessionId, TranscriptionSessionStatus status, long updatedAtUtc, CancellationToken cancellationToken) =>
-        inner.SetStatusAsync(sessionId, status, updatedAtUtc, cancellationToken);
+        _inner.SetStatusAsync(sessionId, status, updatedAtUtc, cancellationToken);
 
     public Task<bool> CompleteAsync(Guid sessionId, string? detectedLanguage, long durationMs, long updatedAtUtc, CancellationToken cancellationToken) =>
-        inner.CompleteAsync(sessionId, detectedLanguage, durationMs, updatedAtUtc, cancellationToken);
+        _inner.CompleteAsync(sessionId, detectedLanguage, durationMs, updatedAtUtc, cancellationToken);
 
     public Task<bool> FailAsync(Guid sessionId, string errorCode, string errorMessage, long updatedAtUtc, CancellationToken cancellationToken) =>
-        inner.FailAsync(sessionId, errorCode, errorMessage, updatedAtUtc, cancellationToken);
+        _inner.FailAsync(sessionId, errorCode, errorMessage, updatedAtUtc, cancellationToken);
 
     public Task<bool> AppendSegmentsAsync(Guid sessionId, IReadOnlyList<TranscriptSegmentWrite> segments, long updatedAtUtc, CancellationToken cancellationToken) =>
-        inner.AppendSegmentsAsync(sessionId, segments, updatedAtUtc, cancellationToken);
+        _inner.AppendSegmentsAsync(sessionId, segments, updatedAtUtc, cancellationToken);
 
     public Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken) =>
-        inner.ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken);
+        _inner.ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken);
 
     public Task<bool> TryTransitionStatusAsync(Guid sessionId,
         TranscriptionSessionStatus expected,
         TranscriptionSessionStatus desired,
         long updatedAtUtc,
         CancellationToken cancellationToken) =>
-        inner.TryTransitionStatusAsync(sessionId, expected, desired, updatedAtUtc, cancellationToken);
+        _inner.TryTransitionStatusAsync(sessionId, expected, desired, updatedAtUtc, cancellationToken);
 
     public async Task<TranscriptionSessionSummaryView?> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         // Gated like GetWithSegmentsAsync: this is the read the live start decides on, so holding it is how a test
         // puts another writer between that decision and the write it leads to.
-        var view = await inner.GetSummaryAsync(sessionId, cancellationToken);
-        await gate.HoldIfArmedAsync();
+        var view = await _inner.GetSummaryAsync(sessionId, cancellationToken);
+        await _gate.HoldIfArmedAsync();
         return view;
     }
 
     public Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken) =>
-        inner.GetLastSeqAsync(sessionId, cancellationToken);
+        _inner.GetLastSeqAsync(sessionId, cancellationToken);
 }
 
 /// <summary>

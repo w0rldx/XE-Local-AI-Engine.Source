@@ -451,22 +451,38 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     }
 
     // A clock frozen at a fixed instant so the retention cutoff (now - RetentionDays) is deterministic.
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return now;
+            return _now;
         }
     }
 
     // Wraps the real retention store and runs a callback immediately after candidate selection, deterministically
     // reproducing a send/touch that races in the window between candidate selection and per-candidate deletion.
-    private sealed class TouchInjectingRetentionStore(INodeRetentionStore inner, Func<Task> afterSelection) : INodeRetentionStore
+    private sealed class TouchInjectingRetentionStore : INodeRetentionStore
     {
+        private readonly INodeRetentionStore _inner;
+        private readonly Func<Task> _afterSelection;
+
+        public TouchInjectingRetentionStore(INodeRetentionStore inner, Func<Task> afterSelection)
+        {
+            _inner = inner;
+            _afterSelection = afterSelection;
+        }
+
         public async Task<IReadOnlyList<Guid>> ListExpiredConversationCandidatesAsync(long cutoffUtc, CancellationToken cancellationToken = default)
         {
-            var candidates = await inner.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken);
-            await afterSelection();
+            var candidates = await _inner.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken);
+            await _afterSelection();
             return candidates;
         }
     }

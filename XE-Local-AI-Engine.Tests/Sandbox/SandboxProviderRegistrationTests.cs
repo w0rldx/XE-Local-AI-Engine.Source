@@ -187,11 +187,18 @@ public sealed class SandboxProviderRegistrationTests
     ///     disposal of a container holding an <see cref="IAsyncDisposable" />-only singleton — which
     ///     <see cref="DockerSandboxRuntimeProvider" /> is — throws rather than disposing it.
     /// </summary>
-    private sealed class TestHost(IHost host) : IAsyncDisposable
+    private sealed class TestHost : IAsyncDisposable
     {
-        public IServiceProvider Services => host.Services;
+        private readonly IHost _host;
+
+        public TestHost(IHost host)
+        {
+            _host = host;
+        }
+
+        public IServiceProvider Services => _host.Services;
 
         public ValueTask DisposeAsync() =>
-            ((IAsyncDisposable)host).DisposeAsync();
+            ((IAsyncDisposable)_host).DisposeAsync();
     }
 }

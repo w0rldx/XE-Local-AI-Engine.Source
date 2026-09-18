@@ -685,9 +685,14 @@ public sealed class AgentSkillStoreTests : IDisposable
         return false;
     }
 
-    private sealed class MutableTimeProvider(long initialMilliseconds) : TimeProvider
+    private sealed class MutableTimeProvider : TimeProvider
     {
-        private long _milliseconds = initialMilliseconds;
+        private long _milliseconds;
+
+        public MutableTimeProvider(long initialMilliseconds)
+        {
+            _milliseconds = initialMilliseconds;
+        }
 
         public void Advance(long milliseconds)
         {
@@ -700,9 +705,14 @@ public sealed class AgentSkillStoreTests : IDisposable
         }
     }
 
-    private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder
+    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
     {
-        private byte[]? _key = key;
+        private byte[]? _key;
+
+        public FixedNodeSqliteKeyHolder(byte[] key)
+        {
+            _key = key;
+        }
 
         public ReadOnlyMemory<byte> Key
         {

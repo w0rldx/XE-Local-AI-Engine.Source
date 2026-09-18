@@ -307,15 +307,24 @@ public sealed class McpInboundProtocolTests
             throw new NotSupportedException("Protocol tests exercise only the opaque workspace list.");
     }
 
-    private sealed class FakeMcpServerApiKeyService(string validKey, McpServerApiKeyScope scope) : IMcpServerApiKeyService
+    private sealed class FakeMcpServerApiKeyService : IMcpServerApiKeyService
     {
+        private readonly string _validKey;
+        private readonly McpServerApiKeyScope _scope;
+
+        public FakeMcpServerApiKeyService(string validKey, McpServerApiKeyScope scope)
+        {
+            _validKey = validKey;
+            _scope = scope;
+        }
+
         public Task<GeneratedMcpServerApiKey> GenerateAsync(McpServerApiKeyScope scope,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Protocol tests do not rotate credentials.");
 
         public Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<McpServerApiKeyView?>(new McpServerApiKeyView("xemcp_protocol",
-                scope,
+                _scope,
                 DateTimeOffset.UnixEpoch,
                 null));
 
@@ -323,8 +332,8 @@ public sealed class McpInboundProtocolTests
             throw new NotSupportedException("Protocol tests do not revoke credentials.");
 
         public Task<McpServerApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default) =>
-            Task.FromResult(string.Equals(presented, validKey, StringComparison.Ordinal)
-                ? new McpServerApiKeyValidation(scope, "xemcp_protocol")
+            Task.FromResult(string.Equals(presented, _validKey, StringComparison.Ordinal)
+                ? new McpServerApiKeyValidation(_scope, "xemcp_protocol")
                 : null);
     }
 }

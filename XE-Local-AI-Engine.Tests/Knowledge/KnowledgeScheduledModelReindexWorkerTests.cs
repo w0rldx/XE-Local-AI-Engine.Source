@@ -66,15 +66,22 @@ public sealed class KnowledgeScheduledModelReindexWorkerTests
             NullLogger<KnowledgeScheduledModelReindexWorker>.Instance);
     }
 
-    private sealed class RecordingDispatcher(KnowledgeIngestionEnqueueResult result) : IKnowledgeIngestionDispatcher
+    private sealed class RecordingDispatcher : IKnowledgeIngestionDispatcher
     {
+        private readonly KnowledgeIngestionEnqueueResult _result;
+
+        public RecordingDispatcher(KnowledgeIngestionEnqueueResult result)
+        {
+            _result = result;
+        }
+
         public List<Guid> Attempts { get; } = [];
 
         public ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Attempts.Add(documentId);
-            return ValueTask.FromResult(result);
+            return ValueTask.FromResult(_result);
         }
     }
 }

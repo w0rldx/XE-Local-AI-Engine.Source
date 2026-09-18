@@ -113,8 +113,15 @@ public sealed class WhisperServerReadinessProbeTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromSeconds(5), cts.Token));
     }
 
-    private sealed class SequenceHandler(Func<int, HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class SequenceHandler : HttpMessageHandler
     {
+        private readonly Func<int, HttpResponseMessage> _responder;
+
+        public SequenceHandler(Func<int, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public int CallCount { get; private set; }
 
         public string? LastPath { get; private set; }
@@ -124,7 +131,7 @@ public sealed class WhisperServerReadinessProbeTests
             LastPath = request.RequestUri?.AbsolutePath;
             var index = CallCount;
             CallCount++;
-            return Task.FromResult(responder(index));
+            return Task.FromResult(_responder(index));
         }
     }
 }

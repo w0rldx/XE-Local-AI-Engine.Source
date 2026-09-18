@@ -834,11 +834,18 @@ public sealed class GgufStoreTests
     }
 
     // Reports progress on the calling thread so assertions see every report deterministically.
-    private sealed class SynchronousProgress(Action<PullProgress> onReport) : IProgress<PullProgress>
+    private sealed class SynchronousProgress : IProgress<PullProgress>
     {
+        private readonly Action<PullProgress> _onReport;
+
+        public SynchronousProgress(Action<PullProgress> onReport)
+        {
+            _onReport = onReport;
+        }
+
         public void Report(PullProgress value)
         {
-            onReport(value);
+            _onReport(value);
         }
     }
 
@@ -856,22 +863,30 @@ public sealed class GgufStoreTests
     }
 
     // Yields <paramref name="yieldBytes" /> then stalls forever, honoring cancellation so the read-idle deadline cancels it.
-    private sealed class StallingStream(byte[] bytes, int yieldBytes) : Stream
+    private sealed class StallingStream : Stream
     {
+        private readonly byte[] _bytes;
+        private readonly int _yieldBytes;
         private int _position;
+
+        public StallingStream(byte[] bytes, int yieldBytes)
+        {
+            _bytes = bytes;
+            _yieldBytes = yieldBytes;
+        }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-        public override long Length => bytes.Length;
+        public override long Length => _bytes.Length;
         public override long Position { get => _position; set => throw new NotSupportedException(); }
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            if (_position < yieldBytes)
+            if (_position < _yieldBytes)
             {
-                var toCopy = Math.Min(buffer.Length, yieldBytes - _position);
-                bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
+                var toCopy = Math.Min(buffer.Length, _yieldBytes - _position);
+                _bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
                 _position += toCopy;
                 return toCopy;
             }
@@ -905,39 +920,47 @@ public sealed class GgufStoreTests
         }
     }
 
-    private sealed class DiskFullStream(byte[] bytes, int throwAfter) : Stream
+    private sealed class DiskFullStream : Stream
     {
+        private readonly byte[] _bytes;
+        private readonly int _throwAfter;
         private int _position;
+
+        public DiskFullStream(byte[] bytes, int throwAfter)
+        {
+            _bytes = bytes;
+            _throwAfter = throwAfter;
+        }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-        public override long Length => bytes.Length;
+        public override long Length => _bytes.Length;
         public override long Position { get => _position; set => throw new NotSupportedException(); }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            if (_position >= throwAfter)
+            if (_position >= _throwAfter)
             {
                 // HResult low word 28 == ENOSPC.
                 throw new IOException("No space left on device.", hresult: 28);
             }
 
-            var toCopy = Math.Min(count, throwAfter - _position);
-            Array.Copy(bytes, _position, buffer, offset, toCopy);
+            var toCopy = Math.Min(count, _throwAfter - _position);
+            Array.Copy(_bytes, _position, buffer, offset, toCopy);
             _position += toCopy;
             return toCopy;
         }
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            if (_position >= throwAfter)
+            if (_position >= _throwAfter)
             {
                 throw new IOException("No space left on device.", hresult: 28);
             }
 
-            var toCopy = Math.Min(buffer.Length, throwAfter - _position);
-            bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
+            var toCopy = Math.Min(buffer.Length, _throwAfter - _position);
+            _bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
             _position += toCopy;
             return ValueTask.FromResult(toCopy);
         }
@@ -961,14 +984,24 @@ public sealed class GgufStoreTests
     }
 
     // A read stream that trips the supplied CancellationTokenSource partway through, then honours the token.
-    private sealed class CancelTriggeringStream(byte[] bytes, CancellationTokenSource cts, int cancelAfter) : Stream
+    private sealed class CancelTriggeringStream : Stream
     {
+        private readonly byte[] _bytes;
+        private readonly CancellationTokenSource _cts;
+        private readonly int _cancelAfter;
         private int _position;
+
+        public CancelTriggeringStream(byte[] bytes, CancellationTokenSource cts, int cancelAfter)
+        {
+            _bytes = bytes;
+            _cts = cts;
+            _cancelAfter = cancelAfter;
+        }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-        public override long Length => bytes.Length;
+        public override long Length => _bytes.Length;
         public override long Position { get => _position; set => throw new NotSupportedException(); }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -979,22 +1012,22 @@ public sealed class GgufStoreTests
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (_position >= cancelAfter)
+            if (_position >= _cancelAfter)
             {
                 // Trip the source token deterministically (CancelAfter avoids the synchronous Cancel() analyzer flag),
                 // then surface the cancellation the way an aborted copy loop would.
-                cts.CancelAfter(TimeSpan.Zero);
+                _cts.CancelAfter(TimeSpan.Zero);
                 var spin = new SpinWait();
-                while (!cts.IsCancellationRequested)
+                while (!_cts.IsCancellationRequested)
                 {
                     spin.SpinOnce();
                 }
 
-                cts.Token.ThrowIfCancellationRequested();
+                _cts.Token.ThrowIfCancellationRequested();
             }
 
-            var toCopy = Math.Min(buffer.Length, cancelAfter - _position);
-            bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
+            var toCopy = Math.Min(buffer.Length, _cancelAfter - _position);
+            _bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
             _position += toCopy;
             return ValueTask.FromResult(toCopy);
         }

@@ -183,10 +183,15 @@ public sealed class SupervisorStartupCaptureWindowTests
         }
     }
 
-    private sealed class SingleDownTierAllocationResolver(ProcessContextAllocation initial) : IProcessContextAllocationResolver
+    private sealed class SingleDownTierAllocationResolver : IProcessContextAllocationResolver
     {
-        private ProcessContextAllocation _effective = initial;
+        private ProcessContextAllocation _effective;
         private int _downTiered;
+
+        public SingleDownTierAllocationResolver(ProcessContextAllocation initial)
+        {
+            _effective = initial;
+        }
 
         public Task<ProcessContextAllocation?> ResolveAsync(string modelName,
             ModelRole role,
@@ -233,13 +238,19 @@ public sealed class SupervisorStartupCaptureWindowTests
         }
     }
 
-    private sealed class ReadyOnAttemptHealthProbe(int readyAttempt) : ILlamaServerHealthProbe
+    private sealed class ReadyOnAttemptHealthProbe : ILlamaServerHealthProbe
     {
+        private readonly int _readyAttempt;
         private int _attempt;
+
+        public ReadyOnAttemptHealthProbe(int readyAttempt)
+        {
+            _readyAttempt = readyAttempt;
+        }
 
         public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
         {
-            return Task.FromResult(Interlocked.Increment(ref _attempt) >= readyAttempt);
+            return Task.FromResult(Interlocked.Increment(ref _attempt) >= _readyAttempt);
         }
 
         public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)

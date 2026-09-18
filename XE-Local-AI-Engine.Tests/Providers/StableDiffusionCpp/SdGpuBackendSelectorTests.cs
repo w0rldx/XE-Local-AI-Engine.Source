@@ -104,11 +104,18 @@ public sealed class SdGpuBackendSelectorTests
         };
     }
 
-    private sealed class FakeVulkanDeviceProbe(bool hasDevice) : IVulkanDeviceProbe
+    private sealed class FakeVulkanDeviceProbe : IVulkanDeviceProbe
     {
+        private readonly bool _hasDevice;
+
+        public FakeVulkanDeviceProbe(bool hasDevice)
+        {
+            _hasDevice = hasDevice;
+        }
+
         public bool HasEnumerableVulkanDevice()
         {
-            return hasDevice;
+            return _hasDevice;
         }
     }
 

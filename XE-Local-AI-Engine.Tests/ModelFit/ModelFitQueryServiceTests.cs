@@ -230,13 +230,20 @@ public sealed class ModelFitQueryServiceTests
     ///     installed model tags (or throws, to exercise the best-effort fallback). Only <c>ListLocalModelsAsync</c> is
     ///     used by the query service; the rest are unsupported.
     /// </summary>
-    private sealed class FakeOllamaModelService(IEnumerable<string>? installedModelNames, bool throwOnList) : IOllamaModelService
+    private sealed class FakeOllamaModelService : IOllamaModelService
     {
-        private readonly IReadOnlyList<string> _installed = installedModelNames?.ToList() ?? [];
+        private readonly IReadOnlyList<string> _installed;
+        private readonly bool _throwOnList;
+
+        public FakeOllamaModelService(IEnumerable<string>? installedModelNames, bool throwOnList)
+        {
+            _throwOnList = throwOnList;
+            _installed = installedModelNames?.ToList() ?? [];
+        }
 
         public Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
         {
-            if (throwOnList)
+            if (_throwOnList)
             {
                 throw new InvalidOperationException("Ollama unreachable (test).");
             }

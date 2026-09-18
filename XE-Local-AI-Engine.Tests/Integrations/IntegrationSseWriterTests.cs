@@ -354,13 +354,19 @@ public sealed class IntegrationSseWriterTests
     }
 
     /// <summary>Records whether the writer turned buffering off, which no header can show.</summary>
-    private sealed class StubResponseBody(Stream stream) : IHttpResponseBodyFeature
+    private sealed class StubResponseBody : IHttpResponseBodyFeature
     {
+        public StubResponseBody(Stream stream)
+        {
+            Stream = stream;
+            Writer = PipeWriter.Create(stream);
+        }
+
         public bool BufferingDisabled { get; private set; }
 
-        public Stream Stream { get; } = stream;
+        public Stream Stream { get; }
 
-        public PipeWriter Writer { get; } = PipeWriter.Create(stream);
+        public PipeWriter Writer { get; }
 
         public void DisableBuffering() =>
             BufferingDisabled = true;
@@ -376,14 +382,21 @@ public sealed class IntegrationSseWriterTests
     }
 
     /// <summary>A response body that fails the way a peer that is gone does, and records that it was written to.</summary>
-    private sealed class FaultingBody(Func<Exception> failure) : MemoryStream
+    private sealed class FaultingBody : MemoryStream
     {
+        private readonly Func<Exception> _failure;
+
+        public FaultingBody(Func<Exception> failure)
+        {
+            _failure = failure;
+        }
+
         public TaskCompletionSource Attempted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
             _ = Attempted.TrySetResult();
-            return ValueTask.FromException(failure());
+            return ValueTask.FromException(_failure());
         }
     }
 
@@ -392,10 +405,16 @@ public sealed class IntegrationSseWriterTests
     ///     disposing one of those with a <c>MoveNextAsync</c> in flight is what throws <c>NotSupportedException</c>, and
     ///     a hand-written enumerator would not reproduce it.
     /// </summary>
-    private sealed class ParkingBuffer(bool releaseOnCancellation) : IIntegrationExecutionEventBuffer
+    private sealed class ParkingBuffer : IIntegrationExecutionEventBuffer
     {
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly bool _releaseOnCancellation;
+
+        public ParkingBuffer(bool releaseOnCancellation)
+        {
+            _releaseOnCancellation = releaseOnCancellation;
+        }
 
         /// <summary>Completes when the reader's token is cancelled, i.e. when the writer has torn its stream down.</summary>
         public Task Cancelled => _cancelled.Task;
@@ -424,7 +443,7 @@ public sealed class IntegrationSseWriterTests
             {
                 try
                 {
-                    await (releaseOnCancellation ? _release.Task.WaitAsync(cancellationToken) : _release.Task);
+                    await (_releaseOnCancellation ? _release.Task.WaitAsync(cancellationToken) : _release.Task);
                 }
                 finally
                 {

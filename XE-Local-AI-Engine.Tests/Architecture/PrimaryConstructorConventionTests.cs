@@ -9,24 +9,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     A primary constructor leaves no trace in IL, so this reads source, like <see cref="ConfigureAwaitPolicyTests" />.
-///     Records are out of scope; <see cref="NotYetMigrated" /> may only shrink, and a project on it that has reached
-///     zero fails here. Rationale: <c>docs/wiki/16-code-conventions.md</c>.
+///     Every project in the solution is fenced, with no exemption; records are out of scope. Rationale:
+///     <c>docs/wiki/16-code-conventions.md</c>.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class PrimaryConstructorConventionTests
 {
-    /// <summary>
-    ///     The projects the rule does not fence yet. Shrink-only: a project here that has reached zero declarations
-    ///     fails the ratchet below, so the list cannot outlive the migration it tracks.
-    /// </summary>
-    private static readonly string[] NotYetMigrated =
-    [
-        "XE-Local-AI-Engine.AI.Agent.Tests",
-        "XE-Local-AI-Engine.Client.Persistence.Tests",
-        "XE-Local-AI-Engine.Tests",
-        "XE-Local-AI-Engine.Tests.E2ETests"
-    ];
-
     /// <summary>C# that ships outside the solution, fenced from the start: <c>tools/</c> holds a generator run by hand.</summary>
     private static readonly string[] ExtraEnforcedRoots = ["tools"];
 
@@ -34,13 +22,10 @@ public sealed class PrimaryConstructorConventionTests
     private static readonly string[] Keywords = ["class", "struct"];
 
     /// <summary>
-    ///     Non-vacuity floors under today's counts, the way <see cref="ConfigureAwaitPolicyTests" /> sets its own: a
-    ///     renamed directory reads too few files and fails here rather than passing on an empty scan. Every entry
-    ///     removed from <see cref="NotYetMigrated" /> moves that project's files from the second count to the first,
-    ///     so the enforced floor rises and the ratchet floor falls as the migration proceeds.
+    ///     A non-vacuity floor under today's count, the way <see cref="ConfigureAwaitPolicyTests" /> sets its own: a
+    ///     renamed directory reads too few files and fails here rather than passing on an empty scan.
     /// </summary>
-    private const int EnforcedFileFloor = 2800;
-    private const int RatchetFileFloor = 1300;
+    private const int EnforcedFileFloor = 4200;
 
     /// <summary>Declarations the scan must find. A miss here is how this fence stops seeing code.</summary>
     private static readonly (string Case, string Source, string[] Types)[] MustBeFound =
@@ -102,63 +87,27 @@ public sealed class PrimaryConstructorConventionTests
             + "The walk is reading the wrong directories, so this fence cannot fire.");
 
         AssertEx.Empty(offenders,
-            "A class or struct in this project declares conventional constructors, never a primary constructor: the "
-            + "guard, the field and the injected name belong in one readable block, and a constructor body stays "
-            + "available. Convert the declaration(s) below rather than adding an exemption here:"
+            "A class or struct declares conventional constructors, never a primary constructor: the guard, the "
+            + "field and the injected name belong in one readable block, and a constructor body stays "
+            + "available. Convert the declaration(s) below:"
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    /// <summary>
+    ///     The fence covers the solution, not a hand-kept list: a project whose directory the walk cannot find
+    ///     contributes no files and would be exempt without anyone deciding that.
+    /// </summary>
     [Test]
-    public void EveryNotYetMigratedProject_StillHasOne()
-    {
-        var reached = new List<string>();
-        var files = 0;
-
-        foreach (var project in NotYetMigrated)
-        {
-            var found = 0;
-
-            foreach (var (path, _) in SourceFiles(RepositoryPaths.Combine(project)))
-            {
-                files++;
-                found += Declarations(File.ReadAllText(path)).Count();
-            }
-
-            if (found == 0)
-            {
-                reached.Add(project);
-            }
-        }
-
-        AssertEx.True(files >= RatchetFileFloor,
-            $"Only {files} C# files were scanned across the unmigrated projects, below the floor of {RatchetFileFloor}.");
-
-        AssertEx.Empty(reached,
-            "These projects declare no primary constructor any more, so the rule already holds for them and the "
-            + "exemption is what keeps it unenforced. Remove them from the list:"
-            + Environment.NewLine + string.Join(Environment.NewLine, reached));
-    }
-
-    [Test]
-    public void EveryProjectInTheSolution_IsOnExactlyOneSideOfTheRule()
+    public void EverySolutionProject_IsScanned()
     {
         var projects = SolutionProjects();
 
         AssertEx.NotEmpty(projects, "No projects were read from the solution file.");
 
-        var missing = NotYetMigrated.Where(project => !projects.Contains(project, StringComparer.Ordinal)).ToList();
-        AssertEx.Empty(missing,
-            "These projects are named here but are not in the solution — they were renamed or removed, and the entry "
-            + "outlived them. Delete the line(s) below:"
-            + Environment.NewLine + string.Join(Environment.NewLine, missing));
-
         var absent = projects.Where(project => !Directory.Exists(RepositoryPaths.Combine(project))).ToList();
         AssertEx.Empty(absent,
             "A solution project's directory was not found under the repository root, so its sources were never "
             + "scanned: " + string.Join(", ", absent));
-
-        AssertEx.True(NotYetMigrated.SequenceEqual(NotYetMigrated.Order(StringComparer.Ordinal), StringComparer.Ordinal),
-            "The exemption list must stay sorted, one per line, so a diff to it is readable.");
     }
 
     /// <summary>
@@ -376,9 +325,7 @@ public sealed class PrimaryConstructorConventionTests
                  .ToArray();
 
     private static IEnumerable<string> EnforcedRoots() =>
-        SolutionProjects().Where(project => !NotYetMigrated.Contains(project, StringComparer.Ordinal))
-                          .Concat(ExtraEnforcedRoots)
-                          .Select(root => RepositoryPaths.Combine(root));
+        SolutionProjects().Concat(ExtraEnforcedRoots).Select(root => RepositoryPaths.Combine(root));
 
     private static IEnumerable<(string Path, string Relative)> SourceFiles(string root)
     {

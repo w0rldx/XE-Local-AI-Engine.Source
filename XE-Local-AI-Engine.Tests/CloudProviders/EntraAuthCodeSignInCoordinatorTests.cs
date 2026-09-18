@@ -278,9 +278,14 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         return AssertEx.NotNull(query[key], $"expected query parameter '{key}' on {url}");
     }
 
-    private sealed class FakeCloudCredentialStore(StoredCloudProviderConfig? config) : ICloudCredentialStore
+    private sealed class FakeCloudCredentialStore : ICloudCredentialStore
     {
-        public StoredCloudProviderConfig? Config { get; set; } = config;
+        public FakeCloudCredentialStore(StoredCloudProviderConfig? config)
+        {
+            Config = config;
+        }
+
+        public StoredCloudProviderConfig? Config { get; set; }
 
         public Task<StoredCloudProviderConfig?> LoadConfigAsync(CancellationToken cancellationToken = default)
         {
@@ -351,15 +356,22 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
 
     // Simulates an unexpected exception type escaping redemption — distinct from RecordingRedeemer, whose
     // exception means "this test's assumptions were wrong," not "simulate a real failure mode."
-    private sealed class ThrowingRedeemer(Exception exceptionToThrow) : IEntraAuthCodeRedeemer
+    private sealed class ThrowingRedeemer : IEntraAuthCodeRedeemer
     {
+        private readonly Exception _exceptionToThrow;
+
+        public ThrowingRedeemer(Exception exceptionToThrow)
+        {
+            _exceptionToThrow = exceptionToThrow;
+        }
+
         public Task<EntraAuthCodeRedemptionResult> RedeemAsync(StoredAzureFoundryConnection connection,
             string authorizationCode,
             string codeVerifier,
             string redirectUri,
             CancellationToken cancellationToken)
         {
-            throw exceptionToThrow;
+            throw _exceptionToThrow;
         }
     }
 }

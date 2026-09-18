@@ -283,16 +283,23 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     }
 
     /// <summary>The coordinator wired to the two fakes, disposed together.</summary>
-    private sealed class Harness(
-        ProcessAudioCaptureCoordinator coordinator,
-        FakeProcessAudioCaptureSource source,
-        RecordingLiveSessionRegistry registry) : IAsyncDisposable
+    private sealed class Harness : IAsyncDisposable
     {
-        public ProcessAudioCaptureCoordinator Coordinator { get; } = coordinator;
+        public Harness(
+            ProcessAudioCaptureCoordinator coordinator,
+            FakeProcessAudioCaptureSource source,
+            RecordingLiveSessionRegistry registry)
+        {
+            Coordinator = coordinator;
+            Source = source;
+            Registry = registry;
+        }
 
-        public FakeProcessAudioCaptureSource Source { get; } = source;
+        public ProcessAudioCaptureCoordinator Coordinator { get; }
 
-        public RecordingLiveSessionRegistry Registry { get; } = registry;
+        public FakeProcessAudioCaptureSource Source { get; }
+
+        public RecordingLiveSessionRegistry Registry { get; }
 
         [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "Ownership transfers to the returned harness, whose DisposeAsync disposes both the coordinator and the registry; the caller holds it in an await using.")]
@@ -337,9 +344,15 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     ///     The registry seam: real producer tokens, a recorded attachment, and a push that can block or cancel the
     ///     producer token exactly as the overflow path does.
     /// </summary>
-    private sealed class RecordingLiveSessionRegistry(ConcurrentQueue<string>? log) : ILiveTranscriptionSessionRegistry, IDisposable
+    private sealed class RecordingLiveSessionRegistry : ILiveTranscriptionSessionRegistry, IDisposable
     {
         private readonly ConcurrentDictionary<Guid, SessionState> _sessions = new();
+        private readonly ConcurrentQueue<string>? _log;
+
+        public RecordingLiveSessionRegistry(ConcurrentQueue<string>? log)
+        {
+            _log = log;
+        }
 
         public bool Live { get; set; } = true;
 
@@ -377,7 +390,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             var state = _sessions.GetOrAdd(sessionId, static _ => new SessionState());
             OnAttaching?.Invoke();
             state.Producer = producer;
-            log?.Enqueue("attach");
+            _log?.Enqueue("attach");
             return new LiveProducerRegistration(state.Cancellation.Token, new Detach(state));
         }
 
@@ -442,15 +455,22 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             public int PushesEntered => Volatile.Read(ref PushCount);
         }
 
-        private sealed class Detach(SessionState state) : IDisposable
+        private sealed class Detach : IDisposable
         {
+            private readonly SessionState _state;
+
+            public Detach(SessionState state)
+            {
+                _state = state;
+            }
+
             public void Dispose()
             {
-                state.Detaches++;
+                _state.Detaches++;
 
                 // The real ProducerDetach nulls the session's producer; mirroring it is what lets a test tell
                 // "detached" apart from "still registered".
-                state.Producer = null;
+                _state.Producer = null;
             }
         }
     }
@@ -459,11 +479,18 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     ///     A capture source that runs until its token is cancelled, recording how often it was entered and pushing a
     ///     controllable number of frames first.
     /// </summary>
-    private sealed class FakeProcessAudioCaptureSource(ILiveTranscriptionSessionRegistry registry, ConcurrentQueue<string>? log)
-        : IProcessAudioCaptureSource
+    private sealed class FakeProcessAudioCaptureSource : IProcessAudioCaptureSource
     {
         private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _entered = new();
+        private readonly ILiveTranscriptionSessionRegistry _registry;
+        private readonly ConcurrentQueue<string>? _log;
         private int _captureCalls;
+
+        public FakeProcessAudioCaptureSource(ILiveTranscriptionSessionRegistry registry, ConcurrentQueue<string>? log)
+        {
+            _registry = registry;
+            _log = log;
+        }
 
         public bool IsSupported { get; set; } = true;
 
@@ -477,12 +504,12 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         public async Task CaptureAsync(Guid sessionId, int processId, CancellationToken cancellationToken)
         {
             _ = Interlocked.Increment(ref _captureCalls);
-            log?.Enqueue("capture");
+            _log?.Enqueue("capture");
             _ = Entered(sessionId).TrySetResult();
 
             for (var frame = 0; frame < FramesToPush && !cancellationToken.IsCancellationRequested; frame++)
             {
-                await registry.PushAudioAsync(sessionId, TranscriptChannel.Others, new byte[320], cancellationToken);
+                await _registry.PushAudioAsync(sessionId, TranscriptChannel.Others, new byte[320], cancellationToken);
             }
 
             // Runs until stopped — a registration on the token rather than any kind of timer, so nothing here waits

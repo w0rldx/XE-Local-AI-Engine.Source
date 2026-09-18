@@ -134,11 +134,18 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         return context;
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return now;
+            return _now;
         }
     }
 }

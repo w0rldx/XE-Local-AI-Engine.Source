@@ -188,13 +188,20 @@ public sealed class ExternalAppsModuleRegistrationTests
     ///     disposal of a container holding an <see cref="IAsyncDisposable" />-only singleton throws rather than
     ///     disposing it.
     /// </summary>
-    private sealed class TestHost(IHost host) : IAsyncDisposable
+    private sealed class TestHost : IAsyncDisposable
     {
-        public IServiceProvider Services => host.Services;
+        private readonly IHost _host;
+
+        public TestHost(IHost host)
+        {
+            _host = host;
+        }
+
+        public IServiceProvider Services => _host.Services;
 
         public ValueTask DisposeAsync()
         {
-            return ((IAsyncDisposable)host).DisposeAsync();
+            return ((IAsyncDisposable)_host).DisposeAsync();
         }
     }
 }

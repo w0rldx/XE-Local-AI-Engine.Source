@@ -162,9 +162,14 @@ public sealed class DetachedInvocationReaperTests
             NullLogger<DetachedInvocationReaper>.Instance);
     }
 
-    private sealed class StubTracker(IReadOnlyCollection<DetachedInvocation> detached) : IInvocationAttachmentTracker
+    private sealed class StubTracker : IInvocationAttachmentTracker
     {
-        public IReadOnlyCollection<DetachedInvocation> Detached { get; set; } = detached;
+        public StubTracker(IReadOnlyCollection<DetachedInvocation> detached)
+        {
+            Detached = detached;
+        }
+
+        public IReadOnlyCollection<DetachedInvocation> Detached { get; set; }
 
         public event EventHandler<InvocationAttachmentChangedEventArgs>? AttachmentChanged;
 
@@ -193,9 +198,14 @@ public sealed class DetachedInvocationReaperTests
     }
 
     // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeClock(DateTimeOffset start) : TimeProvider
+    private sealed class FakeClock : TimeProvider
     {
-        private DateTimeOffset _utcNow = start;
+        private DateTimeOffset _utcNow;
+
+        public FakeClock(DateTimeOffset start)
+        {
+            _utcNow = start;
+        }
 
         public override DateTimeOffset GetUtcNow()
         {

@@ -319,9 +319,14 @@ public sealed class ConversationSummarizerBoundaryTests
         }
     }
 
-    private sealed class CapturingChatClient(Func<int, string>? responseFactory = null) : IChatClient
+    private sealed class CapturingChatClient : IChatClient
     {
-        private readonly Func<int, string> _responseFactory = responseFactory ?? (_ => "short running summary");
+        private readonly Func<int, string> _responseFactory;
+
+        public CapturingChatClient(Func<int, string>? responseFactory = null)
+        {
+            _responseFactory = responseFactory ?? (_ => "short running summary");
+        }
 
         public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
 

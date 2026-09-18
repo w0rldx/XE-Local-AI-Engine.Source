@@ -566,9 +566,15 @@ public sealed class DevWorkflowStoreTests
     }
 
     /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
-    private sealed class CompetingWriteInterceptor(Func<Task> write) : SaveChangesInterceptor
+    private sealed class CompetingWriteInterceptor : SaveChangesInterceptor
     {
+        private readonly Func<Task> _write;
         private bool _fired;
+
+        public CompetingWriteInterceptor(Func<Task> write)
+        {
+            _write = write;
+        }
 
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
             InterceptionResult<int> result,
@@ -577,7 +583,7 @@ public sealed class DevWorkflowStoreTests
             if (!_fired)
             {
                 _fired = true;
-                await write();
+                await _write();
             }
 
             return await base.SavingChangesAsync(eventData, result, cancellationToken);

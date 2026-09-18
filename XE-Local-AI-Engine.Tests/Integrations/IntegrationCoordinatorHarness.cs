@@ -680,28 +680,49 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             UpdatedAtUtc: 0);
 
     /// <summary>Reads the harness's mutable queue age, so a test can move the deadline after the lease is requested.</summary>
-    private sealed class QueueAgeOptions(IntegrationCoordinatorHarness harness) : IOptions<IntegrationOptions>
+    private sealed class QueueAgeOptions : IOptions<IntegrationOptions>
     {
+        private readonly IntegrationCoordinatorHarness _harness;
+
+        public QueueAgeOptions(IntegrationCoordinatorHarness harness)
+        {
+            _harness = harness;
+        }
+
         public IntegrationOptions Value =>
             new()
             {
-                MaxQueueAgeSeconds = harness.MaxQueueAgeSeconds,
-                ContextBudgetTokens = harness.ContextBudgetTokens
+                MaxQueueAgeSeconds = _harness.MaxQueueAgeSeconds,
+                ContextBudgetTokens = _harness.ContextBudgetTokens
             };
     }
 
-    private sealed class TrackingDisposable(IntegrationCoordinatorHarness harness) : IDisposable
+    private sealed class TrackingDisposable : IDisposable
     {
+        private readonly IntegrationCoordinatorHarness _harness;
+
+        public TrackingDisposable(IntegrationCoordinatorHarness harness)
+        {
+            _harness = harness;
+        }
+
         public void Dispose() =>
-            harness.RecordReservationDisposed();
+            _harness.RecordReservationDisposed();
     }
 
-    private sealed class TrackingAsyncDisposable(IntegrationCoordinatorHarness harness) : IAsyncDisposable
+    private sealed class TrackingAsyncDisposable : IAsyncDisposable
     {
+        private readonly IntegrationCoordinatorHarness _harness;
+
+        public TrackingAsyncDisposable(IntegrationCoordinatorHarness harness)
+        {
+            _harness = harness;
+        }
+
         public ValueTask DisposeAsync()
         {
-            harness.RecordLeaseDisposed();
-            harness.ReleaseLeaseSlot();
+            _harness.RecordLeaseDisposed();
+            _harness.ReleaseLeaseSlot();
             return ValueTask.CompletedTask;
         }
     }

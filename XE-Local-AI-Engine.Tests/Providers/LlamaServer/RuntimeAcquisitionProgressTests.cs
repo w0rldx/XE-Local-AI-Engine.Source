@@ -417,8 +417,21 @@ public sealed class RuntimeAcquisitionProgressTests
     }
 
     /// <summary>Resolves only the Windows-CUDA cudart companion; every other lookup reports no live data.</summary>
-    private sealed class CompanionCatalog(string companionTag, string companionAsset, string companionDigest, long companionSize) : ILlamaCppReleaseCatalog
+    private sealed class CompanionCatalog : ILlamaCppReleaseCatalog
     {
+        private readonly string _companionTag;
+        private readonly string _companionAsset;
+        private readonly string _companionDigest;
+        private readonly long _companionSize;
+
+        public CompanionCatalog(string companionTag, string companionAsset, string companionDigest, long companionSize)
+        {
+            _companionTag = companionTag;
+            _companionAsset = companionAsset;
+            _companionDigest = companionDigest;
+            _companionSize = companionSize;
+        }
+
         public Task<LlamaCppReleaseResult> ResolveRecommendedAsync(string recommendedTag, CancellationToken ct)
         {
             return Task.FromResult(LlamaCppReleaseResult.Offline());
@@ -436,13 +449,20 @@ public sealed class RuntimeAcquisitionProgressTests
 
         public Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct)
         {
-            return Task.FromResult(LlamaCppReleaseResult.ForAsset(companionTag,
-                new LlamaCppReleaseAsset(companionAsset, LlamaCppReleasePins.DownloadUri(companionTag, companionAsset), companionDigest, companionSize)));
+            return Task.FromResult(LlamaCppReleaseResult.ForAsset(_companionTag,
+                new LlamaCppReleaseAsset(_companionAsset, LlamaCppReleasePins.DownloadUri(_companionTag, _companionAsset), _companionDigest, _companionSize)));
         }
     }
 
-    private sealed class ScriptedHandler(Func<Uri, HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class ScriptedHandler : HttpMessageHandler
     {
+        private readonly Func<Uri, HttpResponseMessage> _responder;
+
+        public ScriptedHandler(Func<Uri, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public ScriptedHandler(Func<HttpResponseMessage> responder)
             : this(_ => responder())
         {
@@ -453,16 +473,23 @@ public sealed class RuntimeAcquisitionProgressTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult(responder(request.RequestUri!));
+            return Task.FromResult(_responder(request.RequestUri!));
         }
     }
 
     /// <summary>Cancels the caller's token the moment the request is issued, i.e. mid-acquisition rather than before it.</summary>
-    private sealed class CancellingHandler(CancellationTokenSource cts) : HttpMessageHandler
+    private sealed class CancellingHandler : HttpMessageHandler
     {
+        private readonly CancellationTokenSource _cts;
+
+        public CancellingHandler(CancellationTokenSource cts)
+        {
+            _cts = cts;
+        }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            await cts.CancelAsync();
+            await _cts.CancelAsync();
             cancellationToken.ThrowIfCancellationRequested();
             return new HttpResponseMessage(HttpStatusCode.OK);
         }

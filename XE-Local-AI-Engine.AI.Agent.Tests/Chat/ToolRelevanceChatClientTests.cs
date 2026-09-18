@@ -748,14 +748,23 @@ public sealed class ToolRelevanceChatClientTests
 
     // Stands in for a node-side selector that breaks in a way the hop cannot anticipate. The message and inner
     // exception are settable so the privacy test can plant a marker and prove neither reaches the sink.
-    private sealed class ThrowingSelector(string message = "the selector broke", Exception? inner = null) : IToolRelevanceSelector
+    private sealed class ThrowingSelector : IToolRelevanceSelector
     {
+        private readonly string _message;
+        private readonly Exception? _inner;
+
+        public ThrowingSelector(string message = "the selector broke", Exception? inner = null)
+        {
+            _message = message;
+            _inner = inner;
+        }
+
         public Task<ToolRelevanceSelection> SelectAsync(string? query,
             IReadOnlyList<ToolRelevanceCandidate> candidates,
             int threshold,
             CancellationToken cancellationToken)
         {
-            throw new InvalidOperationException(message, inner);
+            throw new InvalidOperationException(_message, _inner);
         }
     }
 

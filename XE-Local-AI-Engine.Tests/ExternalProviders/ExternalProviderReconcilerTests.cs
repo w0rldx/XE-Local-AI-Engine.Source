@@ -289,8 +289,15 @@ public sealed class ExternalProviderReconcilerTests
     ///     collapses to empty — the shape a file that turns unreadable (or carries a newer schema) takes on the read
     ///     path the registry goes through.
     /// </summary>
-    private sealed class AuthoritativeThenEmptyExternalProviderStore(StoredExternalProviderConnection connection) : IExternalProviderStore
+    private sealed class AuthoritativeThenEmptyExternalProviderStore : IExternalProviderStore
     {
+        private readonly StoredExternalProviderConnection _connection;
+
+        public AuthoritativeThenEmptyExternalProviderStore(StoredExternalProviderConnection connection)
+        {
+            _connection = connection;
+        }
+
         public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new StoredExternalProviderConfig());
@@ -301,7 +308,7 @@ public sealed class ExternalProviderReconcilerTests
             return Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Loaded(new StoredExternalProviderConfig
             {
                 Revision = "r0",
-                Connections = [connection]
+                Connections = [_connection]
             }));
         }
 
@@ -345,9 +352,14 @@ public sealed class ExternalProviderReconcilerTests
     ///     COORDINATED update — a substitute would return a default from the mutation and never apply it, and the
     ///     lost-update behaviour this replaced is exactly what the assertions here have to be able to see.
     /// </summary>
-    private sealed class RecordingNodeSettingsStore(StoredNodeSettings initial) : INodeSettingsStore
+    private sealed class RecordingNodeSettingsStore : INodeSettingsStore
     {
-        private StoredNodeSettings _current = initial;
+        private StoredNodeSettings _current;
+
+        public RecordingNodeSettingsStore(StoredNodeSettings initial)
+        {
+            _current = initial;
+        }
 
         public StoredNodeSettings? LastWritten { get; private set; }
 

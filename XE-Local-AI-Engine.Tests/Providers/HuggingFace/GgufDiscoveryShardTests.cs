@@ -157,8 +157,17 @@ public sealed class GgufDiscoveryShardTests
     }
 
     /// <summary>Routes by URL like <c>GgufDiscoveryTests.StubHandler</c>, plus per-file canned header bytes and a log of every range-read filename.</summary>
-    private sealed class ShardStubHandler(string repoDetail, IReadOnlyDictionary<string, byte[]> headerBytesByFileName) : HttpMessageHandler
+    private sealed class ShardStubHandler : HttpMessageHandler
     {
+        private readonly string _repoDetail;
+        private readonly IReadOnlyDictionary<string, byte[]> _headerBytesByFileName;
+
+        public ShardStubHandler(string repoDetail, IReadOnlyDictionary<string, byte[]> headerBytesByFileName)
+        {
+            _repoDetail = repoDetail;
+            _headerBytesByFileName = headerBytesByFileName;
+        }
+
         public List<string> RequestedRangeFileNames { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -169,13 +178,13 @@ public sealed class GgufDiscoveryShardTests
             {
                 var fileName = url[(url.LastIndexOf('/') + 1)..];
                 RequestedRangeFileNames.Add(fileName);
-                var bytes = headerBytesByFileName.TryGetValue(fileName, out var b) ? b : [];
+                var bytes = _headerBytesByFileName.TryGetValue(fileName, out var b) ? b : [];
                 return Task.FromResult(BuildRangeResponse(request, bytes));
             }
 
             if (url.Contains("/api/models/", StringComparison.Ordinal))
             {
-                return Task.FromResult(Json(repoDetail));
+                return Task.FromResult(Json(_repoDetail));
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));

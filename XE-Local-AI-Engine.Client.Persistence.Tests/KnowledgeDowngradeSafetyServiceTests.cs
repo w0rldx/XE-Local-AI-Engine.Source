@@ -228,14 +228,26 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
 
-    private sealed class FixedNodeDataDirectory(string root) : INodeDataDirectory
+    private sealed class FixedNodeDataDirectory : INodeDataDirectory
     {
-        public string Root { get; } = root;
+        public FixedNodeDataDirectory(string root)
+        {
+            Root = root;
+        }
+
+        public string Root { get; }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow() =>
-            now;
+            _now;
     }
 }

@@ -193,9 +193,14 @@ public sealed class TranscriptionUploadSlotTests
     }
 
     /// <summary>A body that breaks part-way through, the way a dropped connection does.</summary>
-    private sealed class FailingStream(int bytesBeforeFailure) : Stream
+    private sealed class FailingStream : Stream
     {
-        private int _remaining = bytesBeforeFailure;
+        private int _remaining;
+
+        public FailingStream(int bytesBeforeFailure)
+        {
+            _remaining = bytesBeforeFailure;
+        }
 
         public override bool CanRead => true;
 
@@ -242,9 +247,16 @@ public sealed class TranscriptionUploadSlotTests
     }
 
     /// <summary>A body whose reader cancels the caller's token part-way through, the way a client disconnect does.</summary>
-    private sealed class CancellingStream(CancellationTokenSource cancellation, int bytesBeforeCancel) : Stream
+    private sealed class CancellingStream : Stream
     {
-        private int _remaining = bytesBeforeCancel;
+        private readonly CancellationTokenSource _cancellation;
+        private int _remaining;
+
+        public CancellingStream(CancellationTokenSource cancellation, int bytesBeforeCancel)
+        {
+            _cancellation = cancellation;
+            _remaining = bytesBeforeCancel;
+        }
 
         public override bool CanRead => true;
 
@@ -266,7 +278,7 @@ public sealed class TranscriptionUploadSlotTests
 
             if (_remaining <= 0)
             {
-                await cancellation.CancelAsync();
+                await _cancellation.CancelAsync();
                 cancellationToken.ThrowIfCancellationRequested();
                 return 0;
             }

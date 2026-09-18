@@ -529,15 +529,22 @@ public sealed class InferenceBenchmarkHarnessTests
         };
     }
 
-    private sealed class FakeBenchmarkChatClient(bool callsTool) : IChatClient
+    private sealed class FakeBenchmarkChatClient : IChatClient
     {
+        private readonly bool _callsTool;
+
+        public FakeBenchmarkChatClient(bool callsTool)
+        {
+            _callsTool = callsTool;
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             var toolHasRun = messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>().Any();
             var tool = options?.Tools?.OfType<AIFunction>().FirstOrDefault();
-            if (!callsTool || toolHasRun || tool is null)
+            if (!_callsTool || toolHasRun || tool is null)
             {
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
             }
@@ -570,11 +577,19 @@ public sealed class InferenceBenchmarkHarnessTests
         }
     }
 
-    private sealed class TimedBenchmarkChatClient(
-        IReadOnlyList<IReadOnlyList<ChatResponseUpdate>> warmStreams,
-        ChatResponseUpdate? coldUpdate = null) : IChatClient
+    private sealed class TimedBenchmarkChatClient : IChatClient
     {
+        private readonly IReadOnlyList<IReadOnlyList<ChatResponseUpdate>> _warmStreams;
+        private readonly ChatResponseUpdate? _coldUpdate;
         private int _streamCall;
+
+        public TimedBenchmarkChatClient(
+            IReadOnlyList<IReadOnlyList<ChatResponseUpdate>> warmStreams,
+            ChatResponseUpdate? coldUpdate = null)
+        {
+            _warmStreams = warmStreams;
+            _coldUpdate = coldUpdate;
+        }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
@@ -589,11 +604,11 @@ public sealed class InferenceBenchmarkHarnessTests
             var call = Interlocked.Increment(ref _streamCall);
             if (call % 2 == 1)
             {
-                yield return coldUpdate ?? PlainUpdate("cold");
+                yield return _coldUpdate ?? PlainUpdate("cold");
                 yield break;
             }
 
-            foreach (var update in warmStreams[(call / 2) - 1])
+            foreach (var update in _warmStreams[(call / 2) - 1])
             {
                 yield return update;
             }

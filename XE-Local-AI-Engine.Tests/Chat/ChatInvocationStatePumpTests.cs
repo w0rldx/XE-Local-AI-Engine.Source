@@ -301,33 +301,43 @@ public sealed class ChatInvocationStatePumpTests
     ///     coalescing drain is not what these tests measure, and letting it fire would collapse the whole turn into
     ///     one frame.
     /// </summary>
-    private sealed class SteppingStateReader(IReadOnlyList<InvocationState> states, SteppingClock clock, TimeSpan step) : ChannelReader<InvocationState>
+    private sealed class SteppingStateReader : ChannelReader<InvocationState>
     {
+        private readonly IReadOnlyList<InvocationState> _states;
+        private readonly SteppingClock _clock;
+        private readonly TimeSpan _step;
         private int _index;
         private bool _available;
 
+        public SteppingStateReader(IReadOnlyList<InvocationState> states, SteppingClock clock, TimeSpan step)
+        {
+            _states = states;
+            _clock = clock;
+            _step = step;
+        }
+
         public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
         {
-            if (_index >= states.Count)
+            if (_index >= _states.Count)
             {
                 return ValueTask.FromResult(false);
             }
 
-            clock.Advance(step);
+            _clock.Advance(_step);
             _available = true;
             return ValueTask.FromResult(true);
         }
 
         public override bool TryRead([MaybeNullWhen(false)] out InvocationState item)
         {
-            if (!_available || _index >= states.Count)
+            if (!_available || _index >= _states.Count)
             {
                 item = null;
                 return false;
             }
 
             _available = false;
-            item = states[_index++];
+            item = _states[_index++];
             return true;
         }
     }
@@ -335,9 +345,14 @@ public sealed class ChatInvocationStatePumpTests
     // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
     // Overrides the timestamp pair as well as the wall clock, because the pump gates both cadences on
     // GetElapsedTime and stamps every event from GetUtcNow.
-    private sealed class SteppingClock(DateTimeOffset start) : TimeProvider
+    private sealed class SteppingClock : TimeProvider
     {
-        private DateTimeOffset _utcNow = start;
+        private DateTimeOffset _utcNow;
+
+        public SteppingClock(DateTimeOffset start)
+        {
+            _utcNow = start;
+        }
 
         // One timestamp unit per DateTime tick, so GetElapsedTime resolves to exact virtual time.
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;

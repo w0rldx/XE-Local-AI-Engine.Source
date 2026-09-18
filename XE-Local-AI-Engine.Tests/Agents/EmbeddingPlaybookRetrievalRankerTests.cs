@@ -331,20 +331,26 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
             throw new NotSupportedException();
         }
 
-        private sealed class FakeEmbeddingGenerator(FakeEmbeddingProvider owner) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
             private const int Dimensions = 16;
+            private readonly FakeEmbeddingProvider _owner;
+
+            public FakeEmbeddingGenerator(FakeEmbeddingProvider owner)
+            {
+                _owner = owner;
+            }
 
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
-                if (owner.ThrowCancellation)
+                if (_owner.ThrowCancellation)
                 {
                     throw new OperationCanceledException(cancellationToken);
                 }
 
-                if (owner.ThrowOnGenerate)
+                if (_owner.ThrowOnGenerate)
                 {
                     throw new HttpRequestException("fake embedding transport failure");
                 }
@@ -352,11 +358,11 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
                 var embeddings = new List<Embedding<float>>();
                 foreach (var value in values)
                 {
-                    owner.TotalEmbeddedTexts++;
+                    _owner.TotalEmbeddedTexts++;
                     embeddings.Add(new Embedding<float>(BuildVector(value)));
                 }
 
-                if (owner.ReturnShortResponse && embeddings.Count > 0)
+                if (_owner.ReturnShortResponse && embeddings.Count > 0)
                 {
                     // Simulate a misbehaving/partial response that returns fewer embeddings than inputs.
                     embeddings.RemoveAt(embeddings.Count - 1);

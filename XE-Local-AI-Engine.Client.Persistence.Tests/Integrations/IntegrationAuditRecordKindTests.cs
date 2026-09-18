@@ -125,9 +125,16 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         return context;
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow() =>
-            now;
+            _now;
     }
 }

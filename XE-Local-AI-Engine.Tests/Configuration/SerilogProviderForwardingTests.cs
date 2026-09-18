@@ -74,9 +74,14 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         return builder;
     }
 
-    private sealed class RecordingLoggerProvider(List<string> recorded) : ILoggerProvider
+    private sealed class RecordingLoggerProvider : ILoggerProvider
     {
-        private readonly List<string> _recorded = recorded;
+        private readonly List<string> _recorded;
+
+        public RecordingLoggerProvider(List<string> recorded)
+        {
+            _recorded = recorded;
+        }
 
         public ILogger CreateLogger(string categoryName) =>
             new RecordingLogger(_recorded);
@@ -86,9 +91,14 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         }
     }
 
-    private sealed class RecordingLogger(List<string> recorded) : ILogger
+    private sealed class RecordingLogger : ILogger
     {
-        private readonly List<string> _recorded = recorded;
+        private readonly List<string> _recorded;
+
+        public RecordingLogger(List<string> recorded)
+        {
+            _recorded = recorded;
+        }
 
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull =>

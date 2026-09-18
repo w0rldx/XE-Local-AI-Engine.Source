@@ -613,21 +613,34 @@ public sealed class BinaryManagerInstallTagTests
         }
     }
 
-    private sealed class ScriptedHandler(Func<HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class ScriptedHandler : HttpMessageHandler
     {
+        private readonly Func<HttpResponseMessage> _responder;
+
+        public ScriptedHandler(Func<HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public int CallCount { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult(responder());
+            return Task.FromResult(_responder());
         }
     }
 
-    private sealed class GatedHandler(byte[] content) : HttpMessageHandler
+    private sealed class GatedHandler : HttpMessageHandler
     {
         private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly byte[] _content;
+
+        public GatedHandler(byte[] content)
+        {
+            _content = content;
+        }
 
         public Task Entered => _entered.Task;
 
@@ -640,7 +653,7 @@ public sealed class BinaryManagerInstallTagTests
             await _release.Task.WaitAsync(cancellationToken);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent(content)
+                Content = new ByteArrayContent(_content)
             };
         }
     }

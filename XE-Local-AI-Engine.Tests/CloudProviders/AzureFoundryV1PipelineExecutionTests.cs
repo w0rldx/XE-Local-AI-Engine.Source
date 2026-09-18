@@ -211,11 +211,18 @@ public sealed class AzureFoundryV1PipelineExecutionTests
         };
     }
 
-    private sealed class StubTokenCredential(string tokenValue) : TokenCredential
+    private sealed class StubTokenCredential : TokenCredential
     {
+        private readonly string _tokenValue;
+
+        public StubTokenCredential(string tokenValue)
+        {
+            _tokenValue = tokenValue;
+        }
+
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
-            return new AccessToken(tokenValue, DateTimeOffset.UtcNow.AddHours(1));
+            return new AccessToken(_tokenValue, DateTimeOffset.UtcNow.AddHours(1));
         }
 
         public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)

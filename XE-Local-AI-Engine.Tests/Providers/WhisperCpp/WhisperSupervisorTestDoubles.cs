@@ -43,14 +43,19 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
 }
 
 /// <summary>An in-memory handle whose exit and tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeWhisperProcessHandle(int pid) : IWhisperServerProcessHandle
+internal sealed class FakeWhisperProcessHandle : IWhisperServerProcessHandle
 {
     private int _exited;
     private int _killed;
 
+    public FakeWhisperProcessHandle(int pid)
+    {
+        ProcessId = pid;
+    }
+
     public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
-    public int ProcessId { get; } = pid;
+    public int ProcessId { get; }
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
@@ -74,14 +79,20 @@ internal sealed class FakeWhisperProcessHandle(int pid) : IWhisperServerProcessH
 ///     Readiness probe with controllable readiness and liveness. Readiness can also be parked on a gate the test
 ///     completes, which is how "the port opens after a while" is expressed without a single sleep.
 /// </summary>
-internal sealed class FakeWhisperReadinessProbe(bool ready = true, bool responsive = true) : IWhisperServerReadinessProbe
+internal sealed class FakeWhisperReadinessProbe : IWhisperServerReadinessProbe
 {
     private int _responsiveChecks;
     private int _readinessWaits;
 
-    public bool Ready { get; set; } = ready;
+    public FakeWhisperReadinessProbe(bool ready = true, bool responsive = true)
+    {
+        Ready = ready;
+        Responsive = responsive;
+    }
 
-    public bool Responsive { get; set; } = responsive;
+    public bool Ready { get; set; }
+
+    public bool Responsive { get; set; }
 
     /// <summary>When set, readiness parks on this gate and resolves to whatever it completes with.</summary>
     public TaskCompletionSource<bool>? ReadinessGate { get; set; }
@@ -116,20 +127,38 @@ internal sealed class FakeWhisperReadinessProbe(bool ready = true, bool responsi
 }
 
 /// <summary>Backend selector returning a fixed backend; never probes hardware.</summary>
-internal sealed class FakeWhisperBackendSelector(WhisperBackend backend = WhisperBackend.Cpu) : IWhisperBackendSelector
+internal sealed class FakeWhisperBackendSelector : IWhisperBackendSelector
 {
+    private readonly WhisperBackend _backend;
+
+    public FakeWhisperBackendSelector(WhisperBackend backend = WhisperBackend.Cpu)
+    {
+        _backend = backend;
+    }
+
     public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct) =>
-        Task.FromResult(backend);
+        Task.FromResult(_backend);
 }
 
 /// <summary>Binary manager returning a fixed fake server path for whatever backend is requested; never downloads.</summary>
-internal sealed class FakeWhisperBinaryManager(
-    WhisperBackend resolvedBackend = WhisperBackend.Cpu,
-    bool isPinnedFallback = true,
-    string version = "b5130") : IWhisperCppBinaryManager
+internal sealed class FakeWhisperBinaryManager : IWhisperCppBinaryManager
 {
+    private readonly WhisperBackend _resolvedBackend;
+    private readonly bool _isPinnedFallback;
+    private readonly string _version;
+
+    public FakeWhisperBinaryManager(
+        WhisperBackend resolvedBackend = WhisperBackend.Cpu,
+        bool isPinnedFallback = true,
+        string version = "b5130")
+    {
+        _resolvedBackend = resolvedBackend;
+        _isPinnedFallback = isPinnedFallback;
+        _version = version;
+    }
+
     public Task<WhisperBinary> EnsureBinaryAsync(WhisperBackend backend, CancellationToken ct) =>
-        Task.FromResult(new WhisperBinary("/fake/bin/whisper-server", version, resolvedBackend, isPinnedFallback));
+        Task.FromResult(new WhisperBinary("/fake/bin/whisper-server", _version, _resolvedBackend, _isPinnedFallback));
 }
 
 /// <summary>
@@ -155,15 +184,21 @@ internal sealed class RecordingGpuLoadAdmission : IGpuModelLoadAdmission
         return Task.FromResult<IDisposable>(new Ticket(this));
     }
 
-    private sealed class Ticket(RecordingGpuLoadAdmission owner) : IDisposable
+    private sealed class Ticket : IDisposable
     {
+        private readonly RecordingGpuLoadAdmission _owner;
         private int _disposed;
+
+        public Ticket(RecordingGpuLoadAdmission owner)
+        {
+            _owner = owner;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                Interlocked.Increment(ref owner._released);
+                Interlocked.Increment(ref _owner._released);
             }
         }
     }
@@ -177,9 +212,15 @@ internal sealed class ForbiddenGpuLoadAdmission : IGpuModelLoadAdmission
 }
 
 /// <summary>Scripted HTTP for the supervisor's in-place model-switch route.</summary>
-internal sealed class ScriptedWhisperHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+internal sealed class ScriptedWhisperHttpHandler : HttpMessageHandler
 {
+    private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
     private int _callCount;
+
+    public ScriptedWhisperHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
+    {
+        _responder = responder;
+    }
 
     public int CallCount => Volatile.Read(ref _callCount);
 
@@ -189,7 +230,7 @@ internal sealed class ScriptedWhisperHttpHandler(Func<HttpRequestMessage, HttpRe
     {
         LastPath = request.RequestUri?.AbsolutePath;
         Interlocked.Increment(ref _callCount);
-        return Task.FromResult(responder(request));
+        return Task.FromResult(_responder(request));
     }
 }
 

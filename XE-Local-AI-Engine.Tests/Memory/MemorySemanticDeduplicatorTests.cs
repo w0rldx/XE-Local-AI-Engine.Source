@@ -232,9 +232,15 @@ public sealed class MemorySemanticDeduplicatorTests
 
     // A node-local provider whose embedding generator returns the mapped vector for each input text; records generator
     // construction and total texts embedded so the cache / re-embed assertions can observe the round-trips.
-    private sealed class MapEmbeddingProvider(VectorMap vectors) : ILocalModelProvider
+    private sealed class MapEmbeddingProvider : ILocalModelProvider
     {
         public const string ProviderKey = "fake-memdedup";
+        private readonly VectorMap _vectors;
+
+        public MapEmbeddingProvider(VectorMap vectors)
+        {
+            _vectors = vectors;
+        }
 
         public int CreateGeneratorCallCount { get; private set; }
 
@@ -247,7 +253,7 @@ public sealed class MemorySemanticDeduplicatorTests
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             CreateGeneratorCallCount++;
-            return new MapEmbeddingGenerator(this, vectors);
+            return new MapEmbeddingGenerator(this, _vectors);
         }
 
         public IChatClient CreateChatClient(LocalModelSelection selection)
@@ -290,13 +296,22 @@ public sealed class MemorySemanticDeduplicatorTests
             TotalEmbeddedTexts++;
         }
 
-        private sealed class MapEmbeddingGenerator(MapEmbeddingProvider owner, VectorMap vectors) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class MapEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
+            private readonly MapEmbeddingProvider _owner;
+            private readonly VectorMap _vectors;
+
+            public MapEmbeddingGenerator(MapEmbeddingProvider owner, VectorMap vectors)
+            {
+                _owner = owner;
+                _vectors = vectors;
+            }
+
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
-                if (owner.ThrowOnGenerate)
+                if (_owner.ThrowOnGenerate)
                 {
                     throw new HttpRequestException("fake embedding transport failure");
                 }
@@ -304,8 +319,8 @@ public sealed class MemorySemanticDeduplicatorTests
                 var embeddings = new List<Embedding<float>>();
                 foreach (var value in values)
                 {
-                    owner.RecordEmbedded();
-                    embeddings.Add(new Embedding<float>(vectors.Get(value)));
+                    _owner.RecordEmbedded();
+                    embeddings.Add(new Embedding<float>(_vectors.Get(value)));
                 }
 
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
@@ -323,11 +338,18 @@ public sealed class MemorySemanticDeduplicatorTests
     }
 
     // A fake resolver so IsConfident is controllable without touching the provider's ListModelsAsync.
-    private sealed class FakeEmbeddingModelResolver(bool isConfident) : IEmbeddingModelResolver
+    private sealed class FakeEmbeddingModelResolver : IEmbeddingModelResolver
     {
+        private readonly bool _isConfident;
+
+        public FakeEmbeddingModelResolver(bool isConfident)
+        {
+            _isConfident = isConfident;
+        }
+
         public Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new EmbeddingModelResolution(ResolvedModel, isConfident));
+            return Task.FromResult(new EmbeddingModelResolution(ResolvedModel, _isConfident));
         }
     }
 }

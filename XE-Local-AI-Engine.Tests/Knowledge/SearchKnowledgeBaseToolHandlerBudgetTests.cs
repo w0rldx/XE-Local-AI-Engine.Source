@@ -234,22 +234,36 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         }));
     }
 
-    private sealed class FakeKnowledgeSearchService(KnowledgeSearchResult result) : IKnowledgeSearchService
+    private sealed class FakeKnowledgeSearchService : IKnowledgeSearchService
     {
+        private readonly KnowledgeSearchResult _result;
+
+        public FakeKnowledgeSearchService(KnowledgeSearchResult result)
+        {
+            _result = result;
+        }
+
         public Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(result);
+            return Task.FromResult(_result);
         }
     }
 
-    private sealed class CapturingKnowledgeSearchService(KnowledgeSearchResult result) : IKnowledgeSearchService
+    private sealed class CapturingKnowledgeSearchService : IKnowledgeSearchService
     {
+        private readonly KnowledgeSearchResult _result;
+
+        public CapturingKnowledgeSearchService(KnowledgeSearchResult result)
+        {
+            _result = result;
+        }
+
         public KnowledgeSearchRequest? LastRequest { get; private set; }
 
         public Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken)
         {
             LastRequest = request;
-            return Task.FromResult(result);
+            return Task.FromResult(_result);
         }
     }
 }

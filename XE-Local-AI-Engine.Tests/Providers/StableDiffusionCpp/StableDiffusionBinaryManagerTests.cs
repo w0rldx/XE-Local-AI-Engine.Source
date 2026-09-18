@@ -100,14 +100,21 @@ public sealed class StableDiffusionBinaryManagerTests
         AssertEx.Equal(expected: 0, handler.CallCount);
     }
 
-    private sealed class CountingHandler(Func<HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class CountingHandler : HttpMessageHandler
     {
+        private readonly Func<HttpResponseMessage> _responder;
+
+        public CountingHandler(Func<HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public int CallCount { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult(responder());
+            return Task.FromResult(_responder());
         }
     }
 

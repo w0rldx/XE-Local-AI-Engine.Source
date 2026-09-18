@@ -218,14 +218,21 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         };
     }
 
-    private sealed class ScriptedHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class ScriptedHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
+
+        public ScriptedHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public int CallCount { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult(responder(request));
+            return Task.FromResult(_responder(request));
         }
     }
 }

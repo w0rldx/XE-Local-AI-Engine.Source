@@ -491,9 +491,14 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 37)).ToArray();
     }
 
-    private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder
+    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
     {
-        private byte[]? _key = key;
+        private byte[]? _key;
+
+        public FixedNodeSqliteKeyHolder(byte[] key)
+        {
+            _key = key;
+        }
 
         public ReadOnlyMemory<byte> Key
         {

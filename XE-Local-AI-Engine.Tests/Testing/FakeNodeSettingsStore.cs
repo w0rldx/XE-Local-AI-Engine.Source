@@ -17,12 +17,20 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///         test that depends on either must use the real <c>NodeSettingsStore</c>.
 ///     </para>
 /// </remarks>
-internal sealed class FakeNodeSettingsStore(
-    StoredNodeSettings initial,
-    Func<StoredNodeSettings, StoredNodeSettings>? siblingWriteBeforeTheUpdate = null) : INodeSettingsStore
+internal sealed class FakeNodeSettingsStore : INodeSettingsStore
 {
+    private readonly Func<StoredNodeSettings, StoredNodeSettings>? _siblingWriteBeforeTheUpdate;
+
+    public FakeNodeSettingsStore(
+        StoredNodeSettings initial,
+        Func<StoredNodeSettings, StoredNodeSettings>? siblingWriteBeforeTheUpdate = null)
+    {
+        _siblingWriteBeforeTheUpdate = siblingWriteBeforeTheUpdate;
+        Current = initial;
+    }
+
     /// <summary>The record the store currently holds.</summary>
-    public StoredNodeSettings Current { get; private set; } = initial;
+    public StoredNodeSettings Current { get; private set; }
 
     /// <summary>The last record persisted, or <see langword="null" /> when nothing has been written.</summary>
     public StoredNodeSettings? Saved { get; private set; }
@@ -52,9 +60,9 @@ internal sealed class FakeNodeSettingsStore(
     {
         ArgumentNullException.ThrowIfNull(mutate);
 
-        if (siblingWriteBeforeTheUpdate is not null)
+        if (_siblingWriteBeforeTheUpdate is not null)
         {
-            Current = siblingWriteBeforeTheUpdate(Current);
+            Current = _siblingWriteBeforeTheUpdate(Current);
         }
 
         await SaveAsync(mutate(Current), cancellationToken);

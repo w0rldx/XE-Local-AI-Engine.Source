@@ -524,18 +524,30 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         return $$"""{"tokens":[{{string.Join(',', Enumerable.Repeat("1", count))}}]}""";
     }
 
-    private sealed class DelegateHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) : HttpMessageHandler
+    private sealed class DelegateHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
+
+        public DelegateHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
+        {
+            _handler = handler;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return handler(request, cancellationToken);
+            return _handler(request, cancellationToken);
         }
     }
 
-    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    private sealed class ManualTimeProvider : TimeProvider
     {
         private readonly Lock _sync = new();
-        private DateTimeOffset _utcNow = utcNow;
+        private DateTimeOffset _utcNow;
+
+        public ManualTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
 
         public override DateTimeOffset GetUtcNow()
         {

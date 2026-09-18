@@ -257,22 +257,26 @@ public sealed class ImageModelDiscoveryEndpointTests
         }
     }
 
-    private sealed class StubImageModelRegistry(params string[] installedModelNames) : IImageModelRegistry
+    private sealed class StubImageModelRegistry : IImageModelRegistry
     {
-        private readonly IReadOnlyList<ImageModelRegistryEntry> _entries =
-        [
-            .. installedModelNames.Select(static name => new ImageModelRegistryEntry
-            {
-                ModelName = name,
-                RepoId = "owner/repo",
-                Family = ImageModelFamily.Sd15,
-                Kind = ImageModelKind.Txt2Img,
-                Parts = [],
-                SizeBytes = 1,
-                SourceRevision = "main",
-                DownloadedAtUtc = DateTimeOffset.UnixEpoch
-            })
-        ];
+        private readonly IReadOnlyList<ImageModelRegistryEntry> _entries;
+
+        public StubImageModelRegistry(params string[] installedModelNames)
+        {
+            _entries = [
+                .. installedModelNames.Select(static name => new ImageModelRegistryEntry
+                {
+                    ModelName = name,
+                    RepoId = "owner/repo",
+                    Family = ImageModelFamily.Sd15,
+                    Kind = ImageModelKind.Txt2Img,
+                    Parts = [],
+                    SizeBytes = 1,
+                    SourceRevision = "main",
+                    DownloadedAtUtc = DateTimeOffset.UnixEpoch
+                })
+            ];
+        }
 
         public Task<IReadOnlyList<ImageModelRegistryEntry>> ListAsync(CancellationToken ct)
         {

@@ -79,11 +79,16 @@ public sealed class MachineKeyProviderTests
 
     // Minimal stateful INodeSettingsStore: holds the last-saved settings, counts writes, and (like the real store)
     // applies a mutation under one lock so two concurrent read-modify-writes cannot interleave. No file I/O.
-    private sealed class FakeNodeSettingsStore(StoredNodeSettings? initial = null) : INodeSettingsStore
+    private sealed class FakeNodeSettingsStore : INodeSettingsStore
     {
         private readonly Lock _gate = new();
 
-        public StoredNodeSettings Current { get; private set; } = initial ?? new StoredNodeSettings();
+        public FakeNodeSettingsStore(StoredNodeSettings? initial = null)
+        {
+            Current = initial ?? new StoredNodeSettings();
+        }
+
+        public StoredNodeSettings Current { get; private set; }
 
         public int SaveCount { get; private set; }
 

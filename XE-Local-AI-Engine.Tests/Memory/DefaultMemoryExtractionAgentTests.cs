@@ -118,8 +118,15 @@ public sealed class DefaultMemoryExtractionAgentTests
     ///     A minimal node-local <see cref="IChatClient" /> stand-in returning a fixed JSON envelope so the agent's
     ///     <c>GetResponseAsync&lt;ExtractionEnvelope&gt;</c> parses a structured result without a live model.
     /// </summary>
-    private sealed class EnvelopeChatClient(string json) : IChatClient
+    private sealed class EnvelopeChatClient : IChatClient
     {
+        private readonly string _json;
+
+        public EnvelopeChatClient(string json)
+        {
+            _json = json;
+        }
+
         public bool WasCalled { get; private set; }
 
         public bool IsDisposed { get; private set; }
@@ -129,7 +136,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             CancellationToken cancellationToken = default)
         {
             WasCalled = true;
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _json)));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

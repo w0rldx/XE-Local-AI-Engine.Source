@@ -245,8 +245,17 @@ public sealed class GenAiErrorDescriptionRedactionProcessorTests
 
     /// <summary>A provider that fails with a message embedding caller content — the real shape of a llama-server or
     ///     OpenAI-compatible failure, without a transport.</summary>
-    private sealed class ThrowingChatClient(string message, string modelId) : IChatClient
+    private sealed class ThrowingChatClient : IChatClient
     {
+        private readonly string _message;
+        private readonly string _modelId;
+
+        public ThrowingChatClient(string message, string modelId)
+        {
+            _message = message;
+            _modelId = modelId;
+        }
+
         public void Dispose()
         {
         }
@@ -254,21 +263,21 @@ public sealed class GenAiErrorDescriptionRedactionProcessorTests
         public object? GetService(Type serviceType, object? serviceKey = null)
         {
             ArgumentNullException.ThrowIfNull(serviceType);
-            return serviceType == typeof(ChatClientMetadata) ? new ChatClientMetadata("fake", defaultModelId: modelId) : null;
+            return serviceType == typeof(ChatClientMetadata) ? new ChatClientMetadata("fake", defaultModelId: _modelId) : null;
         }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            throw new InvalidOperationException(message);
+            throw new InvalidOperationException(_message);
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            throw new InvalidOperationException(message);
+            throw new InvalidOperationException(_message);
         }
     }
 }

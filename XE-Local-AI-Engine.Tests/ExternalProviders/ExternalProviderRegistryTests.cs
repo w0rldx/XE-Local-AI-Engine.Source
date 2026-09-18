@@ -205,13 +205,18 @@ public sealed class ExternalProviderRegistryTests
 }
 
 /// <summary>An in-memory <see cref="IExternalProviderStore" /> that counts loads, so caching can be asserted.</summary>
-internal sealed class FakeExternalProviderStore(params StoredExternalProviderConnection[] connections) : IExternalProviderStore
+internal sealed class FakeExternalProviderStore : IExternalProviderStore
 {
-    private StoredExternalProviderConfig _config = new()
+    private StoredExternalProviderConfig _config;
+
+    public FakeExternalProviderStore(params StoredExternalProviderConnection[] connections)
     {
-        Revision = "r0",
-        Connections = connections
-    };
+        _config = new()
+        {
+            Revision = "r0",
+            Connections = connections
+        };
+    }
 
     public int LoadCount { get; private set; }
 

@@ -248,22 +248,30 @@ public sealed class LlamaServerRerankerClientTests
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
 
-    private sealed class CapturingHandler(Func<HttpRequestMessage, HttpResponseMessage> responder, TimeSpan? delay = null)
-        : HttpMessageHandler
+    private sealed class CapturingHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
+        private readonly TimeSpan? _delay;
+
+        public CapturingHandler(Func<HttpRequestMessage, HttpResponseMessage> responder, TimeSpan? delay = null)
+        {
+            _responder = responder;
+            _delay = delay;
+        }
+
         public Uri? LastRequestUri { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastRequestUri = request.RequestUri;
-            if (delay is { } pause)
+            if (_delay is { } pause)
             {
                 // real-timer: a hang is the input. Honors the token so the client's own bounded timeout — real wall
                 // clock inside the client, with no injected TimeProvider — is what cancels the wait.
                 await Task.Delay(pause, cancellationToken);
             }
 
-            return responder(request);
+            return _responder(request);
         }
     }
 }

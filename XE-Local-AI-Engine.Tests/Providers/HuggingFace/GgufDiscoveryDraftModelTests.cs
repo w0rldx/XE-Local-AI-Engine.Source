@@ -153,15 +153,22 @@ public sealed class GgufDiscoveryDraftModelTests
     }
 
     // Serves only the repo-detail endpoint: every assertion here uses the header-free ListRepoFilesAsync path.
-    private sealed class StubHandler(string repoDetail) : HttpMessageHandler
+    private sealed class StubHandler : HttpMessageHandler
     {
+        private readonly string _repoDetail;
+
+        public StubHandler(string repoDetail)
+        {
+            _repoDetail = repoDetail;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (request.RequestUri!.ToString().Contains("/api/models/", StringComparison.Ordinal))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new StringContent(repoDetail, Encoding.UTF8, "application/json")
+                    Content = new StringContent(_repoDetail, Encoding.UTF8, "application/json")
                 });
             }
 

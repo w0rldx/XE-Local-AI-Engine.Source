@@ -314,9 +314,15 @@ public sealed class WhisperServerTranscriberTests
     }
 
     /// <summary>Records what actually went on the wire, which is the only way to assert the multipart contract.</summary>
-    private sealed class RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class RecordingHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
         private int _callCount;
+
+        public RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
 
         public int CallCount => Volatile.Read(ref _callCount);
 
@@ -332,7 +338,7 @@ public sealed class WhisperServerTranscriberTests
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
 
-            return responder(request);
+            return _responder(request);
         }
     }
 
@@ -377,15 +383,22 @@ public sealed class WhisperServerTranscriberTests
         public WhisperRuntimeStatusSnapshot GetStatus() =>
             new(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu, "b5130", WhisperBinarySource.Pinned, SupportsTranscode: false);
 
-        private sealed class CountingLease(FakeTranscriptionSupervisor owner) : IWhisperTranscriptionLease
+        private sealed class CountingLease : IWhisperTranscriptionLease
         {
+            private readonly FakeTranscriptionSupervisor _owner;
+
+            public CountingLease(FakeTranscriptionSupervisor owner)
+            {
+                _owner = owner;
+            }
+
             public void Touch()
             {
                 // The idle clock is the supervisor's; nothing here needs to observe a touch.
             }
 
             public void Dispose() =>
-                Interlocked.Increment(ref owner._leasesDisposed);
+                Interlocked.Increment(ref _owner._leasesDisposed);
         }
     }
 

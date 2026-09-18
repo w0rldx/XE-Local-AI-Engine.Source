@@ -1352,12 +1352,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
 ///     A transcriber that parks every call on a gate the test opens, and honours the cancellation token while it
 ///     waits — which is what makes "ending a session does not wait behind inference" an assertion rather than a hope.
 /// </summary>
-internal sealed class GatedWhisperTranscriber(Func<SubmittedWindow, IReadOnlyList<WhisperTranscriptSegment>> respond) : IWhisperTranscriber
+internal sealed class GatedWhisperTranscriber : IWhisperTranscriber
 {
     private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly ScriptedWhisperTranscriber _inner = new(respond);
+    private readonly ScriptedWhisperTranscriber _inner;
     private int _callCount;
+
+    public GatedWhisperTranscriber(Func<SubmittedWindow, IReadOnlyList<WhisperTranscriptSegment>> respond)
+    {
+        _inner = new(respond);
+    }
 
     /// <summary>Completes once a call has reached the gate.</summary>
     public Task Entered => _entered.Task;
@@ -1427,11 +1432,17 @@ internal sealed class GatedWhisperTranscriber(Func<SubmittedWindow, IReadOnlyLis
 ///     An in-host audio producer that records how it was stopped: whether its token had already been cancelled, how
 ///     many times it was asked, and optionally refusing to return at all.
 /// </summary>
-internal sealed class RecordingAudioProducer(List<string>? order = null) : ILiveAudioProducer
+internal sealed class RecordingAudioProducer : ILiveAudioProducer
 {
     private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly List<string>? _order;
     private int _stopCount;
+
+    public RecordingAudioProducer(List<string>? order = null)
+    {
+        _order = order;
+    }
 
     /// <summary>The token the registry handed back at attachment; the test wires it so the fake can inspect it.</summary>
     public CancellationToken Token { get; set; }
@@ -1455,11 +1466,11 @@ internal sealed class RecordingAudioProducer(List<string>? order = null) : ILive
         TokenWasCancelledAtStop = Token.IsCancellationRequested;
         _ = Interlocked.Increment(ref _stopCount);
 
-        if (order is not null)
+        if (_order is not null)
         {
-            lock (order)
+            lock (_order)
             {
-                order.Add("stop");
+                _order.Add("stop");
             }
         }
 

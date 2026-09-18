@@ -623,18 +623,31 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
         return provider;
     }
 
-    private sealed class FakeHttpClientFactory(HttpClient client) : IHttpClientFactory
+    private sealed class FakeHttpClientFactory : IHttpClientFactory
     {
+        private readonly HttpClient _client;
+
+        public FakeHttpClientFactory(HttpClient client)
+        {
+            _client = client;
+        }
+
         public HttpClient CreateClient(string name)
         {
-            return client;
+            return _client;
         }
     }
 
-    private sealed class CountingStubHandler(HttpStatusCode statusCode, string? body) : HttpMessageHandler
+    private sealed class CountingStubHandler : HttpMessageHandler
     {
-        private string? _body = body;
-        private HttpStatusCode _statusCode = statusCode;
+        private string? _body;
+        private HttpStatusCode _statusCode;
+
+        public CountingStubHandler(HttpStatusCode statusCode, string? body)
+        {
+            _body = body;
+            _statusCode = statusCode;
+        }
 
         public int CallCount { get; private set; }
 
@@ -712,11 +725,17 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     }
 
     /// <summary>Holds every caller inside the handler until the test releases it, so a fetch stampede would be visible.</summary>
-    private sealed class GatedStubHandler(string body) : HttpMessageHandler
+    private sealed class GatedStubHandler : HttpMessageHandler
     {
         private readonly TaskCompletionSource _firstRequest = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly string _body;
         private int _callCount;
+
+        public GatedStubHandler(string body)
+        {
+            _body = body;
+        }
 
         public int CallCount => Volatile.Read(ref _callCount);
 
@@ -735,7 +754,7 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(body)
+                Content = new StringContent(_body)
             };
         }
     }
@@ -807,12 +826,19 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     }
 
     /// <summary>Content that refuses to declare its length, so <c>Content-Length</c> cannot be the thing that rejects it.</summary>
-    private sealed class UndeclaredLengthContent(string body) : HttpContent
+    private sealed class UndeclaredLengthContent : HttpContent
     {
+        private readonly string _body;
+
+        public UndeclaredLengthContent(string body)
+        {
+            _body = body;
+        }
+
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            var bytes = Encoding.UTF8.GetBytes(body);
+            var bytes = Encoding.UTF8.GetBytes(_body);
             return stream.WriteAsync(bytes, offset: 0, bytes.Length);
         }
 

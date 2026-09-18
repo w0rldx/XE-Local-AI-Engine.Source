@@ -198,9 +198,7 @@ enforced by `BannedSymbols.txt` (RS0030), documented in [Security & Privacy](12-
 `.editorconfig` sets `csharp_style_prefer_primary_constructors = false`, but IDE0290 does not flag a primary
 constructor that already exists, so a source scan enforces the rule: `PrimaryConstructorConventionTests` fails on
 any class or struct declaration that carries a parameter list (records are out of scope). It derives its coverage
-from the solution, minus an explicit exemption list that is where to read which projects the rule does not fence
-yet — that list can only shrink, because a project on it that has reached zero fails the guard until its entry is
-removed.
+from the solution and fences every project in it, plus the C# under `tools/`. There is no exemption list.
 
 ### DTOs, records and type choice
 

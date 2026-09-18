@@ -65,9 +65,16 @@ public sealed class LocalModelProviderResolverDefaultTests
     }
 
     /// <summary>A minimal provider used only for its <see cref="ILocalModelProvider.ProviderName" /> key.</summary>
-    private sealed class StubProvider(string providerName) : ILocalModelProvider
+    private sealed class StubProvider : ILocalModelProvider
     {
-        public string ProviderName => providerName;
+        private readonly string _providerName;
+
+        public StubProvider(string providerName)
+        {
+            _providerName = providerName;
+        }
+
+        public string ProviderName => _providerName;
 
         public IChatClient CreateChatClient(LocalModelSelection selection)
         {

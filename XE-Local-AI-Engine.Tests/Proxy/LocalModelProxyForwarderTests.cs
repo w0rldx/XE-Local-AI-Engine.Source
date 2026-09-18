@@ -336,8 +336,19 @@ public sealed class LocalModelProxyForwarderTests
     }
 
     /// <summary>Stands in for the llama-server child: captures the forwarded request and returns a canned response.</summary>
-    private sealed class CapturingHandler(HttpStatusCode statusCode, string contentType, string body) : HttpMessageHandler
+    private sealed class CapturingHandler : HttpMessageHandler
     {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _contentType;
+        private readonly string _body;
+
+        public CapturingHandler(HttpStatusCode statusCode, string contentType, string body)
+        {
+            _statusCode = statusCode;
+            _contentType = contentType;
+            _body = body;
+        }
+
         public HttpRequestMessage? LastRequest { get; private set; }
 
         public string? LastRequestBody { get; private set; }
@@ -349,11 +360,11 @@ public sealed class LocalModelProxyForwarderTests
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
 
-            var response = new HttpResponseMessage(statusCode)
+            var response = new HttpResponseMessage(_statusCode)
             {
-                Content = new StringContent(body, Encoding.UTF8)
+                Content = new StringContent(_body, Encoding.UTF8)
             };
-            response.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue(_contentType);
             return response;
         }
     }
@@ -382,15 +393,22 @@ public sealed class LocalModelProxyForwarderTests
     }
 
     /// <summary>Stands in for a child killed MID-RESPONSE (forced eject): some bytes arrive, then the body ends prematurely.</summary>
-    private sealed class DyingHandler(string contentType) : HttpMessageHandler
+    private sealed class DyingHandler : HttpMessageHandler
     {
+        private readonly string _contentType;
+
+        public DyingHandler(string contentType)
+        {
+            _contentType = contentType;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StreamContent(new DyingStream())
             };
-            response.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue(_contentType);
             return Task.FromResult(response);
         }
     }

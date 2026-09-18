@@ -276,9 +276,14 @@ public sealed class WhisperSourceRuntimeFoundationTests
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 
     /// <summary>Fails exactly one record write, so the adoption's last step is the one that breaks.</summary>
-    private sealed class FailingWriteStore(WhisperInstalledRuntimeStore inner) : IWhisperInstalledRuntimeStore
+    private sealed class FailingWriteStore : IWhisperInstalledRuntimeStore
     {
-        public WhisperInstalledRuntimeStore Inner { get; } = inner;
+        public FailingWriteStore(WhisperInstalledRuntimeStore inner)
+        {
+            Inner = inner;
+        }
+
+        public WhisperInstalledRuntimeStore Inner { get; }
 
         public bool FailNextWrite { get; set; }
 

@@ -390,8 +390,17 @@ public sealed class TranscriptionUploadStreamingTests
     ///     spill file is still on disk. A startup filter is the seam because the test factory exposes services only,
     ///     and middleware a filter adds runs ahead of the node's own pipeline, so the route needs no authentication.
     /// </summary>
-    private sealed class BufferedControlStartupFilter(TaskCompletionSource gate, TaskCompletionSource entered) : IStartupFilter
+    private sealed class BufferedControlStartupFilter : IStartupFilter
     {
+        private readonly TaskCompletionSource _gate;
+        private readonly TaskCompletionSource _entered;
+
+        public BufferedControlStartupFilter(TaskCompletionSource gate, TaskCompletionSource entered)
+        {
+            _gate = gate;
+            _entered = entered;
+        }
+
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) =>
             app =>
             {
@@ -404,8 +413,8 @@ public sealed class TranscriptionUploadStreamingTests
                     }
 
                     _ = await context.Request.ReadFormAsync(context.RequestAborted);
-                    _ = entered.TrySetResult();
-                    await gate.Task;
+                    _ = _entered.TrySetResult();
+                    await _gate.Task;
                     context.Response.StatusCode = StatusCodes.Status200OK;
                 });
 

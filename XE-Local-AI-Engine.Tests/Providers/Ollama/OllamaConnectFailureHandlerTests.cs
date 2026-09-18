@@ -67,19 +67,33 @@ public sealed class OllamaConnectFailureHandlerTests
         AssertEx.True(ReferenceEquals(refused, thrown), "an existing HttpRequestException must propagate unchanged");
     }
 
-    private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler
+    private sealed class ThrowingHandler : HttpMessageHandler
     {
+        private readonly Exception _exception;
+
+        public ThrowingHandler(Exception exception)
+        {
+            _exception = exception;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return Task.FromException<HttpResponseMessage>(exception);
+            return Task.FromException<HttpResponseMessage>(_exception);
         }
     }
 
-    private sealed class RespondingHandler(HttpResponseMessage response) : HttpMessageHandler
+    private sealed class RespondingHandler : HttpMessageHandler
     {
+        private readonly HttpResponseMessage _response;
+
+        public RespondingHandler(HttpResponseMessage response)
+        {
+            _response = response;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(response);
+            return Task.FromResult(_response);
         }
     }
 }

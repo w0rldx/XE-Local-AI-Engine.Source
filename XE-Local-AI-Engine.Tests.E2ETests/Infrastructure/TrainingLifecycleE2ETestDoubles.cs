@@ -167,13 +167,20 @@ public static class TrainingLifecycleE2ETestDoubles
             return new Handle(lines);
         }
 
-        private sealed class Handle(IReadOnlyList<string> lines) : ITrainingProcessHandle
+        private sealed class Handle : ITrainingProcessHandle
         {
+            private readonly IReadOnlyList<string> _lines;
+
+            public Handle(IReadOnlyList<string> lines)
+            {
+                _lines = lines;
+            }
+
             public TrainingLaunchReceipt Receipt { get; } = new(4242, 4242, "/e2e/python", 1, "e2e-token");
 
             public async IAsyncEnumerable<string> ReadOutputAsync([EnumeratorCancellation] CancellationToken ct)
             {
-                foreach (var line in lines)
+                foreach (var line in _lines)
                 {
                     ct.ThrowIfCancellationRequested();
                     yield return line;
@@ -275,9 +282,14 @@ public static class TrainingLifecycleE2ETestDoubles
         }
     }
 
-    public sealed class InstalledModels(string root) : IGgufModelStore, ITrainingEvaluationInstalledModelLeaseProvider
+    public sealed class InstalledModels : IGgufModelStore, ITrainingEvaluationInstalledModelLeaseProvider
     {
-        private readonly string _path = CreateBase(root);
+        private readonly string _path;
+
+        public InstalledModels(string root)
+        {
+            _path = CreateBase(root);
+        }
 
         private static string CreateBase(string root)
         {
@@ -333,12 +345,21 @@ public static class TrainingLifecycleE2ETestDoubles
             return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct));
         }
 
-        private sealed class Lease(string path, string sha) : ITrainingEvaluationInstalledModelLease
+        private sealed class Lease : ITrainingEvaluationInstalledModelLease
         {
-            public string ModelFilePath => path;
+            private readonly string _path;
+            private readonly string _sha;
+
+            public Lease(string path, string sha)
+            {
+                _path = path;
+                _sha = sha;
+            }
+
+            public string ModelFilePath => _path;
             public string ModelContentFingerprint => InstalledBaseFingerprint;
-            public string ModelSha256 => sha;
-            public long ModelSizeBytes => new FileInfo(path).Length;
+            public string ModelSha256 => _sha;
+            public long ModelSizeBytes => new FileInfo(_path).Length;
 
             public ValueTask DisposeAsync() =>
                 ValueTask.CompletedTask;
@@ -414,8 +435,15 @@ public static class TrainingLifecycleE2ETestDoubles
         }
     }
 
-    public sealed class Importer(Verdicts verdicts) : IGgufModelImporter
+    public sealed class Importer : IGgufModelImporter
     {
+        private readonly Verdicts _verdicts;
+
+        public Importer(Verdicts verdicts)
+        {
+            _verdicts = verdicts;
+        }
+
         public async Task<PreparedGgufImport> PrepareAsync(GgufImportSource source, GgufImportDestination destination,
             IProgress<GgufImportProgress>? progress, CancellationToken ct)
         {
@@ -458,7 +486,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
         public Task<GgufImportCommitReceipt> CommitAsync(PreparedGgufImport prepared, CancellationToken ct)
         {
-            verdicts.Record(Stage.Promoted);
+            _verdicts.Record(Stage.Promoted);
             return Task.FromResult(new GgufImportCommitReceipt(prepared.RegistryEntry, prepared.RegistryEntry.LocalPath,
                 prepared.RegistryEntry.LocalPath + ".xe-model.json", prepared.WeightMemberFingerprint, prepared.ModelContentFingerprint));
         }

@@ -1021,9 +1021,14 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
     }
 
-    private sealed class SuccessfulRunner(string? resolvedCommit = null) : IStableDiffusionSourceCommandRunner
+    private sealed class SuccessfulRunner : IStableDiffusionSourceCommandRunner
     {
-        private readonly string _resolvedCommit = resolvedCommit ?? StableDiffusionReleasePins.PinnedSourceCommitSha;
+        private readonly string _resolvedCommit;
+
+        public SuccessfulRunner(string? resolvedCommit = null)
+        {
+            _resolvedCommit = resolvedCommit ?? StableDiffusionReleasePins.PinnedSourceCommitSha;
+        }
 
         public List<(string FileName, IReadOnlyList<string> Arguments)> Commands { get; } = [];
 
@@ -1084,18 +1089,24 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
     }
 
-    private sealed class FailingWriteStore(IStableDiffusionInstalledRuntimeStore inner) : IStableDiffusionInstalledRuntimeStore
+    private sealed class FailingWriteStore : IStableDiffusionInstalledRuntimeStore
     {
+        private readonly IStableDiffusionInstalledRuntimeStore _inner;
         private int _writeCount;
+
+        public FailingWriteStore(IStableDiffusionInstalledRuntimeStore inner)
+        {
+            _inner = inner;
+        }
 
         public Task<StableDiffusionInstalledRuntimeState?> ReadAsync(CancellationToken ct)
         {
-            return inner.ReadAsync(ct);
+            return _inner.ReadAsync(ct);
         }
 
         public async Task WriteAsync(StableDiffusionInstalledRuntimeState state, CancellationToken ct)
         {
-            await inner.WriteAsync(state, ct);
+            await _inner.WriteAsync(state, ct);
             if (Interlocked.Increment(ref _writeCount) == 1)
             {
                 throw new IOException("simulated partial state-store failure");
@@ -1104,7 +1115,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         public Task DeleteAsync(CancellationToken ct)
         {
-            return inner.DeleteAsync(ct);
+            return _inner.DeleteAsync(ct);
         }
     }
 

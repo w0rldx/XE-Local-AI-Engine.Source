@@ -466,15 +466,21 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
             return Task.FromResult<IDisposable>(new Ticket(this));
         }
 
-        private sealed class Ticket(TrackingGpuModelLoadAdmission owner) : IDisposable
+        private sealed class Ticket : IDisposable
         {
+            private readonly TrackingGpuModelLoadAdmission _owner;
             private int _disposed;
+
+            public Ticket(TrackingGpuModelLoadAdmission owner)
+            {
+                _owner = owner;
+            }
 
             public void Dispose()
             {
                 if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
                 {
-                    Interlocked.Decrement(ref owner._activeTickets);
+                    Interlocked.Decrement(ref _owner._activeTickets);
                 }
             }
         }

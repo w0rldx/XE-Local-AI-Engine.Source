@@ -262,14 +262,21 @@ public sealed class PlaybookAnalysisServiceTests
         return new ProposedPlaybookAction(behavior, TriggerCondition: null, scope, sourceFeedbackIds, confidence);
     }
 
-    private sealed class FakeAnalysisAgent(Func<FeedbackInsightsResult, IReadOnlyList<ProposedPlaybookAction>> propose) : IPlaybookAnalysisAgent
+    private sealed class FakeAnalysisAgent : IPlaybookAnalysisAgent
     {
+        private readonly Func<FeedbackInsightsResult, IReadOnlyList<ProposedPlaybookAction>> _propose;
+
+        public FakeAnalysisAgent(Func<FeedbackInsightsResult, IReadOnlyList<ProposedPlaybookAction>> propose)
+        {
+            _propose = propose;
+        }
+
         public int InvocationCount { get; private set; }
 
         public Task<IReadOnlyList<ProposedPlaybookAction>> ProposeAsync(FeedbackInsightsResult aggregate, CancellationToken cancellationToken = default)
         {
             InvocationCount++;
-            return Task.FromResult(propose(aggregate));
+            return Task.FromResult(_propose(aggregate));
         }
     }
 }

@@ -99,9 +99,15 @@ public sealed class StaleWhisperServerReaperTests
         AssertEx.Empty(scanner.KilledPids);
     }
 
-    private sealed class FakeStaleWhisperServerProcessScanner(IReadOnlyList<StaleWhisperServerProcess> candidates)
-        : IStaleWhisperServerProcessScanner
+    private sealed class FakeStaleWhisperServerProcessScanner : IStaleWhisperServerProcessScanner
     {
+        private readonly IReadOnlyList<StaleWhisperServerProcess> _candidates;
+
+        public FakeStaleWhisperServerProcessScanner(IReadOnlyList<StaleWhisperServerProcess> candidates)
+        {
+            _candidates = candidates;
+        }
+
         public List<int> KilledPids { get; } = [];
 
         public int EnumerateCallCount { get; private set; }
@@ -109,7 +115,7 @@ public sealed class StaleWhisperServerReaperTests
         public IReadOnlyList<StaleWhisperServerProcess> EnumerateWhisperServerProcesses()
         {
             EnumerateCallCount++;
-            return candidates;
+            return _candidates;
         }
 
         public void KillProcessTree(int pid) =>

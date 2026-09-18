@@ -254,8 +254,15 @@ public sealed class BenchmarkCatalogServiceTests
             identity);
     }
 
-    private sealed class LeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots) : IBenchmarkInstalledModelLeaseProvider
+    private sealed class LeaseProvider : IBenchmarkInstalledModelLeaseProvider
     {
+        private readonly IReadOnlyDictionary<string, InstalledModelSnapshot> _snapshots;
+
+        public LeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots)
+        {
+            _snapshots = snapshots;
+        }
+
         public List<string> Acquired { get; } = [];
 
         /// <summary>Model names whose snapshot acquisition fails verification, as a legacy registry entry does.</summary>
@@ -267,7 +274,7 @@ public sealed class BenchmarkCatalogServiceTests
             return Unverifiable.Contains(modelName)
                 ? throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
                     "The installed model weight no longer matches its registry value.")
-                : Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(snapshots[modelName]));
+                : Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(_snapshots[modelName]));
         }
     }
 
@@ -275,25 +282,39 @@ public sealed class BenchmarkCatalogServiceTests
     ///     Serves recorded facts cheaply and fails any verification the caller did not have to do — the model must be in
     ///     <paramref name="snapshots" /> to be verifiable at all.
     /// </summary>
-    private sealed class FactsProvider(
-        IReadOnlyDictionary<string, InstalledModelFacts> facts,
-        IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots) : IBenchmarkInstalledModelLeaseProvider
+    private sealed class FactsProvider : IBenchmarkInstalledModelLeaseProvider
     {
+        private readonly IReadOnlyDictionary<string, InstalledModelFacts> _facts;
+        private readonly IReadOnlyDictionary<string, InstalledModelSnapshot> _snapshots;
+
+        public FactsProvider(
+            IReadOnlyDictionary<string, InstalledModelFacts> facts,
+            IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots)
+        {
+            _facts = facts;
+            _snapshots = snapshots;
+        }
+
         public List<string> Verified { get; } = [];
 
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
         {
             Verified.Add(modelName);
-            return Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(snapshots[modelName]));
+            return Task.FromResult<IBenchmarkInstalledModelLease>(new Lease(_snapshots[modelName]));
         }
 
         public Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken) =>
-            Task.FromResult<InstalledModelFacts?>(facts.GetValueOrDefault(modelName));
+            Task.FromResult<InstalledModelFacts?>(_facts.GetValueOrDefault(modelName));
     }
 
-    private sealed class Lease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
+    private sealed class Lease : IBenchmarkInstalledModelLease
     {
-        public InstalledModelSnapshot Snapshot { get; } = snapshot;
+        public Lease(InstalledModelSnapshot snapshot)
+        {
+            Snapshot = snapshot;
+        }
+
+        public InstalledModelSnapshot Snapshot { get; }
 
         public ValueTask DisposeAsync() =>
             ValueTask.CompletedTask;

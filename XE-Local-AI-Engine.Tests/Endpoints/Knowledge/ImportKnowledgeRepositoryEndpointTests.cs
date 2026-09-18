@@ -80,11 +80,18 @@ public sealed class ImportKnowledgeRepositoryEndpointTests
         return await client.SendAsync(request);
     }
 
-    private sealed class ThrowingRepositoryImportService(Exception failure) : IKnowledgeRepositoryImportService
+    private sealed class ThrowingRepositoryImportService : IKnowledgeRepositoryImportService
     {
+        private readonly Exception _failure;
+
+        public ThrowingRepositoryImportService(Exception failure)
+        {
+            _failure = failure;
+        }
+
         public Task<KnowledgeRepositoryImportResult> ImportAsync(Guid selectedFolderId,
             string? collectionId,
             CancellationToken cancellationToken) =>
-            Task.FromException<KnowledgeRepositoryImportResult>(failure);
+            Task.FromException<KnowledgeRepositoryImportResult>(_failure);
     }
 }

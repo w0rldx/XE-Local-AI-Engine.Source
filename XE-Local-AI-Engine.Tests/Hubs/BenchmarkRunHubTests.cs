@@ -181,11 +181,18 @@ public sealed class BenchmarkRunHubTests
             PrimaryCompletedAtUtc: 2,
             UpdatedAtUtc: 2);
 
-    private sealed class HubFixture(BenchmarkRunHub hub, IGroupManager groups, ISingleClientProxy caller) : IDisposable
+    private sealed class HubFixture : IDisposable
     {
-        public BenchmarkRunHub Hub { get; } = hub;
-        public IGroupManager Groups { get; } = groups;
-        public ISingleClientProxy Caller { get; } = caller;
+        public HubFixture(BenchmarkRunHub hub, IGroupManager groups, ISingleClientProxy caller)
+        {
+            Hub = hub;
+            Groups = groups;
+            Caller = caller;
+        }
+
+        public BenchmarkRunHub Hub { get; }
+        public IGroupManager Groups { get; }
+        public ISingleClientProxy Caller { get; }
 
         public void Dispose() =>
             Hub.Dispose();

@@ -1398,8 +1398,15 @@ public sealed class BenchmarkRunExecutorTests
     private static BenchmarkEventBuffer Buffer() =>
         new(Options.Create(new BenchmarkEventBufferOptions()));
 
-    private sealed class FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
+    private sealed class FixedSnapshotFactory : IBenchmarkRuntimeSnapshotFactory
     {
+        private readonly BenchmarkRuntimeSnapshotV1 _snapshot;
+
+        public FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot)
+        {
+            _snapshot = snapshot;
+        }
+
         public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
             throw new NotSupportedException();
 
@@ -1407,18 +1414,30 @@ public sealed class BenchmarkRunExecutorTests
             throw new NotSupportedException();
 
         public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) =>
-            snapshot;
+            _snapshot;
     }
 
-    private sealed class FixedLeaseProvider(FakeLease lease) : IBenchmarkInstalledModelLeaseProvider
+    private sealed class FixedLeaseProvider : IBenchmarkInstalledModelLeaseProvider
     {
+        private readonly FakeLease _lease;
+
+        public FixedLeaseProvider(FakeLease lease)
+        {
+            _lease = lease;
+        }
+
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken) =>
-            Task.FromResult<IBenchmarkInstalledModelLease>(lease);
+            Task.FromResult<IBenchmarkInstalledModelLease>(_lease);
     }
 
-    private sealed class FakeLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
+    private sealed class FakeLease : IBenchmarkInstalledModelLease
     {
-        public InstalledModelSnapshot ModelSnapshot { get; } = snapshot;
+        public FakeLease(InstalledModelSnapshot snapshot)
+        {
+            ModelSnapshot = snapshot;
+        }
+
+        public InstalledModelSnapshot ModelSnapshot { get; }
         InstalledModelSnapshot IBenchmarkInstalledModelLease.Snapshot => ModelSnapshot;
         public bool Disposed { get; private set; }
 
@@ -1430,9 +1449,14 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     /// <summary>Answers each decision with the next verdict, then repeats the last one — capacity that frees up, or not.</summary>
-    private sealed class SequencedCapacityService(params CapacityVerdict[] verdicts) : ICapacityService
+    private sealed class SequencedCapacityService : ICapacityService
     {
-        private readonly Queue<CapacityVerdict> _verdicts = new(verdicts);
+        private readonly Queue<CapacityVerdict> _verdicts;
+
+        public SequencedCapacityService(params CapacityVerdict[] verdicts)
+        {
+            _verdicts = new(verdicts);
+        }
 
         public int DecisionCount { get; private set; }
         public TrackingDisposable Reservation { get; } = new();
@@ -1451,8 +1475,15 @@ public sealed class BenchmarkRunExecutorTests
         }
     }
 
-    private sealed class RecordingCapacityService(RecordingEnvironmentFacts? environmentFacts = null) : ICapacityService
+    private sealed class RecordingCapacityService : ICapacityService
     {
+        private readonly RecordingEnvironmentFacts? _environmentFacts;
+
+        public RecordingCapacityService(RecordingEnvironmentFacts? environmentFacts = null)
+        {
+            _environmentFacts = environmentFacts;
+        }
+
         public int DecisionCount { get; private set; }
         public int EnvironmentCapturesAtDecision { get; private set; }
         public CapacityRequest? LastRequest { get; private set; }
@@ -1467,7 +1498,7 @@ public sealed class BenchmarkRunExecutorTests
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
         {
             DecisionCount++;
-            EnvironmentCapturesAtDecision = environmentFacts?.Captures ?? 0;
+            EnvironmentCapturesAtDecision = _environmentFacts?.Captures ?? 0;
             LastRequest = request;
             Reservation = new TrackingDisposable();
             return Task.FromResult(new CapacityDecision(CapacityVerdict.Allow, "allowed", false, Reservation));

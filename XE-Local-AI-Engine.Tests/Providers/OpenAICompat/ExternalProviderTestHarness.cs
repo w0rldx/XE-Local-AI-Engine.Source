@@ -173,22 +173,29 @@ internal sealed class OpenAiWireRecorder
         return JsonSerializer.Serialize(value);
     }
 
-    private sealed class RecordingHandler(OpenAiWireRecorder recorder) : HttpMessageHandler
+    private sealed class RecordingHandler : HttpMessageHandler
     {
+        private readonly OpenAiWireRecorder _recorder;
+
+        public RecordingHandler(OpenAiWireRecorder recorder)
+        {
+            _recorder = recorder;
+        }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             int index;
-            lock (recorder._requests)
+            lock (_recorder._requests)
             {
-                index = recorder._requests.Count;
-                recorder._requests.Add(new RecordedRequest(request.RequestUri,
+                index = _recorder._requests.Count;
+                _recorder._requests.Add(new RecordedRequest(request.RequestUri,
                     body,
                     request.Headers.Authorization?.ToString(),
                     request.Headers.Contains("Authorization")));
             }
 
-            return recorder.Responder(index);
+            return _recorder.Responder(index);
         }
     }
 }

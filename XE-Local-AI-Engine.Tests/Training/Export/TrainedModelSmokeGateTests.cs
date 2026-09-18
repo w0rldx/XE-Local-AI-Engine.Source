@@ -174,24 +174,40 @@ public sealed class TrainedModelSmokeGateTests
     }
 
     /// <summary>Runs the body against a fixed loopback session instead of a real process, or fails the launch.</summary>
-    private sealed class ScriptedTransientLauncher(Action<TransientLlamaServerRequest> capture, Exception? failure) : ITransientLlamaServerLauncher
+    private sealed class ScriptedTransientLauncher : ITransientLlamaServerLauncher
     {
+        private readonly Action<TransientLlamaServerRequest> _capture;
+        private readonly Exception? _failure;
+
+        public ScriptedTransientLauncher(Action<TransientLlamaServerRequest> capture, Exception? failure)
+        {
+            _capture = capture;
+            _failure = failure;
+        }
+
         public Task<T> RunAsync<T>(TransientLlamaServerRequest request,
             Func<TransientLlamaServerSession, CancellationToken, Task<T>> body,
             CancellationToken ct)
         {
-            capture(request);
-            return failure is not null
-                ? Task.FromException<T>(failure)
+            _capture(request);
+            return _failure is not null
+                ? Task.FromException<T>(_failure)
                 : body(new TransientLlamaServerSession(new Uri("http://127.0.0.1:18080/v1"), Path.GetFileName(request.ModelFilePath)), ct);
         }
     }
 
-    private sealed class PropsHandler(string? chatTemplate) : HttpMessageHandler
+    private sealed class PropsHandler : HttpMessageHandler
     {
+        private readonly string? _chatTemplate;
+
+        public PropsHandler(string? chatTemplate)
+        {
+            _chatTemplate = chatTemplate;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var body = chatTemplate is null ? "{}" : $$"""{"chat_template":{{JsonSerializer.Serialize(chatTemplate)}}}""";
+            var body = _chatTemplate is null ? "{}" : $$"""{"chat_template":{{JsonSerializer.Serialize(_chatTemplate)}}}""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json")
@@ -199,13 +215,20 @@ public sealed class TrainedModelSmokeGateTests
         }
     }
 
-    private sealed class ScriptedChatClient((string Name, string? Argument)? toolCall) : IChatClient
+    private sealed class ScriptedChatClient : IChatClient
     {
+        private readonly (string Name, string? Argument)? _toolCall;
+
+        public ScriptedChatClient((string Name, string? Argument)? toolCall)
+        {
+            _toolCall = toolCall;
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            if (toolCall is not { } call)
+            if (_toolCall is not { } call)
             {
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "I do not know.")));
             }
@@ -261,15 +284,21 @@ public sealed class TrainedModelSmokeGateTests
             return Task.FromResult<IDisposable>(new Ticket(this));
         }
 
-        private sealed class Ticket(TrackingGpuModelLoadAdmission owner) : IDisposable
+        private sealed class Ticket : IDisposable
         {
+            private readonly TrackingGpuModelLoadAdmission _owner;
             private int _disposed;
+
+            public Ticket(TrackingGpuModelLoadAdmission owner)
+            {
+                _owner = owner;
+            }
 
             public void Dispose()
             {
                 if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
                 {
-                    _ = Interlocked.Decrement(ref owner._activeTickets);
+                    _ = Interlocked.Decrement(ref _owner._activeTickets);
                 }
             }
         }

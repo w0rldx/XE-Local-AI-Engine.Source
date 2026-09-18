@@ -1028,30 +1028,43 @@ public sealed class BenchmarkRunFreezeServiceTests
                 BenchmarkPrimaryStatus.Queued, null, null, null, null, null, 0, null, null, 1, 1, null, null, 1);
     }
 
-    private sealed class RecordingLeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots, bool unverifiable = false)
-        : IBenchmarkInstalledModelLeaseProvider
+    private sealed class RecordingLeaseProvider : IBenchmarkInstalledModelLeaseProvider
     {
+        private readonly IReadOnlyDictionary<string, InstalledModelSnapshot> _snapshots;
+        private readonly bool _unverifiable;
+
+        public RecordingLeaseProvider(IReadOnlyDictionary<string, InstalledModelSnapshot> snapshots, bool unverifiable = false)
+        {
+            _snapshots = snapshots;
+            _unverifiable = unverifiable;
+        }
+
         public List<string> Acquired { get; } = [];
         public List<RecordingLease> Leases { get; } = [];
 
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
         {
             Acquired.Add(modelName);
-            if (unverifiable)
+            if (_unverifiable)
             {
                 throw new InstalledGgufSnapshotException("InstalledModelMemberFingerprintMismatch",
                     "The installed model weight no longer matches its registry value.");
             }
 
-            var lease = new RecordingLease(snapshots[modelName]);
+            var lease = new RecordingLease(_snapshots[modelName]);
             Leases.Add(lease);
             return Task.FromResult<IBenchmarkInstalledModelLease>(lease);
         }
     }
 
-    private sealed class RecordingLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
+    private sealed class RecordingLease : IBenchmarkInstalledModelLease
     {
-        public InstalledModelSnapshot Snapshot { get; } = snapshot;
+        public RecordingLease(InstalledModelSnapshot snapshot)
+        {
+            Snapshot = snapshot;
+        }
+
+        public InstalledModelSnapshot Snapshot { get; }
         public bool Disposed { get; private set; }
 
         public ValueTask DisposeAsync()

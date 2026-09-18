@@ -37,14 +37,19 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 }
 
 /// <summary>An in-memory image-server handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeImageProcessHandle(int pid) : IImageServerProcessHandle
+internal sealed class FakeImageProcessHandle : IImageServerProcessHandle
 {
     private int _exited;
     private int _killed;
 
+    public FakeImageProcessHandle(int pid)
+    {
+        ProcessId = pid;
+    }
+
     public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
-    public int ProcessId { get; } = pid;
+    public int ProcessId { get; }
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
@@ -67,13 +72,19 @@ internal sealed class FakeImageProcessHandle(int pid) : IImageServerProcessHandl
 }
 
 /// <summary>Readiness probe with controllable readiness + liveness; defaults to immediately-ready + responsive.</summary>
-internal sealed class FakeImageReadinessProbe(bool ready = true, bool responsive = true) : IImageServerReadinessProbe
+internal sealed class FakeImageReadinessProbe : IImageServerReadinessProbe
 {
     private int _responsiveChecks;
 
-    public bool Ready { get; set; } = ready;
+    public FakeImageReadinessProbe(bool ready = true, bool responsive = true)
+    {
+        Ready = ready;
+        Responsive = responsive;
+    }
 
-    public bool Responsive { get; set; } = responsive;
+    public bool Ready { get; set; }
+
+    public bool Responsive { get; set; }
 
     /// <summary>Count of reuse-path liveness probes issued — asserts the hot path did / did not probe.</summary>
     public int ResponsiveChecks => Volatile.Read(ref _responsiveChecks);
@@ -91,20 +102,34 @@ internal sealed class FakeImageReadinessProbe(bool ready = true, bool responsive
 }
 
 /// <summary>Backend selector returning a fixed backend; never probes hardware.</summary>
-internal sealed class FakeSdBackendSelector(SdGpuBackend backend = SdGpuBackend.Cpu) : ISdGpuBackendSelector
+internal sealed class FakeSdBackendSelector : ISdGpuBackendSelector
 {
+    private readonly SdGpuBackend _backend;
+
+    public FakeSdBackendSelector(SdGpuBackend backend = SdGpuBackend.Cpu)
+    {
+        _backend = backend;
+    }
+
     public Task<SdGpuBackend> SelectBackendAsync(CancellationToken ct)
     {
-        return Task.FromResult(backend);
+        return Task.FromResult(_backend);
     }
 }
 
 /// <summary>Binary manager returning a fixed fake sd-server path for whatever backend is requested; never downloads.</summary>
-internal sealed class FakeSdBinaryManager(SdGpuBackend resolvedBackend = SdGpuBackend.Cpu) : IStableDiffusionBinaryManager
+internal sealed class FakeSdBinaryManager : IStableDiffusionBinaryManager
 {
+    private readonly SdGpuBackend _resolvedBackend;
+
+    public FakeSdBinaryManager(SdGpuBackend resolvedBackend = SdGpuBackend.Cpu)
+    {
+        _resolvedBackend = resolvedBackend;
+    }
+
     public Task<SdBinary> EnsureBinaryAsync(SdGpuBackend backend, CancellationToken ct)
     {
-        return Task.FromResult(new SdBinary("/fake/bin/sd-server", "master-742-1a13107", resolvedBackend, IsPinnedFallback: true));
+        return Task.FromResult(new SdBinary("/fake/bin/sd-server", "master-742-1a13107", _resolvedBackend, IsPinnedFallback: true));
     }
 }
 
@@ -112,11 +137,18 @@ internal sealed class FakeSdBinaryManager(SdGpuBackend resolvedBackend = SdGpuBa
 ///     Image model store fake: resolves a model name to a single-file (SD1.5-shaped) diffusion part so the argument
 ///     builder produces a valid spec. The download/delete surface is not exercised by the supervisor tests.
 /// </summary>
-internal sealed class FakeImageModelStore(string? diffusionPath = "/fake/models/sd15.safetensors") : IImageModelStore
+internal sealed class FakeImageModelStore : IImageModelStore
 {
+    private readonly string? _diffusionPath;
+
+    public FakeImageModelStore(string? diffusionPath = "/fake/models/sd15.safetensors")
+    {
+        _diffusionPath = diffusionPath;
+    }
+
     public Task<IReadOnlyList<ImageModelPart>?> ResolveModelPartsAsync(string modelName, CancellationToken ct)
     {
-        if (diffusionPath is null)
+        if (_diffusionPath is null)
         {
             return Task.FromResult<IReadOnlyList<ImageModelPart>?>(null);
         }
@@ -126,8 +158,8 @@ internal sealed class FakeImageModelStore(string? diffusionPath = "/fake/models/
             new ImageModelPart
             {
                 Role = ImageModelPartRole.Diffusion,
-                FileName = Path.GetFileName(diffusionPath),
-                LocalPath = diffusionPath,
+                FileName = Path.GetFileName(_diffusionPath),
+                LocalPath = _diffusionPath,
                 SizeBytes = 1024
             }
         ];
@@ -152,7 +184,7 @@ internal sealed class FakeImageModelStore(string? diffusionPath = "/fake/models/
 
     public Task<bool> ExistsAsync(string modelName, CancellationToken ct)
     {
-        return Task.FromResult(diffusionPath is not null);
+        return Task.FromResult(_diffusionPath is not null);
     }
 }
 

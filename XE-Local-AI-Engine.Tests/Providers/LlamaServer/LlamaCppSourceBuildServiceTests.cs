@@ -612,10 +612,17 @@ public sealed class LlamaCppSourceBuildServiceTests
         }
     }
 
-    private sealed class FixedReportProbe(LlamaCppSourceBuildPrerequisiteReport report) : ILlamaCppSourceBuildPrerequisiteProbe
+    private sealed class FixedReportProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
+        private readonly LlamaCppSourceBuildPrerequisiteReport _report;
+
+        public FixedReportProbe(LlamaCppSourceBuildPrerequisiteReport report)
+        {
+            _report = report;
+        }
+
         public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
-            Task.FromResult(report);
+            Task.FromResult(_report);
     }
 
     private sealed class GatedReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
@@ -661,8 +668,19 @@ public sealed class LlamaCppSourceBuildServiceTests
         }
     }
 
-    private sealed class CapturingBinaryManager(IInstalledRuntimeStore store, IActiveSourceBuildSignal signal, bool failAdoption = false) : ILlamaCppBinaryManager
+    private sealed class CapturingBinaryManager : ILlamaCppBinaryManager
     {
+        private readonly IInstalledRuntimeStore _store;
+        private readonly IActiveSourceBuildSignal _signal;
+        private readonly bool _failAdoption;
+
+        public CapturingBinaryManager(IInstalledRuntimeStore store, IActiveSourceBuildSignal signal, bool failAdoption = false)
+        {
+            _store = store;
+            _signal = signal;
+            _failAdoption = failAdoption;
+        }
+
         public GpuVariant? AdoptedVariant { get; private set; }
 
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
@@ -680,7 +698,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         public async Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir, string tag, GpuVariant variant, string sourceRepository,
             string sourceCommit, LlamaCppSourceRevisionMode revisionMode, string? requestedCommit, CancellationToken ct)
         {
-            if (failAdoption)
+            if (_failAdoption)
             {
                 throw new InvalidOperationException("unexpected adoption failure");
             }
@@ -688,8 +706,8 @@ public sealed class LlamaCppSourceBuildServiceTests
             AdoptedVariant = variant;
             var state = new InstalledRuntimeState(tag, "source", new string('a', 64), variant, DateTimeOffset.UtcNow, buildBinDir,
                 sourceRepository, sourceCommit, revisionMode, requestedCommit);
-            await store.WriteAsync(state, ct);
-            signal.SetActive(variant);
+            await _store.WriteAsync(state, ct);
+            _signal.SetActive(variant);
             return state;
         }
     }

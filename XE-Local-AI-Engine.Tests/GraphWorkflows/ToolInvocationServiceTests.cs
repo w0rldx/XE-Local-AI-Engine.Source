@@ -370,20 +370,36 @@ public sealed class ToolInvocationServiceTests
     }
 
     /// <summary>The two built-in chat tools' metadata with one executable of this test's choosing behind it.</summary>
-    private sealed class StubAgentToolRegistry(IReadOnlyList<AITool> tools, IReadOnlyList<LocalChatToolDescriptor> descriptors) : IAgentToolRegistry
+    private sealed class StubAgentToolRegistry : IAgentToolRegistry
     {
+        private readonly IReadOnlyList<AITool> _tools;
+        private readonly IReadOnlyList<LocalChatToolDescriptor> _descriptors;
+
+        public StubAgentToolRegistry(IReadOnlyList<AITool> tools, IReadOnlyList<LocalChatToolDescriptor> descriptors)
+        {
+            _tools = tools;
+            _descriptors = descriptors;
+        }
+
         public IReadOnlyList<AITool> GetLocalChatTools() =>
-            tools;
+            _tools;
 
         public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors() =>
-            descriptors;
+            _descriptors;
     }
 
     /// <summary>One custom entry, ungated by the node kill-switch, standing in for a catalog the name rules forbid.</summary>
-    private sealed class ShadowingCustomToolCatalog(LocalChatToolDescriptor descriptor) : ICustomToolCatalog
+    private sealed class ShadowingCustomToolCatalog : ICustomToolCatalog
     {
+        private readonly LocalChatToolDescriptor _descriptor;
+
+        public ShadowingCustomToolCatalog(LocalChatToolDescriptor descriptor)
+        {
+            _descriptor = descriptor;
+        }
+
         public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([descriptor]);
+            Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([_descriptor]);
 
         public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
             CancellationToken cancellationToken = default) =>

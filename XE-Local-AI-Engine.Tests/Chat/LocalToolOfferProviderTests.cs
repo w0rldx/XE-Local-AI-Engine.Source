@@ -691,11 +691,18 @@ public sealed class LocalToolOfferProviderTests
             allowCloudKnowledgeAccess: false);
     }
 
-    private sealed class StubCustomToolCatalog(IReadOnlyList<LocalChatToolDescriptor> descriptors) : ICustomToolCatalog
+    private sealed class StubCustomToolCatalog : ICustomToolCatalog
     {
+        private readonly IReadOnlyList<LocalChatToolDescriptor> _descriptors;
+
+        public StubCustomToolCatalog(IReadOnlyList<LocalChatToolDescriptor> descriptors)
+        {
+            _descriptors = descriptors;
+        }
+
         public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(descriptors);
+            return Task.FromResult(_descriptors);
         }
 
         public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,

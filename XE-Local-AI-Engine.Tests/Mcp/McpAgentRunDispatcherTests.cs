@@ -334,11 +334,16 @@ public sealed class McpAgentRunDispatcherTests
                 TombstoneLogicalBytes: 0,
                 UpdatedAtUtc: 0));
 
-    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    private sealed class ManualTimeProvider : TimeProvider
     {
         private readonly object _gate = new();
         private readonly List<ManualTimer> _timers = [];
-        private DateTimeOffset _utcNow = utcNow;
+        private DateTimeOffset _utcNow;
+
+        public ManualTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
 
         public TimeSpan? FirstDueTime { get; private set; }
 
@@ -380,16 +385,28 @@ public sealed class McpAgentRunDispatcherTests
             }
         }
 
-        private sealed class ManualTimer(
-            ManualTimeProvider owner,
-            TimerCallback callback,
-            object? state,
-            TimeSpan dueTime,
-            TimeSpan period) : ITimer
+        private sealed class ManualTimer : ITimer
         {
-            private TimeSpan _remaining = dueTime;
-            private TimeSpan _period = period;
+            private readonly ManualTimeProvider _owner;
+            private readonly TimerCallback _callback;
+            private readonly object? _state;
+            private TimeSpan _remaining;
+            private TimeSpan _period;
             private bool _disposed;
+
+            public ManualTimer(
+                ManualTimeProvider owner,
+                TimerCallback callback,
+                object? state,
+                TimeSpan dueTime,
+                TimeSpan period)
+            {
+                _owner = owner;
+                _callback = callback;
+                _state = state;
+                _remaining = dueTime;
+                _period = period;
+            }
 
             public bool Advance(TimeSpan elapsed)
             {
@@ -409,7 +426,7 @@ public sealed class McpAgentRunDispatcherTests
                     return;
                 }
 
-                callback(state);
+                _callback(_state);
                 _remaining = _period;
             }
 
@@ -430,7 +447,7 @@ public sealed class McpAgentRunDispatcherTests
                 if (!_disposed)
                 {
                     _disposed = true;
-                    owner.Remove(this);
+                    _owner.Remove(this);
                 }
             }
 

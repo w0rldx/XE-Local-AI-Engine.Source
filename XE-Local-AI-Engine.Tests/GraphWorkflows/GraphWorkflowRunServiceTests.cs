@@ -581,15 +581,27 @@ public sealed class GraphWorkflowRunServiceTests
 ///     compare-and-set matching no row. Everything else forwards, so every check the service made before the write is
 ///     the real one.
 /// </summary>
-internal sealed class RacingGraphWorkflowStore(
-    IGraphWorkflowStore inner,
-    GraphWorkflowDecisionKind winningDecision,
-    GraphWorkflowRace race,
-    Guid callerOperationId = default) : IGraphWorkflowStore
+internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
 {
+    private readonly IGraphWorkflowStore _inner;
+    private readonly GraphWorkflowDecisionKind _winningDecision;
+    private readonly GraphWorkflowRace _race;
+    private readonly Guid _callerOperationId;
     private int _operationLookups;
 
     private int _runReads;
+
+    public RacingGraphWorkflowStore(
+        IGraphWorkflowStore inner,
+        GraphWorkflowDecisionKind winningDecision,
+        GraphWorkflowRace race,
+        Guid callerOperationId = default)
+    {
+        _inner = inner;
+        _winningDecision = winningDecision;
+        _race = race;
+        _callerOperationId = callerOperationId;
+    }
 
     /// <summary>
     ///     The lookup a decide resolves its idempotency with — and, for <see cref="GraphWorkflowRace.IdenticalAnswer" />,
@@ -598,9 +610,9 @@ internal sealed class RacingGraphWorkflowStore(
     /// </summary>
     public async Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default)
     {
-        if (race != GraphWorkflowRace.IdenticalAnswer || Interlocked.Increment(ref _operationLookups) != 1)
+        if (_race != GraphWorkflowRace.IdenticalAnswer || Interlocked.Increment(ref _operationLookups) != 1)
         {
-            return await inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
+            return await _inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
         }
 
         await CommitIdenticalAnswerAsync(runId, cancellationToken, operationId);
@@ -613,14 +625,14 @@ internal sealed class RacingGraphWorkflowStore(
     /// </summary>
     private async Task CommitIdenticalAnswerAsync(Guid runId, CancellationToken cancellationToken, Guid? operationId = null)
     {
-        var waiting = await inner.GetNodeRunAsync(runId, "review", cancellationToken);
-        _ = await inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
+        var waiting = await _inner.GetNodeRunAsync(runId, "review", cancellationToken);
+        _ = await _inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
                                waiting.Id,
                                GraphWorkflowVersions.Any,
-                               operationId ?? callerOperationId,
-                               winningDecision,
+                               operationId ?? _callerOperationId,
+                               _winningDecision,
                                "operator",
-                               GraphWorkflowStateMachine.PauseOutputJson(winningDecision)),
+                               GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)),
                            cancellationToken);
     }
 
@@ -631,102 +643,102 @@ internal sealed class RacingGraphWorkflowStore(
     /// </summary>
     public async Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        if (race != GraphWorkflowRace.IdenticalAnswerThenRunStops || Interlocked.Increment(ref _runReads) != 1)
+        if (_race != GraphWorkflowRace.IdenticalAnswerThenRunStops || Interlocked.Increment(ref _runReads) != 1)
         {
-            return await inner.GetRunAsync(runId, cancellationToken);
+            return await _inner.GetRunAsync(runId, cancellationToken);
         }
 
         // The answer lands BEFORE the cancel: the store refuses a decision on a run that has stopped, so the other
         // request only wins if it got there first — which is exactly the interleaving this reproduces.
         await CommitIdenticalAnswerAsync(runId, cancellationToken);
-        _ = await inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling), cancellationToken);
-        return await inner.GetRunAsync(runId, cancellationToken);
+        _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling), cancellationToken);
+        return await _inner.GetRunAsync(runId, cancellationToken);
     }
 
     public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
     {
-        if (race == GraphWorkflowRace.CancelledMidWrite)
+        if (_race == GraphWorkflowRace.CancelledMidWrite)
         {
             // A cancel committing between this caller's checks and its write. Delegated afterwards, so what refuses the
             // decision is the store's own in-transaction re-read rather than anything this seam decides.
-            _ = await inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(command.RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling),
+            _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(command.RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling),
                                cancellationToken);
-            return await inner.DecideNodeRunAsync(command, cancellationToken);
+            return await _inner.DecideNodeRunAsync(command, cancellationToken);
         }
 
         // The winner, committed for real between this caller's checks and its own write — with its own operation id,
         // its own answer and its own output, which is what makes it a second human act rather than a replay.
-        _ = await inner.DecideNodeRunAsync(command with
+        _ = await _inner.DecideNodeRunAsync(command with
                            {
                                OperationId = Guid.NewGuid(),
-                               Decision = winningDecision,
-                               OutputJson = GraphWorkflowStateMachine.PauseOutputJson(winningDecision)
+                               Decision = _winningDecision,
+                               OutputJson = GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)
                            },
                            cancellationToken);
 
-        return race == GraphWorkflowRace.ConcurrencyToken
+        return _race == GraphWorkflowRace.ConcurrencyToken
             ? throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{command.RunId}' before this write could commit.")
             : null;
     }
 
     public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
-        inner.CreateDefinitionAsync(command, cancellationToken);
+        _inner.CreateDefinitionAsync(command, cancellationToken);
 
     public Task<GraphWorkflowDefinitionSnapshot> UpdateDefinitionAsync(UpdateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
-        inner.UpdateDefinitionAsync(command, cancellationToken);
+        _inner.UpdateDefinitionAsync(command, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListDefinitionsAsync(CancellationToken cancellationToken = default) =>
-        inner.ListDefinitionsAsync(cancellationToken);
+        _inner.ListDefinitionsAsync(cancellationToken);
 
     public Task<GraphWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
-        inner.GetDefinitionAsync(definitionId, cancellationToken);
+        _inner.GetDefinitionAsync(definitionId, cancellationToken);
 
     public Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
-        inner.DeleteDefinitionAsync(definitionId, cancellationToken);
+        _inner.DeleteDefinitionAsync(definitionId, cancellationToken);
 
     public Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
-        inner.StartRunAsync(command, cancellationToken);
+        _inner.StartRunAsync(command, cancellationToken);
 
     public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
-        inner.FindRunByRequestAsync(requestId, cancellationToken);
+        _inner.FindRunByRequestAsync(requestId, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,
         CancellationToken cancellationToken = default) =>
-        inner.ListRunsAsync(status, limit, cancellationToken);
+        _inner.ListRunsAsync(status, limit, cancellationToken);
 
     public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
-        inner.CountActiveRunsAsync(probeLimit, cancellationToken);
+        _inner.CountActiveRunsAsync(probeLimit, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
-        inner.TransitionRunAsync(command, cancellationToken);
+        _inner.TransitionRunAsync(command, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        inner.ListNodeRunsAsync(runId, cancellationToken);
+        _inner.ListNodeRunsAsync(runId, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
-        inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+        _inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> TransitionNodeRunAsync(TransitionGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
-        inner.TransitionNodeRunAsync(command, cancellationToken);
+        _inner.TransitionNodeRunAsync(command, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
-        inner.AppendEventAsync(command, cancellationToken);
+        _inner.AppendEventAsync(command, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowRunEventSnapshot>> ListEventsAsync(Guid runId,
         long afterSeq = 0,
         int limit = 200,
         CancellationToken cancellationToken = default) =>
-        inner.ListEventsAsync(runId, afterSeq, limit, cancellationToken);
+        _inner.ListEventsAsync(runId, afterSeq, limit, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
-        inner.ListInterruptedNodeRunsAsync(cancellationToken);
+        _inner.ListInterruptedNodeRunsAsync(cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,
         GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
         CancellationToken cancellationToken = default) =>
-        inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
+        _inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
 }
 
 /// <summary>What commits inside this caller's decide, and how the store then reports the loss.</summary>

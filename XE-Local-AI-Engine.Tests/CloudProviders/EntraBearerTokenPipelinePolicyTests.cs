@@ -135,8 +135,15 @@ public sealed class EntraBearerTokenPipelinePolicyTests
         }
     }
 
-    private sealed class RecordingTokenCredential(string tokenValue) : TokenCredential
+    private sealed class RecordingTokenCredential : TokenCredential
     {
+        private readonly string _tokenValue;
+
+        public RecordingTokenCredential(string tokenValue)
+        {
+            _tokenValue = tokenValue;
+        }
+
         public int CallCount { get; private set; }
 
         public TokenRequestContext? LastRequestContext { get; private set; }
@@ -145,7 +152,7 @@ public sealed class EntraBearerTokenPipelinePolicyTests
         {
             CallCount++;
             LastRequestContext = requestContext;
-            return new AccessToken(tokenValue, DateTimeOffset.UtcNow.AddHours(1));
+            return new AccessToken(_tokenValue, DateTimeOffset.UtcNow.AddHours(1));
         }
 
         public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)

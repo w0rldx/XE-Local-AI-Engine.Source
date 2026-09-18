@@ -832,9 +832,14 @@ public sealed class OrchestrationResolverTests
     // A fake ranker recording how many times it was consulted and returning a fixed (deliberately out-of-order)
     // selection, so the test can assert the gate (consulted once, above threshold + non-blank query) and the
     // selector's re-order of the ranker's output.
-    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    private sealed class RecordingRanker : IPlaybookRetrievalRanker
     {
-        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection;
+
+        public RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null)
+        {
+            _selection = selection;
+        }
 
         public int CallCount { get; private set; }
 

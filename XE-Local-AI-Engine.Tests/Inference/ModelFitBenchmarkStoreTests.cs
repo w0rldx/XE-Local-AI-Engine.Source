@@ -161,9 +161,14 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
     }
 
     // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeTimeProvider(DateTimeOffset start) : TimeProvider
+    private sealed class FakeTimeProvider : TimeProvider
     {
-        private DateTimeOffset _utcNow = start;
+        private DateTimeOffset _utcNow;
+
+        public FakeTimeProvider(DateTimeOffset start)
+        {
+            _utcNow = start;
+        }
 
         public override DateTimeOffset GetUtcNow()
         {

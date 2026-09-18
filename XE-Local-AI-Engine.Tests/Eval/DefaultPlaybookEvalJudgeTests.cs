@@ -232,8 +232,15 @@ public sealed class DefaultPlaybookEvalJudgeTests
     ///     Minimal node-local <see cref="IChatClient" /> stand-in returning a fixed JSON verdict so the judge's
     ///     <c>GetResponseAsync&lt;JudgeVerdict&gt;</c> parses a structured result without a live model.
     /// </summary>
-    private sealed class VerdictChatClient(string verdictJson) : IChatClient
+    private sealed class VerdictChatClient : IChatClient
     {
+        private readonly string _verdictJson;
+
+        public VerdictChatClient(string verdictJson)
+        {
+            _verdictJson = verdictJson;
+        }
+
         public bool WasCalled { get; private set; }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -241,7 +248,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
             CancellationToken cancellationToken = default)
         {
             WasCalled = true;
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, verdictJson)));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _verdictJson)));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

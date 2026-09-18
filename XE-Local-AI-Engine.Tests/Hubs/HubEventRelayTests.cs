@@ -62,13 +62,17 @@ public sealed class HubEventRelayTests
         AssertEx.Equal(1, relay.UnsubscribeCount);
     }
 
-    private sealed class ProbeRelay(IHubContext<BenchmarkRunHub> hubContext, ILogger logger) : HubEventRelay<string, BenchmarkRunHub>(hubContext,
-        logger,
-        capacity: 1,
-        "probe.event",
-        static value => $"probe-{value}",
-        static (log, value) => log.LogWarning("The probe relay was saturated for {Value}.", value))
+    private sealed class ProbeRelay : HubEventRelay<string, BenchmarkRunHub>
     {
+        public ProbeRelay(IHubContext<BenchmarkRunHub> hubContext, ILogger logger) : base(hubContext,
+            logger,
+            capacity: 1,
+            "probe.event",
+            static value => $"probe-{value}",
+            static (log, value) => log.LogWarning("The probe relay was saturated for {Value}.", value))
+        {
+        }
+
         public int UnsubscribeCount { get; private set; }
 
         public void Publish(string value) =>

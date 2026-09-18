@@ -89,14 +89,22 @@ public sealed class ConnectionStateTests
     }
 
     /// <summary>Returns <paramref name="before"/> until <see cref="Step"/> is called, then returns <paramref name="after"/>.</summary>
-    private sealed class StepTimeProvider(DateTimeOffset before, DateTimeOffset after) : TimeProvider
+    private sealed class StepTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _before;
+        private readonly DateTimeOffset _after;
         private bool _stepped;
+
+        public StepTimeProvider(DateTimeOffset before, DateTimeOffset after)
+        {
+            _before = before;
+            _after = after;
+        }
 
         public void Step() =>
             _stepped = true;
 
         public override DateTimeOffset GetUtcNow() =>
-            _stepped ? after : before;
+            _stepped ? _after : _before;
     }
 }

@@ -371,11 +371,18 @@ public sealed class CudaManagedRuntimeTests
         File.SetUnixFileMode(path, File.GetUnixFileMode(path) | UnixFileMode.OtherWrite);
     }
 
-    private sealed class StubVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
+    private sealed class StubVendorProbe : IGpuVendorProbe
     {
+        private readonly DetectedGpuVendor _vendor;
+
+        public StubVendorProbe(DetectedGpuVendor vendor)
+        {
+            _vendor = vendor;
+        }
+
         public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
         {
-            return Task.FromResult(vendor);
+            return Task.FromResult(_vendor);
         }
     }
 

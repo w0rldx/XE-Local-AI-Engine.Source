@@ -120,9 +120,16 @@ public sealed class McpAgentRunCompactionServiceTests
             _timer = null;
         }
 
-        private sealed class ManualTimer(TimerCallback callback, object? state) : ITimer
+        private sealed class ManualTimer : ITimer
         {
-            private TimerCallback? _callback = callback;
+            private readonly object? _state;
+            private TimerCallback? _callback;
+
+            public ManualTimer(TimerCallback callback, object? state)
+            {
+                _state = state;
+                _callback = callback;
+            }
 
             public bool Change(TimeSpan dueTime, TimeSpan period) =>
                 _callback is not null;
@@ -140,7 +147,7 @@ public sealed class McpAgentRunCompactionServiceTests
 
             public void Fire()
             {
-                _callback?.Invoke(state);
+                _callback?.Invoke(_state);
             }
         }
     }

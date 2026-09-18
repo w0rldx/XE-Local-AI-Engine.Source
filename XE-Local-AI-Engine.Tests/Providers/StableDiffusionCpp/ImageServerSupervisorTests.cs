@@ -421,9 +421,15 @@ public sealed class ImageServerSupervisorTests
     ///     Hands the FIRST launch a handle whose tree-kill blocks on <paramref name="firstKill" />; the rest are
     ///     ordinary. The shared <see cref="FakeImageProcessHandle" /> kills instantly and so cannot express a slow kill.
     /// </summary>
-    private sealed class LatchingImageLauncher(ImageKillLatch firstKill) : IImageServerProcessLauncher
+    private sealed class LatchingImageLauncher : IImageServerProcessLauncher
     {
+        private readonly ImageKillLatch _firstKill;
         private int _nextPid;
+
+        public LatchingImageLauncher(ImageKillLatch firstKill)
+        {
+            _firstKill = firstKill;
+        }
 
         /// <summary>The first launched daemon — the one this file's admission test evicts.</summary>
         public LatchedImageProcessHandle? Victim { get; private set; }
@@ -432,27 +438,34 @@ public sealed class ImageServerSupervisorTests
         {
             var pid = Interlocked.Increment(ref _nextPid);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
-            var handle = new LatchedImageProcessHandle(pid, pid == 1 ? firstKill : null);
+            var handle = new LatchedImageProcessHandle(pid, pid == 1 ? _firstKill : null);
 #pragma warning restore CA2000
             Victim ??= handle;
             return handle;
         }
     }
 
-    private sealed class LatchedImageProcessHandle(int pid, ImageKillLatch? killLatch) : IImageServerProcessHandle
+    private sealed class LatchedImageProcessHandle : IImageServerProcessHandle
     {
+        private readonly ImageKillLatch? _killLatch;
         private int _exited;
         private int _killed;
 
+        public LatchedImageProcessHandle(int pid, ImageKillLatch? killLatch)
+        {
+            _killLatch = killLatch;
+            ProcessId = pid;
+        }
+
         public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
-        public int ProcessId { get; } = pid;
+        public int ProcessId { get; }
 
         public bool HasExited => Volatile.Read(ref _exited) != 0;
 
         public void TreeKill()
         {
-            killLatch?.Wait();
+            _killLatch?.Wait();
             Interlocked.Exchange(ref _killed, value: 1);
             Interlocked.Exchange(ref _exited, value: 1);
         }

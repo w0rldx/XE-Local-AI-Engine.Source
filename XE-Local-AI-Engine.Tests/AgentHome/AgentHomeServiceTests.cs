@@ -1098,51 +1098,62 @@ public sealed class AgentHomeServiceTests : IDisposable
     ///     The fake, with the two capability flags this file's posture tests need under the test's control. Wrapping
     ///     rather than reimplementing keeps every other behaviour the production fake's.
     /// </summary>
-    private sealed class CapabilityOverridingProvider(
-        FakeSandboxRuntimeProvider inner,
-        bool canDenyEgress,
-        bool canLimitResources = false) : IAgentSandboxRuntimeProvider
+    private sealed class CapabilityOverridingProvider : IAgentSandboxRuntimeProvider
     {
+        private readonly FakeSandboxRuntimeProvider _inner;
+        private readonly bool _canDenyEgress;
+        private readonly bool _canLimitResources;
+
+        public CapabilityOverridingProvider(
+            FakeSandboxRuntimeProvider inner,
+            bool canDenyEgress,
+            bool canLimitResources = false)
+        {
+            _inner = inner;
+            _canDenyEgress = canDenyEgress;
+            _canLimitResources = canLimitResources;
+        }
+
         public SandboxCreateRequest? LastCreate { get; private set; }
 
-        public string ProviderName => inner.ProviderName;
+        public string ProviderName => _inner.ProviderName;
 
         public SandboxProviderCapabilities Capabilities =>
-            (inner.Capabilities
-             | (canDenyEgress ? SandboxProviderCapabilities.SupportsNetworkPolicy : SandboxProviderCapabilities.None)
-             | (canLimitResources ? SandboxProviderCapabilities.SupportsResourceLimits : SandboxProviderCapabilities.None))
-            & ~(canDenyEgress ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsNetworkPolicy)
-            & ~(canLimitResources ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsResourceLimits);
+            (_inner.Capabilities
+             | (_canDenyEgress ? SandboxProviderCapabilities.SupportsNetworkPolicy : SandboxProviderCapabilities.None)
+             | (_canLimitResources ? SandboxProviderCapabilities.SupportsResourceLimits : SandboxProviderCapabilities.None))
+            & ~(_canDenyEgress ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsNetworkPolicy)
+            & ~(_canLimitResources ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsResourceLimits);
 
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {
             LastCreate = request;
-            return inner.CreateOrAttachAsync(request, cancellationToken);
+            return _inner.CreateOrAttachAsync(request, cancellationToken);
         }
 
         public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
-            inner.ConnectAsync(attachKey, cancellationToken);
+            _inner.ConnectAsync(attachKey, cancellationToken);
 
         public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default) =>
-            inner.ExecuteAsync(handle, request, cancellationToken);
+            _inner.ExecuteAsync(handle, request, cancellationToken);
 
         public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
-            inner.CopyIntoAsync(handle, request, cancellationToken);
+            _inner.CopyIntoAsync(handle, request, cancellationToken);
 
         public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
-            inner.ResetDirectoryAsync(handle, sandboxPath, cancellationToken);
+            _inner.ResetDirectoryAsync(handle, sandboxPath, cancellationToken);
 
         public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
-            inner.ReadFileAsync(handle, sandboxPath, cancellationToken);
+            _inner.ReadFileAsync(handle, sandboxPath, cancellationToken);
 
         public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
-            inner.CopyOutAsync(handle, request, cancellationToken);
+            _inner.CopyOutAsync(handle, request, cancellationToken);
 
         public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
-            inner.CancelCommandAsync(handle, executionId, cancellationToken);
+            _inner.CancelCommandAsync(handle, executionId, cancellationToken);
 
         public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
-            inner.KillAsync(handle, cancellationToken);
+            _inner.KillAsync(handle, cancellationToken);
     }
 
     private sealed class CancelRecordingProvider : IAgentSandboxRuntimeProvider

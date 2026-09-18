@@ -757,9 +757,15 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
     // Node-local provider fake: installs a configurable model set and returns fixed non-zero embedding vectors so the
     // resolver, chunk embedder, and search query embedding all work without Ollama or a network round-trip.
-    private sealed class FixedEmbeddingProvider(params LocalModelDescriptor[] models) : ILocalModelProvider
+    private sealed class FixedEmbeddingProvider : ILocalModelProvider
     {
+        private readonly LocalModelDescriptor[] _models;
         private int _generateCallCount;
+
+        public FixedEmbeddingProvider(params LocalModelDescriptor[] models)
+        {
+            _models = models;
+        }
 
         public string ProviderName => "llamacpp";
 
@@ -769,7 +775,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new FixedGenerator(this);
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(models);
+            Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(_models);
 
         public IChatClient CreateChatClient(LocalModelSelection selection) =>
             throw new NotSupportedException();
@@ -789,13 +795,20 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        private sealed class FixedGenerator(FixedEmbeddingProvider owner) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FixedGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
+            private readonly FixedEmbeddingProvider _owner;
+
+            public FixedGenerator(FixedEmbeddingProvider owner)
+            {
+                _owner = owner;
+            }
+
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
-                Interlocked.Increment(ref owner._generateCallCount);
+                Interlocked.Increment(ref _owner._generateCallCount);
                 var embeddings = values.Select(static _ =>
                 {
                     var vector = new float[Dimensions];

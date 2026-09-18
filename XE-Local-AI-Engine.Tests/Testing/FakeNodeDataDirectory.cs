@@ -6,7 +6,12 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     Test double for <see cref="INodeDataDirectory" />: returns a caller-supplied root so a store under test reads and
 ///     writes inside a temp directory instead of the real per-user data dir / content root.
 /// </summary>
-internal sealed class FakeNodeDataDirectory(string root) : INodeDataDirectory
+internal sealed class FakeNodeDataDirectory : INodeDataDirectory
 {
-    public string Root { get; } = root;
+    public FakeNodeDataDirectory(string root)
+    {
+        Root = root;
+    }
+
+    public string Root { get; }
 }

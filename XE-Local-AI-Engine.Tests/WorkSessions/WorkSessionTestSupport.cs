@@ -124,14 +124,23 @@ internal sealed record StepScript(
 ///         pinned in <c>NodeChatStreamServiceTests</c>.
 ///     </para>
 /// </summary>
-internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegistry cancellationRegistry, IServiceProvider services, Guid sessionId)
-    : INodeChatStreamService
+internal sealed class FakeNodeChatStreamService : INodeChatStreamService
 {
     // Concurrent because the admission test drives several sessions through one fake at once; every other test has a
     // single run and does not care.
     private readonly ConcurrentQueue<StepScript> _scripts = new();
     private readonly Lock _recordGate = new();
     private readonly List<NodeChatStreamRequest> _requests = [];
+    private readonly INodeChatStreamCancellationRegistry _cancellationRegistry;
+    private readonly IServiceProvider _services;
+    private readonly Guid _sessionId;
+
+    public FakeNodeChatStreamService(INodeChatStreamCancellationRegistry cancellationRegistry, IServiceProvider services, Guid sessionId)
+    {
+        _cancellationRegistry = cancellationRegistry;
+        _services = services;
+        _sessionId = sessionId;
+    }
 
     /// <summary>
     ///     Every request the supervisor sent, in order. A copy taken under the same lock the recording side holds: the
@@ -163,7 +172,7 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
     {
         if (request is { RefuseUndeclaredWrites: true, AgentDefinitionId: { } bound })
         {
-            await using var gateScope = services.CreateAsyncScope();
+            await using var gateScope = _services.CreateAsyncScope();
             if (await gateScope.ServiceProvider.GetRequiredService<WorkSessionWriteDeclarationGuard>()
                                .InspectAsync(bound, request.Model, cancellationToken) is { } refusal)
             {
@@ -185,11 +194,11 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
             request.RequestId.GetValueOrDefault(Guid.NewGuid()));
         // Linked so a caller that DOES cancel the enumeration still ends the turn; the supervisor deliberately does not.
         using var turn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        using var registration = cancellationRegistry.Register(correlation, turn.Cancel);
+        using var registration = _cancellationRegistry.Register(correlation, turn.Cancel);
 
         if (script.DuringTurn is { } during)
         {
-            await during(services, sessionId);
+            await during(_services, _sessionId);
         }
 
         if (script.ParkThenContinue)

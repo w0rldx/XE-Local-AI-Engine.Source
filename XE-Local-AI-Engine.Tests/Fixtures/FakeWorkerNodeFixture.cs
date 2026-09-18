@@ -250,9 +250,14 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     [SuppressMessage("Sonar", "S4144:Methods should not have identical implementations", Justification = "SignalR hub endpoints intentionally use simple pass-through handlers in the fixture.")]
     [SuppressMessage("Sonar", "S2325:Methods and properties that don't access instance data should be static", Justification = "SignalR hub methods are instance entrypoints.")]
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "SignalR hub methods are instance entrypoints.")]
-    private sealed class FakeWorkerHub(FixtureHubState state) : Hub
+    private sealed class FakeWorkerHub : Hub
     {
-        private readonly FixtureHubState _state = state;
+        private readonly FixtureHubState _state;
+
+        public FakeWorkerHub(FixtureHubState state)
+        {
+            _state = state;
+        }
 
         public override async Task OnConnectedAsync()
         {

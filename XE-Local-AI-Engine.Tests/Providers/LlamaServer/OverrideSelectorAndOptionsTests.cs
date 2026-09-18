@@ -138,11 +138,18 @@ public sealed class OverrideSelectorAndOptionsTests
         AssertEx.False(spec.Arguments.Contains("--metrics"), "CPU must not emit --metrics.");
     }
 
-    private sealed class FakeVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
+    private sealed class FakeVendorProbe : IGpuVendorProbe
     {
+        private readonly DetectedGpuVendor _vendor;
+
+        public FakeVendorProbe(DetectedGpuVendor vendor)
+        {
+            _vendor = vendor;
+        }
+
         public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
         {
-            return Task.FromResult(vendor);
+            return Task.FromResult(_vendor);
         }
     }
 

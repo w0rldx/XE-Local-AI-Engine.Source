@@ -833,28 +833,34 @@ public sealed class HfParallelDownloadTests
     // real-timer: releasing this on a gate would need the test to observe "the sibling ranges finished", and the
     // downloader publishes no per-range completion a fake could wait on. Ordering by elapsed time is the only seam
     // available; no assertion is made on the duration itself.
-    private sealed class TruncatingStream(byte[] payload) : Stream
+    private sealed class TruncatingStream : Stream
     {
         private static readonly TimeSpan EofPause = TimeSpan.FromMilliseconds(500);
+        private readonly byte[] _payload;
 
         private int _position;
+
+        public TruncatingStream(byte[] payload)
+        {
+            _payload = payload;
+        }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-        public override long Length => payload.Length;
+        public override long Length => _payload.Length;
         public override long Position { get => _position; set => throw new NotSupportedException(); }
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            if (_position >= payload.Length)
+            if (_position >= _payload.Length)
             {
                 await Task.Delay(EofPause, cancellationToken);
                 return 0;
             }
 
-            var toCopy = Math.Min(buffer.Length, payload.Length - _position);
-            payload.AsSpan(_position, toCopy).CopyTo(buffer.Span);
+            var toCopy = Math.Min(buffer.Length, _payload.Length - _position);
+            _payload.AsSpan(_position, toCopy).CopyTo(buffer.Span);
             _position += toCopy;
             return toCopy;
         }

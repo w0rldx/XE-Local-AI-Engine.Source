@@ -62,9 +62,19 @@ internal static class SourceCommentStripper
     ///     comment, the content of a string or char literal, or the format text of an interpolation hole. Comment
     ///     delimiters are recognised in the code state only.
     /// </summary>
-    private sealed class Scanner(string text, StringBuilder output, bool blankLiterals)
+    private sealed class Scanner
     {
+        private readonly string _text;
+        private readonly StringBuilder _output;
+        private readonly bool _blankLiterals;
         private int index;
+
+        public Scanner(string text, StringBuilder output, bool blankLiterals)
+        {
+            _text = text;
+            _output = output;
+            _blankLiterals = blankLiterals;
+        }
 
         internal void Run()
         {
@@ -81,9 +91,9 @@ internal static class SourceCommentStripper
         {
             var depth = 0;
 
-            while (index < text.Length)
+            while (index < _text.Length)
             {
-                var current = text[index];
+                var current = _text[index];
 
                 if (holeBraces > 0 && depth == 0)
                 {
@@ -129,7 +139,7 @@ internal static class SourceCommentStripper
                         break;
                 }
 
-                output.Append(current);
+                _output.Append(current);
                 index++;
             }
         }
@@ -150,19 +160,19 @@ internal static class SourceCommentStripper
         /// </summary>
         private bool Blanked(Func<bool> copy)
         {
-            var from = output.Length;
+            var from = _output.Length;
             var copied = copy();
 
-            if (!blankLiterals)
+            if (!_blankLiterals)
             {
                 return copied;
             }
 
-            for (var position = from; position < output.Length; position++)
+            for (var position = from; position < _output.Length; position++)
             {
-                if (output[position] is not ('\r' or '\n'))
+                if (_output[position] is not ('\r' or '\n'))
                 {
-                    output[position] = ' ';
+                    _output[position] = ' ';
                 }
             }
 
@@ -178,9 +188,9 @@ internal static class SourceCommentStripper
             var start = index;
             var dollars = 0;
 
-            while (start < text.Length && (text[start] == '$' || text[start] == '@'))
+            while (start < _text.Length && (_text[start] == '$' || _text[start] == '@'))
             {
-                if (text[start] == '$')
+                if (_text[start] == '$')
                 {
                     dollars++;
                 }
@@ -188,13 +198,13 @@ internal static class SourceCommentStripper
                 start++;
             }
 
-            if (start >= text.Length || text[start] != '"')
+            if (start >= _text.Length || _text[start] != '"')
             {
                 return false;
             }
 
-            var verbatim = text.AsSpan(index, start - index).Contains('@');
-            output.Append(text, index, start - index);
+            var verbatim = _text.AsSpan(index, start - index).Contains('@');
+            _output.Append(_text, index, start - index);
             index = start;
             CopyString(dollars, verbatim);
             return true;
@@ -225,9 +235,9 @@ internal static class SourceCommentStripper
         {
             Take(1);
 
-            while (index < text.Length)
+            while (index < _text.Length)
             {
-                var current = text[index];
+                var current = _text[index];
 
                 if (current == '\\')
                 {
@@ -260,9 +270,9 @@ internal static class SourceCommentStripper
         {
             Take(1);
 
-            while (index < text.Length)
+            while (index < _text.Length)
             {
-                if (text[index] == '"')
+                if (_text[index] == '"')
                 {
                     // An inner "" is an escaped quote, not the terminator.
                     if (Peek(1) == '"')
@@ -293,9 +303,9 @@ internal static class SourceCommentStripper
         {
             Take(openQuotes);
 
-            while (index < text.Length)
+            while (index < _text.Length)
             {
-                if (text[index] == '"')
+                if (_text[index] == '"')
                 {
                     var run = RunLength('"');
 
@@ -309,7 +319,7 @@ internal static class SourceCommentStripper
                     continue;
                 }
 
-                if (dollars > 0 && text[index] == '{')
+                if (dollars > 0 && _text[index] == '{')
                 {
                     var run = RunLength('{');
 
@@ -338,7 +348,7 @@ internal static class SourceCommentStripper
                 return false;
             }
 
-            var current = text[index];
+            var current = _text[index];
 
             if (current is '{' or '}' && Peek(1) == current)
             {
@@ -360,7 +370,7 @@ internal static class SourceCommentStripper
             Take(holeBraces);
             ScanCode(holeBraces);
 
-            if (index < text.Length)
+            if (index < _text.Length)
             {
                 Take(Math.Min(holeBraces, RunLength('}')));
             }
@@ -372,9 +382,9 @@ internal static class SourceCommentStripper
         /// </summary>
         private void CopyFormatText(int holeBraces)
         {
-            while (index < text.Length)
+            while (index < _text.Length)
             {
-                if (text[index] == '}' && RunLength('}') >= holeBraces)
+                if (_text[index] == '}' && RunLength('}') >= holeBraces)
                 {
                     return;
                 }
@@ -387,9 +397,9 @@ internal static class SourceCommentStripper
         {
             Take(1);
 
-            while (index < text.Length)
+            while (index < _text.Length)
             {
-                var current = text[index];
+                var current = _text[index];
 
                 if (current == '\\')
                 {
@@ -418,26 +428,26 @@ internal static class SourceCommentStripper
 
         private void SkipLineComment()
         {
-            while (index < text.Length && text[index] is not ('\r' or '\n'))
+            while (index < _text.Length && _text[index] is not ('\r' or '\n'))
             {
                 index++;
             }
 
-            output.Append(' ');
+            _output.Append(' ');
         }
 
         private void SkipBlockComment()
         {
-            var end = text.IndexOf("*/", index + 2, StringComparison.Ordinal);
-            index = end < 0 ? text.Length : end + 2;
-            output.Append(' ');
+            var end = _text.IndexOf("*/", index + 2, StringComparison.Ordinal);
+            index = end < 0 ? _text.Length : end + 2;
+            _output.Append(' ');
         }
 
         private int RunLength(char character)
         {
             var end = index;
 
-            while (end < text.Length && text[end] == character)
+            while (end < _text.Length && _text[end] == character)
             {
                 end++;
             }
@@ -447,13 +457,13 @@ internal static class SourceCommentStripper
 
         private char Peek(int offset)
         {
-            return index + offset < text.Length ? text[index + offset] : '\0';
+            return index + offset < _text.Length ? _text[index + offset] : '\0';
         }
 
         private void Take(int count)
         {
-            var take = Math.Min(count, text.Length - index);
-            output.Append(text, index, take);
+            var take = Math.Min(count, _text.Length - index);
+            _output.Append(_text, index, take);
             index += take;
         }
     }

@@ -117,14 +117,21 @@ public sealed class KnowledgeUploadEndpointTests
 
     // Hand-written fake for the ValueTask-returning dispatcher: records enqueued ids and returns a fixed admission result,
     // avoiding the ValueTask/analyzer friction of stubbing it through NSubstitute.
-    private sealed class RecordingDispatcher(KnowledgeIngestionEnqueueResult result) : IKnowledgeIngestionDispatcher
+    private sealed class RecordingDispatcher : IKnowledgeIngestionDispatcher
     {
+        private readonly KnowledgeIngestionEnqueueResult _result;
+
+        public RecordingDispatcher(KnowledgeIngestionEnqueueResult result)
+        {
+            _result = result;
+        }
+
         public List<Guid> Enqueued { get; } = [];
 
         public ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken)
         {
             Enqueued.Add(documentId);
-            return ValueTask.FromResult(result);
+            return ValueTask.FromResult(_result);
         }
     }
 }

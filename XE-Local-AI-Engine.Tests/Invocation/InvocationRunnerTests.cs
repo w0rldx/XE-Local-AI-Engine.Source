@@ -4879,8 +4879,15 @@ public sealed class InvocationRunnerTests
     ///     A dispatcher that answers with one fixed decision. Records how many times it was invoked so a test can
     ///     assert both "never" and "exactly once".
     /// </summary>
-    private sealed class StubReasoningEffortDispatcher(ReasoningDispatchDecision decision) : IReasoningEffortDispatcher, IDisposable
+    private sealed class StubReasoningEffortDispatcher : IReasoningEffortDispatcher, IDisposable
     {
+        private readonly ReasoningDispatchDecision _decision;
+
+        public StubReasoningEffortDispatcher(ReasoningDispatchDecision decision)
+        {
+            _decision = decision;
+        }
+
         public int Invocations { get; private set; }
 
         /// <summary>Set when the SCOPE that produced this instance is torn down — this is a scoped registration.</summary>
@@ -4889,7 +4896,7 @@ public sealed class InvocationRunnerTests
         public Task<ReasoningDispatchDecision> DispatchAsync(ReasoningDispatchRequest request, CancellationToken cancellationToken)
         {
             Invocations++;
-            return Task.FromResult(decision);
+            return Task.FromResult(_decision);
         }
 
         public void Dispose()
@@ -5728,9 +5735,15 @@ public sealed class InvocationRunnerTests
         }
     }
 
-    private sealed class MinimumEffectiveContextAdmissionPolicy(int requiredContextTokens) : IInvocationGenerationAdmissionPolicy
+    private sealed class MinimumEffectiveContextAdmissionPolicy : IInvocationGenerationAdmissionPolicy
     {
         public const string EffectiveContextUnavailableMessage = "Effective context unavailable.";
+        private readonly int _requiredContextTokens;
+
+        public MinimumEffectiveContextAdmissionPolicy(int requiredContextTokens)
+        {
+            _requiredContextTokens = requiredContextTokens;
+        }
 
         public InvocationGenerationAdmissionContext? LastContext { get; private set; }
 
@@ -5745,7 +5758,7 @@ public sealed class InvocationRunnerTests
                 return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(InvocationGenerationAdmissionReasonCodes.EffectiveContextUnavailable));
             }
 
-            if (context.EffectiveContextTokens < requiredContextTokens)
+            if (context.EffectiveContextTokens < _requiredContextTokens)
             {
                 return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient));
             }
@@ -5754,13 +5767,20 @@ public sealed class InvocationRunnerTests
         }
     }
 
-    private sealed class RejectingAdmissionPolicy(string reasonCode) : IInvocationGenerationAdmissionPolicy
+    private sealed class RejectingAdmissionPolicy : IInvocationGenerationAdmissionPolicy
     {
+        private readonly string _reasonCode;
+
+        public RejectingAdmissionPolicy(string reasonCode)
+        {
+            _reasonCode = reasonCode;
+        }
+
         public Task<InvocationGenerationAdmissionDecision> EvaluateAsync(InvocationGenerationAdmissionContext context,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(reasonCode));
+            return Task.FromResult(InvocationGenerationAdmissionDecision.Reject(_reasonCode));
         }
     }
 

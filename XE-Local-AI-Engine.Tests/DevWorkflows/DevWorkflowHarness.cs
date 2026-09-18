@@ -866,9 +866,17 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 ///         as many passes as recovery is willing to take.
 ///     </para>
 /// </summary>
-internal sealed class DriftingWorkSessions(FakeDevWorkflowAgentSession agent, IServiceScopeFactory scopes) : IWorkflowOwnedWorkSessionLifecycle
+internal sealed class DriftingWorkSessions : IWorkflowOwnedWorkSessionLifecycle
 {
-    public FakeDevWorkflowAgentSession Agent { get; } = agent;
+    private readonly IServiceScopeFactory _scopes;
+
+    public DriftingWorkSessions(FakeDevWorkflowAgentSession agent, IServiceScopeFactory scopes)
+    {
+        _scopes = scopes;
+        Agent = agent;
+    }
+
+    public FakeDevWorkflowAgentSession Agent { get; }
 
     /// <summary>The node run to move, or null while the writer is asleep. Set it once the row under test exists.</summary>
     public (Guid RunId, Guid NodeRunId)? Target { get; set; }
@@ -890,7 +898,7 @@ internal sealed class DriftingWorkSessions(FakeDevWorkflowAgentSession agent, IS
             return detail;
         }
 
-        await using var scope = scopes.CreateAsyncScope();
+        await using var scope = _scopes.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
                        .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(target.RunId,
                                target.NodeRunId,

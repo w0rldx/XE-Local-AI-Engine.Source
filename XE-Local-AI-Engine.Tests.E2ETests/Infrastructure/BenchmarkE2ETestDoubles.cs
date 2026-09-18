@@ -146,12 +146,19 @@ public static class BenchmarkE2ETestDoubles
     ///     lists the node's Single definitions without the runtime-resolution filter the real service applies; the SPA
     ///     never calls that endpoint, and a benchmark host with no llama.cpp runtime cannot resolve an agent anyway.
     /// </summary>
-    public sealed class CatalogService(IAgentDefinitionStore agentDefinitions) : IBenchmarkCatalogService
+    public sealed class CatalogService : IBenchmarkCatalogService
     {
+        private readonly IAgentDefinitionStore _agentDefinitions;
+
+        public CatalogService(IAgentDefinitionStore agentDefinitions)
+        {
+            _agentDefinitions = agentDefinitions;
+        }
+
         public async Task<IReadOnlyList<BenchmarkEligibleAgent>> ListEligibleAgentsAsync(string modelName,
             CancellationToken cancellationToken = default)
         {
-            var definitions = await agentDefinitions.ListAsync(cancellationToken);
+            var definitions = await _agentDefinitions.ListAsync(cancellationToken);
             return definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single)
                               .Select(static definition => new BenchmarkEligibleAgent(definition.Id, definition.Name, definition.Version))
                               .ToArray();

@@ -158,9 +158,14 @@ public sealed class DevelopmentAttemptFailureReportingTests
             AttemptVersion: 1,
             CommandProfileJson: null);
 
-    private sealed class AdjustableTimeProvider(DateTimeOffset current) : TimeProvider
+    private sealed class AdjustableTimeProvider : TimeProvider
     {
-        private DateTimeOffset _current = current;
+        private DateTimeOffset _current;
+
+        public AdjustableTimeProvider(DateTimeOffset current)
+        {
+            _current = current;
+        }
 
         public override DateTimeOffset GetUtcNow() =>
             _current;

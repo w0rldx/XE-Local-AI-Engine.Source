@@ -105,16 +105,22 @@ public sealed class LlamaServerHealthProbeTests
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
 
-    private sealed class CountingHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder) : HttpMessageHandler
+    private sealed class CountingHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _responder;
         private int _count;
+
+        public CountingHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder)
+        {
+            _responder = responder;
+        }
 
         public int Count => Volatile.Read(ref _count);
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _count);
-            return responder(request, cancellationToken);
+            return _responder(request, cancellationToken);
         }
     }
 }

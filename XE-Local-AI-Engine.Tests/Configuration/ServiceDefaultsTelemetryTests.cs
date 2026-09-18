@@ -165,9 +165,14 @@ public sealed class ServiceDefaultsTelemetryTests
 
     // Records the meter name of every exported metric into a caller-owned list so a test can assert a given meter's
     // instruments flowed through the configured MeterProvider (i.e. were registered via AddMeter).
-    private sealed class RecordingMetricExporter(List<string> exportedMeterNames) : BaseExporter<Metric>
+    private sealed class RecordingMetricExporter : BaseExporter<Metric>
     {
-        private readonly List<string> _exportedMeterNames = exportedMeterNames;
+        private readonly List<string> _exportedMeterNames;
+
+        public RecordingMetricExporter(List<string> exportedMeterNames)
+        {
+            _exportedMeterNames = exportedMeterNames;
+        }
 
         public override ExportResult Export(in Batch<Metric> batch)
         {

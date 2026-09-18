@@ -29,12 +29,19 @@ internal static class IntegrationToolOfferFactory
             new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
-    private sealed class FakeAgentToolRegistry(IReadOnlyList<LocalChatToolDescriptor> descriptors) : IAgentToolRegistry
+    private sealed class FakeAgentToolRegistry : IAgentToolRegistry
     {
+        private readonly IReadOnlyList<LocalChatToolDescriptor> _descriptors;
+
+        public FakeAgentToolRegistry(IReadOnlyList<LocalChatToolDescriptor> descriptors)
+        {
+            _descriptors = descriptors;
+        }
+
         public IReadOnlyList<AITool> GetLocalChatTools() =>
             [];
 
         public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors() =>
-            descriptors;
+            _descriptors;
     }
 }

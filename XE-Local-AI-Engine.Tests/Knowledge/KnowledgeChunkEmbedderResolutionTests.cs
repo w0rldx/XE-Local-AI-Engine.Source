@@ -216,8 +216,15 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
     // A node-local provider fake that records the model name its embedding generator was created with and returns
     // fixed-dimension zero vectors (or throws a transport error), so the resolution wiring can be asserted without Ollama.
-    private sealed class CapturingProvider(params LocalModelDescriptor[] models) : ILocalModelProvider
+    private sealed class CapturingProvider : ILocalModelProvider
     {
+        private readonly LocalModelDescriptor[] _models;
+
+        public CapturingProvider(params LocalModelDescriptor[] models)
+        {
+            _models = models;
+        }
+
         public string? LastSelectedModelName { get; private set; }
 
         public bool ThrowOnGenerate { get; init; }
@@ -244,7 +251,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
         {
-            return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(models);
+            return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(_models);
         }
 
         public IChatClient CreateChatClient(LocalModelSelection selection) =>
@@ -265,29 +272,40 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        private sealed class FixedEmbeddingGenerator(
-            bool throwOnGenerate,
-            IReadOnlyList<int> dimensions,
-            HttpStatusCode? failureStatus = null) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FixedEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
+            private readonly bool _throwOnGenerate;
+            private readonly IReadOnlyList<int> _dimensions;
+            private readonly HttpStatusCode? _failureStatus;
+
+            public FixedEmbeddingGenerator(
+                bool throwOnGenerate,
+                IReadOnlyList<int> dimensions,
+                HttpStatusCode? failureStatus = null)
+            {
+                _throwOnGenerate = throwOnGenerate;
+                _dimensions = dimensions;
+                _failureStatus = failureStatus;
+            }
+
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
-                if (failureStatus is { } status)
+                if (_failureStatus is { } status)
                 {
                     throw new HttpRequestException("The llama-server embedding endpoint returned HTTP 500: input (678 tokens) is too large to process.",
                         inner: null,
                         status);
                 }
 
-                if (throwOnGenerate)
+                if (_throwOnGenerate)
                 {
                     throw new HttpRequestException("fake embedding transport failure");
                 }
 
                 var embeddings = values.Select((_, index) =>
-                    new Embedding<float>(new float[dimensions[Math.Min(index, dimensions.Count - 1)]]));
+                    new Embedding<float>(new float[_dimensions[Math.Min(index, _dimensions.Count - 1)]]));
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
             }
 

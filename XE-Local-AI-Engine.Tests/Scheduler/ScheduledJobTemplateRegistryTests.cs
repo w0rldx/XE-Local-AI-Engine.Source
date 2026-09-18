@@ -116,20 +116,26 @@ public sealed class ScheduledJobTemplateRegistryTests
             "Exception message should name the duplicate template id.");
     }
 
-    private sealed class StubHandler(string templateId, string displayName) : IScheduledJobHandler
+    private sealed class StubHandler : IScheduledJobHandler
     {
-        public string TemplateId { get; } = templateId;
+        public StubHandler(string templateId, string displayName)
+        {
+            TemplateId = templateId;
+            Descriptor = new(templateId,
+                displayName,
+                "Stub handler for registry tests.",
+                ParameterSchema: null,
+                DefaultParameters: null,
+                [ScheduleKind.OneShot],
+                ScheduleKind.OneShot,
+                SchedulerMisfirePolicy.Smart,
+                DefaultMaxRuntimeSeconds: null,
+                AllowManualTrigger: false);
+        }
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(templateId,
-            displayName,
-            "Stub handler for registry tests.",
-            ParameterSchema: null,
-            DefaultParameters: null,
-            [ScheduleKind.OneShot],
-            ScheduleKind.OneShot,
-            SchedulerMisfirePolicy.Smart,
-            DefaultMaxRuntimeSeconds: null,
-            AllowManualTrigger: false);
+        public string TemplateId { get; }
+
+        public ScheduledJobTemplateDescriptor Descriptor { get; }
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

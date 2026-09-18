@@ -307,15 +307,21 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8()));
 
     /// <summary>Records the create request; its capability set is the only other thing about it that matters.</summary>
-    private sealed class RecordingSandbox(SandboxProviderCapabilities capabilities) : IDevelopmentSandboxRuntimeProvider
+    private sealed class RecordingSandbox : IDevelopmentSandboxRuntimeProvider
     {
         private readonly List<SandboxCreateRequest> _created = [];
+        private readonly SandboxProviderCapabilities _capabilities;
+
+        public RecordingSandbox(SandboxProviderCapabilities capabilities)
+        {
+            _capabilities = capabilities;
+        }
 
         public IReadOnlyList<SandboxCreateRequest> Created => _created;
 
         public string ProviderName => "recording";
 
-        public SandboxProviderCapabilities Capabilities => capabilities;
+        public SandboxProviderCapabilities Capabilities => _capabilities;
 
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {

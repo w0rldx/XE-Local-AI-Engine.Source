@@ -352,8 +352,15 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
 }
 
 /// <summary>A clock stopped at one instant — enough to put a running node run past its deadline without waiting for one.</summary>
-internal sealed class GraphWorkflowFixedClock(DateTimeOffset now) : TimeProvider
+internal sealed class GraphWorkflowFixedClock : TimeProvider
 {
+    private readonly DateTimeOffset _now;
+
+    public GraphWorkflowFixedClock(DateTimeOffset now)
+    {
+        _now = now;
+    }
+
     public override DateTimeOffset GetUtcNow() =>
-        now;
+        _now;
 }

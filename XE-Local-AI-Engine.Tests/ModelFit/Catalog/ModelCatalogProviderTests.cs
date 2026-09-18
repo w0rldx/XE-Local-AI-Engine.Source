@@ -196,18 +196,31 @@ public sealed class ModelCatalogProviderTests : IDisposable
         return provider;
     }
 
-    private sealed class FakeHttpClientFactory(HttpClient client) : IHttpClientFactory
+    private sealed class FakeHttpClientFactory : IHttpClientFactory
     {
+        private readonly HttpClient _client;
+
+        public FakeHttpClientFactory(HttpClient client)
+        {
+            _client = client;
+        }
+
         public HttpClient CreateClient(string name)
         {
-            return client;
+            return _client;
         }
     }
 
-    private sealed class CountingStubHandler(HttpStatusCode statusCode, string? body) : HttpMessageHandler
+    private sealed class CountingStubHandler : HttpMessageHandler
     {
-        private HttpStatusCode _statusCode = statusCode;
-        private string? _body = body;
+        private HttpStatusCode _statusCode;
+        private string? _body;
+
+        public CountingStubHandler(HttpStatusCode statusCode, string? body)
+        {
+            _statusCode = statusCode;
+            _body = body;
+        }
 
         public int CallCount { get; private set; }
 

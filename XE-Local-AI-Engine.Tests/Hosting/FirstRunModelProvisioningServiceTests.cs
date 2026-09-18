@@ -504,13 +504,20 @@ public sealed class FirstRunModelProvisioningServiceTests
     ///     A selector that resolves immediately and, when handed the registry, records the phase the acquisition status
     ///     was already showing at the moment the probe was entered — the ordering the DetectingGpu report exists to give.
     /// </summary>
-    private sealed class FakeVariantSelector(RecordingAcquisitionStatusRegistry? acquisitionStatus = null) : IGpuVariantSelector
+    private sealed class FakeVariantSelector : IGpuVariantSelector
     {
+        private readonly RecordingAcquisitionStatusRegistry? _acquisitionStatus;
+
+        public FakeVariantSelector(RecordingAcquisitionStatusRegistry? acquisitionStatus = null)
+        {
+            _acquisitionStatus = acquisitionStatus;
+        }
+
         public string? PhaseAtProbe { get; private set; }
 
         public Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
         {
-            PhaseAtProbe = acquisitionStatus?.Current.Phase;
+            PhaseAtProbe = _acquisitionStatus?.Current.Phase;
             return Task.FromResult(GpuVariant.Cpu);
         }
     }
@@ -572,8 +579,15 @@ public sealed class FirstRunModelProvisioningServiceTests
         }
     }
 
-    private sealed class FakeGgufModelStore(IReadOnlyList<string> installed) : IGgufModelStore
+    private sealed class FakeGgufModelStore : IGgufModelStore
     {
+        private readonly IReadOnlyList<string> _installed;
+
+        public FakeGgufModelStore(IReadOnlyList<string> installed)
+        {
+            _installed = installed;
+        }
+
         public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
         {
             return Task.FromResult<string?>(null);
@@ -586,7 +600,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
         {
-            IReadOnlyList<LocalModelDescriptor> descriptors = installed
+            IReadOnlyList<LocalModelDescriptor> descriptors = _installed
                                                               .Select(static name => new LocalModelDescriptor
                                                               {
                                                                   ModelName = name,
@@ -627,8 +641,15 @@ public sealed class FirstRunModelProvisioningServiceTests
     }
 
     /// <summary>A coordinator that records Start requests and reports a fixed terminal phase for any model name.</summary>
-    private sealed class FakeDownloadCoordinator(GgufDownloadPhase terminalPhase) : IGgufDownloadCoordinator
+    private sealed class FakeDownloadCoordinator : IGgufDownloadCoordinator
     {
+        private readonly GgufDownloadPhase _terminalPhase;
+
+        public FakeDownloadCoordinator(GgufDownloadPhase terminalPhase)
+        {
+            _terminalPhase = terminalPhase;
+        }
+
         public List<GgufModelRequest> StartCalls { get; } = [];
 
         /// <summary>Simulates a provisioning step failing AFTER the runtime was successfully acquired.</summary>
@@ -653,7 +674,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public GgufDownloadStatus? GetStatus(string modelName)
         {
-            return new GgufDownloadStatus(modelName, terminalPhase, CompletedBytes: null, TotalBytes: null, terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
+            return new GgufDownloadStatus(modelName, _terminalPhase, CompletedBytes: null, TotalBytes: null, _terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
         }
 
         public IReadOnlyList<GgufDownloadStatus> ListStatuses()

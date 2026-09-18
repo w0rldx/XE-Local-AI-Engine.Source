@@ -137,15 +137,22 @@ public sealed class ModelRoutingLocalChatClientTests
     ///     A provider that records every (model) it was asked to build a chat client for and hands back a fresh
     ///     <see cref="StubChatClient" /> per call — standing in for a llama-server deferred client or the Ollama client.
     /// </summary>
-    private sealed class RecordingLocalModelProvider(string providerName) : ILocalModelProvider
+    private sealed class RecordingLocalModelProvider : ILocalModelProvider
     {
+        private readonly string _providerName;
+
+        public RecordingLocalModelProvider(string providerName)
+        {
+            _providerName = providerName;
+        }
+
         public List<RecordingChatClient> CreatedClients { get; } = [];
 
-        public string ProviderName => providerName;
+        public string ProviderName => _providerName;
 
         public IChatClient CreateChatClient(LocalModelSelection selection)
         {
-            AssertEx.Equal(providerName, selection.ProviderName);
+            AssertEx.Equal(_providerName, selection.ProviderName);
             var client = new RecordingChatClient(selection.ModelName);
             CreatedClients.Add(client);
             return client;
@@ -188,9 +195,16 @@ public sealed class ModelRoutingLocalChatClientTests
     }
 
     /// <summary>A stub chat client that remembers the model it was created for so the routing assertions can read it.</summary>
-    private sealed class RecordingChatClient(string modelName) : IChatClient
+    private sealed class RecordingChatClient : IChatClient
     {
-        public string ModelName => modelName;
+        private readonly string _modelName;
+
+        public RecordingChatClient(string modelName)
+        {
+            _modelName = modelName;
+        }
+
+        public string ModelName => _modelName;
 
         public int CallCount { get; private set; }
 

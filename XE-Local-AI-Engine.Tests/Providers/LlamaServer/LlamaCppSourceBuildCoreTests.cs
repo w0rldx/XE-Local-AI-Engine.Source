@@ -340,9 +340,16 @@ public sealed class LlamaCppSourceBuildCoreTests
         AssertEx.Equal(second, activity.ActiveBuildId);
     }
 
-    private sealed class FixedVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
+    private sealed class FixedVendorProbe : IGpuVendorProbe
     {
+        private readonly DetectedGpuVendor _vendor;
+
+        public FixedVendorProbe(DetectedGpuVendor vendor)
+        {
+            _vendor = vendor;
+        }
+
         public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) =>
-            Task.FromResult(vendor);
+            Task.FromResult(_vendor);
     }
 }

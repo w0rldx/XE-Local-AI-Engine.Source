@@ -1632,9 +1632,14 @@ public sealed class AgentDefinitionResolverTests
     // A fake ranker that records how many times it was consulted and returns a fixed (deliberately out-of-order)
     // selection, so a test can assert both the gate (consulted only above the threshold with a query) and the resolver's
     // re-order of the ranker's output.
-    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    private sealed class RecordingRanker : IPlaybookRetrievalRanker
     {
-        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection;
+
+        public RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null)
+        {
+            _selection = selection;
+        }
 
         public int CallCount { get; private set; }
 

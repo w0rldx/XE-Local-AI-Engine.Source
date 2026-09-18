@@ -131,8 +131,15 @@ public sealed class WorkspaceRevocationServiceTests
         _ = store.DidNotReceive().RevokeAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    private sealed class BlockingSelectedFolderStore(SelectedFolderRecord record) : INodeSelectedFolderStore
+    private sealed class BlockingSelectedFolderStore : INodeSelectedFolderStore
     {
+        private readonly SelectedFolderRecord _record;
+
+        public BlockingSelectedFolderStore(SelectedFolderRecord record)
+        {
+            _record = record;
+        }
+
         public TaskCompletionSource CommitEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource<bool> ReleaseCommit { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -144,7 +151,7 @@ public sealed class WorkspaceRevocationServiceTests
             throw new NotSupportedException();
 
         public Task<SelectedFolderRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult<SelectedFolderRecord?>(record);
+            Task.FromResult<SelectedFolderRecord?>(_record);
 
         public Task<SelectedFolderRecord?> GetByAliasAsync(string folderAlias, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -183,18 +190,24 @@ public sealed class WorkspaceRevocationServiceTests
             return Task.FromResult<IWorkspaceRevocationSession>(new Session(this));
         }
 
-        private sealed class Session(ExclusivePreparation owner) : IWorkspaceRevocationSession
+        private sealed class Session : IWorkspaceRevocationSession
         {
+            private readonly ExclusivePreparation _owner;
             private int _disposed;
+
+            public Session(ExclusivePreparation owner)
+            {
+                _owner = owner;
+            }
 
             public ValueTask DisposeAsync()
             {
                 if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
                 {
-                    _ = Interlocked.Increment(ref owner._disposalCount);
-                    lock (owner._gate)
+                    _ = Interlocked.Increment(ref _owner._disposalCount);
+                    lock (_owner._gate)
                     {
-                        owner._held = false;
+                        _owner._held = false;
                     }
                 }
 

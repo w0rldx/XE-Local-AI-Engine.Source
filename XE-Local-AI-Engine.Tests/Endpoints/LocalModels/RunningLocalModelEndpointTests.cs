@@ -363,9 +363,14 @@ public sealed class RunningLocalModelEndpointTests
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
-    private sealed class StubNodeSettingsStore(StoredNodeSettings settings) : INodeSettingsStore
+    private sealed class StubNodeSettingsStore : INodeSettingsStore
     {
-        public StoredNodeSettings Settings { get; set; } = settings;
+        public StubNodeSettingsStore(StoredNodeSettings settings)
+        {
+            Settings = settings;
+        }
+
+        public StoredNodeSettings Settings { get; set; }
 
         public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
         {

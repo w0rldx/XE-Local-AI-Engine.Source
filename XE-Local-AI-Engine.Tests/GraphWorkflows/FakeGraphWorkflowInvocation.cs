@@ -77,7 +77,7 @@ internal sealed record GraphWorkflowScriptedTurn(
 ///         fails loudly instead of quietly answering a default.
 ///     </para>
 /// </summary>
-internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : IInvocationRunner
+internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
 {
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _parked = new();
     private readonly ConcurrentBag<Guid> _wedged = [];
@@ -92,8 +92,12 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
     ///     would send the container back through this factory and recurse until the stack ran out. By the time a turn
     ///     runs, the executor has already resolved the dispatcher and the cycle is long closed.
     /// </summary>
-    private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher =
-        new((services ?? throw new ArgumentNullException(nameof(services))).GetRequiredService<IWorkerEventDispatcher>);
+    private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
+
+    public FakeGraphWorkflowInvocation(IServiceProvider services)
+    {
+        _eventDispatcher = new((services ?? throw new ArgumentNullException(nameof(services))).GetRequiredService<IWorkerEventDispatcher>);
+    }
 
     /// <summary>Every package this fake was handed, so a test can assert the contract the fake itself cannot see.</summary>
     public IReadOnlyList<RuntimePackage> Packages => [.. _packages];

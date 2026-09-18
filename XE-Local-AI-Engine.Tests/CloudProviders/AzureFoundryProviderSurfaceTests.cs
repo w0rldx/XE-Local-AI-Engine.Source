@@ -255,13 +255,20 @@ public sealed class AzureFoundryProviderSurfaceTests
         throw new AssertionException($"Expected {typeof(TException).Name} but no exception was thrown.");
     }
 
-    private sealed class ThrowingChatClient(Exception toThrow) : IChatClient
+    private sealed class ThrowingChatClient : IChatClient
     {
+        private readonly Exception _toThrow;
+
+        public ThrowingChatClient(Exception toThrow)
+        {
+            _toThrow = toThrow;
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            throw toThrow;
+            throw _toThrow;
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -270,7 +277,7 @@ public sealed class AzureFoundryProviderSurfaceTests
             CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask;
-            throw toThrow;
+            throw _toThrow;
 #pragma warning disable CS0162 // Unreachable: satisfies the iterator contract.
             yield break;
 #pragma warning restore CS0162
@@ -288,15 +295,21 @@ public sealed class AzureFoundryProviderSurfaceTests
 
     // Minimal Azure.Response test double carrying a fixed status + JSON body, so RequestFailedException(Response)
     // exercises the real GetRawResponse().Content path the translator reads (Locked body-detail extraction).
-    private sealed class FakeAzureResponse(int status, BinaryData content) : Response
+    private sealed class FakeAzureResponse : Response
     {
-        public override int Status { get; } = status;
+        public FakeAzureResponse(int status, BinaryData content)
+        {
+            Status = status;
+            Content = content;
+        }
+
+        public override int Status { get; }
 
         public override string ReasonPhrase => string.Empty;
 
         public override Stream? ContentStream { get; set; }
 
-        public override BinaryData Content { get; } = content;
+        public override BinaryData Content { get; }
 
         public override string ClientRequestId { get; set; } = string.Empty;
 
@@ -330,17 +343,23 @@ public sealed class AzureFoundryProviderSurfaceTests
     // Minimal System.ClientModel.Primitives.PipelineResponse test double, the v1-surface analogue of FakeAzureResponse
     // above — carries a fixed status + optional JSON body so ClientResultException(PipelineResponse, Exception)
     // exercises the real GetRawResponse().Content path.
-    private sealed class FakePipelineResponse(int status, BinaryData? content) : PipelineResponse
+    private sealed class FakePipelineResponse : PipelineResponse
     {
         private static readonly BinaryData EmptyContent = BinaryData.FromBytes(ReadOnlyMemory<byte>.Empty);
 
-        public override int Status { get; } = status;
+        public FakePipelineResponse(int status, BinaryData? content)
+        {
+            Status = status;
+            Content = content ?? EmptyContent;
+        }
+
+        public override int Status { get; }
 
         public override string ReasonPhrase => string.Empty;
 
         public override Stream? ContentStream { get; set; }
 
-        public override BinaryData Content { get; } = content ?? EmptyContent;
+        public override BinaryData Content { get; }
 
         protected override PipelineResponseHeaders HeadersCore => throw new NotSupportedException();
 

@@ -7,15 +7,25 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>Shared fakes for the run-executor suite. No GPU, no venv, no real subprocess.</summary>
-internal sealed class FixedNodeDataDirectory(string root) : INodeDataDirectory
+internal sealed class FixedNodeDataDirectory : INodeDataDirectory
 {
-    public string Root { get; } = root;
+    public FixedNodeDataDirectory(string root)
+    {
+        Root = root;
+    }
+
+    public string Root { get; }
 }
 
 /// <summary>A key holder with fixed material, so the frozen-copy round trip exercises the real AES-GCM path.</summary>
-internal sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder
+internal sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
 {
-    private byte[]? _key = key;
+    private byte[]? _key;
+
+    public FixedNodeSqliteKeyHolder(byte[] key)
+    {
+        _key = key;
+    }
 
     public ReadOnlyMemory<byte> Key
     {
@@ -40,18 +50,27 @@ internal sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolde
 ///         bound waits forever.
 ///     </para>
 /// </summary>
-internal sealed class FakeTrainingProcessHandle(
-    TrainingLaunchReceipt receipt,
-    IReadOnlyList<string> lines,
-    int exitCode,
-    bool exitsOnStreamClose = true)
-    : ITrainingProcessHandle
+internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
 {
-    private readonly Channel<string> _output = CreateChannel(lines);
+    private readonly Channel<string> _output;
     private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _exitWaitEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly int _exitCode;
+    private readonly bool _exitsOnStreamClose;
 
-    public TrainingLaunchReceipt Receipt { get; } = receipt;
+    public FakeTrainingProcessHandle(
+        TrainingLaunchReceipt receipt,
+        IReadOnlyList<string> lines,
+        int exitCode,
+        bool exitsOnStreamClose = true)
+    {
+        _exitCode = exitCode;
+        _exitsOnStreamClose = exitsOnStreamClose;
+        _output = CreateChannel(lines);
+        Receipt = receipt;
+    }
+
+    public TrainingLaunchReceipt Receipt { get; }
 
     public bool StopRequested { get; private set; }
 
@@ -76,7 +95,7 @@ internal sealed class FakeTrainingProcessHandle(
 
     /// <summary>Settles the exit status by hand, for a test that decides when the process goes away.</summary>
     public void SignalExit() =>
-        _ = _exit.TrySetResult(exitCode);
+        _ = _exit.TrySetResult(_exitCode);
 
     public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
     {
@@ -105,9 +124,9 @@ internal sealed class FakeTrainingProcessHandle(
     private void Complete()
     {
         _ = _output.Writer.TryComplete();
-        if (exitsOnStreamClose)
+        if (_exitsOnStreamClose)
         {
-            _ = _exit.TrySetResult(exitCode);
+            _ = _exit.TrySetResult(_exitCode);
         }
     }
 
@@ -120,9 +139,9 @@ internal sealed class FakeTrainingProcessHandle(
 
         // The real handle's stream closes when the child closes both pipes, which is what settles the exit task —
         // unless the child is wedged and never reaches its own exit, which is what the flag models.
-        if (exitsOnStreamClose)
+        if (_exitsOnStreamClose)
         {
-            _ = _exit.TrySetResult(exitCode);
+            _ = _exit.TrySetResult(_exitCode);
         }
     }
 
@@ -146,24 +165,38 @@ internal sealed class FakeTrainingProcessHandle(
     }
 }
 
-internal sealed class FakeTrainingProcessSpawner(FakeTrainingProcessHandle handle) : ITrainingProcessSpawner
+internal sealed class FakeTrainingProcessSpawner : ITrainingProcessSpawner
 {
+    private readonly FakeTrainingProcessHandle _handle;
+
+    public FakeTrainingProcessSpawner(FakeTrainingProcessHandle handle)
+    {
+        _handle = handle;
+    }
+
     public TrainingSpawnRequest? LastRequest { get; private set; }
 
     public ITrainingProcessHandle Spawn(TrainingSpawnRequest request)
     {
         LastRequest = request;
-        return handle;
+        return _handle;
     }
 }
 
 /// <summary>A /proc reader with scripted facts, so receipt validation is testable without a live process.</summary>
-internal sealed class FakeTrainingProcessInspector(TrainingProcessFacts? facts) : ITrainingProcessInspector
+internal sealed class FakeTrainingProcessInspector : ITrainingProcessInspector
 {
+    private readonly TrainingProcessFacts? _facts;
+
+    public FakeTrainingProcessInspector(TrainingProcessFacts? facts)
+    {
+        _facts = facts;
+    }
+
     public List<int> SignalledGroups { get; } = [];
 
     public TrainingProcessFacts? Inspect(int processId) =>
-        facts;
+        _facts;
 
     public Task KillProcessGroupAsync(int processGroupId, CancellationToken cancellationToken = default)
     {

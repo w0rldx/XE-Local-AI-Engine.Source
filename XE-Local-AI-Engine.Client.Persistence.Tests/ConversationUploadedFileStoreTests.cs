@@ -363,14 +363,24 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         return false;
     }
 
-    private sealed class FixedNodeDataDirectory(string root) : INodeDataDirectory
+    private sealed class FixedNodeDataDirectory : INodeDataDirectory
     {
-        public string Root { get; } = root;
+        public FixedNodeDataDirectory(string root)
+        {
+            Root = root;
+        }
+
+        public string Root { get; }
     }
 
-    private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder
+    private sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
     {
-        private byte[]? _key = key;
+        private byte[]? _key;
+
+        public FixedNodeSqliteKeyHolder(byte[] key)
+        {
+            _key = key;
+        }
 
         public ReadOnlyMemory<byte> Key
         {

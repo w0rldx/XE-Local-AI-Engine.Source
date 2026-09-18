@@ -111,9 +111,14 @@ internal sealed class DevelopmentTestFixture : IDisposable
     }
 }
 
-internal sealed class TestDataDirectory(string root) : INodeDataDirectory
+internal sealed class TestDataDirectory : INodeDataDirectory
 {
-    public string Root { get; } = root;
+    public TestDataDirectory(string root)
+    {
+        Root = root;
+    }
+
+    public string Root { get; }
 }
 
 internal class TestApplyPort : IDevelopmentHostApplyPort

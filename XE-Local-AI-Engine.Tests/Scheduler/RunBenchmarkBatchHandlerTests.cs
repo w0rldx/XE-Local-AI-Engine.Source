@@ -257,15 +257,21 @@ public sealed class RunBenchmarkBatchHandlerTests
 
     /// <summary>A <see cref="TimeProvider" /> whose clock advances one fixed step per read, so a fire's budget can be
     ///     spent deterministically without sleeping.</summary>
-    private sealed class BudgetBurningTimeProvider(TimeSpan step) : TimeProvider
+    private sealed class BudgetBurningTimeProvider : TimeProvider
     {
+        private readonly TimeSpan _step;
         private long _reads;
+
+        public BudgetBurningTimeProvider(TimeSpan step)
+        {
+            _step = step;
+        }
 
         public override long GetTimestamp()
         {
             // The first read is the fire's start stamp, so elapsed time only starts accruing from the second read on:
             // one step per budget check, which spends the 4-cell fire's budget on its fourth check.
-            var elapsed = step * Math.Max(0, _reads++ - 1);
+            var elapsed = _step * Math.Max(0, _reads++ - 1);
             return (long)(elapsed.TotalSeconds * TimestampFrequency);
         }
     }

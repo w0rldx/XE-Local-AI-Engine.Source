@@ -458,82 +458,91 @@ internal sealed class GraphWorkflowDrainGate
 ///     <see cref="GraphWorkflowDrainGate" />. Everything else forwards untouched, so every check either side of that
 ///     write is the production one.
 /// </summary>
-internal sealed class GatedDrainGraphWorkflowStore(IGraphWorkflowStore inner, GraphWorkflowDrainGate gate) : IGraphWorkflowStore
+internal sealed class GatedDrainGraphWorkflowStore : IGraphWorkflowStore
 {
+    private readonly IGraphWorkflowStore _inner;
+    private readonly GraphWorkflowDrainGate _gate;
+
+    public GatedDrainGraphWorkflowStore(IGraphWorkflowStore inner, GraphWorkflowDrainGate gate)
+    {
+        _inner = inner;
+        _gate = gate;
+    }
+
     public async Task<GraphWorkflowMutationResult> TransitionNodeRunAsync(TransitionGraphWorkflowNodeRunCommand command,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
         if (command.TargetStatus == GraphWorkflowNodeRunStatus.Cancelled)
         {
-            await gate.WaitAsync();
+            await _gate.WaitAsync();
         }
 
-        return await inner.TransitionNodeRunAsync(command, cancellationToken);
+        return await _inner.TransitionNodeRunAsync(command, cancellationToken);
     }
 
     public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
-        inner.CreateDefinitionAsync(command, cancellationToken);
+        _inner.CreateDefinitionAsync(command, cancellationToken);
 
     public Task<GraphWorkflowDefinitionSnapshot> UpdateDefinitionAsync(UpdateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
-        inner.UpdateDefinitionAsync(command, cancellationToken);
+        _inner.UpdateDefinitionAsync(command, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListDefinitionsAsync(CancellationToken cancellationToken = default) =>
-        inner.ListDefinitionsAsync(cancellationToken);
+        _inner.ListDefinitionsAsync(cancellationToken);
 
     public Task<GraphWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
-        inner.GetDefinitionAsync(definitionId, cancellationToken);
+        _inner.GetDefinitionAsync(definitionId, cancellationToken);
 
     public Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
-        inner.DeleteDefinitionAsync(definitionId, cancellationToken);
+        _inner.DeleteDefinitionAsync(definitionId, cancellationToken);
 
     public Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
-        inner.StartRunAsync(command, cancellationToken);
+        _inner.StartRunAsync(command, cancellationToken);
 
     public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
-        inner.FindRunByRequestAsync(requestId, cancellationToken);
+        _inner.FindRunByRequestAsync(requestId, cancellationToken);
 
     public Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        inner.GetRunAsync(runId, cancellationToken);
+        _inner.GetRunAsync(runId, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,
         CancellationToken cancellationToken = default) =>
-        inner.ListRunsAsync(status, limit, cancellationToken);
+        _inner.ListRunsAsync(status, limit, cancellationToken);
 
     public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
-        inner.CountActiveRunsAsync(probeLimit, cancellationToken);
+        _inner.CountActiveRunsAsync(probeLimit, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
-        inner.TransitionRunAsync(command, cancellationToken);
+        _inner.TransitionRunAsync(command, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        inner.ListNodeRunsAsync(runId, cancellationToken);
+        _inner.ListNodeRunsAsync(runId, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
-        inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+        _inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
 
     public Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
-        inner.DecideNodeRunAsync(command, cancellationToken);
+        _inner.DecideNodeRunAsync(command, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
-        inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
+        _inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
-        inner.AppendEventAsync(command, cancellationToken);
+        _inner.AppendEventAsync(command, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowRunEventSnapshot>> ListEventsAsync(Guid runId,
         long afterSeq = 0,
         int limit = 200,
         CancellationToken cancellationToken = default) =>
-        inner.ListEventsAsync(runId, afterSeq, limit, cancellationToken);
+        _inner.ListEventsAsync(runId, afterSeq, limit, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
-        inner.ListInterruptedNodeRunsAsync(cancellationToken);
+        _inner.ListInterruptedNodeRunsAsync(cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,
         GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
         CancellationToken cancellationToken = default) =>
-        inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
+        _inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
 }

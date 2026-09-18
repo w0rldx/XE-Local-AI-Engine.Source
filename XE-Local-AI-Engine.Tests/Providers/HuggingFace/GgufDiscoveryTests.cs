@@ -455,9 +455,19 @@ public sealed class GgufDiscoveryTests
     ///     Routes by URL: <c>/api/models?filter=gguf</c> → listing JSON; <c>/api/models/{repo}</c> → repo detail JSON;
     ///     <c>/resolve/</c> (a range read) → the canned GGUF header bytes honoring the requested byte range.
     /// </summary>
-    private sealed class StubHandler(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null)
-        : HttpMessageHandler
+    private sealed class StubHandler : HttpMessageHandler
     {
+        private readonly string? _listing;
+        private readonly string? _repoDetail;
+        private readonly byte[]? _headerBytes;
+
+        public StubHandler(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null)
+        {
+            _listing = listing;
+            _repoDetail = repoDetail;
+            _headerBytes = headerBytes;
+        }
+
         public string LastListUrl { get; private set; } = string.Empty;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -468,18 +478,18 @@ public sealed class GgufDiscoveryTests
 
             if (url.Contains("/resolve/", StringComparison.Ordinal))
             {
-                return Task.FromResult(BuildRangeResponse(request, headerBytes ?? []));
+                return Task.FromResult(BuildRangeResponse(request, _headerBytes ?? []));
             }
 
             if (url.Contains("/api/models/", StringComparison.Ordinal))
             {
-                return Task.FromResult(Json(repoDetail ?? "{}"));
+                return Task.FromResult(Json(_repoDetail ?? "{}"));
             }
 
             if (url.Contains("/api/models?", StringComparison.Ordinal))
             {
                 LastListUrl = url;
-                return Task.FromResult(Json(listing ?? "[]"));
+                return Task.FromResult(Json(_listing ?? "[]"));
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));

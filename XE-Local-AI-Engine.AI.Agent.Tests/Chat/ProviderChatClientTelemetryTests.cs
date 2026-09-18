@@ -107,11 +107,18 @@ public sealed class ProviderChatClientTelemetryTests
         };
     }
 
-    private sealed class FakeChatClient(string responseText) : IChatClient
+    private sealed class FakeChatClient : IChatClient
     {
+        private readonly string _responseText;
+
+        public FakeChatClient(string responseText)
+        {
+            _responseText = responseText;
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText)));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _responseText)));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -120,7 +127,7 @@ public sealed class ProviderChatClientTelemetryTests
             CancellationToken cancellationToken = default)
         {
             await Task.Yield();
-            yield return new ChatResponseUpdate(ChatRole.Assistant, responseText);
+            yield return new ChatResponseUpdate(ChatRole.Assistant, _responseText);
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)

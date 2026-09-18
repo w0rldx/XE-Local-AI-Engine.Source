@@ -164,9 +164,15 @@ public sealed class WhisperGoldenFixtureRecorder
 ///     retained audio always begins at its committed watermark, so the watermark at the moment of the call is the
 ///     window's start. Searching for the payload inside the clip would mis-locate a window of near-silence.
 /// </remarks>
-internal sealed class RecordingWhisperTranscriber(IWhisperTranscriber inner) : IWhisperTranscriber
+internal sealed class RecordingWhisperTranscriber : IWhisperTranscriber
 {
     private readonly List<GoldenWindow> _windows = [];
+    private readonly IWhisperTranscriber _inner;
+
+    public RecordingWhisperTranscriber(IWhisperTranscriber inner)
+    {
+        _inner = inner;
+    }
 
     /// <summary>Reads the lane's watermark, which is where its retained audio starts.</summary>
     public Func<long> WindowStartMs { get; set; } = () => 0;
@@ -185,7 +191,7 @@ internal sealed class RecordingWhisperTranscriber(IWhisperTranscriber inner) : I
         var startMs = WindowStartMs();
         var endMs = startMs + (payload.Length / WavPcm16.BytesPerMillisecond);
 
-        var result = await inner.TranscribeAsync(modelId, request, ct);
+        var result = await _inner.TranscribeAsync(modelId, request, ct);
 
         _windows.Add(new GoldenWindow
         {
@@ -213,10 +219,17 @@ internal sealed class RecordingWhisperTranscriber(IWhisperTranscriber inner) : I
 ///     The recorder starts and stops <c>whisper-server</c> itself, by PID, so there is no process for a supervisor to
 ///     own. Only the two things the adapter asks for are needed: where the daemon is, and permission to talk to it.
 /// </remarks>
-internal sealed class GoldenRecorderSupervisor(Uri baseAddress) : IWhisperServerSupervisor
+internal sealed class GoldenRecorderSupervisor : IWhisperServerSupervisor
 {
+    private readonly Uri _baseAddress;
+
+    public GoldenRecorderSupervisor(Uri baseAddress)
+    {
+        _baseAddress = baseAddress;
+    }
+
     public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct) =>
-        Task.FromResult(new WhisperServerEndpoint(modelId, Generation: 1, baseAddress));
+        Task.FromResult(new WhisperServerEndpoint(modelId, Generation: 1, _baseAddress));
 
     public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
         throw new NotSupportedException("The recorder does not own the daemon's lifetime.");

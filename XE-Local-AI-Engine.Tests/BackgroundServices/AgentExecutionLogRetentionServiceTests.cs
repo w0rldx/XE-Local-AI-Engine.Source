@@ -176,11 +176,18 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         return provider;
     }
 
-    private sealed class FixedTimeProvider(long milliseconds) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly long _milliseconds;
+
+        public FixedTimeProvider(long milliseconds)
+        {
+            _milliseconds = milliseconds;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+            return DateTimeOffset.FromUnixTimeMilliseconds(_milliseconds);
         }
     }
 }

@@ -254,9 +254,14 @@ public sealed class ExternalProviderProbeServiceTests
     ///     Records what the probe actually sent and replays a scripted answer. It hands out a FRESH handler per call
     ///     because the probe owns and disposes the transport it is given.
     /// </summary>
-    private sealed class ProbeTransport(Func<int, HttpResponseMessage> responder)
+    private sealed class ProbeTransport
     {
-        private readonly Func<int, HttpResponseMessage> _responder = responder;
+        private readonly Func<int, HttpResponseMessage> _responder;
+
+        public ProbeTransport(Func<int, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
 
         public int RequestCount { get; private set; }
 
@@ -271,15 +276,22 @@ public sealed class ExternalProviderProbeServiceTests
             return new RecordingHandler(this);
         }
 
-        private sealed class RecordingHandler(ProbeTransport transport) : HttpMessageHandler
+        private sealed class RecordingHandler : HttpMessageHandler
         {
+            private readonly ProbeTransport _transport;
+
+            public RecordingHandler(ProbeTransport transport)
+            {
+                _transport = transport;
+            }
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                transport.LastRequestUri = request.RequestUri;
-                transport.LastAuthorization = request.Headers.Authorization?.ToString();
-                transport.LastRequestHadAuthorization = request.Headers.Contains("Authorization");
-                var index = transport.RequestCount++;
-                return Task.FromResult(transport._responder(index));
+                _transport.LastRequestUri = request.RequestUri;
+                _transport.LastAuthorization = request.Headers.Authorization?.ToString();
+                _transport.LastRequestHadAuthorization = request.Headers.Contains("Authorization");
+                var index = _transport.RequestCount++;
+                return Task.FromResult(_transport._responder(index));
             }
         }
     }

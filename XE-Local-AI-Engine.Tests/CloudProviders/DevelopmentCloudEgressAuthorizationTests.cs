@@ -406,11 +406,18 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         string? ModelId,
         string BundleHash);
 
-    private sealed class FixedCloudFactory(IChatClient cloudClient) : IActiveCloudChatClientFactory
+    private sealed class FixedCloudFactory : IActiveCloudChatClientFactory
     {
+        private readonly IChatClient _cloudClient;
+
+        public FixedCloudFactory(IChatClient cloudClient)
+        {
+            _cloudClient = cloudClient;
+        }
+
         public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
-            client = cloudClient;
+            client = _cloudClient;
             return true;
         }
 
@@ -429,13 +436,20 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         }
     }
 
-    private sealed class ToggleableCloudFactory(IChatClient cloudClient) : IActiveCloudChatClientFactory
+    private sealed class ToggleableCloudFactory : IActiveCloudChatClientFactory
     {
+        private readonly IChatClient _cloudClient;
+
+        public ToggleableCloudFactory(IChatClient cloudClient)
+        {
+            _cloudClient = cloudClient;
+        }
+
         public bool CloudActive { get; set; }
 
         public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
-            client = CloudActive ? cloudClient : null;
+            client = CloudActive ? _cloudClient : null;
             return CloudActive;
         }
 
@@ -454,8 +468,17 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         }
     }
 
-    private sealed class TwoRoundCloudChatClient(List<string> events, bool removeCarrierAfterFirstRound = false) : IChatClient
+    private sealed class TwoRoundCloudChatClient : IChatClient
     {
+        private readonly List<string> _events;
+        private readonly bool _removeCarrierAfterFirstRound;
+
+        public TwoRoundCloudChatClient(List<string> events, bool removeCarrierAfterFirstRound = false)
+        {
+            _events = events;
+            _removeCarrierAfterFirstRound = removeCarrierAfterFirstRound;
+        }
+
         public List<ChatOptions> OptionsByRound { get; } = [];
         public int TransportCount { get; private set; }
 
@@ -515,12 +538,12 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         {
             TransportCount++;
             OptionsByRound.Add(options);
-            events.Add($"transport{TransportCount}");
+            _events.Add($"transport{TransportCount}");
         }
 
         private void RemoveCarrierIfRequested(ChatOptions options)
         {
-            if (removeCarrierAfterFirstRound)
+            if (_removeCarrierAfterFirstRound)
             {
                 options.AdditionalProperties!.Remove(DevelopmentCloudAuthorizationMetadata.EnvelopeKey);
             }

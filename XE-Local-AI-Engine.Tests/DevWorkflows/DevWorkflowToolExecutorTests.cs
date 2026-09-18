@@ -578,9 +578,15 @@ public sealed class DevWorkflowToolExecutorTests
     ///     Refuses its first write and then behaves. A decorator over the real store rather than a stub, so everything
     ///     after the refusal — the digest, the size, the round trip — is still the production path.
     /// </summary>
-    private sealed class BlobStoreThatRefusesItsFirstWrite(IDevWorkflowArtifactBlobStore inner) : IDevWorkflowArtifactBlobStore
+    private sealed class BlobStoreThatRefusesItsFirstWrite : IDevWorkflowArtifactBlobStore
     {
+        private readonly IDevWorkflowArtifactBlobStore _inner;
         private int _refused;
+
+        public BlobStoreThatRefusesItsFirstWrite(IDevWorkflowArtifactBlobStore inner)
+        {
+            _inner = inner;
+        }
 
         public Task<DevWorkflowArtifactBlobWriteResult> WriteAsync(Guid runId,
             Guid artifactId,
@@ -588,19 +594,19 @@ public sealed class DevWorkflowToolExecutorTests
             CancellationToken cancellationToken = default) =>
             Interlocked.Exchange(ref _refused, value: 1) == 0
                 ? throw new IOException("The artifact could not be written this time.")
-                : inner.WriteAsync(runId, artifactId, content, cancellationToken);
+                : _inner.WriteAsync(runId, artifactId, content, cancellationToken);
 
         public Task<DevWorkflowArtifactBlobReadResult> ReadAsync(Guid runId,
             Guid artifactId,
             string expectedHash,
             long expectedByteCount,
             CancellationToken cancellationToken = default) =>
-            inner.ReadAsync(runId, artifactId, expectedHash, expectedByteCount, cancellationToken);
+            _inner.ReadAsync(runId, artifactId, expectedHash, expectedByteCount, cancellationToken);
 
         public void Delete(Guid runId, Guid artifactId) =>
-            inner.Delete(runId, artifactId);
+            _inner.Delete(runId, artifactId);
 
         public void DeleteRun(Guid runId) =>
-            inner.DeleteRun(runId);
+            _inner.DeleteRun(runId);
     }
 }

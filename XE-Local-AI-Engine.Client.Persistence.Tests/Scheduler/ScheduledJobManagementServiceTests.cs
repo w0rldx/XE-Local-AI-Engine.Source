@@ -1156,14 +1156,24 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     ///     Minimal <see cref="IHostApplicationBuilder" /> shim that satisfies the extension method's
     ///     <c>builder.Services</c> and <c>builder.Configuration</c> needs without spinning up a full host.
     /// </summary>
-    private sealed class MinimalHostApplicationBuilder(IServiceCollection services) : IHostApplicationBuilder
+    private sealed class MinimalHostApplicationBuilder : IHostApplicationBuilder
     {
-        public IServiceCollection Services { get; } = services;
-        public IConfigurationManager Configuration { get; } = new ConfigurationManager();
-        public IHostEnvironment Environment { get; } = Substitute.For<IHostEnvironment>();
-        public ILoggingBuilder Logging { get; } = Substitute.For<ILoggingBuilder>();
-        public IDictionary<object, object> Properties { get; } = new Dictionary<object, object>();
-        public IMetricsBuilder Metrics { get; } = Substitute.For<IMetricsBuilder>();
+        public MinimalHostApplicationBuilder(IServiceCollection services)
+        {
+            Services = services;
+            Configuration = new ConfigurationManager();
+            Environment = Substitute.For<IHostEnvironment>();
+            Logging = Substitute.For<ILoggingBuilder>();
+            Properties = new Dictionary<object, object>();
+            Metrics = Substitute.For<IMetricsBuilder>();
+        }
+
+        public IServiceCollection Services { get; }
+        public IConfigurationManager Configuration { get; }
+        public IHostEnvironment Environment { get; }
+        public ILoggingBuilder Logging { get; }
+        public IDictionary<object, object> Properties { get; }
+        public IMetricsBuilder Metrics { get; }
 
         public void ConfigureContainer<TContainerBuilder>(IServiceProviderFactory<TContainerBuilder> factory,
             Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull

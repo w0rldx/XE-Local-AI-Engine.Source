@@ -245,8 +245,15 @@ public sealed class KnowledgeIngestionWorkerTests
             NullLogger<KnowledgeIngestionWorker>.Instance);
     }
 
-    private sealed class FakeIngestionService(Func<Guid, CancellationToken, Task> behavior) : IKnowledgeIngestionService
+    private sealed class FakeIngestionService : IKnowledgeIngestionService
     {
+        private readonly Func<Guid, CancellationToken, Task> _behavior;
+
+        public FakeIngestionService(Func<Guid, CancellationToken, Task> behavior)
+        {
+            _behavior = behavior;
+        }
+
         public ConcurrentBag<Guid> Started { get; } = [];
 
         public ConcurrentBag<Guid> Completed { get; } = [];
@@ -254,7 +261,7 @@ public sealed class KnowledgeIngestionWorkerTests
         public async Task RunAsync(Guid documentId, CancellationToken cancellationToken)
         {
             Started.Add(documentId);
-            await behavior(documentId, cancellationToken);
+            await _behavior(documentId, cancellationToken);
             Completed.Add(documentId);
         }
     }

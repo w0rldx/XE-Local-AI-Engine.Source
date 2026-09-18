@@ -1039,8 +1039,15 @@ public sealed class BenchmarkJudgeExecutorTests
         return binding;
     }
 
-    private sealed class FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
+    private sealed class FixedSnapshotFactory : IBenchmarkRuntimeSnapshotFactory
     {
+        private readonly BenchmarkRuntimeSnapshotV1 _snapshot;
+
+        public FixedSnapshotFactory(BenchmarkRuntimeSnapshotV1 snapshot)
+        {
+            _snapshot = snapshot;
+        }
+
         public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
             throw new NotSupportedException();
 
@@ -1048,18 +1055,30 @@ public sealed class BenchmarkJudgeExecutorTests
             throw new NotSupportedException();
 
         public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) =>
-            snapshot;
+            _snapshot;
     }
 
-    private sealed class FixedLeaseProvider(FakeLease lease) : IBenchmarkInstalledModelLeaseProvider
+    private sealed class FixedLeaseProvider : IBenchmarkInstalledModelLeaseProvider
     {
+        private readonly FakeLease _lease;
+
+        public FixedLeaseProvider(FakeLease lease)
+        {
+            _lease = lease;
+        }
+
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken) =>
-            Task.FromResult<IBenchmarkInstalledModelLease>(lease);
+            Task.FromResult<IBenchmarkInstalledModelLease>(_lease);
     }
 
-    private sealed class FakeLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
+    private sealed class FakeLease : IBenchmarkInstalledModelLease
     {
-        public InstalledModelSnapshot ModelSnapshot { get; } = snapshot;
+        public FakeLease(InstalledModelSnapshot snapshot)
+        {
+            ModelSnapshot = snapshot;
+        }
+
+        public InstalledModelSnapshot ModelSnapshot { get; }
         InstalledModelSnapshot IBenchmarkInstalledModelLease.Snapshot => ModelSnapshot;
         public bool Disposed { get; private set; }
 
@@ -1074,9 +1093,14 @@ public sealed class BenchmarkJudgeExecutorTests
     ///     Answers each decision with the next verdict, then repeats the last one forever — so a single verdict is a
     ///     constant answer and a sequence models capacity that frees up (or never does) while the phase waits.
     /// </summary>
-    private sealed class JudgeCapacityService(params CapacityVerdict[] verdicts) : ICapacityService
+    private sealed class JudgeCapacityService : ICapacityService
     {
-        private readonly Queue<CapacityVerdict> _verdicts = new(verdicts);
+        private readonly Queue<CapacityVerdict> _verdicts;
+
+        public JudgeCapacityService(params CapacityVerdict[] verdicts)
+        {
+            _verdicts = new(verdicts);
+        }
 
         public CapacityRequest? LastRequest { get; private set; }
         public int DecisionCount { get; private set; }

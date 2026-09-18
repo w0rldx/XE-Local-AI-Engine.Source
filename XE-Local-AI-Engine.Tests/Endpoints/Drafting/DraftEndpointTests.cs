@@ -339,8 +339,15 @@ public sealed class DraftEndpointTests
     ///     Returns a fixed outcome and records that it was reached. Eligibility, the gate and normalization all live in
     ///     the real service's own unit tests; here the point is what the endpoint does with each outcome.
     /// </summary>
-    private sealed class StubConfigDraftService(DraftResult result) : IConfigDraftService
+    private sealed class StubConfigDraftService : IConfigDraftService
     {
+        private readonly DraftResult _result;
+
+        public StubConfigDraftService(DraftResult result)
+        {
+            _result = result;
+        }
+
         public int AgentCallCount { get; private set; }
 
         public int SkillCallCount { get; private set; }
@@ -350,13 +357,13 @@ public sealed class DraftEndpointTests
         public Task<DraftResult> DraftAgentDefinitionAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
         {
             AgentCallCount++;
-            return Task.FromResult(result);
+            return Task.FromResult(_result);
         }
 
         public Task<DraftResult> DraftSkillAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
         {
             SkillCallCount++;
-            return Task.FromResult(result);
+            return Task.FromResult(_result);
         }
     }
 }

@@ -60,17 +60,26 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
 }
 
 /// <summary>An in-memory process handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true, Action? onTreeKill = null) : ILlamaServerProcessHandle
+internal sealed class FakeProcessHandle : ILlamaServerProcessHandle
 {
     private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly bool _exitOnTreeKill;
+    private readonly Action? _onTreeKill;
     private int _exited;
     private int _killed;
+
+    public FakeProcessHandle(int pid, bool exitOnTreeKill = true, Action? onTreeKill = null)
+    {
+        _exitOnTreeKill = exitOnTreeKill;
+        _onTreeKill = onTreeKill;
+        ProcessId = pid;
+    }
 
     public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
     public bool WasDisposed { get; private set; }
 
-    public int ProcessId { get; } = pid;
+    public int ProcessId { get; }
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
@@ -78,9 +87,9 @@ internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true, Act
     {
         // Runs BEFORE the exit is signalled, so a test can hold a teardown open and observe the supervisor's state
         // mid-removal.
-        onTreeKill?.Invoke();
+        _onTreeKill?.Invoke();
         Interlocked.Exchange(ref _killed, value: 1);
-        if (exitOnTreeKill)
+        if (_exitOnTreeKill)
         {
             SimulateExit();
         }
@@ -113,11 +122,17 @@ internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true, Act
 }
 
 /// <summary>Health probe with controllable readiness; defaults to immediately-ready + responsive.</summary>
-internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true) : ILlamaServerHealthProbe
+internal sealed class FakeHealthProbe : ILlamaServerHealthProbe
 {
-    public bool Ready { get; set; } = ready;
+    public FakeHealthProbe(bool ready = true, bool responsive = true)
+    {
+        Ready = ready;
+        Responsive = responsive;
+    }
 
-    public bool Responsive { get; set; } = responsive;
+    public bool Ready { get; set; }
+
+    public bool Responsive { get; set; }
 
     /// <summary>The effective context window /props reports; null (default) means "unknown" for the effective-ctx read.</summary>
     public int? EffectiveContextTokens { get; set; }
@@ -195,12 +210,19 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
 }
 
 /// <summary>Binary manager returning a fixed fake server path for whatever variant is requested; never downloads.</summary>
-internal sealed class FakeBinaryManager(GpuVariant? servedVariant = null) : ILlamaCppBinaryManager
+internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
 {
+    private readonly GpuVariant? _servedVariant;
+
+    public FakeBinaryManager(GpuVariant? servedVariant = null)
+    {
+        _servedVariant = servedVariant;
+    }
+
     /// <summary>Serves a build of a variant the caller did not ask for, as a recorded source build does.</summary>
     public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", servedVariant ?? variant, IsPinnedFallback: true));
+        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", _servedVariant ?? variant, IsPinnedFallback: true));
     }
 
     public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
@@ -220,11 +242,18 @@ internal sealed class FakeBinaryManager(GpuVariant? servedVariant = null) : ILla
 }
 
 /// <summary>Capability probe for process-supervisor tests that never execute their fake llama-server path.</summary>
-internal sealed class FakeLlamaServerCapabilityManifestProbe(LlamaServerCapabilityManifest? manifest = null) : ILlamaServerCapabilityManifestProbe
+internal sealed class FakeLlamaServerCapabilityManifestProbe : ILlamaServerCapabilityManifestProbe
 {
+    private readonly LlamaServerCapabilityManifest? _manifest;
+
+    public FakeLlamaServerCapabilityManifestProbe(LlamaServerCapabilityManifest? manifest = null)
+    {
+        _manifest = manifest;
+    }
+
     public Task<LlamaServerCapabilityManifest> GetManifestAsync(LlamaBinary binary, CancellationToken ct)
     {
-        return Task.FromResult(manifest ?? LlamaServerCapabilityManifest.AllSupportedForTesting(binary));
+        return Task.FromResult(_manifest ?? LlamaServerCapabilityManifest.AllSupportedForTesting(binary));
     }
 }
 
@@ -247,11 +276,18 @@ internal sealed class ThrowingLlamaServerLoadTelemetry : ILlamaServerLoadTelemet
 }
 
 /// <summary>Variant selector returning a fixed variant; never probes hardware.</summary>
-internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) : IGpuVariantSelector
+internal sealed class FakeVariantSelector : IGpuVariantSelector
 {
+    private readonly GpuVariant _variant;
+
+    public FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu)
+    {
+        _variant = variant;
+    }
+
     public Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
     {
-        return Task.FromResult(variant);
+        return Task.FromResult(_variant);
     }
 }
 
@@ -259,9 +295,14 @@ internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) :
 ///     Inference-profile resolver returning a fixed <see cref="ResolvedLaunchArguments" /> (default: explore-mode) and
 ///     recording the resolve calls so a test can assert the supervisor awaited it on the spawn path.
 /// </summary>
-internal sealed class FakeInferenceProfileResolver(ResolvedLaunchArguments? resolved = null) : IInferenceProfileResolver
+internal sealed class FakeInferenceProfileResolver : IInferenceProfileResolver
 {
-    private readonly ResolvedLaunchArguments _resolved = resolved ?? ResolvedLaunchArguments.Explore();
+    private readonly ResolvedLaunchArguments _resolved;
+
+    public FakeInferenceProfileResolver(ResolvedLaunchArguments? resolved = null)
+    {
+        _resolved = resolved ?? ResolvedLaunchArguments.Explore();
+    }
 
     public ConcurrentQueue<(string ModelName, ModelRole Role, GpuVariant Backend)> Calls { get; } = new();
 
@@ -273,9 +314,14 @@ internal sealed class FakeInferenceProfileResolver(ResolvedLaunchArguments? reso
 }
 
 /// <summary>Deterministic machine-readable fit helper fake for profiling tests.</summary>
-internal sealed class FakeLlamaFitParamsRunner(LlamaFitParamsRunResult? result = null) : ILlamaFitParamsRunner
+internal sealed class FakeLlamaFitParamsRunner : ILlamaFitParamsRunner
 {
-    private readonly LlamaFitParamsRunResult _result = result ?? LlamaFitParamsRunResult.Missing();
+    private readonly LlamaFitParamsRunResult _result;
+
+    public FakeLlamaFitParamsRunner(LlamaFitParamsRunResult? result = null)
+    {
+        _result = result ?? LlamaFitParamsRunResult.Missing();
+    }
 
     public ConcurrentQueue<LlamaServerLaunchSpec> Calls { get; } = new();
 
@@ -291,9 +337,18 @@ internal sealed class FakeLlamaFitParamsRunner(LlamaFitParamsRunResult? result =
 ///     running-count surface and the pre-update 409 safety gate can be exercised deterministically without spawning any
 ///     real <c>llama-server</c>. The ensure/evict surface is unused by those tests and is a no-op.
 /// </summary>
-internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] running) : ILlamaServerProcessSupervisor
+internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
 {
-    private readonly IReadOnlyList<LlamaServerProcessHealth> _running = running ?? [];
+    private readonly IReadOnlyList<LlamaServerProcessHealth> _running;
+
+    public FakeProcessSupervisor(params LlamaServerProcessHealth[] running)
+    {
+        _running = running ?? [];
+        LeaseAcquisition = LlamaServerLeaseAcquisition.NotRunning;
+        LeaseSequence = new Queue<LlamaServerLeaseAcquisition>();
+        EnsureEndpointSequence = new Queue<Uri>();
+        LeasedRoles = [];
+    }
 
     /// <summary>
     ///     Endpoint <see cref="EnsureRunningAsync" /> hands out; <see langword="null" /> (default) keeps the legacy
@@ -305,22 +360,22 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
     ///     The acquisition <see cref="TryAcquireInferenceLease" /> returns. Defaults to
     ///     <see cref="LlamaServerLeaseAcquisition.NotRunning" /> (no lease, not evicting).
     /// </summary>
-    public LlamaServerLeaseAcquisition LeaseAcquisition { get; set; } = LlamaServerLeaseAcquisition.NotRunning;
+    public LlamaServerLeaseAcquisition LeaseAcquisition { get; set; }
 
     /// <summary>
     ///     Acquisitions handed out in order, one per call, before falling back to <see cref="LeaseAcquisition" />. Lets a
     ///     test replay a transient refusal followed by the state that clears it.
     /// </summary>
-    public Queue<LlamaServerLeaseAcquisition> LeaseSequence { get; } = new();
+    public Queue<LlamaServerLeaseAcquisition> LeaseSequence { get; }
 
     /// <summary>Endpoints handed out in order, one per ensure, before falling back to <see cref="EnsureEndpoint" />.</summary>
-    public Queue<Uri> EnsureEndpointSequence { get; } = new();
+    public Queue<Uri> EnsureEndpointSequence { get; }
 
     /// <summary>How many times <see cref="EnsureRunningAsync" /> was called — the re-ensure witness.</summary>
     public int EnsureCalls { get; private set; }
 
     /// <summary>The roles <see cref="TryAcquireInferenceLease" /> was asked for, in order.</summary>
-    public List<ModelRole> LeasedRoles { get; } = [];
+    public List<ModelRole> LeasedRoles { get; }
 
     public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
@@ -434,13 +489,22 @@ internal sealed class FakeLaunchFallbackStore : ILlamaServerLaunchFallbackStore
 ///     fixed installed-model list. The download/delete surface is not exercised by the supervisor/provider tests, so
 ///     <see cref="EnsureModelAsync" /> throws and delete/exists are trivial.
 /// </summary>
-internal sealed class FakeModelStore(
-    string? fixedPath = "/fake/models/model.gguf",
-    IReadOnlyList<string>? installedModelNames = null) : IGgufModelStore
+internal sealed class FakeModelStore : IGgufModelStore
 {
+    private readonly string? _fixedPath;
+    private readonly IReadOnlyList<string>? _installedModelNames;
+
+    public FakeModelStore(
+        string? fixedPath = "/fake/models/model.gguf",
+        IReadOnlyList<string>? installedModelNames = null)
+    {
+        _fixedPath = fixedPath;
+        _installedModelNames = installedModelNames;
+    }
+
     public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
     {
-        return Task.FromResult(fixedPath);
+        return Task.FromResult(_fixedPath);
     }
 
     public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
@@ -453,7 +517,7 @@ internal sealed class FakeModelStore(
 
     public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
     {
-        IReadOnlyList<LocalModelDescriptor> descriptors = (installedModelNames ?? [])
+        IReadOnlyList<LocalModelDescriptor> descriptors = (_installedModelNames ?? [])
                                                           .Select(name => new LocalModelDescriptor
                                                           {
                                                               ModelName = name,
@@ -485,7 +549,7 @@ internal sealed class FakeModelStore(
 
     public Task<bool> ExistsAsync(string modelName, CancellationToken ct)
     {
-        return Task.FromResult(fixedPath is not null);
+        return Task.FromResult(_fixedPath is not null);
     }
 
     public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)

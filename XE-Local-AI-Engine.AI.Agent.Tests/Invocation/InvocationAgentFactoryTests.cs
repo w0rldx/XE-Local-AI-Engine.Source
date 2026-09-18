@@ -1451,14 +1451,24 @@ public sealed class InvocationAgentFactoryTests
         }
     }
 
-    private sealed class ApprovalRequiredFakeHandler(string toolName, string description, string parameterSchema)
-        : IClientLocalToolHandler
+    private sealed class ApprovalRequiredFakeHandler : IClientLocalToolHandler
     {
-        public string ToolName => toolName;
+        private readonly string _toolName;
+        private readonly string _description;
+        private readonly string _parameterSchema;
 
-        public string Description => description;
+        public ApprovalRequiredFakeHandler(string toolName, string description, string parameterSchema)
+        {
+            _toolName = toolName;
+            _description = description;
+            _parameterSchema = parameterSchema;
+        }
 
-        public string ParameterSchema => parameterSchema;
+        public string ToolName => _toolName;
+
+        public string Description => _description;
+
+        public string ParameterSchema => _parameterSchema;
 
         public bool RequiresApproval => true;
 

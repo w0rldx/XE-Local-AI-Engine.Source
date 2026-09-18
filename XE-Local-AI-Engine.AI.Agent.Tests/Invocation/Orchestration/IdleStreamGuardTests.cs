@@ -245,15 +245,21 @@ public sealed class IdleStreamGuardTests
 
     // An enumerator whose MoveNextAsync ALWAYS completes synchronously (a pre-buffered stream, items 1..limit), ignoring
     // any token — it never reaches the guard's async race, so it proves the fast-path cancellation/deadline check.
-    private sealed class SynchronousBufferedEnumerator(int limit) : IAsyncEnumerator<int>
+    private sealed class SynchronousBufferedEnumerator : IAsyncEnumerator<int>
     {
+        private readonly int _limit;
         private int _index;
+
+        public SynchronousBufferedEnumerator(int limit)
+        {
+            _limit = limit;
+        }
 
         public int Current { get; private set; }
 
         public ValueTask<bool> MoveNextAsync()
         {
-            if (_index >= limit)
+            if (_index >= _limit)
             {
                 return ValueTask.FromResult(false);
             }
@@ -272,10 +278,16 @@ public sealed class IdleStreamGuardTests
     // Yields one event then blocks the next MoveNextAsync. A cooperative enumerator observes its bound token and unwinds
     // when the guard cancels it, whereas a non-cooperative one ignores the token so only the test release unblocks it.
     // The controller is non-disposable; the disposable enumerator it creates is owned by the guard.
-    private sealed class StallingStream(bool cooperative)
+    private sealed class StallingStream
     {
         private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly bool _cooperative;
+
+        public StallingStream(bool cooperative)
+        {
+            _cooperative = cooperative;
+        }
 
         public Task Disposed => _disposed.Task;
 
@@ -286,12 +298,24 @@ public sealed class IdleStreamGuardTests
 
         public IAsyncEnumerator<int> CreateEnumerator(CancellationToken cancellationToken)
         {
-            return new Enumerator(_release.Task, _disposed, cooperative, cancellationToken);
+            return new Enumerator(_release.Task, _disposed, _cooperative, cancellationToken);
         }
 
-        private sealed class Enumerator(Task<bool> release, TaskCompletionSource disposed, bool cooperative, CancellationToken token) : IAsyncEnumerator<int>
+        private sealed class Enumerator : IAsyncEnumerator<int>
         {
+            private readonly Task<bool> _release;
+            private readonly TaskCompletionSource _disposed;
+            private readonly bool _cooperative;
+            private readonly CancellationToken _token;
             private int _index;
+
+            public Enumerator(Task<bool> release, TaskCompletionSource disposed, bool cooperative, CancellationToken token)
+            {
+                _release = release;
+                _disposed = disposed;
+                _cooperative = cooperative;
+                _token = token;
+            }
 
             public int Current { get; private set; }
 
@@ -306,15 +330,15 @@ public sealed class IdleStreamGuardTests
 
                 if (_index == 2)
                 {
-                    if (cooperative)
+                    if (_cooperative)
                     {
                         // Respect the bound token: the guard cancelling it unblocks this pull promptly.
-                        await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                        await Task.Delay(Timeout.InfiniteTimeSpan, _token);
                     }
                     else
                     {
                         // Ignore the token entirely: only the test's release unblocks it.
-                        _ = await release;
+                        _ = await _release;
                     }
 
                     Current = 2;
@@ -326,7 +350,7 @@ public sealed class IdleStreamGuardTests
 
             public ValueTask DisposeAsync()
             {
-                disposed.TrySetResult();
+                _disposed.TrySetResult();
                 return ValueTask.CompletedTask;
             }
         }

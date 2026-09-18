@@ -457,8 +457,15 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 1);
     }
 
-    private sealed class FixedSnapshots(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
+    private sealed class FixedSnapshots : IBenchmarkRuntimeSnapshotFactory
     {
+        private readonly BenchmarkRuntimeSnapshotV1 _snapshot;
+
+        public FixedSnapshots(BenchmarkRuntimeSnapshotV1 snapshot)
+        {
+            _snapshot = snapshot;
+        }
+
         public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
             throw new NotSupportedException();
 
@@ -466,22 +473,34 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             throw new NotSupportedException();
 
         public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) =>
-            snapshot;
+            _snapshot;
     }
 
     /// <summary>
     ///     Keyed by model name, because the KLD path leases TWO models — the quant it measures and the base it
     ///     measures against — and the executor verifies each one's fingerprint against a different expectation.
     /// </summary>
-    private sealed class NamedLeases(IReadOnlyDictionary<string, IBenchmarkInstalledModelLease> leases) : IBenchmarkInstalledModelLeaseProvider
+    private sealed class NamedLeases : IBenchmarkInstalledModelLeaseProvider
     {
+        private readonly IReadOnlyDictionary<string, IBenchmarkInstalledModelLease> _leases;
+
+        public NamedLeases(IReadOnlyDictionary<string, IBenchmarkInstalledModelLease> leases)
+        {
+            _leases = leases;
+        }
+
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken) =>
-            leases.TryGetValue(modelName, out var lease) ? Task.FromResult(lease) : throw new KeyNotFoundException(modelName);
+            _leases.TryGetValue(modelName, out var lease) ? Task.FromResult(lease) : throw new KeyNotFoundException(modelName);
     }
 
-    internal sealed class StubLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
+    internal sealed class StubLease : IBenchmarkInstalledModelLease
     {
-        public InstalledModelSnapshot Snapshot { get; } = snapshot;
+        public StubLease(InstalledModelSnapshot snapshot)
+        {
+            Snapshot = snapshot;
+        }
+
+        public InstalledModelSnapshot Snapshot { get; }
 
         public ValueTask DisposeAsync() =>
             ValueTask.CompletedTask;
@@ -499,8 +518,15 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         }
     }
 
-    private sealed class ScriptedPerplexity(Func<string> output) : IBenchmarkPerplexityRunner
+    private sealed class ScriptedPerplexity : IBenchmarkPerplexityRunner
     {
+        private readonly Func<string> _output;
+
+        public ScriptedPerplexity(Func<string> output)
+        {
+            _output = output;
+        }
+
         public async Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath,
             IReadOnlyList<string> arguments,
             CancellationToken cancellationToken)
@@ -513,7 +539,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken);
             }
 
-            return new BenchmarkPerplexityProcessResult(0, output());
+            return new BenchmarkPerplexityProcessResult(0, _output());
         }
     }
 
@@ -523,9 +549,16 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             Task.FromResult(new RuntimeEnvironmentFactsV1(1, null, null, null, 42, ["hardware"]));
     }
 
-    private sealed class StubFreeSpace(long freeBytes) : IFreeSpaceProbe
+    private sealed class StubFreeSpace : IFreeSpaceProbe
     {
+        private readonly long _freeBytes;
+
+        public StubFreeSpace(long freeBytes)
+        {
+            _freeBytes = freeBytes;
+        }
+
         public long GetAvailableFreeBytes(string path) =>
-            freeBytes;
+            _freeBytes;
     }
 }

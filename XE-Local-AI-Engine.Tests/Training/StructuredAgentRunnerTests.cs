@@ -149,8 +149,15 @@ public sealed class StructuredAgentRunnerTests
         new("teacher.gguf", "system", "produce one example", mode, Schema, Temperature: 0.2f, Seed: null);
 
     /// <summary>Minimal node-local client stand-in that records the options the runner composed.</summary>
-    private sealed class RecordingChatClient(string responseText) : IChatClient
+    private sealed class RecordingChatClient : IChatClient
     {
+        private readonly string _responseText;
+
+        public RecordingChatClient(string responseText)
+        {
+            _responseText = responseText;
+        }
+
         public bool WasCalled { get; private set; }
 
         public ChatOptions? LastOptions { get; private set; }
@@ -161,7 +168,7 @@ public sealed class StructuredAgentRunnerTests
         {
             WasCalled = true;
             LastOptions = options;
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText)));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _responseText)));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -226,12 +233,19 @@ public sealed class StructuredAgentRunnerTests
         }
     }
 
-    private sealed class ThrowingChatClient(Exception exception) : IChatClient
+    private sealed class ThrowingChatClient : IChatClient
     {
+        private readonly Exception _exception;
+
+        public ThrowingChatClient(Exception exception)
+        {
+            _exception = exception;
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default) =>
-            Task.FromException<ChatResponse>(exception);
+            Task.FromException<ChatResponse>(_exception);
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,

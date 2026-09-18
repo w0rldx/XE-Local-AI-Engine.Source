@@ -188,9 +188,16 @@ public sealed class WhisperRuntimeLiveSmokeTests
         return File.Exists(path) ? path : null;
     }
 
-    private sealed class StaticBackendSelector(WhisperBackend backend) : IWhisperBackendSelector
+    private sealed class StaticBackendSelector : IWhisperBackendSelector
     {
+        private readonly WhisperBackend _backend;
+
+        public StaticBackendSelector(WhisperBackend backend)
+        {
+            _backend = backend;
+        }
+
         public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct) =>
-            Task.FromResult(backend);
+            Task.FromResult(_backend);
     }
 }

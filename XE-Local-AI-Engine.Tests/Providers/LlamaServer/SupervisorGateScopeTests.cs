@@ -240,9 +240,15 @@ public sealed class SupervisorGateScopeTests
     }
 
     /// <summary>Hands the FIRST launch a handle whose tree-kill blocks on <paramref name="firstKill" />; the rest are ordinary.</summary>
-    private sealed class SwitchableLauncher(KillLatch firstKill) : ILlamaServerProcessLauncher
+    private sealed class SwitchableLauncher : ILlamaServerProcessLauncher
     {
+        private readonly KillLatch _firstKill;
         private int _nextPid;
+
+        public SwitchableLauncher(KillLatch firstKill)
+        {
+            _firstKill = firstKill;
+        }
 
         public ConcurrentBag<LatchedProcessHandle> Handles { get; } = new();
 
@@ -250,22 +256,29 @@ public sealed class SupervisorGateScopeTests
         {
             var pid = Interlocked.Increment(ref _nextPid);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
-            var handle = new LatchedProcessHandle(pid, pid == 1 ? firstKill : null);
+            var handle = new LatchedProcessHandle(pid, pid == 1 ? _firstKill : null);
 #pragma warning restore CA2000
             Handles.Add(handle);
             return handle;
         }
     }
 
-    private sealed class LatchedProcessHandle(int pid, KillLatch? killLatch) : ILlamaServerProcessHandle
+    private sealed class LatchedProcessHandle : ILlamaServerProcessHandle
     {
         private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly KillLatch? _killLatch;
         private int _exited;
         private int _killed;
 
+        public LatchedProcessHandle(int pid, KillLatch? killLatch)
+        {
+            _killLatch = killLatch;
+            ProcessId = pid;
+        }
+
         public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
-        public int ProcessId { get; } = pid;
+        public int ProcessId { get; }
 
         public bool HasExited => Volatile.Read(ref _exited) != 0;
 
@@ -284,7 +297,7 @@ public sealed class SupervisorGateScopeTests
 
         public void TreeKill()
         {
-            killLatch?.Wait();
+            _killLatch?.Wait();
             Interlocked.Exchange(ref _killed, value: 1);
             Interlocked.Exchange(ref _exited, value: 1);
             _exitSignal.TrySetResult();

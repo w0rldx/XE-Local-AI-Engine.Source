@@ -20,11 +20,18 @@ internal static class ChatPumpTestFactory
 
     // Always attributes the given provider, mirroring the real resolver's never-throw contract without touching the
     // cloud/local routing seams.
-    private sealed class StubUsageProviderResolver(string provider) : IUsageProviderResolver
+    private sealed class StubUsageProviderResolver : IUsageProviderResolver
     {
+        private readonly string _provider;
+
+        public StubUsageProviderResolver(string provider)
+        {
+            _provider = provider;
+        }
+
         public Task<string> ResolveAsync(string? modelName, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(provider);
+            return Task.FromResult(_provider);
         }
     }
 }

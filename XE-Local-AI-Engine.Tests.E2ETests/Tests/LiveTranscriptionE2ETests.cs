@@ -23,8 +23,12 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class LiveTranscriptionE2ETests() : XEFakeAudioE2ETestBase(FakeAudioFixtures.JfkWavPath)
+public sealed class LiveTranscriptionE2ETests : XEFakeAudioE2ETestBase
 {
+    public LiveTranscriptionE2ETests() : base(FakeAudioFixtures.JfkWavPath)
+    {
+    }
+
     [Test]
     [Category("Page")]
     public async Task StartingAMicrophoneSession_CommitsASegmentFromTheFakeMicrophone()
@@ -84,8 +88,12 @@ public sealed class LiveTranscriptionE2ETests() : XEFakeAudioE2ETestBase(FakeAud
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed class LiveTranscriptionProvenanceControlE2ETests() : XEFakeAudioE2ETestBase(FakeAudioFixtures.ToneWavPath)
+public sealed class LiveTranscriptionProvenanceControlE2ETests : XEFakeAudioE2ETestBase
 {
+    public LiveTranscriptionProvenanceControlE2ETests() : base(FakeAudioFixtures.ToneWavPath)
+    {
+    }
+
     [Test]
     [Category("Page")]
     public async Task StartingAMicrophoneSession_WithUnrelatedAudio_IsRejectedByTheProvenanceCheck()

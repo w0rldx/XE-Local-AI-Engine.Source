@@ -207,7 +207,12 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     }
 
     // A minimal EF context used only to force an EF-initiated connection open through the interceptor.
-    private sealed class ProbeContext(DbContextOptions<ProbeContext> options) : DbContext(options);
+    private sealed class ProbeContext : DbContext
+    {
+        public ProbeContext(DbContextOptions<ProbeContext> options) : base(options)
+        {
+        }
+    }
 
     // Captures Warning-level log entries so a test can assert the pragma path stayed quiet.
     private sealed class WarningCapturingLogger : ILogger

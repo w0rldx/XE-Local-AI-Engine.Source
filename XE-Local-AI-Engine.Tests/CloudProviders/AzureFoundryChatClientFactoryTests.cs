@@ -672,11 +672,18 @@ public sealed class AzureFoundryChatClientFactoryTests
         }
     }
 
-    private sealed class FakeEntraTokenCacheStore(AuthenticationRecord? record) : IEntraTokenCacheStore
+    private sealed class FakeEntraTokenCacheStore : IEntraTokenCacheStore
     {
+        private readonly AuthenticationRecord? _record;
+
+        public FakeEntraTokenCacheStore(AuthenticationRecord? record)
+        {
+            _record = record;
+        }
+
         public Task<AuthenticationRecord?> LoadRecordAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(record);
+            return Task.FromResult(_record);
         }
 
         public Task SaveRecordAsync(AuthenticationRecord record, CancellationToken cancellationToken = default)
@@ -690,11 +697,18 @@ public sealed class AzureFoundryChatClientFactoryTests
         }
     }
 
-    private sealed class FakeEntraAuthCodeAccountStore(string? homeAccountId) : IEntraAuthCodeAccountStore
+    private sealed class FakeEntraAuthCodeAccountStore : IEntraAuthCodeAccountStore
     {
+        private readonly string? _homeAccountId;
+
+        public FakeEntraAuthCodeAccountStore(string? homeAccountId)
+        {
+            _homeAccountId = homeAccountId;
+        }
+
         public Task<string?> LoadHomeAccountIdAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(homeAccountId);
+            return Task.FromResult(_homeAccountId);
         }
 
         public Task SaveHomeAccountIdAsync(string homeAccountId, CancellationToken cancellationToken = default)

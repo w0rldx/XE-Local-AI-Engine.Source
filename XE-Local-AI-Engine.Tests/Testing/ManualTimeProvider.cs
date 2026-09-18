@@ -123,18 +123,28 @@ internal sealed class ManualTimeProvider : TimeProvider
         }
     }
 
-    private sealed class ManualTimer(ManualTimeProvider owner, TimerCallback callback, object? state) : ITimer
+    private sealed class ManualTimer : ITimer
     {
+        private readonly ManualTimeProvider _owner;
+        private readonly TimerCallback _callback;
+        private readonly object? _state;
         private TimeSpan _period = Timeout.InfiniteTimeSpan;
+
+        public ManualTimer(ManualTimeProvider owner, TimerCallback callback, object? state)
+        {
+            _owner = owner;
+            _callback = callback;
+            _state = state;
+        }
 
         public DateTimeOffset? DueAtUtc { get; private set; }
 
         public bool Change(TimeSpan dueTime, TimeSpan period)
         {
-            lock (owner._gate)
+            lock (_owner._gate)
             {
                 _period = period;
-                DueAtUtc = dueTime == Timeout.InfiniteTimeSpan ? null : owner._now + dueTime;
+                DueAtUtc = dueTime == Timeout.InfiniteTimeSpan ? null : _owner._now + dueTime;
             }
 
             return true;
@@ -142,24 +152,24 @@ internal sealed class ManualTimeProvider : TimeProvider
 
         public void Fire()
         {
-            lock (owner._gate)
+            lock (_owner._gate)
             {
                 DueAtUtc = _period <= TimeSpan.Zero || _period == Timeout.InfiniteTimeSpan
                     ? null
-                    : owner._now + _period;
+                    : _owner._now + _period;
             }
 
-            callback(state);
+            _callback(_state);
         }
 
         public void Dispose()
         {
-            lock (owner._gate)
+            lock (_owner._gate)
             {
                 DueAtUtc = null;
             }
 
-            owner.Remove(this);
+            _owner.Remove(this);
         }
 
         public ValueTask DisposeAsync()

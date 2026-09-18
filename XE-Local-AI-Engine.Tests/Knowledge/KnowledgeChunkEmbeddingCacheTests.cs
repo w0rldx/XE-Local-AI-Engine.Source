@@ -171,11 +171,14 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
         return MemoryMarshal.AsBytes(values.AsSpan()).ToArray();
     }
 
-    private sealed class StubReuseStore(IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>? entries = null)
-        : IKnowledgeChunkEmbeddingReuseStore
+    private sealed class StubReuseStore : IKnowledgeChunkEmbeddingReuseStore
     {
-        private readonly IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]> _entries =
-            entries ?? new Dictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>();
+        private readonly IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]> _entries;
+
+        public StubReuseStore(IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>? entries = null)
+        {
+            _entries = entries ?? new Dictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>();
+        }
 
         public int CallCount { get; private set; }
 
@@ -190,9 +193,14 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
         }
     }
 
-    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class MutableTimeProvider : TimeProvider
     {
-        private DateTimeOffset _now = now;
+        private DateTimeOffset _now;
+
+        public MutableTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
 
         public override DateTimeOffset GetUtcNow() =>
             _now;

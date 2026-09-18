@@ -328,14 +328,21 @@ public sealed class WhisperCppBinaryManagerTests
         return payload.ToArray();
     }
 
-    private sealed class CountingHandler(Func<HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class CountingHandler : HttpMessageHandler
     {
+        private readonly Func<HttpResponseMessage> _responder;
+
+        public CountingHandler(Func<HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public int CallCount { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult(responder());
+            return Task.FromResult(_responder());
         }
     }
 
@@ -364,9 +371,14 @@ public sealed class WhisperCppBinaryManagerTests
         }
     }
 
-    private sealed class StubInstalledRuntimeStore(WhisperInstalledRuntimeState? state) : IWhisperInstalledRuntimeStore
+    private sealed class StubInstalledRuntimeStore : IWhisperInstalledRuntimeStore
     {
-        private WhisperInstalledRuntimeState? _state = state;
+        private WhisperInstalledRuntimeState? _state;
+
+        public StubInstalledRuntimeStore(WhisperInstalledRuntimeState? state)
+        {
+            _state = state;
+        }
 
         public WhisperInstalledRuntimeState? LastWritten { get; private set; }
 

@@ -221,9 +221,14 @@ public sealed class WhisperModelDownloadCoordinatorTests
             }
         }
 
-        private sealed class FakeNodeDataDirectory(string root) : INodeDataDirectory
+        private sealed class FakeNodeDataDirectory : INodeDataDirectory
         {
-            public string Root { get; } = root;
+            public FakeNodeDataDirectory(string root)
+            {
+                Root = root;
+            }
+
+            public string Root { get; }
         }
     }
 

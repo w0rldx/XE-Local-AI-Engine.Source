@@ -250,11 +250,18 @@ public sealed class OllamaLocalModelProviderTests
         }
     }
 
-    private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler
+    private sealed class ThrowingHandler : HttpMessageHandler
     {
+        private readonly Exception _exception;
+
+        public ThrowingHandler(Exception exception)
+        {
+            _exception = exception;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return Task.FromException<HttpResponseMessage>(exception);
+            return Task.FromException<HttpResponseMessage>(_exception);
         }
     }
 

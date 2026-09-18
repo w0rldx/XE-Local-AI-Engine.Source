@@ -165,11 +165,18 @@ public sealed class GenerationProgressTrackerTests
         return (new GenerationProgressTracker(progress, Stopwatch.GetTimestamp()), reports);
     }
 
-    private sealed class DelegateProgress(Action<ImageGenProgress> handler) : IProgress<ImageGenProgress>
+    private sealed class DelegateProgress : IProgress<ImageGenProgress>
     {
+        private readonly Action<ImageGenProgress> _handler;
+
+        public DelegateProgress(Action<ImageGenProgress> handler)
+        {
+            _handler = handler;
+        }
+
         public void Report(ImageGenProgress value)
         {
-            handler(value);
+            _handler(value);
         }
     }
 }

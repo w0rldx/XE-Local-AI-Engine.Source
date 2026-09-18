@@ -183,9 +183,14 @@ public sealed class WorkSessionCheckpointTests
         return (activeTaskId, decisionId);
     }
 
-    private sealed class StubCompactionService(ConversationCompactionResult result) : IConversationCompactionService
+    private sealed class StubCompactionService : IConversationCompactionService
     {
-        public ConversationCompactionResult Result { get; set; } = result;
+        public StubCompactionService(ConversationCompactionResult result)
+        {
+            Result = result;
+        }
+
+        public ConversationCompactionResult Result { get; set; }
 
         /// <summary>Set to answer per keep window — what the short-session case needs to tell the two windows apart.</summary>
         public Func<int?, ConversationCompactionResult>? ResultByKeepVerbatim { get; set; }

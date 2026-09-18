@@ -313,12 +313,19 @@ public sealed class DevelopmentCloudScopedSecurityTests
         IDevelopmentStore Store);
 
     /// <summary>Hands back the REAL bundle the service built, which is the only thing a cloud role can read.</summary>
-    private sealed class CapturingContextBuilder(IDevelopmentCloudContextBuilder inner) : IDevelopmentCloudContextBuilder
+    private sealed class CapturingContextBuilder : IDevelopmentCloudContextBuilder
     {
+        private readonly IDevelopmentCloudContextBuilder _inner;
+
+        public CapturingContextBuilder(IDevelopmentCloudContextBuilder inner)
+        {
+            _inner = inner;
+        }
+
         public DevelopmentCloudContextBundle? Built { get; private set; }
 
         public DevelopmentCloudContextBundle Build(DevelopmentCloudContextBuildRequest request) =>
-            Built = inner.Build(request);
+            Built = _inner.Build(request);
     }
 
     private static DevelopmentCloudContextBundle BuildBundle() =>
@@ -363,28 +370,51 @@ public sealed class DevelopmentCloudScopedSecurityTests
             envelope);
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow() =>
-            now;
+            _now;
     }
 
-    private sealed class CapturingAuditSink(List<string>? events = null) : IDevelopmentCloudEgressAuditSink
+    private sealed class CapturingAuditSink : IDevelopmentCloudEgressAuditSink
     {
+        private readonly List<string>? _events;
+
+        public CapturingAuditSink(List<string>? events = null)
+        {
+            _events = events;
+        }
+
         public List<DevelopmentCloudEgressAudit> Records { get; } = [];
 
         public void Record(DevelopmentCloudEgressAudit audit)
         {
             Records.Add(audit);
-            events?.Add($"authorize{Records.Count}");
+            _events?.Add($"authorize{Records.Count}");
         }
     }
 
-    private sealed class FixedCloudFactory(IChatClient configuredClient, string providerName) : IActiveCloudChatClientFactory
+    private sealed class FixedCloudFactory : IActiveCloudChatClientFactory
     {
+        private readonly IChatClient _configuredClient;
+        private readonly string _providerName;
+
+        public FixedCloudFactory(IChatClient configuredClient, string providerName)
+        {
+            _configuredClient = configuredClient;
+            _providerName = providerName;
+        }
+
         public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
-            client = configuredClient;
+            client = _configuredClient;
             return true;
         }
 
@@ -392,15 +422,24 @@ public sealed class DevelopmentCloudScopedSecurityTests
             true;
 
         public string? ResolveActiveCloudProviderName(string? requestedModelId = null) =>
-            providerName;
+            _providerName;
 
         public void InvalidateSelectionCache()
         {
         }
     }
 
-    private sealed class TwoRoundChatClient(List<string> events, string route) : IChatClient
+    private sealed class TwoRoundChatClient : IChatClient
     {
+        private readonly List<string> _events;
+        private readonly string _route;
+
+        public TwoRoundChatClient(List<string> events, string route)
+        {
+            _events = events;
+            _route = route;
+        }
+
         public int TransportCount { get; private set; }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -408,7 +447,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             CancellationToken cancellationToken = default)
         {
             TransportCount++;
-            events.Add($"transport{TransportCount}");
+            _events.Add($"transport{TransportCount}");
             if (TransportCount == 1)
             {
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
@@ -420,7 +459,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
                 ])));
             }
 
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, $"done-{route}")));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, $"done-{_route}")));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -443,8 +482,15 @@ public sealed class DevelopmentCloudScopedSecurityTests
         }
     }
 
-    private sealed class RoleSubmittingChatClient(bool isReviewer) : IChatClient
+    private sealed class RoleSubmittingChatClient : IChatClient
     {
+        private readonly bool _isReviewer;
+
+        public RoleSubmittingChatClient(bool isReviewer)
+        {
+            _isReviewer = isReviewer;
+        }
+
         public IReadOnlyList<string> ToolNames { get; private set; } = [];
 
         public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -452,9 +498,9 @@ public sealed class DevelopmentCloudScopedSecurityTests
             CancellationToken cancellationToken = default)
         {
             ToolNames = options?.Tools?.Select(static tool => tool.Name).ToArray() ?? [];
-            var toolName = isReviewer ? "submit_review" : "submit_implementation";
+            var toolName = _isReviewer ? "submit_review" : "submit_implementation";
             var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>().SingleOrDefault(tool => tool.Name == toolName));
-            if (isReviewer)
+            if (_isReviewer)
             {
                 _ = await submit.InvokeAsync(new AIFunctionArguments
                 {

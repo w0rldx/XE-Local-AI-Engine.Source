@@ -839,11 +839,18 @@ public sealed class LlamaCppSourceBuildTransportTests
         services.AddSingleton(instance);
     }
 
-    private sealed class RecordingMutationLease(List<string> order) : ILlamaServerRuntimeMutationLease
+    private sealed class RecordingMutationLease : ILlamaServerRuntimeMutationLease
     {
+        private readonly List<string> _order;
+
+        public RecordingMutationLease(List<string> order)
+        {
+            _order = order;
+        }
+
         public ValueTask DisposeAsync()
         {
-            order.Add("dispose");
+            _order.Add("dispose");
             return ValueTask.CompletedTask;
         }
     }

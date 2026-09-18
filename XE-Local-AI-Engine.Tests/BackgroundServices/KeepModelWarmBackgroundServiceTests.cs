@@ -297,15 +297,26 @@ public sealed class KeepModelWarmBackgroundServiceTests
         return harness;
     }
 
-    private sealed class Harness(
-        ILocalModelProviderResolver resolver,
-        ILocalModelProvider provider,
-        ILlamaServerProcessSupervisor supervisor,
-        ILlamaCppSourceBuildActivity sourceBuildActivity,
-        ManualTimeProvider clock,
-        RecordingLogger<KeepModelWarmBackgroundService> logger)
+    private sealed class Harness
     {
-        public ManualTimeProvider Clock { get; } = clock;
+        public Harness(
+            ILocalModelProviderResolver resolver,
+            ILocalModelProvider provider,
+            ILlamaServerProcessSupervisor supervisor,
+            ILlamaCppSourceBuildActivity sourceBuildActivity,
+            ManualTimeProvider clock,
+            RecordingLogger<KeepModelWarmBackgroundService> logger)
+        {
+            Clock = clock;
+            Provider = provider;
+            Resolver = resolver;
+            Service = null!;
+            Supervisor = supervisor;
+            SourceBuildActivity = sourceBuildActivity;
+            Logger = logger;
+        }
+
+        public ManualTimeProvider Clock { get; }
 
         public bool Enabled { get; set; }
 
@@ -313,21 +324,21 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         public string? ModelName { get; set; }
 
-        public ILocalModelProvider Provider { get; } = provider;
+        public ILocalModelProvider Provider { get; }
 
-        public ILocalModelProviderResolver Resolver { get; } = resolver;
+        public ILocalModelProviderResolver Resolver { get; }
 
         public bool RuntimeMutationSuppressed { get; set; }
 
-        public KeepModelWarmBackgroundService Service { get; set; } = null!;
+        public KeepModelWarmBackgroundService Service { get; set; }
 
         public bool SourceBuildActive { get; set; }
 
-        public ILlamaServerProcessSupervisor Supervisor { get; } = supervisor;
+        public ILlamaServerProcessSupervisor Supervisor { get; }
 
-        public ILlamaCppSourceBuildActivity SourceBuildActivity { get; } = sourceBuildActivity;
+        public ILlamaCppSourceBuildActivity SourceBuildActivity { get; }
 
-        public RecordingLogger<KeepModelWarmBackgroundService> Logger { get; } = logger;
+        public RecordingLogger<KeepModelWarmBackgroundService> Logger { get; }
     }
 
     private sealed class ManualTimeProvider : TimeProvider

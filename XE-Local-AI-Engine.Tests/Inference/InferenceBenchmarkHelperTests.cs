@@ -69,13 +69,20 @@ public sealed class InferenceBenchmarkHelperTests
         AssertEx.Equal<long?>(20, collector.PeakWorkingSetBytes);
     }
 
-    private sealed class JsonHandler(string json) : HttpMessageHandler
+    private sealed class JsonHandler : HttpMessageHandler
     {
+        private readonly string _json;
+
+        public JsonHandler(string json)
+        {
+            _json = json;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(json, Encoding.UTF8, "application/json")
+                Content = new StringContent(_json, Encoding.UTF8, "application/json")
             });
         }
     }

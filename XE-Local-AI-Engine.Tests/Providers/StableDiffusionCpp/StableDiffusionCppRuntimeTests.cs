@@ -256,8 +256,15 @@ public sealed class StableDiffusionCppRuntimeTests
     }
 
     /// <summary>Fake supervisor: returns a fixed endpoint and records ensure/restart/evict calls; never spawns a process.</summary>
-    private sealed class FakeImageServerSupervisor(Uri baseAddress) : IImageServerSupervisor
+    private sealed class FakeImageServerSupervisor : IImageServerSupervisor
     {
+        private readonly Uri _baseAddress;
+
+        public FakeImageServerSupervisor(Uri baseAddress)
+        {
+            _baseAddress = baseAddress;
+        }
+
         public int EnsureCount { get; private set; }
 
         public int RestartCount { get; private set; }
@@ -267,13 +274,13 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task<ImageServerEndpoint> EnsureRunningAsync(string modelName, CancellationToken ct)
         {
             EnsureCount++;
-            return Task.FromResult(new ImageServerEndpoint(modelName, baseAddress));
+            return Task.FromResult(new ImageServerEndpoint(modelName, _baseAddress));
         }
 
         public Task<ImageServerEndpoint> RestartAsync(string modelName, CancellationToken ct)
         {
             RestartCount++;
-            return Task.FromResult(new ImageServerEndpoint(modelName, baseAddress));
+            return Task.FromResult(new ImageServerEndpoint(modelName, _baseAddress));
         }
 
         public Task EvictAsync(string modelName, CancellationToken ct)
@@ -299,8 +306,15 @@ public sealed class StableDiffusionCppRuntimeTests
     }
 
     /// <summary>Routes each sd-server request to <c>img_gen</c> / <c>job</c> / <c>cancel</c> and delegates the response.</summary>
-    private sealed class RuntimeHandler(Func<HttpRequestMessage, string, HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class RuntimeHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, string, HttpResponseMessage> _responder;
+
+        public RuntimeHandler(Func<HttpRequestMessage, string, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
         public int ImgGenCalls { get; private set; }
 
         public int GetJobCalls { get; private set; }
@@ -327,7 +341,7 @@ public sealed class StableDiffusionCppRuntimeTests
                 route = "job";
             }
 
-            return Task.FromResult(responder(request, route));
+            return Task.FromResult(_responder(request, route));
         }
     }
 

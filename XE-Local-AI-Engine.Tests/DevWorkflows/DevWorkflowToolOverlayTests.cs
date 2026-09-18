@@ -584,8 +584,15 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     ///     path calls answers; a null artifact stands for a read that failed its immutable verification, which is the
     ///     exact-hash check the trusted apply port makes on the same bytes.
     /// </summary>
-    private sealed class StubEvidenceService(DevelopmentArtifactSnapshot? patch) : IDevelopmentEvidenceService
+    private sealed class StubEvidenceService : IDevelopmentEvidenceService
     {
+        private readonly DevelopmentArtifactSnapshot? _patch;
+
+        public StubEvidenceService(DevelopmentArtifactSnapshot? patch)
+        {
+            _patch = patch;
+        }
+
         public Task<DevelopmentEvidenceSet> ResolveCurrentAsync(Guid taskId,
             DevelopmentWorkspaceSession session,
             CancellationToken cancellationToken = default) =>
@@ -594,9 +601,9 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         public Task<DevelopmentArtifactWith<ReadOnlyMemory<byte>>> ReadLatestAsync(Guid taskId,
             DevelopmentArtifactKind kind,
             CancellationToken cancellationToken = default) =>
-            patch is null
+            _patch is null
                 ? throw new DevelopmentInvalidTransitionException("The Patch artifact failed immutable blob verification (HashMismatch).")
-                : Task.FromResult(new DevelopmentArtifactWith<ReadOnlyMemory<byte>>(patch, Encoding.UTF8.GetBytes(Patch)));
+                : Task.FromResult(new DevelopmentArtifactWith<ReadOnlyMemory<byte>>(_patch, Encoding.UTF8.GetBytes(Patch)));
 
         public Task InvalidateApprovalEvidenceAsync(Guid taskId, string sanitizedReason, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();

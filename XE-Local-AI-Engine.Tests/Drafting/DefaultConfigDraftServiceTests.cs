@@ -550,11 +550,18 @@ public sealed class DefaultConfigDraftServiceTests
         }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return utcNow;
+            return _utcNow;
         }
     }
 
@@ -563,8 +570,19 @@ public sealed class DefaultConfigDraftServiceTests
     ///     <c>GetResponseAsync&lt;T&gt;</c> parses a structured result without a live model, or hangs until cancelled so
     ///     the generation-budget path can be exercised.
     /// </summary>
-    private sealed class EnvelopeChatClient(string json, bool hangUntilCancelled, Func<Task>? beforeResponse) : IChatClient
+    private sealed class EnvelopeChatClient : IChatClient
     {
+        private readonly string _json;
+        private readonly bool _hangUntilCancelled;
+        private readonly Func<Task>? _beforeResponse;
+
+        public EnvelopeChatClient(string json, bool hangUntilCancelled, Func<Task>? beforeResponse)
+        {
+            _json = json;
+            _hangUntilCancelled = hangUntilCancelled;
+            _beforeResponse = beforeResponse;
+        }
+
         public bool WasCalled { get; private set; }
 
         public bool IsDisposed { get; private set; }
@@ -575,17 +593,17 @@ public sealed class DefaultConfigDraftServiceTests
         {
             WasCalled = true;
 
-            if (beforeResponse is not null)
+            if (_beforeResponse is not null)
             {
-                await beforeResponse();
+                await _beforeResponse();
             }
 
-            if (hangUntilCancelled)
+            if (_hangUntilCancelled)
             {
                 await Task.Delay(Timeout.Infinite, cancellationToken);
             }
 
-            return new ChatResponse(new ChatMessage(ChatRole.Assistant, json));
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, _json));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

@@ -193,9 +193,14 @@ public sealed class InvocationAttachmentTrackerTests
     }
 
     // Local deterministic clock (repo convention: per-test-file nested fake, no external time-testing package).
-    private sealed class FakeClock(DateTimeOffset start) : TimeProvider
+    private sealed class FakeClock : TimeProvider
     {
-        private DateTimeOffset _utcNow = start;
+        private DateTimeOffset _utcNow;
+
+        public FakeClock(DateTimeOffset start)
+        {
+            _utcNow = start;
+        }
 
         public override DateTimeOffset GetUtcNow()
         {

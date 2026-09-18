@@ -340,34 +340,41 @@ public sealed class NodeAuthEndpointTests
     ///     identity transaction has not committed — and leaving later writes alone is what lets a retry run against a
     ///     node that genuinely holds the orphaned value.
     /// </summary>
-    private sealed class CancelTheFirstWriteSettingsStore(INodeSettingsStore inner) : INodeSettingsStore
+    private sealed class CancelTheFirstWriteSettingsStore : INodeSettingsStore
     {
+        private readonly INodeSettingsStore _inner;
+
+        public CancelTheFirstWriteSettingsStore(INodeSettingsStore inner)
+        {
+            _inner = inner;
+        }
+
         public int CancelledWrites { get; private set; }
 
         public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
         {
-            return inner.LoadAsync(cancellationToken);
+            return _inner.LoadAsync(cancellationToken);
         }
 
         public Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
         {
-            return inner.LoadStrictAsync(cancellationToken);
+            return _inner.LoadStrictAsync(cancellationToken);
         }
 
         public StoredNodeSettings Load(CancellationToken cancellationToken = default)
         {
-            return inner.Load(cancellationToken);
+            return _inner.Load(cancellationToken);
         }
 
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
         {
-            return inner.SaveAsync(settings, cancellationToken);
+            return _inner.SaveAsync(settings, cancellationToken);
         }
 
         public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate,
             CancellationToken cancellationToken = default)
         {
-            var persisted = await inner.UpdateAsync(mutate, cancellationToken);
+            var persisted = await _inner.UpdateAsync(mutate, cancellationToken);
             if (CancelledWrites > 0)
             {
                 return persisted;

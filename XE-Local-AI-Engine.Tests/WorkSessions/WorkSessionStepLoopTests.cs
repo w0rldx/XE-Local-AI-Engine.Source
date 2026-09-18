@@ -958,19 +958,28 @@ public sealed class WorkSessionStepLoopTests
     ///         consumer is what is under test.
     ///     </para>
     /// </summary>
-    private sealed class ApprovalDroppingStreamService(INodeChatStreamService inner, PendingToolCallRegistry pendingToolCalls) : INodeChatStreamService
+    private sealed class ApprovalDroppingStreamService : INodeChatStreamService
     {
+        private readonly INodeChatStreamService _inner;
+        private readonly PendingToolCallRegistry _pendingToolCalls;
+
+        public ApprovalDroppingStreamService(INodeChatStreamService inner, PendingToolCallRegistry pendingToolCalls)
+        {
+            _inner = inner;
+            _pendingToolCalls = pendingToolCalls;
+        }
+
         public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
             var dropped = false;
-            await foreach (var streamEvent in inner.SendMessageAsync(request, cancellationToken))
+            await foreach (var streamEvent in _inner.SendMessageAsync(request, cancellationToken))
             {
                 if (!dropped && streamEvent.Type == ChatStreamEventTypes.ApprovalRequested)
                 {
                     dropped = true;
-                    _ = pendingToolCalls.Calls.TryAdd(Guid.NewGuid().ToString("N"),
+                    _ = _pendingToolCalls.Calls.TryAdd(Guid.NewGuid().ToString("N"),
                         new PendingToolCall(request.RequestId.GetValueOrDefault(),
                             DateTimeOffset.UtcNow,
                             new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),

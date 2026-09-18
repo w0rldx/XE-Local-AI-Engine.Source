@@ -238,8 +238,15 @@ public sealed class WorkerShutdownDrainServiceTests
         }
     }
 
-    private sealed class RecordingWorkerEventDispatcher(OperationLog operations) : IWorkerEventDispatcher
+    private sealed class RecordingWorkerEventDispatcher : IWorkerEventDispatcher
     {
+        private readonly OperationLog _operations;
+
+        public RecordingWorkerEventDispatcher(OperationLog operations)
+        {
+            _operations = operations;
+        }
+
         public InvocationState? CurrentInvocation => null;
 
         public bool IsAcceptingRemoteInvocations { get; private set; } = true;
@@ -277,7 +284,7 @@ public sealed class WorkerShutdownDrainServiceTests
         public void StopAcceptingRemoteInvocations()
         {
             IsAcceptingRemoteInvocations = false;
-            operations.Add("stop-accepting");
+            _operations.Add("stop-accepting");
         }
 
         public Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package)
@@ -407,9 +414,15 @@ public sealed class WorkerShutdownDrainServiceTests
         }
     }
 
-    private sealed class RecordingInvocationRunner(OperationLog operations) : IInvocationRunner
+    private sealed class RecordingInvocationRunner : IInvocationRunner
     {
+        private readonly OperationLog _operations;
         private TaskCompletionSource<bool>? _completionGate;
+
+        public RecordingInvocationRunner(OperationLog operations)
+        {
+            _operations = operations;
+        }
 
         public int ActiveInvocationCountValue { get; set; }
 
@@ -424,7 +437,7 @@ public sealed class WorkerShutdownDrainServiceTests
 
         public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
         {
-            operations.Add("await-active-invocations");
+            _operations.Add("await-active-invocations");
             DrainStarted.TrySetResult();
 
             if (_completionGate is null)
@@ -433,7 +446,7 @@ public sealed class WorkerShutdownDrainServiceTests
             }
 
             var result = await _completionGate.Task.WaitAsync(timeout, cancellationToken);
-            operations.Add("active-invocations-drained");
+            _operations.Add("active-invocations-drained");
             ActiveInvocationCountValue = 0;
             return result;
         }
@@ -482,8 +495,15 @@ public sealed class WorkerShutdownDrainServiceTests
         }
     }
 
-    private sealed class RecordingDeadLetterStore(OperationLog operations) : IDeadLetterStore
+    private sealed class RecordingDeadLetterStore : IDeadLetterStore
     {
+        private readonly OperationLog _operations;
+
+        public RecordingDeadLetterStore(OperationLog operations)
+        {
+            _operations = operations;
+        }
+
         public List<InvocationFailedPayload> Pending { get; } = [];
 
         public List<InvocationFailedPayload> Enqueued { get; } = [];
@@ -503,7 +523,7 @@ public sealed class WorkerShutdownDrainServiceTests
 
         public Task RemoveAsync(Guid invocationId, CancellationToken cancellationToken = default)
         {
-            operations.Add("remove-dead-letter");
+            _operations.Add("remove-dead-letter");
             Removed.Add(invocationId);
             Pending.RemoveAll(entry => entry.InvocationId == invocationId);
             return Task.CompletedTask;
@@ -515,8 +535,15 @@ public sealed class WorkerShutdownDrainServiceTests
         }
     }
 
-    private sealed class RecordingWorkerHubConnection(OperationLog operations) : IWorkerHubConnection
+    private sealed class RecordingWorkerHubConnection : IWorkerHubConnection
     {
+        private readonly OperationLog _operations;
+
+        public RecordingWorkerHubConnection(OperationLog operations)
+        {
+            _operations = operations;
+        }
+
         public int DisconnectAsyncCallCount { get; private set; }
 
         public bool BlockUntilCancelled { get; set; }
@@ -573,7 +600,7 @@ public sealed class WorkerShutdownDrainServiceTests
         public async Task DisconnectAsync(CancellationToken cancellationToken = default)
         {
             DisconnectAsyncCallCount++;
-            operations.Add("disconnect-worker-hub");
+            _operations.Add("disconnect-worker-hub");
             if (BlockUntilCancelled)
             {
                 // Model a hub disconnect that never completes on its own — only the drain's end-to-end deadline unblocks it.
@@ -667,15 +694,22 @@ public sealed class WorkerShutdownDrainServiceTests
         }
     }
 
-    private sealed class RecordingHubMessageSender(OperationLog operations) : IHubMessageSender
+    private sealed class RecordingHubMessageSender : IHubMessageSender
     {
+        private readonly OperationLog _operations;
+
+        public RecordingHubMessageSender(OperationLog operations)
+        {
+            _operations = operations;
+        }
+
         public bool ThrowOnFailedSend { get; set; }
 
         public bool BlockUntilCancelled { get; set; }
 
         public async Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
         {
-            operations.Add("flush-dead-letter");
+            _operations.Add("flush-dead-letter");
             if (ThrowOnFailedSend)
             {
                 throw new InvalidOperationException("Simulated dead-letter send failure.");

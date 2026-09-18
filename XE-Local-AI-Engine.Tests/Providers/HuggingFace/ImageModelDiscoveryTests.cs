@@ -322,8 +322,19 @@ public sealed class ImageModelDiscoveryTests
     }
 
     /// <summary>Routes by URL: <c>/api/models/{repo}</c> → repo detail JSON; <c>/api/models?</c> → listing JSON.</summary>
-    private sealed class StubHandler(string? listing, string? repoDetail, HttpStatusCode repoStatusCode) : HttpMessageHandler
+    private sealed class StubHandler : HttpMessageHandler
     {
+        private readonly string? _listing;
+        private readonly string? _repoDetail;
+        private readonly HttpStatusCode _repoStatusCode;
+
+        public StubHandler(string? listing, string? repoDetail, HttpStatusCode repoStatusCode)
+        {
+            _listing = listing;
+            _repoDetail = repoDetail;
+            _repoStatusCode = repoStatusCode;
+        }
+
         public string LastListUrl { get; private set; } = string.Empty;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -334,15 +345,15 @@ public sealed class ImageModelDiscoveryTests
 
             if (url.Contains("/api/models/", StringComparison.Ordinal))
             {
-                return Task.FromResult(repoStatusCode == HttpStatusCode.OK
-                    ? Json(repoDetail ?? "{}")
-                    : new HttpResponseMessage(repoStatusCode));
+                return Task.FromResult(_repoStatusCode == HttpStatusCode.OK
+                    ? Json(_repoDetail ?? "{}")
+                    : new HttpResponseMessage(_repoStatusCode));
             }
 
             if (url.Contains("/api/models?", StringComparison.Ordinal))
             {
                 LastListUrl = url;
-                return Task.FromResult(Json(listing ?? "[]"));
+                return Task.FromResult(Json(_listing ?? "[]"));
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));

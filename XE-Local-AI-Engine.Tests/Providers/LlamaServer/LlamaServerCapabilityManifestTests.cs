@@ -387,8 +387,15 @@ public sealed class LlamaServerCapabilityManifestTests
         return new LlamaServerLaunchSpec("model", ModelRole.Chat, "/fake/bin/llama-server", arguments, 12345, "/fake/bin");
     }
 
-    private sealed class FakeCommandRunner(Func<IReadOnlyList<string>, LlamaCommandResult?> result) : ILlamaCommandProcessRunner
+    private sealed class FakeCommandRunner : ILlamaCommandProcessRunner
     {
+        private readonly Func<IReadOnlyList<string>, LlamaCommandResult?> _result;
+
+        public FakeCommandRunner(Func<IReadOnlyList<string>, LlamaCommandResult?> result)
+        {
+            _result = result;
+        }
+
         public ConcurrentQueue<IReadOnlyList<string>> Calls { get; } = new();
 
         public Task<LlamaCommandResult?> RunAsync(string executablePath,
@@ -397,7 +404,7 @@ public sealed class LlamaServerCapabilityManifestTests
             CancellationToken ct)
         {
             Calls.Enqueue([.. arguments]);
-            return Task.FromResult(result(arguments));
+            return Task.FromResult(_result(arguments));
         }
     }
 

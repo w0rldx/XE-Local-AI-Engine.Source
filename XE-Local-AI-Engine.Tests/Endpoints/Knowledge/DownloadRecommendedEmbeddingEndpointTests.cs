@@ -329,20 +329,29 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
 
     // Hand-written recording fake: records every StartAsync request and returns a ticket with the configured
     // AlreadyInFlight, so a test can assert the exact repo/quant/role the endpoint requested.
-    private sealed class RecordingDownloadCoordinator(bool alreadyInFlight, Exception? failure = null) : IGgufDownloadCoordinator
+    private sealed class RecordingDownloadCoordinator : IGgufDownloadCoordinator
     {
+        private readonly bool _alreadyInFlight;
+        private readonly Exception? _failure;
+
+        public RecordingDownloadCoordinator(bool alreadyInFlight, Exception? failure = null)
+        {
+            _alreadyInFlight = alreadyInFlight;
+            _failure = failure;
+        }
+
         public List<GgufModelRequest> StartCalls { get; } = [];
 
         public Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
         {
             StartCalls.Add(request);
-            if (failure is not null)
+            if (_failure is not null)
             {
-                return Task.FromException<GgufDownloadTicket>(failure);
+                return Task.FromException<GgufDownloadTicket>(_failure);
             }
 
             var modelName = string.IsNullOrWhiteSpace(request.Quant) ? request.RepoId : GgufModelName.Format(request.RepoId, request.Quant);
-            return Task.FromResult(new GgufDownloadTicket(modelName, alreadyInFlight));
+            return Task.FromResult(new GgufDownloadTicket(modelName, _alreadyInFlight));
         }
 
         public bool Cancel(string modelName)

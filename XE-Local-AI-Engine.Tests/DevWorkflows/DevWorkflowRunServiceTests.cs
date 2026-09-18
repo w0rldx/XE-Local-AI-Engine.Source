@@ -742,8 +742,15 @@ public sealed class DevWorkflowRunServiceTests
     ///     than substituted because the interface is internal to the Application assembly, which is not exposed to
     ///     Castle's proxy generator.
     /// </summary>
-    private sealed class RecordingWorkSessionLifecycle(Guid refused) : IWorkflowOwnedWorkSessionLifecycle
+    private sealed class RecordingWorkSessionLifecycle : IWorkflowOwnedWorkSessionLifecycle
     {
+        private readonly Guid _refused;
+
+        public RecordingWorkSessionLifecycle(Guid refused)
+        {
+            _refused = refused;
+        }
+
         public List<Guid> Deleted { get; } = [];
 
         public bool HasCapacity => true;
@@ -751,7 +758,7 @@ public sealed class DevWorkflowRunServiceTests
         public Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (sessionId == refused)
+            if (sessionId == _refused)
             {
                 throw new WorkSessionNotFoundException($"Work session '{sessionId}' was not found.");
             }

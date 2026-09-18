@@ -142,20 +142,34 @@ public sealed class NodeTokenServiceTests
         throw new AssertionException("Expected disposed JWT key provider to throw on subsequent access.");
     }
 
-    private sealed class FixedNodeJwtKeyProvider(byte[] key) : INodeJwtKeyProvider
+    private sealed class FixedNodeJwtKeyProvider : INodeJwtKeyProvider
     {
-        public ReadOnlyMemory<byte> SigningKey => key;
+        private readonly byte[] _key;
+
+        public FixedNodeJwtKeyProvider(byte[] key)
+        {
+            _key = key;
+        }
+
+        public ReadOnlyMemory<byte> SigningKey => _key;
 
         public void Dispose()
         {
         }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return utcNow;
+            return _utcNow;
         }
     }
 }

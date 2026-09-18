@@ -463,9 +463,15 @@ public sealed class AgentToolPipelinePolicyTests
         return new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"));
     }
 
-    private sealed class ScriptedChatClient(Func<int, IReadOnlyList<ChatMessage>, ChatOptions?, ChatResponse> response) : IChatClient
+    private sealed class ScriptedChatClient : IChatClient
     {
+        private readonly Func<int, IReadOnlyList<ChatMessage>, ChatOptions?, ChatResponse> _response;
         private int _callCount;
+
+        public ScriptedChatClient(Func<int, IReadOnlyList<ChatMessage>, ChatOptions?, ChatResponse> response)
+        {
+            _response = response;
+        }
 
         public int CallCount => Volatile.Read(ref _callCount);
 
@@ -482,7 +488,7 @@ public sealed class AgentToolPipelinePolicyTests
             ReceivedMessages.Add([.. received]);
             ReceivedToolNames.Add([.. (options?.Tools ?? []).Select(static tool => tool.Name)]);
             var call = Interlocked.Increment(ref _callCount);
-            return Task.FromResult(response(call, received, options));
+            return Task.FromResult(_response(call, received, options));
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

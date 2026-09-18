@@ -381,27 +381,32 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, OccurredAtUtc: 1L);
     }
 
-    private sealed class ConfigurableHandler(Func<ScheduledJobExecutionContext, CancellationToken, Task> body)
-        : IScheduledJobHandler
+    private sealed class ConfigurableHandler : IScheduledJobHandler
     {
         public const string Id = "test.echo";
 
-        private readonly Func<ScheduledJobExecutionContext, CancellationToken, Task> _body = body;
+        private readonly Func<ScheduledJobExecutionContext, CancellationToken, Task> _body;
+
+        public ConfigurableHandler(Func<ScheduledJobExecutionContext, CancellationToken, Task> body)
+        {
+            _body = body;
+            Descriptor = new ScheduledJobTemplateDescriptor(Id,
+                "Configurable (test)",
+                "Test handler that runs an injected body.",
+                ParameterSchema: null,
+                DefaultParameters: null,
+                [ScheduleKind.OneShot, ScheduleKind.Cron],
+                ScheduleKind.OneShot,
+                SchedulerMisfirePolicy.SkipMissed,
+                DefaultMaxRuntimeSeconds: null,
+                AllowManualTrigger: true);
+        }
 
         public int InvocationCount { get; private set; }
 
         public string TemplateId => Id;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(Id,
-            "Configurable (test)",
-            "Test handler that runs an injected body.",
-            ParameterSchema: null,
-            DefaultParameters: null,
-            [ScheduleKind.OneShot, ScheduleKind.Cron],
-            ScheduleKind.OneShot,
-            SchedulerMisfirePolicy.SkipMissed,
-            DefaultMaxRuntimeSeconds: null,
-            AllowManualTrigger: true);
+        public ScheduledJobTemplateDescriptor Descriptor { get; }
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

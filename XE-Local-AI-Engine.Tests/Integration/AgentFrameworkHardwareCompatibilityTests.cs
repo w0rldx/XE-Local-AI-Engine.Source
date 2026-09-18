@@ -196,21 +196,30 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         string Response,
         EvidencePath Path);
 
-    private sealed class FixedGgufModelStore(string modelPath, long sizeBytes, string contentIdentity) : IGgufModelStore
+    private sealed class FixedGgufModelStore : IGgufModelStore
     {
-        private readonly GgufModelFootprintFacts _facts = new(Quant: "Q4_K_M",
-            FileSizeBytes: sizeBytes,
-            ParamCount: null,
-            BlockCount: null,
-            AttentionHeadCount: null,
-            AttentionHeadCountKV: null,
-            EmbeddingLength: null,
-            ContextLength: 32_768,
-            ContentIdentity: contentIdentity);
+        private readonly GgufModelFootprintFacts _facts;
+        private readonly string _modelPath;
+        private readonly long _sizeBytes;
+
+        public FixedGgufModelStore(string modelPath, long sizeBytes, string contentIdentity)
+        {
+            _modelPath = modelPath;
+            _sizeBytes = sizeBytes;
+            _facts = new(Quant: "Q4_K_M",
+                FileSizeBytes: sizeBytes,
+                ParamCount: null,
+                BlockCount: null,
+                AttentionHeadCount: null,
+                AttentionHeadCountKV: null,
+                EmbeddingLength: null,
+                ContextLength: 32_768,
+                ContentIdentity: contentIdentity);
+        }
 
         public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
         {
-            return Task.FromResult<string?>(Matches(modelName) ? modelPath : null);
+            return Task.FromResult<string?>(Matches(modelName) ? _modelPath : null);
         }
 
         public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct)
@@ -227,8 +236,8 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                     ModelName = ModelName,
                     ProviderName = LlamaServerProviderConstants.ProviderName,
                     IsAvailable = true,
-                    SizeBytes = sizeBytes,
-                    ModifiedAt = File.GetLastWriteTimeUtc(modelPath),
+                    SizeBytes = _sizeBytes,
+                    ModifiedAt = File.GetLastWriteTimeUtc(_modelPath),
                     MaxContextTokens = 32_768,
                     IsToolCapable = false,
                     IsReasoningCapable = false,

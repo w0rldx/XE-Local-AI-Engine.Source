@@ -222,9 +222,17 @@ public sealed class StreamIdleWatchdogTests
             return new Enumerator(_stuckMoveNext.Task, _disposed);
         }
 
-        private sealed class Enumerator(Task<bool> stuckMoveNext, TaskCompletionSource disposed) : IAsyncEnumerator<int>
+        private sealed class Enumerator : IAsyncEnumerator<int>
         {
+            private readonly Task<bool> _stuckMoveNext;
+            private readonly TaskCompletionSource _disposed;
             private int _index;
+
+            public Enumerator(Task<bool> stuckMoveNext, TaskCompletionSource disposed)
+            {
+                _stuckMoveNext = stuckMoveNext;
+                _disposed = disposed;
+            }
 
             public int Current { get; private set; }
 
@@ -240,7 +248,7 @@ public sealed class StreamIdleWatchdogTests
                 if (_index == 2)
                 {
                     // No cancellation-token registration at all: the only way out is the test releasing the gate.
-                    var moved = await stuckMoveNext;
+                    var moved = await _stuckMoveNext;
                     Current = 2;
                     return moved;
                 }
@@ -250,7 +258,7 @@ public sealed class StreamIdleWatchdogTests
 
             public ValueTask DisposeAsync()
             {
-                disposed.TrySetResult();
+                _disposed.TrySetResult();
                 return ValueTask.CompletedTask;
             }
         }
@@ -258,22 +266,35 @@ public sealed class StreamIdleWatchdogTests
 
     // Every MoveNextAsync completes synchronously (a pre-buffered stream, chunks 1..limit), ignoring the token — it never
     // reaches the watchdog's wall-clock race, so it proves the fast-path cancellation check.
-    private sealed class SynchronousBufferedStream(int limit) : IAsyncEnumerable<int>
+    private sealed class SynchronousBufferedStream : IAsyncEnumerable<int>
     {
-        public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        private readonly int _limit;
+
+        public SynchronousBufferedStream(int limit)
         {
-            return new Enumerator(limit);
+            _limit = limit;
         }
 
-        private sealed class Enumerator(int limit) : IAsyncEnumerator<int>
+        public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
+            return new Enumerator(_limit);
+        }
+
+        private sealed class Enumerator : IAsyncEnumerator<int>
+        {
+            private readonly int _limit;
             private int _index;
+
+            public Enumerator(int limit)
+            {
+                _limit = limit;
+            }
 
             public int Current { get; private set; }
 
             public ValueTask<bool> MoveNextAsync()
             {
-                if (_index >= limit)
+                if (_index >= _limit)
                 {
                     return ValueTask.FromResult(false);
                 }

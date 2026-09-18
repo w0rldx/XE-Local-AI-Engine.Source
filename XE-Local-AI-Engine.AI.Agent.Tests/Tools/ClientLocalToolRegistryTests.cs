@@ -105,20 +105,34 @@ public sealed class ClientLocalToolRegistryTests
         return Options.Create(options);
     }
 
-    private sealed class FakeHandler(string toolName, string description, string parameterSchema, bool requiresApproval, string output = "ok")
-        : IClientLocalToolHandler
+    private sealed class FakeHandler : IClientLocalToolHandler
     {
-        public string ToolName => toolName;
+        private readonly string _toolName;
+        private readonly string _description;
+        private readonly string _parameterSchema;
+        private readonly bool _requiresApproval;
+        private readonly string _output;
 
-        public string Description => description;
+        public FakeHandler(string toolName, string description, string parameterSchema, bool requiresApproval, string output = "ok")
+        {
+            _toolName = toolName;
+            _description = description;
+            _parameterSchema = parameterSchema;
+            _requiresApproval = requiresApproval;
+            _output = output;
+        }
 
-        public string ParameterSchema => parameterSchema;
+        public string ToolName => _toolName;
 
-        public bool RequiresApproval => requiresApproval;
+        public string Description => _description;
+
+        public string ParameterSchema => _parameterSchema;
+
+        public bool RequiresApproval => _requiresApproval;
 
         public Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(output);
+            return Task.FromResult(_output);
         }
     }
 }

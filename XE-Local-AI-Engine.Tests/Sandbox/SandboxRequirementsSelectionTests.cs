@@ -365,8 +365,15 @@ public sealed class SandboxRequirementsSelectionTests
             }
         }
 
-        private sealed class CapturingLogger(RecordingLoggerProvider owner) : ILogger
+        private sealed class CapturingLogger : ILogger
         {
+            private readonly RecordingLoggerProvider _owner;
+
+            public CapturingLogger(RecordingLoggerProvider owner)
+            {
+                _owner = owner;
+            }
+
             public IDisposable? BeginScope<TState>(TState state)
                 where TState : notnull =>
                 null;
@@ -381,7 +388,7 @@ public sealed class SandboxRequirementsSelectionTests
                 Func<TState, Exception?, string> formatter)
             {
                 ArgumentNullException.ThrowIfNull(formatter);
-                owner.Add(new RecordingLogger<SandboxRequirementsSelectionTests>.Entry(logLevel, formatter(state, exception), exception));
+                _owner.Add(new RecordingLogger<SandboxRequirementsSelectionTests>.Entry(logLevel, formatter(state, exception), exception));
             }
         }
     }

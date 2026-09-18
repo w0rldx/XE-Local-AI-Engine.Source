@@ -172,11 +172,18 @@ public sealed class StartGgufDownloadEndpointTests
         }
     }
 
-    private sealed class ThrowingDownloadCoordinator(Exception failure) : IGgufDownloadCoordinator
+    private sealed class ThrowingDownloadCoordinator : IGgufDownloadCoordinator
     {
+        private readonly Exception _failure;
+
+        public ThrowingDownloadCoordinator(Exception failure)
+        {
+            _failure = failure;
+        }
+
         public Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
         {
-            return Task.FromException<GgufDownloadTicket>(failure);
+            return Task.FromException<GgufDownloadTicket>(_failure);
         }
 
         public bool Cancel(string modelName)

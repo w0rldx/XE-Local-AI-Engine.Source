@@ -741,11 +741,18 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         }
     }
 
-    private sealed class ThrowingChatClient(Exception exception) : IChatClient
+    private sealed class ThrowingChatClient : IChatClient
     {
+        private readonly Exception _exception;
+
+        public ThrowingChatClient(Exception exception)
+        {
+            _exception = exception;
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             CancellationToken cancellationToken = default) =>
-            Task.FromException<ChatResponse>(exception);
+            Task.FromException<ChatResponse>(_exception);
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             [EnumeratorCancellation]
@@ -761,16 +768,24 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         public void Dispose() { }
     }
 
-    private sealed class FixedInstalledModelLease(
-        string modelFilePath,
-        string modelContentFingerprint,
-        string modelSha256,
-        long modelSizeBytes) : ITrainingEvaluationInstalledModelLease
+    private sealed class FixedInstalledModelLease : ITrainingEvaluationInstalledModelLease
     {
-        public string ModelFilePath { get; } = modelFilePath;
-        public string ModelContentFingerprint { get; } = modelContentFingerprint;
-        public string ModelSha256 { get; } = modelSha256;
-        public long ModelSizeBytes { get; } = modelSizeBytes;
+        public FixedInstalledModelLease(
+            string modelFilePath,
+            string modelContentFingerprint,
+            string modelSha256,
+            long modelSizeBytes)
+        {
+            ModelFilePath = modelFilePath;
+            ModelContentFingerprint = modelContentFingerprint;
+            ModelSha256 = modelSha256;
+            ModelSizeBytes = modelSizeBytes;
+        }
+
+        public string ModelFilePath { get; }
+        public string ModelContentFingerprint { get; }
+        public string ModelSha256 { get; }
+        public long ModelSizeBytes { get; }
 
         public ValueTask DisposeAsync() =>
             ValueTask.CompletedTask;

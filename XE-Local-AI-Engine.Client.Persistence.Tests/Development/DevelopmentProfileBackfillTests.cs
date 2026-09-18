@@ -151,13 +151,20 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         IDevelopmentRepositoryBindingService bindings) =>
         new(store, bindings, new DevelopmentCommandProfileDetector(), NullLogger<DevelopmentProfileBackfillService>.Instance);
 
-    private sealed class StubRepositoryBindings(string repositoryRoot) : StubRepositoryBindingsBase
+    private sealed class StubRepositoryBindings : StubRepositoryBindingsBase
     {
+        private readonly string _repositoryRoot;
+
+        public StubRepositoryBindings(string repositoryRoot)
+        {
+            _repositoryRoot = repositoryRoot;
+        }
+
         public override Task<DevelopmentRepositoryBinding> ResolveProjectAsync(Guid projectId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new DevelopmentRepositoryBinding(projectId,
                 DevelopmentTestFixture.SelectedFolderId,
                 "fixture",
-                repositoryRoot,
+                _repositoryRoot,
                 "repository-hash"));
     }
 

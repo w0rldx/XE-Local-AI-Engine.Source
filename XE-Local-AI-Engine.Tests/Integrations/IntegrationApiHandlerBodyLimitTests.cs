@@ -166,9 +166,14 @@ public sealed class IntegrationApiHandlerBodyLimitTests
             "Retry-After matches the window and the middleware's own rejection, so a caller sees one convention whichever layer refused it.");
     }
 
-    private sealed class StubBodyPipeFeature(PipeReader reader) : IRequestBodyPipeFeature
+    private sealed class StubBodyPipeFeature : IRequestBodyPipeFeature
     {
-        public PipeReader Reader { get; } = reader;
+        public StubBodyPipeFeature(PipeReader reader)
+        {
+            Reader = reader;
+        }
+
+        public PipeReader Reader { get; }
     }
 
     /// <summary>Raises exactly what Kestrel raises when the request body passes the host cap as it is consumed.</summary>

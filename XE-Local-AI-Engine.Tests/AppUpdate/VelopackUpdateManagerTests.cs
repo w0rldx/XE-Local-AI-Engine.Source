@@ -141,11 +141,20 @@ public sealed class VelopackUpdateManagerTests
         return typeof(GithubSource).GetProperty("Authorization", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(source);
     }
 
-    private sealed class PortableTestUpdateManager(Exception? checkException = null, UpdateInfo? updateInfo = null)
-        : UpdateManager(new GithubSource("https://github.com/example/public-repo", null, prerelease: false),
-            options: null,
-            locator: new TestVelopackLocator("XE-Local-AI-Engine", "0.1.0", Path.GetTempPath()))
+    private sealed class PortableTestUpdateManager : UpdateManager
     {
+        private readonly Exception? _checkException;
+        private readonly UpdateInfo? _updateInfo;
+
+        public PortableTestUpdateManager(Exception? checkException = null, UpdateInfo? updateInfo = null)
+            : base(new GithubSource("https://github.com/example/public-repo", null, prerelease: false),
+                options: null,
+                locator: new TestVelopackLocator("XE-Local-AI-Engine", "0.1.0", Path.GetTempPath()))
+        {
+            _checkException = checkException;
+            _updateInfo = updateInfo;
+        }
+
         public int CheckCount { get; private set; }
 
         public bool DownloadCompleted { get; private set; }
@@ -159,9 +168,9 @@ public sealed class VelopackUpdateManagerTests
         public override Task<UpdateInfo?> CheckForUpdatesAsync()
         {
             CheckCount++;
-            return checkException is null
-                ? Task.FromResult(updateInfo)
-                : Task.FromException<UpdateInfo?>(checkException);
+            return _checkException is null
+                ? Task.FromResult(_updateInfo)
+                : Task.FromException<UpdateInfo?>(_checkException);
         }
 
         public override Task DownloadUpdatesAsync(UpdateInfo updates,

@@ -104,9 +104,14 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
         });
     }
 
-    private sealed class MutableTimeProvider(DateTimeOffset start) : TimeProvider
+    private sealed class MutableTimeProvider : TimeProvider
     {
-        private DateTimeOffset _now = start;
+        private DateTimeOffset _now;
+
+        public MutableTimeProvider(DateTimeOffset start)
+        {
+            _now = start;
+        }
 
         public override DateTimeOffset GetUtcNow()
         {

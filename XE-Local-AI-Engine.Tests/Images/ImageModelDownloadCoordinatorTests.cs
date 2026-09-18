@@ -221,11 +221,18 @@ public sealed class ImageModelDownloadCoordinatorTests
         }
     }
 
-    private sealed class ThrowingImageModelStore(Exception failure) : StubImageModelStore
+    private sealed class ThrowingImageModelStore : StubImageModelStore
     {
+        private readonly Exception _failure;
+
+        public ThrowingImageModelStore(Exception failure)
+        {
+            _failure = failure;
+        }
+
         public override Task<ImageModelHandle> EnsureModelAsync(ImageModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
         {
-            return Task.FromException<ImageModelHandle>(failure);
+            return Task.FromException<ImageModelHandle>(_failure);
         }
     }
 

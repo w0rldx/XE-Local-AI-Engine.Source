@@ -746,10 +746,16 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
 ///     S0's fake with one thing it cannot do on its own: hold a pull open until a test releases it. Everything else
 ///     delegates, so the branches under test are still the ones the repo's own container fake decides.
 /// </summary>
-internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : IContainerRuntime
+internal sealed class GatedContainerRuntime : IContainerRuntime
 {
+    private readonly FakeDockerRuntimeClient _inner;
     private int _listDetailedCalls;
     private int _mutationCalls;
+
+    public GatedContainerRuntime(FakeDockerRuntimeClient inner)
+    {
+        _inner = inner;
+    }
 
     /// <summary>Set to hold every pull until the source is completed; null to pull straight through.</summary>
     public TaskCompletionSource? PullGate { get; set; }
@@ -796,7 +802,7 @@ internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : ICo
     /// </summary>
     public Func<string, DockerRuntimeException?>? StartFailure { get; set; }
 
-    public DockerDaemonEndpoint Endpoint => inner.Endpoint;
+    public DockerDaemonEndpoint Endpoint => _inner.Endpoint;
 
     public async Task PullImageAsync(string imageReference, IProgress<ContainerPullProgress>? progress, CancellationToken cancellationToken = default)
     {
@@ -806,14 +812,14 @@ internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : ICo
             await gate.Task.WaitAsync(cancellationToken);
         }
 
-        await inner.PullImageAsync(imageReference, progress, cancellationToken);
+        await _inner.PullImageAsync(imageReference, progress, cancellationToken);
     }
 
     public Task<string> RunContainerAsync(ContainerSpecification specification, CancellationToken cancellationToken = default)
     {
         _ = Interlocked.Increment(ref _mutationCalls);
         OnRun?.Invoke();
-        return inner.RunContainerAsync(specification, cancellationToken);
+        return _inner.RunContainerAsync(specification, cancellationToken);
     }
 
     /// <summary>
@@ -826,49 +832,49 @@ internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : ICo
     {
         return InspectFailure?.Invoke(containerId) is { } failure
             ? Task.FromException<ContainerInspection>(failure)
-            : inner.InspectAsync(containerId, cancellationToken);
+            : _inner.InspectAsync(containerId, cancellationToken);
     }
 
     public Task<bool> StopContainerAsync(string containerId, TimeSpan gracePeriod, CancellationToken cancellationToken = default)
     {
         _ = Interlocked.Increment(ref _mutationCalls);
         OnStop?.Invoke(containerId);
-        return inner.StopContainerAsync(containerId, gracePeriod, cancellationToken);
+        return _inner.StopContainerAsync(containerId, gracePeriod, cancellationToken);
     }
 
     public Task<bool> ImageExistsAsync(string imageReference, CancellationToken cancellationToken = default)
     {
-        return PretendImagesAreMissing ? Task.FromResult(false) : inner.ImageExistsAsync(imageReference, cancellationToken);
+        return PretendImagesAreMissing ? Task.FromResult(false) : _inner.ImageExistsAsync(imageReference, cancellationToken);
     }
 
     public Task<string> CreateNetworkAsync(ContainerNetworkSpecification specification, CancellationToken cancellationToken = default) =>
-        inner.CreateNetworkAsync(specification, cancellationToken);
+        _inner.CreateNetworkAsync(specification, cancellationToken);
 
     public Task RemoveNetworkAsync(string networkNameOrId, CancellationToken cancellationToken = default) =>
-        inner.RemoveNetworkAsync(networkNameOrId, cancellationToken);
+        _inner.RemoveNetworkAsync(networkNameOrId, cancellationToken);
 
     public Task<IReadOnlyList<string>> ListNetworksAsync(IReadOnlyDictionary<string, string> labels, CancellationToken cancellationToken = default) =>
-        inner.ListNetworksAsync(labels, cancellationToken);
+        _inner.ListNetworksAsync(labels, cancellationToken);
 
     public Task<IReadOnlyList<ContainerSummary>> ListContainersDetailedAsync(IReadOnlyDictionary<string, string> labels,
         CancellationToken cancellationToken = default)
     {
         _ = Interlocked.Increment(ref _listDetailedCalls);
         OnListDetailed?.Invoke();
-        return inner.ListContainersDetailedAsync(labels, cancellationToken);
+        return _inner.ListContainersDetailedAsync(labels, cancellationToken);
     }
 
     public Task<ContainerLogSnapshot> ReadLogsAsync(string containerId, ContainerLogRequest request, CancellationToken cancellationToken = default) =>
-        inner.ReadLogsAsync(containerId, request, cancellationToken);
+        _inner.ReadLogsAsync(containerId, request, cancellationToken);
 
     public Task<bool> ProbeWritablePathAsync(string containerId, string containerPath, CancellationToken cancellationToken = default) =>
-        inner.ProbeWritablePathAsync(containerId, containerPath, cancellationToken);
+        _inner.ProbeWritablePathAsync(containerId, containerPath, cancellationToken);
 
     public Task<DockerDaemonIdentity> ProbeAsync(CancellationToken cancellationToken = default) =>
-        inner.ProbeAsync(cancellationToken);
+        _inner.ProbeAsync(cancellationToken);
 
     public Task<string> CreateContainerAsync(DockerContainerSpecification specification, CancellationToken cancellationToken = default) =>
-        inner.CreateContainerAsync(specification, cancellationToken);
+        _inner.CreateContainerAsync(specification, cancellationToken);
 
     public Task StartContainerAsync(string containerId, CancellationToken cancellationToken = default)
     {
@@ -876,25 +882,25 @@ internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : ICo
         OnStart?.Invoke(containerId);
         return StartFailure?.Invoke(containerId) is { } failure
             ? Task.FromException(failure)
-            : inner.StartContainerAsync(containerId, cancellationToken);
+            : _inner.StartContainerAsync(containerId, cancellationToken);
     }
 
     public Task<DockerContainerSettings> InspectContainerAsync(string containerId, CancellationToken cancellationToken = default) =>
-        inner.InspectContainerAsync(containerId, cancellationToken);
+        _inner.InspectContainerAsync(containerId, cancellationToken);
 
     public Task<IReadOnlyList<string>> ListContainersAsync(IReadOnlyDictionary<string, string> labels, CancellationToken cancellationToken = default) =>
-        inner.ListContainersAsync(labels, cancellationToken);
+        _inner.ListContainersAsync(labels, cancellationToken);
 
     public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken = default)
     {
         _ = Interlocked.Increment(ref _mutationCalls);
         return RemoveFailure?.Invoke(containerId) is { } failure
             ? Task.FromException(failure)
-            : inner.RemoveContainerAsync(containerId, cancellationToken);
+            : _inner.RemoveContainerAsync(containerId, cancellationToken);
     }
 
     public Task<DockerExecutionOutcome> ExecuteAsync(string containerId, DockerExecutionRequest request, CancellationToken cancellationToken = default) =>
-        inner.ExecuteAsync(containerId, request, cancellationToken);
+        _inner.ExecuteAsync(containerId, request, cancellationToken);
 
     public ValueTask DisposeAsync() =>
         ValueTask.CompletedTask;

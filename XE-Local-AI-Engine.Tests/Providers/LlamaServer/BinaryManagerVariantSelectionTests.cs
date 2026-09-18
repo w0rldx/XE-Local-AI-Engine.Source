@@ -184,11 +184,18 @@ public sealed class BinaryManagerVariantSelectionTests
         return serverPath;
     }
 
-    private sealed class FakeVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
+    private sealed class FakeVendorProbe : IGpuVendorProbe
     {
+        private readonly DetectedGpuVendor _vendor;
+
+        public FakeVendorProbe(DetectedGpuVendor vendor)
+        {
+            _vendor = vendor;
+        }
+
         public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
         {
-            return Task.FromResult(vendor);
+            return Task.FromResult(_vendor);
         }
     }
 

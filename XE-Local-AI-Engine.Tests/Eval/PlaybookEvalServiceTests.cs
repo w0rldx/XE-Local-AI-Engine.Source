@@ -552,14 +552,21 @@ public sealed class PlaybookEvalServiceTests
     }
 
     /// <summary>Scripted judge: a predicate over (case, candidate text) decides pass; scoredBy is always "judge".</summary>
-    private sealed class FakePlaybookEvalJudge(Func<GoldenConversationRecord, string, bool> pass) : IPlaybookEvalJudge
+    private sealed class FakePlaybookEvalJudge : IPlaybookEvalJudge
     {
+        private readonly Func<GoldenConversationRecord, string, bool> _pass;
+
+        public FakePlaybookEvalJudge(Func<GoldenConversationRecord, string, bool> pass)
+        {
+            _pass = pass;
+        }
+
         public Task<EvalScore> ScoreAsync(GoldenConversationRecord goldenCase,
             string candidateText,
             IChatClient nodeLocalClient,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new EvalScore(pass(goldenCase, candidateText), "judge"));
+            return Task.FromResult(new EvalScore(_pass(goldenCase, candidateText), "judge"));
         }
     }
 }

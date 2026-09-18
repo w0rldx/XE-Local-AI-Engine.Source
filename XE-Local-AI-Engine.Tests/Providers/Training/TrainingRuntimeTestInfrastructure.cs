@@ -70,9 +70,15 @@ internal static class TrainingRuntimeTestInfrastructure
     }
 
     /// <summary>Records every invocation and answers from a caller-supplied script.</summary>
-    internal sealed class FakeProcessRunner(Func<string, IReadOnlyList<string>, Action<string>, int> handler) : ITrainingProcessRunner
+    internal sealed class FakeProcessRunner : ITrainingProcessRunner
     {
         private readonly List<Invocation> _invocations = [];
+        private readonly Func<string, IReadOnlyList<string>, Action<string>, int> _handler;
+
+        public FakeProcessRunner(Func<string, IReadOnlyList<string>, Action<string>, int> handler)
+        {
+            _handler = handler;
+        }
 
         public IReadOnlyList<Invocation> Invocations => _invocations;
 
@@ -86,7 +92,7 @@ internal static class TrainingRuntimeTestInfrastructure
         {
             ct.ThrowIfCancellationRequested();
             _invocations.Add(new Invocation(file, [.. args], environment, workingDirectory));
-            return Task.FromResult(handler(file, args, logSink));
+            return Task.FromResult(_handler(file, args, logSink));
         }
 
         internal sealed record Invocation(
@@ -125,11 +131,18 @@ internal static class TrainingRuntimeTestInfrastructure
     }
 
     /// <summary>A probe with a fixed verdict, so runtime tests do not depend on the host's real disk or GPU.</summary>
-    internal sealed class StubPrerequisiteProbe(TrainingRuntimePrerequisiteReport report) : ITrainingRuntimePrerequisiteProbe
+    internal sealed class StubPrerequisiteProbe : ITrainingRuntimePrerequisiteProbe
     {
+        private readonly TrainingRuntimePrerequisiteReport _report;
+
+        public StubPrerequisiteProbe(TrainingRuntimePrerequisiteReport report)
+        {
+            _report = report;
+        }
+
         public Task<TrainingRuntimePrerequisiteReport> ProbeAsync(CancellationToken ct)
         {
-            return Task.FromResult(report);
+            return Task.FromResult(_report);
         }
 
         public static StubPrerequisiteProbe Satisfied()

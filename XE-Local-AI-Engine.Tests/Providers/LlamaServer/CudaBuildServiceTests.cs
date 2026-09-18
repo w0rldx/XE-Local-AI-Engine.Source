@@ -404,11 +404,18 @@ public sealed class CudaBuildServiceTests
         return new PathRestore(original);
     }
 
-    private sealed class PathRestore(string original) : IDisposable
+    private sealed class PathRestore : IDisposable
     {
+        private readonly string _original;
+
+        public PathRestore(string original)
+        {
+            _original = original;
+        }
+
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable("PATH", original);
+            Environment.SetEnvironmentVariable("PATH", _original);
         }
     }
 
@@ -421,11 +428,18 @@ public sealed class CudaBuildServiceTests
         }
     }
 
-    private sealed class StubVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
+    private sealed class StubVendorProbe : IGpuVendorProbe
     {
+        private readonly DetectedGpuVendor _vendor;
+
+        public StubVendorProbe(DetectedGpuVendor vendor)
+        {
+            _vendor = vendor;
+        }
+
         public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
         {
-            return Task.FromResult(vendor);
+            return Task.FromResult(_vendor);
         }
     }
 

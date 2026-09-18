@@ -242,11 +242,18 @@ public sealed class InvocationToolResolverTests
             NullLogger.Instance);
     }
 
-    private sealed class FakeToolRegistry(params AITool[] tools) : IAgentToolRegistry
+    private sealed class FakeToolRegistry : IAgentToolRegistry
     {
+        private readonly AITool[] _tools;
+
+        public FakeToolRegistry(params AITool[] tools)
+        {
+            _tools = tools;
+        }
+
         public IReadOnlyList<AITool> GetLocalChatTools()
         {
-            return tools;
+            return _tools;
         }
 
         public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()

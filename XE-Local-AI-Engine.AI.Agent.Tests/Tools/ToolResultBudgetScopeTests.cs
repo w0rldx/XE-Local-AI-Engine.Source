@@ -83,8 +83,15 @@ public sealed class ToolResultBudgetScopeTests
         return tool as AIFunction ?? throw new AssertionException("Expected an AIFunction.");
     }
 
-    private sealed class FakeHandler(string output) : IClientLocalToolHandler
+    private sealed class FakeHandler : IClientLocalToolHandler
     {
+        private readonly string _output;
+
+        public FakeHandler(string output)
+        {
+            _output = output;
+        }
+
         public string ToolName => "read_document";
 
         public string Description => "Reads a knowledge-base document.";
@@ -94,6 +101,6 @@ public sealed class ToolResultBudgetScopeTests
         public bool RequiresApproval => false;
 
         public Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default) =>
-            Task.FromResult(output);
+            Task.FromResult(_output);
     }
 }

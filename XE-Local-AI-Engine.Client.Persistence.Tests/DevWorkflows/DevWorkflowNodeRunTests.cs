@@ -722,9 +722,16 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>A clock that does not move, so two writes can be ordered by more than luck.</summary>
-    private sealed class FixedClock(DateTimeOffset utcNow) : TimeProvider
+    private sealed class FixedClock : TimeProvider
     {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedClock(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
         public override DateTimeOffset GetUtcNow() =>
-            utcNow;
+            _utcNow;
     }
 }

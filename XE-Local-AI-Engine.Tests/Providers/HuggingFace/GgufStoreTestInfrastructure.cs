@@ -156,9 +156,15 @@ internal static class GgufStoreTestInfrastructure
     }
 
     /// <summary>A scripted HTTP handler returning queued responses (one per call), recording the requests it saw.</summary>
-    public sealed class ScriptedHandler(Func<HttpRequestMessage, int, HttpResponseMessage> responder) : HttpMessageHandler
+    public sealed class ScriptedHandler : HttpMessageHandler
     {
         private readonly List<RecordedRequest> _requests = [];
+        private readonly Func<HttpRequestMessage, int, HttpResponseMessage> _responder;
+
+        public ScriptedHandler(Func<HttpRequestMessage, int, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
 
         public IReadOnlyList<RecordedRequest> Requests => _requests;
 
@@ -171,7 +177,7 @@ internal static class GgufStoreTestInfrastructure
             _requests.Add(new RecordedRequest(request.Headers.Range?.ToString(),
                 request.Headers.Authorization?.Scheme,
                 request.Headers.Authorization?.Parameter));
-            return Task.FromResult(responder(request, index));
+            return Task.FromResult(_responder(request, index));
         }
     }
 

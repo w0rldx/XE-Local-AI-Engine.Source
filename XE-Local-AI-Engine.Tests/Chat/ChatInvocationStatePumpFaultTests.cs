@@ -189,8 +189,15 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
     // A pump whose partial flush always throws; the terminalize legs delegate to a real pump so the fault handler's
     // idempotent Failed terminalize actually exercises persistence.
-    private sealed class FlushFailingPump(INodeChatInvocationPump inner) : INodeChatInvocationPump
+    private sealed class FlushFailingPump : INodeChatInvocationPump
     {
+        private readonly INodeChatInvocationPump _inner;
+
+        public FlushFailingPump(INodeChatInvocationPump inner)
+        {
+            _inner = inner;
+        }
+
         public Task<NodeChatPumpFlushResult> FlushDeltaAsync(NodeChatMessageCorrelation correlation,
             InvocationState state,
             NodeChatPumpCursor cursor,
@@ -205,14 +212,14 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
             IReadOnlyList<NodeChatMessagePart>? parts = null,
             IReadOnlyList<NodeChatMessageSource>? sources = null)
         {
-            return inner.TerminalizeAsync(correlation, state, requestedModel, parts, sources);
+            return _inner.TerminalizeAsync(correlation, state, requestedModel, parts, sources);
         }
 
         public Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
             NodeChatPumpCursor cursor,
             bool wasCancelled)
         {
-            return inner.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
+            return _inner.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
         }
     }
 }

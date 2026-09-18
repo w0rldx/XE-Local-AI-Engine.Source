@@ -837,9 +837,14 @@ public sealed class BenchmarkProjectServiceTests
                 new(path, role, 12, new string('b', count: 64), $"sha256:{new string('b', count: 64)}:12", [modelName], true, null);
         }
 
-        private sealed class JudgeLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
+        private sealed class JudgeLease : IBenchmarkInstalledModelLease
         {
-            public InstalledModelSnapshot Snapshot { get; } = snapshot;
+            public JudgeLease(InstalledModelSnapshot snapshot)
+            {
+                Snapshot = snapshot;
+            }
+
+            public InstalledModelSnapshot Snapshot { get; }
 
             public ValueTask DisposeAsync() =>
                 ValueTask.CompletedTask;

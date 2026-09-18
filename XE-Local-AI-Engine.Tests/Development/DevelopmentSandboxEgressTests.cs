@@ -472,15 +472,21 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
     }
 
     /// <summary>A double whose only interesting property is which capabilities it advertises.</summary>
-    private sealed class CapabilitySandbox(SandboxProviderCapabilities capabilities) : IDevelopmentSandboxRuntimeProvider
+    private sealed class CapabilitySandbox : IDevelopmentSandboxRuntimeProvider
     {
         private readonly List<SandboxCreateRequest> _created = [];
+        private readonly SandboxProviderCapabilities _capabilities;
+
+        public CapabilitySandbox(SandboxProviderCapabilities capabilities)
+        {
+            _capabilities = capabilities;
+        }
 
         public IReadOnlyList<SandboxCreateRequest> Created => _created;
 
         public string ProviderName => "capability";
 
-        public SandboxProviderCapabilities Capabilities => capabilities;
+        public SandboxProviderCapabilities Capabilities => _capabilities;
 
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {

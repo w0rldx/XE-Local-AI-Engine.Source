@@ -471,17 +471,23 @@ public sealed class TrainingExclusivityTests
     ///     assertion needs: "the queue did not claim" is also true of a loop that was cancelled before it ever
     ///     consulted the gate.
     /// </summary>
-    private sealed class ObservedGpuWorkGate(IGpuWorkGate inner) : IGpuWorkGate
+    private sealed class ObservedGpuWorkGate : IGpuWorkGate
     {
         private readonly ConcurrentDictionary<GpuWorkKind, TaskCompletionSource<bool>> _asks = new();
+        private readonly IGpuWorkGate _inner;
 
-        public GpuWorkKind? ExclusiveKind => inner.ExclusiveKind;
+        public ObservedGpuWorkGate(IGpuWorkGate inner)
+        {
+            _inner = inner;
+        }
+
+        public GpuWorkKind? ExclusiveKind => _inner.ExclusiveKind;
 
         public IDisposable? TryBeginExclusive(GpuWorkKind kind) =>
-            Record(kind, inner.TryBeginExclusive(kind));
+            Record(kind, _inner.TryBeginExclusive(kind));
 
         public IDisposable? TryBeginShared(GpuWorkKind kind) =>
-            Record(kind, inner.TryBeginShared(kind));
+            Record(kind, _inner.TryBeginShared(kind));
 
         /// <summary>Completes with the answer the FIRST admission attempt for <paramref name="kind" /> got: true = admitted.</summary>
         public Task<bool> Asked(GpuWorkKind kind) =>

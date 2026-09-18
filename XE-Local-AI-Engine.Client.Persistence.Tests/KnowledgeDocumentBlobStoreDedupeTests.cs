@@ -493,8 +493,13 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private sealed class FixedNodeDataDirectory(string root) : INodeDataDirectory
+    private sealed class FixedNodeDataDirectory : INodeDataDirectory
     {
-        public string Root { get; } = root;
+        public FixedNodeDataDirectory(string root)
+        {
+            Root = root;
+        }
+
+        public string Root { get; }
     }
 }

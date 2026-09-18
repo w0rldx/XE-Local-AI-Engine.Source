@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 ///     suite can assert the durable-before-visible ordering and the "exactly one of publish or abandon per reservation"
 ///     invariant directly rather than inferring them from the rows that survived.
 /// </summary>
-internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationExecutionEventBuffer
+internal sealed class RecordingBuffer : IIntegrationExecutionEventBuffer
 {
     private readonly Lock _gate = new();
 
@@ -18,7 +18,12 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
     /// </summary>
     private readonly TaskCompletionSource _reserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private long _sequence = initialSequence;
+    private long _sequence;
+
+    public RecordingBuffer(long initialSequence = 0)
+    {
+        _sequence = initialSequence;
+    }
 
     public List<long> Reserved { get; } = [];
 

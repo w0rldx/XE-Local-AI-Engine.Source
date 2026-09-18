@@ -2203,19 +2203,28 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
     // beforeStreaming lets a test raise dispatcher traffic (an approval, a notice) from INSIDE the run, which is the
     // only point at which the service's handlers are subscribed. Optional, so every existing construction is unchanged.
-    private sealed class RegenCompletingRunner(RegenRecordingDispatcher dispatcher, Func<Guid, Task>? beforeStreaming = null) : IInvocationRunner
+    private sealed class RegenCompletingRunner : IInvocationRunner
     {
+        private readonly RegenRecordingDispatcher _dispatcher;
+        private readonly Func<Guid, Task>? _beforeStreaming;
+
+        public RegenCompletingRunner(RegenRecordingDispatcher dispatcher, Func<Guid, Task>? beforeStreaming = null)
+        {
+            _dispatcher = dispatcher;
+            _beforeStreaming = beforeStreaming;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            if (beforeStreaming is not null)
+            if (_beforeStreaming is not null)
             {
-                await beforeStreaming(context.Package.InvocationId);
+                await _beforeStreaming(context.Package.InvocationId);
             }
 
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2257,8 +2266,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
     }
 
-    private sealed class RegenContextCapturingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
+    private sealed class RegenContextCapturingRunner : IInvocationRunner
     {
+        private readonly RegenRecordingDispatcher _dispatcher;
+
+        public RegenContextCapturingRunner(RegenRecordingDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         // The conversation context handed to the most recent invocation; the test asserts the variant
         // regenerate never includes a sibling assistant answer.
         public IReadOnlyList<ConversationMessageDto>? LastContext { get; private set; }
@@ -2300,8 +2316,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             LastTimeouts = context.Package.Timeouts;
             LastSamplingOptions = context.Package.SamplingOptions;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2343,13 +2359,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
     }
 
-    private sealed class RegenToolEmittingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
+    private sealed class RegenToolEmittingRunner : IInvocationRunner
     {
+        private readonly RegenRecordingDispatcher _dispatcher;
+
+        public RegenToolEmittingRunner(RegenRecordingDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            await _dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
                 InvocationId = context.Package.InvocationId,
                 ToolCallId = "call-1",
@@ -2358,7 +2381,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 Arguments = "{\"city\":\"berlin\"}",
                 RequiresApproval = false
             });
-            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            await _dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
                 InvocationId = context.Package.InvocationId,
                 ToolCallId = "call-1",
@@ -2367,8 +2390,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 Result = "sunny",
                 IsError = false
             });
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2413,10 +2436,16 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     // Streams one chunk, signals Started, then blocks until Release() (or the run token cancels — honoring a genuine
     // user cancel), then finishes Completed. Lets a test interleave a client-token cancel / teardown / user cancel with
     // an in-flight run.
-    private sealed class RegenGatedCompletingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
+    private sealed class RegenGatedCompletingRunner : IInvocationRunner
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly RegenRecordingDispatcher _dispatcher;
+
+        public RegenGatedCompletingRunner(RegenRecordingDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
 
         public Task Started => _started.Task;
 
@@ -2429,14 +2458,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "gated answer");
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "gated answer");
             _started.TrySetResult();
 
             // Honor a genuine user cancel (runCancellation) while blocked; a client-token disconnect never reaches here.
             await _release.Task.WaitAsync(cancellationToken);
 
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, " done");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, " done");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)

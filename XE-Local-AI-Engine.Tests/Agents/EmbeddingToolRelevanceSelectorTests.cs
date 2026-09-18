@@ -507,22 +507,28 @@ public sealed class EmbeddingToolRelevanceSelectorTests
             }
         }
 
-        private sealed class FakeEmbeddingGenerator(FakeEmbeddingProvider owner) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
             private const int Dimensions = 16;
+            private readonly FakeEmbeddingProvider _owner;
+
+            public FakeEmbeddingGenerator(FakeEmbeddingProvider owner)
+            {
+                _owner = owner;
+            }
 
             public async Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
                 CancellationToken cancellationToken = default)
             {
-                if (owner.GenerateDelay > TimeSpan.Zero)
+                if (_owner.GenerateDelay > TimeSpan.Zero)
                 {
-                    await Task.Delay(owner.GenerateDelay, cancellationToken);
+                    await Task.Delay(_owner.GenerateDelay, cancellationToken);
                 }
 
-                if (owner.GenerateFailure is not null)
+                if (_owner.GenerateFailure is not null)
                 {
-                    throw owner.GenerateFailure;
+                    throw _owner.GenerateFailure;
                 }
 
                 // The batch is the missing tool texts followed by the query, so the override applies to everything but
@@ -532,18 +538,18 @@ public sealed class EmbeddingToolRelevanceSelectorTests
                 for (var position = 0; position < texts.Count; position++)
                 {
                     var value = texts[position];
-                    owner.Record(value);
+                    _owner.Record(value);
                     var isQuery = position == texts.Count - 1;
-                    embeddings.Add(new Embedding<float>(!isQuery && owner.OverrideToolVector is { } overrideVector ? overrideVector(value) : BuildVector(value)));
+                    embeddings.Add(new Embedding<float>(!isQuery && _owner.OverrideToolVector is { } overrideVector ? overrideVector(value) : BuildVector(value)));
                 }
 
-                if (owner.ReturnShortResponse && embeddings.Count > 0)
+                if (_owner.ReturnShortResponse && embeddings.Count > 0)
                 {
                     // A misbehaving or partial response that returns fewer embeddings than inputs.
                     embeddings.RemoveAt(embeddings.Count - 1);
                 }
 
-                if (owner.ReturnsAfterTheBoundExpires)
+                if (_owner.ReturnsAfterTheBoundExpires)
                 {
                     var expired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     await using var registration = cancellationToken.Register(() => expired.TrySetResult());

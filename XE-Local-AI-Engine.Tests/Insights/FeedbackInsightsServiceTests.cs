@@ -137,11 +137,18 @@ public sealed class FeedbackInsightsServiceTests
         return new FeedbackInsightsService(store, new FixedTimeProvider(nowUtcMs));
     }
 
-    private sealed class FixedTimeProvider(long unixMilliseconds) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly long _unixMilliseconds;
+
+        public FixedTimeProvider(long unixMilliseconds)
+        {
+            _unixMilliseconds = unixMilliseconds;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds);
+            return DateTimeOffset.FromUnixTimeMilliseconds(_unixMilliseconds);
         }
     }
 }

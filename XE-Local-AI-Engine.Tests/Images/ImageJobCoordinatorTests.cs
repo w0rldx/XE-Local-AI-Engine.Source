@@ -385,9 +385,15 @@ public sealed class ImageJobCoordinatorTests
         }
     }
 
-    private sealed class FakeImageRuntimeActivityGate(bool admitJobs = true) : IImageRuntimeActivityGate
+    private sealed class FakeImageRuntimeActivityGate : IImageRuntimeActivityGate
     {
+        private readonly bool _admitJobs;
         private int _activeLeaseCount;
+
+        public FakeImageRuntimeActivityGate(bool admitJobs = true)
+        {
+            _admitJobs = admitJobs;
+        }
 
         public int ActiveLeaseCount => Volatile.Read(ref _activeLeaseCount);
 
@@ -396,13 +402,13 @@ public sealed class ImageJobCoordinatorTests
             return new ImageRuntimeActivitySnapshot(ActiveLeaseCount,
                 SpawnReadinessCount: 0,
                 ResidentProcessCount: 0,
-                MutationReserved: !admitJobs,
+                MutationReserved: !_admitJobs,
                 EvictionReserved: false);
         }
 
         public IImageRuntimeActivityLease? TryAcquireJobLease()
         {
-            if (!admitJobs)
+            if (!_admitJobs)
             {
                 return null;
             }
@@ -431,15 +437,21 @@ public sealed class ImageJobCoordinatorTests
             throw new NotSupportedException();
         }
 
-        private sealed class Lease(FakeImageRuntimeActivityGate owner) : IImageRuntimeActivityLease
+        private sealed class Lease : IImageRuntimeActivityLease
         {
+            private readonly FakeImageRuntimeActivityGate _owner;
             private int _disposed;
+
+            public Lease(FakeImageRuntimeActivityGate owner)
+            {
+                _owner = owner;
+            }
 
             public void Dispose()
             {
                 if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
                 {
-                    _ = Interlocked.Decrement(ref owner._activeLeaseCount);
+                    _ = Interlocked.Decrement(ref _owner._activeLeaseCount);
                 }
             }
 
@@ -453,11 +465,19 @@ public sealed class ImageJobCoordinatorTests
 
     // producedSize models a runtime that returns an image whose size differs from the request (stable-diffusion.cpp
     // rounds up to a multiple of 64); null echoes the request, the pre-existing behaviour.
-    private sealed class FakeImageRuntime(bool blockUntilReleased, (int Width, int Height)? producedSize = null) : IImageRuntime
+    private sealed class FakeImageRuntime : IImageRuntime
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly bool _blockUntilReleased;
+        private readonly (int Width, int Height)? _producedSize;
         private int _callCount;
+
+        public FakeImageRuntime(bool blockUntilReleased, (int Width, int Height)? producedSize = null)
+        {
+            _blockUntilReleased = blockUntilReleased;
+            _producedSize = producedSize;
+        }
 
         public int CallCount => Volatile.Read(ref _callCount);
         public bool ObservedCancellation { get; private set; }
@@ -484,7 +504,7 @@ public sealed class ImageJobCoordinatorTests
 
             try
             {
-                if (blockUntilReleased)
+                if (_blockUntilReleased)
                 {
                     await _release.Task.WaitAsync(ct);
                 }
@@ -506,8 +526,8 @@ public sealed class ImageJobCoordinatorTests
                     3,
                     4
                 },
-                Width = producedSize?.Width ?? request.Width,
-                Height = producedSize?.Height ?? request.Height,
+                Width = _producedSize?.Width ?? request.Width,
+                Height = _producedSize?.Height ?? request.Height,
                 Seed = 42,
                 Duration = TimeSpan.FromMilliseconds(7)
             };

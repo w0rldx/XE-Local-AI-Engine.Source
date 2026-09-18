@@ -572,17 +572,22 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         }
     }
 
-    private sealed class ControlledMapStore(string modelName) : ICoordinatedModelProviderMapStore
+    private sealed class ControlledMapStore : ICoordinatedModelProviderMapStore
     {
+        public ControlledMapStore(string modelName)
+        {
+            _receipt = new(modelName,
+                Prior: null,
+                new ModelProviderMapRecord(modelName, LlamaServerProviderConstants.ProviderName, 1, "revision"),
+                WasRemoval: false);
+        }
+
         // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
         // exists to drive a single model's leased path.
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("This test double does not enumerate the provider map.");
 
-        private readonly ProviderMapMutationReceipt _receipt = new(modelName,
-            Prior: null,
-            new ModelProviderMapRecord(modelName, LlamaServerProviderConstants.ProviderName, 1, "revision"),
-            WasRemoval: false);
+        private readonly ProviderMapMutationReceipt _receipt;
 
         public bool BlockClaim { get; init; }
         public ProviderMapRestoreResult RestoreResult { get; init; } = ProviderMapRestoreResult.Restored;
@@ -631,28 +636,36 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             throw new NotSupportedException();
     }
 
-    private sealed class AvailablePreflight(ResolvedGgufAcquisitionIdentity identity, GgufAcquisitionDisposition disposition) : IGgufAcquisitionPreflight
+    private sealed class AvailablePreflight : IGgufAcquisitionPreflight
     {
         private readonly KeyedCompositeLockDomain _domain = new();
+        private readonly ResolvedGgufAcquisitionIdentity _identity;
+        private readonly GgufAcquisitionDisposition _disposition;
+
+        public AvailablePreflight(ResolvedGgufAcquisitionIdentity identity, GgufAcquisitionDisposition disposition)
+        {
+            _identity = identity;
+            _disposition = disposition;
+        }
 
         [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "PreparedGgufAcquisition owns the lease returned to the production coordinator.")]
         public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
             CancellationToken cancellationToken = default)
         {
-            var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
+            var request = new InstalledModelMutationRequest(_identity.CanonicalModelName,
                 InstalledModelMutationKind.Acquire,
-                [new(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight), new(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)]);
+                [new(_identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight), new(_identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)]);
             var keys = new[]
             {
-                ModelCoordinationKeys.Model(identity.CanonicalModelName),
-                ModelCoordinationKeys.Path(identity.RelativeGgufPath),
-                ModelCoordinationKeys.Path(identity.RelativeSidecarPath),
-                ModelCoordinationKeys.ProviderMap(identity.CanonicalModelName)
+                ModelCoordinationKeys.Model(_identity.CanonicalModelName),
+                ModelCoordinationKeys.Path(_identity.RelativeGgufPath),
+                ModelCoordinationKeys.Path(_identity.RelativeSidecarPath),
+                ModelCoordinationKeys.ProviderMap(_identity.CanonicalModelName)
             };
             var inner = await _domain.AcquireMutationAsync(keys, cancellationToken);
             var lease = new InstalledModelMutationLease(request, snapshot: null, providerMapping: null, inner);
-            return new PreparedGgufAcquisition(identity, disposition, ProviderMapDisposition.Absent, lease, activeOperationId: null);
+            return new PreparedGgufAcquisition(_identity, _disposition, ProviderMapDisposition.Absent, lease, activeOperationId: null);
         }
     }
 }

@@ -3923,9 +3923,16 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class TrackingAgentHomeExecutionLease(IAgentHomeExecutionLease? inner = null) : IAgentHomeExecutionLease
+    private sealed class TrackingAgentHomeExecutionLease : IAgentHomeExecutionLease
     {
-        public bool IsBorrowed => inner?.IsBorrowed ?? false;
+        private readonly IAgentHomeExecutionLease? _inner;
+
+        public TrackingAgentHomeExecutionLease(IAgentHomeExecutionLease? inner = null)
+        {
+            _inner = inner;
+        }
+
+        public bool IsBorrowed => _inner?.IsBorrowed ?? false;
 
         public int DisposeCount { get; private set; }
 
@@ -3936,7 +3943,7 @@ public sealed class NodeChatStreamServiceTests
         public IDisposable EnterAmbientScope()
         {
             AmbientScopeEnterCount++;
-            var ambient = inner?.EnterAmbientScope();
+            var ambient = _inner?.EnterAmbientScope();
             return new CallbackDisposable(() =>
             {
                 ambient?.Dispose();
@@ -3947,12 +3954,17 @@ public sealed class NodeChatStreamServiceTests
         public void Dispose()
         {
             DisposeCount++;
-            inner?.Dispose();
+            _inner?.Dispose();
         }
 
-        private sealed class CallbackDisposable(Action callback) : IDisposable
+        private sealed class CallbackDisposable : IDisposable
         {
-            private Action? _callback = callback;
+            private Action? _callback;
+
+            public CallbackDisposable(Action callback)
+            {
+                _callback = callback;
+            }
 
             public void Dispose()
             {
@@ -3961,11 +3973,20 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class StubAgentHomeIdentityProvider(string owner, string node) : IAgentHomeIdentityProvider
+    private sealed class StubAgentHomeIdentityProvider : IAgentHomeIdentityProvider
     {
+        private readonly string _owner;
+        private readonly string _node;
+
+        public StubAgentHomeIdentityProvider(string owner, string node)
+        {
+            _owner = owner;
+            _node = node;
+        }
+
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity(owner, node));
+            return Task.FromResult(new AgentHomeOwnerIdentity(_owner, _node));
         }
     }
 
@@ -4715,13 +4736,20 @@ public sealed class NodeChatStreamServiceTests
             MetadataJson: null);
     }
 
-    private sealed class StreamingUntilCancelledInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    private sealed class StreamingUntilCancelledInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+
+        public StreamingUntilCancelledInvocationRunner(RecordingWorkerEventDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
+            await _dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
 
@@ -4764,17 +4792,26 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class GatedCompletingInvocationRunner(RecordingWorkerEventDispatcher dispatcher, Task release) : IInvocationRunner
+    private sealed class GatedCompletingInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+        private readonly Task _release;
+
+        public GatedCompletingInvocationRunner(RecordingWorkerEventDispatcher dispatcher, Task release)
+        {
+            _dispatcher = dispatcher;
+            _release = release;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             // Emit a delta so the consumer can disconnect, then block until released to report the real Completed
             // terminal. This reproduces a client disconnecting while the shared runner is still working.
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
-            await release;
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await _release;
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4816,8 +4853,15 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class ContextCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    private sealed class ContextCapturingInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+
+        public ContextCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         // The conversation context assembled onto the runtime package; the selected-path tests assert which
         // variant the service included.
         public IReadOnlyList<ConversationMessageDto> CapturedContext { get; private set; } = [];
@@ -4833,8 +4877,8 @@ public sealed class NodeChatStreamServiceTests
         {
             CapturedContext = context.Package.ConversationContext;
             CaptureObserved = true;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4876,15 +4920,22 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class CompletingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    private sealed class CompletingInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+
+        public CompletingInvocationRunner(RecordingWorkerEventDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
-            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await _dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4926,10 +4977,19 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class AwaitingCoderReadInvocationRunner(
-        RecordingWorkerEventDispatcher dispatcher,
-        ICoderWorkspaceReader reader) : IInvocationRunner
+    private sealed class AwaitingCoderReadInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+        private readonly ICoderWorkspaceReader _reader;
+
+        public AwaitingCoderReadInvocationRunner(
+            RecordingWorkerEventDispatcher dispatcher,
+            ICoderWorkspaceReader reader)
+        {
+            _dispatcher = dispatcher;
+            _reader = reader;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public string ReadResult { get; private set; } = string.Empty;
@@ -4937,13 +4997,13 @@ public sealed class NodeChatStreamServiceTests
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await Task.Yield();
-            ReadResult = await reader.ReadFileAsync(new ReadFileToolRequest
+            ReadResult = await _reader.ReadFileAsync(new ReadFileToolRequest
                                          {
                                              Path = "src/a.txt"
                                          },
                                          cancellationToken);
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult);
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
@@ -4984,8 +5044,15 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class PackageCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    private sealed class PackageCapturingInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+
+        public PackageCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         // Captures the runtime-package fields the binding hydration drives: the system prompt, the agent-definition
         // version, the reasoning effort, and the offered tool list. The bound/unbound tests assert on these.
         public string? LastSystemPrompt { get; private set; }
@@ -5009,8 +5076,8 @@ public sealed class NodeChatStreamServiceTests
             LastAllowedTools = context.Package.AllowedTools;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             LastTimeouts = context.Package.Timeouts;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -5052,8 +5119,15 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class ReasoningCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    private sealed class ReasoningCapturingInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+
+        public ReasoningCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         // The reasoning effort carried on the runtime package handed to the invocation; the test asserts the
         // value selected on the send request reaches the runtime package (or stays null when none was selected).
         public string? LastReasoningEffort { get; private set; }
@@ -5080,8 +5154,8 @@ public sealed class NodeChatStreamServiceTests
             LastSamplingOptions = context.Package.SamplingOptions;
             LastAllowAutoModelSwap = context.Package.AllowAutoModelSwap;
             CaptureObserved = true;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -5123,13 +5197,20 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
-    private sealed class ToolEmittingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    private sealed class ToolEmittingInvocationRunner : IInvocationRunner
     {
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
+
+        public ToolEmittingInvocationRunner(RecordingWorkerEventDispatcher dispatcher)
+        {
+            _dispatcher = dispatcher;
+        }
+
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            await _dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
                 InvocationId = context.Package.InvocationId,
                 ToolCallId = "call-1",
@@ -5138,7 +5219,7 @@ public sealed class NodeChatStreamServiceTests
                 Arguments = "{\"city\":\"berlin\"}",
                 RequiresApproval = false
             });
-            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            await _dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
                 InvocationId = context.Package.InvocationId,
                 ToolCallId = "call-1",
@@ -5147,8 +5228,8 @@ public sealed class NodeChatStreamServiceTests
                 Result = "sunny",
                 IsError = false
             });
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
+            await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)

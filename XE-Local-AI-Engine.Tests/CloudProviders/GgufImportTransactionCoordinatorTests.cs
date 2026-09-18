@@ -360,31 +360,51 @@ public sealed class GgufImportTransactionCoordinatorTests
             SourceIdentityToken = $"v1:{new string('a', 64)}"
         };
 
-    private sealed class AcceptedInspector(GgufImportInspection inspection) : IGgufImportInspector
+    private sealed class AcceptedInspector : IGgufImportInspector
     {
+        private readonly GgufImportInspection _inspection;
+
+        public AcceptedInspector(GgufImportInspection inspection)
+        {
+            _inspection = inspection;
+        }
+
         public Task<GgufImportInspection> InspectAsync(GgufImportSource source,
             GgufImportInspectionMode mode,
             CancellationToken cancellationToken) =>
-            Task.FromResult(inspection);
+            Task.FromResult(_inspection);
     }
 
-    private sealed class SequenceInspector(params GgufImportInspection[] inspections) : IGgufImportInspector
+    private sealed class SequenceInspector : IGgufImportInspector
     {
+        private readonly GgufImportInspection[] _inspections;
         private int _index;
+
+        public SequenceInspector(params GgufImportInspection[] inspections)
+        {
+            _inspections = inspections;
+        }
 
         public Task<GgufImportInspection> InspectAsync(GgufImportSource source,
             GgufImportInspectionMode mode,
             CancellationToken cancellationToken)
         {
-            var index = Math.Min(Interlocked.Increment(ref _index) - 1, inspections.Length - 1);
-            return Task.FromResult(inspections[index]);
+            var index = Math.Min(Interlocked.Increment(ref _index) - 1, _inspections.Length - 1);
+            return Task.FromResult(_inspections[index]);
         }
     }
 
-    private sealed class FixedFreeSpaceProbe(long availableBytes) : IFreeSpaceProbe
+    private sealed class FixedFreeSpaceProbe : IFreeSpaceProbe
     {
+        private readonly long _availableBytes;
+
+        public FixedFreeSpaceProbe(long availableBytes)
+        {
+            _availableBytes = availableBytes;
+        }
+
         public long GetAvailableFreeBytes(string path) =>
-            availableBytes;
+            _availableBytes;
     }
 
     private sealed class UnusedImporter : IGgufModelImporter
@@ -405,31 +425,37 @@ public sealed class GgufImportTransactionCoordinatorTests
             throw new NotSupportedException();
     }
 
-    private sealed class AvailablePreflight(ResolvedGgufAcquisitionIdentity identity) : IGgufAcquisitionPreflight
+    private sealed class AvailablePreflight : IGgufAcquisitionPreflight
     {
         private readonly KeyedCompositeLockDomain _domain = new();
+        private readonly ResolvedGgufAcquisitionIdentity _identity;
+
+        public AvailablePreflight(ResolvedGgufAcquisitionIdentity identity)
+        {
+            _identity = identity;
+        }
 
         [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "The returned PreparedGgufAcquisition takes exclusive ownership of the mutation lease and the production coordinator disposes or transfers it on every path.")]
         public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
             CancellationToken cancellationToken = default)
         {
-            var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
+            var request = new InstalledModelMutationRequest(_identity.CanonicalModelName,
                 InstalledModelMutationKind.Acquire,
                 [
-                    new IntendedInstalledModelMember(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
-                    new IntendedInstalledModelMember(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
+                    new IntendedInstalledModelMember(_identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
+                    new IntendedInstalledModelMember(_identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
                 ]);
             var keys = new[]
             {
-                ModelCoordinationKeys.Model(identity.CanonicalModelName),
-                ModelCoordinationKeys.Path(identity.RelativeGgufPath),
-                ModelCoordinationKeys.Path(identity.RelativeSidecarPath),
-                ModelCoordinationKeys.ProviderMap(identity.CanonicalModelName)
+                ModelCoordinationKeys.Model(_identity.CanonicalModelName),
+                ModelCoordinationKeys.Path(_identity.RelativeGgufPath),
+                ModelCoordinationKeys.Path(_identity.RelativeSidecarPath),
+                ModelCoordinationKeys.ProviderMap(_identity.CanonicalModelName)
             };
             var inner = await _domain.AcquireMutationAsync(keys, cancellationToken);
             var lease = new InstalledModelMutationLease(request, snapshot: null, providerMapping: null, inner);
-            return new PreparedGgufAcquisition(identity,
+            return new PreparedGgufAcquisition(_identity,
                 GgufAcquisitionDisposition.Available,
                 ProviderMapDisposition.Absent,
                 lease,
@@ -440,10 +466,16 @@ public sealed class GgufImportTransactionCoordinatorTests
     // Hangs forever on the SECOND call to ResolveAndReserveAsync (the preflight call that acquires the composite
     // mutation lease). Used to prove the pre-preflight active-operation check rejects a second Start for the same
     // model before preflight is ever reached — if it were reached, this class would make the test time out.
-    private sealed class SecondCallHangsPreflight(ResolvedGgufAcquisitionIdentity identity) : IGgufAcquisitionPreflight
+    private sealed class SecondCallHangsPreflight : IGgufAcquisitionPreflight
     {
         private readonly KeyedCompositeLockDomain _domain = new();
+        private readonly ResolvedGgufAcquisitionIdentity _identity;
         private int _callCount;
+
+        public SecondCallHangsPreflight(ResolvedGgufAcquisitionIdentity identity)
+        {
+            _identity = identity;
+        }
 
         [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "The returned PreparedGgufAcquisition takes exclusive ownership of the mutation lease and the production coordinator disposes or transfers it on every path.")]
@@ -455,22 +487,22 @@ public sealed class GgufImportTransactionCoordinatorTests
                 await Task.Delay(Timeout.Infinite, cancellationToken);
             }
 
-            var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
+            var request = new InstalledModelMutationRequest(_identity.CanonicalModelName,
                 InstalledModelMutationKind.Acquire,
                 [
-                    new IntendedInstalledModelMember(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
-                    new IntendedInstalledModelMember(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
+                    new IntendedInstalledModelMember(_identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
+                    new IntendedInstalledModelMember(_identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
                 ]);
             var keys = new[]
             {
-                ModelCoordinationKeys.Model(identity.CanonicalModelName),
-                ModelCoordinationKeys.Path(identity.RelativeGgufPath),
-                ModelCoordinationKeys.Path(identity.RelativeSidecarPath),
-                ModelCoordinationKeys.ProviderMap(identity.CanonicalModelName)
+                ModelCoordinationKeys.Model(_identity.CanonicalModelName),
+                ModelCoordinationKeys.Path(_identity.RelativeGgufPath),
+                ModelCoordinationKeys.Path(_identity.RelativeSidecarPath),
+                ModelCoordinationKeys.ProviderMap(_identity.CanonicalModelName)
             };
             var inner = await _domain.AcquireMutationAsync(keys, cancellationToken);
             var lease = new InstalledModelMutationLease(request, snapshot: null, providerMapping: null, inner);
-            return new PreparedGgufAcquisition(identity,
+            return new PreparedGgufAcquisition(_identity,
                 GgufAcquisitionDisposition.Available,
                 ProviderMapDisposition.Absent,
                 lease,
@@ -478,28 +510,32 @@ public sealed class GgufImportTransactionCoordinatorTests
         }
     }
 
-    private sealed class BlockingCommitImporter(ResolvedGgufAcquisitionIdentity identity) : IGgufModelImporter
+    private sealed class BlockingCommitImporter : IGgufModelImporter
     {
         private static readonly string Hash = new('a', 64);
+        private readonly GgufModelRegistryEntry _entry;
 
-        private readonly GgufModelRegistryEntry _entry = new()
+        public BlockingCommitImporter(ResolvedGgufAcquisitionIdentity identity)
         {
-            RegistryRevision = $"v1:{Hash}",
-            Origin = LocalModelOrigin.Imported,
-            ModelName = identity.CanonicalModelName,
-            RepoId = identity.CanonicalModelName,
-            FileName = identity.FinalFileName,
-            Quant = identity.CanonicalQuantization,
-            LocalPath = identity.RelativeGgufPath,
-            SizeBytes = 42,
-            Sha256 = Hash,
-            SourceRevision = $"sha256:{Hash}",
-            DownloadedAtUtc = DateTimeOffset.UnixEpoch,
-            Role = GgufRole.Chat,
-            SourceDisplayName = "example-Q4_K_M.gguf",
-            MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-            ModelContentFingerprint = $"v1:{Hash}"
-        };
+            _entry = new()
+            {
+                RegistryRevision = $"v1:{Hash}",
+                Origin = LocalModelOrigin.Imported,
+                ModelName = identity.CanonicalModelName,
+                RepoId = identity.CanonicalModelName,
+                FileName = identity.FinalFileName,
+                Quant = identity.CanonicalQuantization,
+                LocalPath = identity.RelativeGgufPath,
+                SizeBytes = 42,
+                Sha256 = Hash,
+                SourceRevision = $"sha256:{Hash}",
+                DownloadedAtUtc = DateTimeOffset.UnixEpoch,
+                Role = GgufRole.Chat,
+                SourceDisplayName = "example-Q4_K_M.gguf",
+                MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+                ModelContentFingerprint = $"v1:{Hash}"
+            };
+        }
 
         public TaskCompletionSource CommitEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReleaseCommit { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -575,17 +611,22 @@ public sealed class GgufImportTransactionCoordinatorTests
             Task.CompletedTask;
     }
 
-    private sealed class SupersedingMapStore(string modelName) : ICoordinatedModelProviderMapStore
+    private sealed class SupersedingMapStore : ICoordinatedModelProviderMapStore
     {
+        public SupersedingMapStore(string modelName)
+        {
+            _receipt = new(modelName,
+                Prior: null,
+                new ModelProviderMapRecord(modelName, "llamacpp", 1, "revision"),
+                WasRemoval: false);
+        }
+
         // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
         // exists to drive a single model's leased path.
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("This test double does not enumerate the provider map.");
 
-        private readonly ProviderMapMutationReceipt _receipt = new(modelName,
-            Prior: null,
-            new ModelProviderMapRecord(modelName, "llamacpp", 1, "revision"),
-            WasRemoval: false);
+        private readonly ProviderMapMutationReceipt _receipt;
 
         public TaskCompletionSource ClaimEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReleaseClaim { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

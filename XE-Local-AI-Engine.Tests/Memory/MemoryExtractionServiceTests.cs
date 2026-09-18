@@ -375,14 +375,21 @@ public sealed class MemoryExtractionServiceTests
         }
     }
 
-    private sealed class FakeExtractionAgent(Func<MemoryExtractionRunInput, IReadOnlyList<ProposedMemory>> propose) : IMemoryExtractionAgent
+    private sealed class FakeExtractionAgent : IMemoryExtractionAgent
     {
+        private readonly Func<MemoryExtractionRunInput, IReadOnlyList<ProposedMemory>> _propose;
+
+        public FakeExtractionAgent(Func<MemoryExtractionRunInput, IReadOnlyList<ProposedMemory>> propose)
+        {
+            _propose = propose;
+        }
+
         public int InvocationCount { get; private set; }
 
         public Task<IReadOnlyList<ProposedMemory>> ProposeAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)
         {
             InvocationCount++;
-            return Task.FromResult(propose(run));
+            return Task.FromResult(_propose(run));
         }
     }
 }

@@ -89,16 +89,22 @@ public sealed class LlamaServerAdapterIntegrationTests
         AssertEx.Equal(1, handler.CallCount);
     }
 
-    private sealed class CountingHandler(HttpStatusCode status) : HttpMessageHandler
+    private sealed class CountingHandler : HttpMessageHandler
     {
+        private readonly HttpStatusCode _status;
         private int _callCount;
+
+        public CountingHandler(HttpStatusCode status)
+        {
+            _status = status;
+        }
 
         public int CallCount => Volatile.Read(ref _callCount);
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             _ = Interlocked.Increment(ref _callCount);
-            return Task.FromResult(new HttpResponseMessage(status)
+            return Task.FromResult(new HttpResponseMessage(_status)
             {
                 Content = new StringContent("{}"),
                 RequestMessage = request

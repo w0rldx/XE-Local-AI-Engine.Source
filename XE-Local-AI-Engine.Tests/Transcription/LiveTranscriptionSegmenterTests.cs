@@ -478,10 +478,16 @@ internal sealed record SubmittedWindow(long StartMs, long EndMs)
 ///     response depends on the submitted audio, and decoding that audio back into an absolute range is the assertion
 ///     these tests are built on, not an incidental detail a call handler could hide.
 /// </remarks>
-internal sealed class ScriptedWhisperTranscriber(Func<SubmittedWindow, IReadOnlyList<WhisperTranscriptSegment>> respond) : IWhisperTranscriber
+internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
 {
     private readonly List<bool> _detectLanguageFlags = [];
     private readonly List<SubmittedWindow> _windows = [];
+    private readonly Func<SubmittedWindow, IReadOnlyList<WhisperTranscriptSegment>> _respond;
+
+    public ScriptedWhisperTranscriber(Func<SubmittedWindow, IReadOnlyList<WhisperTranscriptSegment>> respond)
+    {
+        _respond = respond;
+    }
 
     /// <summary>Thrown instead of answering, when set.</summary>
     public Exception? Failure { get; set; }
@@ -516,7 +522,7 @@ internal sealed class ScriptedWhisperTranscriber(Func<SubmittedWindow, IReadOnly
             throw Failure;
         }
 
-        var segments = respond(window);
+        var segments = _respond(window);
         return new WhisperTranscriptionResult(string.Join(' ', segments.Select(segment => segment.Text)).Trim(),
             segments,
             DetectedLanguageCode,

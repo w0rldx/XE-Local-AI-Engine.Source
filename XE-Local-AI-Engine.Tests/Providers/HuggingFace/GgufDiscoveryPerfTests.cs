@@ -181,12 +181,22 @@ public sealed class GgufDiscoveryPerfTests
     ///     100 + the file's index, so a test can verify the parallel reads were zipped back to the right file) and
     ///     call-count/concurrency tracking for the range-read endpoint.
     /// </summary>
-    private sealed class TrackingStubHandler(string? listing, string? repoDetail, TimeSpan headerDelay) : HttpMessageHandler
+    private sealed class TrackingStubHandler : HttpMessageHandler
     {
+        private readonly string? _listing;
+        private readonly string? _repoDetail;
+        private readonly TimeSpan _headerDelay;
         private int _inFlight;
         private int _listCallCount;
         private int _repoDetailCallCount;
         private int _maxObservedConcurrency;
+
+        public TrackingStubHandler(string? listing, string? repoDetail, TimeSpan headerDelay)
+        {
+            _listing = listing;
+            _repoDetail = repoDetail;
+            _headerDelay = headerDelay;
+        }
 
         public int ListCallCount => _listCallCount;
 
@@ -209,11 +219,11 @@ public sealed class GgufDiscoveryPerfTests
                 InterlockedMax(ref _maxObservedConcurrency, concurrent);
                 try
                 {
-                    if (headerDelay > TimeSpan.Zero)
+                    if (_headerDelay > TimeSpan.Zero)
                     {
                         // real-timer: per-request latency is the input of a parallelism measurement — the observed
                         // concurrency above is only meaningful while requests genuinely overlap in time.
-                        await Task.Delay(headerDelay, cancellationToken);
+                        await Task.Delay(_headerDelay, cancellationToken);
                     }
 
                     var index = Array.IndexOf(QuantTokens, fileName.Replace("model-", "", StringComparison.Ordinal).Replace(".gguf", "", StringComparison.Ordinal));
@@ -228,13 +238,13 @@ public sealed class GgufDiscoveryPerfTests
             if (url.Contains("/api/models/", StringComparison.Ordinal))
             {
                 Interlocked.Increment(ref _repoDetailCallCount);
-                return Json(repoDetail ?? "{}");
+                return Json(_repoDetail ?? "{}");
             }
 
             if (url.Contains("/api/models?", StringComparison.Ordinal))
             {
                 Interlocked.Increment(ref _listCallCount);
-                return Json(listing ?? "[]");
+                return Json(_listing ?? "[]");
             }
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);

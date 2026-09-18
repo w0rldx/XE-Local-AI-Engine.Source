@@ -366,32 +366,50 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         string[] MemberOwners,
         FakeSnapshotStore Store);
 
-    private sealed class FakeSnapshotStore(
-        InstalledGgufCandidate candidate,
-        InstalledGgufSnapshot snapshot,
-        int failuresBeforeSuccess) : IInstalledGgufSnapshotStore
+    private sealed class FakeSnapshotStore : IInstalledGgufSnapshotStore
     {
+        private readonly InstalledGgufCandidate _candidate;
+        private readonly InstalledGgufSnapshot _snapshot;
+        private readonly int _failuresBeforeSuccess;
+
+        public FakeSnapshotStore(
+            InstalledGgufCandidate candidate,
+            InstalledGgufSnapshot snapshot,
+            int failuresBeforeSuccess)
+        {
+            _candidate = candidate;
+            _snapshot = snapshot;
+            _failuresBeforeSuccess = failuresBeforeSuccess;
+        }
+
         public int LoadCount { get; private set; }
 
         public Task<InstalledGgufCandidate?> DiscoverCandidateAsync(string modelName, CancellationToken cancellationToken) =>
-            Task.FromResult<InstalledGgufCandidate?>(candidate);
+            Task.FromResult<InstalledGgufCandidate?>(_candidate);
 
         public Task<InstalledGgufSnapshot> LoadVerifiedAsync(string modelName,
             InstalledGgufCandidate expectedCandidate,
             CancellationToken cancellationToken)
         {
             LoadCount++;
-            if (LoadCount <= failuresBeforeSuccess)
+            if (LoadCount <= _failuresBeforeSuccess)
             {
                 throw new InstalledGgufSnapshotException("InstalledModelSnapshotUnstable", "The installed model changed.");
             }
 
-            return Task.FromResult(snapshot);
+            return Task.FromResult(_snapshot);
         }
     }
 
-    private sealed class ReadOnlyMapStore(ModelProviderMapRecord? mapping) : ICoordinatedModelProviderMapStore
+    private sealed class ReadOnlyMapStore : ICoordinatedModelProviderMapStore
     {
+        private readonly ModelProviderMapRecord? _mapping;
+
+        public ReadOnlyMapStore(ModelProviderMapRecord? mapping)
+        {
+            _mapping = mapping;
+        }
+
         // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
         // exists to drive a single model's leased read.
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
@@ -402,7 +420,7 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             AssertEx.True(lease.ContainsModel(modelName));
-            return Task.FromResult(mapping);
+            return Task.FromResult(_mapping);
         }
 
         public Task<ProviderMapClaimResult> TryClaimLlamaCppAsync(IModelProviderMapMutationLease lease,

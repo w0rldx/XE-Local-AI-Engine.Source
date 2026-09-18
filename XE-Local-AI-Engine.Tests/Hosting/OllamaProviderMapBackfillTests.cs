@@ -88,11 +88,18 @@ public sealed class OllamaProviderMapBackfillTests
         return services.BuildServiceProvider();
     }
 
-    private sealed class FakeOllamaModelService(IReadOnlyList<string> installedNames) : StubOllamaModelService
+    private sealed class FakeOllamaModelService : StubOllamaModelService
     {
+        private readonly IReadOnlyList<string> _installedNames;
+
+        public FakeOllamaModelService(IReadOnlyList<string> installedNames)
+        {
+            _installedNames = installedNames;
+        }
+
         public override Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
         {
-            return Task.FromResult<IEnumerable<OllamaModelSummary>>(installedNames.Select(static name => new OllamaModelSummary(name)).ToArray());
+            return Task.FromResult<IEnumerable<OllamaModelSummary>>(_installedNames.Select(static name => new OllamaModelSummary(name)).ToArray());
         }
     }
 

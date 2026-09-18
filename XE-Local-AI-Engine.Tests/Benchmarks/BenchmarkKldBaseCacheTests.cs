@@ -155,9 +155,16 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
     private static BenchmarkKldCacheKey Key(int chunks = 200) =>
         BenchmarkKldCacheKey.Create(Fingerprint, CorpusSha, chunks);
 
-    private sealed class StubFreeSpace(long freeBytes) : IFreeSpaceProbe
+    private sealed class StubFreeSpace : IFreeSpaceProbe
     {
+        private readonly long _freeBytes;
+
+        public StubFreeSpace(long freeBytes)
+        {
+            _freeBytes = freeBytes;
+        }
+
         public long GetAvailableFreeBytes(string path) =>
-            freeBytes;
+            _freeBytes;
     }
 }

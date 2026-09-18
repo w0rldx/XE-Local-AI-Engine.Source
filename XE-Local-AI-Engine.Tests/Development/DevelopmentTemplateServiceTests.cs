@@ -224,13 +224,29 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             : throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {error}");
     }
 
-    private sealed class FixedNodeDataDirectory(string root) : INodeDataDirectory
+    private sealed class FixedNodeDataDirectory : INodeDataDirectory
     {
-        public string Root { get; } = root;
+        public FixedNodeDataDirectory(string root)
+        {
+            Root = root;
+        }
+
+        public string Root { get; }
     }
 
-    private sealed class FakeTemplateStore(Guid templateId, string templateAlias, string hostPath) : IDevelopmentTemplateStore
+    private sealed class FakeTemplateStore : IDevelopmentTemplateStore
     {
+        private readonly Guid _templateId;
+        private readonly string _templateAlias;
+        private readonly string _hostPath;
+
+        public FakeTemplateStore(Guid templateId, string templateAlias, string hostPath)
+        {
+            _templateId = templateId;
+            _templateAlias = templateAlias;
+            _hostPath = hostPath;
+        }
+
         public DevelopmentTemplateMaterializationSnapshot? Recorded { get; private set; }
 
         public Task<IReadOnlyList<DevelopmentTemplateSnapshot>> ListAsync(CancellationToken cancellationToken = default) =>
@@ -259,7 +275,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             Task.FromResult(Recorded);
 
         private DevelopmentTemplateSnapshot Snapshot() =>
-            new(templateId, templateAlias, hostPath, CreatedAtUtc: 0, Version: 1);
+            new(_templateId, _templateAlias, _hostPath, CreatedAtUtc: 0, Version: 1);
     }
 
     private class RecordingRepositoryBindings : IDevelopmentRepositoryBindingService

@@ -33,15 +33,24 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
 
     private sealed record ScriptedSpawn(int ExitCode, Action<TrainingSpawnRequest>? Effect, IReadOnlyList<string> Lines);
 
-    private sealed class ScriptedHandle(int exitCode, IReadOnlyList<string> lines) : ITrainingProcessHandle
+    private sealed class ScriptedHandle : ITrainingProcessHandle
     {
+        private readonly int _exitCode;
+        private readonly IReadOnlyList<string> _lines;
+
+        public ScriptedHandle(int exitCode, IReadOnlyList<string> lines)
+        {
+            _exitCode = exitCode;
+            _lines = lines;
+        }
+
         public TrainingLaunchReceipt Receipt { get; } = new(Pid: 1, Pgid: 1, "/venv/bin/python", StartTicks: 1, RunToken: "token");
 
         public IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken) =>
             Emit(cancellationToken);
 
         public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(exitCode);
+            Task.FromResult(_exitCode);
 
         public void RequestStop()
         {
@@ -57,7 +66,7 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
 
         private async IAsyncEnumerable<string> Emit([EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            foreach (var line in lines)
+            foreach (var line in _lines)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return line;

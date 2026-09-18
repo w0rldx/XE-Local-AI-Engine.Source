@@ -250,11 +250,18 @@ public sealed class McpServerApiKeyServiceTests
     }
 
     /// <summary>Deterministic clock so the last-used assertions do not depend on wall time.</summary>
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    private sealed class FixedTimeProvider : TimeProvider
     {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
         public override DateTimeOffset GetUtcNow()
         {
-            return now;
+            return _now;
         }
     }
 

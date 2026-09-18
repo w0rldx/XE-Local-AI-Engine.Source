@@ -1622,8 +1622,19 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     prompt it was given. Scripting both halves is what lets a test state "this attempt reverted a file an
     ///     earlier one created and reported it" without a real model.
     /// </summary>
-    private sealed class ScriptedCoderModel(IReadOnlyList<(string Path, string Content)> writes, IReadOnlyList<string> changedFiles, string? patch = null) : IDevelopmentCoderModel
+    private sealed class ScriptedCoderModel : IDevelopmentCoderModel
     {
+        private readonly IReadOnlyList<(string Path, string Content)> _writes;
+        private readonly IReadOnlyList<string> _changedFiles;
+        private readonly string? _patch;
+
+        public ScriptedCoderModel(IReadOnlyList<(string Path, string Content)> writes, IReadOnlyList<string> changedFiles, string? patch = null)
+        {
+            _writes = writes;
+            _changedFiles = changedFiles;
+            _patch = patch;
+        }
+
         public string? Prompt { get; private set; }
 
         /// <summary>What get_diff showed this attempt BEFORE it changed anything.</summary>
@@ -1641,17 +1652,17 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             ArgumentNullException.ThrowIfNull(tools);
             Prompt = prompt;
             DiffAtStart = await tools.GetDiffAsync(cancellationToken);
-            if (patch is not null)
+            if (_patch is not null)
             {
-                _ = await tools.ApplyPatchAsync(patch, cancellationToken);
+                _ = await tools.ApplyPatchAsync(_patch, cancellationToken);
             }
 
-            foreach (var (path, content) in writes)
+            foreach (var (path, content) in _writes)
             {
                 _ = await tools.WriteFileAsync(path, content, cancellationToken);
             }
 
-            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Scripted attempt.", changedFiles, [], Notes: null),
+            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Scripted attempt.", _changedFiles, [], Notes: null),
                 InputTokens: 10,
                 OutputTokens: 20);
         }
@@ -1683,15 +1694,24 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     Cancels the attempt the instant the prompt's own inputs are read — the tick before <c>BuildPrompt</c> runs,
     ///     which is the narrow window the prompt write has to survive.
     /// </summary>
-    private sealed class CancellingPatchEvidenceService(IDevelopmentPatchEvidenceService inner, CancellationTokenSource cancellation) : IDevelopmentPatchEvidenceService
+    private sealed class CancellingPatchEvidenceService : IDevelopmentPatchEvidenceService
     {
+        private readonly IDevelopmentPatchEvidenceService _inner;
+        private readonly CancellationTokenSource _cancellation;
+
+        public CancellingPatchEvidenceService(IDevelopmentPatchEvidenceService inner, CancellationTokenSource cancellation)
+        {
+            _inner = inner;
+            _cancellation = cancellation;
+        }
+
         public Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default) =>
-            inner.ExportAsync(session, cancellationToken);
+            _inner.ExportAsync(session, cancellationToken);
 
         public async Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
         {
-            var paths = await inner.ListChangedPathsAsync(session, cancellationToken);
-            await cancellation.CancelAsync();
+            var paths = await _inner.ListChangedPathsAsync(session, cancellationToken);
+            await _cancellation.CancelAsync();
             return paths;
         }
     }
@@ -1829,8 +1849,17 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         public void Dispose() { }
     }
 
-    private sealed class SubmittingChatClient(long inputTokens, long outputTokens) : IChatClient
+    private sealed class SubmittingChatClient : IChatClient
     {
+        private readonly long _inputTokens;
+        private readonly long _outputTokens;
+
+        public SubmittingChatClient(long inputTokens, long outputTokens)
+        {
+            _inputTokens = inputTokens;
+            _outputTokens = outputTokens;
+        }
+
         public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
@@ -1847,9 +1876,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             {
                 Usage = new UsageDetails
                 {
-                    InputTokenCount = inputTokens,
-                    OutputTokenCount = outputTokens,
-                    TotalTokenCount = inputTokens + outputTokens
+                    InputTokenCount = _inputTokens,
+                    OutputTokenCount = _outputTokens,
+                    TotalTokenCount = _inputTokens + _outputTokens
                 }
             };
         }
