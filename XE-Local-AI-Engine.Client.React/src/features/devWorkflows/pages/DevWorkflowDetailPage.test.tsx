@@ -15,7 +15,7 @@ import {
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
 } from "@/features/devWorkflows/test/DevWorkflowFixtures";
-import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
+import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -28,16 +28,20 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 }));
 
 // The hub is exercised on its own in useDevWorkflowRunHub.test.tsx; here it only has to not reach for a real socket.
-vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
-	acquireHubConnection: () => ({
+// Hoisted into a named spy rather than an inline arrow so one test can assert the hub is never ACQUIRED on a node
+// with the feature switched off; every call still answers a fresh connection object, exactly as before.
+const hubMock = vi.hoisted(() => ({
+	acquire: vi.fn(() => ({
 		connection: { state: "Disconnected", on: vi.fn(), off: vi.fn(), invoke: vi.fn() },
 		whenStarted: Promise.resolve(),
 		onReconnected: () => vi.fn(),
 		onReconnecting: () => vi.fn(),
 		onClosed: () => vi.fn(),
 		release: vi.fn(),
-	}),
+	})),
 }));
+
+vi.mock("@/core/api/signalr/SharedHubConnection", () => ({ acquireHubConnection: hubMock.acquire }));
 
 const { workItem: workItemId, run: runId, nodeRun: nodeRunId } = devWorkflowTestIds;
 /** An older run of the same work item — the one an operator selects with `?run=` to read a finished attempt. */
@@ -93,13 +97,22 @@ function renderPage(selection: DevWorkflowDetailSelection = {}) {
 	return { onSelectionChange };
 }
 
-setupMswServer();
+/**
+ * The node's DevWorkflows:Enabled switch, which this page reads before anything else. It ships OFF, so every test
+ * that wants the real detail view has to say the node has it on.
+ */
+function capabilityRoute(enabled = true) {
+	return jsonRoute("get", "development-workflows/capability", { enabled });
+}
+
+setupMswServer(capabilityRoute());
 
 describe("DevWorkflowDetailPage", () => {
 	beforeEach(() => {
 		// jsdom's default, and TWO_PANE_BREAKPOINT itself: the desktop layout is what every other test here assumes.
 		setViewportWidth(1024);
 		navigate.mockClear();
+		hubMock.acquire.mockClear();
 	});
 
 	afterEach(() => {
@@ -430,5 +443,45 @@ describe("DevWorkflowDetailPage", () => {
 
 		expect(screen.getByTestId("dev-workflow-tab-events").getAttribute("aria-selected")).toBe("true");
 		expect(screen.getByTestId("dev-workflow-tab-nodes").getAttribute("aria-selected")).toBe("true");
+	});
+	// The route is reachable by bookmark on a node that has the feature off, where the work-item GET is a bodyless
+	// 404 — which this page rendered as "This work item could not be loaded", the same words a genuinely missing id
+	// gets. The capability read is what tells them apart.
+	it("says the feature is switched off on this node instead of reporting a missing work item", async () => {
+		let workItemReads = 0;
+		server.use(
+			capabilityRoute(false),
+			http.get(localApiPath(`development-workflows/work-items/${workItemId}`), () => {
+				workItemReads += 1;
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+		renderPage();
+
+		const disabled = await screen.findByTestId("dev-workflows-disabled");
+		expect(disabled.textContent).toBe("Development workflows are disabled by this node's runtime configuration.");
+		expect(screen.queryByTestId("dev-workflow-detail-error")).toBeNull();
+		// Gated, not merely hidden: a disabled node must not be asked for data it will refuse.
+		await waitFor(() => expect(workItemReads).toBe(0));
+	});
+
+	// A `?run=` in the URL names a run id without the work item having loaded, so the hub subscribe is a second path
+	// onto a disabled node. It must stay idle too.
+	it("does not subscribe the run hub while the feature is switched off", async () => {
+		server.use(capabilityRoute(false));
+		renderPage({ run: runId });
+
+		await screen.findByTestId("dev-workflows-disabled");
+		expect(hubMock.acquire).not.toHaveBeenCalled();
+	});
+
+	// A capability call that FAILED says nothing about the switch, so reporting it as "switched off" would be a guess.
+	it("reports a failed capability check as an error, not as a switched-off feature", async () => {
+		server.use(problemDetailsRoute("get", "development-workflows/capability", 500, { detail: "the node is unreachable" }));
+		renderPage();
+
+		const alert = await screen.findByTestId("dev-workflows-disabled");
+		expect(alert.textContent).toContain("the node is unreachable");
+		expect(alert.textContent).not.toContain("disabled by this node's runtime configuration");
 	});
 });

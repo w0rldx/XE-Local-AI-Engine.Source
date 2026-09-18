@@ -5091,6 +5091,11 @@
 			"subtitle": "Langlaufende Agentenarbeit mit eigenem Plan, eigenen Erkenntnissen und Artefakten.",
 			"empty": "Noch keine Arbeitssitzungen. Gib einem Agenten ein Ziel — er plant und erledigt die Arbeit.",
 			"loadFailed": "Arbeitssitzungen konnten nicht geladen werden.",
+			"disabled": "Arbeitssitzungen sind durch die Laufzeitkonfiguration dieses Knotens deaktiviert.",
+			"capabilityFailed": "Es konnte nicht geprüft werden, ob Arbeitssitzungen auf diesem Knoten verfügbar sind.",
+			"loading": {
+				"capability": "Verfügbarkeit der Arbeitssitzungen wird geprüft"
+			},
 			"retry": "Erneut versuchen",
 			"kind": {
 				"General": "Allgemein",
@@ -5273,6 +5278,11 @@
 			"empty": "Noch keine Arbeitspakete. Beschreiben Sie, was gebaut werden soll, und wählen Sie eine Workflow-Vorlage aus.",
 			"createFirst": "Erstes Arbeitspaket anlegen",
 			"loadFailed": "Die Arbeitspakete konnten nicht geladen werden.",
+			"disabled": "Entwicklungs-Workflows sind durch die Laufzeitkonfiguration dieses Knotens deaktiviert.",
+			"capabilityFailed": "Es konnte nicht geprüft werden, ob Workflows auf diesem Knoten verfügbar sind.",
+			"loading": {
+				"capability": "Verfügbarkeit der Workflows wird geprüft"
+			},
 			"retry": "Erneut versuchen",
 			"card": {
 				"counts": "{{running}} laufen · {{queued}} in Warteschlange · {{completed}}/{{total}} fertig",

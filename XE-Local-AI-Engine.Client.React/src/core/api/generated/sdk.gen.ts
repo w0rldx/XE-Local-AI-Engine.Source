@@ -504,6 +504,9 @@ import type {
 	GetDevWorkflowArtifactContentData,
 	GetDevWorkflowArtifactContentErrors,
 	GetDevWorkflowArtifactContentResponses,
+	GetDevWorkflowCapabilityData,
+	GetDevWorkflowCapabilityErrors,
+	GetDevWorkflowCapabilityResponses,
 	GetDevWorkflowDefinitionData,
 	GetDevWorkflowDefinitionErrors,
 	GetDevWorkflowDefinitionResponses,
@@ -723,6 +726,9 @@ import type {
 	GetWorkSessionArtifactContentData,
 	GetWorkSessionArtifactContentErrors,
 	GetWorkSessionArtifactContentResponses,
+	GetWorkSessionCapabilityData,
+	GetWorkSessionCapabilityErrors,
+	GetWorkSessionCapabilityResponses,
 	GetWorkSessionData,
 	GetWorkSessionErrors,
 	GetWorkSessionResponses,
@@ -1681,6 +1687,7 @@ import {
 	zGetDevelopmentTaskResponse,
 	zGetDevWorkflowArtifactContentPath,
 	zGetDevWorkflowArtifactContentResponse,
+	zGetDevWorkflowCapabilityResponse,
 	zGetDevWorkflowDefinitionPath,
 	zGetDevWorkflowDefinitionResponse,
 	zGetDevWorkflowNodeRunPath,
@@ -1805,6 +1812,7 @@ import {
 	zGetWhisperCppSourceBuildStatusResponse,
 	zGetWorkSessionArtifactContentPath,
 	zGetWorkSessionArtifactContentResponse,
+	zGetWorkSessionCapabilityResponse,
 	zGetWorkSessionPath,
 	zGetWorkSessionResponse,
 	zHarvestGoldenConversationsPath,
@@ -2382,6 +2390,36 @@ export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = fal
 			},
 		],
 		url: "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content",
+		...options,
+	});
+
+export const getWorkSessionCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetWorkSessionCapabilityData, ThrowOnError>,
+): RequestResult<GetWorkSessionCapabilityResponses, GetWorkSessionCapabilityErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetWorkSessionCapabilityResponses, GetWorkSessionCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetWorkSessionCapabilityResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/work-sessions/capability",
 		...options,
 	});
 
@@ -12453,6 +12491,36 @@ export const updateDevWorkflowWorkItem = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getDevWorkflowCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetDevWorkflowCapabilityData, ThrowOnError>,
+): RequestResult<GetDevWorkflowCapabilityResponses, GetDevWorkflowCapabilityErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetDevWorkflowCapabilityResponses, GetDevWorkflowCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevWorkflowCapabilityResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development-workflows/capability",
+		...options,
 	});
 
 export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(

@@ -18,6 +18,8 @@ public sealed class OpenApiDocumentTests
     private static readonly (string Path, string[] Verbs)[] WorkSessionPaths =
     [
         ("/api/local/v1/work-sessions", ["get", "post"]),
+        // The one path that also answers on a node with the feature off; it is in the document on every node like the rest.
+        ("/api/local/v1/work-sessions/capability", ["get"]),
         ("/api/local/v1/work-sessions/{sessionId}", ["get", "patch", "delete"]),
         ("/api/local/v1/work-sessions/{sessionId}/start", ["post"]),
         ("/api/local/v1/work-sessions/{sessionId}/pause", ["post"]),

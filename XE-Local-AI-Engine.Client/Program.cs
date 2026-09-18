@@ -584,9 +584,13 @@ namespace XE_Local_AI_Engine.Client
                 // is "no such surface". Ahead of local API security and authentication, like the Development gate, so the
                 // switch cannot be probed by status code.
                 var workSessionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.WorkSessions.Root}");
+                // The one carve-out, like Development's: the capability GET stays reachable so the SPA can say the
+                // feature is switched off rather than rendering this bodyless 404 as a load failure.
+                var workSessionCapabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.WorkSessions.Capability}");
                 app.Use(async (context, next) =>
                 {
-                    if (context.Request.Path.StartsWithSegments(workSessionPath, StringComparison.OrdinalIgnoreCase))
+                    if (context.Request.Path.StartsWithSegments(workSessionPath, StringComparison.OrdinalIgnoreCase)
+                        && !context.Request.Path.Equals(workSessionCapabilityPath, StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;
@@ -603,9 +607,13 @@ namespace XE_Local_AI_Engine.Client
                 // is gated here instead. Ahead of local API security and authentication, so the switch cannot be probed
                 // by status code.
                 var devWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.DevelopmentWorkflows.Root}");
+                // The one carve-out, like Development's: the capability GET stays reachable so the SPA can say the
+                // feature is switched off rather than rendering this bodyless 404 as a load failure.
+                var devWorkflowCapabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.DevelopmentWorkflows.Capability}");
                 app.Use(async (context, next) =>
                 {
-                    if (context.Request.Path.StartsWithSegments(devWorkflowPath, StringComparison.OrdinalIgnoreCase))
+                    if (context.Request.Path.StartsWithSegments(devWorkflowPath, StringComparison.OrdinalIgnoreCase)
+                        && !context.Request.Path.Equals(devWorkflowCapabilityPath, StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;

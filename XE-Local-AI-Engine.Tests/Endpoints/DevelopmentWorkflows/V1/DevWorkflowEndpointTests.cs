@@ -94,6 +94,55 @@ public sealed class DevWorkflowEndpointTests
         AssertEx.Empty(store.ReceivedCalls());
     }
 
+    /// <summary>
+    ///     The one route the disabled-node 404 sweep must NOT swallow. Without it the SPA reads the bodyless 404 the
+    ///     test above pins as "could not load the work items", which is indistinguishable from a broken node.
+    /// </summary>
+    [Test]
+    [Arguments("false", false)]
+    [Arguments("true", true)]
+    public async Task Capability_ReportsTheSwitch_AndStaysReachableWhileTheRestOfTheFamilyIs404(string configured, bool expected)
+    {
+        var store = Store();
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["DevWorkflows:Enabled"] = configured
+            },
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IDevWorkflowStore>();
+                services.AddSingleton(store);
+            }
+        };
+
+        using var response = await SendAsync(factory, "GET", $"{Root}/capability");
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "The capability GET answers on every node, switch on or off.");
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected, document.RootElement.GetProperty("enabled").GetBoolean());
+
+        // The carve-out is exactly one path: its siblings must still be gone on a disabled node.
+        using var sibling = await SendAsync(factory, "GET", WorkItems);
+        AssertEx.Equal(expected ? HttpStatusCode.OK : HttpStatusCode.NotFound,
+            sibling.StatusCode,
+            "Only the capability path is exempt from the disabled-node 404 sweep.");
+    }
+
+    [Test]
+    public async Task Capability_WhenTheOperatorTokenIsMissing_ReturnsUnauthorized()
+    {
+        await using var factory = EnabledFactory(Store(), Substitute.For<IDevWorkflowRunService>());
+        using var client = factory.CreateClient();
+        using var request = Request("GET", $"{Root}/capability");
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, "The capability GET is operator-gated like the rest of the family.");
+    }
+
     [Test]
     public async Task ListWorkItems_ProjectsTheLatestRunAndItsCounters()
     {

@@ -753,3 +753,11 @@ public sealed record ListDevWorkflowRunsResponse(IReadOnlyList<DevWorkflowRunSum
 public sealed record ListDevWorkflowRunEventsResponse(IReadOnlyList<DevWorkflowRunEventResponse> Items, long LastSequence, bool HasMore);
 
 public sealed record ListDevWorkflowArtifactsResponse(IReadOnlyList<DevWorkflowArtifactResponse> Items, long LastSequence);
+
+/// <summary>
+///     Whether this node serves development workflows at all. The one response every node answers, switch on or off:
+///     the rest of the family is 404ed by request-path middleware when <c>DevWorkflows:Enabled</c> is false, and a
+///     bodyless 404 is indistinguishable from a broken route, so without this the SPA can only say "could not load".
+///     Deliberately one field — Development's richer capability payload reports a sandbox this family does not have.
+/// </summary>
+public sealed record DevWorkflowCapabilityResponse(bool Enabled);

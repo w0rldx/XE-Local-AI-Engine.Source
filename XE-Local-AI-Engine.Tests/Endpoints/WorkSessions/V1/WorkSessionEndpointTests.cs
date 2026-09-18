@@ -542,6 +542,57 @@ public sealed class WorkSessionEndpointTests
         AssertEx.Empty(service.ReceivedCalls());
     }
 
+    /// <summary>
+    ///     The one route the disabled-node 404 sweep must NOT swallow. Without it the SPA reads the bodyless 404 the
+    ///     test above pins as "could not load work sessions", which is indistinguishable from a broken node.
+    /// </summary>
+    [Test]
+    [Arguments("false", false)]
+    [Arguments("true", true)]
+    public async Task Capability_ReportsTheSwitch_AndStaysReachableWhileTheRestOfTheFamilyIs404(string configured, bool expected)
+    {
+        var service = Substitute.For<IWorkSessionService>();
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["WorkSessions:Enabled"] = configured
+            },
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IWorkSessionService>();
+                services.AddSingleton(service);
+            }
+        };
+
+        using var response = await SendAsync(factory, "GET", $"{Root}/capability");
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "The capability GET answers on every node, switch on or off.");
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected, document.RootElement.GetProperty("enabled").GetBoolean());
+
+        // The carve-out is exactly one path: its siblings must still be gone on a disabled node. The literal
+        // `capability` segment also has to outrank the `{sessionId}` parameter, which this proves by answering at all.
+        using var sibling = await SendAsync(factory, "GET", Root);
+        AssertEx.Equal(expected ? HttpStatusCode.OK : HttpStatusCode.NotFound,
+            sibling.StatusCode,
+            "Only the capability path is exempt from the disabled-node 404 sweep.");
+    }
+
+    [Test]
+    public async Task Capability_WhenTheOperatorTokenIsMissing_ReturnsUnauthorized()
+    {
+        await using var factory = EnabledFactory(Substitute.For<IWorkSessionService>());
+        using var client = factory.CreateClient();
+        using var request = Request("GET", $"{Root}/capability");
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, "The capability GET is operator-gated like the rest of the family.");
+    }
+
     private static IWorkSessionService SubstituteWithEmptyFeeds()
     {
         var service = Substitute.For<IWorkSessionService>();

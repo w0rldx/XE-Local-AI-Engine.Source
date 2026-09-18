@@ -15,6 +15,7 @@ import { EditWorkSessionDialog } from "@/features/workSessions/components/EditWo
 import { WorkSessionDetailLayout } from "@/features/workSessions/components/WorkSessionDetailLayout";
 import { WorkSessionFollowUpNotice } from "@/features/workSessions/components/WorkSessionFollowUpNotice";
 import { WorkSessionPlanPanel } from "@/features/workSessions/components/WorkSessionPlanPanel";
+import { WorkSessionsDisabledAlert } from "@/features/workSessions/components/WorkSessionsDisabledAlert";
 import { WorkSessionSidePanel } from "@/features/workSessions/components/WorkSessionSidePanel";
 import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionHub";
 import {
@@ -28,6 +29,7 @@ import {
 	useUpdateWorkSession,
 	useWorkSession,
 	useWorkSessionArtifacts,
+	useWorkSessionCapability,
 	useWorkSessionCheckpoints,
 	useWorkSessionEvents,
 	useWorkSessionFindings,
@@ -51,12 +53,18 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const [editDialogOpened, editDialog] = useDisclosure(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 
-	const sessionQuery = useWorkSession(sessionId);
+	// This route is reachable by bookmark or pasted URL on a node that has the feature switched off, where the whole
+	// family answers a bodyless 404 — read as "This work session could not be loaded", which is what a genuinely
+	// missing id says too. The capability read is what separates the two, and everything below is gated on it.
+	const capabilityQuery = useWorkSessionCapability();
+	const workSessionsEnabled = capabilityQuery.data?.enabled === true;
+	const sessionQuery = useWorkSession(sessionId, { enabled: workSessionsEnabled });
 	const conversationId = sessionQuery.data?.conversationId;
-	const live = useWorkSessionHub(sessionId, conversationId);
+	// Passing no session id keeps the hub idle, which is the seam it already has for "nothing to subscribe to yet".
+	const live = useWorkSessionHub(workSessionsEnabled ? sessionId : undefined, conversationId);
 	// Start every feed in parallel with the detail request, but once that authoritative request has terminally failed,
 	// stop subordinate work even if a failed hub subscription has enabled fallback polling.
-	const feedsEnabled = !sessionQuery.isError;
+	const feedsEnabled = workSessionsEnabled && !sessionQuery.isError;
 	const poll = { pollIntervalMs: feedsEnabled ? live.pollIntervalMs : undefined, enabled: feedsEnabled };
 
 	const tasksQuery = useWorkSessionTasks(sessionId, poll);
@@ -163,6 +171,27 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	// `WorkSessionDetailLayout`; until then there is no name to show, so the navigation label stands in, visually
 	// hidden and first in the container so the full-height flex column is unaffected.
 	const fallbackHeading = <VisuallyHidden component="h1">{t("navigation.workSessions", "Work Sessions")}</VisuallyHidden>;
+
+	// The capability answer gates everything below, so it is resolved first. It reuses the page's own loader rather
+	// than inventing a second spinner: from the operator's side this is still "the page is coming up".
+	if (capabilityQuery.isLoading) {
+		return (
+			<FullHeightPage ref={paneContainerRef} data-testid="work-session-detail-page">
+				{fallbackHeading}
+				<Loader data-testid="work-session-detail-loading" />
+			</FullHeightPage>
+		);
+	}
+
+	// Ahead of the pending branch below, which a gated `sessionQuery` would otherwise sit in forever.
+	if (capabilityQuery.error || !workSessionsEnabled) {
+		return (
+			<FullHeightPage ref={paneContainerRef} data-testid="work-session-detail-page">
+				{fallbackHeading}
+				<WorkSessionsDisabledAlert error={capabilityQuery.error} />
+			</FullHeightPage>
+		);
+	}
 
 	if (sessionQuery.isPending) {
 		return (

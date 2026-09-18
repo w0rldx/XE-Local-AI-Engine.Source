@@ -12,6 +12,7 @@ import {
 	createWorkSessionMutation,
 	deleteWorkSessionMutation,
 	getWorkSessionArtifactContentOptions,
+	getWorkSessionCapabilityOptions,
 	getWorkSessionOptions,
 	listWorkSessionArtifactsOptions,
 	listWorkSessionCheckpointsOptions,
@@ -29,6 +30,7 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const workSessionQueryIds = {
+	capability: "getWorkSessionCapability",
 	list: "listWorkSessions",
 	get: "getWorkSession",
 	tasks: "listWorkSessionTasks",
@@ -73,9 +75,23 @@ function feedQuerySettings(sessionId: string | undefined, options: FeedOptions) 
 	} as const;
 }
 
+/**
+ * Whether this node serves work sessions at all — the ONE route that still answers when the feature is off, every
+ * other one being 404ed by request-path middleware with a bodyless response the client cannot tell from a broken
+ * route. The list query is gated on its answer, so a disabled node fires no doomed request. Same shape as
+ * `useDevelopmentCapability`, which is the pattern this follows.
+ */
+export function useWorkSessionCapability() {
+	return useQuery({
+		...withResponseValidation(getWorkSessionCapabilityOptions()),
+		staleTime: 30_000,
+	});
+}
+
 export function useWorkSessionList(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listWorkSessionsOptions()),
+		enabled: options.enabled ?? true,
 		refetchInterval: options.pollIntervalMs ?? false,
 	});
 }

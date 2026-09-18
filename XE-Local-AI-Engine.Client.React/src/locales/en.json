@@ -5091,6 +5091,11 @@
 			"subtitle": "Long-running agent work with its own plan, findings and artifacts.",
 			"empty": "No work sessions yet. Give an agent an objective and it will plan and run the work.",
 			"loadFailed": "Could not load work sessions.",
+			"disabled": "Work sessions are disabled by this node's runtime configuration.",
+			"capabilityFailed": "Could not check whether work sessions are available on this node.",
+			"loading": {
+				"capability": "Checking whether work sessions are available"
+			},
 			"retry": "Retry",
 			"kind": {
 				"General": "General",
@@ -5273,6 +5278,11 @@
 			"empty": "No work items yet. Describe what you want built and pick a workflow template to run it.",
 			"createFirst": "Create your first work item",
 			"loadFailed": "Could not load the work items.",
+			"disabled": "Development workflows are disabled by this node's runtime configuration.",
+			"capabilityFailed": "Could not check whether workflows are available on this node.",
+			"loading": {
+				"capability": "Checking whether workflows are available"
+			},
 			"retry": "Retry",
 			"card": {
 				"counts": "{{running}} running · {{queued}} queued · {{completed}}/{{total}} done",

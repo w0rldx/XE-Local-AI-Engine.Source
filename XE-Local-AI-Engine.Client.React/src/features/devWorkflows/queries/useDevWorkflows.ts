@@ -19,6 +19,7 @@ import {
 	deleteDevWorkflowRuleSetMutation,
 	deleteDevWorkflowWorkItemMutation,
 	getDevWorkflowArtifactContentOptions,
+	getDevWorkflowCapabilityOptions,
 	getDevWorkflowDefinitionOptions,
 	getDevWorkflowNodeRunOptions,
 	getDevWorkflowRuleSetOptions,
@@ -44,6 +45,7 @@ import { isActiveDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const devWorkflowQueryIds = {
+	capability: "getDevWorkflowCapability",
 	workItems: "listDevWorkflowWorkItems",
 	workItem: "getDevWorkflowWorkItem",
 	run: "getDevWorkflowRun",
@@ -122,13 +124,27 @@ function feedQuerySettings(id: string | undefined, options: FeedOptions) {
 }
 
 /**
+ * Whether this node serves development workflows at all — the ONE route that still answers when the feature is off,
+ * every other one being 404ed by request-path middleware with a bodyless response the client cannot tell from a
+ * broken route. Every sibling query on the page is gated on its answer, so a disabled node fires no doomed request.
+ * Same shape as `useDevelopmentCapability`, which is the pattern this follows.
+ */
+export function useDevWorkflowCapability() {
+	return useQuery({
+		...withResponseValidation(getDevWorkflowCapabilityOptions()),
+		staleTime: 30_000,
+	});
+}
+
+/**
  * The work-item list. A run-scoped hub cannot feed a list, so this polls at 5s — but only while a listed run
  * is actually live. `latestRunStatus` is null for a work item that has never run, which is exactly a row that cannot
  * change on its own; polling it would be a timer burning for nothing.
  */
-export function useDevWorkflowWorkItems() {
+export function useDevWorkflowWorkItems(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listDevWorkflowWorkItemsOptions()),
+		enabled: options.enabled ?? true,
 		refetchInterval: (query) => {
 			const anyRunLive = (query.state.data?.items ?? []).some(
 				(item) => Boolean(item.latestRunStatus) && isActiveDevWorkflowRunStatus(toDevWorkflowRunStatus(item.latestRunStatus)),

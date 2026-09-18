@@ -1,4 +1,18 @@
-import { Alert, Badge, Button, Card, Group, Select, SimpleGrid, Skeleton, Stack, Tabs, Text } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Button,
+	Card,
+	Group,
+	Loader,
+	Select,
+	SimpleGrid,
+	Skeleton,
+	Stack,
+	Tabs,
+	Text,
+	VisuallyHidden,
+} from "@mantine/core";
 import { IconPlus, IconSitemap } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -13,6 +27,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { CreateWorkItemDialog } from "@/features/devWorkflows/components/CreateWorkItemDialog";
 import { DevWorkflowDefinitionFormPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionFormPanel";
 import { DevWorkflowRuleSetsPanel } from "@/features/devWorkflows/components/DevWorkflowRuleSetsPanel";
+import { DevWorkflowsDisabledAlert } from "@/features/devWorkflows/components/DevWorkflowsDisabledAlert";
 import {
 	DevWorkflowRunStatusBadge,
 	DevWorkflowWorkItemStatusBadge,
@@ -25,6 +40,7 @@ import {
 import {
 	useCreateDevWorkflowWorkItem,
 	useDevelopmentProjectOptions,
+	useDevWorkflowCapability,
 	useDevWorkflowDefinitions,
 	useDevWorkflowWorkItems,
 	useStartDevWorkflowRun,
@@ -48,10 +64,15 @@ export function DevWorkflowsPage() {
 	// Which template the editor is open on. Local: it is an editing position, not a view of a run worth sharing.
 	const [editedDefinitionId, setEditedDefinitionId] = useState<string | null>(null);
 
+	// The node's own DevWorkflows:Enabled switch, which ships OFF. It 404s the whole family with an empty body, so
+	// without this read every shelf below would render that as "could not load" — a broken node and a switched-off
+	// one would look identical. Every sibling query is gated on it so a disabled node fires no doomed request.
+	const capabilityQuery = useDevWorkflowCapability();
+	const devWorkflowsEnabled = capabilityQuery.data?.enabled === true;
 	// The list polls itself at 5s while any listed run is live — the rule lives in the query hook.
-	const listQuery = useDevWorkflowWorkItems();
-	const definitionsQuery = useDevWorkflowDefinitions();
-	const projectsQuery = useDevelopmentProjectOptions();
+	const listQuery = useDevWorkflowWorkItems({ enabled: devWorkflowsEnabled });
+	const definitionsQuery = useDevWorkflowDefinitions({ enabled: devWorkflowsEnabled });
+	const projectsQuery = useDevelopmentProjectOptions({ enabled: devWorkflowsEnabled });
 	const createMutation = useCreateDevWorkflowWorkItem();
 	const startMutation = useStartDevWorkflowRun();
 
@@ -92,6 +113,32 @@ export function DevWorkflowsPage() {
 		setDialogOpened(false);
 		navigate({ to: "/development-workflows/$workItemId", params: { workItemId } });
 	};
+
+	// The capability branches render no PageHeader, so they carry the page's h1 themselves.
+	const fallbackHeading = <VisuallyHidden component="h1">{t("pages.devWorkflows.title", "Workflow Runs")}</VisuallyHidden>;
+
+	if (capabilityQuery.isLoading) {
+		return (
+			<PageShell>
+				{fallbackHeading}
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.devWorkflows.loading.capability", "Checking whether workflows are available")}</Text>
+				</Group>
+			</PageShell>
+		);
+	}
+
+	// One branch for both halves; the alert itself is shared with the detail page, which is reachable on a disabled
+	// node by a bookmark and must say the same thing.
+	if (capabilityQuery.error || !devWorkflowsEnabled) {
+		return (
+			<PageShell>
+				{fallbackHeading}
+				<DevWorkflowsDisabledAlert error={capabilityQuery.error} />
+			</PageShell>
+		);
+	}
 
 	return (
 		<PageShell data-testid="dev-workflows-page">

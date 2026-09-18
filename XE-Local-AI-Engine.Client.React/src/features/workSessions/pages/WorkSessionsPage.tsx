@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, SimpleGrid, Skeleton, Stack, Text } from "@mantine/core";
+import { Alert, Badge, Button, Card, Group, Loader, SimpleGrid, Skeleton, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { IconBriefcase, IconPlus } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -10,20 +10,55 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { CreateWorkSessionDialog } from "@/features/workSessions/components/CreateWorkSessionDialog";
+import { WorkSessionsDisabledAlert } from "@/features/workSessions/components/WorkSessionsDisabledAlert";
 import { WorkSessionStatusBadge } from "@/features/workSessions/components/WorkSessionStatusBadge";
 import { useWorkSessionAgentOptions } from "@/features/workSessions/hooks/useWorkSessionAgentOptions";
 import { toWorkSessionKind, toWorkSessionStatus } from "@/features/workSessions/models/WorkSessionModels";
-import { useCreateWorkSession, useWorkSessionList } from "@/features/workSessions/queries/useWorkSessions";
+import {
+	useCreateWorkSession,
+	useWorkSessionCapability,
+	useWorkSessionList,
+} from "@/features/workSessions/queries/useWorkSessions";
 
 export function WorkSessionsPage() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const [dialogOpened, setDialogOpened] = useState(false);
-	const listQuery = useWorkSessionList();
+	// The node's own WorkSessions:Enabled switch. It ships ON, but an operator can turn it off — and then the whole
+	// family 404s with an empty body, which the list below would render as "could not load". This read is what tells
+	// the two apart; the list is gated on it so a disabled node fires no doomed request.
+	const capabilityQuery = useWorkSessionCapability();
+	const workSessionsEnabled = capabilityQuery.data?.enabled === true;
+	const listQuery = useWorkSessionList({ enabled: workSessionsEnabled });
 	const createMutation = useCreateWorkSession();
 	const { options: agentOptions } = useWorkSessionAgentOptions();
 
 	const sessions = listQuery.data?.items ?? [];
+	// The capability branches render no PageHeader, so they carry the page's h1 themselves.
+	const fallbackHeading = <VisuallyHidden component="h1">{t("pages.workSessions.title", "Work Sessions")}</VisuallyHidden>;
+
+	if (capabilityQuery.isLoading) {
+		return (
+			<PageShell>
+				{fallbackHeading}
+				<Group gap="sm">
+					<Loader size="sm" />
+					<Text c="dimmed">{t("pages.workSessions.loading.capability", "Checking whether work sessions are available")}</Text>
+				</Group>
+			</PageShell>
+		);
+	}
+
+	// One branch for both halves; the alert itself is shared with the detail page, which is reachable on a disabled
+	// node by a bookmark and must say the same thing.
+	if (capabilityQuery.error || !workSessionsEnabled) {
+		return (
+			<PageShell>
+				{fallbackHeading}
+				<WorkSessionsDisabledAlert error={capabilityQuery.error} />
+			</PageShell>
+		);
+	}
 
 	return (
 		<PageShell data-testid="work-sessions-page">

@@ -92,6 +92,10 @@ export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactCon
 
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse = z.object({
+	enabled: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse = z.object({
 	messageId: z.guid().optional(),
 	conversationId: z.guid().optional(),
@@ -5508,6 +5512,10 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkf
 	request: z.string().min(0).max(8000).nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse = z.object({
+	enabled: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
 	daemonId: z.string().optional(),
 	serverVersion: z.string().optional(),
@@ -7880,6 +7888,11 @@ export const zGetWorkSessionArtifactContentPath = z.object({
  */
 export const zGetWorkSessionArtifactContentResponse =
 	zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse;
+
+/**
+ * Success
+ */
+export const zGetWorkSessionCapabilityResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse;
 
 export const zPostWorkSessionMessageBody = zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest;
 
@@ -10697,6 +10710,12 @@ export const zUpdateDevWorkflowWorkItemPath = z.object({
  */
 export const zUpdateDevWorkflowWorkItemResponse =
 	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowCapabilityResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse;
 
 /**
  * Success

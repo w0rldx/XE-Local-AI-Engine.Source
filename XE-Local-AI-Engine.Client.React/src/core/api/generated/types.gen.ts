@@ -100,6 +100,10 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactReque
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse = {
+	enabled?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse = {
 	messageId?: string;
 	conversationId?: string;
@@ -4585,6 +4589,10 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflo
 	request?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse = {
+	enabled?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
 	enabled?: boolean;
 	sandboxProvider?: string;
@@ -6470,6 +6478,33 @@ export type GetWorkSessionArtifactContentResponses = {
 
 export type GetWorkSessionArtifactContentResponse =
 	GetWorkSessionArtifactContentResponses[keyof GetWorkSessionArtifactContentResponses];
+
+export type GetWorkSessionCapabilityData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/work-sessions/capability";
+};
+
+export type GetWorkSessionCapabilityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetWorkSessionCapabilityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse;
+};
+
+export type GetWorkSessionCapabilityResponse = GetWorkSessionCapabilityResponses[keyof GetWorkSessionCapabilityResponses];
 
 export type PostWorkSessionMessageData = {
 	body: XeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest;
@@ -16693,6 +16728,33 @@ export type UpdateDevWorkflowWorkItemResponses = {
 };
 
 export type UpdateDevWorkflowWorkItemResponse = UpdateDevWorkflowWorkItemResponses[keyof UpdateDevWorkflowWorkItemResponses];
+
+export type GetDevWorkflowCapabilityData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development-workflows/capability";
+};
+
+export type GetDevWorkflowCapabilityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetDevWorkflowCapabilityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse;
+};
+
+export type GetDevWorkflowCapabilityResponse = GetDevWorkflowCapabilityResponses[keyof GetDevWorkflowCapabilityResponses];
 
 export type GetDevelopmentCapabilityData = {
 	body?: never;

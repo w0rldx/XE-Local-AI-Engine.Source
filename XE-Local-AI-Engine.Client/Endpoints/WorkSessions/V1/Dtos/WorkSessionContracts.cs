@@ -199,3 +199,10 @@ public sealed record ListWorkSessionCheckpointsResponse(IReadOnlyList<WorkSessio
 ///     follows it by re-reading from <see cref="LastSequence" />.
 /// </summary>
 public sealed record ListWorkSessionEventsResponse(IReadOnlyList<WorkSessionEventResponse> Items, long LastSequence, bool HasMore);
+
+/// <summary>
+///     Whether this node serves work sessions at all. The one response every node answers, switch on or off: the rest
+///     of the family is 404ed by request-path middleware when <c>WorkSessions:Enabled</c> is false, and a bodyless 404
+///     is indistinguishable from a broken route, so without this the SPA can only say "could not load".
+/// </summary>
+public sealed record WorkSessionCapabilityResponse(bool Enabled);

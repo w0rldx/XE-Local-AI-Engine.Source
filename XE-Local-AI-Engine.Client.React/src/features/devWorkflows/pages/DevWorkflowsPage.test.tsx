@@ -50,7 +50,16 @@ function projectsRoute() {
 	return jsonRoute("get", "development/projects", { items: [] });
 }
 
-setupMswServer();
+/**
+ * The node's DevWorkflows:Enabled switch, which the page reads before anything else. It ships OFF, so every test
+ * that wants the real page has to say the node has it on — and the disabled case below is what a shipped node
+ * actually shows.
+ */
+function capabilityRoute(enabled = true) {
+	return jsonRoute("get", "development-workflows/capability", { enabled });
+}
+
+setupMswServer(capabilityRoute());
 
 describe("DevWorkflowsPage", () => {
 	beforeEach(() => {
@@ -278,6 +287,40 @@ describe("DevWorkflowsPage", () => {
 
 	// A work item whose `updatedAtUtc` never arrived used to render "updated 1/1/1970", which reads as a real (and
 	// alarming) date on a card whose whole job is to say how fresh the run is.
+	// The shipped default is DevWorkflows:Enabled=false, and the node then 404s the whole family with an EMPTY body.
+	// Read as a query error that is indistinguishable from a broken node ("Could not load the work items."), which is
+	// what this page did before the capability read existed.
+	it("says the feature is switched off on this node instead of reporting a load failure", async () => {
+		let workItemReads = 0;
+		server.use(
+			capabilityRoute(false),
+			http.get(localApiPath("development-workflows/work-items"), () => {
+				workItemReads += 1;
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+		renderWithProviders(<DevWorkflowsPage />);
+
+		const disabled = await screen.findByTestId("dev-workflows-disabled");
+		expect(disabled.textContent).toBe("Development workflows are disabled by this node's runtime configuration.");
+		expect(screen.queryByTestId("dev-workflows-error")).toBeNull();
+		// Every shelf is gone with the page body, Templates and Rule sets included — there is no tab left to open.
+		expect(screen.queryByTestId("dev-workflows-tabs")).toBeNull();
+		// Gated, not merely hidden: a disabled node must not be asked for data it will refuse.
+		await waitFor(() => expect(workItemReads).toBe(0));
+	});
+
+	// The other half of the same branch: a capability call that FAILED says nothing about the switch, so reporting it
+	// as "switched off" would be a guess. It keeps the honest error text.
+	it("reports a failed capability check as an error, not as a switched-off feature", async () => {
+		server.use(problemDetailsRoute("get", "development-workflows/capability", 500, { detail: "the node is unreachable" }));
+		renderWithProviders(<DevWorkflowsPage />);
+
+		const alert = await screen.findByTestId("dev-workflows-disabled");
+		expect(alert.textContent).toContain("the node is unreachable");
+		expect(alert.textContent).not.toContain("disabled by this node's runtime configuration");
+	});
+
 	it("shows the dash, not a 1970 date, for a card with no updated timestamp", async () => {
 		server.use(
 			jsonRoute("get", "development-workflows/work-items", {

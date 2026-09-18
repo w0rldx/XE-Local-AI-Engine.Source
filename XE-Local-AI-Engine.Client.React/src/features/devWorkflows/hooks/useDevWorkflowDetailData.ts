@@ -21,17 +21,27 @@ import {
 	useStartDevWorkflowRun,
 } from "@/features/devWorkflows/queries/useDevWorkflows";
 
-export function useDevWorkflowDetailData(workItemId: string, selection: { readonly run?: string; readonly node?: string }) {
+/**
+ * @param enabled This node's `DevWorkflows:Enabled` answer. False gates every request below, because on a disabled
+ *   node the whole family answers a bodyless 404 and the page reports that state itself instead.
+ */
+export function useDevWorkflowDetailData(
+	workItemId: string,
+	selection: { readonly run?: string; readonly node?: string },
+	enabled: boolean,
+) {
 	const [eventsAnchor, setEventsAnchor] = useState<DevWorkflowEventsAnchor>("newest");
 
-	const workItemQuery = useDevWorkflowWorkItem(workItemId);
+	const workItemQuery = useDevWorkflowWorkItem(workItemId, { enabled });
 	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
 	const runId = selection.run ?? workItemQuery.data?.latestRunId ?? undefined;
-	const live = useDevWorkflowRunHub(runId, workItemId);
+	// Passing no run id keeps the hub idle, which is the seam it already has for "nothing to subscribe to yet". Needed
+	// explicitly because `?run=` can name a run from the URL even on a node that serves none of this.
+	const live = useDevWorkflowRunHub(enabled ? runId : undefined, workItemId);
 
 	// Start every feed in parallel with the work-item request, but once that authoritative request has terminally
 	// failed, stop subordinate work even if a failed hub subscription has enabled fallback polling.
-	const feedsEnabled = !workItemQuery.isError;
+	const feedsEnabled = enabled && !workItemQuery.isError;
 	const poll = { pollIntervalMs: feedsEnabled ? live.pollIntervalMs : undefined, enabled: feedsEnabled };
 
 	const runQuery = useDevWorkflowRun(runId, poll);
@@ -43,7 +53,7 @@ export function useDevWorkflowDetailData(workItemId: string, selection: { readon
 	// took the older pages with it, instead of them disappearing without a word.
 	const eventsAnchorParam = devWorkflowEventsAnchorParam(runQuery.data?.lastSequence, eventsAnchor);
 	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
-	const definitionsQuery = useDevWorkflowDefinitions();
+	const definitionsQuery = useDevWorkflowDefinitions({ enabled });
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
 	const decide = useDecideDevWorkflowNodeRun(runId, workItemId);
 	const startRun = useStartDevWorkflowRun();

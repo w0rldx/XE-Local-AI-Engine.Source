@@ -175,6 +175,7 @@ import {
 	getDevelopmentProject,
 	getDevelopmentTask,
 	getDevWorkflowArtifactContent,
+	getDevWorkflowCapability,
 	getDevWorkflowDefinition,
 	getDevWorkflowNodeRun,
 	getDevWorkflowRuleSet,
@@ -249,6 +250,7 @@ import {
 	getWhisperCppSourceBuildStatus,
 	getWorkSession,
 	getWorkSessionArtifactContent,
+	getWorkSessionCapability,
 	harvestGoldenConversations,
 	importAgentTemplates,
 	importKnowledgeRepository,
@@ -861,6 +863,8 @@ import type {
 	GetDevWorkflowArtifactContentData,
 	GetDevWorkflowArtifactContentError,
 	GetDevWorkflowArtifactContentResponse,
+	GetDevWorkflowCapabilityData,
+	GetDevWorkflowCapabilityResponse,
 	GetDevWorkflowDefinitionData,
 	GetDevWorkflowDefinitionResponse,
 	GetDevWorkflowNodeRunData,
@@ -1020,6 +1024,8 @@ import type {
 	GetWorkSessionArtifactContentData,
 	GetWorkSessionArtifactContentError,
 	GetWorkSessionArtifactContentResponse,
+	GetWorkSessionCapabilityData,
+	GetWorkSessionCapabilityResponse,
 	GetWorkSessionData,
 	GetWorkSessionResponse,
 	HarvestGoldenConversationsData,
@@ -1661,6 +1667,28 @@ export const getWorkSessionArtifactContentOptions = (options: Options<GetWorkSes
 			return data;
 		},
 		queryKey: getWorkSessionArtifactContentQueryKey(options),
+	});
+
+export const getWorkSessionCapabilityQueryKey = (options?: Options<GetWorkSessionCapabilityData>) =>
+	createQueryKey("getWorkSessionCapability", options);
+
+export const getWorkSessionCapabilityOptions = (options?: Options<GetWorkSessionCapabilityData>) =>
+	queryOptions<
+		GetWorkSessionCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetWorkSessionCapabilityResponse,
+		ReturnType<typeof getWorkSessionCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getWorkSessionCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getWorkSessionCapabilityQueryKey(options),
 	});
 
 export const postWorkSessionMessageMutation = (
@@ -8638,6 +8666,28 @@ export const updateDevWorkflowWorkItemMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getDevWorkflowCapabilityQueryKey = (options?: Options<GetDevWorkflowCapabilityData>) =>
+	createQueryKey("getDevWorkflowCapability", options);
+
+export const getDevWorkflowCapabilityOptions = (options?: Options<GetDevWorkflowCapabilityData>) =>
+	queryOptions<
+		GetDevWorkflowCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetDevWorkflowCapabilityResponse,
+		ReturnType<typeof getDevWorkflowCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevWorkflowCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevWorkflowCapabilityQueryKey(options),
+	});
 
 export const getDevelopmentCapabilityQueryKey = (options?: Options<GetDevelopmentCapabilityData>) =>
 	createQueryKey("getDevelopmentCapability", options);

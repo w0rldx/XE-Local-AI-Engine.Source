@@ -14,7 +14,7 @@ import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-setupMswServer();
+setupMswServer(capabilityRoute());
 
 // The centre pane IS the real chat page; its own contract is pinned by Chat.scope.test.tsx. What this file needs is
 // the SCOPE the detail page hands it and a way to fire the two overrides.
@@ -95,6 +95,14 @@ function session(overrides: Record<string, unknown> = {}) {
 		lastSequence: 5,
 		...overrides,
 	};
+}
+
+/**
+ * The node's WorkSessions:Enabled switch, which this page reads before anything else. It ships ON, but an operator
+ * can turn it off — and this route is still reachable by bookmark when they have.
+ */
+function capabilityRoute(enabled = true) {
+	return jsonRoute("get", "work-sessions/capability", { enabled });
 }
 
 function routes(sessionBody: Record<string, unknown> = session()) {
@@ -419,5 +427,37 @@ describe("WorkSessionDetailPage", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+	// An operator who switched WorkSessions:Enabled off still has this URL in their history, and the session GET is
+	// then a bodyless 404 — rendered as "This work session could not be loaded", the same words a genuinely missing
+	// id gets. The capability read is what tells them apart.
+	it("says the feature is switched off on this node instead of reporting a missing session", async () => {
+		let sessionReads = 0;
+		server.use(
+			capabilityRoute(false),
+			http.get(localApiPath(`work-sessions/${sessionId}`), () => {
+				sessionReads += 1;
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />, { withRouter: true });
+
+		const disabled = await screen.findByTestId("work-sessions-disabled");
+		expect(disabled.textContent).toBe("Work sessions are disabled by this node's runtime configuration.");
+		expect(screen.queryByTestId("work-session-detail-error")).toBeNull();
+		// Gated, not merely hidden: a disabled node must not be asked for data it will refuse, and the hub — a second
+		// path onto the same disabled family — must not be acquired either.
+		await waitFor(() => expect(sessionReads).toBe(0));
+		expect(hubMock.acquire).not.toHaveBeenCalled();
+	});
+
+	// A capability call that FAILED says nothing about the switch, so reporting it as "switched off" would be a guess.
+	it("reports a failed capability check as an error, not as a switched-off feature", async () => {
+		server.use(problemDetailsRoute("get", "work-sessions/capability", 500, { detail: "the node is unreachable" }));
+		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />, { withRouter: true });
+
+		const alert = await screen.findByTestId("work-sessions-disabled");
+		expect(alert.textContent).toContain("the node is unreachable");
+		expect(alert.textContent).not.toContain("disabled by this node's runtime configuration");
 	});
 });

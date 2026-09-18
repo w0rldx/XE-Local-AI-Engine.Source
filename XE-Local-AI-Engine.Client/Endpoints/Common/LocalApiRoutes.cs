@@ -840,6 +840,15 @@ public static class LocalApiRoutes
     public static class WorkSessions
     {
         public const string Root = "work-sessions";
+
+        /// <summary>
+        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="Development.Capability" />:
+        ///     it answers <c>enabled: false</c> so the SPA can say "switched off on this node" instead of rendering the
+        ///     bodyless 404 as a load failure. A literal segment outranks <see cref="ById" />'s parameter, so this can
+        ///     never be read as a session id.
+        /// </summary>
+        public const string Capability = "work-sessions/capability";
+
         public const string ById = "work-sessions/{sessionId}";
         public const string Start = "work-sessions/{sessionId}/start";
         public const string Pause = "work-sessions/{sessionId}/pause";
@@ -875,6 +884,13 @@ public static class LocalApiRoutes
     public static class DevelopmentWorkflows
     {
         public const string Root = "development-workflows";
+
+        /// <summary>
+        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="Development.Capability" />:
+        ///     it answers <c>enabled: false</c> so the SPA can say "switched off on this node" instead of rendering the
+        ///     bodyless 404 as a load failure.
+        /// </summary>
+        public const string Capability = "development-workflows/capability";
 
         /// <summary>The work-item collection. <c>?status=</c> filters on the status the RUNTIME writes, never a client.</summary>
         public const string WorkItems = "development-workflows/work-items";

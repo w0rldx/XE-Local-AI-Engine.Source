@@ -235,6 +235,40 @@
         ]
       }
     },
+    "/api/local/v1/work-sessions/capability": {
+      "get": {
+        "tags": [
+          "Work-Sessions"
+        ],
+        "operationId": "getWorkSessionCapability",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/work-sessions/{sessionId}/messages": {
       "post": {
         "tags": [
@@ -17200,6 +17234,40 @@
         ]
       }
     },
+    "/api/local/v1/development-workflows/capability": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "getDevWorkflowCapability",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/capability": {
       "get": {
         "tags": [
@@ -24124,6 +24192,15 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse": {
         "type": "object",
@@ -39622,6 +39699,15 @@
             "maxLength": 8000,
             "minLength": 0,
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
           }
         }
       },

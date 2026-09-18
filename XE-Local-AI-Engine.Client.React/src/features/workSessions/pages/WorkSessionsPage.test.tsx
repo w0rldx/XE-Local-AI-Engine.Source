@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkSessionsPage } from "@/features/workSessions/pages/WorkSessionsPage";
-import { jsonRoute, problemDetailsRoute } from "@/test/msw/Handlers";
+import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-setupMswServer();
+setupMswServer(capabilityRoute());
 
 const navigate = vi.hoisted(() => vi.fn());
 
@@ -52,6 +53,14 @@ function agentsRoute() {
 	});
 }
 
+/**
+ * The node's WorkSessions:Enabled switch, which the page reads before anything else. It ships ON, but an operator
+ * can turn it off — and then the whole family 404s, which is what the disabled case below covers.
+ */
+function capabilityRoute(enabled = true) {
+	return jsonRoute("get", "work-sessions/capability", { enabled });
+}
+
 function summary(overrides: Record<string, unknown> = {}) {
 	return {
 		id: sessionId,
@@ -84,11 +93,26 @@ describe("WorkSessionsPage", () => {
 		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Work Sessions");
 	});
 
-	it("shows skeletons while the list loads", () => {
-		server.use(jsonRoute("get", "work-sessions", { items: [] }), agentsRoute());
+	// The skeletons are now the SECOND loading state: the capability read resolves first, then the list is in flight.
+	// The list route is held open on a gate this test releases, so the skeleton is observed rather than raced for.
+	it("shows skeletons while the list loads", async () => {
+		let releaseList = (): void => undefined;
+		const listGate = new Promise<void>((resolve) => {
+			releaseList = resolve;
+		});
+		server.use(
+			http.get(localApiPath("work-sessions"), async () => {
+				await listGate;
+				return HttpResponse.json({ items: [] });
+			}),
+			agentsRoute(),
+		);
 		renderWithProviders(<WorkSessionsPage />);
 
-		expect(screen.getByTestId("work-sessions-loading")).toBeDefined();
+		expect(await screen.findByTestId("work-sessions-loading")).toBeDefined();
+
+		releaseList();
+		expect(await screen.findByTestId("work-sessions-empty")).toBeDefined();
 	});
 
 	it("offers a create call to action when there are no sessions", async () => {
@@ -130,6 +154,37 @@ describe("WorkSessionsPage", () => {
 		const card = await screen.findByRole("button", { name: /Survey the vector-store options/ });
 		expect(card.tagName).toBe("BUTTON");
 		expect(card.getAttribute("type")).toBe("button");
+	});
+
+	// An operator who switched WorkSessions:Enabled off gets a bodyless 404 on the whole family, which the list used
+	// to render as "Could not load work sessions." — indistinguishable from a broken node.
+	it("says the feature is switched off on this node instead of reporting a load failure", async () => {
+		let listReads = 0;
+		server.use(
+			capabilityRoute(false),
+			http.get(localApiPath("work-sessions"), () => {
+				listReads += 1;
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+		renderWithProviders(<WorkSessionsPage />);
+
+		const disabled = await screen.findByTestId("work-sessions-disabled");
+		expect(disabled.textContent).toBe("Work sessions are disabled by this node's runtime configuration.");
+		expect(screen.queryByTestId("work-sessions-error")).toBeNull();
+		// Gated, not merely hidden: a disabled node must not be asked for data it will refuse.
+		await waitFor(() => expect(listReads).toBe(0));
+	});
+
+	// The other half of the same branch: a capability call that FAILED says nothing about the switch, so reporting it
+	// as "switched off" would be a guess. It keeps the honest error text.
+	it("reports a failed capability check as an error, not as a switched-off feature", async () => {
+		server.use(problemDetailsRoute("get", "work-sessions/capability", 500, { detail: "the node is unreachable" }));
+		renderWithProviders(<WorkSessionsPage />);
+
+		const alert = await screen.findByTestId("work-sessions-disabled");
+		expect(alert.textContent).toContain("the node is unreachable");
+		expect(alert.textContent).not.toContain("disabled by this node's runtime configuration");
 	});
 
 	it("creates a session from the dialog and navigates to it", async () => {

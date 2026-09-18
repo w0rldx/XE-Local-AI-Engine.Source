@@ -32,9 +32,11 @@ import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWork
 import { DevWorkflowNodeRunTable } from "@/features/devWorkflows/components/DevWorkflowNodeRunTable";
 import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/DevWorkflowRunSummaryPanel";
 import { DevWorkflowRunToolbar } from "@/features/devWorkflows/components/DevWorkflowRunToolbar";
+import { DevWorkflowsDisabledAlert } from "@/features/devWorkflows/components/DevWorkflowsDisabledAlert";
 import { DevWorkflowWorkItemStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import { useDevWorkflowDetailData } from "@/features/devWorkflows/hooks/useDevWorkflowDetailData";
 import { type DevWorkflowDetailTab, toDevWorkflowWorkItemStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
+import { useDevWorkflowCapability } from "@/features/devWorkflows/queries/useDevWorkflows";
 
 export interface DevWorkflowDetailSelection {
 	readonly run?: string;
@@ -66,6 +68,12 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// stops existing the moment a run does.
 	const [definitionId, setDefinitionId] = useState<string | null>(null);
 
+	// This route is reachable by bookmark or pasted URL on a node that has the feature switched off — which is every
+	// shipped node today — where the whole family answers a bodyless 404, read as "This work item could not be
+	// loaded": exactly what a genuinely missing id says. The capability read separates the two and gates the rest.
+	const capabilityQuery = useDevWorkflowCapability();
+	const devWorkflowsEnabled = capabilityQuery.data?.enabled === true;
+
 	const {
 		workItemQuery,
 		runId,
@@ -87,7 +95,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 		pendingDecisionCount,
 		blockingGateNodeRunId,
 		canStartRun,
-	} = useDevWorkflowDetailData(workItemId, selection);
+	} = useDevWorkflowDetailData(workItemId, selection, devWorkflowsEnabled);
 
 	const select = useCallback(
 		(next: DevWorkflowDetailSelection) => onSelectionChange({ ...selection, ...next }),
@@ -122,6 +130,27 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// then there is no name to show, so the navigation label stands in, visually hidden and first in the container so
 	// the full-height flex column is unaffected.
 	const fallbackHeading = <VisuallyHidden component="h1">{t("navigation.devWorkflows", "Workflow Runs")}</VisuallyHidden>;
+
+	// The capability answer gates everything below, so it is resolved first. It reuses the page's own loader rather
+	// than inventing a second spinner: from the operator's side this is still "the page is coming up".
+	if (capabilityQuery.isLoading) {
+		return (
+			<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
+				{fallbackHeading}
+				<Loader data-testid="dev-workflow-detail-loading" />
+			</FullHeightPage>
+		);
+	}
+
+	// Ahead of the pending branch below, which a gated `workItemQuery` would otherwise sit in forever.
+	if (capabilityQuery.error || !devWorkflowsEnabled) {
+		return (
+			<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
+				{fallbackHeading}
+				<DevWorkflowsDisabledAlert error={capabilityQuery.error} />
+			</FullHeightPage>
+		);
+	}
 
 	if (workItemQuery.isPending) {
 		return (
