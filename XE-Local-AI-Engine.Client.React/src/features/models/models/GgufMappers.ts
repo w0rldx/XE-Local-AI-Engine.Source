@@ -51,5 +51,9 @@ export function toGgufRepositoryDetail(
 		repoId: dto.repoId ?? "",
 		// A discovery failure returns an empty file list (200); coalesce defensively in case it is omitted.
 		files: (dto.files ?? []).map(toGgufRepositoryFile),
+		// Default false: an older backend that does not send the flag has no projector concept, so the download dialog
+		// offers no weights-only choice and sends nothing — the server default then applies, preserving today's behaviour.
+		hasProjector: dto.hasProjector ?? false,
+		projectorSizeBytes: dto.projectorSizeBytes ?? null,
 	};
 }

@@ -74,15 +74,52 @@ public sealed class StartGgufDownloadEndpointTests
         AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
-    private static async Task<HttpResponseMessage> PostAsync(TestServerWebAppFactory factory, HttpClient client)
+    [Test]
+    public async Task StartDownload_WhenTheBodyOmitsIncludeProjector_KeepsTheAutoPairDefault()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute)
-        {
-            Content = JsonContent.Create(new
+        // The DTO is an init-only property with an `= true` initializer: System.Text.Json never assigns a member the
+        // body does not carry, so the initializer — not `default(bool)` — is what the coordinator sees. This is the
+        // guard on that, because the whole compatibility claim of the option rests on it.
+        var coordinator = new RecordingDownloadCoordinator();
+        await using var factory = CreateFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory, client);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.True(coordinator.LastRequest!.IncludeProjector, "An omitted includeProjector must still auto-pair the projector.");
+    }
+
+    [Test]
+    public async Task StartDownload_WhenTheBodyAsksForWeightsOnly_ForwardsTheChoice()
+    {
+        var coordinator = new RecordingDownloadCoordinator();
+        await using var factory = CreateFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(factory, client, includeProjector: false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(coordinator.LastRequest!.IncludeProjector);
+    }
+
+    private static async Task<HttpResponseMessage> PostAsync(TestServerWebAppFactory factory, HttpClient client, bool? includeProjector = null)
+    {
+        object body = includeProjector is null
+            ? new
             {
                 repoId = "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
                 quant = "Q4_K_M"
-            })
+            }
+            : new
+            {
+                repoId = "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
+                quant = "Q4_K_M",
+                includeProjector = includeProjector.Value
+            };
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute)
+        {
+            Content = JsonContent.Create(body)
         };
         factory.AddNodeBearerToken(request);
         return await client.SendAsync(request);
@@ -106,6 +143,33 @@ public sealed class StartGgufDownloadEndpointTests
                 services.AddSingleton(coordinator);
             }
         };
+    }
+
+    /// <summary>Accepts every start and keeps the request the endpoint built, so the DTO-to-contract hop can be asserted.</summary>
+    private sealed class RecordingDownloadCoordinator : IGgufDownloadCoordinator
+    {
+        public GgufModelRequest? LastRequest { get; private set; }
+
+        public Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
+        {
+            LastRequest = request;
+            return Task.FromResult(new GgufDownloadTicket("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", AlreadyInFlight: false, Guid.NewGuid()));
+        }
+
+        public bool Cancel(string modelName)
+        {
+            return false;
+        }
+
+        public GgufDownloadStatus? GetStatus(string modelName)
+        {
+            return null;
+        }
+
+        public IReadOnlyList<GgufDownloadStatus> ListStatuses()
+        {
+            return [];
+        }
     }
 
     private sealed class ThrowingDownloadCoordinator(Exception failure) : IGgufDownloadCoordinator

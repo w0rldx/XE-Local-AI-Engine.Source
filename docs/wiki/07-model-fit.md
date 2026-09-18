@@ -141,6 +141,30 @@ A recommendation row is actionable: the operator can download the model. `GgufDo
 - **`GetStatus`** returns the latest sanitized `GgufDownloadStatus` (phase + completed/total bytes; **never** a path/URL/token).
 - On success it writes the `model_provider_map` row pointing the GGUF at the `llamacpp` provider (through a fresh DI scope, since the map store is scoped) — the **single production writer** that makes a downloaded GGUF reachable by the runtime. Best-effort: a map-write failure never marks the download Failed.
 
+### Weights-only installs (`includeProjector`)
+
+A vision-capable GGUF repo also ships an `mmproj` projector companion, and by default the download auto-pairs it:
+`HuggingFaceGgufDownloadTransaction.ResolveAsync` asks `IHuggingFaceGgufDiscovery.FindProjectorAsync` for the repo's
+highest-precision projector and attaches it to every non-draft role. That is what makes the installed model multimodal —
+and what makes it **ineligible as a benchmark judge**, because a model launched with `--mmproj` cannot prove its launch
+identity ([Benchmarks §judge eligibility](20-benchmarks.md)).
+
+`StartGgufDownloadRequest.IncludeProjector` (`POST model-fit/download`), the MCP tool parameter `include_projector`, and
+the contract field `GgufModelRequest.IncludeProjector` all carry the same choice, and all **default to `true`** — a body
+that omits the field installs exactly what it always did. Sending `false` skips the projector scan entirely, so the repo
+resolves to the same artifact set a text-only repo does: one weight, one sidecar, no projector fields. There is no
+sidecar schema change; a weights-only install is indistinguishable from a projector-less repo's install.
+
+- **The picker knows whether it matters.** `GET model-fit/gguf/inspect` returns repo-level `hasProjector` and
+  `projectorSizeBytes` from the *same* `FindProjectorAsync` selection a download would make (both calls read one
+  TTL-cached repo listing, so this is not a second Hugging Face round trip). A repo with `hasProjector: false` is
+  unaffected by the option.
+- **The choice is part of the installed identity.** Re-requesting the same repo and quant with the opposite projector
+  choice while one is installed answers `GgufAcquisitionDisposition.Conflict` → **HTTP 409**, because the acquisition
+  state probe compares the intended projector against the installed members.
+- **There is no in-place "add the projector later" path.** To change the choice, delete the installed model and download
+  it again with the other setting.
+
 > **UI ownership note.** In the React layer the GGUF browse/download, llama.cpp runtime, HF token, and running-models hooks were **relocated** out of the model-fit feature into Model Management / Node Settings / Loaded Models. A download started from a recommendation row is owned by the Model Management feature (`useModelFit.ts`). The download/runtime/token endpoints still live physically under `Endpoints/ModelFit/V1/` (see table below) but their UI no longer renders on the advisor page.
 
 ## Quartz wiring

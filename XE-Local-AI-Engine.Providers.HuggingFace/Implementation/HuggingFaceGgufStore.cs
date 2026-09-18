@@ -239,8 +239,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             // A vision repo ships an mmproj projector companion the model needs for image input; pull it alongside the
             // weights (auto-pair). A text-only repo has none — FindProjectorAsync returns null and nothing extra is
             // fetched. A projector failure never fails the model: it loads text-only. Skipped for a draft file — a
-            // speculative drafter is never the chat model that would consume a projector.
-            var projector = GgufDraftModel.IsDraftQuant(quant)
+            // speculative drafter is never the chat model that would consume a projector, and so is a weights-only
+            // request (GgufModelRequest.IncludeProjector) — the flag means the same thing on every acquisition path.
+            var projector = GgufDraftModel.IsDraftQuant(quant) || !request.IncludeProjector
                 ? ProjectorDownloadResult.None
                 : await TryEnsureProjectorAsync(request.RepoId, fileName, revision, ct).ConfigureAwait(false);
 

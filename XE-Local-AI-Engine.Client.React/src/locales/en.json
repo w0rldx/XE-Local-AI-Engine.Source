@@ -2481,6 +2481,10 @@
 					"draft": "Draft model",
 					"draftHint": "Speculative-decoding drafter — not a chat model",
 					"recommended": "Recommended",
+					"projector": {
+						"label": "Include vision projector ({{size}})",
+						"description": "Clear this to install the weights only. The model stays text-only, and only a text-only model can be used as a benchmark judge. To add the projector later, delete the model and download it again."
+					},
 					"columns": {
 						"quant": "Quant",
 						"size": "Size",

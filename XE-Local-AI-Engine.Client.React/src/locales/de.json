@@ -2481,6 +2481,10 @@
 					"draft": "Entwurfsmodell",
 					"draftHint": "Entwurfsmodell für spekulative Dekodierung – kein Chat-Modell",
 					"recommended": "Empfohlen",
+					"projector": {
+						"label": "Vision-Projektor einbeziehen ({{size}})",
+						"description": "Deaktivieren Sie dies, um nur die Gewichte zu installieren. Das Modell bleibt ein reines Textmodell, und nur ein reines Textmodell kann als Benchmark-Judge verwendet werden. Um den Projektor später hinzuzufügen, löschen Sie das Modell und laden Sie es erneut herunter."
+					},
 					"columns": {
 						"quant": "Quantisierung",
 						"size": "Größe",

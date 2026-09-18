@@ -71,6 +71,10 @@ export interface StartGgufDownloadVariables {
 	fileName?: string;
 	quant?: string;
 	revision?: string;
+	// Whether to also download the repo's `mmproj*.gguf` vision projector. Left undefined for a repo that ships none:
+	// JSON.stringify drops an undefined value, so the field is absent from the wire body and the server default (true)
+	// applies. A model installed WITH a projector is refused as a benchmark judge, hence the weights-only choice.
+	includeProjector?: boolean;
 }
 
 // Starts a resumable GGUF download via the Hugging Face GGUF model store. On success the running-models list may

@@ -163,6 +163,8 @@ The per-run write paths compare against `BenchmarkRunIdentity.Unstamped`: `ToRec
 
 A rubric of weighted criteria, scored 0..10 each, recomputed to 0..100 by `BenchmarkJudgeScoreCalculator.Compute`. `ComputePolicyHash` hashes the **prompt version**, not the prompt text, so any wording change must bump `BenchmarkJudgePolicyVersions.PromptVersion`; reads tolerate stored older versions structurally so a project page can still load and offer a re-save, while writes, activation and execution validate strictly.
 
+**The judge is held to a stricter eligibility rule than the primary** (`BenchmarkModelEligibility.ValidateJudge`): a model carrying an auxiliary asset — a projector, adapter or draft companion — is refused outright, because it launches with `--mmproj`/`--lora`/`-md` and the launch receipt records only *that* something extra was loaded, never which file, so its judgings could never join a rank cohort. A vision-capable repo is therefore made judge-eligible by installing it **weights-only** (`includeProjector: false` on the download — see [Model Fit §weights-only installs](07-model-fit.md)), not by any change here.
+
 `PUT projects/{id}/judge` answers the re-judge precondition **before** building the policy, because building it takes the verifying model lease that re-hashes every member file — 57 s for a 22 GB judge. An unchanged draft is recognized without a lease by rebuilding it against the stored model identity and comparing hashes, with the model *name* compared separately. Ceiling: a judge file changed on disk under an unchanged name reads as unchanged until the policy is next actually built.
 
 ### 5.2 Verifiable criteria — judging with no model

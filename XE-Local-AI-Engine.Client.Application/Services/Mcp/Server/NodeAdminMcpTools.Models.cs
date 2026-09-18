@@ -22,11 +22,17 @@ public sealed partial class NodeAdminMcpTools
         [Description("Optional quant label when file_name is omitted.")]
         string? quant = null,
         [Description("Optional branch, tag, or commit revision.")]
-        string? revision = null)
+        string? revision = null,
+        [Description("Whether to also pull the repo's mmproj projector when it ships one. Defaults to true; false installs the weights only.")]
+        bool include_projector = true)
 #pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("start_model_pull",
-            AuditArguments(("repo_id", repo_id), ("file_name", file_name), ("quant", quant), ("revision", revision)),
+            AuditArguments(("repo_id", repo_id),
+                ("file_name", file_name),
+                ("quant", quant),
+                ("revision", revision),
+                ("include_projector", include_projector)),
             async () =>
             {
                 if (string.IsNullOrWhiteSpace(repo_id))
@@ -42,7 +48,8 @@ public sealed partial class NodeAdminMcpTools
                         RepoId = repo_id.Trim(),
                         FileName = NullIfWhiteSpace(file_name),
                         Quant = NullIfWhiteSpace(quant),
-                        Revision = NullIfWhiteSpace(revision)
+                        Revision = NullIfWhiteSpace(revision),
+                        IncludeProjector = include_projector
                     }, cancellationToken);
                     return new McpModelPullStartResponse(ticket.AlreadyInFlight ? "already_in_flight" : "accepted",
                         ticket.ModelName,

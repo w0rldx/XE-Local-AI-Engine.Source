@@ -23,6 +23,16 @@ public sealed record GgufModelRequest
 
     /// <summary>Intended role hint recorded in the registry for the chat/embedding process split.</summary>
     public GgufRole Role { get; init; } = GgufRole.Unknown;
+
+    /// <summary>
+    ///     Whether the repo's multimodal projector (<c>mmproj</c>) companion is pulled alongside the weights when the repo
+    ///     ships one. <see langword="true" /> (the default) is the auto-pair behaviour every caller had before this
+    ///     existed. <see langword="false" /> installs the weights only — the same identity a projector-less repo already
+    ///     produces, which is what makes a vision-capable repo usable as a benchmark judge (a projector-bearing model is
+    ///     refused there because its launch receipt cannot name the extra asset). A draft quant never takes a projector
+    ///     regardless. There is no in-place "add the projector later" path: delete the model and download it again.
+    /// </summary>
+    public bool IncludeProjector { get; init; } = true;
 }
 
 /// <summary>

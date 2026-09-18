@@ -19,7 +19,7 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
 | `get_runtime_status` | agentic | Read installed/recommended runtime versions and update/offline state. | Cache-only; does not refresh the remote catalog. |
 | `start_runtime_acquisition` | agentic | Start managed llama.cpp runtime acquisition. | Optional `variant`: `cpu`, `cuda`, or `vulkan`. |
 | `get_runtime_acquisition` | agentic | Poll sanitized runtime acquisition progress. | — |
-| `start_model_pull` | agentic | Start or rejoin a background GGUF pull. | `repo_id`; optional `file_name`, `quant`, `revision`. |
+| `start_model_pull` | agentic | Start or rejoin a background GGUF pull. | `repo_id`; optional `file_name`, `quant`, `revision`, `include_projector` (default `true`; `false` installs the weights only, which is what makes a vision-capable repo judge-eligible). |
 | `get_model_pull` | agentic | Poll a GGUF pull. | Canonical `model_name` returned by `start_model_pull`. |
 | `cancel_model_pull` | agentic | Request cooperative GGUF pull cancellation. | Canonical `model_name`. |
 | `delete_model` | agentic | Delete an installed model through coordinated deletion. | `model_name`. |

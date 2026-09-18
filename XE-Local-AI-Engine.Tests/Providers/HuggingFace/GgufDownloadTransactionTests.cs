@@ -49,6 +49,49 @@ public sealed class GgufDownloadTransactionTests
     }
 
     [Test]
+    public async Task ResolveAndCommit_WeightsOnlyRequest_NeverScansForAProjectorAndCommitsNoProjectorFacts()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Download(WeightBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        // The repo DOES ship a projector: only the request says not to take it.
+        var discovery = Discovery(includeProjector: true);
+        var transaction = Transaction(http, discovery, registry, options);
+
+        var source = await transaction.ResolveAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = Infra.Quant,
+            IncludeProjector = false
+        }, CancellationToken.None);
+
+        AssertEx.Null(source.Projector);
+        await discovery.DidNotReceive().FindProjectorAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        var destination = Destination(withProjector: false);
+        var prepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
+        AssertEx.Null(prepared.TemporaryProjectorPath);
+        AssertEx.Null(prepared.Sidecar.ProjectorRelativePath);
+        AssertEx.Null(prepared.Sidecar.ProjectorContentSha256);
+        AssertEx.Null(prepared.Sidecar.ProjectorSourceDisplayName);
+        AssertEx.Null(prepared.Sidecar.ProjectorMemberFingerprint);
+
+        var receipt = await transaction.CommitAsync(prepared, CancellationToken.None);
+
+        AssertEx.Null(receipt.FinalProjectorPath);
+        var installed = await registry.FindAsync(destination.CanonicalModelName, CancellationToken.None);
+        AssertEx.NotNull(installed);
+        AssertEx.Null(installed!.ProjectorFileName);
+        AssertEx.Null(installed.ProjectorLocalPath);
+        AssertEx.Null(installed.ProjectorSha256);
+        AssertEx.Null(installed.ProjectorSizeBytes);
+        // Exactly the weight and its sidecar reached the models directory — no projector bytes were fetched.
+        AssertEx.Equal(expected: 1, handler.CallCount);
+    }
+
+    [Test]
     public async Task Prepare_ProjectorFailure_RemovesWeightAndProjectorTempsWithoutTextOnlySuccess()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

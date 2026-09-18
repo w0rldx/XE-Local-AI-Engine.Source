@@ -173,6 +173,44 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             (await probe.ProbeAsync(wrongRevision, identity, lease, CancellationToken.None)).Disposition);
     }
 
+    [Test]
+    public async Task StateProbe_RejectsReuseAcrossTheOppositeProjectorChoice()
+    {
+        // The weights-only download option is not a second identity scheme: a repo installed one way and re-requested
+        // the other way is an ordinary Conflict (HTTP 409), which is why there is no in-place "add the projector" path.
+        var map = new ReadOnlyMapStore(new ModelProviderMapRecord("foo:Q4_K_M",
+            LlamaServerProviderConstants.ProviderName,
+            UpdatedAtUtc: 1,
+            Revision: "map-r1"));
+        var probe = new GgufAcquisitionStateProbe();
+
+        var weightsOnlyIdentity = CreateIdentity();
+        var projectorIntent = CreateDownloadIntent() with
+        {
+            Projector = new GgufProjectorAcquisitionMetadata("mmproj-model-f16.gguf", new string('c', 64), DeclaredSizeBytes: 7)
+        };
+        var projectorIdentity = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())))
+            .Resolve(projectorIntent);
+
+        // Installed weights-only, re-requested WITH the projector.
+        var weightsOnly = CreateCurrentFixture();
+        var weightsOnlyCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(), weightsOnly.Store, map);
+        await using (var lease = await weightsOnlyCoordinator.AcquireMutationAsync(CreateRequest(weightsOnlyIdentity)))
+        {
+            AssertEx.Equal(GgufAcquisitionDisposition.Conflict,
+                (await probe.ProbeAsync(projectorIntent, projectorIdentity, lease, CancellationToken.None)).Disposition);
+        }
+
+        // Installed WITH a projector, re-requested weights-only.
+        var withProjector = CreateProjectorFixture();
+        var projectorCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(), withProjector.Store, map);
+        await using (var lease = await projectorCoordinator.AcquireMutationAsync(CreateRequest(weightsOnlyIdentity)))
+        {
+            AssertEx.Equal(GgufAcquisitionDisposition.Conflict,
+                (await probe.ProbeAsync(CreateDownloadIntent(), weightsOnlyIdentity, lease, CancellationToken.None)).Disposition);
+        }
+    }
+
     private static InstalledModelMutationRequest CreateRequest(ResolvedGgufAcquisitionIdentity identity) =>
         new(identity.CanonicalModelName,
             InstalledModelMutationKind.Acquire,
@@ -210,10 +248,21 @@ public sealed class InstalledModelSnapshotCoordinatorTests
     private static SnapshotFixture CreateLegacyFixture() =>
         CreateFixture("legacy/foo.gguf", sidecarPath: null, origin: null);
 
+    /// <summary>The same current-schema install, but carrying an <c>mmproj</c> projector member.</summary>
+    private static SnapshotFixture CreateProjectorFixture()
+    {
+        var identity = CreateIdentity();
+        return CreateFixture(identity.RelativeGgufPath,
+            identity.RelativeSidecarPath,
+            LocalModelOrigin.HuggingFace,
+            projectorPath: "projectors/foo.mmproj.gguf");
+    }
+
     private static SnapshotFixture CreateFixture(string weightPath,
         string? sidecarPath,
         LocalModelOrigin? origin,
-        int failuresBeforeSuccess = 0)
+        int failuresBeforeSuccess = 0,
+        string? projectorPath = null)
     {
         const string modelName = "foo:Q4_K_M";
         var owners = new[]
@@ -229,10 +278,10 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             SourceRevision: "source-r1",
             DownloadedAtUtc: DateTimeOffset.UnixEpoch,
             Role: GgufRole.Chat,
-            ProjectorFileName: null,
-            ProjectorRelativePath: null,
-            ProjectorSizeBytes: null,
-            ProjectorSha256: null,
+            ProjectorFileName: projectorPath is null ? null : Path.GetFileName(projectorPath),
+            ProjectorRelativePath: projectorPath,
+            ProjectorSizeBytes: projectorPath is null ? null : 7,
+            ProjectorSha256: projectorPath is null ? null : new string('c', 64),
             Origin: origin,
             SourceDisplayName: "model.gguf",
             MetadataSchemaVersion: origin is null ? null : 1,
@@ -243,7 +292,7 @@ public sealed class InstalledModelSnapshotCoordinatorTests
                 registryValue,
                 "registry-r1",
                 weightPath,
-                ProjectorRelativePath: null,
+                ProjectorRelativePath: projectorPath,
                 SidecarRelativePath: sidecarPath)
         };
         var members = new List<InstalledModelPhysicalMember>
@@ -257,6 +306,19 @@ public sealed class InstalledModelSnapshotCoordinatorTests
                 Required: true,
                 MetadataSchemaVersion: null)
         };
+        if (projectorPath is not null)
+        {
+            members.Add(new InstalledModelPhysicalMember(projectorPath,
+                InstalledModelPhysicalMemberRole.Projector,
+                SizeBytes: 7,
+                Sha256: new string('c', 64),
+                MemberFingerprint: GgufMemberFingerprint.Compute(new string('c', 64), sizeBytes: 7),
+                OwningAliases: owners,
+                Required: true,
+                // Only a sidecar carries a schema version; GgufPhysicalMemberSetHash rejects the pair on any other role.
+                MetadataSchemaVersion: null));
+        }
+
         if (sidecarPath is not null)
         {
             members.Add(new InstalledModelPhysicalMember(sidecarPath,

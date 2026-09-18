@@ -8,6 +8,7 @@ describe("toGgufRepositoryDetail file mapping", () => {
 	it("maps the new quality/fit/recommended fields from the wire shape", () => {
 		const response: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
 			repoId: "owner/repo",
+			hasProjector: false,
 			files: [
 				{
 					fileName: "model-Q5_K_M.gguf",
@@ -34,6 +35,7 @@ describe("toGgufRepositoryDetail file mapping", () => {
 	it("coalesces omitted quality/fit/recommended fields to neutral defaults", () => {
 		const response: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
 			repoId: "owner/repo",
+			hasProjector: false,
 			files: [
 				{
 					fileName: "model-Q4_K_M.gguf",
@@ -58,10 +60,46 @@ describe("toGgufRepositoryDetail file mapping", () => {
 	});
 });
 
+describe("vision-projector fields", () => {
+	it("maps the projector flag and its size through", () => {
+		const detail = toGgufRepositoryDetail({
+			repoId: "unsloth/gemma-3-12b-it-GGUF",
+			hasProjector: true,
+			projectorSizeBytes: 850_000_000,
+			files: [],
+		});
+
+		expect(detail).toMatchObject({ hasProjector: true, projectorSizeBytes: 850_000_000 });
+	});
+
+	// An older backend sends neither field. Defaulting to "no projector" means the dialog offers no weights-only
+	// choice and sends nothing, so the server default applies — today's behaviour, rather than a checkbox that lies.
+	it("treats omitted projector fields as no projector", () => {
+		const detail = toGgufRepositoryDetail({
+			repoId: "owner/repo",
+			files: [],
+		} as unknown as XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse);
+
+		expect(detail).toMatchObject({ hasProjector: false, projectorSizeBytes: null });
+	});
+
+	it("reports a projector whose size the backend did not send", () => {
+		const detail = toGgufRepositoryDetail({
+			repoId: "owner/repo",
+			hasProjector: true,
+			projectorSizeBytes: null,
+			files: [],
+		});
+
+		expect(detail).toMatchObject({ hasProjector: true, projectorSizeBytes: null });
+	});
+});
+
 describe("draft-model rows", () => {
 	it("carries the backend draft flag and its marked quant label through the mapper", () => {
 		const response: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
 			repoId: "unsloth/gemma-4-12b-it-GGUF",
+			hasProjector: false,
 			files: [
 				{
 					fileName: "MTP/mtp-gemma-4-12b-it-Q8_0.gguf",

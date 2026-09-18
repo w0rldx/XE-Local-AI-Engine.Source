@@ -164,7 +164,9 @@ internal static class ModelFitMapper
         };
     }
 
-    public static InspectGgufRepositoryResponse ToResponse(this GgufRepoDetail detail, IReadOnlyList<GgufVariantAnnotation> annotations)
+    public static InspectGgufRepositoryResponse ToResponse(this GgufRepoDetail detail,
+        IReadOnlyList<GgufVariantAnnotation> annotations,
+        GgufProjectorFile? projector)
     {
         ArgumentNullException.ThrowIfNull(detail);
         ArgumentNullException.ThrowIfNull(annotations);
@@ -185,7 +187,10 @@ internal static class ModelFitMapper
                          .OrderBy(static file => GgufDraftModel.IsDraftQuant(file.Quant))
                          .ThenBy(static file => file.SizeBytes)
                          .Select(file => file.ToFileResponse(annotationsByFile.GetValueOrDefault(file.FileName)))
-            ]
+            ],
+            // Repo-level, not per file: the download attaches at most this one projector whichever quant is picked.
+            HasProjector = projector is not null,
+            ProjectorSizeBytes = projector?.SizeBytes
         };
     }
 

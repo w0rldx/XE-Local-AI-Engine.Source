@@ -82,6 +82,51 @@ public sealed class OpenApiDocumentTests
     }
 
     [Test]
+    public async Task LocalOpenApiDocument_NamesEverySchemaPropertyAndParameterInCamelCase()
+    {
+        // The general form of the invariant every named-DTO assertion in this class depends on. The document is
+        // generated against a COPY of the FastEndpoints serializer global, taken when NSwag resolves the document
+        // registration — which UseOpenApi does while the pipeline is being built, before UseFastEndpoints populates
+        // that global. ConfigureServices seeds it at registration time so the snapshot cannot be the bare PascalCase
+        // default; without that seeding this document describes a camelCase API with PascalCase names, and because
+        // the global is process-wide, whether it did so depended on which host booted first in the test process.
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+
+        var propertyNames = document.RootElement.GetProperty("components").GetProperty("schemas").EnumerateObject()
+                                    .Where(static schema => schema.Value.TryGetProperty("properties", out _))
+                                    .SelectMany(static schema => schema.Value.GetProperty("properties").EnumerateObject()
+                                                                      .Select(property => $"{schema.Name}.{property.Name}"))
+                                    .ToList();
+        var parameterNames = document.RootElement.GetProperty("paths").EnumerateObject()
+                                     .SelectMany(static path => path.Value.EnumerateObject()
+                                                                    .Where(static operation => operation.Value.TryGetProperty("parameters", out _))
+                                                                    .SelectMany(operation => operation.Value.GetProperty("parameters").EnumerateArray()
+                                                                                                      .Select(parameter => $"{path.Name}:{parameter.GetProperty("name").GetString()}")))
+                                     .ToList();
+
+        // Non-vacuity floors: a document that generated nothing would otherwise pass this with zero offenders.
+        AssertEx.True(propertyNames.Count >= 1000,
+            $"Expected the OpenAPI document to describe at least 1000 schema properties; found {propertyNames.Count}. Refusing a vacuous casing pass.");
+        AssertEx.True(parameterNames.Count >= 50,
+            $"Expected the OpenAPI document to describe at least 50 operation parameters; found {parameterNames.Count}. Refusing a vacuous casing pass.");
+
+        var offenders = propertyNames.Concat(parameterNames)
+                                     .Where(static name => char.IsUpper(name[(name.LastIndexOfAny(['.', ':']) + 1)..][0]))
+                                     .Order(StringComparer.Ordinal)
+                                     .ToList();
+
+        AssertEx.True(offenders.Count == 0,
+            $"Every OpenAPI schema property and operation parameter must be camelCase — the wire format the node actually serializes. "
+            + $"{offenders.Count} of {propertyNames.Count + parameterNames.Count} are not: {string.Join(", ", offenders.Take(20))}"
+            + (offenders.Count > 20 ? ", …" : string.Empty));
+    }
+
+    [Test]
     public async Task LocalOpenApiDocument_HasNoDuplicateOperationIds()
     {
         var operationIds = await GetOperationIdsAsync();

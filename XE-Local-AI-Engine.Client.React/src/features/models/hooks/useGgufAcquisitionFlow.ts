@@ -57,9 +57,9 @@ export function useGgufAcquisitionFlow() {
 	// Starts a GGUF download by repo id (the model name the backend resolves rides the response). On success the model
 	// is tracked as in-flight (in the shared store); alreadyInFlight responses are surfaced too (already running).
 	const startGgufDownload = useCallback(
-		(repoId: string, fileName?: string, quant?: string): void => {
+		(repoId: string, fileName?: string, quant?: string, includeProjector?: boolean): void => {
 			startGgufDownloadMutation.mutate(
-				{ repoId, fileName, quant },
+				{ repoId, fileName, quant, includeProjector },
 				{
 					onSuccess: (response) => {
 						const modelName = response?.modelName ?? repoId;
@@ -85,15 +85,15 @@ export function useGgufAcquisitionFlow() {
 
 	// Confirms a specific quant from the picker: downloads the exact chosen file (fileName is resolved verbatim by the
 	// backend, so a Dynamic UD- quant downloads unambiguously) and closes the dialog.
-	const handleConfirmQuantDownload = (repoId: string, file: GgufRepositoryFile): void => {
-		startGgufDownload(repoId, file.fileName, file.quant);
+	const handleConfirmQuantDownload = (repoId: string, file: GgufRepositoryFile, includeProjector?: boolean): void => {
+		startGgufDownload(repoId, file.fileName, file.quant, includeProjector);
 		setDownloadRepo(null);
 	};
 
 	// Fallback used when the picker has no files to offer (degraded/unreachable inspection): download the default quant
 	// by repo id only, restoring the pre-picker one-click capability so a degraded inspect never blocks downloading.
-	const handleConfirmDefaultDownload = (repoId: string): void => {
-		startGgufDownload(repoId, undefined, defaultGgufQuant);
+	const handleConfirmDefaultDownload = (repoId: string, includeProjector?: boolean): void => {
+		startGgufDownload(repoId, undefined, defaultGgufQuant, includeProjector);
 		setDownloadRepo(null);
 	};
 

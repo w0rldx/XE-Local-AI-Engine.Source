@@ -1663,6 +1663,30 @@ export const getWorkSessionArtifactContentOptions = (options: Options<GetWorkSes
 		queryKey: getWorkSessionArtifactContentQueryKey(options),
 	});
 
+export const postWorkSessionMessageMutation = (
+	options?: Partial<Options<PostWorkSessionMessageData>>,
+): UseMutationOptions<
+	PostWorkSessionMessageResponse,
+	AxiosError<PostWorkSessionMessageError>,
+	Options<PostWorkSessionMessageData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		PostWorkSessionMessageResponse,
+		AxiosError<PostWorkSessionMessageError>,
+		Options<PostWorkSessionMessageData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await postWorkSessionMessage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listWorkSessionsQueryKey = (options?: Options<ListWorkSessionsData>) => createQueryKey("listWorkSessions", options);
 
 export const listWorkSessionsOptions = (options?: Options<ListWorkSessionsData>) =>
@@ -1945,30 +1969,6 @@ export const cancelWorkSessionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelWorkSession({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const postWorkSessionMessageMutation = (
-	options?: Partial<Options<PostWorkSessionMessageData>>,
-): UseMutationOptions<
-	PostWorkSessionMessageResponse,
-	AxiosError<PostWorkSessionMessageError>,
-	Options<PostWorkSessionMessageData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		PostWorkSessionMessageResponse,
-		AxiosError<PostWorkSessionMessageError>,
-		Options<PostWorkSessionMessageData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await postWorkSessionMessage({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -9559,50 +9559,6 @@ export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibl
 		queryKey: listEligibleBenchmarkModelsQueryKey(options),
 	});
 
-export const listBenchmarkCellsQueryKey = (options: Options<ListBenchmarkCellsData>) =>
-	createQueryKey("listBenchmarkCells", options);
-
-export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsData>) =>
-	queryOptions<
-		ListBenchmarkCellsResponse,
-		AxiosError<ListBenchmarkCellsError>,
-		ListBenchmarkCellsResponse,
-		ReturnType<typeof listBenchmarkCellsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listBenchmarkCells({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listBenchmarkCellsQueryKey(options),
-	});
-
-export const compareBenchmarkCellsQueryKey = (options: Options<CompareBenchmarkCellsData>) =>
-	createQueryKey("compareBenchmarkCells", options);
-
-export const compareBenchmarkCellsOptions = (options: Options<CompareBenchmarkCellsData>) =>
-	queryOptions<
-		CompareBenchmarkCellsResponse,
-		AxiosError<CompareBenchmarkCellsError>,
-		CompareBenchmarkCellsResponse,
-		ReturnType<typeof compareBenchmarkCellsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await compareBenchmarkCells({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: compareBenchmarkCellsQueryKey(options),
-	});
-
 export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>
 	createQueryKey("exportBenchmarkProject", options);
 
@@ -9753,30 +9709,6 @@ export const clearBenchmarkFidelityCacheMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await clearBenchmarkFidelityCache({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const createBenchmarkFromComparisonMutation = (
-	options?: Partial<Options<CreateBenchmarkFromComparisonData>>,
-): UseMutationOptions<
-	CreateBenchmarkFromComparisonResponse,
-	AxiosError<CreateBenchmarkFromComparisonError>,
-	Options<CreateBenchmarkFromComparisonData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CreateBenchmarkFromComparisonResponse,
-		AxiosError<CreateBenchmarkFromComparisonError>,
-		Options<CreateBenchmarkFromComparisonData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createBenchmarkFromComparison({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -10364,6 +10296,74 @@ export const reorderBenchmarkTaskItemsMutation = (
 	};
 	return mutationOptions;
 };
+
+export const compareBenchmarkCellsQueryKey = (options: Options<CompareBenchmarkCellsData>) =>
+	createQueryKey("compareBenchmarkCells", options);
+
+export const compareBenchmarkCellsOptions = (options: Options<CompareBenchmarkCellsData>) =>
+	queryOptions<
+		CompareBenchmarkCellsResponse,
+		AxiosError<CompareBenchmarkCellsError>,
+		CompareBenchmarkCellsResponse,
+		ReturnType<typeof compareBenchmarkCellsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await compareBenchmarkCells({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: compareBenchmarkCellsQueryKey(options),
+	});
+
+export const createBenchmarkFromComparisonMutation = (
+	options?: Partial<Options<CreateBenchmarkFromComparisonData>>,
+): UseMutationOptions<
+	CreateBenchmarkFromComparisonResponse,
+	AxiosError<CreateBenchmarkFromComparisonError>,
+	Options<CreateBenchmarkFromComparisonData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateBenchmarkFromComparisonResponse,
+		AxiosError<CreateBenchmarkFromComparisonError>,
+		Options<CreateBenchmarkFromComparisonData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createBenchmarkFromComparison({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listBenchmarkCellsQueryKey = (options: Options<ListBenchmarkCellsData>) =>
+	createQueryKey("listBenchmarkCells", options);
+
+export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsData>) =>
+	queryOptions<
+		ListBenchmarkCellsResponse,
+		AxiosError<ListBenchmarkCellsError>,
+		ListBenchmarkCellsResponse,
+		ReturnType<typeof listBenchmarkCellsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkCells({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkCellsQueryKey(options),
+	});
 
 export const listSlashCommandsQueryKey = (options?: Options<ListSlashCommandsData>) =>
 	createQueryKey("listSlashCommands", options);

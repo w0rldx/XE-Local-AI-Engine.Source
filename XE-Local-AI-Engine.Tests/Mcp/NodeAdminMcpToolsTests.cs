@@ -216,6 +216,22 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
+    public async Task StartModelPull_DefaultsToAutoPairingTheProjectorAndHonoursAWeightsOnlyRequest()
+    {
+        var harness = new Harness();
+        var requests = new List<GgufModelRequest>();
+        harness.Download.StartAsync(Arg.Do<GgufModelRequest>(requests.Add), Arg.Any<CancellationToken>())
+               .Returns(new GgufDownloadTicket("repo/model:Q4_K_M", false, Guid.NewGuid()));
+
+        _ = await harness.Tools.StartModelPullAsync("repo/model", CancellationToken.None, quant: "Q4_K_M");
+        _ = await harness.Tools.StartModelPullAsync("repo/model", CancellationToken.None, quant: "Q4_K_M", include_projector: false);
+
+        AssertEx.Equal(expected: 2, requests.Count);
+        AssertEx.True(requests[0].IncludeProjector, "An omitted include_projector must keep the auto-pair default.");
+        AssertEx.False(requests[1].IncludeProjector);
+    }
+
+    [Test]
     public async Task MutationTools_MapApplicationRejectionsToStableFailureCodes()
     {
         var harness = new Harness();

@@ -545,6 +545,64 @@ describe("ModelManagement", () => {
 		);
 	});
 
+	// The projector choice is the dialog's; what matters on the wire is the body this page actually sends. A repo with no
+	// projector must keep today's shape exactly — the key absent, not `false` — so the server default still applies.
+	it("omits includeProjector entirely for a repo that ships no vision projector", async () => {
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/llama-3.1-8b-gguf",
+			hasProjector: false,
+			projectorSizeBytes: null,
+			files: [{ fileName: "llama-3.1-8b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 5_000_000_000 }],
+		});
+		useGgufBrowseStore.setState({ browseQuery: "llama" });
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.click(await screen.findByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+		expect(await screen.findByTestId("gguf-download-row-Q4_K_M")).toBeTruthy();
+		expect(screen.queryByTestId("gguf-download-include-projector")).toBeNull();
+		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
+
+		await waitFor(() => expect(mutationFns.startGgufDownload).toHaveBeenCalledTimes(1));
+		const body = mutationFns.startGgufDownload.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+		// An undefined value would be dropped by JSON.stringify, but assert the round-tripped body so the wire is what
+		// is pinned here rather than the in-memory variables object.
+		expect(JSON.parse(JSON.stringify(body))).toEqual({
+			repoId: "unsloth/llama-3.1-8b-gguf",
+			fileName: "llama-3.1-8b-Q4_K_M.gguf",
+			quant: "Q4_K_M",
+		});
+	});
+
+	it("sends includeProjector false when the operator clears the checkbox for a vision repo", async () => {
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/llama-3.1-8b-gguf",
+			hasProjector: true,
+			projectorSizeBytes: 1_073_741_824,
+			files: [{ fileName: "llama-3.1-8b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 5_000_000_000 }],
+		});
+		useGgufBrowseStore.setState({ browseQuery: "llama" });
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.click(await screen.findByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+		fireEvent.click(await screen.findByTestId("gguf-download-include-projector"));
+		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
+
+		await waitFor(() =>
+			expect(mutationFns.startGgufDownload.mock.calls[0]?.[0]).toEqual({
+				body: {
+					repoId: "unsloth/llama-3.1-8b-gguf",
+					fileName: "llama-3.1-8b-Q4_K_M.gguf",
+					quant: "Q4_K_M",
+					includeProjector: false,
+				},
+			}),
+		);
+	});
+
 	it("falls back to the default quant when the picker has no files to offer", async () => {
 		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
 		// Degraded/empty inspection (e.g. HF unreachable → 200 empty list) must not strand the operator.

@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
+import { Badge, Button, Checkbox, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
 import { IconCloudDownload, IconStar } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -39,10 +39,12 @@ interface GgufDownloadDialogProps {
 	// The repo whose quants are being picked; null closes the dialog (and gates the inspect query).
 	repository: GgufRepository | null;
 	onClose: () => void;
-	onConfirm: (repoId: string, file: GgufRepositoryFile) => void;
+	// `includeProjector` is undefined when the repo ships no vision projector — the caller then omits the field entirely
+	// so the server default applies; it is a boolean only when the operator was actually offered the choice.
+	onConfirm: (repoId: string, file: GgufRepositoryFile, includeProjector?: boolean) => void;
 	// Fallback when inspection returns no files (e.g. discovery degraded/unreachable): download the default quant by
 	// repo id only, preserving the pre-picker one-click capability so a degraded inspect never blocks downloading.
-	onConfirmDefault: (repoId: string) => void;
+	onConfirmDefault: (repoId: string, includeProjector?: boolean) => void;
 	isDownloading: boolean;
 }
 
@@ -66,9 +68,19 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 
 	const selectedFile = files.find((file) => file.fileName === selectedFileName) ?? null;
 
+	// The operator's projector choice, tagged with the repo it was made for. Inspecting a different repo simply stops
+	// matching, so the choice falls back to the default (included) with no derived-state effect — the same reason
+	// pickedFileName above is derived rather than stored.
+	const [projectorPick, setProjectorPick] = useState<{ repoId: string; include: boolean } | null>(null);
+	const hasProjector = inspect.data?.hasProjector ?? false;
+	const projectorChoice = projectorPick !== null && projectorPick.repoId === repository?.repoId ? projectorPick.include : true;
+	// undefined when the repo ships no projector: the field is then omitted from the request so the server default
+	// (include it) applies, which keeps a repo with no projector on exactly today's wire shape.
+	const includeProjector = hasProjector ? projectorChoice : undefined;
+
 	const handleConfirm = (): void => {
 		if (repository !== null && selectedFile !== null) {
-			onConfirm(repository.repoId, selectedFile);
+			onConfirm(repository.repoId, selectedFile, includeProjector);
 		}
 	};
 
@@ -122,7 +134,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 								variant="light"
 								leftSection={<IconCloudDownload size={16} />}
 								loading={isDownloading}
-								onClick={() => onConfirmDefault(repository.repoId)}
+								onClick={() => onConfirmDefault(repository.repoId, includeProjector)}
 								data-testid="gguf-download-default"
 							>
 								{t("pages.models.gguf.download.defaultFallback", "Download default quant (Q4_K_M)")}
@@ -209,6 +221,24 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 							</Table>
 						</Table.ScrollContainer>
 					</Radio.Group>
+				) : null}
+
+				{hasProjector ? (
+					<Checkbox
+						checked={projectorChoice}
+						onChange={(event) => {
+							const include = event.currentTarget.checked;
+							setProjectorPick(repository === null ? null : { repoId: repository.repoId, include });
+						}}
+						label={t("pages.models.gguf.download.projector.label", "Include vision projector ({{size}})", {
+							size: formatBytesAsGb(inspect.data?.projectorSizeBytes ?? null),
+						})}
+						description={t(
+							"pages.models.gguf.download.projector.description",
+							"Clear this to install the weights only. The model stays text-only, and only a text-only model can be used as a benchmark judge. To add the projector later, delete the model and download it again.",
+						)}
+						data-testid="gguf-download-include-projector"
+					/>
 				) : null}
 			</Stack>
 		</DialogShell>

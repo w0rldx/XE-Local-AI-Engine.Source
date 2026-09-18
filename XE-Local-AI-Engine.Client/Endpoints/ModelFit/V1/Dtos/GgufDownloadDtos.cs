@@ -96,12 +96,25 @@ public sealed class GgufRepositoryFileResponse
     public required bool IsRecommended { get; init; }
 }
 
-/// <summary>Response envelope for <c>GET model-fit/gguf/inspect</c>: the repo id plus its selectable GGUF files.</summary>
+/// <summary>
+///     Response envelope for <c>GET model-fit/gguf/inspect</c>: the repo id, its selectable GGUF files, and whether the
+///     repo ships a multimodal projector companion. The projector fields are repo-level, not per file: a repo has at most
+///     one projector for the download to attach (the highest-precision one), whichever quant is chosen.
+/// </summary>
 public sealed class InspectGgufRepositoryResponse
 {
     public required string RepoId { get; init; }
 
     public required IReadOnlyList<GgufRepositoryFileResponse> Files { get; init; }
+
+    /// <summary>
+    ///     Whether this repo ships an <c>mmproj</c> projector that a download would attach by default. When <c>false</c>
+    ///     the <c>includeProjector</c> download option changes nothing.
+    /// </summary>
+    public required bool HasProjector { get; init; }
+
+    /// <summary>Size of that projector in bytes, or <c>null</c> when the repo ships none.</summary>
+    public long? ProjectorSizeBytes { get; init; }
 }
 
 /// <summary>
@@ -118,6 +131,14 @@ public sealed class StartGgufDownloadRequest
     public string? Quant { get; init; }
 
     public string? Revision { get; init; }
+
+    /// <summary>
+    ///     Whether to also pull the repo's <c>mmproj</c> projector when it ships one. Defaults to <c>true</c> — a body
+    ///     that omits the field installs exactly what it always did. Send <c>false</c> for a weights-only install, which
+    ///     is how a vision-capable repo becomes eligible as a benchmark judge. The choice is part of the installed
+    ///     identity: re-requesting the same repo and quant with the opposite choice while one is installed answers 409.
+    /// </summary>
+    public bool IncludeProjector { get; init; } = true;
 }
 
 /// <summary>

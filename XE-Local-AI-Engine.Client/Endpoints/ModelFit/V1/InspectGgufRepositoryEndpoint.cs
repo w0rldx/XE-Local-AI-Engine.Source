@@ -47,7 +47,12 @@ public sealed class InspectGgufRepositoryEndpoint(
         {
             var detail = await _discovery.ListRepoFilesAsync(repoId, ct);
             var annotations = await _recommender.AnnotateAsync(detail.Files, ct);
-            await Send.OkAsync(detail.ToResponse(annotations), ct);
+            // The SAME selection a download would make, rather than a second scan of our own: the projector is excluded
+            // from the selectable-file listings, so the picker can only learn about it from the discovery seam. Both
+            // calls read one TTL-cached repo listing (HfHubClient.GetRepoAsync is keyed by repo id), so this costs no
+            // extra Hugging Face round trip.
+            var projector = await _discovery.FindProjectorAsync(repoId, ct);
+            await Send.OkAsync(detail.ToResponse(annotations, projector), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -62,7 +67,8 @@ public sealed class InspectGgufRepositoryEndpoint(
             await Send.OkAsync(new InspectGgufRepositoryResponse
                 {
                     RepoId = repoId,
-                    Files = []
+                    Files = [],
+                    HasProjector = false
                 },
                 ct);
         }

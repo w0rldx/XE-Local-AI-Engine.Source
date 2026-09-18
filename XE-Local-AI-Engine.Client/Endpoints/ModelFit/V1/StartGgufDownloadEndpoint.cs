@@ -43,7 +43,8 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
             RepoId = req.RepoId.Trim(),
             FileName = string.IsNullOrWhiteSpace(req.FileName) ? null : req.FileName.Trim(),
             Quant = string.IsNullOrWhiteSpace(req.Quant) ? null : req.Quant.Trim(),
-            Revision = string.IsNullOrWhiteSpace(req.Revision) ? null : req.Revision.Trim()
+            Revision = string.IsNullOrWhiteSpace(req.Revision) ? null : req.Revision.Trim(),
+            IncludeProjector = req.IncludeProjector
         };
 
         var ticket = await _downloadCoordinator.StartAsync(request, ct);

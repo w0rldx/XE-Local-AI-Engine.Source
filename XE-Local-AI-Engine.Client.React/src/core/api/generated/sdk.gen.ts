@@ -970,6 +970,7 @@ import type {
 	ListWorkspacesErrors,
 	ListWorkspacesResponses,
 	NodeAuthStatusData,
+	NodeAuthStatusErrors,
 	NodeAuthStatusResponses,
 	NodeChangePasswordData,
 	NodeChangePasswordErrors,
@@ -984,6 +985,7 @@ import type {
 	NodeMeErrors,
 	NodeMeResponses,
 	NodeRefreshData,
+	NodeRefreshErrors,
 	NodeRefreshResponses,
 	NodeSetupData,
 	NodeSetupErrors,
@@ -2383,6 +2385,40 @@ export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = fal
 		...options,
 	});
 
+export const postWorkSessionMessage = <ThrowOnError extends boolean = false>(
+	options: Options<PostWorkSessionMessageData, ThrowOnError>,
+): RequestResult<PostWorkSessionMessageResponses, PostWorkSessionMessageErrors, ThrowOnError> =>
+	(options.client ?? client).post<PostWorkSessionMessageResponses, PostWorkSessionMessageErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPostWorkSessionMessageBody,
+					path: zPostWorkSessionMessagePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPostWorkSessionMessageResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/work-sessions/{sessionId}/messages",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listWorkSessions = <ThrowOnError extends boolean = false>(
 	options?: Options<ListWorkSessionsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionsResponses, ListWorkSessionsErrors, ThrowOnError> =>
@@ -2808,40 +2844,6 @@ export const cancelWorkSession = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/work-sessions/{sessionId}/cancel",
 		...options,
-	});
-
-export const postWorkSessionMessage = <ThrowOnError extends boolean = false>(
-	options: Options<PostWorkSessionMessageData, ThrowOnError>,
-): RequestResult<PostWorkSessionMessageResponses, PostWorkSessionMessageErrors, ThrowOnError> =>
-	(options.client ?? client).post<PostWorkSessionMessageResponses, PostWorkSessionMessageErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zPostWorkSessionMessageBody,
-					path: zPostWorkSessionMessagePath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zPostWorkSessionMessageResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/work-sessions/{sessionId}/messages",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const getTutorialState = <ThrowOnError extends boolean = false>(
@@ -13834,66 +13836,6 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 		...options,
 	});
 
-export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
-	options: Options<ListBenchmarkCellsData, ThrowOnError>,
-): RequestResult<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zListBenchmarkCellsPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zListBenchmarkCellsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/benchmarks/projects/{projectId}/cells",
-		...options,
-	});
-
-export const compareBenchmarkCells = <ThrowOnError extends boolean = false>(
-	options: Options<CompareBenchmarkCellsData, ThrowOnError>,
-): RequestResult<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError> =>
-	(options.client ?? client).get<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zCompareBenchmarkCellsPath,
-					query: zCompareBenchmarkCellsQuery,
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCompareBenchmarkCellsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/benchmarks/projects/{projectId}/compare",
-		...options,
-	});
-
 export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<ExportBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError> =>
@@ -14104,40 +14046,6 @@ export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache",
 		...options,
-	});
-
-export const createBenchmarkFromComparison = <ThrowOnError extends boolean = false>(
-	options: Options<CreateBenchmarkFromComparisonData, ThrowOnError>,
-): RequestResult<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zCreateBenchmarkFromComparisonBody,
-					path: zCreateBenchmarkFromComparisonPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCreateBenchmarkFromComparisonResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(
@@ -14921,6 +14829,100 @@ export const reorderBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const compareBenchmarkCells = <ThrowOnError extends boolean = false>(
+	options: Options<CompareBenchmarkCellsData, ThrowOnError>,
+): RequestResult<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError> =>
+	(options.client ?? client).get<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCompareBenchmarkCellsPath,
+					query: zCompareBenchmarkCellsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCompareBenchmarkCellsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/compare",
+		...options,
+	});
+
+export const createBenchmarkFromComparison = <ThrowOnError extends boolean = false>(
+	options: Options<CreateBenchmarkFromComparisonData, ThrowOnError>,
+): RequestResult<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateBenchmarkFromComparisonBody,
+					path: zCreateBenchmarkFromComparisonPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateBenchmarkFromComparisonResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkCellsData, ThrowOnError>,
+): RequestResult<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkCellsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkCellsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/cells",
+		...options,
+	});
+
 export const listSlashCommands = <ThrowOnError extends boolean = false>(
 	options?: Options<ListSlashCommandsData, ThrowOnError>,
 ): RequestResult<ListSlashCommandsResponses, ListSlashCommandsErrors, ThrowOnError> =>
@@ -15080,8 +15082,8 @@ export const updateSlashCommand = <ThrowOnError extends boolean = false>(
 
 export const nodeAuthStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<NodeAuthStatusData, ThrowOnError>,
-): RequestResult<NodeAuthStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<NodeAuthStatusResponses, unknown, ThrowOnError>({
+): RequestResult<NodeAuthStatusResponses, NodeAuthStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<NodeAuthStatusResponses, NodeAuthStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
 				.object({
@@ -15141,8 +15143,8 @@ export const nodeLogin = <ThrowOnError extends boolean = false>(
 
 export const nodeRefresh = <ThrowOnError extends boolean = false>(
 	options?: Options<NodeRefreshData, ThrowOnError>,
-): RequestResult<NodeRefreshResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<NodeRefreshResponses, unknown, ThrowOnError>({
+): RequestResult<NodeRefreshResponses, NodeRefreshErrors, ThrowOnError> =>
+	(options?.client ?? client).post<NodeRefreshResponses, NodeRefreshErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
 				.object({

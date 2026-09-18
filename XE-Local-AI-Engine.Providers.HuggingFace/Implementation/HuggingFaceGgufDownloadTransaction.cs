@@ -52,7 +52,10 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         var requestedRole = request.Role == GgufRole.Unknown ? GgufRole.Chat : request.Role;
         var role = GgufDraftModel.IsDraftQuant(selected.Quant) ? GgufRole.Draft : requestedRole;
         ResolvedGgufProjectorDownload? projector = null;
-        if (role != GgufRole.Draft)
+
+        // A weights-only request never even asks the discovery for a projector: the repo scan is skipped, so a
+        // vision-capable repo resolves to exactly the artifact set a text-only repo does.
+        if (role != GgufRole.Draft && request.IncludeProjector)
         {
             var discoveredProjector = await _discovery.FindProjectorAsync(request.RepoId, cancellationToken).ConfigureAwait(false);
             if (discoveredProjector is not null)

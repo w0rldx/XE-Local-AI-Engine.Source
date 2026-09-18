@@ -3,6 +3,10 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -273,6 +277,64 @@ public sealed class ModelFitEndpointTests
         AssertEx.True(doc.RootElement.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array,
             "Inspect response must wrap files in a 'files' array.");
         AssertEx.Equal("unsloth/gemma-3-12b-it-GGUF", doc.RootElement.GetProperty("repoId").GetString());
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task GgufInspect_ReportsWhetherTheRepoShipsAProjector(bool repoHasProjector)
+    {
+        const string repoId = "org/vision-GGUF";
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.ListRepoFilesAsync(repoId, Arg.Any<CancellationToken>())
+                 .Returns(new GgufRepoDetail(repoId,
+                     IsGated: false,
+                     License: null,
+                     [
+                         new GgufRepoFile("model-Q4_K_M.gguf",
+                             "Q4_K_M",
+                             SizeBytes: 4096,
+                             Sha256: new string('a', 64),
+                             "rev-1",
+                             Architecture: null,
+                             QuantType: null,
+                             ParamCount: null,
+                             BlockCount: null,
+                             AttentionHeadCount: null,
+                             AttentionHeadCountKV: null,
+                             EmbeddingLength: null,
+                             ContextLength: null)
+                     ]));
+        discovery.FindProjectorAsync(repoId, Arg.Any<CancellationToken>())
+                 .Returns(repoHasProjector
+                     ? new GgufProjectorFile("mmproj-model-f16.gguf", SizeBytes: 1234, new string('b', 64), "rev-1")
+                     : (GgufProjectorFile?)null);
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IHuggingFaceGgufDiscovery>();
+                services.AddSingleton(discovery);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{GgufInspectRoute()}?repoId={repoId}");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(repoHasProjector, doc.RootElement.GetProperty("hasProjector").GetBoolean());
+        var size = doc.RootElement.GetProperty("projectorSizeBytes");
+        if (repoHasProjector)
+        {
+            AssertEx.Equal(expected: 1234L, size.GetInt64());
+        }
+        else
+        {
+            AssertEx.Equal(JsonValueKind.Null, size.ValueKind);
+        }
     }
 
     [Test]

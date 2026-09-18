@@ -49,6 +49,12 @@ export interface GgufRepositoryFile {
 export interface GgufRepositoryDetail {
 	readonly repoId: string;
 	readonly files: readonly GgufRepositoryFile[];
+	// True when the repo ships an `mmproj*.gguf` vision projector beside the weights. Installing it makes the model
+	// multimodal — and a model installed WITH a projector is refused as a benchmark judge, which is why the download
+	// dialog offers a weights-only install for exactly these repos.
+	readonly hasProjector: boolean;
+	// Size of that projector, or null when the repo ships none (or an older backend does not report it).
+	readonly projectorSizeBytes: number | null;
 }
 
 // Pure rule for the picker's initial/derived selection: the backend-flagged recommended file when present, else the

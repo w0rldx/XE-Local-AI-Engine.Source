@@ -294,6 +294,25 @@ public static class ConfigureServices
             options.MaximumReceiveMessageSize = 512 * 1024;
             options.StreamBufferCapacity = 1;
         });
+        // The OpenAPI document is generated against a COPY of the FastEndpoints serializer global
+        // (FastEndpoints.Swagger's SwaggerDocument registration does `new JsonSerializerOptions(Config.SerOpts.Options)`),
+        // and NSwag's UseOpenApi resolves that registration EAGERLY while the pipeline is being built whenever the
+        // document path contains "{documentName}" — which ours does. UseFastEndpoints, which is what normally
+        // populates that global from IOptions<JsonOptions>, has not run at that point, so the generator would describe
+        // a camelCase API with PascalCase property and parameter names. Seeding the global here, at registration time,
+        // makes the document correct no matter where the middleware sits in the pipeline; UseFastEndpoints later
+        // replaces the instance outright, so runtime serialization is unaffected.
+        //
+        // The global is process-wide and shared with every other host in the process, so it must not be mutated once
+        // it has been used: System.Text.Json seals an options instance on first (de)serialization. Read-only here
+        // means an earlier host already ran UseFastEndpoints and served with it, which is exactly the case where the
+        // instance already carries the camelCase policy it took from IOptions<JsonOptions> — nothing to seed.
+        var fastEndpointsSerializerOptions = new Config().Serializer.Options;
+        if (!fastEndpointsSerializerOptions.IsReadOnly)
+        {
+            ConfigureJsonSerializerOptions(fastEndpointsSerializerOptions);
+        }
+
         builder.Services.SwaggerDocument(options =>
         {
             options.DocumentSettings = settings =>
@@ -668,6 +687,11 @@ public static class ConfigureServices
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        // Stated rather than inherited. Every options instance this is applied to at runtime already carries the
+        // camelCase policy from JsonSerializerDefaults.Web, but the FastEndpoints serializer global starts life as a
+        // bare JsonSerializerOptions (PascalCase), and the OpenAPI document generator snapshots THAT — see the
+        // SwaggerDocument registration below. Setting it here makes this method self-sufficient for both.
+        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.PropertyNameCaseInsensitive = true;
         options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
         options.TypeInfoResolver ??= new DefaultJsonTypeInfoResolver();
