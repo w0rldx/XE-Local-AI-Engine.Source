@@ -13,14 +13,14 @@ export interface NodeLoginRequest {
 	password: string;
 }
 
+export interface NodeChangePasswordRequest {
+	currentPassword: string;
+	newPassword: string;
+}
+
 export interface NodeAccessTokenResponse {
 	accessToken: string;
 	expiresAtUtc: string;
-}
-
-export interface NodeMeResponse {
-	userName: string;
-	roles: string[];
 }
 
 export interface NodeAuthErrorResponse {

@@ -4,6 +4,7 @@ import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import type {
 	NodeAccessTokenResponse,
 	NodeAuthStatusResponse,
+	NodeChangePasswordRequest,
 	NodeLoginRequest,
 	NodeSetupRequest,
 } from "@/core/auth/models/NodeAuthModels";
@@ -63,4 +64,11 @@ export async function refreshNodeAuthToken(): Promise<NodeAccessTokenResponse> {
 
 export async function logoutNodeAuth(config?: AxiosRequestConfig): Promise<void> {
 	await authClient.post(buildLocalApiUrl("auth/logout"), {}, withBearer(config));
+}
+
+// Returns 204 and NO new token pair: the node rotates the security stamp and revokes every refresh token, so the
+// caller's own access token is dead on its next request and the refresh cookie is cleared. A caller must treat a
+// resolved promise as a sign-out, not as a session that continues.
+export async function changeNodePassword(request: NodeChangePasswordRequest, config?: AxiosRequestConfig): Promise<void> {
+	await authClient.post(buildLocalApiUrl("auth/change-password"), request, withBearer(config));
 }

@@ -1861,6 +1861,21 @@
 				"revoke": "Schlüssel widerrufen",
 				"regenerateWarning": "Beim Neuerzeugen wird der Schlüssel sofort ersetzt — jeder Client, der noch mit dem alten konfiguriert ist, funktioniert dann nicht mehr."
 			},
+			"changePassword": {
+				"title": "Passwort ändern",
+				"description": "Wenn Sie das Passwort ändern, werden Sie überall von diesem Node abgemeldet, auch in diesem Browser. Sobald die Änderung erfolgreich ist, enden alle Sitzungen, und Sie werden zur Anmeldeseite geleitet, um das neue Passwort einzugeben.",
+				"currentPasswordLabel": "Aktuelles Passwort",
+				"newPasswordLabel": "Neues Passwort",
+				"confirmPasswordLabel": "Neues Passwort bestätigen",
+				"submit": "Passwort ändern",
+				"validationCurrentRequired": "Geben Sie Ihr aktuelles Passwort ein.",
+				"validationNewRequired": "Geben Sie ein neues Passwort ein.",
+				"validationNewWeak": "Das neue Passwort erfüllt nicht alle unten aufgeführten Anforderungen.",
+				"validationNewSameAsCurrent": "Das neue Passwort muss sich vom aktuellen unterscheiden.",
+				"validationNoMatch": "Die neuen Passwörter stimmen nicht überein.",
+				"success": "Passwort geändert. Melden Sie sich mit Ihrem neuen Passwort erneut an.",
+				"error": "Das Passwort konnte nicht geändert werden."
+			},
 			"mcpServerKey": {
 				"title": "MCP-Server",
 				"configured": "Schlüssel konfiguriert",

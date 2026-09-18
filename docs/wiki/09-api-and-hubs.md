@@ -63,7 +63,7 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | Group (route base) | Routes | Owner page |
 |---|---|---|
 | **ApiFoundation** | `diagnostics/validation-probe`, `diagnostics/exception-probe`, `diagnostics/configurator-canary-probe` (excluded from the OpenAPI document, so it has no generated client function; see §4) | (transport diagnostics) |
-| **Auth** (`auth/*`) | `auth/status`, `auth/setup`, `auth/login`, `auth/refresh`, `auth/logout`, `auth/change-password`, `auth/me` | [Security & Privacy](12-security-and-privacy.md) |
+| **Auth** (`auth/*`) | `auth/status`, `auth/setup`, `auth/login`, `auth/refresh`, `auth/logout`, `auth/change-password` | [Security & Privacy](12-security-and-privacy.md) |
 | **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/compact/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel`, `chat/approvals/resolve`, `chat/questions/resolve` | [Chat](05-chat.md) |
 | **NodeBinding** (`binding/*`) | `binding/start`, `binding/poll`, `binding/cancel` | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **Connection** (`connection/*`) | `connection`, `connection/connect`, `connection/disconnect`, `connection/auto-connect/enable\|disable` | [Architecture Overview](01-architecture-overview.md) |

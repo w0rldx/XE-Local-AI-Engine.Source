@@ -26,6 +26,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
+import { NodeChangePasswordCard } from "@/features/node-settings/components/NodeChangePasswordCard";
 import {
 	NodeSettingsAuxiliaryPanels,
 	NodeSettingsDeveloperModePanel,
@@ -362,6 +363,7 @@ export function NodeSettings() {
 				onClearToken={handleClearToken}
 			/>
 			<VoiceSettingsCard />
+			<NodeChangePasswordCard />
 			<NodeSettingsDeveloperModePanel developerMode={developerMode} onToggleDeveloperMode={toggleDeveloperMode} />
 		</PageShell>
 	);

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
+import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -51,22 +52,7 @@ function validate(
 
 	const password = values.password;
 	if (password.length > 0) {
-		const unmet: string[] = [];
-		if (password.length < 12) {
-			unmet.push("12+ characters");
-		}
-		if (!/[A-Z]/.test(password)) {
-			unmet.push("an uppercase letter");
-		}
-		if (!/[a-z]/.test(password)) {
-			unmet.push("a lowercase letter");
-		}
-		if (!/[0-9]/.test(password)) {
-			unmet.push("a digit");
-		}
-		if (!/[^a-zA-Z0-9]/.test(password)) {
-			unmet.push("a symbol");
-		}
+		const unmet = unmetPasswordRules(password);
 		if (unmet.length > 0) {
 			errors.password = t("auth.setup.validationPasswordWeak", { unmet: unmet.join(", ") });
 		}

@@ -5857,11 +5857,6 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = {
 	newPassword: string;
 };
 
-export type XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = {
-	userName: string;
-	roles: Array<string>;
-};
-
 export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
 	applying: boolean;
 };
@@ -19716,33 +19711,6 @@ export type NodeChangePasswordResponses = {
 };
 
 export type NodeChangePasswordResponse = NodeChangePasswordResponses[keyof NodeChangePasswordResponses];
-
-export type NodeMeData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/auth/me";
-};
-
-export type NodeMeErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type NodeMeResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
-};
-
-export type NodeMeResponse = NodeMeResponses[keyof NodeMeResponses];
 
 export type ApplyAppUpdateData = {
 	body?: never;

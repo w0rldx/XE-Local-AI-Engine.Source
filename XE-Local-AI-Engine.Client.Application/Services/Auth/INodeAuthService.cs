@@ -23,8 +23,6 @@ public interface INodeAuthService
     ///     because the trust boundary is the machine itself. Fails when no administrator account exists yet.
     /// </summary>
     Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken);
-
-    Task<NodeCurrentUser?> GetCurrentUserAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 }
 
 public sealed record NodeAuthStatus(bool SetupRequired, bool Authenticated);
@@ -47,4 +45,3 @@ public sealed record NodeSetupResult(bool Succeeded, bool AlreadyInitialized, IR
 
 public sealed record NodePasswordChangeResult(bool Succeeded, IReadOnlyList<string> Errors);
 
-public sealed record NodeCurrentUser(string UserName, IReadOnlyList<string> Roles);

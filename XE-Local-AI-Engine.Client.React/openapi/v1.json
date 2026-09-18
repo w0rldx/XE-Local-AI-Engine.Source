@@ -22354,40 +22354,6 @@
         ]
       }
     },
-    "/api/local/v1/auth/me": {
-      "get": {
-        "tags": [
-          "Auth"
-        ],
-        "operationId": "nodeMe",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeMeResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
     "/api/local/v1/app-update/apply": {
       "post": {
         "tags": [
@@ -43991,25 +43957,6 @@
             "maxLength": 256,
             "minLength": 12,
             "nullable": false
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAuthV1NodeMeResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "userName",
-          "roles"
-        ],
-        "properties": {
-          "userName": {
-            "type": "string"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },

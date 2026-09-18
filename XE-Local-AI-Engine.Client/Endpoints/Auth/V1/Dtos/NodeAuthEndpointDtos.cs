@@ -35,13 +35,6 @@ public sealed record NodeAccessTokenResponse
     public required DateTime ExpiresAtUtc { get; init; }
 }
 
-public sealed record NodeMeResponse
-{
-    public required string UserName { get; init; }
-
-    public required IReadOnlyList<string> Roles { get; init; }
-}
-
 /// <summary>
 ///     The <c>401</c> body <c>auth/login</c> answers when ASP.NET Identity has locked the account, paired with a
 ///     <c>Retry-After</c> header carrying the same number of seconds. A wrong password before the lockout threshold

@@ -19,7 +19,6 @@ public static class LocalApiRoutes
         public const string Refresh = "auth/refresh";
         public const string Logout = "auth/logout";
         public const string ChangePassword = "auth/change-password";
-        public const string Me = "auth/me";
     }
 
     public static class LocalChat

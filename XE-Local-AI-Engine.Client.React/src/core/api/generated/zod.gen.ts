@@ -7259,11 +7259,6 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = z.
 	newPassword: z.string().min(12).max(256),
 });
 
-export const zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = z.object({
-	userName: z.string(),
-	roles: z.array(z.string()),
-});
-
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
 	applying: z.boolean(),
 });
@@ -11493,11 +11488,6 @@ export const zNodeChangePasswordBody = zXeLocalAiEngineClientEndpointsAuthV1Node
  * No Content
  */
 export const zNodeChangePasswordResponse = z.void();
-
-/**
- * Success
- */
-export const zNodeMeResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
 
 /**
  * Success

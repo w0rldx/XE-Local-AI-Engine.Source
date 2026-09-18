@@ -336,7 +336,6 @@ import {
 	nodeChangePassword,
 	nodeLogin,
 	nodeLogout,
-	nodeMe,
 	nodeRefresh,
 	nodeSetup,
 	type Options,
@@ -1225,8 +1224,6 @@ import type {
 	NodeLoginResponse,
 	NodeLogoutData,
 	NodeLogoutResponse,
-	NodeMeData,
-	NodeMeResponse,
 	NodeRefreshData,
 	NodeRefreshResponse,
 	NodeSetupData,
@@ -10622,22 +10619,6 @@ export const nodeChangePasswordMutation = (
 	};
 	return mutationOptions;
 };
-
-export const nodeMeQueryKey = (options?: Options<NodeMeData>) => createQueryKey("nodeMe", options);
-
-export const nodeMeOptions = (options?: Options<NodeMeData>) =>
-	queryOptions<NodeMeResponse, AxiosError<DefaultError>, NodeMeResponse, ReturnType<typeof nodeMeQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await nodeMe({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: nodeMeQueryKey(options),
-	});
 
 export const applyAppUpdateMutation = (
 	options?: Partial<Options<ApplyAppUpdateData>>,

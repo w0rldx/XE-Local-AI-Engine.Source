@@ -987,9 +987,6 @@ import type {
 	NodeLogoutData,
 	NodeLogoutErrors,
 	NodeLogoutResponses,
-	NodeMeData,
-	NodeMeErrors,
-	NodeMeResponses,
 	NodeRefreshData,
 	NodeRefreshErrors,
 	NodeRefreshResponses,
@@ -1962,7 +1959,6 @@ import {
 	zNodeLoginBody,
 	zNodeLoginResponse,
 	zNodeLogoutResponse,
-	zNodeMeResponse,
 	zNodeRefreshResponse,
 	zNodeSetupBody,
 	zNodeSetupResponse,
@@ -15287,36 +15283,6 @@ export const nodeChangePassword = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const nodeMe = <ThrowOnError extends boolean = false>(
-	options?: Options<NodeMeData, ThrowOnError>,
-): RequestResult<NodeMeResponses, NodeMeErrors, ThrowOnError> =>
-	(options?.client ?? client).get<NodeMeResponses, NodeMeErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zNodeMeResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/auth/me",
-		...options,
 	});
 
 export const applyAppUpdate = <ThrowOnError extends boolean = false>(

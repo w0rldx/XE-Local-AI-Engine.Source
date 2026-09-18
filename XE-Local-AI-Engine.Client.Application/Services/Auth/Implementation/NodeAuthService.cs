@@ -297,18 +297,6 @@ public sealed class NodeAuthService : INodeAuthService
         return new NodePasswordChangeResult(Succeeded: true, []);
     }
 
-    public async Task<NodeCurrentUser?> GetCurrentUserAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
-    {
-        var user = await _userManager.GetUserAsync(principal);
-        if (user is null)
-        {
-            return null;
-        }
-
-        var roles = await _userManager.GetRolesAsync(user);
-        return new NodeCurrentUser(user.UserName ?? user.Email ?? user.Id, roles.ToArray());
-    }
-
     /// <summary>
     ///     Whether the revocation at <paramref name="revokedAtUtc" /> was ROTATION replacing the presented token, rather
     ///     than logout, a password change or a reset revoking it. Nothing records WHY a token was revoked, so the

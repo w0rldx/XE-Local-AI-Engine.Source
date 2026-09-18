@@ -135,7 +135,8 @@ vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () =>
 	ImageRuntimeSourceBuildCard: () => null,
 }));
 
-// The runtime card renders a TanStack Router <Link> (eject-first notice). Stub it so the page mounts without a
+// The runtime card renders a TanStack Router <Link> (eject-first notice) and the change-password card calls
+// useNavigate (a successful change is a sign-out that routes to /login). Stub both so the page mounts without a
 // RouterProvider OR loading the generated route tree (which eval-fails outside a real router).
 vi.mock("@tanstack/react-router", () => ({
 	Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
@@ -143,6 +144,7 @@ vi.mock("@tanstack/react-router", () => ({
 			{children}
 		</a>
 	),
+	useNavigate: () => vi.fn(),
 }));
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";

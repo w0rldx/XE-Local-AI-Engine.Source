@@ -19,6 +19,8 @@ public sealed class NodeAuthEndpointTests
     private const string Email = "admin@example.test";
     private const string Password = "Str0ng!Password123";
 
+    private const string OperatorProbeUrl = "/api/local/v1/node-settings";
+
     [Test]
     public async Task AuthFlow_WhenSetupLoginRefreshAndLogout_RunSuccessfully()
     {
@@ -36,10 +38,12 @@ public sealed class NodeAuthEndpointTests
         var loginToken = await ReadTokenAsync(loginResponse);
         var loginRefreshCookie = GetRefreshCookie(loginResponse);
 
-        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/auth/me");
-        meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginToken.AccessToken);
-        using var meResponse = await client.SendAsync(meRequest);
-        AssertEx.Equal(HttpStatusCode.OK, meResponse.StatusCode);
+        // Any Operator-policy endpoint proves the freshly minted bearer token authenticates; GET node-settings is the
+        // cheapest stable one. Nothing in the body is read — the status code IS the assertion.
+        using var probeRequest = new HttpRequestMessage(HttpMethod.Get, OperatorProbeUrl);
+        probeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginToken.AccessToken);
+        using var probeResponse = await client.SendAsync(probeRequest);
+        AssertEx.Equal(HttpStatusCode.OK, probeResponse.StatusCode);
 
         using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
         refreshRequest.Headers.Add("Cookie", loginRefreshCookie);

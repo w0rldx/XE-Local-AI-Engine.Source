@@ -112,6 +112,23 @@ public sealed class RateLimitPolicyTests
         {
             rejected?.Dispose();
         }
+
+        // auth/change-password rides the SAME policy and the same peer-address partition, so the window login just
+        // exhausted is exhausted for it too. Asserted here rather than as its own test because a second test would need
+        // its own fresh window: the window is a fixed minute and AuthPolicy's permit limit is NOT configurable, so a
+        // separate test could only get one by waiting or by standing up a second limiter host — and this fixture's
+        // whole point is that the host's immortal replenishment timer is paid for exactly once.
+        //
+        // It discriminates: the limiter runs BEFORE authentication, so without RequireRateLimiting a token-less request
+        // here is answered 401 by the Operator policy and never 429. The helper loops for the one case this cannot
+        // control — the fixed window rolling over between the two calls — which simply re-exhausts it, exactly as the
+        // login loop above handles the same boundary. Kept outside the try/finally above so it shares none of its
+        // state: `rejected` is that loop's response and is already disposed by the time this runs.
+        using var throttledChange = await ExhaustWithChangePasswordAsync(client);
+        AssertEx.Equal("60",
+            throttledChange.Headers.TryGetValues("Retry-After", out var changeRetryAfter) ? string.Join(",", changeRetryAfter) : null,
+            "A 429 must carry the Retry-After hint OnRejected sets.");
+        AssertEx.Contains(await throttledChange.Content.ReadAsStringAsync(), "Too many auth attempts", StringComparison.Ordinal);
     }
 
     [Test]
@@ -290,6 +307,47 @@ public sealed class RateLimitPolicyTests
         return client.PostAsJsonAsync(new Uri("/api/local/v1/integration-api/triggers/rate-limit-probe/invoke", UriKind.Relative), new
         {
             requestId = Guid.NewGuid()
+        });
+    }
+
+    /// <summary>
+    ///     Drives <c>auth/change-password</c> until the shared auth window rejects it, and returns that 429 for the
+    ///     caller to assert headers on. Every response before it must be the Operator policy's 401 — which is what
+    ///     makes the 429 evidence that the route carries <c>AuthRateLimit</c> rather than evidence of anything else.
+    /// </summary>
+    private static async Task<HttpResponseMessage> ExhaustWithChangePasswordAsync(HttpClient client)
+    {
+        for (var attempt = 1; attempt <= (ProductionAuthPermitLimit * 2) + 1; attempt++)
+        {
+            var response = await PostChangePasswordAsync(client);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                return response;
+            }
+
+            try
+            {
+                AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode,
+                    $"change-password attempt {attempt} carried no bearer token, so anything but 401 or 429 means the "
+                    + "request was answered by something other than the auth pipeline.");
+            }
+            finally
+            {
+                response.Dispose();
+            }
+        }
+
+        throw new AssertionException(
+            $"auth/change-password was never throttled within {(ProductionAuthPermitLimit * 2) + 1} attempts — it does "
+            + $"not carry the {NodeAuthRateLimits.AuthPolicy} policy the auth endpoints beside it share.");
+    }
+
+    private static Task<HttpResponseMessage> PostChangePasswordAsync(HttpClient client)
+    {
+        return client.PostAsJsonAsync(new Uri("/api/local/v1/auth/change-password", UriKind.Relative), new
+        {
+            currentPassword = "not-the-password",
+            newPassword = "Al5o!NotThePassword"
         });
     }
 

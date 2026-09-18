@@ -1861,6 +1861,21 @@
 				"revoke": "Revoke key",
 				"regenerateWarning": "Regenerating replaces the key immediately — any client still configured with the old one stops working."
 			},
+			"changePassword": {
+				"title": "Change password",
+				"description": "Changing the password signs you out of this node everywhere, including this browser. Every session ends the moment the change succeeds, so you will be sent to the sign-in page to enter the new password.",
+				"currentPasswordLabel": "Current password",
+				"newPasswordLabel": "New password",
+				"confirmPasswordLabel": "Confirm new password",
+				"submit": "Change password",
+				"validationCurrentRequired": "Enter your current password.",
+				"validationNewRequired": "Enter a new password.",
+				"validationNewWeak": "The new password does not meet all the requirements listed below.",
+				"validationNewSameAsCurrent": "The new password must differ from the current one.",
+				"validationNoMatch": "The new passwords do not match.",
+				"success": "Password changed. Sign in again with your new password.",
+				"error": "Could not change the password."
+			},
 			"mcpServerKey": {
 				"title": "MCP server",
 				"configured": "Key configured",

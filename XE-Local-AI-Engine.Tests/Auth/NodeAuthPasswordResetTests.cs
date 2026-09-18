@@ -21,6 +21,8 @@ public sealed class NodeAuthPasswordResetTests
     private const string OldPassword = "Str0ng!Password123";
     private const string NewPassword = "R3set!Password456";
 
+    private const string OperatorProbeUrl = "/api/local/v1/node-settings";
+
     [Test]
     public async Task Reset_WhenAdminExists_ReplacesPasswordSoOnlyTheNewOneLogsIn()
     {
@@ -100,14 +102,14 @@ public sealed class NodeAuthPasswordResetTests
         var accessToken = AssertEx.NotNull(await loginResponse.Content.ReadFromJsonAsync<AccessTokenBody>()).AccessToken;
 
         // The bearer token works before the reset...
-        AssertEx.Equal(HttpStatusCode.OK, (await GetMeAsync(client, accessToken)).StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, (await ProbeAsync(client, accessToken)).StatusCode);
 
         var result = await ResetAsync(factory, NewPassword);
         AssertEx.True(result.Succeeded);
 
         // ...and is rejected immediately afterwards, even though it has not expired: the rotated security stamp no longer
         // matches, so an already-authenticated session cannot outlive the reset.
-        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, accessToken)).StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, (await ProbeAsync(client, accessToken)).StatusCode);
     }
 
     [Test]
@@ -134,12 +136,16 @@ public sealed class NodeAuthPasswordResetTests
             legacyToken = tokenService.CreateAccessToken(stamplessUser, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
         }
 
-        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, legacyToken)).StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, (await ProbeAsync(client, legacyToken)).StatusCode);
     }
 
-    private static async Task<HttpResponseMessage> GetMeAsync(HttpClient client, string accessToken)
+    /// <summary>
+    ///     "Does this bearer token still authenticate?" — the status code is the whole assertion, nothing in the body is
+    ///     read. Any Operator-policy endpoint answers it; GET node-settings is the cheapest stable one.
+    /// </summary>
+    private static async Task<HttpResponseMessage> ProbeAsync(HttpClient client, string accessToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/auth/me");
+        using var request = new HttpRequestMessage(HttpMethod.Get, OperatorProbeUrl);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         return await client.SendAsync(request);
     }

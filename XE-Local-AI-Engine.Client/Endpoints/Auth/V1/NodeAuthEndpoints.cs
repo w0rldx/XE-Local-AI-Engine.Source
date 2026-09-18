@@ -165,6 +165,11 @@ public sealed class NodeChangePasswordEndpoint : Endpoint<NodeChangePasswordRequ
     {
         Post(LocalApiRoutes.Auth.ChangePassword);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Same throttle as setup/login/refresh. Being Operator-authorized bounds WHO can guess, not HOW OFTEN: the
+        // current password is verified here, so an already-signed-in session (or anything holding a live token) could
+        // otherwise grind at it unbounded. The policy partitions on the peer address, so a change and the sign-in that
+        // must follow it share one 10/minute bucket — two permits out of ten, nowhere near the limit.
+        Options(static options => options.RequireRateLimiting(NodeAuthRateLimits.AuthPolicy));
         Description(static descriptor => descriptor.AutoTagOverride("Auth"));
     }
 
@@ -183,38 +188,5 @@ public sealed class NodeChangePasswordEndpoint : Endpoint<NodeChangePasswordRequ
 
         NodeAuthCookie.ClearRefreshToken(HttpContext.Response);
         await Send.NoContentAsync(ct);
-    }
-}
-
-public sealed class NodeMeEndpoint : EndpointWithoutRequest<NodeMeResponse>
-{
-    private readonly INodeAuthService _authService;
-
-    public NodeMeEndpoint(INodeAuthService authService)
-    {
-        _authService = authService;
-    }
-
-    public override void Configure()
-    {
-        Get(LocalApiRoutes.Auth.Me);
-        Policies(NodeAuthorizationPolicies.Operator);
-        Description(static descriptor => descriptor.AutoTagOverride("Auth"));
-    }
-
-    public override async Task HandleAsync(CancellationToken ct)
-    {
-        var currentUser = await _authService.GetCurrentUserAsync(User, ct);
-        if (currentUser is null)
-        {
-            await Send.UnauthorizedAsync(ct);
-            return;
-        }
-
-        await Send.OkAsync(new NodeMeResponse
-        {
-            UserName = currentUser.UserName,
-            Roles = currentUser.Roles
-        }, ct);
     }
 }
