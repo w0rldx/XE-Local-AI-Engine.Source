@@ -802,6 +802,76 @@ public sealed class OpenApiDocumentTests
         AssertEx.Equal(string.Join('|', expected), string.Join('|', values));
     }
 
+    /// <summary>
+    ///     Every node-local operation declares a <c>403</c>, because every one of them can actually return it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <c>LocalApiSecurityMiddleware</c> sits in front of the whole <c>/api/local/v1/</c> prefix and answers a
+    ///         real 403 — not a 401 — for a request carrying a foreign <c>Origin</c> or <c>Host</c>, or arriving from a
+    ///         non-loopback peer. That check runs before authorization and does not care whether the route is
+    ///         anonymous, so the four anonymous auth operations (login, setup, status, refresh) carry the status as
+    ///         truthfully as the authorized ones.
+    ///     </para>
+    ///     <para>
+    ///         Pinned because the declaration arrives by a route nobody chose: FastEndpoints adds the auto-403 off
+    ///         <c>PreBuiltUserPolicies</c>, which the deny-by-default <c>Configurator</c> in <c>Program</c> sets on
+    ///         every endpoint — while the auto-401 beside it IS suppressed for an anonymous verb. A future library
+    ///         version that made the two symmetric would silently drop the 403 from the generated client's error
+    ///         handling for every route, and nothing else in the suite would notice. The generated hey-api client is
+    ///         built from this document, so what it declares is what the SPA is written against.
+    ///     </para>
+    /// </remarks>
+    [Test]
+    public async Task LocalOpenApiDocument_DeclaresForbiddenOnEveryOperation()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+
+        var operations = 0;
+        var offenders = new List<string>();
+
+        foreach (var pathItem in document.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            if (!pathItem.Name.StartsWith("/api/local/v1/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var operation in pathItem.Value.EnumerateObject())
+            {
+                if (!HttpVerbs.Contains(operation.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                operations++;
+
+                if (!operation.Value.TryGetProperty("responses", out var responses)
+                    || !responses.TryGetProperty("403", out _))
+                {
+                    offenders.Add($"{operation.Name.ToUpperInvariant()} {pathItem.Name}");
+                }
+            }
+        }
+
+        // Non-vacuity floor under the 445 operations measured on 2026-09-18: a document that generated no paths, or a
+        // prefix filter that matched none of them, would otherwise pass this with zero offenders.
+        AssertEx.True(operations >= 400,
+            $"Only {operations} operations were found under /api/local/v1/; refusing a vacuous pass. The document or the path filter is broken.");
+
+        AssertEx.Empty(offenders,
+            "Every node-local operation must declare a 403: LocalApiSecurityMiddleware guards the whole "
+            + "/api/local/v1/ prefix and answers 403 for a foreign Origin/Host or a non-loopback peer, before "
+            + "authorization and regardless of whether the route is anonymous. The operation(s) below no longer say "
+            + "so, which means the generated client is not written to handle a response the node really sends:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders.Order(StringComparer.Ordinal)));
+    }
+
     private async Task<List<string>> GetOperationIdsAsync()
     {
         var factory = Factory;

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.BackgroundServices;
+namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 /// <summary>
 ///     Scheduler-specific retention sweeper. Deletes <c>scheduled_job_runs</c> rows (and their cascaded events) older
 ///     than <see cref="SchedulerOptions.HistoryRetentionDays" />, on a <see cref="SchedulerOptions.RetentionSweepIntervalMinutes" />
-///     cadence. Kept separate from the chat <see cref="RetentionSweeperService" /> so scheduler history can evolve its own
+///     cadence. Kept separate from the chat <c>RetentionSweeperService</c> so scheduler history can evolve its own
 ///     retention policy. Run rows stamp <c>CreatedAtUtc</c> in unix-milliseconds, so the cutoff is computed in ms.
 /// </summary>
 public sealed class SchedulerHistoryRetentionService : BackgroundService

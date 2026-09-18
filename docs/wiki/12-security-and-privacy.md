@@ -129,6 +129,7 @@ if (IsLocalApiRequest(context.Request.Path)
 - **Allowed hosts** are exactly `localhost`, `127.0.0.1`, `::1` (case-insensitive; IPv6 brackets normalized off).
 - **Origin check** is fail-closed: an absent `Origin` is permitted (same-origin navigation), but any *present* `Origin` must parse, be a loopback host, and match the request's scheme + host + port exactly. A non-loopback or mismatched origin is rejected.
 - Ordering matters: the middleware runs *before* `UseRouting`/`UseAuthentication`/`UseAuthorization` in `Program.cs`, so a non-local caller is rejected before it can reach an endpoint at all.
+- Because it runs before authorization and does not care whether a route is anonymous, **every** operation under `/api/local/v1/` can genuinely return this 403 — the four anonymous auth routes (login, setup, status, refresh) included — which is why the OpenAPI document declares a `403` on all of them and `OpenApiDocumentTests` pins that.
 
 > **Reverse proxies / headless deployment are unsupported.** The peer check reads the socket peer, and no forwarded-headers middleware is registered, so `X-Forwarded-For` is never honoured. A reverse proxy on the **same host** would appear as a loopback peer on every forwarded request and defeat the peer gate — this is by design: the app is single-user, same-machine only. Putting `/api/local/v1` behind a proxy or exposing it beyond the local machine is out of scope and not a supported configuration.
 

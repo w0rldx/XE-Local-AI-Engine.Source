@@ -5,6 +5,7 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -70,7 +71,7 @@ internal sealed class LocalModelProxyForwarder
         "\n\ndata: {\"error\":{\"message\":\"The local model runtime stopped while streaming this response (it may have been ejected). Try again shortly.\",\"type\":\"server_error\",\"code\":null}}\n\ndata: [DONE]\n\n");
 
     private readonly IGgufModelStore _ggufModelStore;
-    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<LocalModelProxyForwarder> _logger;
     private readonly TimeSpan _upstreamIdleTimeout;
@@ -80,13 +81,13 @@ internal sealed class LocalModelProxyForwarder
     ///     pass a small value to exercise the idle watchdog without waiting a real minute.
     /// </param>
     public LocalModelProxyForwarder(IGgufModelStore ggufModelStore,
-        ILlamaServerProcessSupervisor supervisor,
+        LlamaCppRuntimeOrchestrationService runtime,
         IHttpClientFactory httpClientFactory,
         ILogger<LocalModelProxyForwarder> logger,
         TimeSpan? upstreamIdleTimeout = null)
     {
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _upstreamIdleTimeout = upstreamIdleTimeout ?? DefaultUpstreamIdleTimeout;
@@ -166,7 +167,7 @@ internal sealed class LocalModelProxyForwarder
         {
             try
             {
-                endpoint = await _supervisor.EnsureRunningAsync(model, role, ct);
+                endpoint = await _runtime.EnsureRunningAsync(model, role, ct);
             }
             catch (LlamaRuntimeException ex)
             {
@@ -177,7 +178,7 @@ internal sealed class LocalModelProxyForwarder
                 return;
             }
 
-            var acquisition = _supervisor.TryAcquireInferenceLease(model, role);
+            var acquisition = _runtime.TryAcquireInferenceLease(model, role);
             if (acquisition.ProcessEvicting)
             {
                 await WriteBusyAsync(context, "The requested model is being ejected by the operator. Try again shortly.", ct);

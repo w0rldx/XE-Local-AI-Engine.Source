@@ -64,10 +64,13 @@ internal static class AddNodeAdaptiveMemoryExtensions
             sp.GetRequiredService<IOptions<MemoryExtractionOptions>>(),
             sp.GetRequiredService<ILogger<MemoryExtractionWorker>>()));
 
-        // Execution-log retention policy. The agent_execution_logs telemetry table is append-only, so without a sweep it
-        // grows unbounded; AgentExecutionLogRetentionService (registered in the host) reads these to age out old rows.
+        // Execution-log retention policy plus the sweeper that applies it. The agent_execution_logs telemetry table is
+        // append-only, so without a sweep it grows unbounded. The sweeper resolves the execution-log store from a
+        // per-sweep scope, and only this layer may reach a persistence store, so it is registered beside its options
+        // here rather than in the host.
         builder.Services.AddOptions<AgentExecutionLogRetentionOptions>()
                .Bind(builder.Configuration.GetSection(AgentExecutionLogRetentionOptions.Section));
+        builder.Services.AddHostedService<AgentExecutionLogRetentionService>();
 
         return builder;
     }

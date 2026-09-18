@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.BackgroundServices;
+namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

@@ -720,6 +720,16 @@ namespace XE_Local_AI_Engine.Client
                 // an endpoint whose AnonymousVerbs cover the verb, so the four AllowAnonymous() endpoints in
                 // NodeAuthEndpoints stay anonymous regardless. ConfiguratorCanaryProbeEndpoint exists solely to
                 // make the deletion of this line fail EndpointAuthorizationPolicyTests.
+                //
+                // One documented side effect: because this sets PreBuiltUserPolicies on EVERY endpoint, FastEndpoints'
+                // Swagger generator treats every endpoint as RequiresAuthorization() and adds an auto-403 — including
+                // to the four anonymous auth operations (login, setup, status, refresh), whose auto-401 the same
+                // generator does suppress off AnonymousVerbs. The asymmetry is the library's, not ours. The 403 is
+                // kept because it is TRUE: LocalApiSecurityMiddleware answers a real 403 on every /api/local/v1/*
+                // route, anonymous ones included, for a foreign Origin/Host or a non-loopback peer, so an anonymous
+                // login request can and does get one. Suppressing it would mean unsetting the very policy the canary
+                // endpoint above pins, which would trade a truthful declaration for a deny-by-default hole.
+                // OpenApiDocumentTests asserts the 403 is on every operation.
                 config.Endpoints.Configurator = ep => ep.Policies(NodeAuthorizationPolicies.Operator);
 
                 // Desktop-only app self-update surface: off the desktop flag these endpoints are excluded from

@@ -100,6 +100,25 @@ An incremental Release result is evidence only when projects actually compiled. 
 
 **Rule:** a recursive walk over constructor parameters reaches the type argument of `ILogger<T>`, and for an endpoint that logs, that argument is the endpoint's own type. Skip the self-reference. The type argument of a logger is a logging **category**, not something resolved and called, while `ILogger<AnotherEndpoint>` stays a violation, because it is both the wrong category and a reference to another endpoint. **Failure prevented:** nine endpoints landed on the `EndpointDependencyTests` allowlist on its first empty-allowlist run for the sole offence of owning a logger, which would have frozen a false rule into the list S6 went on to empty. **Authority:** S1 regression-guards slice, 2026-09-16.
 
+### Moving a hosted service into an Application DI module changes its START ORDER, and one module is feature-gated
+
+**Rule:** `IHostedService` instances start in registration order, so relocating an `AddHostedService<T>()` call out
+of `ConfigureServices` into a `Client.Application` DI module moves that service EARLIER — the application modules
+run at the top of `ConfigureServices`, the host's own block at the bottom. Check the moved service for a documented
+ordering dependency before moving the registration, and check the destination module for an early return:
+`NodeSchedulerServiceCollectionExtensions.AddNodeScheduler` returns before registering anything when
+`SchedulerOptions.Enabled` is false, so a registration placed inside it silently becomes conditional. That was
+acceptable for both scheduler services only because each already no-ops on a disabled scheduler (the history sweeper
+returns at the top of `ExecuteAsync`; the job-detail reconciler previously logged one swallowed
+`InvalidOperationException` per disabled boot, which it now does not). **Prevents:** a relocation advertised as
+behaviour-neutral that either reorders startup work or drops a service entirely on a feature-off node — neither of
+which any test in the suite asserts. A second trap in the same family:
+`BackgroundServices/FirstRunModelProvisioningService` CANNOT move down at all, because its public constructor
+resolves the desktop-launch decision from `DesktopLaunch.ResolveLaunchMode` and `VelopackInstall.IsManaged()`, both
+host-internal — it takes its three llama.cpp contracts through `LlamaCppRuntimeOrchestrationService` instead.
+**Authority:** the host-dependency rule slice, `AddNodeChatExtensions` / `AddNodeAdaptiveMemoryExtensions` /
+`AddNodeModelRuntimeExtensions` / `NodeSchedulerServiceCollectionExtensions`, 2026-09-18.
+
 ### FastEndpoints verb names collide with `IResponseCookies.Delete`, so a route scan must match unqualified calls only
 
 **Rule:** a scan for route literals in endpoint source matches `Get|Post|Put|Delete|Patch|Routes(` only where the call is **unqualified**, matched with a negative lookbehind for an identifier character or a dot rather than a `\b`. `\b` matches just as happily after a dot, so `response.Cookies.Delete(RefreshCookieName, …)` in `NodeAuthCookie` reads as a FastEndpoints verb taking a non-`LocalApiRoutes` route. **Failure prevented:** a guard that reds on entirely correct cookie code, whose obvious fix is an allowlist entry that then excuses the real thing too. Narrowing what counts as a verb call is safe in this repository specifically because `.editorconfig` sets `dotnet_style_qualification_for_method = false:error`, so a legitimate verb call can never arrive qualified. **Authority:** S1 regression-guards slice, `EndpointConventionTests`, 2026-09-16.
@@ -2201,6 +2220,24 @@ believed by the implementer, the brief and the diff review; an independent revie
 `pnpm run openapi:check` structurally cannot: it regenerates the client FROM the committed spec and agrees with a
 wrong spec happily, and behaviour tests pin the throw and the envelope, not the declaration. **Authority:**
 `TrainingExceptionHandler`, `OpenApiDocumentTests`; 2026-09-10 cleanup review.
+
+### A global FastEndpoints `Configurator` that sets a policy makes Swagger add a 403 to the ANONYMOUS routes too
+
+**Rule:** FastEndpoints 8.3.0's Swagger generator suppresses the auto-**401** for a verb covered by
+`AnonymousVerbs`, but gates the auto-**403** on `RequiresAuthorization()`, which is just
+`PreBuiltUserPolicies != null`. `Program.cs` sets `ep.Policies(NodeAuthorizationPolicies.Operator)` on EVERY
+endpoint through `config.Endpoints.Configurator` (deny-by-default), so the four anonymous auth operations
+(`auth/login`, `auth/setup`, `auth/status`, `auth/refresh`) declare a 403 they never asked for, while their 401 is
+correctly absent. The asymmetry is the library's. Do not "fix" it: the declaration is TRUE — `LocalApiSecurityMiddleware`
+runs before authorization, ignores whether a route is anonymous, and answers a real 403 on every `/api/local/v1/*`
+request with a foreign `Origin`/`Host` or a non-loopback peer — and the only way to suppress it is to unset the very
+policy `ConfiguratorCanaryProbeEndpoint` and `EndpointAuthorizationPolicyTests` exist to pin, trading a truthful
+status for a deny-by-default hole. **Prevents:** deleting a status the generated hey-api client is written against
+because it looks like a library accident, and re-opening the anonymous-route hole while doing it.
+`pnpm run openapi:check` cannot catch either: it regenerates the client FROM the committed spec and agrees with
+whatever that spec says. **Authority:** the `Configurator` comment in `Program.cs`, and
+`OpenApiDocumentTests.LocalOpenApiDocument_DeclaresForbiddenOnEveryOperation`, which pins the 403 across all 445
+operations; verified against the committed `XE-Local-AI-Engine.Client.React/openapi/v1.json`, 2026-09-18.
 
 ### A declared 413 is thrown by Kestrel inside model binding, so it needs a handler, not an early exit
 

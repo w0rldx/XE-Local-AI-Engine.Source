@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.BackgroundServices;
+namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;

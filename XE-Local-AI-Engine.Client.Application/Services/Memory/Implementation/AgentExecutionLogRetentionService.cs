@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.BackgroundServices;
+namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;

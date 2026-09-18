@@ -310,7 +310,7 @@ public sealed class ContainerBridgeRealDaemonTests
                 }
             ]));
             builder.Services.AddSingleton(models);
-            builder.Services.AddSingleton(Substitute.For<ILlamaServerProcessSupervisor>());
+            builder.Services.AddSingleton(SubstitutedRuntimeOrchestration.Over(Substitute.For<ILlamaServerProcessSupervisor>()));
             builder.Services.AddHttpClient(LocalModelProxyForwarder.HttpClientName);
             builder.Services.AddScoped<LocalModelProxyForwarder>();
 

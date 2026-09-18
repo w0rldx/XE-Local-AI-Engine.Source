@@ -288,7 +288,7 @@ public sealed class LocalModelProxyForwarderTests
         httpClientFactory.CreateClient(LocalModelProxyForwarder.HttpClientName)
                          .Returns(_ => new HttpClient(upstream, disposeHandler: false));
 
-        return new LocalModelProxyForwarder(ggufStore, supervisor, httpClientFactory, NullLogger<LocalModelProxyForwarder>.Instance, idleTimeout);
+        return new LocalModelProxyForwarder(ggufStore, SubstitutedRuntimeOrchestration.Over(supervisor), httpClientFactory, NullLogger<LocalModelProxyForwarder>.Instance, idleTimeout);
     }
 
     private static LocalModelDescriptor InstalledDescriptor()

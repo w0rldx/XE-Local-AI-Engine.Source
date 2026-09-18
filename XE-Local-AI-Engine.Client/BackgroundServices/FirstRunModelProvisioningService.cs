@@ -14,6 +14,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
+///         <b>Why it stays in the host.</b> The desktop-launch decision it gates on is a host fact — the process's own
+///         command line plus the Velopack install kind — that the application layer cannot resolve, so this service
+///         cannot move down with the other background services. The three llama.cpp contracts it needs (the GPU-variant
+///         probe, the binary ensure and the acquisition-status report) therefore arrive through
+///         <see cref="LlamaCppRuntimeOrchestrationService" />, the one door a host type may take, exactly as the
+///         inbound model proxy's forwarder does.
+///     </para>
+///     <para>
 ///         <b>Desktop-gated.</b> The whole flow runs only when the process was launched in desktop mode
 ///         (<c>XE_LAUNCH_MODE=desktop</c> / <c>--desktop</c>). Headless, Aspire, and CI runs are byte-behavior-unchanged
 ///         — they never auto-download a model.
@@ -29,10 +37,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         so it provisions at most once and is safe to run on every boot.
 ///     </para>
 ///     <para>
-///         <b>Acquisition visibility.</b> The GPU-probe segment reports to
-///         <see cref="IRuntimeAcquisitionStatusRegistry" /> so the operator sees why a fresh install sits idle; the binary
-///         manager reports the download/verify/extract phases itself. This service owns the terminal
-///         <see cref="RuntimeAcquisitionPhase.Failed" /> for the probe segment ALONE — never for the whole flow.
+///         <b>Acquisition visibility.</b> The GPU-probe segment reports to the acquisition-status registry so the
+///         operator sees why a fresh install sits idle; the binary manager reports the download/verify/extract phases
+///         itself. This service owns the terminal <see cref="RuntimeAcquisitionPhase.Failed" /> for the probe segment
+///         ALONE — never for the whole flow.
 ///     </para>
 /// </remarks>
 public sealed class FirstRunModelProvisioningService : BackgroundService
@@ -42,8 +50,6 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     // where the fast path + both shelling probes chain. Generous so a slow-but-working detection still succeeds.
     private static readonly TimeSpan DefaultGpuProbeCeiling = TimeSpan.FromSeconds(25);
 
-    private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus;
-    private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly IConfiguration _configuration;
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
     private readonly IGgufModelStore _ggufModelStore;
@@ -53,27 +59,23 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     private readonly INodeRuntimeSettings _nodeRuntimeSettings;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly TimeSpan _pollInterval;
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
     private readonly TimeProvider _timeProvider;
-    private readonly IGpuVariantSelector _variantSelector;
 
     public FirstRunModelProvisioningService(IConfiguration configuration,
         IGgufModelStore ggufModelStore,
         IGgufDownloadCoordinator downloadCoordinator,
-        ILlamaCppBinaryManager binaryManager,
-        IGpuVariantSelector variantSelector,
+        LlamaCppRuntimeOrchestrationService runtime,
         INodeSettingsStore nodeSettingsStore,
         INodeRuntimeSettings nodeRuntimeSettings,
-        IRuntimeAcquisitionStatusRegistry acquisitionStatus,
         TimeProvider timeProvider,
         ILogger<FirstRunModelProvisioningService> logger)
         : this(configuration,
             ggufModelStore,
             downloadCoordinator,
-            binaryManager,
-            variantSelector,
+            runtime,
             nodeSettingsStore,
             nodeRuntimeSettings,
-            acquisitionStatus,
             timeProvider,
             logger,
             DesktopLaunch.ResolveLaunchMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged()).IsLocalMode(),
@@ -89,11 +91,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     internal FirstRunModelProvisioningService(IConfiguration configuration,
         IGgufModelStore ggufModelStore,
         IGgufDownloadCoordinator downloadCoordinator,
-        ILlamaCppBinaryManager binaryManager,
-        IGpuVariantSelector variantSelector,
+        LlamaCppRuntimeOrchestrationService runtime,
         INodeSettingsStore nodeSettingsStore,
         INodeRuntimeSettings nodeRuntimeSettings,
-        IRuntimeAcquisitionStatusRegistry acquisitionStatus,
         TimeProvider timeProvider,
         ILogger<FirstRunModelProvisioningService> logger,
         bool isLocalMode,
@@ -103,11 +103,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
         _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
-        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-        _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-        _acquisitionStatus = acquisitionStatus ?? throw new ArgumentNullException(nameof(acquisitionStatus));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _isLocalMode = isLocalMode;
@@ -204,8 +202,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             // silent multi-second phases the operator sees no explanation for (the archive download is the other, and the
             // binary manager reports that one itself). Reporting is fire-and-forget inside the registry, so it adds no
             // await to the startup path.
-            _acquisitionStatus.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.DetectingGpu));
-            variant = await _variantSelector.SelectVariantAsync(probeCts.Token);
+            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.DetectingGpu));
+            variant = await _runtime.SelectGpuVariantAsync(probeCts.Token);
         }
         catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
@@ -223,7 +221,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             // spans the model download and the settings save, so a throw from either would overwrite a legitimate
             // Completed with a false runtime failure — and the banner's retry would then be a dead button attached to a
             // wrong diagnosis. Cancellation is excluded above because a shutting-down host is not an acquisition failure.
-            _acquisitionStatus.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
+            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
                 SanitizedError: SanitizeAcquisitionFailure(exception)));
 
             // Propagate exactly as before, so the outer catch still swallows + logs and startup never crashes.
@@ -233,7 +231,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _logger.LogInformation(
             "First-run provisioning acquiring the llama.cpp runtime ({Variant}) for first-run model '{RepoId}' — this downloads the runtime on first run and can take a few minutes.", variant,
             repoId.Trim());
-        var binary = await _binaryManager.EnsureBinaryAsync(variant, ct);
+        var binary = await _runtime.EnsureBinaryAsync(variant, ct);
         _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
 
         // Download the default GGUF through the coordinator's detached path so progress/cancel AND the llamacpp

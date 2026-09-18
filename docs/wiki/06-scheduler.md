@@ -17,7 +17,7 @@ This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Applicat
 | Template handler(s) | `…/Services/Scheduler/Handlers/` |
 | DI registration (Quartz) | `XE-Local-AI-Engine.Client.Application/DependencyInjection/NodeSchedulerServiceCollectionExtensions.cs` |
 | SignalR hub + publisher | `XE-Local-AI-Engine.Client/Hubs/SchedulerHub.cs`, `…/Hubs/SchedulerEventPublisher.cs` |
-| Retention sweep | `XE-Local-AI-Engine.Client/BackgroundServices/SchedulerHistoryRetentionService.cs` |
+| Retention sweep | `XE-Local-AI-Engine.Client.Application/Services/Scheduler/Implementation/SchedulerHistoryRetentionService.cs` |
 | REST endpoints (FastEndpoints) | `XE-Local-AI-Engine.Client/Endpoints/Scheduler/V1/` |
 | Route constants | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`Scheduler`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/scheduler/` |
@@ -163,7 +163,7 @@ Run history is owned by `IScheduledJobRunStore` (`XE-Local-AI-Engine.Client.Pers
 - Runs have **no enforced FK to their definition** so history outlives the definition; their *events* cascade-delete.
 - The store owns: id/timestamp stamping, `UpsertByFireInstanceAsync` (idempotent fire-instance open), `UpdateLifecycleAsync` (terminal transitions), `RequestCancellationAsync` (stamp `CancellationRequestedAtUtc` without changing status), `MarkStaleActiveRunsAsync` (startup reconciliation of orphaned `Queued`/`Running` runs to a terminal state), and `SweepOlderThanAsync` (retention deletes by `CreatedAtUtc`, cascade removes events).
 
-`SchedulerHistoryRetentionService` (`XE-Local-AI-Engine.Client/BackgroundServices/SchedulerHistoryRetentionService.cs`) is a `BackgroundService` that periodically calls the sweep using `SchedulerOptions.HistoryRetentionDays` (default 30) on a `RetentionSweepIntervalMinutes` cadence (default 60).
+`SchedulerHistoryRetentionService` (`XE-Local-AI-Engine.Client.Application/Services/Scheduler/Implementation/SchedulerHistoryRetentionService.cs`) is a `BackgroundService` that periodically calls the sweep using `SchedulerOptions.HistoryRetentionDays` (default 30) on a `RetentionSweepIntervalMinutes` cadence (default 60).
 
 ---
 

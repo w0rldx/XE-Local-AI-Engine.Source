@@ -604,24 +604,6 @@ public static class ConfigureServices
 
         builder.Services.AddHostedService<HeartbeatBackgroundService>();
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
-        // Chat retention is disabled by default (ChatRetentionOptions.Enabled = false): it permanently deletes user
-        // chat history, so it must be explicitly opted into via the ChatRetention config section. Validated on start so
-        // a bad window (RetentionDays <= 0 sets the sweep cutoff at/after "now" and would purge everything) fails fast
-        // instead of silently deleting all conversations the moment retention is enabled.
-        builder.Services.AddOptions<ChatRetentionOptions>()
-               .Bind(builder.Configuration.GetSection(ChatRetentionOptions.Section))
-               .ValidateDataAnnotations()
-               .ValidateOnStart();
-        builder.Services.AddHostedService<RetentionSweeperService>();
-        builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
-        // Ages out the append-only agent_execution_logs telemetry (adaptive-memory diagnostics) so it cannot grow
-        // unbounded; reads its policy from AgentExecutionLogRetentionOptions (bound in AddNodeAdaptiveMemory).
-        builder.Services.AddHostedService<AgentExecutionLogRetentionService>();
-        // Startup self-heal: re-stamps every enabled definition's durable Quartz JobDetail with the current dispatch-job
-        // type name, so jobs persisted by an older build (whose stored JOB_CLASS_NAME no longer resolves after the
-        // dispatch job moved namespaces) load again. Never changes schedules or fires jobs. Registered AFTER
-        // AddNodeScheduler so the scheduler factory/job store are available when its StartAsync runs.
-        builder.Services.AddHostedService<SchedulerJobDetailReconciliationService>();
         // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
         // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
         // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
@@ -668,13 +650,6 @@ public static class ConfigureServices
         // bundled llama.cpp runtime) and selected so a fresh double-click install can chat out of the box. Gated behind
         // desktop launch mode and offline-tolerant — headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();
-        // Opt-in local-model residency keeper. It polls live node settings and periodically touches the selected model so
-        // the provider reuses its resident process and refreshes idle age without blocking startup.
-        builder.Services.AddHostedService<KeepModelWarmBackgroundService>();
-        // One-shot llama.cpp runtime update check: after a short non-blocking delay, resolves the recommended tag against
-        // the live release catalog and compares it to the installed runtime, recording an "update available" snapshot
-        // (read by the runtime-status endpoint). Notify-only + offline-tolerant; never downloads a binary on its own.
-        builder.Services.AddHostedService<LlamaCppUpdateCheckService>();
         // Readiness = essential node-local persistence AND Central Platform worker coordination. Both are tagged "ready"
         // so a failure of either alone flips /health/ready: a dead/unwritable SQLite store must fail readiness even when
         // worker pairing is fine, and vice versa.

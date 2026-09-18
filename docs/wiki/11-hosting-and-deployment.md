@@ -91,14 +91,12 @@ See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Pri
 
 ### Background (hosted) services
 
-Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServices.cs`. These are the always-on workers inside the node process. Feature modules register more of their own — `grep -r AddHostedService` across `Client.Application/DependencyInjection/Modules/` and the provider projects is the complete inventory; the module-owned queue workers are called out under the table:
+Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServices.cs`. These are the always-on workers inside the node process. A hosted service that needs a persistence store or a concrete provider's contract is **not** one of these: the host-dependency rule (see [Code Conventions](16-code-conventions.md)) forbids the host from holding either, so such a service lives in `Client.Application` and is registered by its own feature module. Feature modules register more of their own — `grep -r AddHostedService` across `Client.Application/DependencyInjection/Modules/` and the provider projects is the complete inventory; the module-owned queue workers are called out under the table:
 
 | Service | Role |
 |---------|------|
 | `HeartbeatBackgroundService` | platform WorkerHub heartbeat |
 | `AutoConnectBackgroundService` | establishes/maintains the single WorkerHub connection |
-| `RetentionSweeperService`, `SchedulerHistoryRetentionService`, `AgentExecutionLogRetentionService` | data retention sweeps |
-| `SchedulerJobDetailReconciliationService` | reconcile Quartz scheduler job detail (see [Scheduler](06-scheduler.md)) |
 | `ModelRecommendationScheduleSeeder` | seeds the model-fit recommendation schedule (see [Model-Fit](07-model-fit.md)) |
 | `DefaultAgentSeeder`, `CoderAgentSeeder` | seed built-in agent definitions (see [Agent Mode](04-agent-mode.md)) |
 | `ToolCallCleanupService` | clears stale tool-call state |
@@ -106,7 +104,6 @@ Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServi
 | `KnowledgeVectorNormalizationBackfillService` | one-shot backfill L2-normalizing legacy (pre-normalization) KB chunk vectors so cosine search can score with a plain dot product |
 | `NodeChatTitleEncryptionBackfillService`, `OllamaProviderMapBackfillService` | one-shot data backfills |
 | `FirstRunModelProvisioningService` | desktop first-run GGUF starter-model download |
-| `LlamaCppUpdateCheckService` | periodic llama.cpp runtime update check (see [Local Runtime & Providers](03-local-runtime-and-providers.md)) |
 | `BenchmarkRunHubEventRelay`, `DatasetGenerationHubEventRelay`, `TrainingRunHubEventRelay` | drain each feature's in-process event buffer onto its SignalR hub, keeping `Client.Application` free of a SignalR dependency (see [API & Hubs](09-api-and-hubs.md)) |
 
 Module-owned workers worth knowing about, registered alongside their feature rather than here:
@@ -118,6 +115,10 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `TrainingRunQueueHostedService`, `TrainingRunStartupReaper` | `AddNodeTrainingRunExtensions` | the single-consumer training/evaluation run queue, and the startup reaper that kills Python trainers orphaned by a host crash using their persisted launch receipts |
 | `KnowledgeIngestionWorker`, `KnowledgeScheduledModelReindexWorker` | `AddNodeKnowledgeBaseExtensions` | KB ingestion queue and scheduled reindex (see [Knowledge Base](15-knowledge-base.md)) |
 | `McpAgentRunDispatcher`, `McpAgentRunRecoveryService`, `McpAgentRunCompactionService` | `AddNodeMcpAgentRunsExtensions` | inbound-MCP agent run dispatch, restart recovery, compaction |
+| `RetentionSweeperService` | `AddNodeChatExtensions` | chat retention sweep, disabled by default (see [Security & Privacy](12-security-and-privacy.md)) |
+| `AgentExecutionLogRetentionService` | `AddNodeAdaptiveMemoryExtensions` | ages out the append-only `agent_execution_logs` telemetry |
+| `SchedulerHistoryRetentionService`, `SchedulerJobDetailReconciliationService` | `NodeSchedulerServiceCollectionExtensions` | scheduler history sweep and the Quartz job-detail startup self-heal (see [Scheduler](06-scheduler.md)) |
+| `KeepModelWarmBackgroundService`, `LlamaCppUpdateCheckService` | `AddNodeModelRuntimeExtensions` | opt-in local-model residency keeper, and the one-shot llama.cpp runtime update check (see [Local Runtime & Providers](03-local-runtime-and-providers.md)) |
 | `ImageJobStartupReconciler`, `DevelopmentStartupReconciler`, `LocalModelDeletionStartupReconciler`, `SandboxOrphanReaper`, `DetachedInvocationReaper` | their feature modules | restart reconciliation and orphan reaping |
 | `StaleLlamaServerReaper`, `CudaBuildStartupService`, `LlamaServerRuntimeOverrideStartupNotice` | `Providers.LlamaServer` | see [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `StaleImageServerReaper`, `StableDiffusionCppSourceBuildLifecycle` | `Providers.StableDiffusionCpp` | see [Image Generation](14-image-generation.md) |

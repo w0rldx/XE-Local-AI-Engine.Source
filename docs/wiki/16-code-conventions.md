@@ -55,9 +55,18 @@ after the type it declares, the plural `*Endpoints.cs` groupings named in an all
 every endpoint `sealed`, and every route derived from `LocalApiRoutes` rather than written as a string literal.
 `EndpointDependencyTests` enforces the dependency rule above the same way, for every endpoint in the host and with
 no exemption list. Generic arguments are walked recursively, so a forbidden type wrapped in an allowed generic
-counts too. The same rule covers every SignalR hub and every DI-constructed class that lives under `Endpoints/`,
-such as a run composer, because both answer a client the way an endpoint does; background services and the
-local-model proxy forwarder are deliberately outside it. The test once carried a shrink-only allowlist keyed by
+counts too. The rule now covers the **whole host**, not only its request edge: every SignalR hub, every
+DI-constructed class under `Endpoints/`, and every other class in the host assembly that DI builds — hosted
+services, hub-side event publishers, exception handlers, authentication handlers, boot backfills. The composition
+root is outside it by construction rather than by exemption (`Program`, `ConfigureServices` and the
+`Add*Extensions` classes are static or parameterless, and naming a concrete implementation is what composing the
+object graph *is*), and so is the Data Protection key ring, whose decryptor type name is persisted inside every
+encrypted key-ring element and therefore cannot move. `HostServiceResolutionTests` closes the other half of the
+same rule with a source scan: a host class may not pull a forbidden type out of the container with
+`GetRequiredService<T>` either, which is how three retention sweepers held persistence stores that no constructor
+scan could see. A host type that genuinely cannot move down — the model proxy's forwarder owns an `HttpContext`,
+first-run provisioning gates on the process's own launch mode — takes what it needs through an application-layer
+service instead, which is what `LlamaCppRuntimeOrchestrationService` is. The test once carried a shrink-only allowlist keyed by
 fully-qualified endpoint-and-parameter pairs,
 frozen at the persistence-store and concrete-provider injections that existed when the rule was written; slices
 S6a–S6m migrated those sites area by area until it was empty and then deleted it. Nothing may be added back: a

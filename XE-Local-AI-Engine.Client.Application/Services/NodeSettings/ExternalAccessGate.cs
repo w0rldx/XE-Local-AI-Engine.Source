@@ -1,6 +1,4 @@
-namespace XE_Local_AI_Engine.Client.BackgroundServices;
-
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
+namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The wait-until-decided gate the three automatic outbound checks share: it returns once the node's external-access
@@ -13,15 +11,15 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     administrator exists and the first-run choice has not been made. After the boot backfill an upgraded node is
 ///     always decided before the host accepts a request, so this wait is only ever paid on a fresh install.
 /// </remarks>
-internal static class ExternalAccessGate
+public static class ExternalAccessGate
 {
-    internal static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
     ///     Returns once the external-access profile is decided, or throws <see cref="OperationCanceledException" /> when
     ///     <paramref name="cancellationToken" /> fires — which every caller already treats as shutdown.
     /// </summary>
-    internal static async Task WaitUntilDecidedAsync(INodeRuntimeSettings runtimeSettings,
+    public static async Task WaitUntilDecidedAsync(INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {

@@ -87,6 +87,17 @@ public static class NodeSchedulerServiceCollectionExtensions
         // hosts. The Client host registers a hub-backed publisher (ConfigureServices) that supersedes this.
         builder.Services.TryAddSingleton<ISchedulerEventPublisher, NullSchedulerEventPublisher>();
 
+        // Scheduler history retention: ages out scheduled_job_runs rows on the SchedulerOptions cadence. It resolves the
+        // run store from a per-sweep scope, and only this layer may reach a persistence store, so it is registered here
+        // rather than in the host. Inside the Enabled guard is where it already effectively lived: the service's own
+        // first act is to return when the scheduler is disabled, because no jobs fire and no history accrues.
+        builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
+
+        // Startup self-heal for persisted Quartz job details whose stored JOB_CLASS_NAME no longer resolves. Registered
+        // last so it starts AFTER AddQuartzHostedService above, which is what makes the scheduler factory and job store
+        // usable by the time its StartAsync runs.
+        builder.Services.AddHostedService<SchedulerJobDetailReconciliationService>();
+
         return builder;
     }
 }

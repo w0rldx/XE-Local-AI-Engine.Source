@@ -48,6 +48,19 @@ internal static class AddNodeChatExtensions
         builder.Services.AddSingleton<IConversationSummarizer, ConversationSummarizer>();
         builder.Services.AddScoped<IConversationCompactionService, ConversationCompactionService>();
 
+        // Chat retention is disabled by default (ChatRetentionOptions.Enabled = false): it permanently deletes user
+        // chat history, so it must be explicitly opted into via the ChatRetention config section. Validated on start so
+        // a bad window (RetentionDays <= 0 sets the sweep cutoff at/after "now" and would purge everything) fails fast
+        // instead of silently deleting all conversations the moment retention is enabled.
+        builder.Services.AddOptions<ChatRetentionOptions>()
+               .Bind(builder.Configuration.GetSection(ChatRetentionOptions.Section))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
+
+        // The sweeper itself. It resolves the retention, uploaded-file and work-session stores from a per-sweep scope,
+        // and only this layer may reach a persistence store, so it is registered here rather than in the host.
+        builder.Services.AddHostedService<RetentionSweeperService>();
+
         return builder;
     }
 }

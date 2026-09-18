@@ -170,6 +170,16 @@ internal static class AddNodeModelRuntimeExtensions
         // AddLlamaServerLocalModelProvider above, so this wrapper is a Singleton too.
         builder.Services.AddSingleton<LlamaCppRuntimeOrchestrationService>();
 
+        // Opt-in local-model residency keeper. It polls live node settings and periodically touches the selected model so
+        // the provider reuses its resident process and refreshes idle age without blocking startup. Registered here
+        // rather than in the host because it takes the supervisor contract directly, and only this layer may.
+        builder.Services.AddHostedService<KeepModelWarmBackgroundService>();
+
+        // One-shot llama.cpp runtime update check: after a short non-blocking delay, resolves the recommended tag against
+        // the live release catalog and compares it to the installed runtime, recording an "update available" snapshot
+        // (read by the runtime-status endpoint). Notify-only + offline-tolerant; never downloads a binary on its own.
+        builder.Services.AddHostedService<LlamaCppUpdateCheckService>();
+
         // The process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
         // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A
         // plain AddSingleton wins over each provider's TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>()
