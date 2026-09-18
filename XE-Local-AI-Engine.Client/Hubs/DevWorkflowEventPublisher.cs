@@ -7,10 +7,17 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///     Pushes a committed development-workflow change to that run's group. Supersedes the no-op the application module
 ///     registers, so a host without this hub stays resolvable.
 /// </summary>
-internal sealed class DevWorkflowEventPublisher(IHubContext<DevWorkflowRunHub> hubContext) : IDevWorkflowEventPublisher
+internal sealed class DevWorkflowEventPublisher : IDevWorkflowEventPublisher
 {
+    private readonly IHubContext<DevWorkflowRunHub> _hubContext;
+
+    public DevWorkflowEventPublisher(IHubContext<DevWorkflowRunHub> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
     public Task PublishAsync(Guid runId, long sequence, DevWorkflowChangeKind kind, CancellationToken cancellationToken = default) =>
-        hubContext.Clients.Group(DevWorkflowHubGroups.Run(runId))
+        _hubContext.Clients.Group(DevWorkflowHubGroups.Run(runId))
                   .SendAsync(DevWorkflowHubEvents.Changed, new DevWorkflowChanged(runId, sequence, ToWireKind(kind)), cancellationToken);
 
     /// <summary>

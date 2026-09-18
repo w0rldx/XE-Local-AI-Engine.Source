@@ -10,11 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Reports the toolchain checklist for a backend, so the operator sees which prerequisite is missing instead of
 ///     only that one is. Operator-gated.
 /// </summary>
-public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
-    : Endpoint<GetWhisperCppSourceBuildPrerequisitesRequest, WhisperCppSourceBuildPrerequisitesResponse>
+public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint : Endpoint<GetWhisperCppSourceBuildPrerequisitesRequest, WhisperCppSourceBuildPrerequisitesResponse>
 {
-    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
-        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
+
+    public GetWhisperCppSourceBuildPrerequisitesEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
+    {
+        ArgumentNullException.ThrowIfNull(whisperRuntime);
+        _whisperRuntime = whisperRuntime;
+    }
 
     public override void Configure()
     {

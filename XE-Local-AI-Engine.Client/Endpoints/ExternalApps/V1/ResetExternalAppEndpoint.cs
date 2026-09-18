@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         disconnects cancels nothing. Follow the rest on the hub.
 ///     </para>
 /// </summary>
-public sealed class ResetExternalAppEndpoint(IExternalAppService apps)
-    : Endpoint<ExternalAppInstanceCommandRequest, ExternalAppInstanceSummaryView>
+public sealed class ResetExternalAppEndpoint : Endpoint<ExternalAppInstanceCommandRequest, ExternalAppInstanceSummaryView>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public ResetExternalAppEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

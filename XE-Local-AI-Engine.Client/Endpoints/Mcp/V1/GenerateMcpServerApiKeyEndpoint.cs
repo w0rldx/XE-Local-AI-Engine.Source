@@ -16,10 +16,15 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 ///         A caller that discards this body cannot get the key back from any other endpoint.
 ///     </para>
 /// </summary>
-public sealed class GenerateMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKeyService)
-    : EndpointWithoutRequest<GeneratedMcpServerApiKeyResponse>
+public sealed class GenerateMcpServerApiKeyEndpoint : EndpointWithoutRequest<GeneratedMcpServerApiKeyResponse>
 {
-    private readonly IMcpServerApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly IMcpServerApiKeyService _apiKeyService;
+
+    public GenerateMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

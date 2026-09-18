@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     while a transcription or a spawn is in flight, carrying the activity snapshot so the operator can see what to
 ///     wait for rather than being told only that it failed. Operator-gated.
 /// </summary>
-public sealed class EjectTranscriptionRuntimeEndpoint(ITranscriptionRuntimeService runtimeService)
-    : Endpoint<TranscriptionRuntimeActionRequest, TranscriptionRuntimeStatusResponse>
+public sealed class EjectTranscriptionRuntimeEndpoint : Endpoint<TranscriptionRuntimeActionRequest, TranscriptionRuntimeStatusResponse>
 {
-    private readonly ITranscriptionRuntimeService _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
+    private readonly ITranscriptionRuntimeService _runtimeService;
+
+    public EjectTranscriptionRuntimeEndpoint(ITranscriptionRuntimeService runtimeService)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeService);
+        _runtimeService = runtimeService;
+    }
 
     public override void Configure()
     {

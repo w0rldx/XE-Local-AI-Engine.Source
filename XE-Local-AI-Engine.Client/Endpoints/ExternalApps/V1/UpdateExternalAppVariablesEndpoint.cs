@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         an empty string clears it. Reconfiguring a running instance is a 409 <c>ExternalAppInvalidTransition</c>.
 ///     </para>
 /// </summary>
-public sealed class UpdateExternalAppVariablesEndpoint(IExternalAppService apps)
-    : Endpoint<UpdateExternalAppVariablesRequest, ExternalAppInstanceView>
+public sealed class UpdateExternalAppVariablesEndpoint : Endpoint<UpdateExternalAppVariablesRequest, ExternalAppInstanceView>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public UpdateExternalAppVariablesEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

@@ -11,9 +11,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     asked to stop rather than having a terminal status written over work still in flight — so a 200 would tell a
 ///     schema-trusting client the cancel had finished. A run that is already terminal answers 409.
 /// </summary>
-public sealed class CancelGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs) : Endpoint<GraphWorkflowRunRequest, GraphWorkflowRunResponse>
+public sealed class CancelGraphWorkflowRunEndpoint : Endpoint<GraphWorkflowRunRequest, GraphWorkflowRunResponse>
 {
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IGraphWorkflowRunService _runs;
+
+    public CancelGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

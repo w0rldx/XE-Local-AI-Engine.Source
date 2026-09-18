@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 ///         sessions and in-flight executions the old one owned.
 ///     </para>
 /// </summary>
-public sealed class GenerateIntegrationApiKeyEndpoint(IIntegrationApiKeyService apiKeyService)
-    : Endpoint<GenerateIntegrationApiKeyRequest, GenerateIntegrationApiKeyResponse>
+public sealed class GenerateIntegrationApiKeyEndpoint : Endpoint<GenerateIntegrationApiKeyRequest, GenerateIntegrationApiKeyResponse>
 {
-    private readonly IIntegrationApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly IIntegrationApiKeyService _apiKeyService;
+
+    public GenerateIntegrationApiKeyEndpoint(IIntegrationApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

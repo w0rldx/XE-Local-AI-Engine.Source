@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     Lists the bundled files of one skill — names, descriptions, media types and sizes. Contents are deliberately
 ///     absent: a resource is up to a megabyte of third-party text and the list only needs to say what exists.
 /// </summary>
-public sealed class ListSkillResourcesEndpoint(IAgentSkillService agentSkillService)
-    : Endpoint<ListSkillResourcesRequest, ListSkillResourcesResponse>
+public sealed class ListSkillResourcesEndpoint : Endpoint<ListSkillResourcesRequest, ListSkillResourcesResponse>
 {
-    private readonly IAgentSkillService _agentSkillService = agentSkillService ?? throw new ArgumentNullException(nameof(agentSkillService));
+    private readonly IAgentSkillService _agentSkillService;
+
+    public ListSkillResourcesEndpoint(IAgentSkillService agentSkillService)
+    {
+        ArgumentNullException.ThrowIfNull(agentSkillService);
+        _agentSkillService = agentSkillService;
+    }
 
     public override void Configure()
     {

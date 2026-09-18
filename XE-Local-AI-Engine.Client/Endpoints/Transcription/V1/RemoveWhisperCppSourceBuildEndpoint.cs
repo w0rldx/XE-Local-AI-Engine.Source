@@ -13,11 +13,15 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     without it, a record proven unusable can only be cleared by hand. Refuses with <c>409 runtime-busy</c> while
 ///     anything holds the runtime. Operator-gated.
 /// </summary>
-public sealed class RemoveWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
-    : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
+public sealed class RemoveWhisperCppSourceBuildEndpoint : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
 {
-    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
-        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
+
+    public RemoveWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
+    {
+        ArgumentNullException.ThrowIfNull(whisperRuntime);
+        _whisperRuntime = whisperRuntime;
+    }
 
     public override void Configure()
     {

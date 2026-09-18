@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 ///     404 when the case is missing, already enabled, manual, or belongs to another agent. A route-only POST (the client
 ///     posts <c>{}</c>). Operator-gated.
 /// </summary>
-public sealed class ApproveGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)
-    : Endpoint<ApproveGoldenConversationRequest, GoldenConversationResponse>
+public sealed class ApproveGoldenConversationEndpoint : Endpoint<ApproveGoldenConversationRequest, GoldenConversationResponse>
 {
-    private readonly IGoldenConversationService _goldenConversationService = goldenConversationService ?? throw new ArgumentNullException(nameof(goldenConversationService));
+    private readonly IGoldenConversationService _goldenConversationService;
+
+    public ApproveGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)
+    {
+        ArgumentNullException.ThrowIfNull(goldenConversationService);
+        _goldenConversationService = goldenConversationService;
+    }
 
     public override void Configure()
     {

@@ -4,19 +4,28 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-internal sealed class LlamaCppSourceBuildEventPublisher(
-    IHubContext<LlamaCppSourceBuildHub> sourceHubContext,
-    IHubContext<CudaBuildHub> cudaHubContext) : ILlamaCppSourceBuildEventPublisher
+internal sealed class LlamaCppSourceBuildEventPublisher : ILlamaCppSourceBuildEventPublisher
 {
+    private readonly IHubContext<LlamaCppSourceBuildHub> _sourceHubContext;
+    private readonly IHubContext<CudaBuildHub> _cudaHubContext;
+
+    public LlamaCppSourceBuildEventPublisher(
+        IHubContext<LlamaCppSourceBuildHub> sourceHubContext,
+        IHubContext<CudaBuildHub> cudaHubContext)
+    {
+        _sourceHubContext = sourceHubContext;
+        _cudaHubContext = cudaHubContext;
+    }
+
     public async Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
-        await sourceHubContext.Clients.All.SendAsync(LlamaCppSourceBuildHubEvents.StatusChanged,
+        await _sourceHubContext.Clients.All.SendAsync(LlamaCppSourceBuildHubEvents.StatusChanged,
             LlamaCppSourceBuildStatusHubMessage.FromContract(statusEvent), cancellationToken);
 
         if (statusEvent.CurrentBuild.IsLegacyPinnedCuda())
         {
-            await cudaHubContext.Clients.All.SendAsync(CudaBuildHubEvents.StatusChanged,
+            await _cudaHubContext.Clients.All.SendAsync(CudaBuildHubEvents.StatusChanged,
                 new CudaBuildStatusHubEvent(statusEvent.Phase, statusEvent.AppendedLogLines, statusEvent.Terminal, statusEvent.SanitizedError),
                 cancellationToken);
         }

@@ -9,10 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 ///     Deletes a trigger. A HARD delete: past executions keep their own trigger id, so the history outlives the
 ///     definition, and a caller that invokes the removed name gets the ordinary 404.
 /// </summary>
-public sealed class DeleteIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
-    : EndpointWithoutRequest
+public sealed class DeleteIntegrationTriggerEndpoint : EndpointWithoutRequest
 {
-    private readonly IIntegrationTriggerService _triggerService = triggerService ?? throw new ArgumentNullException(nameof(triggerService));
+    private readonly IIntegrationTriggerService _triggerService;
+
+    public DeleteIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
+    {
+        ArgumentNullException.ThrowIfNull(triggerService);
+        _triggerService = triggerService;
+    }
 
     public override void Configure()
     {

@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     the model name, which is operator-supplied text, so the store — not this endpoint — owns the containment guard
 ///     that keeps the delete inside the models directory.
 /// </remarks>
-public sealed class DeleteImageModelEndpoint(IImageModelStore modelStore)
-    : Endpoint<DeleteImageModelRequest>
+public sealed class DeleteImageModelEndpoint : Endpoint<DeleteImageModelRequest>
 {
-    private readonly IImageModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+    private readonly IImageModelStore _modelStore;
+
+    public DeleteImageModelEndpoint(IImageModelStore modelStore)
+    {
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _modelStore = modelStore;
+    }
 
     public override void Configure()
     {

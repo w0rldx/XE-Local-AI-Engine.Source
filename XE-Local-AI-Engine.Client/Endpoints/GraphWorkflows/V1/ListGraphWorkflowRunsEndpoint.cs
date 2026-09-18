@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>The run list, newest first. No node runs and no documents: this is the page that picks a run to open.</summary>
-public sealed class ListGraphWorkflowRunsEndpoint(IGraphWorkflowRunService runs) : Endpoint<ListGraphWorkflowRunsRequest, ListGraphWorkflowRunsResponse>
+public sealed class ListGraphWorkflowRunsEndpoint : Endpoint<ListGraphWorkflowRunsRequest, ListGraphWorkflowRunsResponse>
 {
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IGraphWorkflowRunService _runs;
+
+    public ListGraphWorkflowRunsEndpoint(IGraphWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

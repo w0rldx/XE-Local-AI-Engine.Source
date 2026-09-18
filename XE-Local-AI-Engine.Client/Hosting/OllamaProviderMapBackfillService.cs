@@ -25,12 +25,20 @@ using XE_Local_AI_Engine.Client.Services.Models;
 ///         removed by the test host's <c>RemoveAll&lt;IHostedService&gt;()</c>, so it never perturbs request-path tests.
 ///     </para>
 /// </remarks>
-public sealed class OllamaProviderMapBackfillService(
-    IServiceScopeFactory scopeFactory,
-    ILogger<OllamaProviderMapBackfillService> logger) : BackgroundService
+public sealed class OllamaProviderMapBackfillService : BackgroundService
 {
-    private readonly ILogger<OllamaProviderMapBackfillService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly ILogger<OllamaProviderMapBackfillService> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public OllamaProviderMapBackfillService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<OllamaProviderMapBackfillService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

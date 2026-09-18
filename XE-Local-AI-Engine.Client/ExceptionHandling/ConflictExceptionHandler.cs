@@ -26,10 +26,16 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///         keeps its own typed <c>*BlockedResponse</c> body and never reaches this handler; see ADR 0009.
 ///     </para>
 /// </summary>
-public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) : IExceptionHandler
+public class ConflictExceptionHandler : IExceptionHandler
 {
     /// <summary>Same string FastEndpoints' ResponseSerializer writes, so a 409 looks like every other problem body.</summary>
     private const string ProblemContentType = "application/problem+json; charset=utf-8";
+    private readonly ILogger<ConflictExceptionHandler> _logger;
+
+    public ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
 
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
@@ -75,7 +81,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             return false;
         }
 
-        logger.LogWarning(exception,
+        _logger.LogWarning(exception,
             "Handled conflict exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),

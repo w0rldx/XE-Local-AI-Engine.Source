@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///         the same shape whether there are zero errors or five.
 ///     </para>
 /// </summary>
-public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
-    : Endpoint<ValidateGraphWorkflowDefinitionRequest, ValidateGraphWorkflowDefinitionResponse>
+public sealed class ValidateGraphWorkflowDefinitionEndpoint : Endpoint<ValidateGraphWorkflowDefinitionRequest, ValidateGraphWorkflowDefinitionResponse>
 {
-    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IGraphWorkflowDefinitionService _definitions;
+
+    public ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {

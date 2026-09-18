@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 ///     ok/reason. This is not a filesystem browser: it validates one path the UI supplies. Desktop-only (a headless
 ///     host has no operator picking a local binary) and Operator-gated.
 /// </summary>
-public sealed class ValidateExecutableEndpoint(ICustomToolService customToolService)
-    : Endpoint<ProbeExecutableRequest, HostExecutableProbeResult>, IDesktopOnlyEndpoint
+public sealed class ValidateExecutableEndpoint : Endpoint<ProbeExecutableRequest, HostExecutableProbeResult>, IDesktopOnlyEndpoint
 {
-    private readonly ICustomToolService _customToolService = customToolService ?? throw new ArgumentNullException(nameof(customToolService));
+    private readonly ICustomToolService _customToolService;
+
+    public ValidateExecutableEndpoint(ICustomToolService customToolService)
+    {
+        ArgumentNullException.ThrowIfNull(customToolService);
+        _customToolService = customToolService;
+    }
 
     public override void Configure()
     {

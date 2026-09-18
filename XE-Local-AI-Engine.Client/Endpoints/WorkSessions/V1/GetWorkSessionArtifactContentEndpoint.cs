@@ -12,11 +12,17 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     One artifact's bytes as JSON rather than a stream: a binary response would leave the generated SDK and need
 ///     hand-wiring on the client's HTTP layer for the one route that does not go through it.
 /// </summary>
-public sealed class GetWorkSessionArtifactContentEndpoint(IWorkSessionService service, IOptions<WorkSessionOptions> options)
-    : Endpoint<WorkSessionArtifactRequest, WorkSessionArtifactContentResponse>
+public sealed class GetWorkSessionArtifactContentEndpoint : Endpoint<WorkSessionArtifactRequest, WorkSessionArtifactContentResponse>
 {
-    private readonly WorkSessionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly WorkSessionOptions _options;
+    private readonly IWorkSessionService _service;
+
+    public GetWorkSessionArtifactContentEndpoint(IWorkSessionService service, IOptions<WorkSessionOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

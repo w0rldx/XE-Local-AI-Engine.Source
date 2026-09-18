@@ -12,13 +12,18 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     404) so the UI can render the empty/diagnostics state. The provider-name query param is gone: the advisor is the
 ///     single recommendation backend and writes the fixed <c>llama.cpp</c> provider sentinel into the snapshot key.
 /// </summary>
-public sealed class GetLatestRecommendationsEndpoint(IModelFitQueryService modelFitQueryService)
-    : Endpoint<GetLatestRecommendationsRequest, GetLatestRecommendationsResponse>
+public sealed class GetLatestRecommendationsEndpoint : Endpoint<GetLatestRecommendationsRequest, GetLatestRecommendationsResponse>
 {
     /// <summary>The advisor's fixed provider sentinel — the snapshot key the box-aware recommendation is cached under.</summary>
     private const string AdvisorProviderName = "llama.cpp";
 
-    private readonly IModelFitQueryService _modelFitQueryService = modelFitQueryService ?? throw new ArgumentNullException(nameof(modelFitQueryService));
+    private readonly IModelFitQueryService _modelFitQueryService;
+
+    public GetLatestRecommendationsEndpoint(IModelFitQueryService modelFitQueryService)
+    {
+        ArgumentNullException.ThrowIfNull(modelFitQueryService);
+        _modelFitQueryService = modelFitQueryService;
+    }
 
     public override void Configure()
     {

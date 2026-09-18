@@ -43,10 +43,17 @@ public sealed record GraphWorkflowRunSubscriptionSnapshot(
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class GraphWorkflowRunHub(IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options) : Hub
+public sealed class GraphWorkflowRunHub : Hub
 {
-    private readonly GraphWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly GraphWorkflowOptions _options;
+    private readonly IGraphWorkflowRunService _runs;
+
+    public GraphWorkflowRunHub(IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public async Task<GraphWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
     {

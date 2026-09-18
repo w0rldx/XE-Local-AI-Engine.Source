@@ -13,11 +13,15 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     status route. Every refusal is a 409 carrying a reason code and the activity snapshot, so the operator is told
 ///     what to wait for or what to install. Operator-gated.
 /// </summary>
-public sealed class StartWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
-    : Endpoint<StartWhisperCppSourceBuildRequest, StartWhisperCppSourceBuildResponse>
+public sealed class StartWhisperCppSourceBuildEndpoint : Endpoint<StartWhisperCppSourceBuildRequest, StartWhisperCppSourceBuildResponse>
 {
-    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
-        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
+
+    public StartWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
+    {
+        ArgumentNullException.ThrowIfNull(whisperRuntime);
+        _whisperRuntime = whisperRuntime;
+    }
 
     public override void Configure()
     {

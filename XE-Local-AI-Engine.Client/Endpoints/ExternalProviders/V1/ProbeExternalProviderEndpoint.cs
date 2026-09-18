@@ -23,10 +23,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///         OpenAI-compatible servers, so refusing such a connection would refuse working ones.
 ///     </para>
 /// </remarks>
-public sealed class ProbeExternalProviderEndpoint(IExternalProviderProbeService probeService)
-    : Endpoint<ExternalProviderProbeRequest, ExternalProviderProbeResponse>
+public sealed class ProbeExternalProviderEndpoint : Endpoint<ExternalProviderProbeRequest, ExternalProviderProbeResponse>
 {
-    private readonly IExternalProviderProbeService _probeService = probeService ?? throw new ArgumentNullException(nameof(probeService));
+    private readonly IExternalProviderProbeService _probeService;
+
+    public ProbeExternalProviderEndpoint(IExternalProviderProbeService probeService)
+    {
+        ArgumentNullException.ThrowIfNull(probeService);
+        _probeService = probeService;
+    }
 
     public override void Configure()
     {

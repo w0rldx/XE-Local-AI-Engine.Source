@@ -11,9 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 ///     Enqueues an evaluation of one side of a training run against that run's own frozen hold-out membership. The
 ///     queue is single-consumer, so this only enqueues — scoring starts once nothing else is holding the GPU.
 /// </summary>
-public sealed class CreateEvaluationEndpoint(IEvaluationRunService evaluations) : Endpoint<CreateEvaluationRequest, EvaluationResponse>
+public sealed class CreateEvaluationEndpoint : Endpoint<CreateEvaluationRequest, EvaluationResponse>
 {
-    private readonly IEvaluationRunService _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
+    private readonly IEvaluationRunService _evaluations;
+
+    public CreateEvaluationEndpoint(IEvaluationRunService evaluations)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        _evaluations = evaluations;
+    }
 
     public override void Configure()
     {
@@ -34,9 +40,15 @@ public sealed class CreateEvaluationEndpoint(IEvaluationRunService evaluations) 
     }
 }
 
-public sealed class GetEvaluationEndpoint(IEvaluationRunService evaluations) : Endpoint<EvaluationByIdRequest, EvaluationResponse>
+public sealed class GetEvaluationEndpoint : Endpoint<EvaluationByIdRequest, EvaluationResponse>
 {
-    private readonly IEvaluationRunService _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
+    private readonly IEvaluationRunService _evaluations;
+
+    public GetEvaluationEndpoint(IEvaluationRunService evaluations)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        _evaluations = evaluations;
+    }
 
     public override void Configure()
     {
@@ -57,9 +69,15 @@ public sealed class GetEvaluationEndpoint(IEvaluationRunService evaluations) : E
     }
 }
 
-public sealed class ListEvaluationsEndpoint(IEvaluationRunService evaluations) : Endpoint<ListEvaluationsRequest, ListEvaluationsResponse>
+public sealed class ListEvaluationsEndpoint : Endpoint<ListEvaluationsRequest, ListEvaluationsResponse>
 {
-    private readonly IEvaluationRunService _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
+    private readonly IEvaluationRunService _evaluations;
+
+    public ListEvaluationsEndpoint(IEvaluationRunService evaluations)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        _evaluations = evaluations;
+    }
 
     public override void Configure()
     {
@@ -78,9 +96,15 @@ public sealed class ListEvaluationsEndpoint(IEvaluationRunService evaluations) :
 }
 
 /// <summary>Re-queues an interrupted evaluation; the executor continues at the next unscored sample.</summary>
-public sealed class ResumeEvaluationEndpoint(IEvaluationRunService evaluations) : Endpoint<EvaluationByIdRequest, EvaluationResponse>
+public sealed class ResumeEvaluationEndpoint : Endpoint<EvaluationByIdRequest, EvaluationResponse>
 {
-    private readonly IEvaluationRunService _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
+    private readonly IEvaluationRunService _evaluations;
+
+    public ResumeEvaluationEndpoint(IEvaluationRunService evaluations)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        _evaluations = evaluations;
+    }
 
     public override void Configure()
     {
@@ -98,9 +122,15 @@ public sealed class ResumeEvaluationEndpoint(IEvaluationRunService evaluations) 
     }
 }
 
-public sealed class CancelEvaluationEndpoint(IEvaluationRunService evaluations) : Endpoint<EvaluationByIdRequest>
+public sealed class CancelEvaluationEndpoint : Endpoint<EvaluationByIdRequest>
 {
-    private readonly IEvaluationRunService _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
+    private readonly IEvaluationRunService _evaluations;
+
+    public CancelEvaluationEndpoint(IEvaluationRunService evaluations)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        _evaluations = evaluations;
+    }
 
     public override void Configure()
     {
@@ -121,9 +151,15 @@ public sealed class CancelEvaluationEndpoint(IEvaluationRunService evaluations) 
     }
 }
 
-public sealed class DeleteEvaluationEndpoint(IEvaluationRunService evaluations) : Endpoint<DeleteEvaluationRequest>
+public sealed class DeleteEvaluationEndpoint : Endpoint<DeleteEvaluationRequest>
 {
-    private readonly IEvaluationRunService _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
+    private readonly IEvaluationRunService _evaluations;
+
+    public DeleteEvaluationEndpoint(IEvaluationRunService evaluations)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        _evaluations = evaluations;
+    }
 
     public override void Configure()
     {

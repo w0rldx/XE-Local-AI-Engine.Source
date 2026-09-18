@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-public sealed class GetNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService) : EndpointWithoutRequest<NodeSettingsResponse>
+public sealed class GetNodeSettingsEndpoint : EndpointWithoutRequest<NodeSettingsResponse>
 {
-    private readonly INodeSettingsAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
+    private readonly INodeSettingsAdministrationService _administrationService;
+
+    public GetNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        _administrationService = administrationService;
+    }
 
     public override void Configure()
     {

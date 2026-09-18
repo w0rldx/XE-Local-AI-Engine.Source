@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Sets or clears the operator's model choice and returns the refreshed catalogue. A null or blank id clears the
 ///     override, so the node falls back to the hardware recommendation. Operator-gated.
 /// </summary>
-public sealed class SelectTranscriptionModelEndpoint(ITranscriptionRuntimeService runtimeService)
-    : Endpoint<SelectTranscriptionModelRequest, TranscriptionModelListResponse>
+public sealed class SelectTranscriptionModelEndpoint : Endpoint<SelectTranscriptionModelRequest, TranscriptionModelListResponse>
 {
-    private readonly ITranscriptionRuntimeService _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
+    private readonly ITranscriptionRuntimeService _runtimeService;
+
+    public SelectTranscriptionModelEndpoint(ITranscriptionRuntimeService runtimeService)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeService);
+        _runtimeService = runtimeService;
+    }
 
     public override void Configure()
     {

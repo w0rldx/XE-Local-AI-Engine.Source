@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 // Incremental feeds use ?sinceSeq= so a hub notification refreshes only data after the caller's watermark.
 
-public sealed class ListWorkSessionTasksEndpoint(IWorkSessionService service) : Endpoint<WorkSessionFeedRequest, ListWorkSessionTasksResponse>
+public sealed class ListWorkSessionTasksEndpoint : Endpoint<WorkSessionFeedRequest, ListWorkSessionTasksResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ListWorkSessionTasksEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -28,9 +34,15 @@ public sealed class ListWorkSessionTasksEndpoint(IWorkSessionService service) : 
     }
 }
 
-public sealed class ListWorkSessionFindingsEndpoint(IWorkSessionService service) : Endpoint<WorkSessionFeedRequest, ListWorkSessionFindingsResponse>
+public sealed class ListWorkSessionFindingsEndpoint : Endpoint<WorkSessionFeedRequest, ListWorkSessionFindingsResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ListWorkSessionFindingsEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -48,9 +60,15 @@ public sealed class ListWorkSessionFindingsEndpoint(IWorkSessionService service)
     }
 }
 
-public sealed class ListWorkSessionArtifactsEndpoint(IWorkSessionService service) : Endpoint<WorkSessionFeedRequest, ListWorkSessionArtifactsResponse>
+public sealed class ListWorkSessionArtifactsEndpoint : Endpoint<WorkSessionFeedRequest, ListWorkSessionArtifactsResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ListWorkSessionArtifactsEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -68,10 +86,15 @@ public sealed class ListWorkSessionArtifactsEndpoint(IWorkSessionService service
     }
 }
 
-public sealed class ListWorkSessionCheckpointsEndpoint(IWorkSessionService service)
-    : Endpoint<WorkSessionFeedRequest, ListWorkSessionCheckpointsResponse>
+public sealed class ListWorkSessionCheckpointsEndpoint : Endpoint<WorkSessionFeedRequest, ListWorkSessionCheckpointsResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ListWorkSessionCheckpointsEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -89,9 +112,15 @@ public sealed class ListWorkSessionCheckpointsEndpoint(IWorkSessionService servi
     }
 }
 
-public sealed class ListWorkSessionEventsEndpoint(IWorkSessionService service) : Endpoint<WorkSessionEventFeedRequest, ListWorkSessionEventsResponse>
+public sealed class ListWorkSessionEventsEndpoint : Endpoint<WorkSessionEventFeedRequest, ListWorkSessionEventsResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ListWorkSessionEventsEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

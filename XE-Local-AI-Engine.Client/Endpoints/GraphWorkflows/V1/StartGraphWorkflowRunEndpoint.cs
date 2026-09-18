@@ -16,9 +16,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///         it never saw the answer to.
 ///     </para>
 /// </summary>
-public sealed class StartGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs) : Endpoint<StartGraphWorkflowRunRequest, StartGraphWorkflowRunResponse>
+public sealed class StartGraphWorkflowRunEndpoint : Endpoint<StartGraphWorkflowRunRequest, StartGraphWorkflowRunResponse>
 {
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IGraphWorkflowRunService _runs;
+
+    public StartGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

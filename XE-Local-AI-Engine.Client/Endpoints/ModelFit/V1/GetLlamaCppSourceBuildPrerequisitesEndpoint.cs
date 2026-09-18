@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrationService runtime)
-    : Endpoint<GetLlamaCppSourceBuildPrerequisitesRequest, LlamaCppSourceBuildPrerequisitesResponse>
+public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint : Endpoint<GetLlamaCppSourceBuildPrerequisitesRequest, LlamaCppSourceBuildPrerequisitesResponse>
 {
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public GetLlamaCppSourceBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrationService runtime)
+    {
+        _runtime = runtime;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.ModelFit.SourceBuildPrerequisites);
@@ -21,7 +27,7 @@ public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(LlamaCppRuntimeO
     public override async Task HandleAsync(GetLlamaCppSourceBuildPrerequisitesRequest request, CancellationToken ct)
     {
         var backend = request.Backend.ToContract();
-        var report = await runtime.ProbeSourceBuildPrerequisitesAsync(backend, ct);
+        var report = await _runtime.ProbeSourceBuildPrerequisitesAsync(backend, ct);
         await Send.OkAsync(report.ToResponse(backend), ct);
     }
 }

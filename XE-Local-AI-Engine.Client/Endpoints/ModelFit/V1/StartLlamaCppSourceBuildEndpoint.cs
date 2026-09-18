@@ -9,10 +9,19 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-public sealed class StartLlamaCppSourceBuildEndpoint(
-    LlamaCppRuntimeOrchestrationService runtime,
-    INodeRuntimeSettings nodeRuntimeSettings) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
+public sealed class StartLlamaCppSourceBuildEndpoint : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
 {
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
+
+    public StartLlamaCppSourceBuildEndpoint(
+        LlamaCppRuntimeOrchestrationService runtime,
+        INodeRuntimeSettings nodeRuntimeSettings)
+    {
+        _runtime = runtime;
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.ModelFit.SourceBuild);
@@ -32,7 +41,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
         }
 
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct))
+                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
         {
             await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage);
             return;
@@ -42,7 +51,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
         // server-selected fields are already populated, and the strict official-source rules would reject it.
         try
         {
-            var result = await runtime.StartSourceBuildAsync(request.ToContract(), ct);
+            var result = await _runtime.StartSourceBuildAsync(request.ToContract(), ct);
             var blocked = LlamaCppSourceBuildStartEndpointSupport.MapBlocked(result.Outcome,
                 LlamaCppSourceBuildStartEndpointSupport.SourceBuildKind);
             if (blocked is not null)
@@ -64,7 +73,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
             await Send.OkAsync(new StartLlamaCppSourceBuildResponse
             {
                 Started = true,
-                Status = runtime.GetSourceBuildStatus().ToResponse()
+                Status = _runtime.GetSourceBuildStatus().ToResponse()
             }, ct);
         }
         catch (LlamaRuntimeException exception)

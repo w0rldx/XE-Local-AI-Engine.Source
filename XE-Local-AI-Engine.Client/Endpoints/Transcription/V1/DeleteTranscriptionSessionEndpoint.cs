@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     the id is unknown. There is no audio to delete — the uploaded bytes were removed when the upload that produced
 ///     the transcript ended. Operator-gated.
 /// </summary>
-public sealed class DeleteTranscriptionSessionEndpoint(ITranscriptionService sessions)
-    : Endpoint<TranscriptionSessionRouteRequest>
+public sealed class DeleteTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest>
 {
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ITranscriptionService _sessions;
+
+    public DeleteTranscriptionSessionEndpoint(ITranscriptionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

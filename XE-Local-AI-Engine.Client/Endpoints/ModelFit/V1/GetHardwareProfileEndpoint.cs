@@ -15,11 +15,18 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 ///     Carries NO machine identifier (hostname/serial) — aggregates only. A <c>?refresh=true</c> query bypasses the
 ///     in-memory caches and re-probes.
 /// </summary>
-public sealed class GetHardwareProfileEndpoint(IHardwareProfiler hardwareProfiler, IRuntimeDeviceAudit runtimeAudit)
-    : Endpoint<GetHardwareProfileRequest, HardwareProfileResponse>
+public sealed class GetHardwareProfileEndpoint : Endpoint<GetHardwareProfileRequest, HardwareProfileResponse>
 {
-    private readonly IHardwareProfiler _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-    private readonly IRuntimeDeviceAudit _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
+    private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly IRuntimeDeviceAudit _runtimeAudit;
+
+    public GetHardwareProfileEndpoint(IHardwareProfiler hardwareProfiler, IRuntimeDeviceAudit runtimeAudit)
+    {
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        ArgumentNullException.ThrowIfNull(runtimeAudit);
+        _hardwareProfiler = hardwareProfiler;
+        _runtimeAudit = runtimeAudit;
+    }
 
     public override void Configure()
     {

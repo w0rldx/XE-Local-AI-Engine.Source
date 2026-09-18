@@ -7,9 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
-public sealed class ListDevWorkflowRunsEndpoint(DevWorkflowRunQueryService runQueries) : Endpoint<ListDevWorkflowRunsRequest, ListDevWorkflowRunsResponse>
+public sealed class ListDevWorkflowRunsEndpoint : Endpoint<ListDevWorkflowRunsRequest, ListDevWorkflowRunsResponse>
 {
-    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
+    private readonly DevWorkflowRunQueryService _runQueries;
+
+    public ListDevWorkflowRunsEndpoint(DevWorkflowRunQueryService runQueries)
+    {
+        ArgumentNullException.ThrowIfNull(runQueries);
+        _runQueries = runQueries;
+    }
 
     public override void Configure()
     {
@@ -37,11 +43,18 @@ public sealed class ListDevWorkflowRunsEndpoint(DevWorkflowRunQueryService runQu
 ///         a work item that names no project is a 400, and a work item that already has a live run is a 409.
 ///     </para>
 /// </summary>
-public sealed class StartDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
-    : Endpoint<StartDevWorkflowRunRequest, DevWorkflowRunResponse>
+public sealed class StartDevWorkflowRunEndpoint : Endpoint<StartDevWorkflowRunRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer = composer ?? throw new ArgumentNullException(nameof(composer));
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly DevWorkflowRunComposer _composer;
+    private readonly IDevWorkflowRunService _runs;
+
+    public StartDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    {
+        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(runs);
+        _composer = composer;
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -62,10 +75,18 @@ public sealed class StartDevWorkflowRunEndpoint(IDevWorkflowRunService runs, Dev
     }
 }
 
-public sealed class GetDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer) : Endpoint<DevWorkflowRunRequest, DevWorkflowRunResponse>
+public sealed class GetDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer = composer ?? throw new ArgumentNullException(nameof(composer));
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly DevWorkflowRunComposer _composer;
+    private readonly IDevWorkflowRunService _runs;
+
+    public GetDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    {
+        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(runs);
+        _composer = composer;
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -87,11 +108,18 @@ public sealed class GetDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWo
 ///     Asks the run to pause. 202 like the other three: the body it returns reads <c>Pausing</c>, because live node
 ///     runs drain first — a 200 would tell a schema-trusting client the pause had finished.
 /// </summary>
-public sealed class PauseDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
-    : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
+public sealed class PauseDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer = composer ?? throw new ArgumentNullException(nameof(composer));
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly DevWorkflowRunComposer _composer;
+    private readonly IDevWorkflowRunService _runs;
+
+    public PauseDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    {
+        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(runs);
+        _composer = composer;
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -112,11 +140,18 @@ public sealed class PauseDevWorkflowRunEndpoint(IDevWorkflowRunService runs, Dev
     }
 }
 
-public sealed class ResumeDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
-    : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
+public sealed class ResumeDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer = composer ?? throw new ArgumentNullException(nameof(composer));
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly DevWorkflowRunComposer _composer;
+    private readonly IDevWorkflowRunService _runs;
+
+    public ResumeDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    {
+        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(runs);
+        _composer = composer;
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -137,11 +172,18 @@ public sealed class ResumeDevWorkflowRunEndpoint(IDevWorkflowRunService runs, De
     }
 }
 
-public sealed class CancelDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
-    : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
+public sealed class CancelDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunActionRequest, DevWorkflowRunResponse>
 {
-    private readonly DevWorkflowRunComposer _composer = composer ?? throw new ArgumentNullException(nameof(composer));
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly DevWorkflowRunComposer _composer;
+    private readonly IDevWorkflowRunService _runs;
+
+    public CancelDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWorkflowRunComposer composer)
+    {
+        ArgumentNullException.ThrowIfNull(composer);
+        ArgumentNullException.ThrowIfNull(runs);
+        _composer = composer;
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -167,9 +209,15 @@ public sealed class CancelDevWorkflowRunEndpoint(IDevWorkflowRunService runs, De
 ///     pages; its sequences are strictly increasing but NOT contiguous, because the run's counter is shared with node
 ///     runs and artifacts.
 /// </summary>
-public sealed class ListDevWorkflowRunEventsEndpoint(DevWorkflowRunQueryService runQueries) : Endpoint<DevWorkflowRunEventFeedRequest, ListDevWorkflowRunEventsResponse>
+public sealed class ListDevWorkflowRunEventsEndpoint : Endpoint<DevWorkflowRunEventFeedRequest, ListDevWorkflowRunEventsResponse>
 {
-    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
+    private readonly DevWorkflowRunQueryService _runQueries;
+
+    public ListDevWorkflowRunEventsEndpoint(DevWorkflowRunQueryService runQueries)
+    {
+        ArgumentNullException.ThrowIfNull(runQueries);
+        _runQueries = runQueries;
+    }
 
     public override void Configure()
     {

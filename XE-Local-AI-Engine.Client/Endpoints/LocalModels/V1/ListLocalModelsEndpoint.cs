@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Models;
 
-public sealed class ListLocalModelsEndpoint(ILocalModelCatalogService catalogService) : EndpointWithoutRequest<ListLocalModelsResponse>
+public sealed class ListLocalModelsEndpoint : EndpointWithoutRequest<ListLocalModelsResponse>
 {
-    private readonly ILocalModelCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
+    private readonly ILocalModelCatalogService _catalogService;
+
+    public ListLocalModelsEndpoint(ILocalModelCatalogService catalogService)
+    {
+        ArgumentNullException.ThrowIfNull(catalogService);
+        _catalogService = catalogService;
+    }
 
     public override void Configure()
     {

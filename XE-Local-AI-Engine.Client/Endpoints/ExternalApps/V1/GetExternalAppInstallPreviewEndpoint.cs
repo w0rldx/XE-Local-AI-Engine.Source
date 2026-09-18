@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     capabilities and whether the install can proceed at all. The service evaluates gpu, <c>requires</c>, resources
 ///     and the runtime — the SPA never re-derives the verdict from the parts.
 /// </summary>
-public sealed class GetExternalAppInstallPreviewEndpoint(IExternalAppService apps)
-    : Endpoint<ExternalAppApplicationRequest, ExternalAppInstallPreview>
+public sealed class GetExternalAppInstallPreviewEndpoint : Endpoint<ExternalAppApplicationRequest, ExternalAppInstallPreview>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public GetExternalAppInstallPreviewEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

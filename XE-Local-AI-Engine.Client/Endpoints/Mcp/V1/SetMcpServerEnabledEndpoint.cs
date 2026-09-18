@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 ///     registration is always created disabled), and is the only path that flips the enabled state — the
 ///     create/update bodies carry no enabled flag. A successful toggle triggers a connection refresh in the service.
 /// </summary>
-public sealed class SetMcpServerEnabledEndpoint(IMcpServerService mcpServerService)
-    : Endpoint<SetMcpServerEnabledRequest, McpServerResponse>
+public sealed class SetMcpServerEnabledEndpoint : Endpoint<SetMcpServerEnabledRequest, McpServerResponse>
 {
-    private readonly IMcpServerService _mcpServerService = mcpServerService ?? throw new ArgumentNullException(nameof(mcpServerService));
+    private readonly IMcpServerService _mcpServerService;
+
+    public SetMcpServerEnabledEndpoint(IMcpServerService mcpServerService)
+    {
+        ArgumentNullException.ThrowIfNull(mcpServerService);
+        _mcpServerService = mcpServerService;
+    }
 
     public override void Configure()
     {

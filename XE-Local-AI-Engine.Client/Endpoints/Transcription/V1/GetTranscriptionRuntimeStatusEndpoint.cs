@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Reports the transcription runtime: its state, the resolved binary, the selected and recommended models, the
 ///     managed-runtime record and what is currently holding it. Operator-gated. No path, URL or port is surfaced.
 /// </summary>
-public sealed class GetTranscriptionRuntimeStatusEndpoint(ITranscriptionRuntimeService runtimeService)
-    : EndpointWithoutRequest<TranscriptionRuntimeStatusResponse>
+public sealed class GetTranscriptionRuntimeStatusEndpoint : EndpointWithoutRequest<TranscriptionRuntimeStatusResponse>
 {
-    private readonly ITranscriptionRuntimeService _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
+    private readonly ITranscriptionRuntimeService _runtimeService;
+
+    public GetTranscriptionRuntimeStatusEndpoint(ITranscriptionRuntimeService runtimeService)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeService);
+        _runtimeService = runtimeService;
+    }
 
     public override void Configure()
     {

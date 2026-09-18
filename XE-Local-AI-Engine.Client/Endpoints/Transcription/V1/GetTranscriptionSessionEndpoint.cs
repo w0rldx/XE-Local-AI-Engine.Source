@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Reads one session with its transcript and the options it ran under; 404 when the id is unknown. The transcript
 ///     text is decrypted here and returned only to the authenticated operator, and is never logged. Operator-gated.
 /// </summary>
-public sealed class GetTranscriptionSessionEndpoint(ITranscriptionService sessions)
-    : Endpoint<TranscriptionSessionRouteRequest, TranscriptionSessionDetailResponse>
+public sealed class GetTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest, TranscriptionSessionDetailResponse>
 {
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ITranscriptionService _sessions;
+
+    public GetTranscriptionSessionEndpoint(ITranscriptionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

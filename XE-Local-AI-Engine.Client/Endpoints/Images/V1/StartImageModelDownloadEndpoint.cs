@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     observable via <c>GET images/models/downloads</c>; presence of the finished model surfaces via
 ///     <c>GET images/models</c>. No path/token is accepted or returned. Operator-gated.
 /// </summary>
-public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
-    : Endpoint<StartImageModelDownloadRequest, StartImageModelDownloadResponse>
+public sealed class StartImageModelDownloadEndpoint : Endpoint<StartImageModelDownloadRequest, StartImageModelDownloadResponse>
 {
-    private readonly IImageModelDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IImageModelDownloadCoordinator _downloadCoordinator;
+
+    public StartImageModelDownloadEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

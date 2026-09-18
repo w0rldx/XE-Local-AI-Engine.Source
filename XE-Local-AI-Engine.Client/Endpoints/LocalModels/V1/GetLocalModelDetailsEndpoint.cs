@@ -13,12 +13,20 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     back — a <see cref="LocalModelDetailsResolution.NoLocalDetails" /> is the single 404 for every branch that has
 ///     no local details to report.
 /// </summary>
-public sealed class GetLocalModelDetailsEndpoint(
-    ILocalModelDetailsResolver detailsResolver,
-    ModelNameValidator modelNameValidator) : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
+public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
 {
-    private readonly ILocalModelDetailsResolver _detailsResolver = detailsResolver ?? throw new ArgumentNullException(nameof(detailsResolver));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly ILocalModelDetailsResolver _detailsResolver;
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public GetLocalModelDetailsEndpoint(
+        ILocalModelDetailsResolver detailsResolver,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(detailsResolver);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _detailsResolver = detailsResolver;
+        _modelNameValidator = modelNameValidator;
+    }
 
     public override void Configure()
     {

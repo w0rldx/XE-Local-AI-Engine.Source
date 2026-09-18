@@ -11,11 +11,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 ///     open in a browser. The token exchange completes in the background — the UI polls
 ///     <c>cloud-settings/entra/auth-code/status</c> for completion. Never returns token material.
 /// </summary>
-public sealed class EntraAuthCodeSignInEndpoint(IEntraAuthCodeSignInCoordinator signInCoordinator)
-    : EndpointWithoutRequest<EntraAuthCodeSignInResponse>
+public sealed class EntraAuthCodeSignInEndpoint : EndpointWithoutRequest<EntraAuthCodeSignInResponse>
 {
-    private readonly IEntraAuthCodeSignInCoordinator _signInCoordinator =
-        signInCoordinator ?? throw new ArgumentNullException(nameof(signInCoordinator));
+    private readonly IEntraAuthCodeSignInCoordinator _signInCoordinator;
+
+    public EntraAuthCodeSignInEndpoint(IEntraAuthCodeSignInCoordinator signInCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(signInCoordinator);
+        _signInCoordinator = signInCoordinator;
+    }
 
     public override void Configure()
     {

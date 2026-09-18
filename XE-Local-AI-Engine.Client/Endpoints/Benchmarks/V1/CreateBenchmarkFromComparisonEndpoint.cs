@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 ///         out of the freeze's bare <see cref="KeyNotFoundException" />.
 ///     </para>
 /// </summary>
-public sealed class CreateBenchmarkFromComparisonEndpoint(IComparisonBenchmarkHandoffService handoff)
-    : Endpoint<CreateBenchmarkFromComparisonRequest, CreateBenchmarkFromComparisonResponse>
+public sealed class CreateBenchmarkFromComparisonEndpoint : Endpoint<CreateBenchmarkFromComparisonRequest, CreateBenchmarkFromComparisonResponse>
 {
-    private readonly IComparisonBenchmarkHandoffService _handoff = handoff ?? throw new ArgumentNullException(nameof(handoff));
+    private readonly IComparisonBenchmarkHandoffService _handoff;
+
+    public CreateBenchmarkFromComparisonEndpoint(IComparisonBenchmarkHandoffService handoff)
+    {
+        ArgumentNullException.ThrowIfNull(handoff);
+        _handoff = handoff;
+    }
 
     public override void Configure()
     {

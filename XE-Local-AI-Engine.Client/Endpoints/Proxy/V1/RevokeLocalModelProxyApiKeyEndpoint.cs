@@ -9,10 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Proxy;
 ///     Revokes the inbound model-proxy credential. With no key stored the proxy authenticates nobody, which is the
 ///     documented way to turn the proxy off without changing configuration or restarting the node.
 /// </summary>
-public sealed class RevokeLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyService apiKeyService)
-    : EndpointWithoutRequest
+public sealed class RevokeLocalModelProxyApiKeyEndpoint : EndpointWithoutRequest
 {
-    private readonly ILocalModelProxyApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly ILocalModelProxyApiKeyService _apiKeyService;
+
+    public RevokeLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

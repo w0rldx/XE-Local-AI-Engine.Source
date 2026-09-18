@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-public sealed class TriggerScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
-    : Endpoint<ScheduledJobActionRequest>
+public sealed class TriggerScheduledJobEndpoint : Endpoint<ScheduledJobActionRequest>
 {
-    private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
+    private readonly IScheduledJobManagementService _scheduledJobManagementService;
+
+    public TriggerScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
+    {
+        ArgumentNullException.ThrowIfNull(scheduledJobManagementService);
+        _scheduledJobManagementService = scheduledJobManagementService;
+    }
 
     public override void Configure()
     {

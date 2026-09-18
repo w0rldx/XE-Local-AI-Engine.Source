@@ -9,14 +9,21 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     registers, so a host without this hub stays resolvable. Both messages are content-free by contract: neither
 ///     carries a variable, a value or anything else the engine holds on the operator's behalf.
 /// </summary>
-internal sealed class ExternalAppEventPublisher(IHubContext<ExternalAppHub> hubContext) : IExternalAppEventPublisher
+internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
 {
+    private readonly IHubContext<ExternalAppHub> _hubContext;
+
+    public ExternalAppEventPublisher(IHubContext<ExternalAppHub> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
     public Task PublishAsync(Guid instanceId,
         long sequence,
         ExternalAppInstanceEventKind kind,
         ExternalAppInstanceStatus status,
         CancellationToken cancellationToken = default) =>
-        hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
+        _hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
                   .SendAsync(ExternalAppHubEvents.Changed,
                       new ExternalAppChanged(instanceId, sequence, ToWireKind(kind), status.ToString()),
                       cancellationToken);
@@ -27,7 +34,7 @@ internal sealed class ExternalAppEventPublisher(IHubContext<ExternalAppHub> hubC
         int completedLayers,
         long bytes,
         CancellationToken cancellationToken = default) =>
-        hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
+        _hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
                   .SendAsync(ExternalAppHubEvents.PullProgress,
                       new ExternalAppPullProgress(instanceId, service, layerCount, completedLayers, bytes),
                       cancellationToken);

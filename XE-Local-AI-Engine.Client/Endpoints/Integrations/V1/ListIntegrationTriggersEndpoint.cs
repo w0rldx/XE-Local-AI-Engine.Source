@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>Every trigger, ordered by name. Operator-gated: an integrator never reads this surface.</summary>
-public sealed class ListIntegrationTriggersEndpoint(IIntegrationTriggerService triggerService)
-    : EndpointWithoutRequest<ListIntegrationTriggersResponse>
+public sealed class ListIntegrationTriggersEndpoint : EndpointWithoutRequest<ListIntegrationTriggersResponse>
 {
-    private readonly IIntegrationTriggerService _triggerService = triggerService ?? throw new ArgumentNullException(nameof(triggerService));
+    private readonly IIntegrationTriggerService _triggerService;
+
+    public ListIntegrationTriggersEndpoint(IIntegrationTriggerService triggerService)
+    {
+        ArgumentNullException.ThrowIfNull(triggerService);
+        _triggerService = triggerService;
+    }
 
     public override void Configure()
     {

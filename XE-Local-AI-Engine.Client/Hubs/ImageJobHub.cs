@@ -16,9 +16,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     same Operator policy as the other local hubs.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class ImageJobHub(IImageJobCoordinator coordinator) : Hub
+public sealed class ImageJobHub : Hub
 {
-    private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IImageJobCoordinator _coordinator;
+
+    public ImageJobHub(IImageJobCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+    }
 
     /// <summary>Returns the SignalR group name for a job's scoped delivery.</summary>
     public static string JobGroup(Guid jobId)

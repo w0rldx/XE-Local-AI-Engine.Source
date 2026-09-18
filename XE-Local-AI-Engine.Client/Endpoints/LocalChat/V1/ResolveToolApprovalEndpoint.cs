@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///     resolves the runner's pending approval and releases the waiting turn. Keyed only by the approval request id (the
 ///     runner's opaque per-approval key), so it works with no platform connection and needs no conversation context.
 /// </summary>
-public sealed class ResolveToolApprovalEndpoint(IWorkerEventDispatcher eventDispatcher)
-    : Endpoint<ResolveToolApprovalRequest, ResolveToolApprovalResponse>
+public sealed class ResolveToolApprovalEndpoint : Endpoint<ResolveToolApprovalRequest, ResolveToolApprovalResponse>
 {
-    private readonly IWorkerEventDispatcher _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
+    private readonly IWorkerEventDispatcher _eventDispatcher;
+
+    public ResolveToolApprovalEndpoint(IWorkerEventDispatcher eventDispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        _eventDispatcher = eventDispatcher;
+    }
 
     public override void Configure()
     {

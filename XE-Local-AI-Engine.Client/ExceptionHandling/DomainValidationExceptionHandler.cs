@@ -36,8 +36,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///         the register/create ones, so a global 400 would silently move three routes.
 ///     </para>
 /// </summary>
-public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExceptionHandler> logger) : IExceptionHandler
+public sealed class DomainValidationExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<DomainValidationExceptionHandler> _logger;
+
+    public DomainValidationExceptionHandler(ILogger<DomainValidationExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -72,7 +79,7 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
             return false;
         }
 
-        logger.LogWarning(exception,
+        _logger.LogWarning(exception,
             "Handled domain validation exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),

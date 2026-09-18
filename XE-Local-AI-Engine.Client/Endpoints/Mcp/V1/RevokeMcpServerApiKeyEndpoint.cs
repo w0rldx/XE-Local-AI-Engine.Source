@@ -9,10 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 ///     Revokes the inbound-MCP credential. With no key stored the MCP endpoint authenticates nobody, which is the
 ///     documented way to turn the inbound surface off without changing configuration or restarting the node.
 /// </summary>
-public sealed class RevokeMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKeyService)
-    : EndpointWithoutRequest
+public sealed class RevokeMcpServerApiKeyEndpoint : EndpointWithoutRequest
 {
-    private readonly IMcpServerApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly IMcpServerApiKeyService _apiKeyService;
+
+    public RevokeMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

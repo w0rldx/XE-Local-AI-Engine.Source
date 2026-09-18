@@ -12,17 +12,24 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     store, so nothing to redact; <c>ErrorClass</c> is an exception type name only by the store contract. Resolves the
 ///     agent first so a missing definition returns 404 rather than an empty page. Operator-gated.
 /// </summary>
-public sealed class ListAgentExecutionLogsEndpoint(
-    IAgentDefinitionService agentDefinitions,
-    AgentExecutionLogQueryService executionLogs)
-    : Endpoint<ListAgentExecutionLogsRequest, ListAgentExecutionLogsResponse>
+public sealed class ListAgentExecutionLogsEndpoint : Endpoint<ListAgentExecutionLogsRequest, ListAgentExecutionLogsResponse>
 {
     // Default page size when the caller supplies none; clamped upper bound keeps a diagnostics fetch bounded.
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 200;
 
-    private readonly IAgentDefinitionService _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
-    private readonly AgentExecutionLogQueryService _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
+    private readonly IAgentDefinitionService _agentDefinitions;
+    private readonly AgentExecutionLogQueryService _executionLogs;
+
+    public ListAgentExecutionLogsEndpoint(
+        IAgentDefinitionService agentDefinitions,
+        AgentExecutionLogQueryService executionLogs)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitions);
+        ArgumentNullException.ThrowIfNull(executionLogs);
+        _agentDefinitions = agentDefinitions;
+        _executionLogs = executionLogs;
+    }
 
     public override void Configure()
     {

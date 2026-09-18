@@ -12,14 +12,19 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     scoped to one conversation — there is NO message content in this store, so nothing to redact; <c>FailureCategory</c>
 ///     is a category enum name only by the store contract. Operator-gated.
 /// </summary>
-public sealed class ListRunEnvelopesEndpoint(AgentExecutionLogQueryService executionLogs)
-    : Endpoint<ListRunEnvelopesRequest, ListRunEnvelopesResponse>
+public sealed class ListRunEnvelopesEndpoint : Endpoint<ListRunEnvelopesRequest, ListRunEnvelopesResponse>
 {
     // Default page size when the caller supplies none; clamped upper bound keeps a diagnostics fetch bounded.
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 200;
 
-    private readonly AgentExecutionLogQueryService _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
+    private readonly AgentExecutionLogQueryService _executionLogs;
+
+    public ListRunEnvelopesEndpoint(AgentExecutionLogQueryService executionLogs)
+    {
+        ArgumentNullException.ThrowIfNull(executionLogs);
+        _executionLogs = executionLogs;
+    }
 
     public override void Configure()
     {

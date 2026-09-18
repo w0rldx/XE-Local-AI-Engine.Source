@@ -17,10 +17,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 ///         state.
 ///     </para>
 /// </summary>
-public sealed class CodexStatusEndpoint(CodexSessionService session)
-    : EndpointWithoutRequest<CodexStatusResponse>
+public sealed class CodexStatusEndpoint : EndpointWithoutRequest<CodexStatusResponse>
 {
-    private readonly CodexSessionService _session = session ?? throw new ArgumentNullException(nameof(session));
+    private readonly CodexSessionService _session;
+
+    public CodexStatusEndpoint(CodexSessionService session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        _session = session;
+    }
 
     public override void Configure()
     {

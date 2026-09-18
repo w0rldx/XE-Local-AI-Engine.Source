@@ -19,10 +19,18 @@ public sealed record DatasetGenerationReplayReset(Guid DatasetId, long LatestSeq
 ///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class DatasetGenerationHub(TrainingDatasetService datasets, IDatasetGenerationEventBuffer events) : Hub
+public sealed class DatasetGenerationHub : Hub
 {
-    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
-    private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
+    private readonly TrainingDatasetService _datasets;
+    private readonly IDatasetGenerationEventBuffer _events;
+
+    public DatasetGenerationHub(TrainingDatasetService datasets, IDatasetGenerationEventBuffer events)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(events);
+        _datasets = datasets;
+        _events = events;
+    }
 
     public static string DatasetGroup(Guid datasetId) =>
         $"dataset-generation-{datasetId:N}";

@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>One trigger by id. Also the <c>Location</c> target of the create.</summary>
-public sealed class GetIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
-    : EndpointWithoutRequest<IntegrationTriggerView>
+public sealed class GetIntegrationTriggerEndpoint : EndpointWithoutRequest<IntegrationTriggerView>
 {
-    private readonly IIntegrationTriggerService _triggerService = triggerService ?? throw new ArgumentNullException(nameof(triggerService));
+    private readonly IIntegrationTriggerService _triggerService;
+
+    public GetIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
+    {
+        ArgumentNullException.ThrowIfNull(triggerService);
+        _triggerService = triggerService;
+    }
 
     public override void Configure()
     {

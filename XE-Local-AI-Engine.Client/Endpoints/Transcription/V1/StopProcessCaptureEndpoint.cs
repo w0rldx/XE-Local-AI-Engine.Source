@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 ///     in the registry, which the cancel route reaches; this endpoint is a convenience over that path and never an
 ///     alternative to it.
 /// </remarks>
-public sealed class StopProcessCaptureEndpoint(ProcessAudioCaptureCoordinator captures)
-    : Endpoint<TranscriptionSessionRouteRequest>
+public sealed class StopProcessCaptureEndpoint : Endpoint<TranscriptionSessionRouteRequest>
 {
-    private readonly ProcessAudioCaptureCoordinator _captures = captures ?? throw new ArgumentNullException(nameof(captures));
+    private readonly ProcessAudioCaptureCoordinator _captures;
+
+    public StopProcessCaptureEndpoint(ProcessAudioCaptureCoordinator captures)
+    {
+        ArgumentNullException.ThrowIfNull(captures);
+        _captures = captures;
+    }
 
     public override void Configure()
     {

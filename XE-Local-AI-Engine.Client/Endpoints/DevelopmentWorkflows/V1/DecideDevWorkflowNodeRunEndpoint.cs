@@ -20,9 +20,15 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///         refused with the standing decision on the body.
 ///     </para>
 /// </summary>
-public sealed class DecideDevWorkflowNodeRunEndpoint(IDevWorkflowRunService runs) : Endpoint<DevWorkflowDecisionRequest, DevWorkflowDecisionResultResponse>
+public sealed class DecideDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowDecisionRequest, DevWorkflowDecisionResultResponse>
 {
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IDevWorkflowRunService _runs;
+
+    public DecideDevWorkflowNodeRunEndpoint(IDevWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

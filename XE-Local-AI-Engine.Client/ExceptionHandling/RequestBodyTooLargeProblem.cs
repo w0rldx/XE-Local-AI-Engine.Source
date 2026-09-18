@@ -63,13 +63,20 @@ public static class RequestBodyTooLargeProblem
     ///     and serializes the body itself, which is a second emitter of this answer and the drift this type exists to
     ///     stop.
     /// </summary>
-    private sealed class RequestBodyTooLargeResult(string detail) : IResult
+    private sealed class RequestBodyTooLargeResult : IResult
     {
+        private readonly string _detail;
+
+        public RequestBodyTooLargeResult(string detail)
+        {
+            _detail = detail;
+        }
+
         public Task ExecuteAsync(HttpContext httpContext)
         {
             ArgumentNullException.ThrowIfNull(httpContext);
 
-            return WriteAsync(httpContext, detail, httpContext.RequestAborted);
+            return WriteAsync(httpContext, _detail, httpContext.RequestAborted);
         }
     }
 }

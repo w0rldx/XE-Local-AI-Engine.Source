@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Training.Export;
 ///     Starts an export. 202 — the pipeline owns the work from here, and its phases arrive on the run hub. Every
 ///     refusal is decided before anything is written, so a 409 has left nothing behind.
 /// </summary>
-public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
-    : Endpoint<StartTrainingExportRequest, TrainingExportAcceptedResponse>
+public sealed class StartTrainingExportEndpoint : Endpoint<StartTrainingExportRequest, TrainingExportAcceptedResponse>
 {
-    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+    private readonly ITrainingExportService _exports;
+
+    public StartTrainingExportEndpoint(ITrainingExportService exports)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        _exports = exports;
+    }
 
     public override void Configure()
     {
@@ -64,10 +69,15 @@ public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
     }
 }
 
-public sealed class ListTrainingArtifactsEndpoint(ITrainingExportService exports)
-    : Endpoint<TrainingRunArtifactsRequest, ListTrainingArtifactsResponse>
+public sealed class ListTrainingArtifactsEndpoint : Endpoint<TrainingRunArtifactsRequest, ListTrainingArtifactsResponse>
 {
-    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+    private readonly ITrainingExportService _exports;
+
+    public ListTrainingArtifactsEndpoint(ITrainingExportService exports)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        _exports = exports;
+    }
 
     public override void Configure()
     {
@@ -85,10 +95,15 @@ public sealed class ListTrainingArtifactsEndpoint(ITrainingExportService exports
     }
 }
 
-public sealed class GetTrainingArtifactEndpoint(ITrainingExportService exports)
-    : Endpoint<TrainingArtifactByIdRequest, TrainingArtifactResponse>
+public sealed class GetTrainingArtifactEndpoint : Endpoint<TrainingArtifactByIdRequest, TrainingArtifactResponse>
 {
-    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+    private readonly ITrainingExportService _exports;
+
+    public GetTrainingArtifactEndpoint(ITrainingExportService exports)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        _exports = exports;
+    }
 
     public override void Configure()
     {
@@ -114,9 +129,15 @@ public sealed class GetTrainingArtifactEndpoint(ITrainingExportService exports)
 ///     Routed through the export service rather than the store so the staged bytes go with the row; the store only
 ///     ever removes the row.
 /// </summary>
-public sealed class DeleteTrainingArtifactEndpoint(ITrainingExportService exports) : Endpoint<DeleteTrainingArtifactRequest>
+public sealed class DeleteTrainingArtifactEndpoint : Endpoint<DeleteTrainingArtifactRequest>
 {
-    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+    private readonly ITrainingExportService _exports;
+
+    public DeleteTrainingArtifactEndpoint(ITrainingExportService exports)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        _exports = exports;
+    }
 
     public override void Configure()
     {
@@ -133,10 +154,15 @@ public sealed class DeleteTrainingArtifactEndpoint(ITrainingExportService export
 }
 
 /// <summary>Re-runs the smoke gate against an already-staged artifact and records the new verdict.</summary>
-public sealed class RunTrainingArtifactSmokeEndpoint(ITrainingExportService exports)
-    : Endpoint<TrainingArtifactByIdRequest, TrainingArtifactSmokeResponse>
+public sealed class RunTrainingArtifactSmokeEndpoint : Endpoint<TrainingArtifactByIdRequest, TrainingArtifactSmokeResponse>
 {
-    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+    private readonly ITrainingExportService _exports;
+
+    public RunTrainingArtifactSmokeEndpoint(ITrainingExportService exports)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        _exports = exports;
+    }
 
     public override void Configure()
     {
@@ -162,10 +188,15 @@ public sealed class RunTrainingArtifactSmokeEndpoint(ITrainingExportService expo
 }
 
 /// <summary>Registers a smoke-passed, quality-approved artifact as a local model, with its training lineage attached.</summary>
-public sealed class PromoteTrainingArtifactEndpoint(IArtifactPromotionService promotion)
-    : Endpoint<PromoteTrainingArtifactRequest, PromoteTrainingArtifactResponse>
+public sealed class PromoteTrainingArtifactEndpoint : Endpoint<PromoteTrainingArtifactRequest, PromoteTrainingArtifactResponse>
 {
-    private readonly IArtifactPromotionService _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
+    private readonly IArtifactPromotionService _promotion;
+
+    public PromoteTrainingArtifactEndpoint(IArtifactPromotionService promotion)
+    {
+        ArgumentNullException.ThrowIfNull(promotion);
+        _promotion = promotion;
+    }
 
     public override void Configure()
     {
@@ -186,10 +217,15 @@ public sealed class PromoteTrainingArtifactEndpoint(IArtifactPromotionService pr
     }
 }
 
-public sealed class DecideTrainingArtifactQualityEndpoint(IArtifactQualityService quality)
-    : Endpoint<DecideArtifactQualityRequest, ArtifactQualityResponse>
+public sealed class DecideTrainingArtifactQualityEndpoint : Endpoint<DecideArtifactQualityRequest, ArtifactQualityResponse>
 {
-    private readonly IArtifactQualityService _quality = quality ?? throw new ArgumentNullException(nameof(quality));
+    private readonly IArtifactQualityService _quality;
+
+    public DecideTrainingArtifactQualityEndpoint(IArtifactQualityService quality)
+    {
+        ArgumentNullException.ThrowIfNull(quality);
+        _quality = quality;
+    }
 
     public override void Configure()
     {
@@ -227,10 +263,15 @@ public sealed class DecideTrainingArtifactQualityEndpoint(IArtifactQualityServic
     }
 }
 
-public sealed class OverrideTrainingArtifactQualityEndpoint(IArtifactQualityService quality)
-    : Endpoint<OverrideArtifactQualityRequest, ArtifactQualityResponse>
+public sealed class OverrideTrainingArtifactQualityEndpoint : Endpoint<OverrideArtifactQualityRequest, ArtifactQualityResponse>
 {
-    private readonly IArtifactQualityService _quality = quality ?? throw new ArgumentNullException(nameof(quality));
+    private readonly IArtifactQualityService _quality;
+
+    public OverrideTrainingArtifactQualityEndpoint(IArtifactQualityService quality)
+    {
+        ArgumentNullException.ThrowIfNull(quality);
+        _quality = quality;
+    }
 
     public override void Configure()
     {
@@ -249,10 +290,15 @@ public sealed class OverrideTrainingArtifactQualityEndpoint(IArtifactQualityServ
     }
 }
 
-public sealed class BeginTrainingArtifactQualityRevalidationEndpoint(IArtifactQualityService quality)
-    : Endpoint<BeginArtifactQualityRevalidationRequest, ArtifactQualityResponse>
+public sealed class BeginTrainingArtifactQualityRevalidationEndpoint : Endpoint<BeginArtifactQualityRevalidationRequest, ArtifactQualityResponse>
 {
-    private readonly IArtifactQualityService _quality = quality ?? throw new ArgumentNullException(nameof(quality));
+    private readonly IArtifactQualityService _quality;
+
+    public BeginTrainingArtifactQualityRevalidationEndpoint(IArtifactQualityService quality)
+    {
+        ArgumentNullException.ThrowIfNull(quality);
+        _quality = quality;
+    }
 
     public override void Configure()
     {
@@ -271,10 +317,15 @@ public sealed class BeginTrainingArtifactQualityRevalidationEndpoint(IArtifactQu
     }
 }
 
-public sealed class DiscardTrainingArtifactQualityEndpoint(ITrainingExportService exports)
-    : Endpoint<DiscardArtifactQualityRequest, ArtifactQualityResponse>
+public sealed class DiscardTrainingArtifactQualityEndpoint : Endpoint<DiscardArtifactQualityRequest, ArtifactQualityResponse>
 {
-    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
+    private readonly ITrainingExportService _exports;
+
+    public DiscardTrainingArtifactQualityEndpoint(ITrainingExportService exports)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        _exports = exports;
+    }
 
     public override void Configure()
     {

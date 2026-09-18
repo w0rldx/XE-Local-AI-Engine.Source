@@ -15,11 +15,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     single-flight. Each gate that fails returns a sanitized 409 with a stable reason code. On success it starts the
 ///     background build and returns the initial status; live progress streams over the CUDA build hub.
 /// </summary>
-public sealed class StartCudaBuildEndpoint(
-    LlamaCppRuntimeOrchestrationService runtime,
-    INodeRuntimeSettings nodeRuntimeSettings) : EndpointWithoutRequest<StartCudaBuildResponse>
+public sealed class StartCudaBuildEndpoint : EndpointWithoutRequest<StartCudaBuildResponse>
 {
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
+
+    public StartCudaBuildEndpoint(
+        LlamaCppRuntimeOrchestrationService runtime,
+        INodeRuntimeSettings nodeRuntimeSettings)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {
@@ -40,7 +48,7 @@ public sealed class StartCudaBuildEndpoint(
         }
 
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct))
+                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
         {
             await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage);
             return;

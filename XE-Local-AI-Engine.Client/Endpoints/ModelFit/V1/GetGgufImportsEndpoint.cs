@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class GetGgufImportsEndpoint(IGgufImportTransactionCoordinator coordinator)
-    : EndpointWithoutRequest<ListGgufImportsResponse>
+public sealed class GetGgufImportsEndpoint : EndpointWithoutRequest<ListGgufImportsResponse>
 {
-    private readonly IGgufImportTransactionCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IGgufImportTransactionCoordinator _coordinator;
+
+    public GetGgufImportsEndpoint(IGgufImportTransactionCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+    }
 
     public override void Configure()
     {

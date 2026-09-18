@@ -10,14 +10,20 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Reports which model this node's hardware should run, and the footprint figures behind the answer, so the
 ///     operator sees the reasoning rather than an unexplained pick. Operator-gated.
 /// </summary>
-public sealed class GetTranscriptionRecommendationEndpoint(
-    ITranscriptionRuntimeService runtimeService,
-    WhisperRuntimeOrchestrationService whisperRuntime) : EndpointWithoutRequest<TranscriptionModelRecommendationResponse>
+public sealed class GetTranscriptionRecommendationEndpoint : EndpointWithoutRequest<TranscriptionModelRecommendationResponse>
 {
-    private readonly ITranscriptionRuntimeService _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
+    private readonly ITranscriptionRuntimeService _runtimeService;
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
 
-    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
-        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
+    public GetTranscriptionRecommendationEndpoint(
+        ITranscriptionRuntimeService runtimeService,
+        WhisperRuntimeOrchestrationService whisperRuntime)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeService);
+        ArgumentNullException.ThrowIfNull(whisperRuntime);
+        _runtimeService = runtimeService;
+        _whisperRuntime = whisperRuntime;
+    }
 
     public override void Configure()
     {

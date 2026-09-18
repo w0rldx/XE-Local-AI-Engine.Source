@@ -6,8 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Automation;
 
-public sealed class ListSlashCommandsEndpoint(ISlashCommandService service) : EndpointWithoutRequest<ListSlashCommandsResponse>
+public sealed class ListSlashCommandsEndpoint : EndpointWithoutRequest<ListSlashCommandsResponse>
 {
+    private readonly ISlashCommandService _service;
+
+    public ListSlashCommandsEndpoint(ISlashCommandService service)
+    {
+        _service = service;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Automation.Commands);
@@ -18,12 +25,19 @@ public sealed class ListSlashCommandsEndpoint(ISlashCommandService service) : En
     public override async Task HandleAsync(CancellationToken ct) =>
         await Send.OkAsync(new ListSlashCommandsResponse
         {
-            Items = [.. (await service.ListAsync(ct)).Select(item => item.ToResponse())]
+            Items = [.. (await _service.ListAsync(ct)).Select(item => item.ToResponse())]
         }, ct);
 }
 
-public sealed class GetSlashCommandEndpoint(ISlashCommandService service) : Endpoint<SlashCommandByIdRequest, SlashCommandResponse>
+public sealed class GetSlashCommandEndpoint : Endpoint<SlashCommandByIdRequest, SlashCommandResponse>
 {
+    private readonly ISlashCommandService _service;
+
+    public GetSlashCommandEndpoint(ISlashCommandService service)
+    {
+        _service = service;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Automation.CommandById);
@@ -33,7 +47,7 @@ public sealed class GetSlashCommandEndpoint(ISlashCommandService service) : Endp
 
     public override async Task HandleAsync(SlashCommandByIdRequest req, CancellationToken ct)
     {
-        var item = await service.GetByIdAsync(req.CommandId, ct);
+        var item = await _service.GetByIdAsync(req.CommandId, ct);
         if (item is null)
         {
             await Send.NotFoundAsync(ct);
@@ -44,8 +58,15 @@ public sealed class GetSlashCommandEndpoint(ISlashCommandService service) : Endp
     }
 }
 
-public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : Endpoint<CreateSlashCommandRequest, SlashCommandResponse>
+public sealed class CreateSlashCommandEndpoint : Endpoint<CreateSlashCommandRequest, SlashCommandResponse>
 {
+    private readonly ISlashCommandService _service;
+
+    public CreateSlashCommandEndpoint(ISlashCommandService service)
+    {
+        _service = service;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Automation.Commands);
@@ -59,7 +80,7 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
     {
         try
         {
-            var item = await service.CreateAsync(req.ToInput(), ct);
+            var item = await _service.CreateAsync(req.ToInput(), ct);
             await Send.CreatedAtAsync<GetSlashCommandEndpoint>(new
             {
                 commandId = item.Id
@@ -72,8 +93,15 @@ public sealed class CreateSlashCommandEndpoint(ISlashCommandService service) : E
     }
 }
 
-public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : Endpoint<UpdateSlashCommandRequest, SlashCommandResponse>
+public sealed class UpdateSlashCommandEndpoint : Endpoint<UpdateSlashCommandRequest, SlashCommandResponse>
 {
+    private readonly ISlashCommandService _service;
+
+    public UpdateSlashCommandEndpoint(ISlashCommandService service)
+    {
+        _service = service;
+    }
+
     public override void Configure()
     {
         Put(LocalApiRoutes.Automation.CommandById);
@@ -88,7 +116,7 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
     {
         try
         {
-            var item = await service.UpdateAsync(req.CommandId, req.ToInput(), ct);
+            var item = await _service.UpdateAsync(req.CommandId, req.ToInput(), ct);
             if (item is null)
             {
                 await Send.NotFoundAsync(ct);
@@ -104,8 +132,15 @@ public sealed class UpdateSlashCommandEndpoint(ISlashCommandService service) : E
     }
 }
 
-public sealed class DeleteSlashCommandEndpoint(ISlashCommandService service) : Endpoint<SlashCommandByIdRequest>
+public sealed class DeleteSlashCommandEndpoint : Endpoint<SlashCommandByIdRequest>
 {
+    private readonly ISlashCommandService _service;
+
+    public DeleteSlashCommandEndpoint(ISlashCommandService service)
+    {
+        _service = service;
+    }
+
     public override void Configure()
     {
         Delete(LocalApiRoutes.Automation.CommandById);
@@ -115,7 +150,7 @@ public sealed class DeleteSlashCommandEndpoint(ISlashCommandService service) : E
 
     public override async Task HandleAsync(SlashCommandByIdRequest req, CancellationToken ct)
     {
-        if (!await service.DeleteAsync(req.CommandId, ct))
+        if (!await _service.DeleteAsync(req.CommandId, ct))
         {
             await Send.NotFoundAsync(ct);
             return;

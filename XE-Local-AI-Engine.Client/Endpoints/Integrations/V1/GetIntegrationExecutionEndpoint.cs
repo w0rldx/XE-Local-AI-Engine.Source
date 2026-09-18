@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///     One execution in full. Operator-gated and deliberately NOT key-scoped: an operator reading the admin surface is
 ///     not acting as an integrator and must be able to reach every row.
 /// </summary>
-public sealed class GetIntegrationExecutionEndpoint(IntegrationExecutionQueryService executions)
-    : EndpointWithoutRequest<IntegrationExecutionDetailDto>
+public sealed class GetIntegrationExecutionEndpoint : EndpointWithoutRequest<IntegrationExecutionDetailDto>
 {
-    private readonly IntegrationExecutionQueryService _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+    private readonly IntegrationExecutionQueryService _executions;
+
+    public GetIntegrationExecutionEndpoint(IntegrationExecutionQueryService executions)
+    {
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+    }
 
     public override void Configure()
     {

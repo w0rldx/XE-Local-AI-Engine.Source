@@ -19,10 +19,18 @@ public sealed record BenchmarkRunReplayReset(Guid RunId, long LatestSequence, lo
 ///     subscribe-after-publish race; clients deduplicate the possible overlap by the event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class BenchmarkRunHub(BenchmarkRecordService records, IBenchmarkEventBuffer events) : Hub
+public sealed class BenchmarkRunHub : Hub
 {
-    private readonly IBenchmarkEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkEventBuffer _events;
+    private readonly BenchmarkRecordService _records;
+
+    public BenchmarkRunHub(BenchmarkRecordService records, IBenchmarkEventBuffer events)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(records);
+        _events = events;
+        _records = records;
+    }
 
     public static string RunGroup(Guid runId) =>
         $"benchmark-run-{runId:N}";

@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     download is pending and surfaces the <c>Failed</c> phase with its sanitized reason instead of waiting forever for
 ///     a model that will never appear. Mirrors <c>GET model-fit/gguf/downloads</c>. No path, URL, or token is returned.
 /// </summary>
-public sealed class ListImageModelDownloadsEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
-    : EndpointWithoutRequest<ListImageModelDownloadsResponse>
+public sealed class ListImageModelDownloadsEndpoint : EndpointWithoutRequest<ListImageModelDownloadsResponse>
 {
-    private readonly IImageModelDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IImageModelDownloadCoordinator _downloadCoordinator;
+
+    public ListImageModelDownloadsEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

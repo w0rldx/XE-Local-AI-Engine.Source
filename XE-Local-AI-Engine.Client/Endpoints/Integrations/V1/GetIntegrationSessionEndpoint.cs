@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///     One session for the operator. Deliberately NOT principal-scoped: an operator reading the admin surface is not
 ///     acting as an integrator, so a missing row is a plain 404 rather than the external family's masked one.
 /// </summary>
-public sealed class GetIntegrationSessionEndpoint(IntegrationSessionService sessions)
-    : EndpointWithoutRequest<IntegrationSessionResponse>
+public sealed class GetIntegrationSessionEndpoint : EndpointWithoutRequest<IntegrationSessionResponse>
 {
-    private readonly IntegrationSessionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly IntegrationSessionService _sessions;
+
+    public GetIntegrationSessionEndpoint(IntegrationSessionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     <see cref="UploadTranscriptionAudioEndpoint" /> — so the title is decided here, which is why the file flow sends
 ///     the chosen file's name on this call. A blank model id resolves to the node's effective model. Operator-gated.
 /// </summary>
-public sealed class CreateTranscriptionSessionEndpoint(ITranscriptionService sessions)
-    : Endpoint<CreateTranscriptionSessionRequest, TranscriptionSessionDetailResponse>
+public sealed class CreateTranscriptionSessionEndpoint : Endpoint<CreateTranscriptionSessionRequest, TranscriptionSessionDetailResponse>
 {
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ITranscriptionService _sessions;
+
+    public CreateTranscriptionSessionEndpoint(ITranscriptionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

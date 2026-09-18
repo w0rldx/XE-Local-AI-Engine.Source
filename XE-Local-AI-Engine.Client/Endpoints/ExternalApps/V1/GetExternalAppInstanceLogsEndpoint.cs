@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 ///     design: it is the application's own output, and an application printing its own secrets is something its
 ///     operator has to be able to see.
 /// </summary>
-public sealed class GetExternalAppInstanceLogsEndpoint(IExternalAppService apps)
-    : Endpoint<ExternalAppInstanceLogsRequest, ExternalAppInstanceLogsResponse>
+public sealed class GetExternalAppInstanceLogsEndpoint : Endpoint<ExternalAppInstanceLogsRequest, ExternalAppInstanceLogsResponse>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public GetExternalAppInstanceLogsEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

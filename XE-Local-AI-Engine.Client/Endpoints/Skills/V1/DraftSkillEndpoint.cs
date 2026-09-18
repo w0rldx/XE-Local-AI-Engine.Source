@@ -10,13 +10,18 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 ///     operator's form and the existing <c>skills</c> create/update routes remain the only path to the database, where
 ///     the drafted content lands in the Imported posture.
 /// </summary>
-public sealed class DraftSkillEndpoint(IConfigDraftService configDraftService)
-    : Endpoint<DraftSkillRequest, SkillDraftResponse>
+public sealed class DraftSkillEndpoint : Endpoint<DraftSkillRequest, SkillDraftResponse>
 {
     private const int MaxExistingDescriptionLength = 1024;
     private const int MaxExistingNameLength = 64;
 
-    private readonly IConfigDraftService _configDraftService = configDraftService ?? throw new ArgumentNullException(nameof(configDraftService));
+    private readonly IConfigDraftService _configDraftService;
+
+    public DraftSkillEndpoint(IConfigDraftService configDraftService)
+    {
+        ArgumentNullException.ThrowIfNull(configDraftService);
+        _configDraftService = configDraftService;
+    }
 
     public override void Configure()
     {

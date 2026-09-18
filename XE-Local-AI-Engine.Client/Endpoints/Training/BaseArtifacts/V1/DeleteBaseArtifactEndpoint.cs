@@ -5,8 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
-public sealed class DeleteBaseArtifactEndpoint(IBaseArtifactService baseArtifactService) : Endpoint<BaseArtifactByIdRequest>
+public sealed class DeleteBaseArtifactEndpoint : Endpoint<BaseArtifactByIdRequest>
 {
+    private readonly IBaseArtifactService _baseArtifactService;
+
+    public DeleteBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
+    {
+        _baseArtifactService = baseArtifactService;
+    }
+
     public override void Configure()
     {
         Delete(LocalApiRoutes.Training.BaseArtifactById);
@@ -19,7 +26,7 @@ public sealed class DeleteBaseArtifactEndpoint(IBaseArtifactService baseArtifact
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var outcome = await baseArtifactService.DeleteAsync(request.ArtifactId, ct);
+        var outcome = await _baseArtifactService.DeleteAsync(request.ArtifactId, ct);
         switch (outcome)
         {
             case BaseArtifactDeleteOutcome.NotFound:

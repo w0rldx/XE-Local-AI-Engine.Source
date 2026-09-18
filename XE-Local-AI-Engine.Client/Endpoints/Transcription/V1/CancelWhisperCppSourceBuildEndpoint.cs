@@ -10,11 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Requests cancellation of a running source build and returns the status that results. Cancelling when nothing
 ///     is running is a success, not an error — the caller asked for a state that already holds. Operator-gated.
 /// </summary>
-public sealed class CancelWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
-    : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
+public sealed class CancelWhisperCppSourceBuildEndpoint : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
 {
-    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
-        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
+
+    public CancelWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
+    {
+        ArgumentNullException.ThrowIfNull(whisperRuntime);
+        _whisperRuntime = whisperRuntime;
+    }
 
     public override void Configure()
     {

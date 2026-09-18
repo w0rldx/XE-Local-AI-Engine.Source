@@ -19,15 +19,20 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     also a 400 today, carrying its own retry-when-idle wording rather than the generic failure text. On success it
 ///     returns the drafted/updated profile view (machine key omitted).
 /// </summary>
-public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
-    : Endpoint<ExploreInferenceProfileRequest, InferenceProfileActionResponse>
+public sealed class ExploreInferenceProfileEndpoint : Endpoint<ExploreInferenceProfileRequest, InferenceProfileActionResponse>
 {
     // The bounds live on the request DTO, next to the XML doc that publishes them, so the documented range and the
     // range this endpoint enforces cannot drift apart. This check stays the enforcing path.
     private const int MinExploreContextTokens = ExploreInferenceProfileRequest.MinExploreContextTokens;
     private const int MaxExploreContextTokens = ExploreInferenceProfileRequest.MaxExploreContextTokens;
 
-    private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
+    private readonly IInferenceProfileService _inferenceProfileService;
+
+    public ExploreInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
+    {
+        ArgumentNullException.ThrowIfNull(inferenceProfileService);
+        _inferenceProfileService = inferenceProfileService;
+    }
 
     public override void Configure()
     {

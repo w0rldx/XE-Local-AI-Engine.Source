@@ -617,7 +617,12 @@ internal sealed class IntegrationApiHandler
 }
 
 /// <summary>Endpoint metadata carrying the integration family's request-body cap, resolved once at composition.</summary>
-internal sealed class IntegrationRequestSizeLimit(long maxRequestBodySize) : IRequestSizeLimitMetadata
+internal sealed class IntegrationRequestSizeLimit : IRequestSizeLimitMetadata
 {
-    public long? MaxRequestBodySize { get; } = maxRequestBodySize;
+    public IntegrationRequestSizeLimit(long maxRequestBodySize)
+    {
+        MaxRequestBodySize = maxRequestBodySize;
+    }
+
+    public long? MaxRequestBodySize { get; }
 }

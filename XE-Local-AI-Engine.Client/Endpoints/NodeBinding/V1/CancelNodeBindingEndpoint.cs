@@ -4,9 +4,15 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class CancelNodeBindingEndpoint(INodeBindingService nodeBindingService) : EndpointWithoutRequest<CancelNodeBindingResponse>
+public sealed class CancelNodeBindingEndpoint : EndpointWithoutRequest<CancelNodeBindingResponse>
 {
-    private readonly INodeBindingService _nodeBindingService = nodeBindingService ?? throw new ArgumentNullException(nameof(nodeBindingService));
+    private readonly INodeBindingService _nodeBindingService;
+
+    public CancelNodeBindingEndpoint(INodeBindingService nodeBindingService)
+    {
+        ArgumentNullException.ThrowIfNull(nodeBindingService);
+        _nodeBindingService = nodeBindingService;
+    }
 
     public override void Configure()
     {

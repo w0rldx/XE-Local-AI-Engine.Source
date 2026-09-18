@@ -13,10 +13,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     summaries only — no token, no internal URL. A discovery/network failure surfaces a 200 OK-empty list (never a
 ///     500) so the browse panel degrades gracefully.
 /// </summary>
-public sealed class BrowseGgufRepositoriesEndpoint(
-    IHuggingFaceGgufDiscovery discovery,
-    ILogger<BrowseGgufRepositoriesEndpoint> logger)
-    : Endpoint<BrowseGgufRepositoriesRequest, BrowseGgufRepositoriesResponse>
+public sealed class BrowseGgufRepositoriesEndpoint : Endpoint<BrowseGgufRepositoriesRequest, BrowseGgufRepositoriesResponse>
 {
     /// <summary>The maximum repos a single browse may return (bounds the discovery search breadth).</summary>
     private const int MaxLimit = 50;
@@ -24,8 +21,18 @@ public sealed class BrowseGgufRepositoriesEndpoint(
     /// <summary>The default repos returned when no limit is supplied.</summary>
     private const int DefaultLimit = 20;
 
-    private readonly IHuggingFaceGgufDiscovery _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
-    private readonly ILogger<BrowseGgufRepositoriesEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IHuggingFaceGgufDiscovery _discovery;
+    private readonly ILogger<BrowseGgufRepositoriesEndpoint> _logger;
+
+    public BrowseGgufRepositoriesEndpoint(
+        IHuggingFaceGgufDiscovery discovery,
+        ILogger<BrowseGgufRepositoriesEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(logger);
+        _discovery = discovery;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

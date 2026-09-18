@@ -16,10 +16,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     unacknowledged call cannot consume a preview either. Imported skills land disabled with Imported provenance;
 ///     that, not the acknowledgement, is the control that keeps third-party instructions away from a model.
 /// </remarks>
-public sealed class CommitSkillImportEndpoint(ISkillImportService importService)
-    : Endpoint<SkillImportCommitEndpointRequest, SkillImportCommitResponse>
+public sealed class CommitSkillImportEndpoint : Endpoint<SkillImportCommitEndpointRequest, SkillImportCommitResponse>
 {
-    private readonly ISkillImportService _importService = importService ?? throw new ArgumentNullException(nameof(importService));
+    private readonly ISkillImportService _importService;
+
+    public CommitSkillImportEndpoint(ISkillImportService importService)
+    {
+        ArgumentNullException.ThrowIfNull(importService);
+        _importService = importService;
+    }
 
     public override void Configure()
     {

@@ -11,11 +11,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 ///     can render a copyable/clickable link. The token exchange completes in the background — the UI polls
 ///     <c>cloud-settings/entra/device-code/status</c> for completion. Never returns token material.
 /// </summary>
-public sealed class EntraDeviceCodeSignInEndpoint(IEntraDeviceCodeSignInCoordinator signInCoordinator)
-    : EndpointWithoutRequest<EntraDeviceCodeSignInResponse>
+public sealed class EntraDeviceCodeSignInEndpoint : EndpointWithoutRequest<EntraDeviceCodeSignInResponse>
 {
-    private readonly IEntraDeviceCodeSignInCoordinator _signInCoordinator =
-        signInCoordinator ?? throw new ArgumentNullException(nameof(signInCoordinator));
+    private readonly IEntraDeviceCodeSignInCoordinator _signInCoordinator;
+
+    public EntraDeviceCodeSignInEndpoint(IEntraDeviceCodeSignInCoordinator signInCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(signInCoordinator);
+        _signInCoordinator = signInCoordinator;
+    }
 
     public override void Configure()
     {

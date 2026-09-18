@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     belongs to another agent, or is not a pending suggestion. Operator-gated. A separate route from the manual
 ///     PUT so analysis provenance is never rewritten to Manual.
 /// </summary>
-public sealed class UpdateSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
-    : Endpoint<UpdateSuggestedPlaybookActionRequest, PlaybookActionResponse>
+public sealed class UpdateSuggestedPlaybookActionEndpoint : Endpoint<UpdateSuggestedPlaybookActionRequest, PlaybookActionResponse>
 {
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
+    private readonly IPlaybookActionService _playbookActionService;
+
+    public UpdateSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
+    {
+        ArgumentNullException.ThrowIfNull(playbookActionService);
+        _playbookActionService = playbookActionService;
+    }
 
     public override void Configure()
     {

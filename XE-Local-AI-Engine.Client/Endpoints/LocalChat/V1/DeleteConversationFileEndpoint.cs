@@ -9,10 +9,15 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 ///     FastEndpoints handler removing one uploaded attachment (DELETE): drops the metadata row plus the on-disk
 ///     encrypted bytes and cached Markdown. Returns 204 when removed, 404 when no such file exists for the conversation.
 /// </summary>
-public sealed class DeleteConversationFileEndpoint(IConversationUploadedFileStore fileStore)
-    : Endpoint<DeleteConversationUploadRequest>
+public sealed class DeleteConversationFileEndpoint : Endpoint<DeleteConversationUploadRequest>
 {
-    private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
+    private readonly IConversationUploadedFileStore _fileStore;
+
+    public DeleteConversationFileEndpoint(IConversationUploadedFileStore fileStore)
+    {
+        ArgumentNullException.ThrowIfNull(fileStore);
+        _fileStore = fileStore;
+    }
 
     public override void Configure()
     {

@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 ///     field for one. Answers 200 with <c>configured=false</c> rather than 404 when no key exists, so the settings page
 ///     can render the empty state from one call.
 /// </summary>
-public sealed class GetMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKeyService)
-    : EndpointWithoutRequest<McpServerApiKeyStatusResponse>
+public sealed class GetMcpServerApiKeyEndpoint : EndpointWithoutRequest<McpServerApiKeyStatusResponse>
 {
-    private readonly IMcpServerApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly IMcpServerApiKeyService _apiKeyService;
+
+    public GetMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

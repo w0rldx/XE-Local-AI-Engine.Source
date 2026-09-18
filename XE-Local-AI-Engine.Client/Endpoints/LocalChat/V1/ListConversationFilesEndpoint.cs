@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 ///     FastEndpoints handler listing the file attachments for a conversation (GET). Returns metadata only — never the
 ///     raw bytes or extracted text.
 /// </summary>
-public sealed class ListConversationFilesEndpoint(IConversationUploadedFileStore fileStore)
-    : Endpoint<ListConversationUploadsRequest, ListConversationUploadsResponse>
+public sealed class ListConversationFilesEndpoint : Endpoint<ListConversationUploadsRequest, ListConversationUploadsResponse>
 {
-    private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
+    private readonly IConversationUploadedFileStore _fileStore;
+
+    public ListConversationFilesEndpoint(IConversationUploadedFileStore fileStore)
+    {
+        ArgumentNullException.ThrowIfNull(fileStore);
+        _fileStore = fileStore;
+    }
 
     public override void Configure()
     {

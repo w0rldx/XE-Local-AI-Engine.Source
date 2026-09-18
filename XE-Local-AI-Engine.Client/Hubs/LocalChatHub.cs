@@ -18,13 +18,28 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 ///     Represents local chat hub.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class LocalChatHub(
-    INodeChatStreamService streamService,
-    INodeChatRegenerationService regenerationService,
-    IInvocationResumeRegistry resumeRegistry,
-    IInvocationAttachmentTracker attachmentTracker,
-    IOptions<SecurityOptions> securityOptions) : Hub
+public sealed class LocalChatHub : Hub
 {
+    private readonly INodeChatStreamService _streamService;
+    private readonly INodeChatRegenerationService _regenerationService;
+    private readonly IInvocationResumeRegistry _resumeRegistry;
+    private readonly IInvocationAttachmentTracker _attachmentTracker;
+    private readonly IOptions<SecurityOptions> _securityOptions;
+
+    public LocalChatHub(
+        INodeChatStreamService streamService,
+        INodeChatRegenerationService regenerationService,
+        IInvocationResumeRegistry resumeRegistry,
+        IInvocationAttachmentTracker attachmentTracker,
+        IOptions<SecurityOptions> securityOptions)
+    {
+        _streamService = streamService;
+        _regenerationService = regenerationService;
+        _resumeRegistry = resumeRegistry;
+        _attachmentTracker = attachmentTracker;
+        _securityOptions = securityOptions;
+    }
+
     public IAsyncEnumerable<ChatStreamEvent> SendMessage(NodeChatStreamRequest request,
         CancellationToken cancellationToken)
     {
@@ -44,7 +59,7 @@ public sealed class LocalChatHub(
             };
         }
 
-        return TrackAttachment(streamService.SendMessageAsync(request, cancellationToken), cancellationToken);
+        return TrackAttachment(_streamService.SendMessageAsync(request, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -68,7 +83,7 @@ public sealed class LocalChatHub(
             return;
         }
 
-        var maxSizeKb = securityOptions.Value.MaxMessageSizeKb;
+        var maxSizeKb = _securityOptions.Value.MaxMessageSizeKb;
         var sizeBytes = Encoding.UTF8.GetByteCount(content);
         if (sizeBytes <= maxSizeKb * 1024)
         {
@@ -103,7 +118,7 @@ public sealed class LocalChatHub(
         CancellationToken cancellationToken)
     {
         return TrackAttachment(
-            regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken),
+            _regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, samplingOptions, cancellationToken),
             cancellationToken);
     }
 
@@ -116,7 +131,7 @@ public sealed class LocalChatHub(
     public IAsyncEnumerable<ChatStreamEvent> ResumeMessage(Guid invocationId,
         CancellationToken cancellationToken)
     {
-        return TrackAttachment(resumeRegistry.ResumeAsync(invocationId, cancellationToken), cancellationToken);
+        return TrackAttachment(_resumeRegistry.ResumeAsync(invocationId, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -136,10 +151,10 @@ public sealed class LocalChatHub(
     public IAsyncEnumerable<ChatStreamEvent> ResumeConversation(Guid conversationId,
         CancellationToken cancellationToken)
     {
-        var invocationId = resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId);
+        var invocationId = _resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId);
         return invocationId is null
             ? AsyncEnumerable.Empty<ChatStreamEvent>()
-            : TrackAttachment(resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken), cancellationToken);
+            : TrackAttachment(_resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -175,7 +190,7 @@ public sealed class LocalChatHub(
             {
                 if (attachment is null)
                 {
-                    attachment = attachmentTracker.Attach(streamEvent.RequestId);
+                    attachment = _attachmentTracker.Attach(streamEvent.RequestId);
 
                     // Closes the one gap the callback cannot: a cancellation that fired while we were latching has
                     // already run its callback against a still-null field and will never run again.

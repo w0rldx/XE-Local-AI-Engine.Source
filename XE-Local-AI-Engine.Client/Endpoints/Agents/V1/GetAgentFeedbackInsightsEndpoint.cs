@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Insights;
 ///     persisted by the chat path — no writes, so no mutation guard. Operator-gated. Returns 404 when the agent
 ///     definition does not exist.
 /// </summary>
-public sealed class GetAgentFeedbackInsightsEndpoint(IFeedbackInsightsService feedbackInsightsService)
-    : Endpoint<GetAgentFeedbackInsightsRequest, AgentFeedbackInsightsResponse>
+public sealed class GetAgentFeedbackInsightsEndpoint : Endpoint<GetAgentFeedbackInsightsRequest, AgentFeedbackInsightsResponse>
 {
-    private readonly IFeedbackInsightsService _feedbackInsightsService = feedbackInsightsService ?? throw new ArgumentNullException(nameof(feedbackInsightsService));
+    private readonly IFeedbackInsightsService _feedbackInsightsService;
+
+    public GetAgentFeedbackInsightsEndpoint(IFeedbackInsightsService feedbackInsightsService)
+    {
+        ArgumentNullException.ThrowIfNull(feedbackInsightsService);
+        _feedbackInsightsService = feedbackInsightsService;
+    }
 
     public override void Configure()
     {

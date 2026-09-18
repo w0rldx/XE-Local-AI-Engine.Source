@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     that surfaces the launch-arg facts plus the lifecycle status name (<c>Explored|Frozen|Stale</c>) and NEVER the
 ///     local-only machine key (the view already omits it).
 /// </summary>
-public sealed class ListInferenceProfilesEndpoint(IInferenceProfileService inferenceProfileService)
-    : EndpointWithoutRequest<ListInferenceProfilesResponse>
+public sealed class ListInferenceProfilesEndpoint : EndpointWithoutRequest<ListInferenceProfilesResponse>
 {
-    private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
+    private readonly IInferenceProfileService _inferenceProfileService;
+
+    public ListInferenceProfilesEndpoint(IInferenceProfileService inferenceProfileService)
+    {
+        ArgumentNullException.ThrowIfNull(inferenceProfileService);
+        _inferenceProfileService = inferenceProfileService;
+    }
 
     public override void Configure()
     {

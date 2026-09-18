@@ -11,13 +11,18 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     The operator's transcription sessions, paged server-side so the page can reach rows older than the first one.
 ///     Ordered newest first by the store and never re-sorted here. Operator-gated.
 /// </summary>
-public sealed class ListTranscriptionSessionsEndpoint(ITranscriptionService sessions)
-    : Endpoint<ListTranscriptionSessionsRequest, ListTranscriptionSessionsResponse>
+public sealed class ListTranscriptionSessionsEndpoint : Endpoint<ListTranscriptionSessionsRequest, ListTranscriptionSessionsResponse>
 {
     /// <summary>The page size a caller that names none gets.</summary>
     private const int DefaultLimit = 50;
 
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ITranscriptionService _sessions;
+
+    public ListTranscriptionSessionsEndpoint(ITranscriptionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

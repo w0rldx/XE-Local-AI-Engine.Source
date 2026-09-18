@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     analysis staging: rejects a pending Suggested/Analysis action by archiving it (provenance preserved). 404 when the
 ///     action is missing, belongs to another agent, or is not a pending suggestion. Operator-gated.
 /// </summary>
-public sealed class RejectSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
-    : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
+public sealed class RejectSuggestedPlaybookActionEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
+    private readonly IPlaybookActionService _playbookActionService;
+
+    public RejectSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
+    {
+        ArgumentNullException.ThrowIfNull(playbookActionService);
+        _playbookActionService = playbookActionService;
+    }
 
     public override void Configure()
     {

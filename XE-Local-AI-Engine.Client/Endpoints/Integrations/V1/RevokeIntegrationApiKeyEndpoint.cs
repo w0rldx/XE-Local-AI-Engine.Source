@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 ///     content-free audit rows reference the credential's prefix, and deleting it would orphan that history and let the
 ///     same display prefix be minted again.
 /// </summary>
-public sealed class RevokeIntegrationApiKeyEndpoint(IIntegrationApiKeyService apiKeyService)
-    : EndpointWithoutRequest
+public sealed class RevokeIntegrationApiKeyEndpoint : EndpointWithoutRequest
 {
-    private readonly IIntegrationApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly IIntegrationApiKeyService _apiKeyService;
+
+    public RevokeIntegrationApiKeyEndpoint(IIntegrationApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

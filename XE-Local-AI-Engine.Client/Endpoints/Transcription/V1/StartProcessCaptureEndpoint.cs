@@ -22,8 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 ///         carry a reason code rather than prose, in the same shape the runtime routes use.
 ///     </para>
 /// </remarks>
-public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator captures)
-    : Endpoint<StartProcessCaptureRequest, ProcessCaptureStatusResponse>
+public sealed class StartProcessCaptureEndpoint : Endpoint<StartProcessCaptureRequest, ProcessCaptureStatusResponse>
 {
     /// <summary>This host has no process loopback; the SPA hides the source rather than offering a retry.</summary>
     internal const string NotSupportedReason = "capture-not-supported";
@@ -34,7 +33,13 @@ public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator c
     /// <summary>This session already has a capture; stop it before starting another.</summary>
     internal const string AlreadyCapturingReason = "capture-already-running";
 
-    private readonly ProcessAudioCaptureCoordinator _captures = captures ?? throw new ArgumentNullException(nameof(captures));
+    private readonly ProcessAudioCaptureCoordinator _captures;
+
+    public StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator captures)
+    {
+        ArgumentNullException.ThrowIfNull(captures);
+        _captures = captures;
+    }
 
     public override void Configure()
     {

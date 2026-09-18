@@ -23,8 +23,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         reached a global handler.
 ///     </para>
 /// </summary>
-public sealed class DevelopmentConflictExceptionHandler(ILogger<DevelopmentConflictExceptionHandler> logger) : IExceptionHandler
+public sealed class DevelopmentConflictExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<DevelopmentConflictExceptionHandler> _logger;
+
+    public DevelopmentConflictExceptionHandler(ILogger<DevelopmentConflictExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -35,7 +42,7 @@ public sealed class DevelopmentConflictExceptionHandler(ILogger<DevelopmentConfl
             return false;
         }
 
-        logger.LogWarning(exception,
+        _logger.LogWarning(exception,
             "Handled Development conflict exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),

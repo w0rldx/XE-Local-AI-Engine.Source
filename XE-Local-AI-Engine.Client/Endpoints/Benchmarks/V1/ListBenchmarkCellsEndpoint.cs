@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     The project's measurement cells. A cell is what ranks, so a comparison reads this shape rather than the run
 ///     listing: the runs of one cell are its answers, and the items MISSING from it are why it does not rank.
 /// </summary>
-public sealed class ListBenchmarkCellsEndpoint(BenchmarkRecordService records)
-    : Endpoint<ListBenchmarkCellsRequest, ListBenchmarkCellsResponse>
+public sealed class ListBenchmarkCellsEndpoint : Endpoint<ListBenchmarkCellsRequest, ListBenchmarkCellsResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ListBenchmarkCellsEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {

@@ -18,24 +18,32 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     decision (whether a fresh insert or a retryable dedupe hit has to be queued) to
 ///     <see cref="IKnowledgeIngestionAdmissionService" />.
 /// </summary>
-public sealed class UploadKnowledgeDocumentEndpoint(
-    IKnowledgeDocumentBlobStore blobStore,
-    IKnowledgeIngestionAdmissionService ingestionAdmission,
-    IDocumentTextExtractor extractor,
-    IOptions<KnowledgeBaseOptions> knowledgeBaseOptions,
-    IOptions<SecurityOptions> securityOptions)
-    : Endpoint<UploadKnowledgeDocumentRequest, UploadKnowledgeDocumentResponse>
+public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDocumentRequest, UploadKnowledgeDocumentResponse>
 {
     private const string DefaultMimeType = "application/octet-stream";
 
-    private readonly IKnowledgeDocumentBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
+    private readonly IKnowledgeDocumentBlobStore _blobStore;
+    private readonly IKnowledgeIngestionAdmissionService _ingestionAdmission;
+    private readonly IDocumentTextExtractor _extractor;
+    private readonly string _embeddingModel;
+    private readonly long _maxUploadBytes;
 
-    private readonly IKnowledgeIngestionAdmissionService _ingestionAdmission =
-        ingestionAdmission ?? throw new ArgumentNullException(nameof(ingestionAdmission));
-
-    private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
-    private readonly string _embeddingModel = (knowledgeBaseOptions ?? throw new ArgumentNullException(nameof(knowledgeBaseOptions))).Value.EmbeddingModelName;
-    private readonly long _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+    public UploadKnowledgeDocumentEndpoint(
+        IKnowledgeDocumentBlobStore blobStore,
+        IKnowledgeIngestionAdmissionService ingestionAdmission,
+        IDocumentTextExtractor extractor,
+        IOptions<KnowledgeBaseOptions> knowledgeBaseOptions,
+        IOptions<SecurityOptions> securityOptions)
+    {
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(ingestionAdmission);
+        _ingestionAdmission = ingestionAdmission;
+        ArgumentNullException.ThrowIfNull(extractor);
+        _extractor = extractor;
+        _embeddingModel = (knowledgeBaseOptions ?? throw new ArgumentNullException(nameof(knowledgeBaseOptions))).Value.EmbeddingModelName;
+        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+    }
 
     public override void Configure()
     {

@@ -6,11 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class UpdateLlamaCppRuntimeEndpoint(ILlamaCppRuntimeAdministrationService administrationService)
-    : Endpoint<UpdateLlamaCppRuntimeRequest, LlamaCppVersionResponse>
+public sealed class UpdateLlamaCppRuntimeEndpoint : Endpoint<UpdateLlamaCppRuntimeRequest, LlamaCppVersionResponse>
 {
-    private readonly ILlamaCppRuntimeAdministrationService _administrationService =
-        administrationService ?? throw new ArgumentNullException(nameof(administrationService));
+    private readonly ILlamaCppRuntimeAdministrationService _administrationService;
+
+    public UpdateLlamaCppRuntimeEndpoint(ILlamaCppRuntimeAdministrationService administrationService)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        _administrationService = administrationService;
+    }
 
     public override void Configure()
     {

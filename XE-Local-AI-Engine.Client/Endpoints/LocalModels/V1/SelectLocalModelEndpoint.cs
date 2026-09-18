@@ -8,14 +8,24 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
-public sealed class SelectLocalModelEndpoint(
-    ILocalModelAdministrationService administrationService,
-    IModelTrustResolver modelTrustResolver,
-    ModelNameValidator modelNameValidator) : Endpoint<SelectLocalModelRequest, SelectLocalModelResponse>
+public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest, SelectLocalModelResponse>
 {
-    private readonly ILocalModelAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+    private readonly ILocalModelAdministrationService _administrationService;
+    private readonly ModelNameValidator _modelNameValidator;
+    private readonly IModelTrustResolver _modelTrustResolver;
+
+    public SelectLocalModelEndpoint(
+        ILocalModelAdministrationService administrationService,
+        IModelTrustResolver modelTrustResolver,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _administrationService = administrationService;
+        _modelNameValidator = modelNameValidator;
+        _modelTrustResolver = modelTrustResolver;
+    }
 
     public override void Configure()
     {

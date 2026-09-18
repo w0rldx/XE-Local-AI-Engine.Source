@@ -44,7 +44,7 @@ public sealed record DevWorkflowRunSubscriptionSnapshot(
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWorkflowRunService runs, IOptions<DevWorkflowOptions> options) : Hub
+public sealed class DevWorkflowRunHub : Hub
 {
     /// <summary>
     ///     How many persisted events one subscribe hands back. Past this the snapshot says so and the client pages the
@@ -53,9 +53,18 @@ public sealed class DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWo
     /// </summary>
     private const int ReplayCap = 200;
 
-    private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly DevWorkflowRunQueryService _queries = queries ?? throw new ArgumentNullException(nameof(queries));
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly DevWorkflowOptions _options;
+    private readonly DevWorkflowRunQueryService _queries;
+    private readonly IDevWorkflowRunService _runs;
+
+    public DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWorkflowRunService runs, IOptions<DevWorkflowOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(queries);
+        _queries = queries;
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public async Task<DevWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
     {

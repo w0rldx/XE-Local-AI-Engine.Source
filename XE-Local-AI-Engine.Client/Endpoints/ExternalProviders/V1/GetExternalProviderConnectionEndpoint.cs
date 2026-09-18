@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     slug — is a clean 404: both mean "no such connection", and telling them apart would only report the grammar
 ///     back to a caller that cannot act on the difference.
 /// </summary>
-public sealed class GetExternalProviderConnectionEndpoint(IExternalProviderStore store)
-    : Endpoint<GetExternalProviderConnectionRequest, ExternalProviderConnectionResponse>
+public sealed class GetExternalProviderConnectionEndpoint : Endpoint<GetExternalProviderConnectionRequest, ExternalProviderConnectionResponse>
 {
-    private readonly IExternalProviderStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IExternalProviderStore _store;
+
+    public GetExternalProviderConnectionEndpoint(IExternalProviderStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public override void Configure()
     {

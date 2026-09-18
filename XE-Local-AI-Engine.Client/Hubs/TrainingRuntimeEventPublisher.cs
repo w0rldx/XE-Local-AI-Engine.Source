@@ -3,12 +3,19 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
-internal sealed class TrainingRuntimeEventPublisher(IHubContext<TrainingRuntimeHub> hubContext) : ITrainingRuntimeEventPublisher
+internal sealed class TrainingRuntimeEventPublisher : ITrainingRuntimeEventPublisher
 {
+    private readonly IHubContext<TrainingRuntimeHub> _hubContext;
+
+    public TrainingRuntimeEventPublisher(IHubContext<TrainingRuntimeHub> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
     public async Task PublishStatusAsync(TrainingRuntimeStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
-        await hubContext.Clients.All.SendAsync(TrainingRuntimeHubEvents.StatusChanged,
+        await _hubContext.Clients.All.SendAsync(TrainingRuntimeHubEvents.StatusChanged,
             TrainingRuntimeStatusHubMessage.FromContract(statusEvent), cancellationToken);
     }
 }

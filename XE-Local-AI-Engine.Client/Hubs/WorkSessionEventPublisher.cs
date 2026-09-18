@@ -7,10 +7,17 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     Pushes a committed work-session change to that session's group. Supersedes the no-op the application module
 ///     registers, so a host without this hub stays resolvable.
 /// </summary>
-internal sealed class WorkSessionEventPublisher(IHubContext<WorkSessionHub> hubContext) : IWorkSessionEventPublisher
+internal sealed class WorkSessionEventPublisher : IWorkSessionEventPublisher
 {
+    private readonly IHubContext<WorkSessionHub> _hubContext;
+
+    public WorkSessionEventPublisher(IHubContext<WorkSessionHub> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
     public Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default) =>
-        hubContext.Clients.Group(WorkSessionHubGroups.Session(sessionId))
+        _hubContext.Clients.Group(WorkSessionHubGroups.Session(sessionId))
                   .SendAsync(WorkSessionHubEvents.Changed, new WorkSessionChanged(sessionId, sequence, ToWireKind(kind)), cancellationToken);
 
     /// <summary>

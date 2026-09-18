@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 ///     the no-op default in the Client host. Payloads are already sanitized by the callers (no parameters, details, or
 ///     stack traces).
 /// </summary>
-internal sealed class SchedulerEventPublisher(IHubContext<SchedulerHub> hubContext) : ISchedulerEventPublisher
+internal sealed class SchedulerEventPublisher : ISchedulerEventPublisher
 {
-    private readonly IHubContext<SchedulerHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    private readonly IHubContext<SchedulerHub> _hubContext;
+
+    public SchedulerEventPublisher(IHubContext<SchedulerHub> hubContext)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+    }
 
     public Task PublishRunAsync(SchedulerRunHubEvent runEvent, CancellationToken cancellationToken = default)
     {

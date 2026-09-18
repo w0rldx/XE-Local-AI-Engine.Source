@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///         integrator polls cannot drift apart.
 ///     </para>
 /// </summary>
-public sealed class GetIntegrationExecutionEventsEndpoint(IntegrationExecutionQueryService executions)
-    : Endpoint<ListIntegrationExecutionEventsRequest, ListIntegrationExecutionEventsResponse>
+public sealed class GetIntegrationExecutionEventsEndpoint : Endpoint<ListIntegrationExecutionEventsRequest, ListIntegrationExecutionEventsResponse>
 {
-    private readonly IntegrationExecutionQueryService _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+    private readonly IntegrationExecutionQueryService _executions;
+
+    public GetIntegrationExecutionEventsEndpoint(IntegrationExecutionQueryService executions)
+    {
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+    }
 
     public override void Configure()
     {

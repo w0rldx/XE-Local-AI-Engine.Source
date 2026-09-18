@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class ListDevelopmentRepositoriesEndpoint(IDevelopmentManagementService service)
-    : EndpointWithoutRequest<ListDevelopmentRepositoriesResponse>, IDevelopmentEndpoint
+public sealed class ListDevelopmentRepositoriesEndpoint : EndpointWithoutRequest<ListDevelopmentRepositoriesResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public ListDevelopmentRepositoriesEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -24,10 +29,15 @@ public sealed class ListDevelopmentRepositoriesEndpoint(IDevelopmentManagementSe
     }
 }
 
-public sealed class RegisterDevelopmentRepositoryEndpoint(IDevelopmentManagementService service)
-    : Endpoint<RegisterDevelopmentRepositoryRequest, DevelopmentRepositoryResponse>, IDevelopmentEndpoint
+public sealed class RegisterDevelopmentRepositoryEndpoint : Endpoint<RegisterDevelopmentRepositoryRequest, DevelopmentRepositoryResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public RegisterDevelopmentRepositoryEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -53,10 +63,15 @@ public sealed class RegisterDevelopmentRepositoryEndpoint(IDevelopmentManagement
     }
 }
 
-public sealed class DetectDevelopmentRepositoryProfileEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentProfileDetectionRequest, DevelopmentProfileDetectionResponse>, IDevelopmentEndpoint
+public sealed class DetectDevelopmentRepositoryProfileEndpoint : Endpoint<DevelopmentProfileDetectionRequest, DevelopmentProfileDetectionResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public DetectDevelopmentRepositoryProfileEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -82,10 +97,15 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint(IDevelopmentManag
     }
 }
 
-public sealed class ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagementService service)
-    : Endpoint<ReconnectDevelopmentRepositoryRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
+public sealed class ReconnectDevelopmentRepositoryEndpoint : Endpoint<ReconnectDevelopmentRepositoryRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

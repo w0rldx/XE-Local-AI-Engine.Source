@@ -6,12 +6,20 @@ using XE_Local_AI_Engine.Client.Endpoints.Invocations.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Events;
 
-public sealed class GetInvocationMonitorEndpoint(
-    IWorkerEventDispatcher eventDispatcher,
-    IInvocationHistory invocationHistory) : EndpointWithoutRequest<InvocationMonitorResponse>
+public sealed class GetInvocationMonitorEndpoint : EndpointWithoutRequest<InvocationMonitorResponse>
 {
-    private readonly IWorkerEventDispatcher _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
-    private readonly IInvocationHistory _invocationHistory = invocationHistory ?? throw new ArgumentNullException(nameof(invocationHistory));
+    private readonly IWorkerEventDispatcher _eventDispatcher;
+    private readonly IInvocationHistory _invocationHistory;
+
+    public GetInvocationMonitorEndpoint(
+        IWorkerEventDispatcher eventDispatcher,
+        IInvocationHistory invocationHistory)
+    {
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        ArgumentNullException.ThrowIfNull(invocationHistory);
+        _eventDispatcher = eventDispatcher;
+        _invocationHistory = invocationHistory;
+    }
 
     public override void Configure()
     {

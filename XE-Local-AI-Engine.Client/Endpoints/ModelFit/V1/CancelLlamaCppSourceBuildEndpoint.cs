@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class CancelLlamaCppSourceBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<LlamaCppSourceBuildStatusResponse>
+public sealed class CancelLlamaCppSourceBuildEndpoint : EndpointWithoutRequest<LlamaCppSourceBuildStatusResponse>
 {
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public CancelLlamaCppSourceBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime)
+    {
+        _runtime = runtime;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.ModelFit.SourceBuildCancel);
@@ -18,7 +24,7 @@ public sealed class CancelLlamaCppSourceBuildEndpoint(LlamaCppRuntimeOrchestrati
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        runtime.CancelSourceBuild();
-        await Send.OkAsync(runtime.GetSourceBuildStatus().ToResponse(), ct);
+        _runtime.CancelSourceBuild();
+        await Send.OkAsync(_runtime.GetSourceBuildStatus().ToResponse(), ct);
     }
 }

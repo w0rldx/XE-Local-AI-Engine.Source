@@ -8,11 +8,22 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-public sealed class RemoveLlamaCppSourceBuildEndpoint(
-    LlamaCppRuntimeOrchestrationService runtime,
-    INodeRuntimeSettings nodeRuntimeSettings,
-    ILocalChatClientCacheInvalidator localChatClientCacheInvalidator) : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
+public sealed class RemoveLlamaCppSourceBuildEndpoint : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
 {
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
+    private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator;
+
+    public RemoveLlamaCppSourceBuildEndpoint(
+        LlamaCppRuntimeOrchestrationService runtime,
+        INodeRuntimeSettings nodeRuntimeSettings,
+        ILocalChatClientCacheInvalidator localChatClientCacheInvalidator)
+    {
+        _runtime = runtime;
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        _localChatClientCacheInvalidator = localChatClientCacheInvalidator;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.ModelFit.SourceBuildRemove);
@@ -25,18 +36,18 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
     public override async Task HandleAsync(CancellationToken ct)
     {
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct))
+                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
         {
             await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
             {
                 Reason = "keep-model-warm-enabled",
                 Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage,
-                RunningProcessCount = runtime.CountRunningProcesses()
+                RunningProcessCount = _runtime.CountRunningProcesses()
             }));
             return;
         }
 
-        var (removed, runningProcessCount, buildActive) = await runtime.TryRemoveSourceBuildAsync(ct);
+        var (removed, runningProcessCount, buildActive) = await _runtime.TryRemoveSourceBuildAsync(ct);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
@@ -50,9 +61,9 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
             return;
         }
 
-        localChatClientCacheInvalidator.ClearClientCache();
-        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct);
-        var installed = await runtime.ReadInstalledRuntimeAsync(ct);
-        await Send.OkAsync(runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct);
+        _localChatClientCacheInvalidator.ClearClientCache();
+        var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct);
+        var installed = await _runtime.ReadInstalledRuntimeAsync(ct);
+        await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct);
     }
 }

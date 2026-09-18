@@ -11,14 +11,21 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     shared <see cref="IAppUpdateState" /> snapshot (computed at startup); <c>?refresh=true</c> forces a fresh GitHub
 ///     check, subject to a 10-minute rate-limit floor.
 /// </summary>
-public sealed class GetAppUpdateStatusEndpoint(IAppUpdateState updateState, IAppUpdateService updateService)
-    : Endpoint<GetAppUpdateStatusRequest, AppUpdateStatusResponse>, IDesktopOnlyEndpoint
+public sealed class GetAppUpdateStatusEndpoint : Endpoint<GetAppUpdateStatusRequest, AppUpdateStatusResponse>, IDesktopOnlyEndpoint
 {
     // Minimum spacing between anonymous live GitHub refreshes.
     internal static readonly TimeSpan MinRefreshInterval = TimeSpan.FromMinutes(10);
 
-    private readonly IAppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
-    private readonly IAppUpdateService _updateService = updateService ?? throw new ArgumentNullException(nameof(updateService));
+    private readonly IAppUpdateState _updateState;
+    private readonly IAppUpdateService _updateService;
+
+    public GetAppUpdateStatusEndpoint(IAppUpdateState updateState, IAppUpdateService updateService)
+    {
+        ArgumentNullException.ThrowIfNull(updateState);
+        ArgumentNullException.ThrowIfNull(updateService);
+        _updateState = updateState;
+        _updateService = updateService;
+    }
 
     public override void Configure()
     {

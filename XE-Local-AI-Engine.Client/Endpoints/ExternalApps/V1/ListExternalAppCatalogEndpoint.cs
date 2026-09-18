@@ -12,12 +12,19 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 ///     here rather than left to the SPA because it is the second round-trip the card exists to avoid; the base64
 ///     <c>files[]</c> asset bodies never cross the wire.
 /// </summary>
-public sealed class ListExternalAppCatalogEndpoint(IApplicationCatalogProvider catalog, IExternalAppService apps)
-    : EndpointWithoutRequest<ExternalAppCatalogResponse>
+public sealed class ListExternalAppCatalogEndpoint : EndpointWithoutRequest<ExternalAppCatalogResponse>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
 
-    private readonly IApplicationCatalogProvider _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IApplicationCatalogProvider _catalog;
+
+    public ListExternalAppCatalogEndpoint(IApplicationCatalogProvider catalog, IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        ArgumentNullException.ThrowIfNull(catalog);
+        _apps = apps;
+        _catalog = catalog;
+    }
 
     public override void Configure()
     {

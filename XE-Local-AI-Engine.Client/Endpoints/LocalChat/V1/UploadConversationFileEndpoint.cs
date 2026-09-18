@@ -14,11 +14,17 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     then hands the file to <see cref="IConversationUploadIngestor" />, which runs the gated extract-and-persist
 ///     phase. The storage path is server-generated; the original name is kept only as encrypted display metadata.
 /// </summary>
-public sealed class UploadConversationFileEndpoint(IConversationUploadIngestor ingestor, IOptions<SecurityOptions> securityOptions)
-    : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
+public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
 {
-    private readonly IConversationUploadIngestor _ingestor = ingestor ?? throw new ArgumentNullException(nameof(ingestor));
-    private readonly long _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+    private readonly IConversationUploadIngestor _ingestor;
+    private readonly long _maxUploadBytes;
+
+    public UploadConversationFileEndpoint(IConversationUploadIngestor ingestor, IOptions<SecurityOptions> securityOptions)
+    {
+        ArgumentNullException.ThrowIfNull(ingestor);
+        _ingestor = ingestor;
+        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+    }
 
     public override void Configure()
     {

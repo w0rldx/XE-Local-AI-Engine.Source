@@ -13,12 +13,19 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 ///     and "your click just failed" is a different sentence from "the cache is stale", which rides on
 ///     <c>lastRefreshFailure</c>.
 /// </summary>
-public sealed class RefreshExternalAppCatalogEndpoint(IApplicationCatalogProvider catalog, IExternalAppService apps)
-    : EndpointWithoutRequest<ExternalAppCatalogResponse>
+public sealed class RefreshExternalAppCatalogEndpoint : EndpointWithoutRequest<ExternalAppCatalogResponse>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
 
-    private readonly IApplicationCatalogProvider _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IApplicationCatalogProvider _catalog;
+
+    public RefreshExternalAppCatalogEndpoint(IApplicationCatalogProvider catalog, IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        ArgumentNullException.ThrowIfNull(catalog);
+        _apps = apps;
+        _catalog = catalog;
+    }
 
     public override void Configure()
     {

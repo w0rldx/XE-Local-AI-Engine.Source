@@ -20,9 +20,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///         answer into it.
 ///     </para>
 /// </summary>
-public sealed class DeleteIntegrationSessionEndpoint(IntegrationSessionService sessions) : EndpointWithoutRequest
+public sealed class DeleteIntegrationSessionEndpoint : EndpointWithoutRequest
 {
-    private readonly IntegrationSessionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly IntegrationSessionService _sessions;
+
+    public DeleteIntegrationSessionEndpoint(IntegrationSessionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

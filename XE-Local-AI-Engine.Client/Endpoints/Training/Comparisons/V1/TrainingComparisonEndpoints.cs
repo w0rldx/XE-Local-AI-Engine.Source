@@ -7,9 +7,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
-public sealed class CreateComparisonEndpoint(IComparisonReportService comparisons) : Endpoint<CreateComparisonRequest, ComparisonResponse>
+public sealed class CreateComparisonEndpoint : Endpoint<CreateComparisonRequest, ComparisonResponse>
 {
-    private readonly IComparisonReportService _comparisons = comparisons ?? throw new ArgumentNullException(nameof(comparisons));
+    private readonly IComparisonReportService _comparisons;
+
+    public CreateComparisonEndpoint(IComparisonReportService comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+        _comparisons = comparisons;
+    }
 
     public override void Configure()
     {
@@ -34,9 +40,15 @@ public sealed class CreateComparisonEndpoint(IComparisonReportService comparison
     }
 }
 
-public sealed class ListComparisonsEndpoint(IComparisonReportService comparisons) : EndpointWithoutRequest<ListComparisonsResponse>
+public sealed class ListComparisonsEndpoint : EndpointWithoutRequest<ListComparisonsResponse>
 {
-    private readonly IComparisonReportService _comparisons = comparisons ?? throw new ArgumentNullException(nameof(comparisons));
+    private readonly IComparisonReportService _comparisons;
+
+    public ListComparisonsEndpoint(IComparisonReportService comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+        _comparisons = comparisons;
+    }
 
     public override void Configure()
     {
@@ -54,9 +66,15 @@ public sealed class ListComparisonsEndpoint(IComparisonReportService comparisons
     }
 }
 
-public sealed class GetComparisonEndpoint(IComparisonReportService comparisons) : Endpoint<ComparisonByIdRequest, ComparisonResponse>
+public sealed class GetComparisonEndpoint : Endpoint<ComparisonByIdRequest, ComparisonResponse>
 {
-    private readonly IComparisonReportService _comparisons = comparisons ?? throw new ArgumentNullException(nameof(comparisons));
+    private readonly IComparisonReportService _comparisons;
+
+    public GetComparisonEndpoint(IComparisonReportService comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+        _comparisons = comparisons;
+    }
 
     public override void Configure()
     {
@@ -77,9 +95,15 @@ public sealed class GetComparisonEndpoint(IComparisonReportService comparisons) 
     }
 }
 
-public sealed class DeleteComparisonEndpoint(IComparisonReportService comparisons) : Endpoint<DeleteComparisonRequest>
+public sealed class DeleteComparisonEndpoint : Endpoint<DeleteComparisonRequest>
 {
-    private readonly IComparisonReportService _comparisons = comparisons ?? throw new ArgumentNullException(nameof(comparisons));
+    private readonly IComparisonReportService _comparisons;
+
+    public DeleteComparisonEndpoint(IComparisonReportService comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+        _comparisons = comparisons;
+    }
 
     public override void Configure()
     {
@@ -101,10 +125,15 @@ public sealed class DeleteComparisonEndpoint(IComparisonReportService comparison
 ///     What the create dialog pre-fills from one training run: the base and tuned model names its lineage implies, and
 ///     the evaluations that already exist for them. Read-only — it creates nothing.
 /// </summary>
-public sealed class SuggestComparisonEndpoint(IComparisonReportService comparisons)
-    : Endpoint<SuggestComparisonRequest, ComparisonSuggestionResponse>
+public sealed class SuggestComparisonEndpoint : Endpoint<SuggestComparisonRequest, ComparisonSuggestionResponse>
 {
-    private readonly IComparisonReportService _comparisons = comparisons ?? throw new ArgumentNullException(nameof(comparisons));
+    private readonly IComparisonReportService _comparisons;
+
+    public SuggestComparisonEndpoint(IComparisonReportService comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+        _comparisons = comparisons;
+    }
 
     public override void Configure()
     {

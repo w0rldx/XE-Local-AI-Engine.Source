@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Proxy;
 ///         A caller that discards this body cannot get the key back from any other endpoint.
 ///     </para>
 /// </summary>
-public sealed class GenerateLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyService apiKeyService)
-    : EndpointWithoutRequest<GeneratedLocalModelProxyApiKeyResponse>
+public sealed class GenerateLocalModelProxyApiKeyEndpoint : EndpointWithoutRequest<GeneratedLocalModelProxyApiKeyResponse>
 {
-    private readonly ILocalModelProxyApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly ILocalModelProxyApiKeyService _apiKeyService;
+
+    public GenerateLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

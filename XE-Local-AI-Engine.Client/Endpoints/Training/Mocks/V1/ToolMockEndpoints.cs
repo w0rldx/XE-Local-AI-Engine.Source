@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-public sealed class ListToolMocksEndpoint(IToolMockService mocks)
-    : EndpointWithoutRequest<ListToolMocksResponse>
+public sealed class ListToolMocksEndpoint : EndpointWithoutRequest<ListToolMocksResponse>
 {
-    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
+    private readonly IToolMockService _mocks;
+
+    public ListToolMocksEndpoint(IToolMockService mocks)
+    {
+        ArgumentNullException.ThrowIfNull(mocks);
+        _mocks = mocks;
+    }
 
     public override void Configure()
     {
@@ -28,10 +33,15 @@ public sealed class ListToolMocksEndpoint(IToolMockService mocks)
     }
 }
 
-public sealed class GetToolMockEndpoint(IToolMockService mocks)
-    : Endpoint<GetToolMockRequest, ToolMockResponse>
+public sealed class GetToolMockEndpoint : Endpoint<GetToolMockRequest, ToolMockResponse>
 {
-    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
+    private readonly IToolMockService _mocks;
+
+    public GetToolMockEndpoint(IToolMockService mocks)
+    {
+        ArgumentNullException.ThrowIfNull(mocks);
+        _mocks = mocks;
+    }
 
     public override void Configure()
     {
@@ -52,10 +62,15 @@ public sealed class GetToolMockEndpoint(IToolMockService mocks)
     }
 }
 
-public sealed class CreateToolMockEndpoint(IToolMockService mocks)
-    : Endpoint<CreateToolMockRequest, ToolMockResponse>
+public sealed class CreateToolMockEndpoint : Endpoint<CreateToolMockRequest, ToolMockResponse>
 {
-    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
+    private readonly IToolMockService _mocks;
+
+    public CreateToolMockEndpoint(IToolMockService mocks)
+    {
+        ArgumentNullException.ThrowIfNull(mocks);
+        _mocks = mocks;
+    }
 
     public override void Configure()
     {
@@ -73,10 +88,15 @@ public sealed class CreateToolMockEndpoint(IToolMockService mocks)
     }
 }
 
-public sealed class UpdateToolMockEndpoint(IToolMockService mocks)
-    : Endpoint<UpdateToolMockRequest, ToolMockResponse>
+public sealed class UpdateToolMockEndpoint : Endpoint<UpdateToolMockRequest, ToolMockResponse>
 {
-    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
+    private readonly IToolMockService _mocks;
+
+    public UpdateToolMockEndpoint(IToolMockService mocks)
+    {
+        ArgumentNullException.ThrowIfNull(mocks);
+        _mocks = mocks;
+    }
 
     public override void Configure()
     {
@@ -91,10 +111,15 @@ public sealed class UpdateToolMockEndpoint(IToolMockService mocks)
     }
 }
 
-public sealed class DeleteToolMockEndpoint(IToolMockService mocks)
-    : Endpoint<DeleteToolMockRequest>
+public sealed class DeleteToolMockEndpoint : Endpoint<DeleteToolMockRequest>
 {
-    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
+    private readonly IToolMockService _mocks;
+
+    public DeleteToolMockEndpoint(IToolMockService mocks)
+    {
+        ArgumentNullException.ThrowIfNull(mocks);
+        _mocks = mocks;
+    }
 
     public override void Configure()
     {
@@ -110,10 +135,15 @@ public sealed class DeleteToolMockEndpoint(IToolMockService mocks)
 }
 
 /// <summary>Runs the static verifier and records its verdict. A failing verdict also disables the mock.</summary>
-public sealed class VerifyToolMockEndpoint(IToolMockService mocks)
-    : Endpoint<VerifyToolMockRequest, ToolMockResponse>
+public sealed class VerifyToolMockEndpoint : Endpoint<VerifyToolMockRequest, ToolMockResponse>
 {
-    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
+    private readonly IToolMockService _mocks;
+
+    public VerifyToolMockEndpoint(IToolMockService mocks)
+    {
+        ArgumentNullException.ThrowIfNull(mocks);
+        _mocks = mocks;
+    }
 
     public override void Configure()
     {

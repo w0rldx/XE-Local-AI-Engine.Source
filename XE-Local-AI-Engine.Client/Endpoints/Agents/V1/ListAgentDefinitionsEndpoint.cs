@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ListAgentDefinitionsEndpoint(IAgentDefinitionService agentDefinitionService)
-    : EndpointWithoutRequest<ListAgentDefinitionsResponse>
+public sealed class ListAgentDefinitionsEndpoint : EndpointWithoutRequest<ListAgentDefinitionsResponse>
 {
-    private readonly IAgentDefinitionService _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
+    private readonly IAgentDefinitionService _agentDefinitionService;
+
+    public ListAgentDefinitionsEndpoint(IAgentDefinitionService agentDefinitionService)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitionService);
+        _agentDefinitionService = agentDefinitionService;
+    }
 
     public override void Configure()
     {

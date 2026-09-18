@@ -15,11 +15,17 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     Every input here is attacker-authored — an archive an operator was handed, a repository anyone can publish to.
 ///     The dry run is the point: no row exists until a human has seen what the content actually says.
 /// </remarks>
-public sealed class PreviewSkillImportEndpoint(ISkillImportService importService, SkillImportOptions options)
-    : Endpoint<SkillImportPreviewRequest, SkillImportPreviewResponse>
+public sealed class PreviewSkillImportEndpoint : Endpoint<SkillImportPreviewRequest, SkillImportPreviewResponse>
 {
-    private readonly ISkillImportService _importService = importService ?? throw new ArgumentNullException(nameof(importService));
-    private readonly int _maxArchiveBytes = (options ?? throw new ArgumentNullException(nameof(options))).MaxArchiveBytes;
+    private readonly ISkillImportService _importService;
+    private readonly int _maxArchiveBytes;
+
+    public PreviewSkillImportEndpoint(ISkillImportService importService, SkillImportOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(importService);
+        _importService = importService;
+        _maxArchiveBytes = (options ?? throw new ArgumentNullException(nameof(options))).MaxArchiveBytes;
+    }
 
     public override void Configure()
     {
@@ -105,7 +111,12 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
 }
 
 /// <summary>Endpoint metadata raising this route's request-body cap to the configured archive cap.</summary>
-internal sealed class SkillImportRequestSizeLimit(long maxRequestBodySize) : IRequestSizeLimitMetadata
+internal sealed class SkillImportRequestSizeLimit : IRequestSizeLimitMetadata
 {
-    public long? MaxRequestBodySize { get; } = maxRequestBodySize;
+    public SkillImportRequestSizeLimit(long maxRequestBodySize)
+    {
+        MaxRequestBodySize = maxRequestBodySize;
+    }
+
+    public long? MaxRequestBodySize { get; }
 }

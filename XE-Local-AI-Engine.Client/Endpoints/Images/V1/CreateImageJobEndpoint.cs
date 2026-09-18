@@ -13,11 +13,18 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     coordinator (which persists the job Queued with the prompt encrypted at rest and runs generation detached), then
 ///     returns the freshly-created Queued view. Operator-gated.
 /// </summary>
-public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, ImageRuntimeOrchestrationService imageRuntime)
-    : Endpoint<CreateImageJobRequest, ImageJobResponse>
+public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, ImageJobResponse>
 {
-    private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-    private readonly ImageRuntimeOrchestrationService _imageRuntime = imageRuntime ?? throw new ArgumentNullException(nameof(imageRuntime));
+    private readonly IImageJobCoordinator _coordinator;
+    private readonly ImageRuntimeOrchestrationService _imageRuntime;
+
+    public CreateImageJobEndpoint(IImageJobCoordinator coordinator, ImageRuntimeOrchestrationService imageRuntime)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        ArgumentNullException.ThrowIfNull(imageRuntime);
+        _coordinator = coordinator;
+        _imageRuntime = imageRuntime;
+    }
 
     public override void Configure()
     {

@@ -16,16 +16,24 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     appended to the process on the next cold load so the operator can experiment with it. The override takes effect
 ///     the next time the model is (re)loaded.
 /// </summary>
-public sealed class PutModelLaunchArgumentsEndpoint(
-    ModelLaunchArgumentsService launchArguments,
-    ModelNameValidator modelNameValidator) : Endpoint<SetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
+public sealed class PutModelLaunchArgumentsEndpoint : Endpoint<SetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
 {
     // A generous cap for a hand-typed flag string; guards the store against an abusive payload while leaving room for
     // several flags with values. Well above any realistic llama.cpp argument line.
     private const int MaxRawArgumentsLength = 4096;
 
-    private readonly ModelLaunchArgumentsService _launchArguments = launchArguments ?? throw new ArgumentNullException(nameof(launchArguments));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly ModelLaunchArgumentsService _launchArguments;
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public PutModelLaunchArgumentsEndpoint(
+        ModelLaunchArgumentsService launchArguments,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(launchArguments);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _launchArguments = launchArguments;
+        _modelNameValidator = modelNameValidator;
+    }
 
     public override void Configure()
     {

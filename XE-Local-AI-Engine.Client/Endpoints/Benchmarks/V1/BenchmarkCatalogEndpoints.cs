@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService catalog)
-    : Endpoint<EligibleBenchmarkAgentsRequest, ListEligibleBenchmarkAgentsResponse>
+public sealed class ListEligibleBenchmarkAgentsEndpoint : Endpoint<EligibleBenchmarkAgentsRequest, ListEligibleBenchmarkAgentsResponse>
 {
-    private readonly IBenchmarkCatalogService _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IBenchmarkCatalogService _catalog;
+
+    public ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        _catalog = catalog;
+    }
 
     public override void Configure()
     {
@@ -36,10 +41,15 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService
     }
 }
 
-public sealed class ListEligibleBenchmarkModelsEndpoint(IBenchmarkCatalogService catalog)
-    : Endpoint<EligibleBenchmarkModelsRequest, ListEligibleBenchmarkModelsResponse>
+public sealed class ListEligibleBenchmarkModelsEndpoint : Endpoint<EligibleBenchmarkModelsRequest, ListEligibleBenchmarkModelsResponse>
 {
-    private readonly IBenchmarkCatalogService _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IBenchmarkCatalogService _catalog;
+
+    public ListEligibleBenchmarkModelsEndpoint(IBenchmarkCatalogService catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        _catalog = catalog;
+    }
 
     public override void Configure()
     {

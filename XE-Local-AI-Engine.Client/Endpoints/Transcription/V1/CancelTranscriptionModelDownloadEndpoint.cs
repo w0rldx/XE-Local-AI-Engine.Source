@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     than failing, because the operator clicking a stale row is a race, not a mistake. A 1.6 GB pull that could not
 ///     be stopped would hold the node's bandwidth and disk until it finished. Operator-gated.
 /// </summary>
-public sealed class CancelTranscriptionModelDownloadEndpoint(IWhisperModelDownloadCoordinator downloadCoordinator)
-    : Endpoint<TranscriptionModelDownloadRequest, TranscriptionModelDownloadResponse>
+public sealed class CancelTranscriptionModelDownloadEndpoint : Endpoint<TranscriptionModelDownloadRequest, TranscriptionModelDownloadResponse>
 {
-    private readonly IWhisperModelDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IWhisperModelDownloadCoordinator _downloadCoordinator;
+
+    public CancelTranscriptionModelDownloadEndpoint(IWhisperModelDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

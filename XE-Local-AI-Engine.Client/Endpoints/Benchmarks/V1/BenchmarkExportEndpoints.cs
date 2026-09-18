@@ -10,11 +10,18 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>Downloads a project's complete benchmark record as JSON.</summary>
-public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports, TimeProvider timeProvider)
-    : Endpoint<BenchmarkProjectRouteRequest, BenchmarkExportResponse>
+public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRouteRequest, BenchmarkExportResponse>
 {
-    private readonly IBenchmarkExportQuery _exports = exports ?? throw new ArgumentNullException(nameof(exports));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IBenchmarkExportQuery _exports;
+    private readonly TimeProvider _timeProvider;
+
+    public ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _exports = exports;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -84,11 +91,18 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports
 }
 
 /// <summary>Downloads a project's flat benchmark run projection as RFC 4180 CSV.</summary>
-public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery exports, TimeProvider timeProvider)
-    : Endpoint<BenchmarkProjectRouteRequest>
+public sealed class ExportBenchmarkProjectCsvEndpoint : Endpoint<BenchmarkProjectRouteRequest>
 {
-    private readonly IBenchmarkExportQuery _exports = exports ?? throw new ArgumentNullException(nameof(exports));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IBenchmarkExportQuery _exports;
+    private readonly TimeProvider _timeProvider;
+
+    public ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery exports, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(exports);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _exports = exports;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

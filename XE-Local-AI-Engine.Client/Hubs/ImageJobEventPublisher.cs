@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     host. Payloads are coarse status only (already free of prompt/path/step detail) — see
 ///     <see cref="ImageJobStatusHubEvent" />.
 /// </summary>
-internal sealed class ImageJobEventPublisher(IHubContext<ImageJobHub> hubContext) : IImageJobEventPublisher
+internal sealed class ImageJobEventPublisher : IImageJobEventPublisher
 {
-    private readonly IHubContext<ImageJobHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    private readonly IHubContext<ImageJobHub> _hubContext;
+
+    public ImageJobEventPublisher(IHubContext<ImageJobHub> hubContext)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+    }
 
     public Task PublishStatusAsync(ImageJobStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {

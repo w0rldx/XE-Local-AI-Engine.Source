@@ -5,16 +5,28 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed class CancelNodeChatMessageEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    INodeChatStreamCancellationRegistry streamCancellationRegistry,
-    TimeProvider timeProvider) : Endpoint<CancelNodeChatMessageRequest, NodeChatCancelMessageResponse>
+public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessageRequest, NodeChatCancelMessageResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly INodeChatStreamCancellationRegistry _streamCancellationRegistry = streamCancellationRegistry ?? throw new ArgumentNullException(nameof(streamCancellationRegistry));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly INodeChatStreamCancellationRegistry _streamCancellationRegistry;
+    private readonly TimeProvider _timeProvider;
+
+    public CancelNodeChatMessageEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        INodeChatStreamCancellationRegistry streamCancellationRegistry,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(streamCancellationRegistry);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _streamCancellationRegistry = streamCancellationRegistry;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

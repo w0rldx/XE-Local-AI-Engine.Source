@@ -19,10 +19,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     this on mount, so starting a multi-hundred-MB download from a GET would kick one off on any fresh node the moment a
 ///     page loads. Before acquisition has ever run the registry serves an <c>Idle</c> snapshot at sequence 0.
 /// </remarks>
-public sealed class GetRuntimeAcquisitionStatusEndpoint(ILlamaCppRuntimeAdministrationService administrationService)
-    : EndpointWithoutRequest<RuntimeAcquisitionStatusResponse>
+public sealed class GetRuntimeAcquisitionStatusEndpoint : EndpointWithoutRequest<RuntimeAcquisitionStatusResponse>
 {
-    private readonly ILlamaCppRuntimeAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
+    private readonly ILlamaCppRuntimeAdministrationService _administrationService;
+
+    public GetRuntimeAcquisitionStatusEndpoint(ILlamaCppRuntimeAdministrationService administrationService)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        _administrationService = administrationService;
+    }
 
     public override void Configure()
     {

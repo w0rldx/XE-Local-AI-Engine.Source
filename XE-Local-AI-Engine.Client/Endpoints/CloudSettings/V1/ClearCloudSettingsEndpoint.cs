@@ -6,14 +6,24 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-public sealed class ClearCloudSettingsEndpoint(
-    ICloudCredentialStore cloudCredentialStore,
-    ICapabilityReporter capabilityReporter,
-    ILogger<ClearCloudSettingsEndpoint> logger) : EndpointWithoutRequest<CloudSettingsResponse>
+public sealed class ClearCloudSettingsEndpoint : EndpointWithoutRequest<CloudSettingsResponse>
 {
-    private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
-    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
-    private readonly ILogger<ClearCloudSettingsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ICapabilityReporter _capabilityReporter;
+    private readonly ICloudCredentialStore _cloudCredentialStore;
+    private readonly ILogger<ClearCloudSettingsEndpoint> _logger;
+
+    public ClearCloudSettingsEndpoint(
+        ICloudCredentialStore cloudCredentialStore,
+        ICapabilityReporter capabilityReporter,
+        ILogger<ClearCloudSettingsEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityReporter);
+        ArgumentNullException.ThrowIfNull(cloudCredentialStore);
+        ArgumentNullException.ThrowIfNull(logger);
+        _capabilityReporter = capabilityReporter;
+        _cloudCredentialStore = cloudCredentialStore;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

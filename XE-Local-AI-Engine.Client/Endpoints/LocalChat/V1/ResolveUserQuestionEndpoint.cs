@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///     only by the question request id (the runner's opaque per-question key), so it works with no platform connection
 ///     and needs no conversation context.
 /// </summary>
-public sealed class ResolveUserQuestionEndpoint(IWorkerEventDispatcher eventDispatcher)
-    : Endpoint<ResolveUserQuestionRequest, ResolveUserQuestionResponse>
+public sealed class ResolveUserQuestionEndpoint : Endpoint<ResolveUserQuestionRequest, ResolveUserQuestionResponse>
 {
-    private readonly IWorkerEventDispatcher _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
+    private readonly IWorkerEventDispatcher _eventDispatcher;
+
+    public ResolveUserQuestionEndpoint(IWorkerEventDispatcher eventDispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(eventDispatcher);
+        _eventDispatcher = eventDispatcher;
+    }
 
     public override void Configure()
     {

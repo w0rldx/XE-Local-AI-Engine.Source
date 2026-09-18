@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
-public sealed class ListBaseArtifactsEndpoint(IBaseArtifactService baseArtifactService)
-    : EndpointWithoutRequest<BaseArtifactListResponse>
+public sealed class ListBaseArtifactsEndpoint : EndpointWithoutRequest<BaseArtifactListResponse>
 {
+    private readonly IBaseArtifactService _baseArtifactService;
+
+    public ListBaseArtifactsEndpoint(IBaseArtifactService baseArtifactService)
+    {
+        _baseArtifactService = baseArtifactService;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Training.BaseArtifacts);
@@ -18,7 +24,7 @@ public sealed class ListBaseArtifactsEndpoint(IBaseArtifactService baseArtifactS
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var artifacts = await baseArtifactService.ListAsync(ct);
+        var artifacts = await _baseArtifactService.ListAsync(ct);
         await Send.OkAsync(new BaseArtifactListResponse
         {
             Items = artifacts.Select(artifact => artifact.ToResponse()).ToArray()

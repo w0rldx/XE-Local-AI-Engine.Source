@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     agent, or is not a pending suggestion; 409 when the eval has not passed (required / regressed / stale) or the
 ///     agent is already at the enabled-action cap (CapReached). Operator-gated.
 /// </summary>
-public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
-    : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
+public sealed class PromoteSuggestedPlaybookActionEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
+    private readonly IPlaybookActionService _playbookActionService;
+
+    public PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
+    {
+        ArgumentNullException.ThrowIfNull(playbookActionService);
+        _playbookActionService = playbookActionService;
+    }
 
     public override void Configure()
     {

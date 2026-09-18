@@ -10,12 +10,20 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     Clears the per-model extra <c>llama-server</c> launch-argument override (developer/advanced). Idempotent: a model
 ///     with no override still reports success with an empty string.
 /// </summary>
-public sealed class DeleteModelLaunchArgumentsEndpoint(
-    ModelLaunchArgumentsService launchArguments,
-    ModelNameValidator modelNameValidator) : Endpoint<GetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
+public sealed class DeleteModelLaunchArgumentsEndpoint : Endpoint<GetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
 {
-    private readonly ModelLaunchArgumentsService _launchArguments = launchArguments ?? throw new ArgumentNullException(nameof(launchArguments));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly ModelLaunchArgumentsService _launchArguments;
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public DeleteModelLaunchArgumentsEndpoint(
+        ModelLaunchArgumentsService launchArguments,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(launchArguments);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _launchArguments = launchArguments;
+        _modelNameValidator = modelNameValidator;
+    }
 
     public override void Configure()
     {

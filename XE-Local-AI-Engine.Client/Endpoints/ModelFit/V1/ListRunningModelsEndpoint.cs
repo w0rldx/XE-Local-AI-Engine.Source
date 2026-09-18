@@ -15,12 +15,20 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     degrade; any other exception is a defect and is left to surface as a 500 rather than be disguised as "nothing is
 ///     running". Each row's diagnostics are already sanitized (no internal paths/secrets).
 /// </summary>
-public sealed class ListRunningModelsEndpoint(
-    LlamaCppRuntimeOrchestrationService runtime,
-    ILogger<ListRunningModelsEndpoint> logger) : EndpointWithoutRequest<ListRunningModelsResponse>
+public sealed class ListRunningModelsEndpoint : EndpointWithoutRequest<ListRunningModelsResponse>
 {
-    private readonly ILogger<ListRunningModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly ILogger<ListRunningModelsEndpoint> _logger;
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public ListRunningModelsEndpoint(
+        LlamaCppRuntimeOrchestrationService runtime,
+        ILogger<ListRunningModelsEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(runtime);
+        _logger = logger;
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {

@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     appends streamed log lines / updates the phase without a follow-up REST poll. Replaces the no-op default the
 ///     provider registers. Payloads carry no app secrets (scrubbed-env build) and have cache-root/HOME prefixes redacted.
 /// </summary>
-internal sealed class CudaBuildEventPublisher(IHubContext<CudaBuildHub> hubContext) : ICudaBuildEventPublisher
+internal sealed class CudaBuildEventPublisher : ICudaBuildEventPublisher
 {
-    private readonly IHubContext<CudaBuildHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    private readonly IHubContext<CudaBuildHub> _hubContext;
+
+    public CudaBuildEventPublisher(IHubContext<CudaBuildHub> hubContext)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+    }
 
     public Task PublishStatusAsync(CudaBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {

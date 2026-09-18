@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     provider registers. Payloads are sanitized upstream by the status registry — never an absolute path, a download URL,
 ///     or a token.
 /// </summary>
-internal sealed class RuntimeAcquisitionEventPublisher(IHubContext<RuntimeAcquisitionHub> hubContext) : IRuntimeAcquisitionEventPublisher
+internal sealed class RuntimeAcquisitionEventPublisher : IRuntimeAcquisitionEventPublisher
 {
-    private readonly IHubContext<RuntimeAcquisitionHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    private readonly IHubContext<RuntimeAcquisitionHub> _hubContext;
+
+    public RuntimeAcquisitionEventPublisher(IHubContext<RuntimeAcquisitionHub> hubContext)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+    }
 
     public Task PublishStatusAsync(RuntimeAcquisitionStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {

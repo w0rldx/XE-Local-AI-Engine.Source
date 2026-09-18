@@ -16,15 +16,24 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     200 OK with an empty file list (never a 500) so the picker degrades gracefully — mirroring
 ///     <see cref="BrowseGgufRepositoriesEndpoint" />.
 /// </summary>
-public sealed class InspectGgufRepositoryEndpoint(
-    IHuggingFaceGgufDiscovery discovery,
-    IGgufVariantRecommender recommender,
-    ILogger<InspectGgufRepositoryEndpoint> logger)
-    : Endpoint<InspectGgufRepositoryRequest, InspectGgufRepositoryResponse>
+public sealed class InspectGgufRepositoryEndpoint : Endpoint<InspectGgufRepositoryRequest, InspectGgufRepositoryResponse>
 {
-    private readonly IHuggingFaceGgufDiscovery _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
-    private readonly IGgufVariantRecommender _recommender = recommender ?? throw new ArgumentNullException(nameof(recommender));
-    private readonly ILogger<InspectGgufRepositoryEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IHuggingFaceGgufDiscovery _discovery;
+    private readonly IGgufVariantRecommender _recommender;
+    private readonly ILogger<InspectGgufRepositoryEndpoint> _logger;
+
+    public InspectGgufRepositoryEndpoint(
+        IHuggingFaceGgufDiscovery discovery,
+        IGgufVariantRecommender recommender,
+        ILogger<InspectGgufRepositoryEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(recommender);
+        ArgumentNullException.ThrowIfNull(logger);
+        _discovery = discovery;
+        _recommender = recommender;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

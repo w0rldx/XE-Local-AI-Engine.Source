@@ -32,13 +32,20 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         therefore reports the model that would actually be used, which is not necessarily the recommended one.
 ///     </para>
 /// </remarks>
-public sealed class DownloadRecommendedEmbeddingEndpoint(
-    IGgufDownloadCoordinator downloadCoordinator,
-    IGgufModelStore modelStore)
-    : EndpointWithoutRequest<DownloadRecommendedEmbeddingResponse>
+public sealed class DownloadRecommendedEmbeddingEndpoint : EndpointWithoutRequest<DownloadRecommendedEmbeddingResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
-    private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+    private readonly IGgufModelStore _modelStore;
+
+    public DownloadRecommendedEmbeddingEndpoint(
+        IGgufDownloadCoordinator downloadCoordinator,
+        IGgufModelStore modelStore)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _downloadCoordinator = downloadCoordinator;
+        _modelStore = modelStore;
+    }
 
     public override void Configure()
     {

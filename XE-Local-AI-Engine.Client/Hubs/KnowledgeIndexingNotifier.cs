@@ -10,14 +10,24 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     sanitized (id + coarse status only). Publishing is best-effort: a transport failure is swallowed and logged by
 ///     type, never propagated, so a hub hiccup can never fail or stall the background ingestion pipeline.
 /// </summary>
-internal sealed class KnowledgeIndexingNotifier(
-    IHubContext<KnowledgeBaseHub> hubContext,
-    TimeProvider timeProvider,
-    ILogger<KnowledgeIndexingNotifier> logger) : IKnowledgeIndexingNotifier
+internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
 {
-    private readonly IHubContext<KnowledgeBaseHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<KnowledgeIndexingNotifier> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IHubContext<KnowledgeBaseHub> _hubContext;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<KnowledgeIndexingNotifier> _logger;
+
+    public KnowledgeIndexingNotifier(
+        IHubContext<KnowledgeBaseHub> hubContext,
+        TimeProvider timeProvider,
+        ILogger<KnowledgeIndexingNotifier> logger)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        _hubContext = hubContext;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
 
     public async Task NotifyDocumentChangedAsync(Guid documentId, KnowledgeDocumentStatus status, CancellationToken cancellationToken = default)
     {

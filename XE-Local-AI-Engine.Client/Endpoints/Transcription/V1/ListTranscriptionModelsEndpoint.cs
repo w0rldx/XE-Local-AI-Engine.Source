@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Lists the whisper weight catalogue with what this node knows about each row: whether it is installed, any
 ///     download in flight, and which ids are selected and recommended. Operator-gated; no absolute path is surfaced.
 /// </summary>
-public sealed class ListTranscriptionModelsEndpoint(ITranscriptionRuntimeService runtimeService)
-    : EndpointWithoutRequest<TranscriptionModelListResponse>
+public sealed class ListTranscriptionModelsEndpoint : EndpointWithoutRequest<TranscriptionModelListResponse>
 {
-    private readonly ITranscriptionRuntimeService _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
+    private readonly ITranscriptionRuntimeService _runtimeService;
+
+    public ListTranscriptionModelsEndpoint(ITranscriptionRuntimeService runtimeService)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeService);
+        _runtimeService = runtimeService;
+    }
 
     public override void Configure()
     {

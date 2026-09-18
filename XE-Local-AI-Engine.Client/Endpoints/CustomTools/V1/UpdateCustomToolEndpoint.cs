@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 
-public sealed class UpdateCustomToolEndpoint(ICustomToolService customToolService)
-    : Endpoint<CustomToolDefinition, CustomToolView>
+public sealed class UpdateCustomToolEndpoint : Endpoint<CustomToolDefinition, CustomToolView>
 {
-    private readonly ICustomToolService _customToolService = customToolService ?? throw new ArgumentNullException(nameof(customToolService));
+    private readonly ICustomToolService _customToolService;
+
+    public UpdateCustomToolEndpoint(ICustomToolService customToolService)
+    {
+        ArgumentNullException.ThrowIfNull(customToolService);
+        _customToolService = customToolService;
+    }
 
     public override void Configure()
     {

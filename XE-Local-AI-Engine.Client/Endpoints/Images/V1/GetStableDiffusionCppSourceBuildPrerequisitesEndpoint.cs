@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
-public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(ImageRuntimeOrchestrationService imageRuntime)
-    : Endpoint<GetStableDiffusionCppSourceBuildPrerequisitesRequest, StableDiffusionCppSourceBuildPrerequisitesResponse>
+public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint : Endpoint<GetStableDiffusionCppSourceBuildPrerequisitesRequest, StableDiffusionCppSourceBuildPrerequisitesResponse>
 {
+    private readonly ImageRuntimeOrchestrationService _imageRuntime;
+
+    public GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(ImageRuntimeOrchestrationService imageRuntime)
+    {
+        _imageRuntime = imageRuntime;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Images.RuntimeSourceBuildPrerequisites);
@@ -21,7 +27,7 @@ public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(ImageR
     public override async Task HandleAsync(GetStableDiffusionCppSourceBuildPrerequisitesRequest request, CancellationToken ct)
     {
         var backend = request.Backend.ToContract();
-        var report = await imageRuntime.ProbeAsync(backend, ct);
+        var report = await _imageRuntime.ProbeAsync(backend, ct);
         await Send.OkAsync(report.ToResponse(backend), ct);
     }
 }

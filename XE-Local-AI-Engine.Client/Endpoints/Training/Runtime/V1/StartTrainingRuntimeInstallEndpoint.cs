@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
-public sealed class StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<StartTrainingRuntimeInstallResponse>
+public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest<StartTrainingRuntimeInstallResponse>
 {
+    private readonly TrainingRuntimeOrchestrationService _runtime;
+
+    public StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestrationService runtime)
+    {
+        _runtime = runtime;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Training.RuntimeInstall);
@@ -30,7 +36,7 @@ public sealed class StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestra
 
         try
         {
-            var result = await runtime.InstallAsync(ct);
+            var result = await _runtime.InstallAsync(ct);
             switch (result.Outcome)
             {
                 case TrainingRuntimeInstallOutcome.AlreadyRunning:
@@ -57,7 +63,7 @@ public sealed class StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestra
             await Send.OkAsync(new StartTrainingRuntimeInstallResponse
             {
                 Started = true,
-                Status = runtime.GetStatus().ToResponse()
+                Status = _runtime.GetStatus().ToResponse()
             }, ct);
         }
         catch (TrainingRuntimeException exception)

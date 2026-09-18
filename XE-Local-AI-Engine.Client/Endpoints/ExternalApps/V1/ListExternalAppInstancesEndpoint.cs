@@ -11,9 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     of which live on the detail; the store reads whole rows regardless, so a summary list would buy nothing and
 ///     cost the page one GET per card before it could render.
 /// </summary>
-public sealed class ListExternalAppInstancesEndpoint(IExternalAppService apps) : EndpointWithoutRequest<ListExternalAppInstancesResponse>
+public sealed class ListExternalAppInstancesEndpoint : EndpointWithoutRequest<ListExternalAppInstancesResponse>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public ListExternalAppInstancesEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

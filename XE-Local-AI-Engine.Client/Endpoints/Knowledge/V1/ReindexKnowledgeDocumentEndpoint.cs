@@ -10,13 +10,20 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     re-enqueues it; the background ingestion worker idempotently purges the document's old chunks/vectors before
 ///     re-inserting, so a reindex never duplicates rows. Returns 404 when the id is unknown, otherwise 204.
 /// </summary>
-public sealed class ReindexKnowledgeDocumentEndpoint(
-    IKnowledgeDocumentCatalogService catalogService,
-    IKnowledgeIngestionDispatcher ingestionDispatcher)
-    : Endpoint<KnowledgeDocumentRouteRequest>
+public sealed class ReindexKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRouteRequest>
 {
-    private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
-    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher = ingestionDispatcher ?? throw new ArgumentNullException(nameof(ingestionDispatcher));
+    private readonly IKnowledgeDocumentCatalogService _catalogService;
+    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
+
+    public ReindexKnowledgeDocumentEndpoint(
+        IKnowledgeDocumentCatalogService catalogService,
+        IKnowledgeIngestionDispatcher ingestionDispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(catalogService);
+        ArgumentNullException.ThrowIfNull(ingestionDispatcher);
+        _catalogService = catalogService;
+        _ingestionDispatcher = ingestionDispatcher;
+    }
 
     public override void Configure()
     {

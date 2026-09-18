@@ -14,14 +14,24 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     deleted (path-guarded to <c>{cacheRoot}/llama.cpp/source-cuda/</c>), the installed-runtime record + the managed
 ///     signal are cleared, the local chat-client cache is invalidated, and the refreshed runtime status is returned.
 /// </summary>
-public sealed class RemoveCudaBuildEndpoint(
-    LlamaCppRuntimeOrchestrationService runtime,
-    INodeRuntimeSettings nodeRuntimeSettings,
-    ILocalChatClientCacheInvalidator localChatClientCacheInvalidator) : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
+public sealed class RemoveCudaBuildEndpoint : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
 {
-    private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator = localChatClientCacheInvalidator ?? throw new ArgumentNullException(nameof(localChatClientCacheInvalidator));
-    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public RemoveCudaBuildEndpoint(
+        LlamaCppRuntimeOrchestrationService runtime,
+        INodeRuntimeSettings nodeRuntimeSettings,
+        ILocalChatClientCacheInvalidator localChatClientCacheInvalidator)
+    {
+        ArgumentNullException.ThrowIfNull(localChatClientCacheInvalidator);
+        ArgumentNullException.ThrowIfNull(nodeRuntimeSettings);
+        ArgumentNullException.ThrowIfNull(runtime);
+        _localChatClientCacheInvalidator = localChatClientCacheInvalidator;
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {

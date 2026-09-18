@@ -9,10 +9,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     A user follow-up into the session's owned conversation. 202: the row is persisted here, but the step that reads
 ///     it is the supervisor's — and on a Draft session there is no step until the operator starts it.
 /// </summary>
-public sealed class PostWorkSessionMessageEndpoint(IWorkSessionService service)
-    : Endpoint<PostWorkSessionMessageRequest, PostWorkSessionMessageResponse>
+public sealed class PostWorkSessionMessageEndpoint : Endpoint<PostWorkSessionMessageRequest, PostWorkSessionMessageResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public PostWorkSessionMessageEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

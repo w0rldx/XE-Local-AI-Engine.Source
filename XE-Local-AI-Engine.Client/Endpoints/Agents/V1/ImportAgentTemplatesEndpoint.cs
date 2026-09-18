@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ImportAgentTemplatesEndpoint(IAgentTemplateImportService importService)
-    : Endpoint<ImportAgentTemplatesRequest, ImportAgentTemplatesResponse>
+public sealed class ImportAgentTemplatesEndpoint : Endpoint<ImportAgentTemplatesRequest, ImportAgentTemplatesResponse>
 {
-    private readonly IAgentTemplateImportService _importService = importService ?? throw new ArgumentNullException(nameof(importService));
+    private readonly IAgentTemplateImportService _importService;
+
+    public ImportAgentTemplatesEndpoint(IAgentTemplateImportService importService)
+    {
+        ArgumentNullException.ThrowIfNull(importService);
+        _importService = importService;
+    }
 
     public override void Configure()
     {

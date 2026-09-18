@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService records)
-    : EndpointWithoutRequest<ListBenchmarkProjectsResponse>
+public sealed class ListBenchmarkProjectsEndpoint : EndpointWithoutRequest<ListBenchmarkProjectsResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ListBenchmarkProjectsEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -35,11 +40,18 @@ public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService records
     }
 }
 
-public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
-    : Endpoint<BenchmarkProjectMutationRequest, BenchmarkProjectDetailResponse>
+public sealed class CreateBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectMutationRequest, BenchmarkProjectDetailResponse>
 {
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkProjectService _projects;
+    private readonly BenchmarkRecordService _records;
+
+    public CreateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(records);
+        _projects = projects;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -60,10 +72,15 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     }
 }
 
-public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService records)
-    : Endpoint<BenchmarkProjectRouteRequest, BenchmarkProjectDetailResponse>
+public sealed class GetBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRouteRequest, BenchmarkProjectDetailResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public GetBenchmarkProjectEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -86,11 +103,18 @@ public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService records)
     }
 }
 
-public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
-    : Endpoint<UpdateBenchmarkProjectRequest, BenchmarkProjectDetailResponse>
+public sealed class UpdateBenchmarkProjectEndpoint : Endpoint<UpdateBenchmarkProjectRequest, BenchmarkProjectDetailResponse>
 {
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkProjectService _projects;
+    private readonly BenchmarkRecordService _records;
+
+    public UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(records);
+        _projects = projects;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -109,10 +133,15 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     }
 }
 
-public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService records)
-    : Endpoint<DeleteBenchmarkProjectRequest>
+public sealed class DeleteBenchmarkProjectEndpoint : Endpoint<DeleteBenchmarkProjectRequest>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public DeleteBenchmarkProjectEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -134,11 +163,18 @@ public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService record
 ///     can still turn, and turning it re-scores every run — so it is its own resource with its own confirmation, never
 ///     a field that rides along on the project PUT.
 /// </summary>
-public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
-    : Endpoint<UpdateBenchmarkJudgePolicyRequest, BenchmarkJudgeChangeResponse>
+public sealed class UpdateBenchmarkJudgePolicyEndpoint : Endpoint<UpdateBenchmarkJudgePolicyRequest, BenchmarkJudgeChangeResponse>
 {
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkProjectService _projects;
+    private readonly BenchmarkRecordService _records;
+
+    public UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(records);
+        _projects = projects;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -178,11 +214,18 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
 }
 
 /// <summary>Moves the project's rank cohort to the current judge runtime by re-judging every succeeded run.</summary>
-public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
-    : Endpoint<RejudgeBenchmarkProjectRequest, BenchmarkJudgeChangeResponse>
+public sealed class RejudgeBenchmarkProjectEndpoint : Endpoint<RejudgeBenchmarkProjectRequest, BenchmarkJudgeChangeResponse>
 {
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkProjectService _projects;
+    private readonly BenchmarkRecordService _records;
+
+    public RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(records);
+        _projects = projects;
+        _records = records;
+    }
 
     public override void Configure()
     {

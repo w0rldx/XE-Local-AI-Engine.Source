@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
-public sealed class CancelBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
-    : Endpoint<BaseArtifactByIdRequest, BaseArtifactResponse>
+public sealed class CancelBaseArtifactEndpoint : Endpoint<BaseArtifactByIdRequest, BaseArtifactResponse>
 {
+    private readonly IBaseArtifactService _baseArtifactService;
+
+    public CancelBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
+    {
+        _baseArtifactService = baseArtifactService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Training.BaseArtifactCancel);
@@ -21,14 +27,14 @@ public sealed class CancelBaseArtifactEndpoint(IBaseArtifactService baseArtifact
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var artifact = await baseArtifactService.GetAsync(request.ArtifactId, ct);
+        var artifact = await _baseArtifactService.GetAsync(request.ArtifactId, ct);
         if (artifact is null)
         {
             await Send.NotFoundAsync(ct);
             return;
         }
 
-        if (!await baseArtifactService.CancelAsync(request.ArtifactId))
+        if (!await _baseArtifactService.CancelAsync(request.ArtifactId))
         {
             await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("not-downloading",
                           "The base checkpoint download is not running."));

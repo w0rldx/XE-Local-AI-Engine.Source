@@ -10,12 +10,20 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     Reads the per-model extra <c>llama-server</c> launch-argument override (developer/advanced). Returns an empty
 ///     string when the model has no override.
 /// </summary>
-public sealed class GetModelLaunchArgumentsEndpoint(
-    ModelLaunchArgumentsService launchArguments,
-    ModelNameValidator modelNameValidator) : Endpoint<GetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
+public sealed class GetModelLaunchArgumentsEndpoint : Endpoint<GetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
 {
-    private readonly ModelLaunchArgumentsService _launchArguments = launchArguments ?? throw new ArgumentNullException(nameof(launchArguments));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly ModelLaunchArgumentsService _launchArguments;
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public GetModelLaunchArgumentsEndpoint(
+        ModelLaunchArgumentsService launchArguments,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(launchArguments);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _launchArguments = launchArguments;
+        _modelNameValidator = modelNameValidator;
+    }
 
     public override void Configure()
     {

@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///         an operator cancelling from the admin UI must be able to reach every row, whichever integrator owns it.
 ///     </para>
 /// </summary>
-public sealed class CancelIntegrationExecutionEndpoint(IntegrationExecutionQueryService executions)
-    : EndpointWithoutRequest
+public sealed class CancelIntegrationExecutionEndpoint : EndpointWithoutRequest
 {
-    private readonly IntegrationExecutionQueryService _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+    private readonly IntegrationExecutionQueryService _executions;
+
+    public CancelIntegrationExecutionEndpoint(IntegrationExecutionQueryService executions)
+    {
+        ArgumentNullException.ThrowIfNull(executions);
+        _executions = executions;
+    }
 
     public override void Configure()
     {

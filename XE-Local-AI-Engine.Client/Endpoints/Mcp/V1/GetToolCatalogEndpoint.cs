@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     group/badge tools by their originating server. Model-capability gating is intentionally not applied here: this is
 ///     the catalog of everything that exists on the node (the offer provider applies gating per active model elsewhere).
 /// </summary>
-public sealed class GetToolCatalogEndpoint(ToolCatalogService toolCatalog)
-    : EndpointWithoutRequest<ToolCatalogResponse>
+public sealed class GetToolCatalogEndpoint : EndpointWithoutRequest<ToolCatalogResponse>
 {
-    private readonly ToolCatalogService _toolCatalog = toolCatalog ?? throw new ArgumentNullException(nameof(toolCatalog));
+    private readonly ToolCatalogService _toolCatalog;
+
+    public GetToolCatalogEndpoint(ToolCatalogService toolCatalog)
+    {
+        ArgumentNullException.ThrowIfNull(toolCatalog);
+        _toolCatalog = toolCatalog;
+    }
 
     public override void Configure()
     {

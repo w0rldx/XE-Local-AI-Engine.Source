@@ -5,12 +5,20 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed class DeleteNodeChatConversationEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    TimeProvider timeProvider) : Endpoint<DeleteNodeChatConversationRequest, NodeChatDeleteConversationResponse>
+public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChatConversationRequest, NodeChatDeleteConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly TimeProvider _timeProvider;
+
+    public DeleteNodeChatConversationEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

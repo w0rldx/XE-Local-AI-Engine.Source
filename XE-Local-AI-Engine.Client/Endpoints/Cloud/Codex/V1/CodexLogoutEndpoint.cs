@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 ///     <c>codex-oauth-tokens.enc</c>), so the next chat send routes back to Azure-or-local. Returns the resulting
 ///     signed-out status. Never returns token material.
 /// </summary>
-public sealed class CodexLogoutEndpoint(CodexSessionService session)
-    : EndpointWithoutRequest<CodexStatusResponse>
+public sealed class CodexLogoutEndpoint : EndpointWithoutRequest<CodexStatusResponse>
 {
-    private readonly CodexSessionService _session = session ?? throw new ArgumentNullException(nameof(session));
+    private readonly CodexSessionService _session;
+
+    public CodexLogoutEndpoint(CodexSessionService session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        _session = session;
+    }
 
     public override void Configure()
     {

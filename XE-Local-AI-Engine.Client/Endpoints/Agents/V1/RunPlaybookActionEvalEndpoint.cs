@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 ///     pending suggestion. The route carries the ids so the request is body-less (Configure overrides Accepts so the
 ///     missing Content-Type is not answered with 415). Operator-gated.
 /// </summary>
-public sealed class RunPlaybookActionEvalEndpoint(IPlaybookEvalService playbookEvalService)
-    : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
+public sealed class RunPlaybookActionEvalEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
-    private readonly IPlaybookEvalService _playbookEvalService = playbookEvalService ?? throw new ArgumentNullException(nameof(playbookEvalService));
+    private readonly IPlaybookEvalService _playbookEvalService;
+
+    public RunPlaybookActionEvalEndpoint(IPlaybookEvalService playbookEvalService)
+    {
+        ArgumentNullException.ThrowIfNull(playbookEvalService);
+        _playbookEvalService = playbookEvalService;
+    }
 
     public override void Configure()
     {

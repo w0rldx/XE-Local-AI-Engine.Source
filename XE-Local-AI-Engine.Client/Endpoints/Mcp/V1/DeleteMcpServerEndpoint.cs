@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
-public sealed class DeleteMcpServerEndpoint(IMcpServerService mcpServerService)
-    : Endpoint<DeleteMcpServerRequest>
+public sealed class DeleteMcpServerEndpoint : Endpoint<DeleteMcpServerRequest>
 {
-    private readonly IMcpServerService _mcpServerService = mcpServerService ?? throw new ArgumentNullException(nameof(mcpServerService));
+    private readonly IMcpServerService _mcpServerService;
+
+    public DeleteMcpServerEndpoint(IMcpServerService mcpServerService)
+    {
+        ArgumentNullException.ThrowIfNull(mcpServerService);
+        _mcpServerService = mcpServerService;
+    }
 
     public override void Configure()
     {

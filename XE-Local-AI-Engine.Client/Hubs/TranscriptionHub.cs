@@ -91,10 +91,7 @@ public sealed record TranscriptionSessionStatusPush(Guid SessionId, string Statu
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class TranscriptionHub(
-    ITranscriptionService sessions,
-    ILiveTranscriptionSessionRegistry live,
-    IOptions<TranscriptionOptions> options) : Hub
+public sealed class TranscriptionHub : Hub
 {
     /// <summary>
     ///     The largest frame one <see cref="PushAudioFrame" /> may carry: 32 KiB, one second of 16 kHz mono int16.
@@ -114,9 +111,21 @@ public sealed class TranscriptionHub(
     /// </remarks>
     private const string SubscribedSessionsKey = "transcription.subscribed-sessions";
 
-    private readonly ILiveTranscriptionSessionRegistry _live = live ?? throw new ArgumentNullException(nameof(live));
-    private readonly TranscriptionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ILiveTranscriptionSessionRegistry _live;
+    private readonly TranscriptionOptions _options;
+    private readonly ITranscriptionService _sessions;
+
+    public TranscriptionHub(
+        ITranscriptionService sessions,
+        ILiveTranscriptionSessionRegistry live,
+        IOptions<TranscriptionOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(live);
+        _live = live;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     /// <summary>
     ///     Joins the session's group and replays the committed rows after <paramref name="afterSeq" />.

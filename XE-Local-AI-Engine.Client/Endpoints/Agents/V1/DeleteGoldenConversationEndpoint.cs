@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 ///     on the route, so one agent's route cannot touch another agent's case). 204 on delete; 404 when the
 ///     case is missing or belongs to another agent. Operator-gated.
 /// </summary>
-public sealed class DeleteGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)
-    : Endpoint<DeleteGoldenConversationRequest>
+public sealed class DeleteGoldenConversationEndpoint : Endpoint<DeleteGoldenConversationRequest>
 {
-    private readonly IGoldenConversationService _goldenConversationService = goldenConversationService ?? throw new ArgumentNullException(nameof(goldenConversationService));
+    private readonly IGoldenConversationService _goldenConversationService;
+
+    public DeleteGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)
+    {
+        ArgumentNullException.ThrowIfNull(goldenConversationService);
+        _goldenConversationService = goldenConversationService;
+    }
 
     public override void Configure()
     {

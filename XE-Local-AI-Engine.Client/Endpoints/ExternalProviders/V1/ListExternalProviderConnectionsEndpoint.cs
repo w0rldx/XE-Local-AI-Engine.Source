@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///     Lists every configured external OpenAI-compatible connection and its registered models, with the store revision
 ///     the editor sends back on its next write. API keys are never included — only <c>hasApiKey</c>.
 /// </summary>
-public sealed class ListExternalProviderConnectionsEndpoint(IExternalProviderStore store) : EndpointWithoutRequest<ExternalProviderConnectionsResponse>
+public sealed class ListExternalProviderConnectionsEndpoint : EndpointWithoutRequest<ExternalProviderConnectionsResponse>
 {
-    private readonly IExternalProviderStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IExternalProviderStore _store;
+
+    public ListExternalProviderConnectionsEndpoint(IExternalProviderStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public override void Configure()
     {

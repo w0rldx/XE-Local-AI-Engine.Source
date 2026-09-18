@@ -8,12 +8,20 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
-public sealed class PutModelKindEndpoint(
-    IModelClassificationService classificationService,
-    ModelNameValidator modelNameValidator) : Endpoint<SetModelKindRequest, ModelKindResponse>
+public sealed class PutModelKindEndpoint : Endpoint<SetModelKindRequest, ModelKindResponse>
 {
-    private readonly IModelClassificationService _classificationService = classificationService ?? throw new ArgumentNullException(nameof(classificationService));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly IModelClassificationService _classificationService;
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public PutModelKindEndpoint(
+        IModelClassificationService classificationService,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(classificationService);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _classificationService = classificationService;
+        _modelNameValidator = modelNameValidator;
+    }
 
     public override void Configure()
     {

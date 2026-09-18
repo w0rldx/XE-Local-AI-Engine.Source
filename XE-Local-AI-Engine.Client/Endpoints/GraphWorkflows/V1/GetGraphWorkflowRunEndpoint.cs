@@ -12,9 +12,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     documents: they are the largest thing a run stores, and a graph of two hundred nodes would carry all of them on
 ///     a page that renders none.
 /// </summary>
-public sealed class GetGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs) : Endpoint<GraphWorkflowRunRequest, GraphWorkflowRunResponse>
+public sealed class GetGraphWorkflowRunEndpoint : Endpoint<GraphWorkflowRunRequest, GraphWorkflowRunResponse>
 {
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IGraphWorkflowRunService _runs;
+
+    public GetGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

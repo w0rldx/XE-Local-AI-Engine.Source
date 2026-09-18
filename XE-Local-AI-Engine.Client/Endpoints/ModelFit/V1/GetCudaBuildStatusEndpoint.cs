@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     is running/terminal, and the last N streamed log lines (the one-shot hydrate on mount; live progress streams over
 ///     the CUDA build hub).
 /// </summary>
-public sealed class GetCudaBuildStatusEndpoint(LlamaCppRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<CudaBuildStatusResponse>
+public sealed class GetCudaBuildStatusEndpoint : EndpointWithoutRequest<CudaBuildStatusResponse>
 {
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public GetCudaBuildStatusEndpoint(LlamaCppRuntimeOrchestrationService runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {

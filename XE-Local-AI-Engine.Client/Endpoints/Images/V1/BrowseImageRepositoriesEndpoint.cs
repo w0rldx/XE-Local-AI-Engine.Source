@@ -13,10 +13,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     surfaces a 200 OK with an empty list (never a 500) so the browse panel degrades gracefully, following the
 ///     precedent set by the GGUF browse/inspect endpoints.
 /// </summary>
-public sealed class BrowseImageRepositoriesEndpoint(
-    IImageModelDiscovery discovery,
-    ILogger<BrowseImageRepositoriesEndpoint> logger)
-    : Endpoint<BrowseImageRepositoriesRequest, BrowseImageRepositoriesResponse>
+public sealed class BrowseImageRepositoriesEndpoint : Endpoint<BrowseImageRepositoriesRequest, BrowseImageRepositoriesResponse>
 {
     /// <summary>The maximum repos a single browse may return (bounds the discovery search breadth).</summary>
     private const int MaxLimit = 50;
@@ -24,8 +21,18 @@ public sealed class BrowseImageRepositoriesEndpoint(
     /// <summary>The default repos returned when no limit is supplied.</summary>
     private const int DefaultLimit = 20;
 
-    private readonly IImageModelDiscovery _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
-    private readonly ILogger<BrowseImageRepositoriesEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IImageModelDiscovery _discovery;
+    private readonly ILogger<BrowseImageRepositoriesEndpoint> _logger;
+
+    public BrowseImageRepositoriesEndpoint(
+        IImageModelDiscovery discovery,
+        ILogger<BrowseImageRepositoriesEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(logger);
+        _discovery = discovery;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     FastEndpoints handler that lists the installed image models — name, repo, family, kind, present weight parts and
 ///     total size (GET images/models). Reads the on-disk registry manifest; no absolute path is surfaced. Operator-gated.
 /// </summary>
-public sealed class ListImageModelsEndpoint(IImageModelRegistry registry)
-    : EndpointWithoutRequest<ListImageModelsResponse>
+public sealed class ListImageModelsEndpoint : EndpointWithoutRequest<ListImageModelsResponse>
 {
-    private readonly IImageModelRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+    private readonly IImageModelRegistry _registry;
+
+    public ListImageModelsEndpoint(IImageModelRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+    }
 
     public override void Configure()
     {

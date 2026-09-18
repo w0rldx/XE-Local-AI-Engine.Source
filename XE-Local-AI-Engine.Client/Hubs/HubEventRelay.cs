@@ -11,28 +11,42 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 ///     saturated it drops only the live transport copy; the sequence gap makes the client replay or refetch. The buffer
 ///     stays the replay authority — a relay only bridges what the buffer already published.
 /// </summary>
-internal abstract class HubEventRelay<TEvent, THub>(
-    IHubContext<THub> hubContext,
-    ILogger logger,
-    int capacity,
-    string method,
-    Func<TEvent, string> group,
-    Action<ILogger, TEvent> logSaturated) : BackgroundService
+internal abstract class HubEventRelay<TEvent, THub> : BackgroundService
     where THub : Hub
 {
-    private readonly Channel<TEvent> _channel = Channel.CreateBounded<TEvent>(new BoundedChannelOptions(capacity)
-    {
-        SingleReader = true,
-        SingleWriter = false,
-        AllowSynchronousContinuations = false,
-        FullMode = BoundedChannelFullMode.Wait
-    });
+    private readonly Channel<TEvent> _channel;
+    private readonly Func<TEvent, string> _group;
+    private readonly IHubContext<THub> _hubContext;
+    private readonly ILogger _logger;
+    private readonly Action<ILogger, TEvent> _logSaturated;
+    private readonly string _method;
 
-    private readonly Func<TEvent, string> _group = group ?? throw new ArgumentNullException(nameof(group));
-    private readonly IHubContext<THub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
-    private readonly ILogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly Action<ILogger, TEvent> _logSaturated = logSaturated ?? throw new ArgumentNullException(nameof(logSaturated));
-    private readonly string _method = method ?? throw new ArgumentNullException(nameof(method));
+    protected HubEventRelay(
+        IHubContext<THub> hubContext,
+        ILogger logger,
+        int capacity,
+        string method,
+        Func<TEvent, string> group,
+        Action<ILogger, TEvent> logSaturated)
+    {
+        _channel = Channel.CreateBounded<TEvent>(new BoundedChannelOptions(capacity)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false,
+            FullMode = BoundedChannelFullMode.Wait
+        });
+        ArgumentNullException.ThrowIfNull(group);
+        _group = group;
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(logSaturated);
+        _logSaturated = logSaturated;
+        ArgumentNullException.ThrowIfNull(method);
+        _method = method;
+    }
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
@@ -78,19 +92,25 @@ internal abstract class HubEventRelay<TEvent, THub>(
 }
 
 /// <summary>Bridges buffered benchmark run output to the Operator-scoped benchmark hub.</summary>
-internal sealed class BenchmarkRunHubEventRelay(
-    IBenchmarkEventBuffer events,
-    IHubContext<BenchmarkRunHub> hubContext,
-    ILogger<BenchmarkRunHubEventRelay> logger) : HubEventRelay<BenchmarkRunStreamEvent, BenchmarkRunHub>(hubContext,
-    logger,
-    BenchmarkEventBufferOptions.DefaultMaxEventCount,
-    BenchmarkRunHubEvents.Event,
-    static streamEvent => BenchmarkRunHub.RunGroup(streamEvent.RunId),
-    static (log, streamEvent) => log.LogWarning("Benchmark live-event relay was saturated for run {RunId} at sequence {Sequence}; the client must replay.",
-        streamEvent.RunId,
-        streamEvent.Sequence))
+internal sealed class BenchmarkRunHubEventRelay : HubEventRelay<BenchmarkRunStreamEvent, BenchmarkRunHub>
 {
-    private readonly IBenchmarkEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
+    private readonly IBenchmarkEventBuffer _events;
+
+    public BenchmarkRunHubEventRelay(
+        IBenchmarkEventBuffer events,
+        IHubContext<BenchmarkRunHub> hubContext,
+        ILogger<BenchmarkRunHubEventRelay> logger) : base(hubContext,
+        logger,
+        BenchmarkEventBufferOptions.DefaultMaxEventCount,
+        BenchmarkRunHubEvents.Event,
+        static streamEvent => BenchmarkRunHub.RunGroup(streamEvent.RunId),
+        static (log, streamEvent) => log.LogWarning("Benchmark live-event relay was saturated for run {RunId} at sequence {Sequence}; the client must replay.",
+            streamEvent.RunId,
+            streamEvent.Sequence))
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+    }
 
     protected override void Subscribe() =>
         _events.EventPublished += OnEventPublished;
@@ -103,19 +123,25 @@ internal sealed class BenchmarkRunHubEventRelay(
 }
 
 /// <summary>Bridges buffered dataset generation progress to the Operator-scoped generation hub.</summary>
-internal sealed class DatasetGenerationHubEventRelay(
-    IDatasetGenerationEventBuffer events,
-    IHubContext<DatasetGenerationHub> hubContext,
-    ILogger<DatasetGenerationHubEventRelay> logger) : HubEventRelay<DatasetGenerationEvent, DatasetGenerationHub>(hubContext,
-    logger,
-    DatasetGenerationEventBufferOptions.DefaultMaxEventCount,
-    DatasetGenerationHubEvents.Event,
-    static generationEvent => DatasetGenerationHub.DatasetGroup(generationEvent.DatasetId),
-    static (log, generationEvent) => log.LogWarning("The dataset generation relay was saturated for dataset {DatasetId} at sequence {Sequence}; the client must replay.",
-        generationEvent.DatasetId,
-        generationEvent.Sequence))
+internal sealed class DatasetGenerationHubEventRelay : HubEventRelay<DatasetGenerationEvent, DatasetGenerationHub>
 {
-    private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
+    private readonly IDatasetGenerationEventBuffer _events;
+
+    public DatasetGenerationHubEventRelay(
+        IDatasetGenerationEventBuffer events,
+        IHubContext<DatasetGenerationHub> hubContext,
+        ILogger<DatasetGenerationHubEventRelay> logger) : base(hubContext,
+        logger,
+        DatasetGenerationEventBufferOptions.DefaultMaxEventCount,
+        DatasetGenerationHubEvents.Event,
+        static generationEvent => DatasetGenerationHub.DatasetGroup(generationEvent.DatasetId),
+        static (log, generationEvent) => log.LogWarning("The dataset generation relay was saturated for dataset {DatasetId} at sequence {Sequence}; the client must replay.",
+            generationEvent.DatasetId,
+            generationEvent.Sequence))
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+    }
 
     protected override void Subscribe() =>
         _events.EventPublished += OnEventPublished;
@@ -128,19 +154,25 @@ internal sealed class DatasetGenerationHubEventRelay(
 }
 
 /// <summary>Bridges buffered training run progress to the Operator-scoped run hub.</summary>
-internal sealed class TrainingRunHubEventRelay(
-    ITrainingRunEventBuffer events,
-    IHubContext<TrainingRunHub> hubContext,
-    ILogger<TrainingRunHubEventRelay> logger) : HubEventRelay<TrainingRunEvent, TrainingRunHub>(hubContext,
-    logger,
-    TrainingRunEventBufferOptions.DefaultMaxEventCount,
-    TrainingRunHubEvents.Event,
-    static runEvent => TrainingRunHub.RunGroup(runEvent.RunId),
-    static (log, runEvent) => log.LogWarning("The training run relay was saturated for run {RunId} at sequence {Sequence}; the client must replay.",
-        runEvent.RunId,
-        runEvent.Sequence))
+internal sealed class TrainingRunHubEventRelay : HubEventRelay<TrainingRunEvent, TrainingRunHub>
 {
-    private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
+    private readonly ITrainingRunEventBuffer _events;
+
+    public TrainingRunHubEventRelay(
+        ITrainingRunEventBuffer events,
+        IHubContext<TrainingRunHub> hubContext,
+        ILogger<TrainingRunHubEventRelay> logger) : base(hubContext,
+        logger,
+        TrainingRunEventBufferOptions.DefaultMaxEventCount,
+        TrainingRunHubEvents.Event,
+        static runEvent => TrainingRunHub.RunGroup(runEvent.RunId),
+        static (log, runEvent) => log.LogWarning("The training run relay was saturated for run {RunId} at sequence {Sequence}; the client must replay.",
+            runEvent.RunId,
+            runEvent.Sequence))
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+    }
 
     protected override void Subscribe() =>
         _events.EventPublished += OnEventPublished;

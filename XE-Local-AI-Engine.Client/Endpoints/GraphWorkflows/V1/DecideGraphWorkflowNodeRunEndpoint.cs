@@ -13,9 +13,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     operation id goes to the runtime, which answers a replayed decision with the recorded one rather than deciding
 ///     twice, and refuses a DIFFERENT id on an answered pause with the decision that stands on the body.
 /// </summary>
-public sealed class DecideGraphWorkflowNodeRunEndpoint(IGraphWorkflowRunService runs) : Endpoint<DecideGraphWorkflowNodeRunRequest, GraphWorkflowDecisionResultResponse>
+public sealed class DecideGraphWorkflowNodeRunEndpoint : Endpoint<DecideGraphWorkflowNodeRunRequest, GraphWorkflowDecisionResultResponse>
 {
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IGraphWorkflowRunService _runs;
+
+    public DecideGraphWorkflowNodeRunEndpoint(IGraphWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

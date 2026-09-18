@@ -6,12 +6,20 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed class CreateNodeChatConversationEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    TimeProvider timeProvider) : Endpoint<CreateNodeChatConversationRequest, NodeChatConversationResponse>
+public sealed class CreateNodeChatConversationEndpoint : Endpoint<CreateNodeChatConversationRequest, NodeChatConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly TimeProvider _timeProvider;
+
+    public CreateNodeChatConversationEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

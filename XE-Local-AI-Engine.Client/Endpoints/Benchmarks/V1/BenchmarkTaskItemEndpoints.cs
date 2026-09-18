@@ -12,11 +12,18 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     because each write recomputes the project's item-set hash — and a moved set hash resets the rank cohort, which
 ///     is not something a field could express.
 /// </summary>
-public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
-    : Endpoint<BenchmarkProjectRouteRequest, ListBenchmarkTaskItemsResponse>
+public sealed class ListBenchmarkTaskItemsEndpoint : Endpoint<BenchmarkProjectRouteRequest, ListBenchmarkTaskItemsResponse>
 {
-    private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkTaskItemService _items;
+    private readonly BenchmarkRecordService _records;
+
+    public ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(records);
+        _items = items;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -37,10 +44,15 @@ public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService ite
     }
 }
 
-public sealed class CreateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
-    : Endpoint<CreateBenchmarkTaskItemRequest, BenchmarkTaskItemResponse>
+public sealed class CreateBenchmarkTaskItemEndpoint : Endpoint<CreateBenchmarkTaskItemRequest, BenchmarkTaskItemResponse>
 {
-    private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
+    private readonly IBenchmarkTaskItemService _items;
+
+    public CreateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        _items = items;
+    }
 
     public override void Configure()
     {
@@ -58,10 +70,15 @@ public sealed class CreateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
     }
 }
 
-public sealed class UpdateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
-    : Endpoint<UpdateBenchmarkTaskItemRequest, BenchmarkTaskItemResponse>
+public sealed class UpdateBenchmarkTaskItemEndpoint : Endpoint<UpdateBenchmarkTaskItemRequest, BenchmarkTaskItemResponse>
 {
-    private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
+    private readonly IBenchmarkTaskItemService _items;
+
+    public UpdateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        _items = items;
+    }
 
     public override void Configure()
     {
@@ -79,10 +96,15 @@ public sealed class UpdateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
     }
 }
 
-public sealed class DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
-    : Endpoint<DeleteBenchmarkTaskItemRequest>
+public sealed class DeleteBenchmarkTaskItemEndpoint : Endpoint<DeleteBenchmarkTaskItemRequest>
 {
-    private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
+    private readonly IBenchmarkTaskItemService _items;
+
+    public DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        _items = items;
+    }
 
     public override void Configure()
     {
@@ -104,11 +126,18 @@ public sealed class DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
 ///     Renumbers the whole item list at once. Not a revision bump and not a cohort reset: the index is a display
 ///     position that no hash carries, so a drag-and-drop must not unrank a completed suite.
 /// </summary>
-public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
-    : Endpoint<ReorderBenchmarkTaskItemsRequest, ListBenchmarkTaskItemsResponse>
+public sealed class ReorderBenchmarkTaskItemsEndpoint : Endpoint<ReorderBenchmarkTaskItemsRequest, ListBenchmarkTaskItemsResponse>
 {
-    private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkTaskItemService _items;
+    private readonly BenchmarkRecordService _records;
+
+    public ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(records);
+        _items = items;
+        _records = records;
+    }
 
     public override void Configure()
     {

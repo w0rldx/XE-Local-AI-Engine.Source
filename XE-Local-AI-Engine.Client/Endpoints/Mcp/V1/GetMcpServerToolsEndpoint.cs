@@ -14,15 +14,20 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 ///     and a redacted reason was captured). The tools list is the server's discovered set when connected and empty
 ///     otherwise.
 /// </summary>
-public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService)
-    : Endpoint<GetMcpServerToolsRequest, McpServerToolsResponse>
+public sealed class GetMcpServerToolsEndpoint : Endpoint<GetMcpServerToolsRequest, McpServerToolsResponse>
 {
     private const string StatusConnected = "connected";
     private const string StatusDisabled = "disabled";
     private const string StatusConnecting = "connecting";
     private const string StatusError = "error";
 
-    private readonly IMcpServerService _mcpServerService = mcpServerService ?? throw new ArgumentNullException(nameof(mcpServerService));
+    private readonly IMcpServerService _mcpServerService;
+
+    public GetMcpServerToolsEndpoint(IMcpServerService mcpServerService)
+    {
+        ArgumentNullException.ThrowIfNull(mcpServerService);
+        _mcpServerService = mcpServerService;
+    }
 
     public override void Configure()
     {

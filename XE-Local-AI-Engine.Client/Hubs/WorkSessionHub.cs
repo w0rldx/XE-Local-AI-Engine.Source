@@ -40,7 +40,7 @@ public sealed record WorkSessionSubscriptionSnapshot(
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class WorkSessionHub(IWorkSessionService service, IOptions<WorkSessionOptions> options) : Hub
+public sealed class WorkSessionHub : Hub
 {
     /// <summary>
     ///     How many persisted events one subscribe hands back. Past this the snapshot says so and the client pages the
@@ -49,8 +49,15 @@ public sealed class WorkSessionHub(IWorkSessionService service, IOptions<WorkSes
     /// </summary>
     private const int ReplayCap = 200;
 
-    private readonly WorkSessionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly WorkSessionOptions _options;
+    private readonly IWorkSessionService _service;
+
+    public WorkSessionHub(IWorkSessionService service, IOptions<WorkSessionOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public async Task<WorkSessionSubscriptionSnapshot> SubscribeSession(Guid sessionId, long afterSeq)
     {

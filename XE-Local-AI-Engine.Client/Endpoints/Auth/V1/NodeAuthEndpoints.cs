@@ -5,8 +5,15 @@ using FastEndpoints.Swagger;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class NodeAuthStatusEndpoint(INodeAuthService authService) : EndpointWithoutRequest<NodeAuthStatusResponse>
+public sealed class NodeAuthStatusEndpoint : EndpointWithoutRequest<NodeAuthStatusResponse>
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeAuthStatusEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Auth.Status);
@@ -16,7 +23,7 @@ public sealed class NodeAuthStatusEndpoint(INodeAuthService authService) : Endpo
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = await authService.GetStatusAsync(User, ct);
+        var status = await _authService.GetStatusAsync(User, ct);
         await Send.OkAsync(new NodeAuthStatusResponse
         {
             SetupRequired = status.SetupRequired,
@@ -25,8 +32,15 @@ public sealed class NodeAuthStatusEndpoint(INodeAuthService authService) : Endpo
     }
 }
 
-public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<NodeSetupRequest>
+public sealed class NodeSetupEndpoint : Endpoint<NodeSetupRequest>
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeSetupEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Auth.Setup);
@@ -37,7 +51,7 @@ public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<N
 
     public override async Task HandleAsync(NodeSetupRequest req, CancellationToken ct)
     {
-        var result = await authService.SetupAsync(req.Email, req.Password, ct);
+        var result = await _authService.SetupAsync(req.Email, req.Password, ct);
         if (result.Succeeded)
         {
             await Send.NoContentAsync(ct);
@@ -61,8 +75,15 @@ public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<N
     }
 }
 
-public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<NodeLoginRequest, NodeAccessTokenResponse>
+public sealed class NodeLoginEndpoint : Endpoint<NodeLoginRequest, NodeAccessTokenResponse>
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeLoginEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Auth.Login);
@@ -77,13 +98,20 @@ public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<N
 
     public override async Task HandleAsync(NodeLoginRequest req, CancellationToken ct)
     {
-        var result = await authService.LoginAsync(req.Email, req.Password, ct);
+        var result = await _authService.LoginAsync(req.Email, req.Password, ct);
         await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct);
     }
 }
 
-public sealed class NodeRefreshEndpoint(INodeAuthService authService) : EndpointWithoutRequest<NodeAccessTokenResponse>
+public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessTokenResponse>
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeRefreshEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Auth.Refresh);
@@ -95,13 +123,20 @@ public sealed class NodeRefreshEndpoint(INodeAuthService authService) : Endpoint
     public override async Task HandleAsync(CancellationToken ct)
     {
         var refreshToken = HttpContext.Request.Cookies[NodeAuthCookie.RefreshCookieName];
-        var result = await authService.RefreshAsync(refreshToken, ct);
+        var result = await _authService.RefreshAsync(refreshToken, ct);
         await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct);
     }
 }
 
-public sealed class NodeLogoutEndpoint(INodeAuthService authService) : EndpointWithoutRequest
+public sealed class NodeLogoutEndpoint : EndpointWithoutRequest
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeLogoutEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Auth.Logout);
@@ -111,14 +146,21 @@ public sealed class NodeLogoutEndpoint(INodeAuthService authService) : EndpointW
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await authService.RevokeRefreshTokensAsync(User, ct);
+        await _authService.RevokeRefreshTokensAsync(User, ct);
         NodeAuthCookie.ClearRefreshToken(HttpContext.Response);
         await Send.NoContentAsync(ct);
     }
 }
 
-public sealed class NodeChangePasswordEndpoint(INodeAuthService authService) : Endpoint<NodeChangePasswordRequest>
+public sealed class NodeChangePasswordEndpoint : Endpoint<NodeChangePasswordRequest>
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeChangePasswordEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Auth.ChangePassword);
@@ -128,7 +170,7 @@ public sealed class NodeChangePasswordEndpoint(INodeAuthService authService) : E
 
     public override async Task HandleAsync(NodeChangePasswordRequest req, CancellationToken ct)
     {
-        var result = await authService.ChangePasswordAsync(User, req.CurrentPassword, req.NewPassword, ct);
+        var result = await _authService.ChangePasswordAsync(User, req.CurrentPassword, req.NewPassword, ct);
         if (!result.Succeeded)
         {
             await Send.ResultAsync(Results.BadRequest(new NodeAuthErrorResponse
@@ -144,8 +186,15 @@ public sealed class NodeChangePasswordEndpoint(INodeAuthService authService) : E
     }
 }
 
-public sealed class NodeMeEndpoint(INodeAuthService authService) : EndpointWithoutRequest<NodeMeResponse>
+public sealed class NodeMeEndpoint : EndpointWithoutRequest<NodeMeResponse>
 {
+    private readonly INodeAuthService _authService;
+
+    public NodeMeEndpoint(INodeAuthService authService)
+    {
+        _authService = authService;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Auth.Me);
@@ -155,7 +204,7 @@ public sealed class NodeMeEndpoint(INodeAuthService authService) : EndpointWitho
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var currentUser = await authService.GetCurrentUserAsync(User, ct);
+        var currentUser = await _authService.GetCurrentUserAsync(User, ct);
         if (currentUser is null)
         {
             await Send.UnauthorizedAsync(ct);

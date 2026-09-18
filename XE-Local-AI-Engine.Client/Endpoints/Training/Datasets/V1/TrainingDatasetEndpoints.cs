@@ -8,10 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-public sealed class ListTrainingDatasetsEndpoint(TrainingDatasetService datasets)
-    : EndpointWithoutRequest<ListTrainingDatasetsResponse>
+public sealed class ListTrainingDatasetsEndpoint : EndpointWithoutRequest<ListTrainingDatasetsResponse>
 {
-    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+    private readonly TrainingDatasetService _datasets;
+
+    public ListTrainingDatasetsEndpoint(TrainingDatasetService datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        _datasets = datasets;
+    }
 
     public override void Configure()
     {
@@ -29,10 +34,15 @@ public sealed class ListTrainingDatasetsEndpoint(TrainingDatasetService datasets
     }
 }
 
-public sealed class GetTrainingDatasetEndpoint(TrainingDatasetService datasets)
-    : Endpoint<GetTrainingDatasetRequest, TrainingDatasetResponse>
+public sealed class GetTrainingDatasetEndpoint : Endpoint<GetTrainingDatasetRequest, TrainingDatasetResponse>
 {
-    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+    private readonly TrainingDatasetService _datasets;
+
+    public GetTrainingDatasetEndpoint(TrainingDatasetService datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        _datasets = datasets;
+    }
 
     public override void Configure()
     {
@@ -53,10 +63,15 @@ public sealed class GetTrainingDatasetEndpoint(TrainingDatasetService datasets)
     }
 }
 
-public sealed class DeleteTrainingDatasetEndpoint(TrainingDatasetService datasets)
-    : Endpoint<DeleteTrainingDatasetRequest>
+public sealed class DeleteTrainingDatasetEndpoint : Endpoint<DeleteTrainingDatasetRequest>
 {
-    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+    private readonly TrainingDatasetService _datasets;
+
+    public DeleteTrainingDatasetEndpoint(TrainingDatasetService datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        _datasets = datasets;
+    }
 
     public override void Configure()
     {
@@ -75,10 +90,15 @@ public sealed class DeleteTrainingDatasetEndpoint(TrainingDatasetService dataset
 ///     Cancels generation. Mirrors the training-run cancel: a queued dataset is terminalized, a generating one is
 ///     signalled through the executor's registry, and an unknown or already-finished dataset is a 404.
 /// </summary>
-public sealed class CancelTrainingDatasetEndpoint(IDatasetGenerationService generation)
-    : Endpoint<CancelTrainingDatasetRequest>
+public sealed class CancelTrainingDatasetEndpoint : Endpoint<CancelTrainingDatasetRequest>
 {
-    private readonly IDatasetGenerationService _generation = generation ?? throw new ArgumentNullException(nameof(generation));
+    private readonly IDatasetGenerationService _generation;
+
+    public CancelTrainingDatasetEndpoint(IDatasetGenerationService generation)
+    {
+        ArgumentNullException.ThrowIfNull(generation);
+        _generation = generation;
+    }
 
     public override void Configure()
     {
@@ -101,10 +121,15 @@ public sealed class CancelTrainingDatasetEndpoint(IDatasetGenerationService gene
     }
 }
 
-public sealed class ListTrainingSamplesEndpoint(TrainingDatasetService datasets)
-    : Endpoint<ListTrainingSamplesRequest, ListTrainingSamplesResponse>
+public sealed class ListTrainingSamplesEndpoint : Endpoint<ListTrainingSamplesRequest, ListTrainingSamplesResponse>
 {
-    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+    private readonly TrainingDatasetService _datasets;
+
+    public ListTrainingSamplesEndpoint(TrainingDatasetService datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        _datasets = datasets;
+    }
 
     public override void Configure()
     {
@@ -133,10 +158,15 @@ public sealed class ListTrainingSamplesEndpoint(TrainingDatasetService datasets)
 }
 
 /// <summary>Sample review verbs. Any accepted mutation bumps the dataset revision and recomputes its fingerprint.</summary>
-public sealed class ReviewTrainingSampleEndpoint(TrainingDatasetService datasets)
-    : Endpoint<ReviewTrainingSampleRequest, TrainingSampleResponse>
+public sealed class ReviewTrainingSampleEndpoint : Endpoint<ReviewTrainingSampleRequest, TrainingSampleResponse>
 {
-    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+    private readonly TrainingDatasetService _datasets;
+
+    public ReviewTrainingSampleEndpoint(TrainingDatasetService datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        _datasets = datasets;
+    }
 
     public override void Configure()
     {
@@ -151,10 +181,15 @@ public sealed class ReviewTrainingSampleEndpoint(TrainingDatasetService datasets
     }
 }
 
-public sealed class ExportTrainingDatasetEndpoint(IDatasetExportService export)
-    : Endpoint<ExportTrainingDatasetRequest, ExportTrainingDatasetResponse>
+public sealed class ExportTrainingDatasetEndpoint : Endpoint<ExportTrainingDatasetRequest, ExportTrainingDatasetResponse>
 {
-    private readonly IDatasetExportService _export = export ?? throw new ArgumentNullException(nameof(export));
+    private readonly IDatasetExportService _export;
+
+    public ExportTrainingDatasetEndpoint(IDatasetExportService export)
+    {
+        ArgumentNullException.ThrowIfNull(export);
+        _export = export;
+    }
 
     public override void Configure()
     {

@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>The definition picker's feed. Never loads a graph blob: the node count is a column, not a parse.</summary>
-public sealed class ListDevWorkflowDefinitionsEndpoint(DevWorkflowAuthoringService authoring)
-    : Endpoint<ListDevWorkflowDefinitionsRequest, ListDevWorkflowDefinitionsResponse>
+public sealed class ListDevWorkflowDefinitionsEndpoint : Endpoint<ListDevWorkflowDefinitionsRequest, ListDevWorkflowDefinitionsResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public ListDevWorkflowDefinitionsEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -39,12 +44,18 @@ public sealed class ListDevWorkflowDefinitionsEndpoint(DevWorkflowAuthoringServi
 ///         every other domain refusal produces.
 ///     </para>
 /// </summary>
-public sealed class CreateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring, IOptions<DevWorkflowOptions> options)
-    : Endpoint<CreateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
+public sealed class CreateDevWorkflowDefinitionEndpoint : Endpoint<CreateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
 
-    private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly DevWorkflowOptions _options;
+
+    public CreateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring, IOptions<DevWorkflowOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    }
 
     public override void Configure()
     {
@@ -80,9 +91,15 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringServ
     }
 }
 
-public sealed class GetDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
+public sealed class GetDevWorkflowDefinitionEndpoint : Endpoint<DevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public GetDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -100,12 +117,18 @@ public sealed class GetDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService
     }
 }
 
-public sealed class UpdateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring, IOptions<DevWorkflowOptions> options)
-    : Endpoint<UpdateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
+public sealed class UpdateDevWorkflowDefinitionEndpoint : Endpoint<UpdateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
 
-    private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly DevWorkflowOptions _options;
+
+    public UpdateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring, IOptions<DevWorkflowOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    }
 
     public override void Configure()
     {
@@ -148,9 +171,15 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringServ
 ///     cannot become permanently undeletable because a year-old run still references it. It disappears from the
 ///     picker and from the default list.
 /// </summary>
-public sealed class ArchiveDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowDefinitionRequest>
+public sealed class ArchiveDevWorkflowDefinitionEndpoint : Endpoint<DevWorkflowDefinitionRequest>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public ArchiveDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {

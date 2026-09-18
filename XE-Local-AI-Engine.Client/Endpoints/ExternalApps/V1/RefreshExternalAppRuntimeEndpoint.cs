@@ -23,12 +23,19 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         instance with an operation in flight, so a refresh during an install cannot disturb it.
 ///     </para>
 /// </summary>
-public sealed class RefreshExternalAppRuntimeEndpoint(IContainerRuntimeResolver resolver, IExternalAppStartupReconciler reconciler)
-    : Endpoint<RefreshExternalAppRuntimeRequest, ExternalAppRuntimeResponse>
+public sealed class RefreshExternalAppRuntimeEndpoint : Endpoint<RefreshExternalAppRuntimeRequest, ExternalAppRuntimeResponse>
 {
-    private readonly IExternalAppStartupReconciler _reconciler = reconciler ?? throw new ArgumentNullException(nameof(reconciler));
+    private readonly IExternalAppStartupReconciler _reconciler;
 
-    private readonly IContainerRuntimeResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly IContainerRuntimeResolver _resolver;
+
+    public RefreshExternalAppRuntimeEndpoint(IContainerRuntimeResolver resolver, IExternalAppStartupReconciler reconciler)
+    {
+        ArgumentNullException.ThrowIfNull(reconciler);
+        ArgumentNullException.ThrowIfNull(resolver);
+        _reconciler = reconciler;
+        _resolver = resolver;
+    }
 
     public override void Configure()
     {

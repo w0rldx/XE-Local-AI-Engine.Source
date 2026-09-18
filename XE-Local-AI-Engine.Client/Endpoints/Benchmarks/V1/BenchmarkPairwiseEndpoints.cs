@@ -12,11 +12,16 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     route, deliberately: splitting them would let a client render a strength beside a verdict set that did not
 ///     produce it, and nothing on the wire would say so.
 /// </summary>
-public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService records)
-    : Endpoint<ListBenchmarkComparisonsRequest, ListBenchmarkComparisonsResponse>
+public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkComparisonsRequest, ListBenchmarkComparisonsResponse>
 {
     private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ListBenchmarkComparisonsEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -110,11 +115,18 @@ public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService reco
 ///     What pairwise judging this project will cost, answered BEFORE the operator saves the mode. Pairwise is
 ///     quadratic in the cohort — twelve runs is 132 judge calls — so the number goes in front of the decision.
 /// </summary>
-public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService records, IBenchmarkPairwisePlanner planner)
-    : Endpoint<GetBenchmarkPairwiseEstimateRequest, GetBenchmarkPairwiseEstimateResponse>
+public sealed class GetBenchmarkPairwiseEstimateEndpoint : Endpoint<GetBenchmarkPairwiseEstimateRequest, GetBenchmarkPairwiseEstimateResponse>
 {
-    private readonly IBenchmarkPairwisePlanner _planner = planner ?? throw new ArgumentNullException(nameof(planner));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkPairwisePlanner _planner;
+    private readonly BenchmarkRecordService _records;
+
+    public GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService records, IBenchmarkPairwisePlanner planner)
+    {
+        ArgumentNullException.ThrowIfNull(planner);
+        ArgumentNullException.ThrowIfNull(records);
+        _planner = planner;
+        _records = records;
+    }
 
     public override void Configure()
     {

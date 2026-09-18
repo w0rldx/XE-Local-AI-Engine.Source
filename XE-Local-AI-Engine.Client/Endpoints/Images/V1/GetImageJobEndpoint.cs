@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     FastEndpoints handler that reads one image job's current status view (GET images/jobs/{jobId}); 404 when the job
 ///     is unknown. Thin transport over the <see cref="IImageJobCoordinator" />. Operator-gated.
 /// </summary>
-public sealed class GetImageJobEndpoint(IImageJobCoordinator coordinator)
-    : Endpoint<ImageJobRouteRequest, ImageJobResponse>
+public sealed class GetImageJobEndpoint : Endpoint<ImageJobRouteRequest, ImageJobResponse>
 {
-    private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IImageJobCoordinator _coordinator;
+
+    public GetImageJobEndpoint(IImageJobCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+    }
 
     public override void Configure()
     {

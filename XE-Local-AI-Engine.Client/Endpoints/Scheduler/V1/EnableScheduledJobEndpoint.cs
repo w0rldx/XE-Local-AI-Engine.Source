@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-public sealed class EnableScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
-    : Endpoint<ScheduledJobActionRequest, ScheduledJobResponse>
+public sealed class EnableScheduledJobEndpoint : Endpoint<ScheduledJobActionRequest, ScheduledJobResponse>
 {
-    private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
+    private readonly IScheduledJobManagementService _scheduledJobManagementService;
+
+    public EnableScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
+    {
+        ArgumentNullException.ThrowIfNull(scheduledJobManagementService);
+        _scheduledJobManagementService = scheduledJobManagementService;
+    }
 
     public override void Configure()
     {

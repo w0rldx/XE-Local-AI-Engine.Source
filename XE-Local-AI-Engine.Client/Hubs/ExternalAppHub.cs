@@ -48,7 +48,7 @@ public sealed record ExternalAppSubscriptionSnapshot(
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class ExternalAppHub(IExternalAppService apps, IOptions<ExternalAppsOptions> options) : Hub
+public sealed class ExternalAppHub : Hub
 {
     /// <summary>
     ///     How many persisted events one subscribe hands back. Past this the snapshot says so and the client pages the
@@ -63,8 +63,15 @@ public sealed class ExternalAppHub(IExternalAppService apps, IOptions<ExternalAp
     /// </summary>
     private const string InstanceNotFoundMessage = "External app instance was not found.";
 
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
-    private readonly ExternalAppsOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly IExternalAppService _apps;
+    private readonly ExternalAppsOptions _options;
+
+    public ExternalAppHub(IExternalAppService apps, IOptions<ExternalAppsOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    }
 
     public async Task<ExternalAppSubscriptionSnapshot> Subscribe(Guid instanceId, long afterSequence)
     {

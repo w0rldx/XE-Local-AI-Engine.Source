@@ -15,17 +15,28 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     the exact shape <c>POST images/models/downloads</c> accepts, so installing is one click and no typing.
 ///     Operator-gated; no path or token is surfaced.
 /// </summary>
-public sealed class GetImageModelCatalogEndpoint(
-    IImageModelCatalog catalog,
-    IImageModelRegistry registry,
-    IHardwareProfiler hardwareProfiler,
-    ILogger<GetImageModelCatalogEndpoint> logger)
-    : EndpointWithoutRequest<GetImageModelCatalogResponse>
+public sealed class GetImageModelCatalogEndpoint : EndpointWithoutRequest<GetImageModelCatalogResponse>
 {
-    private readonly IImageModelCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-    private readonly IHardwareProfiler _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-    private readonly ILogger<GetImageModelCatalogEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IImageModelRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+    private readonly IImageModelCatalog _catalog;
+    private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly ILogger<GetImageModelCatalogEndpoint> _logger;
+    private readonly IImageModelRegistry _registry;
+
+    public GetImageModelCatalogEndpoint(
+        IImageModelCatalog catalog,
+        IImageModelRegistry registry,
+        IHardwareProfiler hardwareProfiler,
+        ILogger<GetImageModelCatalogEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(registry);
+        _catalog = catalog;
+        _hardwareProfiler = hardwareProfiler;
+        _logger = logger;
+        _registry = registry;
+    }
 
     public override void Configure()
     {

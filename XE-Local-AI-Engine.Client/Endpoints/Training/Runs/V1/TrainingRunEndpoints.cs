@@ -12,9 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 ///     Starts a run. The license confirmation is enforced here AND in the store's create transaction — the endpoint so
 ///     the operator gets a 400 rather than a 500, the store so no other caller can bypass it.
 /// </summary>
-public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoint<CreateTrainingRunRequest, TrainingRunResponse>
+public sealed class CreateTrainingRunEndpoint : Endpoint<CreateTrainingRunRequest, TrainingRunResponse>
 {
-    private readonly ITrainingRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly ITrainingRunService _runs;
+
+    public CreateTrainingRunEndpoint(ITrainingRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -45,9 +51,15 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
     }
 }
 
-public sealed class ListTrainingRunsEndpoint(ITrainingRunService runs) : Endpoint<ListTrainingRunsRequest, ListTrainingRunsResponse>
+public sealed class ListTrainingRunsEndpoint : Endpoint<ListTrainingRunsRequest, ListTrainingRunsResponse>
 {
-    private readonly ITrainingRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly ITrainingRunService _runs;
+
+    public ListTrainingRunsEndpoint(ITrainingRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -68,9 +80,15 @@ public sealed class ListTrainingRunsEndpoint(ITrainingRunService runs) : Endpoin
     }
 }
 
-public sealed class GetTrainingRunEndpoint(ITrainingRunService runs) : Endpoint<TrainingRunByIdRequest, TrainingRunResponse>
+public sealed class GetTrainingRunEndpoint : Endpoint<TrainingRunByIdRequest, TrainingRunResponse>
 {
-    private readonly ITrainingRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly ITrainingRunService _runs;
+
+    public GetTrainingRunEndpoint(ITrainingRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -91,9 +109,15 @@ public sealed class GetTrainingRunEndpoint(ITrainingRunService runs) : Endpoint<
     }
 }
 
-public sealed class CancelTrainingRunEndpoint(ITrainingRunService runs) : Endpoint<TrainingRunByIdRequest>
+public sealed class CancelTrainingRunEndpoint : Endpoint<TrainingRunByIdRequest>
 {
-    private readonly ITrainingRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly ITrainingRunService _runs;
+
+    public CancelTrainingRunEndpoint(ITrainingRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -120,12 +144,21 @@ public sealed class CancelTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
 ///     The wizard's computed starting point: options sized to this box, the VRAM estimate behind them, and the exact
 ///     licensing text the operator has to confirm. Read-only — it creates nothing.
 /// </summary>
-public sealed class GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalculator defaults, ILicenseGateService licenseGate, IInstalledBaseModelLinker linker)
-    : Endpoint<TrainingRunDefaultsRequest, TrainingRunDefaultsResponse>
+public sealed class GetTrainingRunDefaultsEndpoint : Endpoint<TrainingRunDefaultsRequest, TrainingRunDefaultsResponse>
 {
-    private readonly ITrainingOptionDefaultsCalculator _defaults = defaults ?? throw new ArgumentNullException(nameof(defaults));
-    private readonly ILicenseGateService _licenseGate = licenseGate ?? throw new ArgumentNullException(nameof(licenseGate));
-    private readonly IInstalledBaseModelLinker _linker = linker ?? throw new ArgumentNullException(nameof(linker));
+    private readonly ITrainingOptionDefaultsCalculator _defaults;
+    private readonly ILicenseGateService _licenseGate;
+    private readonly IInstalledBaseModelLinker _linker;
+
+    public GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalculator defaults, ILicenseGateService licenseGate, IInstalledBaseModelLinker linker)
+    {
+        ArgumentNullException.ThrowIfNull(defaults);
+        ArgumentNullException.ThrowIfNull(licenseGate);
+        ArgumentNullException.ThrowIfNull(linker);
+        _defaults = defaults;
+        _licenseGate = licenseGate;
+        _linker = linker;
+    }
 
     public override void Configure()
     {

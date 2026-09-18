@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. On success it returns the frozen
 ///     profile view.
 /// </summary>
-public sealed class FreezeInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
-    : Endpoint<FreezeInferenceProfileRequest, InferenceProfileActionResponse>
+public sealed class FreezeInferenceProfileEndpoint : Endpoint<FreezeInferenceProfileRequest, InferenceProfileActionResponse>
 {
-    private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
+    private readonly IInferenceProfileService _inferenceProfileService;
+
+    public FreezeInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
+    {
+        ArgumentNullException.ThrowIfNull(inferenceProfileService);
+        _inferenceProfileService = inferenceProfileService;
+    }
 
     public override void Configure()
     {

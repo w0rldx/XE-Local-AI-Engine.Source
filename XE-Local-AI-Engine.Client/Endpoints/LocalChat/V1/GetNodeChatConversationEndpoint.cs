@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed class GetNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence)
-    : Endpoint<GetNodeChatConversationRequest, NodeChatConversationResponse>
+public sealed class GetNodeChatConversationEndpoint : Endpoint<GetNodeChatConversationRequest, NodeChatConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
+    private readonly INodeChatPersistenceService _chatPersistence;
+
+    public GetNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        _chatPersistence = chatPersistence;
+    }
 
     public override void Configure()
     {

@@ -10,14 +10,19 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     query, runs the lexical FTS and model-scoped semantic arms, fuses them, and hydrates the hits. Titles and sections
 ///     derive from non-sensitive heading/storage references, so a result never exposes the encrypted file name.
 /// </summary>
-public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchService)
-    : Endpoint<SearchKnowledgeRequest, SearchKnowledgeResponse>
+public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, SearchKnowledgeResponse>
 {
     private const int MinLimit = 1;
     private const int MaxLimit = 50;
     private const int DefaultLimit = 10;
 
-    private readonly IKnowledgeSearchService _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
+    private readonly IKnowledgeSearchService _searchService;
+
+    public SearchKnowledgeEndpoint(IKnowledgeSearchService searchService)
+    {
+        ArgumentNullException.ThrowIfNull(searchService);
+        _searchService = searchService;
+    }
 
     public override void Configure()
     {

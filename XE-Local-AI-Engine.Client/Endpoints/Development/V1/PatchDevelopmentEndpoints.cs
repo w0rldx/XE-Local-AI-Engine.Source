@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class PreviewDevelopmentPatchEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentActionRequest, DevelopmentPatchPreviewResponse>, IDevelopmentEndpoint
+public sealed class PreviewDevelopmentPatchEndpoint : Endpoint<DevelopmentActionRequest, DevelopmentPatchPreviewResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public PreviewDevelopmentPatchEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -40,10 +45,15 @@ public sealed class PreviewDevelopmentPatchEndpoint(IDevelopmentManagementServic
     }
 }
 
-public sealed class ApplyDevelopmentPatchEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentActionRequest, DevelopmentApplyResponse>, IDevelopmentEndpoint
+public sealed class ApplyDevelopmentPatchEndpoint : Endpoint<DevelopmentActionRequest, DevelopmentApplyResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public ApplyDevelopmentPatchEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

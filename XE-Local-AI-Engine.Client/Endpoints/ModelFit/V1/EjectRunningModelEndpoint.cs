@@ -19,10 +19,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     operator-ejected. Eject is idempotent (a not-running process reports <c>not_running</c>). Role is
 ///     <c>chat|embedding</c> (defaulting to chat); an unknown role is rejected with a 400.
 /// </summary>
-public sealed class EjectRunningModelEndpoint(LlamaCppRuntimeOrchestrationService runtime)
-    : Endpoint<EjectRunningModelRequest, EjectRunningModelResponse>
+public sealed class EjectRunningModelEndpoint : Endpoint<EjectRunningModelRequest, EjectRunningModelResponse>
 {
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public EjectRunningModelEndpoint(LlamaCppRuntimeOrchestrationService runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {

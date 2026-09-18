@@ -9,22 +9,31 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 /// <summary>
 ///     Represents default exception handler.
 /// </summary>
-public class DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IHostEnvironment hostEnvironment) : IExceptionHandler
+public class DefaultExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<DefaultExceptionHandler> _logger;
+    private readonly IHostEnvironment _hostEnvironment;
+
+    public DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IHostEnvironment hostEnvironment)
+    {
+        _logger = logger;
+        _hostEnvironment = hostEnvironment;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(exception);
 
-        var isDevelopment = hostEnvironment.IsDevelopment()
-                            || hostEnvironment.IsEnvironment("Testing")
-                            || hostEnvironment.IsEnvironment("IntegrationTests");
+        var isDevelopment = _hostEnvironment.IsDevelopment()
+                            || _hostEnvironment.IsEnvironment("Testing")
+                            || _hostEnvironment.IsEnvironment("IntegrationTests");
         var detail = isDevelopment ? exception.Message : "An unexpected error occurred";
 
         // Log the same W3C trace id the client receives in the ProblemDetails response (via ResolveTraceId), plus the
         // current span id, so a client-reported trace id joins straight to this log line and to distributed traces. The
         // Kestrel connection id is kept separately as RequestId — it identifies the connection, not the W3C trace.
-        logger.LogError(exception,
+        _logger.LogError(exception,
             "Unhandled exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. SpanId: {SpanId}. RequestId: {RequestId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),

@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     retry-when-idle wording rather than the generic failure text. On success it
 ///     returns the measured metrics + snapshot id + (un-frozen) profile view — never the raw <c>/metrics</c> scrape.
 /// </summary>
-public sealed class BenchmarkInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
-    : Endpoint<BenchmarkInferenceProfileRequest, BenchmarkInferenceProfileResponse>
+public sealed class BenchmarkInferenceProfileEndpoint : Endpoint<BenchmarkInferenceProfileRequest, BenchmarkInferenceProfileResponse>
 {
-    private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
+    private readonly IInferenceProfileService _inferenceProfileService;
+
+    public BenchmarkInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
+    {
+        ArgumentNullException.ThrowIfNull(inferenceProfileService);
+        _inferenceProfileService = inferenceProfileService;
+    }
 
     public override void Configure()
     {

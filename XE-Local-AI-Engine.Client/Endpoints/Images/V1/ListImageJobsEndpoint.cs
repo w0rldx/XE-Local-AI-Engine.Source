@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     FastEndpoints handler that lists every persisted image job newest-first (GET images/jobs). Thin transport over the
 ///     <see cref="IImageJobCoordinator" />. Operator-gated.
 /// </summary>
-public sealed class ListImageJobsEndpoint(IImageJobCoordinator coordinator)
-    : EndpointWithoutRequest<ListImageJobsResponse>
+public sealed class ListImageJobsEndpoint : EndpointWithoutRequest<ListImageJobsResponse>
 {
-    private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IImageJobCoordinator _coordinator;
+
+    public ListImageJobsEndpoint(IImageJobCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+    }
 
     public override void Configure()
     {

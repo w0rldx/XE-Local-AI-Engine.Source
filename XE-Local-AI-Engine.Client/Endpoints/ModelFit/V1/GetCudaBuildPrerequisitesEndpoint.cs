@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     (true only on Linux when every item is satisfied). Installs nothing. Works on any OS — a non-Linux host reports a
 ///     single unsatisfied OS item with <c>canBuild=false</c>.
 /// </summary>
-public sealed class GetCudaBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<CudaBuildPrerequisitesResponse>
+public sealed class GetCudaBuildPrerequisitesEndpoint : EndpointWithoutRequest<CudaBuildPrerequisitesResponse>
 {
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public GetCudaBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrationService runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {

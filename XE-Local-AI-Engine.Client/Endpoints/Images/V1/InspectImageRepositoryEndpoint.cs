@@ -14,13 +14,20 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     failure surfaces a 200 OK with an empty file list (never a 500), mirroring
 ///     <c>InspectGgufRepositoryEndpoint</c>.
 /// </summary>
-public sealed class InspectImageRepositoryEndpoint(
-    IImageModelDiscovery discovery,
-    ILogger<InspectImageRepositoryEndpoint> logger)
-    : Endpoint<InspectImageRepositoryRequest, InspectImageRepositoryResponse>
+public sealed class InspectImageRepositoryEndpoint : Endpoint<InspectImageRepositoryRequest, InspectImageRepositoryResponse>
 {
-    private readonly IImageModelDiscovery _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
-    private readonly ILogger<InspectImageRepositoryEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IImageModelDiscovery _discovery;
+    private readonly ILogger<InspectImageRepositoryEndpoint> _logger;
+
+    public InspectImageRepositoryEndpoint(
+        IImageModelDiscovery discovery,
+        ILogger<InspectImageRepositoryEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(logger);
+        _discovery = discovery;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     race, not a mistake. Cancellation is cooperative and deliberately leaves the partial <c>.part</c> file on disk so
 ///     a later attempt resumes from it.
 /// </remarks>
-public sealed class CancelImageModelDownloadEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
-    : Endpoint<CancelImageModelDownloadRequest, CancelImageModelDownloadResponse>
+public sealed class CancelImageModelDownloadEndpoint : Endpoint<CancelImageModelDownloadRequest, CancelImageModelDownloadResponse>
 {
-    private readonly IImageModelDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IImageModelDownloadCoordinator _downloadCoordinator;
+
+    public CancelImageModelDownloadEndpoint(IImageModelDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

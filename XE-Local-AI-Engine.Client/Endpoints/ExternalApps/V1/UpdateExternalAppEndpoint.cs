@@ -17,9 +17,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         snapshot never had, and one of them may be required.
 ///     </para>
 /// </summary>
-public sealed class UpdateExternalAppEndpoint(IExternalAppService apps) : Endpoint<UpdateExternalAppRequest, ExternalAppInstanceSummaryView>
+public sealed class UpdateExternalAppEndpoint : Endpoint<UpdateExternalAppRequest, ExternalAppInstanceSummaryView>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public UpdateExternalAppEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

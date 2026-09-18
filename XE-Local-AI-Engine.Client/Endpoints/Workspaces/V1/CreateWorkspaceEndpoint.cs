@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
-public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFolders)
-    : Endpoint<CreateWorkspaceRequest, WorkspaceResponse>
+public sealed class CreateWorkspaceEndpoint : Endpoint<CreateWorkspaceRequest, WorkspaceResponse>
 {
-    private readonly ISelectedFolderResolver _selectedFolders = selectedFolders ?? throw new ArgumentNullException(nameof(selectedFolders));
+    private readonly ISelectedFolderResolver _selectedFolders;
+
+    public CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFolders)
+    {
+        ArgumentNullException.ThrowIfNull(selectedFolders);
+        _selectedFolders = selectedFolders;
+    }
 
     public override void Configure()
     {

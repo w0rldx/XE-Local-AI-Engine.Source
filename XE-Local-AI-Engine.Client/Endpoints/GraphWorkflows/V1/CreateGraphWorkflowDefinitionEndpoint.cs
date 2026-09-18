@@ -16,10 +16,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///         exception is replayed here rather than in the global single-message handler that could only report one.
 ///     </para>
 /// </summary>
-public sealed class CreateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
-    : Endpoint<CreateGraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
+public sealed class CreateGraphWorkflowDefinitionEndpoint : Endpoint<CreateGraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
 {
-    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IGraphWorkflowDefinitionService _definitions;
+
+    public CreateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {

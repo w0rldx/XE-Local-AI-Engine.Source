@@ -20,9 +20,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         the admission either. The hub ping carries the settled state.
 ///     </para>
 /// </summary>
-public sealed class CancelExternalAppOperationEndpoint(IExternalAppService apps) : Endpoint<ExternalAppInstanceRequest>
+public sealed class CancelExternalAppOperationEndpoint : Endpoint<ExternalAppInstanceRequest>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public CancelExternalAppOperationEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

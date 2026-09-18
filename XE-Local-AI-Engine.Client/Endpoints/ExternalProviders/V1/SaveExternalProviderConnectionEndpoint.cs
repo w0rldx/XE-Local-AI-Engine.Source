@@ -21,11 +21,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///         explain.
 ///     </para>
 /// </remarks>
-public sealed class SaveExternalProviderConnectionEndpoint(IExternalProviderAdministrationService administrationService)
-    : Endpoint<SaveExternalProviderConnectionRequest, ExternalProviderConnectionsResponse>
+public sealed class SaveExternalProviderConnectionEndpoint : Endpoint<SaveExternalProviderConnectionRequest, ExternalProviderConnectionsResponse>
 {
-    private readonly IExternalProviderAdministrationService _administrationService =
-        administrationService ?? throw new ArgumentNullException(nameof(administrationService));
+    private readonly IExternalProviderAdministrationService _administrationService;
+
+    public SaveExternalProviderConnectionEndpoint(IExternalProviderAdministrationService administrationService)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        _administrationService = administrationService;
+    }
 
     public override void Configure()
     {

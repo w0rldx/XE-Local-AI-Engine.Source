@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Connection.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
 
-public sealed class DisableAutoConnectEndpoint(IConnectionControlService connectionControlService) : EndpointWithoutRequest<ConnectionStatusResponse>
+public sealed class DisableAutoConnectEndpoint : EndpointWithoutRequest<ConnectionStatusResponse>
 {
-    private readonly IConnectionControlService _connectionControlService = connectionControlService ?? throw new ArgumentNullException(nameof(connectionControlService));
+    private readonly IConnectionControlService _connectionControlService;
+
+    public DisableAutoConnectEndpoint(IConnectionControlService connectionControlService)
+    {
+        ArgumentNullException.ThrowIfNull(connectionControlService);
+        _connectionControlService = connectionControlService;
+    }
 
     public override void Configure()
     {

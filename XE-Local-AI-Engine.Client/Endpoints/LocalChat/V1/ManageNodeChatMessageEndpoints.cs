@@ -11,14 +11,24 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     conversation. Guarded — branching FROM a remote mirror is rejected with 409 (the source is read-only;
 ///     the branch would carry remote content the node can no longer re-drive).
 /// </summary>
-public sealed class BranchNodeChatConversationEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<BranchNodeChatConversationRequest, NodeChatBranchConversationResponse>
+public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChatConversationRequest, NodeChatBranchConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public BranchNodeChatConversationEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -54,14 +64,24 @@ public sealed class BranchNodeChatConversationEndpoint(
 ///     Revision endpoint: POST records a regenerated assistant turn as a SIBLING VARIANT (never in-place)
 ///     and returns the freshly minted placeholder; GET lists every variant of the turn. Both guarded.
 /// </summary>
-public sealed class CreateNodeChatMessageRevisionEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
+public sealed class CreateNodeChatMessageRevisionEndpoint : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public CreateNodeChatMessageRevisionEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -103,9 +123,15 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
     }
 }
 
-public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
+public sealed class ListNodeChatMessageRevisionsEndpoint : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
+    private readonly INodeChatPersistenceService _chatPersistence;
+
+    public ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceService chatPersistence)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        _chatPersistence = chatPersistence;
+    }
 
     public override void Configure()
     {
@@ -131,14 +157,24 @@ public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceSer
 ///     Feedback endpoint: node-local thumbs/comment storage. PUT upserts, GET reads. Guarded — feedback on a
 ///     remote-mirror message is rejected (consistent with the view-only posture for Origin=Remote).
 /// </summary>
-public sealed class SetNodeChatMessageFeedbackEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<SetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
+public sealed class SetNodeChatMessageFeedbackEndpoint : Endpoint<SetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public SetNodeChatMessageFeedbackEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -169,14 +205,24 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
 ///     reload. An empty/absent map clears the stored selection. Guarded — persisting a selection on a
 ///     remote-mirror (Origin=Remote) conversation is rejected with 409, consistent with the view-only posture.
 /// </summary>
-public sealed class SetNodeChatSelectedPathEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<SetNodeChatSelectedPathRequest, NodeChatSelectedPathResponse>
+public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelectedPathRequest, NodeChatSelectedPathResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public SetNodeChatSelectedPathEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -203,9 +249,15 @@ public sealed class SetNodeChatSelectedPathEndpoint(
     }
 }
 
-public sealed class GetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
+public sealed class GetNodeChatMessageFeedbackEndpoint : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
+    private readonly INodeChatPersistenceService _chatPersistence;
+
+    public GetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceService chatPersistence)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        _chatPersistence = chatPersistence;
+    }
 
     public override void Configure()
     {

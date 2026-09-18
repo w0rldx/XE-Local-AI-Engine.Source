@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 ///     service, which validates a non-blank Title, an existing owning agent, non-empty InputTurns and at least one of
 ///     {Assertion, Rubric}. A validation failure surfaces as 400. Operator-gated.
 /// </summary>
-public sealed class CreateGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)
-    : Endpoint<CreateGoldenConversationRequest, GoldenConversationResponse>
+public sealed class CreateGoldenConversationEndpoint : Endpoint<CreateGoldenConversationRequest, GoldenConversationResponse>
 {
-    private readonly IGoldenConversationService _goldenConversationService = goldenConversationService ?? throw new ArgumentNullException(nameof(goldenConversationService));
+    private readonly IGoldenConversationService _goldenConversationService;
+
+    public CreateGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)
+    {
+        ArgumentNullException.ThrowIfNull(goldenConversationService);
+        _goldenConversationService = goldenConversationService;
+    }
 
     public override void Configure()
     {

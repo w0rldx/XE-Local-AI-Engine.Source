@@ -12,9 +12,15 @@ using XE_Local_AI_Engine.Providers.Training;
 ///     removing is what an operator means by "stop and undo this", and a separate cancel route would only let the two
 ///     get out of step.
 /// </summary>
-public sealed class RemoveTrainingRuntimeEndpoint(TrainingRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
+public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
 {
+    private readonly TrainingRuntimeOrchestrationService _runtime;
+
+    public RemoveTrainingRuntimeEndpoint(TrainingRuntimeOrchestrationService runtime)
+    {
+        _runtime = runtime;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Training.RuntimeRemove);
@@ -26,17 +32,17 @@ public sealed class RemoveTrainingRuntimeEndpoint(TrainingRuntimeOrchestrationSe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        if (runtime.Cancel())
+        if (_runtime.Cancel())
         {
             // The install tears its own tree down on cancellation; reporting the in-progress status back is honest,
             // and the client polls or listens on the hub for the terminal transition.
-            await Send.OkAsync(runtime.GetStatus().ToResponse(), ct);
+            await Send.OkAsync(_runtime.GetStatus().ToResponse(), ct);
             return;
         }
 
         try
         {
-            if (!await runtime.RemoveAsync(ct))
+            if (!await _runtime.RemoveAsync(ct))
             {
                 await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
                               "A training runtime install is in progress. Cancel it before removing the runtime."));
@@ -49,6 +55,6 @@ public sealed class RemoveTrainingRuntimeEndpoint(TrainingRuntimeOrchestrationSe
             return;
         }
 
-        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct);
+        await Send.OkAsync(_runtime.GetStatus().ToResponse(), ct);
     }
 }

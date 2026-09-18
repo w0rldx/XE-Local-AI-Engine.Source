@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 ///     Updates a trigger under optimistic concurrency. The external <c>Name</c> is deliberately not editable: it is the
 ///     contract a caller addresses, so changing it is a delete-and-create decision.
 /// </summary>
-public sealed class UpdateIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
-    : Endpoint<UpdateIntegrationTriggerRequest, IntegrationTriggerView>
+public sealed class UpdateIntegrationTriggerEndpoint : Endpoint<UpdateIntegrationTriggerRequest, IntegrationTriggerView>
 {
-    private readonly IIntegrationTriggerService _triggerService = triggerService ?? throw new ArgumentNullException(nameof(triggerService));
+    private readonly IIntegrationTriggerService _triggerService;
+
+    public UpdateIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
+    {
+        ArgumentNullException.ThrowIfNull(triggerService);
+        _triggerService = triggerService;
+    }
 
     public override void Configure()
     {

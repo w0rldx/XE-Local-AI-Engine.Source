@@ -6,11 +6,18 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class UpdateAgentDefinitionEndpoint(IAgentDefinitionService agentDefinitionService, TimeProvider timeProvider)
-    : Endpoint<UpdateAgentDefinitionRequest, AgentDefinitionResponse>
+public sealed class UpdateAgentDefinitionEndpoint : Endpoint<UpdateAgentDefinitionRequest, AgentDefinitionResponse>
 {
-    private readonly IAgentDefinitionService _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IAgentDefinitionService _agentDefinitionService;
+    private readonly TimeProvider _timeProvider;
+
+    public UpdateAgentDefinitionEndpoint(IAgentDefinitionService agentDefinitionService, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitionService);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _agentDefinitionService = agentDefinitionService;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

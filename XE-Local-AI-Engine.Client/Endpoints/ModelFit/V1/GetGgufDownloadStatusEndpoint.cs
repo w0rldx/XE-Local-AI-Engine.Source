@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     either it was never started or the process restarted. Thin transport over
 ///     <see cref="IGgufDownloadCoordinator.GetStatus" />; no path, URL, or token is returned.
 /// </summary>
-public sealed class GetGgufDownloadStatusEndpoint(IGgufDownloadCoordinator downloadCoordinator)
-    : Endpoint<GetGgufDownloadStatusRequest, GgufDownloadStatusResponse>
+public sealed class GetGgufDownloadStatusEndpoint : Endpoint<GetGgufDownloadStatusRequest, GgufDownloadStatusResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+
+    public GetGgufDownloadStatusEndpoint(IGgufDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

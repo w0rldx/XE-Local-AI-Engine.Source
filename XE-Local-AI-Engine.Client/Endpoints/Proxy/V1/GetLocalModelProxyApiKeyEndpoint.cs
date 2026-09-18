@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Client.Services.Proxy;
 ///     no field for one. Answers 200 with <c>configured=false</c> rather than 404 when no key exists, so the settings
 ///     page can render the empty state from one call.
 /// </summary>
-public sealed class GetLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyService apiKeyService)
-    : EndpointWithoutRequest<LocalModelProxyApiKeyStatusResponse>
+public sealed class GetLocalModelProxyApiKeyEndpoint : EndpointWithoutRequest<LocalModelProxyApiKeyStatusResponse>
 {
-    private readonly ILocalModelProxyApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly ILocalModelProxyApiKeyService _apiKeyService;
+
+    public GetLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

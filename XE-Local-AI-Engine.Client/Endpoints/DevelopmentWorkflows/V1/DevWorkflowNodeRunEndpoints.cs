@@ -16,9 +16,15 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///     work-session routes rather than through observability endpoints of this surface's own — two ways to read one
 ///     session's events would drift.
 /// </summary>
-public sealed class GetDevWorkflowNodeRunEndpoint(DevWorkflowRunComposer composer) : Endpoint<DevWorkflowNodeRunRequest, DevWorkflowNodeRunDetailResponse>
+public sealed class GetDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowNodeRunRequest, DevWorkflowNodeRunDetailResponse>
 {
-    private readonly DevWorkflowRunComposer _composer = composer ?? throw new ArgumentNullException(nameof(composer));
+    private readonly DevWorkflowRunComposer _composer;
+
+    public GetDevWorkflowNodeRunEndpoint(DevWorkflowRunComposer composer)
+    {
+        ArgumentNullException.ThrowIfNull(composer);
+        _composer = composer;
+    }
 
     public override void Configure()
     {
@@ -40,9 +46,15 @@ public sealed class GetDevWorkflowNodeRunEndpoint(DevWorkflowRunComposer compose
 ///     superseded rows behind a flag would cost an endpoint to get them back; the client groups by
 ///     <c>lineageId</c> and reads <c>isLatest</c>, which is computed here rather than re-derived there.
 /// </summary>
-public sealed class ListDevWorkflowArtifactsEndpoint(DevWorkflowRunQueryService runQueries) : Endpoint<DevWorkflowArtifactFeedRequest, ListDevWorkflowArtifactsResponse>
+public sealed class ListDevWorkflowArtifactsEndpoint : Endpoint<DevWorkflowArtifactFeedRequest, ListDevWorkflowArtifactsResponse>
 {
-    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
+    private readonly DevWorkflowRunQueryService _runQueries;
+
+    public ListDevWorkflowArtifactsEndpoint(DevWorkflowRunQueryService runQueries)
+    {
+        ArgumentNullException.ThrowIfNull(runQueries);
+        _runQueries = runQueries;
+    }
 
     public override void Configure()
     {
@@ -68,12 +80,20 @@ public sealed class ListDevWorkflowArtifactsEndpoint(DevWorkflowRunQueryService 
 ///     One artifact's bytes as JSON rather than a stream: a binary response would leave the generated SDK and need
 ///     hand-wiring on the client's HTTP layer for the one route that does not go through it.
 /// </summary>
-public sealed class GetDevWorkflowArtifactContentEndpoint(DevWorkflowRunQueryService runQueries, IDevWorkflowArtifactBlobStore blobs, IOptions<DevWorkflowOptions> options)
-    : Endpoint<DevWorkflowArtifactRequest, DevWorkflowArtifactContentResponse>
+public sealed class GetDevWorkflowArtifactContentEndpoint : Endpoint<DevWorkflowArtifactRequest, DevWorkflowArtifactContentResponse>
 {
-    private readonly IDevWorkflowArtifactBlobStore _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
-    private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
+    private readonly IDevWorkflowArtifactBlobStore _blobs;
+    private readonly DevWorkflowOptions _options;
+    private readonly DevWorkflowRunQueryService _runQueries;
+
+    public GetDevWorkflowArtifactContentEndpoint(DevWorkflowRunQueryService runQueries, IDevWorkflowArtifactBlobStore blobs, IOptions<DevWorkflowOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(blobs);
+        _blobs = blobs;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(runQueries);
+        _runQueries = runQueries;
+    }
 
     public override void Configure()
     {

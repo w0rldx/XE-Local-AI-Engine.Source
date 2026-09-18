@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 ///     Every <c>xeint_</c> credential, revoked ones included — a revoked row is history an operator still needs. No
 ///     response on this route can carry a secret: the node keeps only a digest.
 /// </summary>
-public sealed class ListIntegrationApiKeysEndpoint(IIntegrationApiKeyService apiKeyService)
-    : EndpointWithoutRequest<ListIntegrationApiKeysResponse>
+public sealed class ListIntegrationApiKeysEndpoint : EndpointWithoutRequest<ListIntegrationApiKeysResponse>
 {
-    private readonly IIntegrationApiKeyService _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
+    private readonly IIntegrationApiKeyService _apiKeyService;
+
+    public ListIntegrationApiKeysEndpoint(IIntegrationApiKeyService apiKeyService)
+    {
+        ArgumentNullException.ThrowIfNull(apiKeyService);
+        _apiKeyService = apiKeyService;
+    }
 
     public override void Configure()
     {

@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
-    : Endpoint<ListBenchmarkRunsRequest, ListBenchmarkRunsResponse>
+public sealed class ListBenchmarkRunsEndpoint : Endpoint<ListBenchmarkRunsRequest, ListBenchmarkRunsResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -62,10 +67,15 @@ public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
     }
 }
 
-public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
-    : Endpoint<StartBenchmarkRunRequest, BenchmarkRunDetailResponse>
+public sealed class StartBenchmarkRunEndpoint : Endpoint<StartBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkRunFreezeService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IBenchmarkRunFreezeService _runs;
+
+    public StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {
@@ -128,11 +138,16 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
 ///     Enqueues a whole model × KV-type matrix against one project. Per-item outcomes, not all-or-nothing: one
 ///     ineligible model must not cost the operator the other nine cells.
 /// </summary>
-public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService batches)
-    : Endpoint<StartBenchmarkRunBatchRequest, StartBenchmarkRunBatchResponse>
+public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunBatchRequest, StartBenchmarkRunBatchResponse>
 {
     private const int MaxItems = 50;
-    private readonly IBenchmarkRunBatchService _batches = batches ?? throw new ArgumentNullException(nameof(batches));
+    private readonly IBenchmarkRunBatchService _batches;
+
+    public StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService batches)
+    {
+        ArgumentNullException.ThrowIfNull(batches);
+        _batches = batches;
+    }
 
     public override void Configure()
     {
@@ -203,10 +218,15 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService bat
     }
 }
 
-public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService records)
-    : Endpoint<BenchmarkRunRouteRequest, BenchmarkRunDetailResponse>
+public sealed class GetBenchmarkRunEndpoint : Endpoint<BenchmarkRunRouteRequest, BenchmarkRunDetailResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public GetBenchmarkRunEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -230,10 +250,15 @@ public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService records)
     }
 }
 
-public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService records)
-    : Endpoint<DeleteBenchmarkRunRequest>
+public sealed class DeleteBenchmarkRunEndpoint : Endpoint<DeleteBenchmarkRunRequest>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public DeleteBenchmarkRunEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -250,11 +275,18 @@ public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService records)
     }
 }
 
-public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, BenchmarkRecordService records)
-    : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
+public sealed class CancelBenchmarkRunEndpoint : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkCancellationService _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkCancellationService _cancellation;
+    private readonly BenchmarkRecordService _records;
+
+    public CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(cancellation);
+        ArgumentNullException.ThrowIfNull(records);
+        _cancellation = cancellation;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -272,10 +304,15 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
     }
 }
 
-public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService records)
-    : Endpoint<ScoreBenchmarkRunRequest, BenchmarkRunDetailResponse>
+public sealed class ScoreBenchmarkRunEndpoint : Endpoint<ScoreBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ScoreBenchmarkRunEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -303,10 +340,15 @@ public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService records)
 }
 
 /// <summary>Clears the operator override, so the run ranks by its judge score again (or not at all).</summary>
-public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService records)
-    : Endpoint<ClearBenchmarkRunScoreRequest, BenchmarkRunDetailResponse>
+public sealed class ClearBenchmarkRunScoreEndpoint : Endpoint<ClearBenchmarkRunScoreRequest, BenchmarkRunDetailResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -325,11 +367,18 @@ public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService record
 }
 
 /// <summary>Judges one succeeded run again under the project's current policy.</summary>
-public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
-    : Endpoint<RejudgeBenchmarkRunRequest, BenchmarkRunDetailResponse>
+public sealed class RejudgeBenchmarkRunEndpoint : Endpoint<RejudgeBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkProjectService _projects;
+    private readonly BenchmarkRecordService _records;
+
+    public RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(records);
+        _projects = projects;
+        _records = records;
+    }
 
     public override void Configure()
     {

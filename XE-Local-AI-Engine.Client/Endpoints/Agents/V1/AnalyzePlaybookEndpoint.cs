@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     actions for review. Returns the created suggestions (an empty list when the feedback is below threshold or no
 ///     proposal survived validation/dedup); 404 when the agent does not exist. Operator-gated.
 /// </summary>
-public sealed class AnalyzePlaybookEndpoint(IPlaybookAnalysisService analysisService)
-    : Endpoint<AnalyzePlaybookRequest, ListPlaybookActionsResponse>
+public sealed class AnalyzePlaybookEndpoint : Endpoint<AnalyzePlaybookRequest, ListPlaybookActionsResponse>
 {
-    private readonly IPlaybookAnalysisService _analysisService = analysisService ?? throw new ArgumentNullException(nameof(analysisService));
+    private readonly IPlaybookAnalysisService _analysisService;
+
+    public AnalyzePlaybookEndpoint(IPlaybookAnalysisService analysisService)
+    {
+        ArgumentNullException.ThrowIfNull(analysisService);
+        _analysisService = analysisService;
+    }
 
     public override void Configure()
     {

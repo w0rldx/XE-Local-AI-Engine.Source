@@ -14,11 +14,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///     Deleting a connection that is already gone succeeds with no change, so a retry after a partial failure is not an
 ///     error. The response is the whole configuration for the same reason the save's is: the revision has moved.
 /// </remarks>
-public sealed class DeleteExternalProviderConnectionEndpoint(IExternalProviderAdministrationService administrationService)
-    : Endpoint<DeleteExternalProviderConnectionRequest, ExternalProviderConnectionsResponse>
+public sealed class DeleteExternalProviderConnectionEndpoint : Endpoint<DeleteExternalProviderConnectionRequest, ExternalProviderConnectionsResponse>
 {
-    private readonly IExternalProviderAdministrationService _administrationService =
-        administrationService ?? throw new ArgumentNullException(nameof(administrationService));
+    private readonly IExternalProviderAdministrationService _administrationService;
+
+    public DeleteExternalProviderConnectionEndpoint(IExternalProviderAdministrationService administrationService)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        _administrationService = administrationService;
+    }
 
     public override void Configure()
     {

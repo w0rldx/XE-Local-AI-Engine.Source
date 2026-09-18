@@ -11,13 +11,20 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     stale documents. Returns how many documents were enqueued. Bodyless — uses <c>EndpointWithoutRequest</c> so no
 ///     JSON body is expected.
 /// </summary>
-public sealed class ReindexCorpusEndpoint(
-    IKnowledgeDocumentCatalogService catalogService,
-    IKnowledgeIngestionDispatcher ingestionDispatcher)
-    : EndpointWithoutRequest<ReindexCorpusResponse>
+public sealed class ReindexCorpusEndpoint : EndpointWithoutRequest<ReindexCorpusResponse>
 {
-    private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
-    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher = ingestionDispatcher ?? throw new ArgumentNullException(nameof(ingestionDispatcher));
+    private readonly IKnowledgeDocumentCatalogService _catalogService;
+    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
+
+    public ReindexCorpusEndpoint(
+        IKnowledgeDocumentCatalogService catalogService,
+        IKnowledgeIngestionDispatcher ingestionDispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(catalogService);
+        ArgumentNullException.ThrowIfNull(ingestionDispatcher);
+        _catalogService = catalogService;
+        _ingestionDispatcher = ingestionDispatcher;
+    }
 
     public override void Configure()
     {

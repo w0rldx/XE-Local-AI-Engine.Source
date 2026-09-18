@@ -21,10 +21,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         operator is about to read.
 ///     </para>
 /// </summary>
-public sealed class GetExternalAppUpdatePreviewEndpoint(IExternalAppService apps)
-    : Endpoint<ExternalAppInstanceRequest, ExternalAppUpdatePreview>
+public sealed class GetExternalAppUpdatePreviewEndpoint : Endpoint<ExternalAppInstanceRequest, ExternalAppUpdatePreview>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public GetExternalAppUpdatePreviewEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class GetDevelopmentTaskEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentTaskRequest, DevelopmentTaskDetailResponse>, IDevelopmentEndpoint
+public sealed class GetDevelopmentTaskEndpoint : Endpoint<DevelopmentTaskRequest, DevelopmentTaskDetailResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public GetDevelopmentTaskEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -23,10 +28,15 @@ public sealed class GetDevelopmentTaskEndpoint(IDevelopmentManagementService ser
     }
 }
 
-public sealed class StartDevelopmentNextActionEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentActionRequest, DevelopmentNextActionResponse>, IDevelopmentEndpoint
+public sealed class StartDevelopmentNextActionEndpoint : Endpoint<DevelopmentActionRequest, DevelopmentNextActionResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public StartDevelopmentNextActionEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -58,10 +68,15 @@ public sealed class StartDevelopmentNextActionEndpoint(IDevelopmentManagementSer
     }
 }
 
-public sealed class CancelDevelopmentAttemptEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentAttemptRequest>, IDevelopmentEndpoint
+public sealed class CancelDevelopmentAttemptEndpoint : Endpoint<DevelopmentAttemptRequest>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public CancelDevelopmentAttemptEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

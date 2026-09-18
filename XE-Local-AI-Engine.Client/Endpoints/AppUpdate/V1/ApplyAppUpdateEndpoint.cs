@@ -12,15 +12,20 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     graceful shutdown, so the browser can enter restart polling without mistaking process exit for an apply failure.
 ///     Apply failures surface as a sanitized 400.
 /// </summary>
-public sealed class ApplyAppUpdateEndpoint(
-    IAppUpdateService updateService,
-    AppUpdateShutdownCoordinator shutdownCoordinator)
-    : EndpointWithoutRequest<ApplyAppUpdateResponse>, IDesktopOnlyEndpoint
+public sealed class ApplyAppUpdateEndpoint : EndpointWithoutRequest<ApplyAppUpdateResponse>, IDesktopOnlyEndpoint
 {
-    private readonly IAppUpdateService _updateService = updateService ?? throw new ArgumentNullException(nameof(updateService));
+    private readonly IAppUpdateService _updateService;
+    private readonly AppUpdateShutdownCoordinator _shutdownCoordinator;
 
-    private readonly AppUpdateShutdownCoordinator _shutdownCoordinator = shutdownCoordinator
-                                                                         ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
+    public ApplyAppUpdateEndpoint(
+        IAppUpdateService updateService,
+        AppUpdateShutdownCoordinator shutdownCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(updateService);
+        ArgumentNullException.ThrowIfNull(shutdownCoordinator);
+        _updateService = updateService;
+        _shutdownCoordinator = shutdownCoordinator;
+    }
 
     public override void Configure()
     {

@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     is the only consumer: it warns when a definition pins a model that is not tool-capable, so tool selection can be
 ///     disabled rather than silently no-op at runtime.
 /// </summary>
-public sealed class GetToolCapableModelsEndpoint(INodeRuntimeSettings runtimeSettings)
-    : EndpointWithoutRequest<ToolCapableModelsResponse>
+public sealed class GetToolCapableModelsEndpoint : EndpointWithoutRequest<ToolCapableModelsResponse>
 {
-    private readonly INodeRuntimeSettings _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+    private readonly INodeRuntimeSettings _runtimeSettings;
+
+    public GetToolCapableModelsEndpoint(INodeRuntimeSettings runtimeSettings)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+    }
 
     public override void Configure()
     {

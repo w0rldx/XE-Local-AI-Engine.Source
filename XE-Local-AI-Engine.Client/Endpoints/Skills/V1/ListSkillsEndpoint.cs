@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ListSkillsEndpoint(IAgentSkillService agentSkillService)
-    : EndpointWithoutRequest<ListSkillsResponse>
+public sealed class ListSkillsEndpoint : EndpointWithoutRequest<ListSkillsResponse>
 {
-    private readonly IAgentSkillService _agentSkillService = agentSkillService ?? throw new ArgumentNullException(nameof(agentSkillService));
+    private readonly IAgentSkillService _agentSkillService;
+
+    public ListSkillsEndpoint(IAgentSkillService agentSkillService)
+    {
+        ArgumentNullException.ThrowIfNull(agentSkillService);
+        _agentSkillService = agentSkillService;
+    }
 
     public override void Configure()
     {

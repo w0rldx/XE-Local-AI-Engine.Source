@@ -15,9 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     The channel spelling is the mapper's, shared with the REST transcript rows: a resuming client merges the
 ///     replay snapshot and the live pushes into one list, so the same field must be spelled the same way in both.
 /// </remarks>
-internal sealed class TranscriptionEventPublisher(IHubContext<TranscriptionHub> hubContext) : ITranscriptionEventPublisher
+internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
 {
-    private readonly IHubContext<TranscriptionHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    private readonly IHubContext<TranscriptionHub> _hubContext;
+
+    public TranscriptionEventPublisher(IHubContext<TranscriptionHub> hubContext)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+    }
 
     public Task PublishSegmentAsync(Guid sessionId,
         long seq,

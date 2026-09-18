@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
-public sealed class GetStableDiffusionCppSourceBuildStatusEndpoint(ImageRuntimeOrchestrationService imageRuntime)
-    : EndpointWithoutRequest<StableDiffusionCppSourceBuildStatusResponse>
+public sealed class GetStableDiffusionCppSourceBuildStatusEndpoint : EndpointWithoutRequest<StableDiffusionCppSourceBuildStatusResponse>
 {
+    private readonly ImageRuntimeOrchestrationService _imageRuntime;
+
+    public GetStableDiffusionCppSourceBuildStatusEndpoint(ImageRuntimeOrchestrationService imageRuntime)
+    {
+        _imageRuntime = imageRuntime;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Images.RuntimeSourceBuildStatus);
@@ -18,6 +24,6 @@ public sealed class GetStableDiffusionCppSourceBuildStatusEndpoint(ImageRuntimeO
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(imageRuntime.GetStatus().ToResponse(), ct);
+        await Send.OkAsync(_imageRuntime.GetStatus().ToResponse(), ct);
     }
 }

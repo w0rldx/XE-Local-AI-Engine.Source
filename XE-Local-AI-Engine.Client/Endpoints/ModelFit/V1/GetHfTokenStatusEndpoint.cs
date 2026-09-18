@@ -13,10 +13,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         the token value. The token never leaves the encrypted store.
 ///     </para>
 /// </summary>
-public sealed class GetHfTokenStatusEndpoint(IHfTokenStore tokenStore)
-    : EndpointWithoutRequest<HfTokenStatusResponse>
+public sealed class GetHfTokenStatusEndpoint : EndpointWithoutRequest<HfTokenStatusResponse>
 {
-    private readonly IHfTokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+    private readonly IHfTokenStore _tokenStore;
+
+    public GetHfTokenStatusEndpoint(IHfTokenStore tokenStore)
+    {
+        ArgumentNullException.ThrowIfNull(tokenStore);
+        _tokenStore = tokenStore;
+    }
 
     public override void Configure()
     {

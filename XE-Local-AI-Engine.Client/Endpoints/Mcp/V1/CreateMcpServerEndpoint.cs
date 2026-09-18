@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
-public sealed class CreateMcpServerEndpoint(IMcpServerService mcpServerService)
-    : Endpoint<CreateMcpServerRequest, McpServerResponse>
+public sealed class CreateMcpServerEndpoint : Endpoint<CreateMcpServerRequest, McpServerResponse>
 {
-    private readonly IMcpServerService _mcpServerService = mcpServerService ?? throw new ArgumentNullException(nameof(mcpServerService));
+    private readonly IMcpServerService _mcpServerService;
+
+    public CreateMcpServerEndpoint(IMcpServerService mcpServerService)
+    {
+        ArgumentNullException.ThrowIfNull(mcpServerService);
+        _mcpServerService = mcpServerService;
+    }
 
     public override void Configure()
     {

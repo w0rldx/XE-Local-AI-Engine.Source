@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     subscribes once and reconciles each push by model name. Replaces the no-op default in the Client host. Payloads
 ///     are already sanitized by the coordinator at the broadcast boundary (no path, URL, or token).
 /// </summary>
-internal sealed class GgufDownloadEventPublisher(IHubContext<GgufDownloadHub> hubContext) : IGgufDownloadEventPublisher
+internal sealed class GgufDownloadEventPublisher : IGgufDownloadEventPublisher
 {
-    private readonly IHubContext<GgufDownloadHub> _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+    private readonly IHubContext<GgufDownloadHub> _hubContext;
+
+    public GgufDownloadEventPublisher(IHubContext<GgufDownloadHub> hubContext)
+    {
+        ArgumentNullException.ThrowIfNull(hubContext);
+        _hubContext = hubContext;
+    }
 
     public Task PublishStatusAsync(GgufDownloadStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {

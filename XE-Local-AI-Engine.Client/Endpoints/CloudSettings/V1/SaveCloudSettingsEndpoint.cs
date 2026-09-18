@@ -7,14 +7,24 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-public sealed class SaveCloudSettingsEndpoint(
-    ICloudCredentialStore cloudCredentialStore,
-    ICapabilityReporter capabilityReporter,
-    ILogger<SaveCloudSettingsEndpoint> logger) : Endpoint<SaveCloudSettingsRequest, CloudSettingsResponse>
+public sealed class SaveCloudSettingsEndpoint : Endpoint<SaveCloudSettingsRequest, CloudSettingsResponse>
 {
-    private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
-    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
-    private readonly ILogger<SaveCloudSettingsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ICapabilityReporter _capabilityReporter;
+    private readonly ICloudCredentialStore _cloudCredentialStore;
+    private readonly ILogger<SaveCloudSettingsEndpoint> _logger;
+
+    public SaveCloudSettingsEndpoint(
+        ICloudCredentialStore cloudCredentialStore,
+        ICapabilityReporter capabilityReporter,
+        ILogger<SaveCloudSettingsEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityReporter);
+        ArgumentNullException.ThrowIfNull(cloudCredentialStore);
+        ArgumentNullException.ThrowIfNull(logger);
+        _capabilityReporter = capabilityReporter;
+        _cloudCredentialStore = cloudCredentialStore;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

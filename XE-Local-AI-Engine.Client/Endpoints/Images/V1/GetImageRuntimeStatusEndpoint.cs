@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
-public sealed class GetImageRuntimeStatusEndpoint(ImageRuntimeOrchestrationService imageRuntime)
-    : EndpointWithoutRequest<ImageRuntimeStatusResponse>
+public sealed class GetImageRuntimeStatusEndpoint : EndpointWithoutRequest<ImageRuntimeStatusResponse>
 {
+    private readonly ImageRuntimeOrchestrationService _imageRuntime;
+
+    public GetImageRuntimeStatusEndpoint(ImageRuntimeOrchestrationService imageRuntime)
+    {
+        _imageRuntime = imageRuntime;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Images.Runtime);
@@ -18,11 +24,11 @@ public sealed class GetImageRuntimeStatusEndpoint(ImageRuntimeOrchestrationServi
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct);
+        var installed = await _imageRuntime.ReadInstalledRuntimeAsync(ct);
         await Send.OkAsync(new ImageRuntimeStatusResponse
         {
             ManagedRuntime = installed?.ToResponse(),
-            Activity = imageRuntime.GetActivitySnapshot().ToResponse()
+            Activity = _imageRuntime.GetActivitySnapshot().ToResponse()
         }, ct);
     }
 }

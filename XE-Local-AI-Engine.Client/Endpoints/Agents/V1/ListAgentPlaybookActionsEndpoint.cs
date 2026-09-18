@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ListAgentPlaybookActionsEndpoint(IPlaybookActionService playbookActionService)
-    : Endpoint<ListAgentPlaybookActionsRequest, ListPlaybookActionsResponse>
+public sealed class ListAgentPlaybookActionsEndpoint : Endpoint<ListAgentPlaybookActionsRequest, ListPlaybookActionsResponse>
 {
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
+    private readonly IPlaybookActionService _playbookActionService;
+
+    public ListAgentPlaybookActionsEndpoint(IPlaybookActionService playbookActionService)
+    {
+        ArgumentNullException.ThrowIfNull(playbookActionService);
+        _playbookActionService = playbookActionService;
+    }
 
     public override void Configure()
     {

@@ -18,10 +18,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         version number, so the fingerprint is what binds the acceptance to what was read.
 ///     </para>
 /// </summary>
-public sealed class InstallExternalAppEndpoint(IExternalAppService apps)
-    : Endpoint<InstallExternalAppRequest, ExternalAppInstanceSummaryView>
+public sealed class InstallExternalAppEndpoint : Endpoint<InstallExternalAppRequest, ExternalAppInstanceSummaryView>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public InstallExternalAppEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

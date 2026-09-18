@@ -12,13 +12,18 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///     The operator's sessions page, filtered and paged server-side so it can reach rows older than one page. Ordered
 ///     <c>LastActivityUtc</c> then <c>Id</c> descending by the store, and never re-sorted here.
 /// </summary>
-public sealed class ListIntegrationSessionsEndpoint(IntegrationSessionService sessions)
-    : Endpoint<ListIntegrationSessionsRequest, ListIntegrationSessionsResponse>
+public sealed class ListIntegrationSessionsEndpoint : Endpoint<ListIntegrationSessionsRequest, ListIntegrationSessionsResponse>
 {
     /// <summary>The page size a caller that names none gets.</summary>
     private const int DefaultLimit = 50;
 
-    private readonly IntegrationSessionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly IntegrationSessionService _sessions;
+
+    public ListIntegrationSessionsEndpoint(IntegrationSessionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

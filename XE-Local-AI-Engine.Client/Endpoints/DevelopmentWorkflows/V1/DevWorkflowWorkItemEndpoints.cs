@@ -12,9 +12,15 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///     The work-item list. Each row carries its latest run's status and node counters, so the page renders without a
 ///     per-row fetch — which is what makes polling it honest rather than a fan-out.
 /// </summary>
-public sealed class ListDevWorkflowWorkItemsEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<ListDevWorkflowWorkItemsRequest, ListDevWorkflowWorkItemsResponse>
+public sealed class ListDevWorkflowWorkItemsEndpoint : Endpoint<ListDevWorkflowWorkItemsRequest, ListDevWorkflowWorkItemsResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public ListDevWorkflowWorkItemsEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -38,9 +44,15 @@ public sealed class ListDevWorkflowWorkItemsEndpoint(DevWorkflowAuthoringService
 ///     Creates a work item. Deliberately definition-agnostic: the definition is chosen per RUN, which is what lets one
 ///     work item be re-run against a revised definition later.
 /// </summary>
-public sealed class CreateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<CreateDevWorkflowWorkItemRequest, DevWorkflowWorkItemResponse>
+public sealed class CreateDevWorkflowWorkItemEndpoint : Endpoint<CreateDevWorkflowWorkItemRequest, DevWorkflowWorkItemResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public CreateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -66,11 +78,19 @@ public sealed class CreateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringServic
     }
 }
 
-public sealed class GetDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService authoring, DevWorkflowRunQueryService runQueries) : Endpoint<DevWorkflowWorkItemRequest, DevWorkflowWorkItemResponse>
+public sealed class GetDevWorkflowWorkItemEndpoint : Endpoint<DevWorkflowWorkItemRequest, DevWorkflowWorkItemResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
 
-    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
+    private readonly DevWorkflowRunQueryService _runQueries;
+
+    public GetDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService authoring, DevWorkflowRunQueryService runQueries)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        ArgumentNullException.ThrowIfNull(runQueries);
+        _authoring = authoring;
+        _runQueries = runQueries;
+    }
 
     public override void Configure()
     {
@@ -92,11 +112,19 @@ public sealed class GetDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService a
     }
 }
 
-public sealed class UpdateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService authoring, DevWorkflowRunQueryService runQueries) : Endpoint<UpdateDevWorkflowWorkItemRequest, DevWorkflowWorkItemResponse>
+public sealed class UpdateDevWorkflowWorkItemEndpoint : Endpoint<UpdateDevWorkflowWorkItemRequest, DevWorkflowWorkItemResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
 
-    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
+    private readonly DevWorkflowRunQueryService _runQueries;
+
+    public UpdateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService authoring, DevWorkflowRunQueryService runQueries)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        ArgumentNullException.ThrowIfNull(runQueries);
+        _authoring = authoring;
+        _runQueries = runQueries;
+    }
 
     public override void Configure()
     {
@@ -127,9 +155,15 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringServic
 ///     rows are the smaller half: the work sessions the agent node runs own and the artifact bytes on disk go with
 ///     them, and neither is something the store can reach.
 /// </summary>
-public sealed class DeleteDevWorkflowWorkItemEndpoint(IDevWorkflowRunService runs) : Endpoint<DevWorkflowWorkItemRequest>
+public sealed class DeleteDevWorkflowWorkItemEndpoint : Endpoint<DevWorkflowWorkItemRequest>
 {
-    private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IDevWorkflowRunService _runs;
+
+    public DeleteDevWorkflowWorkItemEndpoint(IDevWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

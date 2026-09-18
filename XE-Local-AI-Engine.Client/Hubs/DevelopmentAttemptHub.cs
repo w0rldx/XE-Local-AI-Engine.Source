@@ -16,15 +16,24 @@ public sealed record DevelopmentAttemptSubscriptionSnapshot(
     DevelopmentAttemptLiveUpdate? Latest);
 
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class DevelopmentAttemptHub(
-    IDevelopmentManagementService managementService,
-    IDevelopmentAttemptLiveBroker broker) : Hub
+public sealed class DevelopmentAttemptHub : Hub
 {
+    private readonly IDevelopmentManagementService _managementService;
+    private readonly IDevelopmentAttemptLiveBroker _broker;
+
+    public DevelopmentAttemptHub(
+        IDevelopmentManagementService managementService,
+        IDevelopmentAttemptLiveBroker broker)
+    {
+        _managementService = managementService;
+        _broker = broker;
+    }
+
     public async Task<DevelopmentAttemptSubscriptionSnapshot> SubscribeAsync(Guid projectId,
         Guid taskId,
         Guid attemptId)
     {
-        var task = await managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted);
+        var task = await _managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted);
         var attempt = task.Attempts.SingleOrDefault(candidate => candidate.Id == attemptId)
                       ?? throw new HubException("The Development attempt does not belong to the requested project and task.");
         if (attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
@@ -32,7 +41,7 @@ public sealed class DevelopmentAttemptHub(
             throw new HubException("Only the current active Development attempt can be subscribed.");
         }
 
-        if (!broker.TryGetSnapshot(attemptId, out _))
+        if (!_broker.TryGetSnapshot(attemptId, out _))
         {
             throw new HubException("The Development attempt has no active live stream.");
         }
@@ -40,7 +49,7 @@ public sealed class DevelopmentAttemptHub(
         await Groups.AddToGroupAsync(Context.ConnectionId,
             DevelopmentAttemptHubGroups.Attempt(projectId, attemptId),
             Context.ConnectionAborted);
-        if (!broker.TryGetSnapshot(attemptId, out var snapshot))
+        if (!_broker.TryGetSnapshot(attemptId, out var snapshot))
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId,
                 DevelopmentAttemptHubGroups.Attempt(projectId, attemptId),

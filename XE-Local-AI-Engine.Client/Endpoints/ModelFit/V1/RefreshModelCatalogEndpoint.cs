@@ -21,13 +21,20 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 ///     <see cref="ModelCatalogInfoResponse.RefreshSourceConfigured" /> so the caller can tell "refreshed" from
 ///     "there is nothing to refresh from". Same silent-success class as the image-model download.
 /// </remarks>
-public sealed class RefreshModelCatalogEndpoint(
-    IModelCatalogProvider catalogProvider,
-    IOptions<ModelCatalogOptions> options)
-    : EndpointWithoutRequest<ModelCatalogInfoResponse>
+public sealed class RefreshModelCatalogEndpoint : EndpointWithoutRequest<ModelCatalogInfoResponse>
 {
-    private readonly IModelCatalogProvider _catalogProvider = catalogProvider ?? throw new ArgumentNullException(nameof(catalogProvider));
-    private readonly IOptions<ModelCatalogOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IModelCatalogProvider _catalogProvider;
+    private readonly IOptions<ModelCatalogOptions> _options;
+
+    public RefreshModelCatalogEndpoint(
+        IModelCatalogProvider catalogProvider,
+        IOptions<ModelCatalogOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(catalogProvider);
+        ArgumentNullException.ThrowIfNull(options);
+        _catalogProvider = catalogProvider;
+        _options = options;
+    }
 
     public override void Configure()
     {

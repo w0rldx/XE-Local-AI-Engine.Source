@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
-public sealed class CreateBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
-    : Endpoint<CreateBaseArtifactRequest, BaseArtifactResponse>
+public sealed class CreateBaseArtifactEndpoint : Endpoint<CreateBaseArtifactRequest, BaseArtifactResponse>
 {
+    private readonly IBaseArtifactService _baseArtifactService;
+
+    public CreateBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
+    {
+        _baseArtifactService = baseArtifactService;
+    }
+
     public override void Configure()
     {
         Post(LocalApiRoutes.Training.BaseArtifacts);
@@ -23,7 +29,7 @@ public sealed class CreateBaseArtifactEndpoint(IBaseArtifactService baseArtifact
     {
         try
         {
-            var artifact = await baseArtifactService.StartDownloadAsync(request.RepoId, request.Revision, ct);
+            var artifact = await _baseArtifactService.StartDownloadAsync(request.RepoId, request.Revision, ct);
             await Send.OkAsync(artifact.ToResponse(), ct);
         }
         catch (BaseArtifactRejectedException exception)

@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     The Tool node picker's feed. Reads the same service the runtime invokes through, so a name offered here is a
 ///     name a run will accept — the filter is never re-stated at this layer.
 /// </summary>
-public sealed class ListGraphWorkflowToolsEndpoint(IToolInvocationService tools) : EndpointWithoutRequest<ListGraphWorkflowToolsResponse>
+public sealed class ListGraphWorkflowToolsEndpoint : EndpointWithoutRequest<ListGraphWorkflowToolsResponse>
 {
-    private readonly IToolInvocationService _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+    private readonly IToolInvocationService _tools;
+
+    public ListGraphWorkflowToolsEndpoint(IToolInvocationService tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        _tools = tools;
+    }
 
     public override void Configure()
     {

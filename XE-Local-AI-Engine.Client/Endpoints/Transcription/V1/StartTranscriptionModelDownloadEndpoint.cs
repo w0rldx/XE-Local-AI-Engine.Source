@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     Begins a weight download and returns 202 immediately. The transfer outlives this request, so its outcome —
 ///     including failure — is observed through the model list rather than through this response. Operator-gated.
 /// </summary>
-public sealed class StartTranscriptionModelDownloadEndpoint(IWhisperModelDownloadCoordinator downloadCoordinator)
-    : Endpoint<TranscriptionModelDownloadRequest, TranscriptionModelDownloadResponse>
+public sealed class StartTranscriptionModelDownloadEndpoint : Endpoint<TranscriptionModelDownloadRequest, TranscriptionModelDownloadResponse>
 {
-    private readonly IWhisperModelDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IWhisperModelDownloadCoordinator _downloadCoordinator;
+
+    public StartTranscriptionModelDownloadEndpoint(IWhisperModelDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

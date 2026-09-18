@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class GetGgufDownloadOperationStatusEndpoint(IGgufDownloadCoordinator downloadCoordinator)
-    : Endpoint<GetGgufDownloadOperationStatusRequest, GgufDownloadStatusResponse>
+public sealed class GetGgufDownloadOperationStatusEndpoint : Endpoint<GetGgufDownloadOperationStatusRequest, GgufDownloadStatusResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+
+    public GetGgufDownloadOperationStatusEndpoint(IGgufDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

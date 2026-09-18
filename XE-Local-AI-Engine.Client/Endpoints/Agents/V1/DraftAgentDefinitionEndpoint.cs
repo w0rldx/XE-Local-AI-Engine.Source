@@ -10,13 +10,18 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 ///     populates the operator's form and the existing <c>agents</c> create/update routes remain the only path to the
 ///     database.
 /// </summary>
-public sealed class DraftAgentDefinitionEndpoint(IConfigDraftService configDraftService)
-    : Endpoint<DraftAgentDefinitionRequest, AgentDraftResponse>
+public sealed class DraftAgentDefinitionEndpoint : Endpoint<DraftAgentDefinitionRequest, AgentDraftResponse>
 {
     private const int MaxExistingDescriptionLength = 2000;
     private const int MaxExistingNameLength = 120;
 
-    private readonly IConfigDraftService _configDraftService = configDraftService ?? throw new ArgumentNullException(nameof(configDraftService));
+    private readonly IConfigDraftService _configDraftService;
+
+    public DraftAgentDefinitionEndpoint(IConfigDraftService configDraftService)
+    {
+        ArgumentNullException.ThrowIfNull(configDraftService);
+        _configDraftService = configDraftService;
+    }
 
     public override void Configure()
     {

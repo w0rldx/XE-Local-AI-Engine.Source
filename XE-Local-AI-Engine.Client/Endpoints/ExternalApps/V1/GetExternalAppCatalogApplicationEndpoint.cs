@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 ///     One catalog manifest in full, minus the base64 asset bodies and with every <c>secret</c> variable's declared
 ///     default nulled — a shipped secret default is never a wire value.
 /// </summary>
-public sealed class GetExternalAppCatalogApplicationEndpoint(IApplicationCatalogProvider catalog)
-    : Endpoint<ExternalAppApplicationRequest, ExternalAppManifestView>
+public sealed class GetExternalAppCatalogApplicationEndpoint : Endpoint<ExternalAppApplicationRequest, ExternalAppManifestView>
 {
-    private readonly IApplicationCatalogProvider _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IApplicationCatalogProvider _catalog;
+
+    public GetExternalAppCatalogApplicationEndpoint(IApplicationCatalogProvider catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        _catalog = catalog;
+    }
 
     public override void Configure()
     {

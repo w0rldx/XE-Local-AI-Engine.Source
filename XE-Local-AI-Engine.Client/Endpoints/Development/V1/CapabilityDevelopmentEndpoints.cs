@@ -32,27 +32,44 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 ///         Development Mode switched off, which is exactly when an operator needs to be told the feature is off.
 ///     </para>
 /// </summary>
-public sealed class GetDevelopmentCapabilityEndpoint(
-    IOptions<DevelopmentOptions> options,
-    IOptions<SandboxOptions> agentSandboxOptions,
-    IOptions<DevelopmentSandboxOptions> developmentSandboxOptions,
-    IDevelopmentSandboxRuntimeProvider sandboxRuntimeProvider,
-    IAgentSandboxRuntimeProvider agentSandboxRuntimeProvider,
-    IWorkSessionSandboxRuntimeProvider workSessionSandboxRuntimeProvider,
-    ISandboxContainmentProbe containmentProbe,
-    IDockerDaemonPreflightService dockerDaemonPreflight) : EndpointWithoutRequest<DevelopmentCapabilityResponse>
+public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<DevelopmentCapabilityResponse>
 {
-    private readonly IOptions<DevelopmentOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
-    private readonly IOptions<SandboxOptions> _agentSandboxOptions = agentSandboxOptions ?? throw new ArgumentNullException(nameof(agentSandboxOptions));
-    private readonly IOptions<DevelopmentSandboxOptions> _developmentSandboxOptions = developmentSandboxOptions ?? throw new ArgumentNullException(nameof(developmentSandboxOptions));
-    private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider = sandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(sandboxRuntimeProvider));
-    private readonly IAgentSandboxRuntimeProvider _agentSandboxRuntimeProvider = agentSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(agentSandboxRuntimeProvider));
+    private readonly IOptions<DevelopmentOptions> _options;
+    private readonly IOptions<SandboxOptions> _agentSandboxOptions;
+    private readonly IOptions<DevelopmentSandboxOptions> _developmentSandboxOptions;
+    private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider;
+    private readonly IAgentSandboxRuntimeProvider _agentSandboxRuntimeProvider;
+    private readonly IWorkSessionSandboxRuntimeProvider _workSessionSandboxRuntimeProvider;
+    private readonly ISandboxContainmentProbe _containmentProbe;
+    private readonly IDockerDaemonPreflightService _dockerDaemonPreflight;
 
-    private readonly IWorkSessionSandboxRuntimeProvider _workSessionSandboxRuntimeProvider =
-        workSessionSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(workSessionSandboxRuntimeProvider));
-
-    private readonly ISandboxContainmentProbe _containmentProbe = containmentProbe ?? throw new ArgumentNullException(nameof(containmentProbe));
-    private readonly IDockerDaemonPreflightService _dockerDaemonPreflight = dockerDaemonPreflight ?? throw new ArgumentNullException(nameof(dockerDaemonPreflight));
+    public GetDevelopmentCapabilityEndpoint(
+        IOptions<DevelopmentOptions> options,
+        IOptions<SandboxOptions> agentSandboxOptions,
+        IOptions<DevelopmentSandboxOptions> developmentSandboxOptions,
+        IDevelopmentSandboxRuntimeProvider sandboxRuntimeProvider,
+        IAgentSandboxRuntimeProvider agentSandboxRuntimeProvider,
+        IWorkSessionSandboxRuntimeProvider workSessionSandboxRuntimeProvider,
+        ISandboxContainmentProbe containmentProbe,
+        IDockerDaemonPreflightService dockerDaemonPreflight)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(agentSandboxOptions);
+        ArgumentNullException.ThrowIfNull(developmentSandboxOptions);
+        ArgumentNullException.ThrowIfNull(sandboxRuntimeProvider);
+        ArgumentNullException.ThrowIfNull(agentSandboxRuntimeProvider);
+        ArgumentNullException.ThrowIfNull(workSessionSandboxRuntimeProvider);
+        ArgumentNullException.ThrowIfNull(containmentProbe);
+        ArgumentNullException.ThrowIfNull(dockerDaemonPreflight);
+        _options = options;
+        _agentSandboxOptions = agentSandboxOptions;
+        _developmentSandboxOptions = developmentSandboxOptions;
+        _sandboxRuntimeProvider = sandboxRuntimeProvider;
+        _agentSandboxRuntimeProvider = agentSandboxRuntimeProvider;
+        _workSessionSandboxRuntimeProvider = workSessionSandboxRuntimeProvider;
+        _containmentProbe = containmentProbe;
+        _dockerDaemonPreflight = dockerDaemonPreflight;
+    }
 
     public override void Configure()
     {
@@ -149,10 +166,15 @@ public sealed class GetDevelopmentCapabilityEndpoint(
 ///         whatever daemon happened to be answering.
 ///     </para>
 /// </summary>
-public sealed class ConfirmDevelopmentContainerRuntimeEndpoint(IDockerDaemonPreflightService dockerDaemonPreflight)
-    : Endpoint<ConfirmDevelopmentContainerRuntimeRequest, DevelopmentContainerRuntimeResponse>, IDevelopmentEndpoint
+public sealed class ConfirmDevelopmentContainerRuntimeEndpoint : Endpoint<ConfirmDevelopmentContainerRuntimeRequest, DevelopmentContainerRuntimeResponse>, IDevelopmentEndpoint
 {
-    private readonly IDockerDaemonPreflightService _dockerDaemonPreflight = dockerDaemonPreflight ?? throw new ArgumentNullException(nameof(dockerDaemonPreflight));
+    private readonly IDockerDaemonPreflightService _dockerDaemonPreflight;
+
+    public ConfirmDevelopmentContainerRuntimeEndpoint(IDockerDaemonPreflightService dockerDaemonPreflight)
+    {
+        ArgumentNullException.ThrowIfNull(dockerDaemonPreflight);
+        _dockerDaemonPreflight = dockerDaemonPreflight;
+    }
 
     public override void Configure()
     {

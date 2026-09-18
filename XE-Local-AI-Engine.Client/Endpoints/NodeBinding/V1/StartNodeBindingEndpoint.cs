@@ -5,9 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.NodeBinding.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class StartNodeBindingEndpoint(INodeBindingService nodeBindingService) : EndpointWithoutRequest<NodeBindingSessionResponse>
+public sealed class StartNodeBindingEndpoint : EndpointWithoutRequest<NodeBindingSessionResponse>
 {
-    private readonly INodeBindingService _nodeBindingService = nodeBindingService ?? throw new ArgumentNullException(nameof(nodeBindingService));
+    private readonly INodeBindingService _nodeBindingService;
+
+    public StartNodeBindingEndpoint(INodeBindingService nodeBindingService)
+    {
+        ArgumentNullException.ThrowIfNull(nodeBindingService);
+        _nodeBindingService = nodeBindingService;
+    }
 
     public override void Configure()
     {

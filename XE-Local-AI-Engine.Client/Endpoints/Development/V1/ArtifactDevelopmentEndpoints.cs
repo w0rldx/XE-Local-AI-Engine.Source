@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class ListDevelopmentArtifactsEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentTaskRequest, ListDevelopmentArtifactsResponse>, IDevelopmentEndpoint
+public sealed class ListDevelopmentArtifactsEndpoint : Endpoint<DevelopmentTaskRequest, ListDevelopmentArtifactsResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public ListDevelopmentArtifactsEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -24,10 +29,15 @@ public sealed class ListDevelopmentArtifactsEndpoint(IDevelopmentManagementServi
     }
 }
 
-public sealed class GetDevelopmentArtifactEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentArtifactRequest, DevelopmentArtifactContentResponse>, IDevelopmentEndpoint
+public sealed class GetDevelopmentArtifactEndpoint : Endpoint<DevelopmentArtifactRequest, DevelopmentArtifactContentResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public GetDevelopmentArtifactEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

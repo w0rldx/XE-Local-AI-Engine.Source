@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     failed result that is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. On success
 ///     it returns the demoted profile view.
 /// </summary>
-public sealed class InvalidateInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
-    : Endpoint<InvalidateInferenceProfileRequest, InferenceProfileActionResponse>
+public sealed class InvalidateInferenceProfileEndpoint : Endpoint<InvalidateInferenceProfileRequest, InferenceProfileActionResponse>
 {
-    private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
+    private readonly IInferenceProfileService _inferenceProfileService;
+
+    public InvalidateInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
+    {
+        ArgumentNullException.ThrowIfNull(inferenceProfileService);
+        _inferenceProfileService = inferenceProfileService;
+    }
 
     public override void Configure()
     {

@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     build is running. Returns the current status (the build tears down its process group + cleans partial trees
 ///     asynchronously, transitioning to <c>Cancelled</c>).
 /// </summary>
-public sealed class CancelCudaBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<CudaBuildStatusResponse>
+public sealed class CancelCudaBuildEndpoint : EndpointWithoutRequest<CudaBuildStatusResponse>
 {
-    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime;
+
+    public CancelCudaBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+    }
 
     public override void Configure()
     {

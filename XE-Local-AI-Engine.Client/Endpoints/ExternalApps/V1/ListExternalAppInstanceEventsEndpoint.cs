@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     the same <c>ListEventsAsync</c> the hub replays from, so the History tab and a fresh subscription cannot show
 ///     two different pasts.
 /// </summary>
-public sealed class ListExternalAppInstanceEventsEndpoint(IExternalAppService apps)
-    : Endpoint<ExternalAppInstanceEventFeedRequest, ListExternalAppInstanceEventsResponse>
+public sealed class ListExternalAppInstanceEventsEndpoint : Endpoint<ExternalAppInstanceEventFeedRequest, ListExternalAppInstanceEventsResponse>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public ListExternalAppInstanceEventsEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

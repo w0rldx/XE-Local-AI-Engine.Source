@@ -17,10 +17,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         The member is validated for PRESENCE, so a delete with no query is a 400 rather than a delete at version 0.
 ///     </para>
 /// </summary>
-public sealed class UninstallExternalAppEndpoint(IExternalAppService apps)
-    : Endpoint<UninstallExternalAppRequest, ExternalAppInstanceSummaryView>
+public sealed class UninstallExternalAppEndpoint : Endpoint<UninstallExternalAppRequest, ExternalAppInstanceSummaryView>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public UninstallExternalAppEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

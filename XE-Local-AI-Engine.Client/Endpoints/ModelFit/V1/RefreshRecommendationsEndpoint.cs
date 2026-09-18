@@ -15,13 +15,18 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 ///     The run is created asynchronously by the scheduler dispatcher; this endpoint never executes the advisor
 ///     and never owns run/cancellation/history state.
 /// </summary>
-public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger modelFitRefreshTrigger)
-    : Endpoint<RefreshRecommendationsRequest, RefreshRecommendationsResponse>
+public sealed class RefreshRecommendationsEndpoint : Endpoint<RefreshRecommendationsRequest, RefreshRecommendationsResponse>
 {
     /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema floor).</summary>
     private const int MinCtxTarget = 256;
 
-    private readonly IModelFitRefreshTrigger _modelFitRefreshTrigger = modelFitRefreshTrigger ?? throw new ArgumentNullException(nameof(modelFitRefreshTrigger));
+    private readonly IModelFitRefreshTrigger _modelFitRefreshTrigger;
+
+    public RefreshRecommendationsEndpoint(IModelFitRefreshTrigger modelFitRefreshTrigger)
+    {
+        ArgumentNullException.ThrowIfNull(modelFitRefreshTrigger);
+        _modelFitRefreshTrigger = modelFitRefreshTrigger;
+    }
 
     public override void Configure()
     {

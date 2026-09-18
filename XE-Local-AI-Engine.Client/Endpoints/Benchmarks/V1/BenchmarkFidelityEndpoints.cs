@@ -12,11 +12,18 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     over a measured bytes-per-logit constant, and the formula is returned with it so the figure is checkable rather
 ///     than magic.
 /// </summary>
-public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService records, BenchmarkKldBaseCache cache)
-    : Endpoint<GetKldDiskEstimateRequest, GetKldDiskEstimateResponse>
+public sealed class GetBenchmarkKldDiskEstimateEndpoint : Endpoint<GetKldDiskEstimateRequest, GetKldDiskEstimateResponse>
 {
-    private readonly BenchmarkKldBaseCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkKldBaseCache _cache;
+    private readonly BenchmarkRecordService _records;
+
+    public GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService records, BenchmarkKldBaseCache cache)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        ArgumentNullException.ThrowIfNull(records);
+        _cache = cache;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -62,11 +69,18 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService r
 ///         reading IS the honest answer, and the operator re-measures the runs they care about.
 ///     </para>
 /// </summary>
-public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
-    : Endpoint<UpdateBenchmarkProjectFidelityRequest, BenchmarkProjectFidelityChangeResponse>
+public sealed class UpdateBenchmarkProjectFidelityEndpoint : Endpoint<UpdateBenchmarkProjectFidelityRequest, BenchmarkProjectFidelityChangeResponse>
 {
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkProjectService _projects;
+    private readonly BenchmarkRecordService _records;
+
+    public UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(records);
+        _projects = projects;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -99,11 +113,18 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectServ
 }
 
 /// <summary>Re-measures one run's quant fidelity. A new immutable attempt, never an overwrite of the last one.</summary>
-public sealed class StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService records, IBenchmarkQueueSignal signal)
-    : Endpoint<StartRunFidelityRequest>
+public sealed class StartBenchmarkRunFidelityEndpoint : Endpoint<StartRunFidelityRequest>
 {
-    private readonly IBenchmarkQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly IBenchmarkQueueSignal _signal;
+    private readonly BenchmarkRecordService _records;
+
+    public StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService records, IBenchmarkQueueSignal signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        ArgumentNullException.ThrowIfNull(records);
+        _signal = signal;
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -131,10 +152,15 @@ public sealed class StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService rec
 }
 
 /// <summary>The immutable measurement history behind a run's displayed numbers.</summary>
-public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService records)
-    : Endpoint<ListBenchmarkFidelityAttemptsRequest, ListBenchmarkFidelityAttemptsResponse>
+public sealed class ListBenchmarkFidelityAttemptsEndpoint : Endpoint<ListBenchmarkFidelityAttemptsRequest, ListBenchmarkFidelityAttemptsResponse>
 {
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkRecordService _records;
+
+    public ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        _records = records;
+    }
 
     public override void Configure()
     {
@@ -188,11 +214,18 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService
 ///     Clears the base-logit cache. Refused while any fidelity work item is live: deleting a file a queued
 ///     measurement is on its way to reading would fail that measurement for a reason the operator never sees.
 /// </summary>
-public sealed class ClearBenchmarkFidelityCacheEndpoint(BenchmarkRecordService records, BenchmarkKldBaseCache cache)
-    : Endpoint<GetKldDiskEstimateRequest>
+public sealed class ClearBenchmarkFidelityCacheEndpoint : Endpoint<GetKldDiskEstimateRequest>
 {
-    private readonly BenchmarkKldBaseCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
+    private readonly BenchmarkKldBaseCache _cache;
+    private readonly BenchmarkRecordService _records;
+
+    public ClearBenchmarkFidelityCacheEndpoint(BenchmarkRecordService records, BenchmarkKldBaseCache cache)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        ArgumentNullException.ThrowIfNull(records);
+        _cache = cache;
+        _records = records;
+    }
 
     public override void Configure()
     {

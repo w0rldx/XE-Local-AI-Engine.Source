@@ -11,9 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     instance installed at v2 renders what it is running, and an instance whose application has left the catalog
 ///     must still render at all.
 /// </summary>
-public sealed class GetExternalAppInstanceEndpoint(IExternalAppService apps) : Endpoint<ExternalAppInstanceRequest, ExternalAppInstanceView>
+public sealed class GetExternalAppInstanceEndpoint : Endpoint<ExternalAppInstanceRequest, ExternalAppInstanceView>
 {
-    private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly IExternalAppService _apps;
+
+    public GetExternalAppInstanceEndpoint(IExternalAppService apps)
+    {
+        ArgumentNullException.ThrowIfNull(apps);
+        _apps = apps;
+    }
 
     public override void Configure()
     {

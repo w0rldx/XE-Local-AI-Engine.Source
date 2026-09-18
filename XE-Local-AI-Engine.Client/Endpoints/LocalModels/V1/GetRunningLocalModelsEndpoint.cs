@@ -13,14 +13,24 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     <see cref="ListLocalModelsEndpoint" />. The response also reports whether the Ollama runtime is configured at all
 ///     (<see cref="RunningLocalModelsResponse.OllamaConfigured" />) so the client stops polling when it is switched off.
 /// </summary>
-public sealed class GetRunningLocalModelsEndpoint(
-    ILocalModelCatalogService catalogService,
-    IConfiguration configuration,
-    ILogger<GetRunningLocalModelsEndpoint> logger) : EndpointWithoutRequest<RunningLocalModelsResponse>
+public sealed class GetRunningLocalModelsEndpoint : EndpointWithoutRequest<RunningLocalModelsResponse>
 {
-    private readonly ILocalModelCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
-    private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-    private readonly ILogger<GetRunningLocalModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILocalModelCatalogService _catalogService;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<GetRunningLocalModelsEndpoint> _logger;
+
+    public GetRunningLocalModelsEndpoint(
+        ILocalModelCatalogService catalogService,
+        IConfiguration configuration,
+        ILogger<GetRunningLocalModelsEndpoint> logger)
+    {
+        ArgumentNullException.ThrowIfNull(catalogService);
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(logger);
+        _catalogService = catalogService;
+        _configuration = configuration;
+        _logger = logger;
+    }
 
     public override void Configure()
     {

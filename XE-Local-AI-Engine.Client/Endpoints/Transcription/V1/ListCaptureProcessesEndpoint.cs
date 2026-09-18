@@ -14,10 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 ///     404: the SPA hides the source entirely on such a node, and a 404 would be indistinguishable from a routing
 ///     mistake. An empty list on a supported host simply means nothing is playing.
 /// </remarks>
-public sealed class ListCaptureProcessesEndpoint(IProcessAudioCaptureSource captureSource)
-    : EndpointWithoutRequest<CaptureProcessListResponse>
+public sealed class ListCaptureProcessesEndpoint : EndpointWithoutRequest<CaptureProcessListResponse>
 {
-    private readonly IProcessAudioCaptureSource _captureSource = captureSource ?? throw new ArgumentNullException(nameof(captureSource));
+    private readonly IProcessAudioCaptureSource _captureSource;
+
+    public ListCaptureProcessesEndpoint(IProcessAudioCaptureSource captureSource)
+    {
+        ArgumentNullException.ThrowIfNull(captureSource);
+        _captureSource = captureSource;
+    }
 
     public override void Configure()
     {

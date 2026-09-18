@@ -7,10 +7,17 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     Pushes a committed graph-workflow change to that run's group. Supersedes the no-op the application module
 ///     registers, so a host without this hub stays resolvable.
 /// </summary>
-internal sealed class GraphWorkflowEventPublisher(IHubContext<GraphWorkflowRunHub> hubContext) : IGraphWorkflowEventPublisher
+internal sealed class GraphWorkflowEventPublisher : IGraphWorkflowEventPublisher
 {
+    private readonly IHubContext<GraphWorkflowRunHub> _hubContext;
+
+    public GraphWorkflowEventPublisher(IHubContext<GraphWorkflowRunHub> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
     public Task PublishAsync(Guid runId, long sequence, GraphWorkflowChangeKind kind, CancellationToken cancellationToken = default) =>
-        hubContext.Clients.Group(GraphWorkflowHubGroups.Run(runId))
+        _hubContext.Clients.Group(GraphWorkflowHubGroups.Run(runId))
                   .SendAsync(GraphWorkflowHubEvents.Changed, new GraphWorkflowChanged(runId, sequence, ToWireKind(kind)), cancellationToken);
 
     /// <summary>

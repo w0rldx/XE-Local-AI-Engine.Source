@@ -7,9 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>One definition in full, graph included — what the editor opens.</summary>
-public sealed class GetGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions) : Endpoint<GraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
+public sealed class GetGraphWorkflowDefinitionEndpoint : Endpoint<GraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
 {
-    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IGraphWorkflowDefinitionService _definitions;
+
+    public GetGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {

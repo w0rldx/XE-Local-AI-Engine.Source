@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class ListDevelopmentTemplatesEndpoint(IDevelopmentTemplateService service)
-    : EndpointWithoutRequest<ListDevelopmentTemplatesResponse>, IDevelopmentEndpoint
+public sealed class ListDevelopmentTemplatesEndpoint : EndpointWithoutRequest<ListDevelopmentTemplatesResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentTemplateService _service;
+
+    public ListDevelopmentTemplatesEndpoint(IDevelopmentTemplateService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -24,10 +29,15 @@ public sealed class ListDevelopmentTemplatesEndpoint(IDevelopmentTemplateService
     }
 }
 
-public sealed class RegisterDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
-    : Endpoint<RegisterDevelopmentTemplateRequest, DevelopmentTemplateResponse>, IDevelopmentEndpoint
+public sealed class RegisterDevelopmentTemplateEndpoint : Endpoint<RegisterDevelopmentTemplateRequest, DevelopmentTemplateResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentTemplateService _service;
+
+    public RegisterDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -52,10 +62,15 @@ public sealed class RegisterDevelopmentTemplateEndpoint(IDevelopmentTemplateServ
     }
 }
 
-public sealed class RemoveDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
-    : Endpoint<DevelopmentTemplateRequest>, IDevelopmentEndpoint
+public sealed class RemoveDevelopmentTemplateEndpoint : Endpoint<DevelopmentTemplateRequest>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentTemplateService _service;
+
+    public RemoveDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -75,10 +90,15 @@ public sealed class RemoveDevelopmentTemplateEndpoint(IDevelopmentTemplateServic
     }
 }
 
-public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopmentTemplateService service)
-    : Endpoint<CreateDevelopmentRepositoryFromTemplateRequest, DevelopmentRepositoryFromTemplateResponse>, IDevelopmentEndpoint
+public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint : Endpoint<CreateDevelopmentRepositoryFromTemplateRequest, DevelopmentRepositoryFromTemplateResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentTemplateService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentTemplateService _service;
+
+    public CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopmentTemplateService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

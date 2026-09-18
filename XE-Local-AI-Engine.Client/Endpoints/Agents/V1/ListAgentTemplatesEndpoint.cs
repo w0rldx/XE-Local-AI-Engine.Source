@@ -5,11 +5,18 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ListAgentTemplatesEndpoint(IAgentTemplateCatalog catalog, IAgentDefinitionService agentDefinitions)
-    : EndpointWithoutRequest<ListAgentTemplatesResponse>
+public sealed class ListAgentTemplatesEndpoint : EndpointWithoutRequest<ListAgentTemplatesResponse>
 {
-    private readonly IAgentTemplateCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-    private readonly IAgentDefinitionService _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
+    private readonly IAgentTemplateCatalog _catalog;
+    private readonly IAgentDefinitionService _agentDefinitions;
+
+    public ListAgentTemplatesEndpoint(IAgentTemplateCatalog catalog, IAgentDefinitionService agentDefinitions)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(agentDefinitions);
+        _catalog = catalog;
+        _agentDefinitions = agentDefinitions;
+    }
 
     public override void Configure()
     {

@@ -21,13 +21,20 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     model is already running the coordinator rejoins it (<see cref="DownloadRecommendedRerankerResponse.AlreadyInFlight" />
 ///     is <c>true</c>) rather than starting a second. No path/token is accepted or returned.
 /// </remarks>
-public sealed class DownloadRecommendedRerankerEndpoint(
-    IGgufDownloadCoordinator downloadCoordinator,
-    IGgufModelStore modelStore)
-    : EndpointWithoutRequest<DownloadRecommendedRerankerResponse>
+public sealed class DownloadRecommendedRerankerEndpoint : EndpointWithoutRequest<DownloadRecommendedRerankerResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
-    private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+    private readonly IGgufModelStore _modelStore;
+
+    public DownloadRecommendedRerankerEndpoint(
+        IGgufDownloadCoordinator downloadCoordinator,
+        IGgufModelStore modelStore)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        ArgumentNullException.ThrowIfNull(modelStore);
+        _downloadCoordinator = downloadCoordinator;
+        _modelStore = modelStore;
+    }
 
     public override void Configure()
     {

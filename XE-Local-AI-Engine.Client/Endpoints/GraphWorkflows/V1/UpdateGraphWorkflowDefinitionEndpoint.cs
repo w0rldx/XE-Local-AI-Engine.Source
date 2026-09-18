@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     Edits a definition under the version it was edited from. A stale version answers 409 through the global
 ///     conflict handler rather than overwriting whatever landed in between.
 /// </summary>
-public sealed class UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
-    : Endpoint<UpdateGraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
+public sealed class UpdateGraphWorkflowDefinitionEndpoint : Endpoint<UpdateGraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
 {
-    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IGraphWorkflowDefinitionService _definitions;
+
+    public UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {

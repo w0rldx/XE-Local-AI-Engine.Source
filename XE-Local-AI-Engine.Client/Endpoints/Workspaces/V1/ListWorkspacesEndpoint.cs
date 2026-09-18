@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
-public sealed class ListWorkspacesEndpoint(ISelectedFolderResolver selectedFolders)
-    : EndpointWithoutRequest<ListWorkspacesResponse>
+public sealed class ListWorkspacesEndpoint : EndpointWithoutRequest<ListWorkspacesResponse>
 {
-    private readonly ISelectedFolderResolver _selectedFolders = selectedFolders ?? throw new ArgumentNullException(nameof(selectedFolders));
+    private readonly ISelectedFolderResolver _selectedFolders;
+
+    public ListWorkspacesEndpoint(ISelectedFolderResolver selectedFolders)
+    {
+        ArgumentNullException.ThrowIfNull(selectedFolders);
+        _selectedFolders = selectedFolders;
+    }
 
     public override void Configure()
     {

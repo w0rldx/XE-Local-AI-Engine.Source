@@ -10,11 +10,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 ///     sign-in state. The UI polls this after starting a sign-in until it reaches a terminal state. Returns no token
 ///     material.
 /// </summary>
-public sealed class EntraAuthCodeStatusEndpoint(IEntraAuthCodeSignInCoordinator signInCoordinator)
-    : EndpointWithoutRequest<EntraAuthCodeSignInStatusResponse>
+public sealed class EntraAuthCodeStatusEndpoint : EndpointWithoutRequest<EntraAuthCodeSignInStatusResponse>
 {
-    private readonly IEntraAuthCodeSignInCoordinator _signInCoordinator =
-        signInCoordinator ?? throw new ArgumentNullException(nameof(signInCoordinator));
+    private readonly IEntraAuthCodeSignInCoordinator _signInCoordinator;
+
+    public EntraAuthCodeStatusEndpoint(IEntraAuthCodeSignInCoordinator signInCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(signInCoordinator);
+        _signInCoordinator = signInCoordinator;
+    }
 
     public override void Configure()
     {

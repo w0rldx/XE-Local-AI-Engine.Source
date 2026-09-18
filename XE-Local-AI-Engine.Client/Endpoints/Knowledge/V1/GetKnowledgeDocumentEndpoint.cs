@@ -9,10 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     FastEndpoints handler for reading one knowledge-base document's detail plus its ordered chunks (GET by id), for the
 ///     detail drawer. Returns 404 when the id is unknown.
 /// </summary>
-public sealed class GetKnowledgeDocumentEndpoint(IKnowledgeDocumentCatalogService catalogService)
-    : Endpoint<KnowledgeDocumentRouteRequest, KnowledgeDocumentDetailResponse>
+public sealed class GetKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRouteRequest, KnowledgeDocumentDetailResponse>
 {
-    private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
+    private readonly IKnowledgeDocumentCatalogService _catalogService;
+
+    public GetKnowledgeDocumentEndpoint(IKnowledgeDocumentCatalogService catalogService)
+    {
+        ArgumentNullException.ThrowIfNull(catalogService);
+        _catalogService = catalogService;
+    }
 
     public override void Configure()
     {

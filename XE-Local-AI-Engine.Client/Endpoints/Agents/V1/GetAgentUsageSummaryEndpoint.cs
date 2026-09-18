@@ -17,15 +17,24 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     reasoning bills as output). Metadata ONLY — token counts + a derived cost, no message content, so nothing to
 ///     redact. Only covers the retained horizon (the response surfaces the retention window). Operator-gated.
 /// </summary>
-public sealed class GetAgentUsageSummaryEndpoint(
-    AgentExecutionLogQueryService executionLogs,
-    IUsageRateResolver rateResolver,
-    IOptions<AgentExecutionLogRetentionOptions> retentionOptions)
-    : Endpoint<AgentUsageSummaryRequest, AgentUsageSummaryResponse>
+public sealed class GetAgentUsageSummaryEndpoint : Endpoint<AgentUsageSummaryRequest, AgentUsageSummaryResponse>
 {
-    private readonly AgentExecutionLogQueryService _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
-    private readonly IUsageRateResolver _rateResolver = rateResolver ?? throw new ArgumentNullException(nameof(rateResolver));
-    private readonly IOptions<AgentExecutionLogRetentionOptions> _retentionOptions = retentionOptions ?? throw new ArgumentNullException(nameof(retentionOptions));
+    private readonly AgentExecutionLogQueryService _executionLogs;
+    private readonly IUsageRateResolver _rateResolver;
+    private readonly IOptions<AgentExecutionLogRetentionOptions> _retentionOptions;
+
+    public GetAgentUsageSummaryEndpoint(
+        AgentExecutionLogQueryService executionLogs,
+        IUsageRateResolver rateResolver,
+        IOptions<AgentExecutionLogRetentionOptions> retentionOptions)
+    {
+        ArgumentNullException.ThrowIfNull(executionLogs);
+        ArgumentNullException.ThrowIfNull(rateResolver);
+        ArgumentNullException.ThrowIfNull(retentionOptions);
+        _executionLogs = executionLogs;
+        _rateResolver = rateResolver;
+        _retentionOptions = retentionOptions;
+    }
 
     public override void Configure()
     {

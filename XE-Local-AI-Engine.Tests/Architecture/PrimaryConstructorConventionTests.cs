@@ -22,7 +22,6 @@ public sealed class PrimaryConstructorConventionTests
     private static readonly string[] NotYetMigrated =
     [
         "XE-Local-AI-Engine.AI.Agent.Tests",
-        "XE-Local-AI-Engine.Client",
         "XE-Local-AI-Engine.Client.Persistence.Tests",
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Tests.E2ETests"
@@ -40,8 +39,8 @@ public sealed class PrimaryConstructorConventionTests
     ///     removed from <see cref="NotYetMigrated" /> moves that project's files from the second count to the first,
     ///     so the enforced floor rises and the ratchet floor falls as the migration proceeds.
     /// </summary>
-    private const int EnforcedFileFloor = 2300;
-    private const int RatchetFileFloor = 1900;
+    private const int EnforcedFileFloor = 2800;
+    private const int RatchetFileFloor = 1300;
 
     /// <summary>Declarations the scan must find. A miss here is how this fence stops seeing code.</summary>
     private static readonly (string Case, string Source, string[] Types)[] MustBeFound =

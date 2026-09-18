@@ -6,12 +6,20 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
-public sealed class DeleteLocalModelEndpoint(
-    ILocalModelAdministrationService administrationService,
-    ModelNameValidator modelNameValidator) : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>
+public sealed class DeleteLocalModelEndpoint : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>
 {
-    private readonly ILocalModelAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly ILocalModelAdministrationService _administrationService;
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public DeleteLocalModelEndpoint(
+        ILocalModelAdministrationService administrationService,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(administrationService);
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _administrationService = administrationService;
+        _modelNameValidator = modelNameValidator;
+    }
 
     public override void Configure()
     {

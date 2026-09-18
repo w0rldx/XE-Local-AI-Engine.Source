@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     Starts a session. 202, not 200: the status moves here, but the step that follows is the supervisor's, taken out
 ///     of band on the node's one invocation slot — accepted is the honest answer, started is not.
 /// </summary>
-public sealed class StartWorkSessionEndpoint(IWorkSessionService service) : Endpoint<WorkSessionRequest, WorkSessionResponse>
+public sealed class StartWorkSessionEndpoint : Endpoint<WorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public StartWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -33,9 +39,15 @@ public sealed class StartWorkSessionEndpoint(IWorkSessionService service) : Endp
     }
 }
 
-public sealed class PauseWorkSessionEndpoint(IWorkSessionService service) : Endpoint<WorkSessionRequest, WorkSessionResponse>
+public sealed class PauseWorkSessionEndpoint : Endpoint<WorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public PauseWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -55,9 +67,15 @@ public sealed class PauseWorkSessionEndpoint(IWorkSessionService service) : Endp
     }
 }
 
-public sealed class ResumeWorkSessionEndpoint(IWorkSessionService service) : Endpoint<WorkSessionRequest, WorkSessionResponse>
+public sealed class ResumeWorkSessionEndpoint : Endpoint<WorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ResumeWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -78,9 +96,15 @@ public sealed class ResumeWorkSessionEndpoint(IWorkSessionService service) : End
     }
 }
 
-public sealed class CancelWorkSessionEndpoint(IWorkSessionService service) : Endpoint<WorkSessionRequest, WorkSessionResponse>
+public sealed class CancelWorkSessionEndpoint : Endpoint<WorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public CancelWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

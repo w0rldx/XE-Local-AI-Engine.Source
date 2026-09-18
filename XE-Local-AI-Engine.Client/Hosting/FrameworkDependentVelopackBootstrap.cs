@@ -56,18 +56,29 @@ internal static class FrameworkDependentVelopackBootstrap
             ? parsed
             : managedProcessId;
 
-    private sealed class LauncherProcess(IProcessImpl inner, string launcherPath, uint launcherProcessId) : IProcessImpl
+    private sealed class LauncherProcess : IProcessImpl
     {
+        private readonly IProcessImpl _inner;
+        private readonly string _launcherPath;
+        private readonly uint _launcherProcessId;
+
+        public LauncherProcess(IProcessImpl inner, string launcherPath, uint launcherProcessId)
+        {
+            _inner = inner;
+            _launcherPath = launcherPath;
+            _launcherProcessId = launcherProcessId;
+        }
+
         public string GetCurrentProcessPath() =>
-            launcherPath;
+            _launcherPath;
 
         public uint GetCurrentProcessId() =>
-            launcherProcessId;
+            _launcherProcessId;
 
         public void StartProcess(string exePath, IEnumerable<string> args, string workDir, bool showWindow) =>
-            inner.StartProcess(exePath, args, workDir, showWindow);
+            _inner.StartProcess(exePath, args, workDir, showWindow);
 
         public void Exit(int exitCode) =>
-            inner.Exit(exitCode);
+            _inner.Exit(exitCode);
     }
 }

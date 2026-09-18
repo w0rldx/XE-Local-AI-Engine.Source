@@ -5,12 +5,19 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-internal sealed class StableDiffusionCppSourceBuildEventPublisher(IHubContext<StableDiffusionCppSourceBuildHub> hubContext) : IStableDiffusionCppSourceBuildEventPublisher
+internal sealed class StableDiffusionCppSourceBuildEventPublisher : IStableDiffusionCppSourceBuildEventPublisher
 {
+    private readonly IHubContext<StableDiffusionCppSourceBuildHub> _hubContext;
+
+    public StableDiffusionCppSourceBuildEventPublisher(IHubContext<StableDiffusionCppSourceBuildHub> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
     public Task PublishStatusAsync(StableDiffusionCppSourceBuildStatusEvent statusEvent, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
-        return hubContext.Clients.All.SendAsync(StableDiffusionCppSourceBuildEvents.StatusChanged,
+        return _hubContext.Clients.All.SendAsync(StableDiffusionCppSourceBuildEvents.StatusChanged,
             StableDiffusionCppSourceBuildStatusHubMessage.FromContract(statusEvent), ct);
     }
 }

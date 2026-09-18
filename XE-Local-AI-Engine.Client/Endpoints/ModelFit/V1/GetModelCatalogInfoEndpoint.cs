@@ -12,13 +12,20 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 ///     currently in effect (bundled / remote / remote-last-good), its version, and when it was last fetched. Read-only —
 ///     never triggers a fetch (see <see cref="RefreshModelCatalogEndpoint" /> for the operator-forced refresh).
 /// </summary>
-public sealed class GetModelCatalogInfoEndpoint(
-    IModelCatalogProvider catalogProvider,
-    IOptions<ModelCatalogOptions> options)
-    : EndpointWithoutRequest<ModelCatalogInfoResponse>
+public sealed class GetModelCatalogInfoEndpoint : EndpointWithoutRequest<ModelCatalogInfoResponse>
 {
-    private readonly IModelCatalogProvider _catalogProvider = catalogProvider ?? throw new ArgumentNullException(nameof(catalogProvider));
-    private readonly IOptions<ModelCatalogOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IModelCatalogProvider _catalogProvider;
+    private readonly IOptions<ModelCatalogOptions> _options;
+
+    public GetModelCatalogInfoEndpoint(
+        IModelCatalogProvider catalogProvider,
+        IOptions<ModelCatalogOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(catalogProvider);
+        ArgumentNullException.ThrowIfNull(options);
+        _catalogProvider = catalogProvider;
+        _options = options;
+    }
 
     public override void Configure()
     {

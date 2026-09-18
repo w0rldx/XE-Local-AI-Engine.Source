@@ -41,12 +41,20 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///         <b>Not desktop-gated.</b> An upgrading node exists on every launch mode.
 ///     </para>
 /// </remarks>
-public sealed class ExternalAccessProfileBackfillService(
-    IServiceScopeFactory scopeFactory,
-    ILogger<ExternalAccessProfileBackfillService> logger) : IHostedService
+public sealed class ExternalAccessProfileBackfillService : IHostedService
 {
-    private readonly ILogger<ExternalAccessProfileBackfillService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly ILogger<ExternalAccessProfileBackfillService> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public ExternalAccessProfileBackfillService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<ExternalAccessProfileBackfillService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

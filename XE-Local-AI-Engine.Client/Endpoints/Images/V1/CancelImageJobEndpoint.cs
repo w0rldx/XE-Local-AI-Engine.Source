@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Images;
 ///     picks clean-cancel (queued) vs kill+restart (generating) internally; a queued/generating job returns 204, an
 ///     unknown or already-terminal job returns 404. Operator-gated.
 /// </summary>
-public sealed class CancelImageJobEndpoint(IImageJobCoordinator coordinator)
-    : Endpoint<ImageJobRouteRequest>
+public sealed class CancelImageJobEndpoint : Endpoint<ImageJobRouteRequest>
 {
-    private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IImageJobCoordinator _coordinator;
+
+    public CancelImageJobEndpoint(IImageJobCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+    }
 
     public override void Configure()
     {

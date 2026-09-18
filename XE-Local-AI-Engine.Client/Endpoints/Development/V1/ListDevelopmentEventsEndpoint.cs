@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class ListDevelopmentEventsEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentProjectRequest, ListDevelopmentEventsResponse>, IDevelopmentEndpoint
+public sealed class ListDevelopmentEventsEndpoint : Endpoint<DevelopmentProjectRequest, ListDevelopmentEventsResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public ListDevelopmentEventsEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

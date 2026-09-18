@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 ///     already reached a terminal state, and 202 Accepted (with the outcome) when the request was recorded — whether or
 ///     not Quartz had an active fire to interrupt. Operator-gated.
 /// </summary>
-public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService scheduledJobManagementService)
-    : Endpoint<ScheduledJobRunRouteRequest, ScheduledJobRunCancelResponse>
+public sealed class CancelScheduledJobRunEndpoint : Endpoint<ScheduledJobRunRouteRequest, ScheduledJobRunCancelResponse>
 {
-    private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
+    private readonly IScheduledJobManagementService _scheduledJobManagementService;
+
+    public CancelScheduledJobRunEndpoint(IScheduledJobManagementService scheduledJobManagementService)
+    {
+        ArgumentNullException.ThrowIfNull(scheduledJobManagementService);
+        _scheduledJobManagementService = scheduledJobManagementService;
+    }
 
     public override void Configure()
     {

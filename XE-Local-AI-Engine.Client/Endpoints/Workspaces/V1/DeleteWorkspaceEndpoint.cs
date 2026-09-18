@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
-public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocationService)
-    : Endpoint<DeleteWorkspaceRequest>
+public sealed class DeleteWorkspaceEndpoint : Endpoint<DeleteWorkspaceRequest>
 {
-    private readonly IWorkspaceRevocationService _revocationService = revocationService ?? throw new ArgumentNullException(nameof(revocationService));
+    private readonly IWorkspaceRevocationService _revocationService;
+
+    public DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocationService)
+    {
+        ArgumentNullException.ThrowIfNull(revocationService);
+        _revocationService = revocationService;
+    }
 
     public override void Configure()
     {

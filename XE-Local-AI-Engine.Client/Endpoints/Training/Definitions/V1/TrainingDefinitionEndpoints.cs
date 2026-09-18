@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-public sealed class ListTrainingDefinitionsEndpoint(IDatasetDefinitionService definitions)
-    : EndpointWithoutRequest<ListTrainingDefinitionsResponse>
+public sealed class ListTrainingDefinitionsEndpoint : EndpointWithoutRequest<ListTrainingDefinitionsResponse>
 {
-    private readonly IDatasetDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IDatasetDefinitionService _definitions;
+
+    public ListTrainingDefinitionsEndpoint(IDatasetDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {
@@ -28,10 +33,15 @@ public sealed class ListTrainingDefinitionsEndpoint(IDatasetDefinitionService de
     }
 }
 
-public sealed class GetTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
-    : Endpoint<GetTrainingDefinitionRequest, TrainingDefinitionResponse>
+public sealed class GetTrainingDefinitionEndpoint : Endpoint<GetTrainingDefinitionRequest, TrainingDefinitionResponse>
 {
-    private readonly IDatasetDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IDatasetDefinitionService _definitions;
+
+    public GetTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {
@@ -52,10 +62,15 @@ public sealed class GetTrainingDefinitionEndpoint(IDatasetDefinitionService defi
     }
 }
 
-public sealed class CreateTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
-    : Endpoint<CreateTrainingDefinitionRequest, TrainingDefinitionResponse>
+public sealed class CreateTrainingDefinitionEndpoint : Endpoint<CreateTrainingDefinitionRequest, TrainingDefinitionResponse>
 {
-    private readonly IDatasetDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IDatasetDefinitionService _definitions;
+
+    public CreateTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {
@@ -73,10 +88,15 @@ public sealed class CreateTrainingDefinitionEndpoint(IDatasetDefinitionService d
     }
 }
 
-public sealed class UpdateTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
-    : Endpoint<UpdateTrainingDefinitionRequest, TrainingDefinitionResponse>
+public sealed class UpdateTrainingDefinitionEndpoint : Endpoint<UpdateTrainingDefinitionRequest, TrainingDefinitionResponse>
 {
-    private readonly IDatasetDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IDatasetDefinitionService _definitions;
+
+    public UpdateTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {
@@ -91,10 +111,15 @@ public sealed class UpdateTrainingDefinitionEndpoint(IDatasetDefinitionService d
     }
 }
 
-public sealed class DeleteTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
-    : Endpoint<DeleteTrainingDefinitionRequest>
+public sealed class DeleteTrainingDefinitionEndpoint : Endpoint<DeleteTrainingDefinitionRequest>
 {
-    private readonly IDatasetDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IDatasetDefinitionService _definitions;
+
+    public DeleteTrainingDefinitionEndpoint(IDatasetDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {
@@ -110,10 +135,15 @@ public sealed class DeleteTrainingDefinitionEndpoint(IDatasetDefinitionService d
 }
 
 /// <summary>Enqueues a generation run for the definition. 202 — the queue owns the work from here.</summary>
-public sealed class GenerateTrainingDatasetEndpoint(IDatasetGenerationService generation)
-    : Endpoint<GenerateTrainingDatasetRequest, TrainingDatasetResponse>
+public sealed class GenerateTrainingDatasetEndpoint : Endpoint<GenerateTrainingDatasetRequest, TrainingDatasetResponse>
 {
-    private readonly IDatasetGenerationService _generation = generation ?? throw new ArgumentNullException(nameof(generation));
+    private readonly IDatasetGenerationService _generation;
+
+    public GenerateTrainingDatasetEndpoint(IDatasetGenerationService generation)
+    {
+        ArgumentNullException.ThrowIfNull(generation);
+        _generation = generation;
+    }
 
     public override void Configure()
     {

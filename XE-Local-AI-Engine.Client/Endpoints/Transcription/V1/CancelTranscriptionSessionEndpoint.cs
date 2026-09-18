@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     for that id. Cancellation is a signal, not a join: the run unwinds on its own and writes the session
 ///     <c>Cancelled</c>. Operator-gated.
 /// </summary>
-public sealed class CancelTranscriptionSessionEndpoint(ITranscriptionService sessions)
-    : Endpoint<TranscriptionSessionRouteRequest>
+public sealed class CancelTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest>
 {
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ITranscriptionService _sessions;
+
+    public CancelTranscriptionSessionEndpoint(ITranscriptionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

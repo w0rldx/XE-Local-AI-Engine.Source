@@ -12,10 +12,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     background, cancellable download keyed by the canonical model name and returns immediately with that identity. The
 ///     download runs detached; progress/cancel are tracked by the coordinator. No path/token is accepted or returned.
 /// </summary>
-public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadCoordinator)
-    : Endpoint<StartGgufDownloadRequest, StartGgufDownloadResponse>
+public sealed class StartGgufDownloadEndpoint : Endpoint<StartGgufDownloadRequest, StartGgufDownloadResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+
+    public StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

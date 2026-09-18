@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.Runtime.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 
-public sealed class GetTrainingRuntimeStatusEndpoint(TrainingRuntimeOrchestrationService runtime)
-    : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
+public sealed class GetTrainingRuntimeStatusEndpoint : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
 {
+    private readonly TrainingRuntimeOrchestrationService _runtime;
+
+    public GetTrainingRuntimeStatusEndpoint(TrainingRuntimeOrchestrationService runtime)
+    {
+        _runtime = runtime;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Training.RuntimeStatus);
@@ -18,6 +24,6 @@ public sealed class GetTrainingRuntimeStatusEndpoint(TrainingRuntimeOrchestratio
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct);
+        await Send.OkAsync(_runtime.GetStatus().ToResponse(), ct);
     }
 }

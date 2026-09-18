@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     — the schema cascade cannot be relied upon because foreign-key enforcement is off on the runtime connection — and
 ///     then removes the on-disk encrypted bytes. Returns 404 when the id is unknown, otherwise 204.
 /// </summary>
-public sealed class DeleteKnowledgeDocumentEndpoint(IKnowledgeDocumentPurgeService purgeService)
-    : Endpoint<KnowledgeDocumentRouteRequest>
+public sealed class DeleteKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRouteRequest>
 {
-    private readonly IKnowledgeDocumentPurgeService _purgeService = purgeService ?? throw new ArgumentNullException(nameof(purgeService));
+    private readonly IKnowledgeDocumentPurgeService _purgeService;
+
+    public DeleteKnowledgeDocumentEndpoint(IKnowledgeDocumentPurgeService purgeService)
+    {
+        ArgumentNullException.ThrowIfNull(purgeService);
+        _purgeService = purgeService;
+    }
 
     public override void Configure()
     {

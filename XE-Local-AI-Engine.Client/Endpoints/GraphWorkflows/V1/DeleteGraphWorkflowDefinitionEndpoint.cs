@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     store's transaction. Terminal runs are unaffected: each pinned its own copy of the graph at start, so history
 ///     survives the row.
 /// </summary>
-public sealed class DeleteGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions) : Endpoint<GraphWorkflowDefinitionRequest>
+public sealed class DeleteGraphWorkflowDefinitionEndpoint : Endpoint<GraphWorkflowDefinitionRequest>
 {
-    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+    private readonly IGraphWorkflowDefinitionService _definitions;
+
+    public DeleteGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        _definitions = definitions;
+    }
 
     public override void Configure()
     {

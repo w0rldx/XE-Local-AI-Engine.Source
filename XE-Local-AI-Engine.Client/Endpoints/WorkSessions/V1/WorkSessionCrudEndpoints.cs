@@ -7,9 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
-public sealed class ListWorkSessionsEndpoint(IWorkSessionService service) : EndpointWithoutRequest<ListWorkSessionsResponse>
+public sealed class ListWorkSessionsEndpoint : EndpointWithoutRequest<ListWorkSessionsResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public ListWorkSessionsEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -24,9 +30,15 @@ public sealed class ListWorkSessionsEndpoint(IWorkSessionService service) : Endp
     }
 }
 
-public sealed class CreateWorkSessionEndpoint(IWorkSessionService service) : Endpoint<CreateWorkSessionRequest, WorkSessionResponse>
+public sealed class CreateWorkSessionEndpoint : Endpoint<CreateWorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public CreateWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -52,9 +64,15 @@ public sealed class CreateWorkSessionEndpoint(IWorkSessionService service) : End
     }
 }
 
-public sealed class GetWorkSessionEndpoint(IWorkSessionService service) : Endpoint<WorkSessionRequest, WorkSessionResponse>
+public sealed class GetWorkSessionEndpoint : Endpoint<WorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public GetWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -72,9 +90,15 @@ public sealed class GetWorkSessionEndpoint(IWorkSessionService service) : Endpoi
     }
 }
 
-public sealed class UpdateWorkSessionEndpoint(IWorkSessionService service) : Endpoint<UpdateWorkSessionRequest, WorkSessionResponse>
+public sealed class UpdateWorkSessionEndpoint : Endpoint<UpdateWorkSessionRequest, WorkSessionResponse>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public UpdateWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -98,9 +122,15 @@ public sealed class UpdateWorkSessionEndpoint(IWorkSessionService service) : End
     }
 }
 
-public sealed class DeleteWorkSessionEndpoint(IWorkSessionService service) : Endpoint<WorkSessionRequest>
+public sealed class DeleteWorkSessionEndpoint : Endpoint<WorkSessionRequest>
 {
-    private readonly IWorkSessionService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IWorkSessionService _service;
+
+    public DeleteWorkSessionEndpoint(IWorkSessionService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

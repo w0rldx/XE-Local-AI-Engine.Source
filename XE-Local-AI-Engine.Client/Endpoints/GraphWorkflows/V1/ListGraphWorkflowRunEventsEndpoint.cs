@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     The run's event log, paged from an exclusive watermark — the one feed that grows without bound, so the one that
 ///     pages. Its sequences are strictly increasing but NOT contiguous: the run's counter is shared with its node runs.
 /// </summary>
-public sealed class ListGraphWorkflowRunEventsEndpoint(IGraphWorkflowRunService runs)
-    : Endpoint<GraphWorkflowRunEventFeedRequest, ListGraphWorkflowRunEventsResponse>
+public sealed class ListGraphWorkflowRunEventsEndpoint : Endpoint<GraphWorkflowRunEventFeedRequest, ListGraphWorkflowRunEventsResponse>
 {
-    private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IGraphWorkflowRunService _runs;
+
+    public ListGraphWorkflowRunEventsEndpoint(IGraphWorkflowRunService runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        _runs = runs;
+    }
 
     public override void Configure()
     {

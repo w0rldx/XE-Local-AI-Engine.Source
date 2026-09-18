@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>The rule-set list. Never loads a body: it is the encrypted column, and the list has no use for it.</summary>
-public sealed class ListDevWorkflowRuleSetsEndpoint(DevWorkflowAuthoringService authoring) : EndpointWithoutRequest<ListDevWorkflowRuleSetsResponse>
+public sealed class ListDevWorkflowRuleSetsEndpoint : EndpointWithoutRequest<ListDevWorkflowRuleSetsResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public ListDevWorkflowRuleSetsEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -25,9 +31,15 @@ public sealed class ListDevWorkflowRuleSetsEndpoint(DevWorkflowAuthoringService 
     }
 }
 
-public sealed class CreateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<CreateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
+public sealed class CreateDevWorkflowRuleSetEndpoint : Endpoint<CreateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public CreateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -59,9 +71,15 @@ public sealed class CreateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService
     }
 }
 
-public sealed class GetDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
+public sealed class GetDevWorkflowRuleSetEndpoint : Endpoint<DevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public GetDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -87,9 +105,15 @@ public sealed class GetDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService au
 ///         and the hash is what says the current document is no longer that text.
 ///     </para>
 /// </summary>
-public sealed class UpdateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<UpdateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
+public sealed class UpdateDevWorkflowRuleSetEndpoint : Endpoint<UpdateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public UpdateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {
@@ -121,9 +145,15 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService
 ///     foreign key to a rule set, and what a node run needs from one — which document applied, at which text — it
 ///     copied onto its own row at materialization. The objective composer skips a document that is gone.
 /// </summary>
-public sealed class DeleteDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowRuleSetRequest>
+public sealed class DeleteDevWorkflowRuleSetEndpoint : Endpoint<DevWorkflowRuleSetRequest>
 {
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowAuthoringService _authoring;
+
+    public DeleteDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring)
+    {
+        ArgumentNullException.ThrowIfNull(authoring);
+        _authoring = authoring;
+    }
 
     public override void Configure()
     {

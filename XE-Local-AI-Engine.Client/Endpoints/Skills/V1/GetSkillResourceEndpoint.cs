@@ -10,10 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     Returns one bundled file including its decrypted content. The resource name is a skill-root-relative path, so it
 ///     reaches the endpoint percent-escaped and is decoded and charset-validated before the lookup.
 /// </summary>
-public sealed class GetSkillResourceEndpoint(IAgentSkillService agentSkillService)
-    : Endpoint<GetSkillResourceRequest, SkillResourceResponse>
+public sealed class GetSkillResourceEndpoint : Endpoint<GetSkillResourceRequest, SkillResourceResponse>
 {
-    private readonly IAgentSkillService _agentSkillService = agentSkillService ?? throw new ArgumentNullException(nameof(agentSkillService));
+    private readonly IAgentSkillService _agentSkillService;
+
+    public GetSkillResourceEndpoint(IAgentSkillService agentSkillService)
+    {
+        ArgumentNullException.ThrowIfNull(agentSkillService);
+        _agentSkillService = agentSkillService;
+    }
 
     public override void Configure()
     {

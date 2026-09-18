@@ -14,12 +14,20 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     and was therefore left running. The model name is carried in the route, so the client sends no body at all — see
 ///     <see cref="Configure" /> for the Accepts override that keeps a body-less POST out of 415.
 /// </summary>
-public sealed class UnloadLocalModelEndpoint(
-    IModelUnloadCoordinator unloadCoordinator,
-    ModelNameValidator modelNameValidator) : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
+public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
 {
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
-    private readonly IModelUnloadCoordinator _unloadCoordinator = unloadCoordinator ?? throw new ArgumentNullException(nameof(unloadCoordinator));
+    private readonly ModelNameValidator _modelNameValidator;
+    private readonly IModelUnloadCoordinator _unloadCoordinator;
+
+    public UnloadLocalModelEndpoint(
+        IModelUnloadCoordinator unloadCoordinator,
+        ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        ArgumentNullException.ThrowIfNull(unloadCoordinator);
+        _modelNameValidator = modelNameValidator;
+        _unloadCoordinator = unloadCoordinator;
+    }
 
     public override void Configure()
     {

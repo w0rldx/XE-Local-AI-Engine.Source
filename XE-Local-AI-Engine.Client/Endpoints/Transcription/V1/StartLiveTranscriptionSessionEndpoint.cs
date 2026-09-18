@@ -21,10 +21,15 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///         session, where retrying could never work.
 ///     </para>
 /// </remarks>
-public sealed class StartLiveTranscriptionSessionEndpoint(ITranscriptionService sessions)
-    : Endpoint<TranscriptionSessionRouteRequest, StartLiveTranscriptionSessionResponse>
+public sealed class StartLiveTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest, StartLiveTranscriptionSessionResponse>
 {
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly ITranscriptionService _sessions;
+
+    public StartLiveTranscriptionSessionEndpoint(ITranscriptionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+    }
 
     public override void Configure()
     {

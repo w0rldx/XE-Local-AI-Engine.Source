@@ -46,8 +46,8 @@ Canonical shape: sealed, one endpoint per `*Endpoint.cs`, route derived from `Lo
 constructor guarding its dependencies into `private readonly` fields, the request's `CancellationToken` threaded
 through every call, no `ConfigureAwait` (the host is not a library — see
 [ConfigureAwait is contextual](#configureawait-is-contextual)), DTO return.
-`Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` is the structural reference; its constructor still
-shows the pre-baseline shape until the constructor migration reaches it.
+`Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` is the structural reference, its constructor
+included.
 
 Both halves of that shape are now regression guards rather than review habits.
 `EndpointConventionTests` freezes the file and type conventions: one endpoint per `*Endpoint.cs` file named

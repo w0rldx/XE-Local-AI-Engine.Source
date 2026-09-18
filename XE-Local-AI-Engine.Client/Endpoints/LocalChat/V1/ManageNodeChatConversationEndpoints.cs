@@ -6,14 +6,24 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed class RenameNodeChatConversationEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<RenameNodeChatConversationRequest, NodeChatConversationResponse>
+public sealed class RenameNodeChatConversationEndpoint : Endpoint<RenameNodeChatConversationRequest, NodeChatConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public RenameNodeChatConversationEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -41,14 +51,24 @@ public sealed class RenameNodeChatConversationEndpoint(
     }
 }
 
-public sealed class PinNodeChatConversationEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<PinNodeChatConversationRequest, NodeChatConversationResponse>
+public sealed class PinNodeChatConversationEndpoint : Endpoint<PinNodeChatConversationRequest, NodeChatConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public PinNodeChatConversationEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -74,14 +94,24 @@ public sealed class PinNodeChatConversationEndpoint(
     }
 }
 
-public sealed class ArchiveNodeChatConversationEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<ArchiveNodeChatConversationRequest, NodeChatConversationResponse>
+public sealed class ArchiveNodeChatConversationEndpoint : Endpoint<ArchiveNodeChatConversationRequest, NodeChatConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public ArchiveNodeChatConversationEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {
@@ -112,14 +142,24 @@ public sealed class ArchiveNodeChatConversationEndpoint(
 ///     auth path (Operator policy, same as the other conversation mutations) — NOT the agent-management surface — and
 ///     honors the read-only mutation guard like rename/pin/archive.
 /// </summary>
-public sealed class SetNodeChatConversationMemoryExcludedEndpoint(
-    INodeChatPersistenceService chatPersistence,
-    INodeChatMutationGuard mutationGuard,
-    TimeProvider timeProvider) : Endpoint<SetNodeChatConversationMemoryExcludedRequest, NodeChatConversationResponse>
+public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<SetNodeChatConversationMemoryExcludedRequest, NodeChatConversationResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly TimeProvider _timeProvider;
+
+    public SetNodeChatConversationMemoryExcludedEndpoint(
+        INodeChatPersistenceService chatPersistence,
+        INodeChatMutationGuard mutationGuard,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _mutationGuard = mutationGuard;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

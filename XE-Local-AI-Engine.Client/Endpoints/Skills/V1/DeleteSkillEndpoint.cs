@@ -5,10 +5,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class DeleteSkillEndpoint(IAgentSkillService agentSkillService)
-    : Endpoint<DeleteSkillRequest>
+public sealed class DeleteSkillEndpoint : Endpoint<DeleteSkillRequest>
 {
-    private readonly IAgentSkillService _agentSkillService = agentSkillService ?? throw new ArgumentNullException(nameof(agentSkillService));
+    private readonly IAgentSkillService _agentSkillService;
+
+    public DeleteSkillEndpoint(IAgentSkillService agentSkillService)
+    {
+        ArgumentNullException.ThrowIfNull(agentSkillService);
+        _agentSkillService = agentSkillService;
+    }
 
     public override void Configure()
     {

@@ -17,8 +17,15 @@ using Microsoft.AspNetCore.Diagnostics;
 ///         reaches the same throw and now the same answer.
 ///     </para>
 /// </summary>
-public sealed class RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLargeExceptionHandler> logger) : IExceptionHandler
+public sealed class RequestBodyTooLargeExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<RequestBodyTooLargeExceptionHandler> _logger;
+
+    public RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLargeExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -32,7 +39,7 @@ public sealed class RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLa
             return false;
         }
 
-        logger.LogWarning(exception,
+        _logger.LogWarning(exception,
             "Refused an oversized request body while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}.",
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),

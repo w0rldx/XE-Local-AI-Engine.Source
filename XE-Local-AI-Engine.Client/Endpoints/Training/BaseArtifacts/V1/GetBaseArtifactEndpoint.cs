@@ -10,9 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 ///     The polling surface for a download in flight: the response carries live byte progress, following the model and
 ///     image download lanes rather than adding a third hub for a transfer that already has a status route.
 /// </summary>
-public sealed class GetBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
-    : Endpoint<BaseArtifactByIdRequest, BaseArtifactResponse>
+public sealed class GetBaseArtifactEndpoint : Endpoint<BaseArtifactByIdRequest, BaseArtifactResponse>
 {
+    private readonly IBaseArtifactService _baseArtifactService;
+
+    public GetBaseArtifactEndpoint(IBaseArtifactService baseArtifactService)
+    {
+        _baseArtifactService = baseArtifactService;
+    }
+
     public override void Configure()
     {
         Get(LocalApiRoutes.Training.BaseArtifactById);
@@ -24,7 +30,7 @@ public sealed class GetBaseArtifactEndpoint(IBaseArtifactService baseArtifactSer
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var artifact = await baseArtifactService.GetAsync(request.ArtifactId, ct);
+        var artifact = await _baseArtifactService.GetAsync(request.ArtifactId, ct);
         if (artifact is null)
         {
             await Send.NotFoundAsync(ct);

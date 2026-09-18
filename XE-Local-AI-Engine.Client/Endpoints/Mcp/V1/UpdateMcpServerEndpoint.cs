@@ -6,10 +6,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
-public sealed class UpdateMcpServerEndpoint(IMcpServerService mcpServerService)
-    : Endpoint<UpdateMcpServerRequest, McpServerResponse>
+public sealed class UpdateMcpServerEndpoint : Endpoint<UpdateMcpServerRequest, McpServerResponse>
 {
-    private readonly IMcpServerService _mcpServerService = mcpServerService ?? throw new ArgumentNullException(nameof(mcpServerService));
+    private readonly IMcpServerService _mcpServerService;
+
+    public UpdateMcpServerEndpoint(IMcpServerService mcpServerService)
+    {
+        ArgumentNullException.ThrowIfNull(mcpServerService);
+        _mcpServerService = mcpServerService;
+    }
 
     public override void Configure()
     {

@@ -7,11 +7,15 @@ using XE_Local_AI_Engine.Client.Endpoints.TutorialState.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 
-public sealed class GetTutorialStateEndpoint(INodeTutorialStateService tutorialStateService)
-    : EndpointWithoutRequest<TutorialStateResponse>
+public sealed class GetTutorialStateEndpoint : EndpointWithoutRequest<TutorialStateResponse>
 {
-    private readonly INodeTutorialStateService _tutorialStateService =
-        tutorialStateService ?? throw new ArgumentNullException(nameof(tutorialStateService));
+    private readonly INodeTutorialStateService _tutorialStateService;
+
+    public GetTutorialStateEndpoint(INodeTutorialStateService tutorialStateService)
+    {
+        ArgumentNullException.ThrowIfNull(tutorialStateService);
+        _tutorialStateService = tutorialStateService;
+    }
 
     public override void Configure()
     {
@@ -27,11 +31,15 @@ public sealed class GetTutorialStateEndpoint(INodeTutorialStateService tutorialS
     }
 }
 
-public sealed class SaveTutorialStateEndpoint(INodeTutorialStateService tutorialStateService)
-    : Endpoint<SaveTutorialStateRequest>
+public sealed class SaveTutorialStateEndpoint : Endpoint<SaveTutorialStateRequest>
 {
-    private readonly INodeTutorialStateService _tutorialStateService =
-        tutorialStateService ?? throw new ArgumentNullException(nameof(tutorialStateService));
+    private readonly INodeTutorialStateService _tutorialStateService;
+
+    public SaveTutorialStateEndpoint(INodeTutorialStateService tutorialStateService)
+    {
+        ArgumentNullException.ThrowIfNull(tutorialStateService);
+        _tutorialStateService = tutorialStateService;
+    }
 
     public override void Configure()
     {

@@ -19,10 +19,18 @@ public sealed record TrainingRunReplayReset(Guid RunId, long LatestSequence, lon
 ///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events) : Hub
+public sealed class TrainingRunHub : Hub
 {
-    private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly ITrainingRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly ITrainingRunEventBuffer _events;
+    private readonly ITrainingRunService _runs;
+
+    public TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(runs);
+        _events = events;
+        _runs = runs;
+    }
 
     public static string RunGroup(Guid runId) =>
         $"training-run-{runId:N}";

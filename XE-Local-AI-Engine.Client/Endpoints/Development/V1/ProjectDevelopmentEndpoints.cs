@@ -7,10 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class ListDevelopmentProjectsEndpoint(IDevelopmentManagementService service)
-    : EndpointWithoutRequest<ListDevelopmentProjectsResponse>, IDevelopmentEndpoint
+public sealed class ListDevelopmentProjectsEndpoint : EndpointWithoutRequest<ListDevelopmentProjectsResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public ListDevelopmentProjectsEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -25,10 +30,15 @@ public sealed class ListDevelopmentProjectsEndpoint(IDevelopmentManagementServic
     }
 }
 
-public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementService service)
-    : Endpoint<CreateDevelopmentProjectRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
+public sealed class CreateDevelopmentProjectEndpoint : Endpoint<CreateDevelopmentProjectRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public CreateDevelopmentProjectEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {
@@ -76,10 +86,15 @@ public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementServi
     }
 }
 
-public sealed class GetDevelopmentProjectEndpoint(IDevelopmentManagementService service)
-    : Endpoint<DevelopmentProjectRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
+public sealed class GetDevelopmentProjectEndpoint : Endpoint<DevelopmentProjectRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentManagementService _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly IDevelopmentManagementService _service;
+
+    public GetDevelopmentProjectEndpoint(IDevelopmentManagementService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        _service = service;
+    }
 
     public override void Configure()
     {

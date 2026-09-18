@@ -6,11 +6,18 @@ using XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class UpdateSkillEndpoint(IAgentSkillService agentSkillService, TimeProvider timeProvider)
-    : Endpoint<UpdateSkillRequest, SkillResponse>
+public sealed class UpdateSkillEndpoint : Endpoint<UpdateSkillRequest, SkillResponse>
 {
-    private readonly IAgentSkillService _agentSkillService = agentSkillService ?? throw new ArgumentNullException(nameof(agentSkillService));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IAgentSkillService _agentSkillService;
+    private readonly TimeProvider _timeProvider;
+
+    public UpdateSkillEndpoint(IAgentSkillService agentSkillService, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(agentSkillService);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _agentSkillService = agentSkillService;
+        _timeProvider = timeProvider;
+    }
 
     public override void Configure()
     {

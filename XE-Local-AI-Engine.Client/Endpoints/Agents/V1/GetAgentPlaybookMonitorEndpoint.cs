@@ -14,15 +14,23 @@ using XE_Local_AI_Engine.Client.Services.Monitoring;
 ///     service does not 404, so this endpoint resolves the agent itself and returns 404 when it does not exist. The
 ///     <c>retrieval</c> block carries the current relevance-gating thresholds for the panel banner. Operator-gated.
 /// </summary>
-public sealed class GetAgentPlaybookMonitorEndpoint(
-    IAgentDefinitionService agentDefinitions,
-    IPlaybookMonitorService playbookMonitorService,
-    IOptions<PlaybookRetrievalOptions> retrievalOptions)
-    : Endpoint<GetAgentPlaybookMonitorRequest, AgentPlaybookMonitorResponse>
+public sealed class GetAgentPlaybookMonitorEndpoint : Endpoint<GetAgentPlaybookMonitorRequest, AgentPlaybookMonitorResponse>
 {
-    private readonly IAgentDefinitionService _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
-    private readonly IPlaybookMonitorService _playbookMonitorService = playbookMonitorService ?? throw new ArgumentNullException(nameof(playbookMonitorService));
-    private readonly PlaybookRetrievalOptions _retrievalOptions = (retrievalOptions ?? throw new ArgumentNullException(nameof(retrievalOptions))).Value;
+    private readonly IAgentDefinitionService _agentDefinitions;
+    private readonly IPlaybookMonitorService _playbookMonitorService;
+    private readonly PlaybookRetrievalOptions _retrievalOptions;
+
+    public GetAgentPlaybookMonitorEndpoint(
+        IAgentDefinitionService agentDefinitions,
+        IPlaybookMonitorService playbookMonitorService,
+        IOptions<PlaybookRetrievalOptions> retrievalOptions)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitions);
+        _agentDefinitions = agentDefinitions;
+        ArgumentNullException.ThrowIfNull(playbookMonitorService);
+        _playbookMonitorService = playbookMonitorService;
+        _retrievalOptions = (retrievalOptions ?? throw new ArgumentNullException(nameof(retrievalOptions))).Value;
+    }
 
     public override void Configure()
     {

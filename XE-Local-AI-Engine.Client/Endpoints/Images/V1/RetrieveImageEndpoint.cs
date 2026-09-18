@@ -18,10 +18,15 @@ public sealed class RetrieveImageRequest
 ///     stored MIME type (image/png) and marked no-store — the plaintext image only ever exists in transit. No prompt,
 ///     path, or filename is surfaced. Operator-gated.
 /// </summary>
-public sealed class RetrieveImageEndpoint(IGeneratedImageStore imageStore)
-    : Endpoint<RetrieveImageRequest>
+public sealed class RetrieveImageEndpoint : Endpoint<RetrieveImageRequest>
 {
-    private readonly IGeneratedImageStore _imageStore = imageStore ?? throw new ArgumentNullException(nameof(imageStore));
+    private readonly IGeneratedImageStore _imageStore;
+
+    public RetrieveImageEndpoint(IGeneratedImageStore imageStore)
+    {
+        ArgumentNullException.ThrowIfNull(imageStore);
+        _imageStore = imageStore;
+    }
 
     public override void Configure()
     {

@@ -29,11 +29,17 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///         through the same slot disposal, which is the only thing that deletes the audio.
 ///     </para>
 /// </remarks>
-public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessions, IOptions<SecurityOptions> securityOptions)
-    : Endpoint<UploadTranscriptionAudioRequest, TranscriptionSessionDetailResponse>
+public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscriptionAudioRequest, TranscriptionSessionDetailResponse>
 {
-    private readonly ITranscriptionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-    private readonly long _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+    private readonly ITranscriptionService _sessions;
+    private readonly long _maxUploadBytes;
+
+    public UploadTranscriptionAudioEndpoint(ITranscriptionService sessions, IOptions<SecurityOptions> securityOptions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        _sessions = sessions;
+        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+    }
 
     public override void Configure()
     {

@@ -21,16 +21,28 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///         composes <c>Client.Application</c> services and takes no store of its own.
 ///     </para>
 /// </summary>
-public sealed class DevWorkflowRunComposer(
-    DevWorkflowRunQueryService queries,
-    DevWorkflowAuthoringService authoring,
-    IAgentDefinitionService agents,
-    IWorkSessionService sessions)
+public sealed class DevWorkflowRunComposer
 {
-    private readonly IAgentDefinitionService _agents = agents ?? throw new ArgumentNullException(nameof(agents));
-    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
-    private readonly DevWorkflowRunQueryService _queries = queries ?? throw new ArgumentNullException(nameof(queries));
-    private readonly IWorkSessionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+    private readonly IAgentDefinitionService _agents;
+    private readonly DevWorkflowAuthoringService _authoring;
+    private readonly DevWorkflowRunQueryService _queries;
+    private readonly IWorkSessionService _sessions;
+
+    public DevWorkflowRunComposer(
+        DevWorkflowRunQueryService queries,
+        DevWorkflowAuthoringService authoring,
+        IAgentDefinitionService agents,
+        IWorkSessionService sessions)
+    {
+        ArgumentNullException.ThrowIfNull(agents);
+        ArgumentNullException.ThrowIfNull(authoring);
+        ArgumentNullException.ThrowIfNull(queries);
+        ArgumentNullException.ThrowIfNull(sessions);
+        _agents = agents;
+        _authoring = authoring;
+        _queries = queries;
+        _sessions = sessions;
+    }
 
     public async Task<DevWorkflowRunResponse> ComposeAsync(DevWorkflowRunDetail detail, CancellationToken cancellationToken)
     {

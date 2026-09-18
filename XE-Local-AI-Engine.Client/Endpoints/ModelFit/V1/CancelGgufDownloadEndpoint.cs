@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     model name. Cancellation is cooperative (the GGUF store stops at the next byte/await boundary) and idempotent —
 ///     a download that already finished / was never started returns <c>cancelled:false</c>, not an error.
 /// </summary>
-public sealed class CancelGgufDownloadEndpoint(IGgufDownloadCoordinator downloadCoordinator)
-    : Endpoint<CancelGgufDownloadRequest, CancelGgufDownloadResponse>
+public sealed class CancelGgufDownloadEndpoint : Endpoint<CancelGgufDownloadRequest, CancelGgufDownloadResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+
+    public CancelGgufDownloadEndpoint(IGgufDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

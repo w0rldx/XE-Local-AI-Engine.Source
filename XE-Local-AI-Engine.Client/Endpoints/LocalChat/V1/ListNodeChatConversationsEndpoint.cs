@@ -8,12 +8,19 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
-public sealed class ListNodeChatConversationsEndpoint(INodeChatPersistenceService chatPersistence, IOptions<SecurityOptions> securityOptions)
-    : Endpoint<ListNodeChatConversationsRequest, ListNodeChatConversationsResponse>
+public sealed class ListNodeChatConversationsEndpoint : Endpoint<ListNodeChatConversationsRequest, ListNodeChatConversationsResponse>
 {
-    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
+    private readonly INodeChatPersistenceService _chatPersistence;
 
-    private readonly IOptions<SecurityOptions> _securityOptions = securityOptions ?? throw new ArgumentNullException(nameof(securityOptions));
+    private readonly IOptions<SecurityOptions> _securityOptions;
+
+    public ListNodeChatConversationsEndpoint(INodeChatPersistenceService chatPersistence, IOptions<SecurityOptions> securityOptions)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(securityOptions);
+        _chatPersistence = chatPersistence;
+        _securityOptions = securityOptions;
+    }
 
     public override void Configure()
     {

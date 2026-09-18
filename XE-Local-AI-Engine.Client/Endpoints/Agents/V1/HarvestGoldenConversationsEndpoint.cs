@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 ///     (deterministic, no model). Returns the per-run counts; 404 when the agent does not exist. A route-only POST (the
 ///     client posts <c>{}</c> — FastEndpoints 415s a truly empty body). Operator-gated.
 /// </summary>
-public sealed class HarvestGoldenConversationsEndpoint(IGoldenHarvestService harvestService)
-    : Endpoint<HarvestGoldenConversationsRequest, GoldenHarvestResponse>
+public sealed class HarvestGoldenConversationsEndpoint : Endpoint<HarvestGoldenConversationsRequest, GoldenHarvestResponse>
 {
-    private readonly IGoldenHarvestService _harvestService = harvestService ?? throw new ArgumentNullException(nameof(harvestService));
+    private readonly IGoldenHarvestService _harvestService;
+
+    public HarvestGoldenConversationsEndpoint(IGoldenHarvestService harvestService)
+    {
+        ArgumentNullException.ThrowIfNull(harvestService);
+        _harvestService = harvestService;
+    }
 
     public override void Configure()
     {

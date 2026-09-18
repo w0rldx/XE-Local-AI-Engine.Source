@@ -11,10 +11,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 ///     downloads. The FE polls this to rediscover downloads after navigation and to render a progress list.
 ///     No path, URL, or token is returned; all fields are sanitized by <see cref="IGgufDownloadCoordinator" />.
 /// </summary>
-public sealed class GetGgufDownloadsEndpoint(IGgufDownloadCoordinator downloadCoordinator)
-    : EndpointWithoutRequest<ListGgufDownloadsResponse>
+public sealed class GetGgufDownloadsEndpoint : EndpointWithoutRequest<ListGgufDownloadsResponse>
 {
-    private readonly IGgufDownloadCoordinator _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+
+    public GetGgufDownloadsEndpoint(IGgufDownloadCoordinator downloadCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(downloadCoordinator);
+        _downloadCoordinator = downloadCoordinator;
+    }
 
     public override void Configure()
     {

@@ -11,12 +11,20 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 ///     older turns with a node-local model into an encrypted synopsis sent in their place on later turns; the original
 ///     messages are never deleted. Operator-gated and honors the read-only mutation guard, like rename/pin/archive.
 /// </summary>
-public sealed class CompactNodeChatConversationEndpoint(
-    IConversationCompactionService compactionService,
-    INodeChatMutationGuard mutationGuard) : Endpoint<CompactNodeChatConversationRequest, CompactNodeChatConversationResponse>
+public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeChatConversationRequest, CompactNodeChatConversationResponse>
 {
-    private readonly IConversationCompactionService _compactionService = compactionService ?? throw new ArgumentNullException(nameof(compactionService));
-    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
+    private readonly IConversationCompactionService _compactionService;
+    private readonly INodeChatMutationGuard _mutationGuard;
+
+    public CompactNodeChatConversationEndpoint(
+        IConversationCompactionService compactionService,
+        INodeChatMutationGuard mutationGuard)
+    {
+        ArgumentNullException.ThrowIfNull(compactionService);
+        ArgumentNullException.ThrowIfNull(mutationGuard);
+        _compactionService = compactionService;
+        _mutationGuard = mutationGuard;
+    }
 
     public override void Configure()
     {

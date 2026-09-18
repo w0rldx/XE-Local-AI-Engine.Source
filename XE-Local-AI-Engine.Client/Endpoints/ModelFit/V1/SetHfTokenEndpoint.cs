@@ -15,10 +15,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         store.
 ///     </para>
 /// </summary>
-public sealed class SetHfTokenEndpoint(IHfTokenStore tokenStore)
-    : Endpoint<SetHfTokenRequest, HfTokenStatusResponse>
+public sealed class SetHfTokenEndpoint : Endpoint<SetHfTokenRequest, HfTokenStatusResponse>
 {
-    private readonly IHfTokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+    private readonly IHfTokenStore _tokenStore;
+
+    public SetHfTokenEndpoint(IHfTokenStore tokenStore)
+    {
+        ArgumentNullException.ThrowIfNull(tokenStore);
+        _tokenStore = tokenStore;
+    }
 
     public override void Configure()
     {
