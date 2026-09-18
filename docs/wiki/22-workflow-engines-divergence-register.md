@@ -15,6 +15,8 @@ best-practice review's finding F11 names the risk directly: "Every future graph-
 or consciously not, with no record of which divergences are intentional." **Convergence itself is explicitly
 deferred** — operator ruling D10, 2026-09-09: write this register, do not design a merge.
 
+Sections 1–4 compare **only** those two engines. §6 is an addendum outside that comparison: one adjacent, still-undecided duplication in a third module, recorded here because it is the same shape and has no other register.
+
 Where a plan document and the code disagreed, the code (read on this baseline) wins, and the note says so.
 
 ## 1. Comparison table
@@ -77,3 +79,11 @@ The register's default is separation, so anything the two engines now share is r
 
 `docs/agent-knowledge.md` §4, "A fix in one workflow engine is not automatically engine-local", is the durable
 rule; this page is the evidence it points at. Read that entry before changing behavior in either engine.
+
+## 6. Addendum: adjacent divergence outside this register's pair (OPEN)
+
+Development Mode is neither of the two engines compared above, so this sits outside §1–§4. It is recorded here because it is the same shape of unexamined engine duplication the register exists to surface, and because the decision about it is still open. Same ungoverned-gap shape as §3.
+
+| Gap | Cost guess | Note |
+|---|---|---|
+| `DevelopmentCoderModel.RunAsync` (`Services/Development/`) drives `IChatClient.GetStreamingResponseAsync` directly, with a hand-built `ChatOptions` tool set (its private `ToolGateway`, wrapped per tool in `AIFunctionFactory.Create`) and its own `ProviderCallBudget` scope — a second tool-invocation stack beside the shared `IInvocationRunner` that chat (`NodeChatStreamService`), Work Sessions (whose step loop drains that same chat stream service), Graph Workflows' Agent nodes (`GraphWorkflowAgentExecutor`), scheduler `run-agent` (`RunSavedAgentHandler`), External Integrations (`IntegrationExecutionCoordinator`) and Benchmarks (`BenchmarkRunExecutor` / `BenchmarkJudgeExecutor` / `BenchmarkComparisonExecutor`) all route through. | L | **Undecided — recorded, not ruled.** The duplication is real, and a migration would be a re-architecture rather than a rename: the loop's gateway carries Dev Mode-specific pieces, including a cloud-only `submit_cloud_implementation` submission and the hash-locked apply-gate machinery §2 already records as non-portable. The 2026-09 feature audit's recommendation — a recommendation, not an owner ruling — is to **leave as is**. Treat this row as a fact about the code, not as sanctioned target architecture; revisit when a change would otherwise have to be made in both stacks. |
