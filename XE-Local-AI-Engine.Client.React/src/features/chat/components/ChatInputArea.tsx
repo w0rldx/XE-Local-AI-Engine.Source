@@ -183,9 +183,9 @@ export function ChatInputArea({
 	const attachmentControlsAvailable = fileAttachmentsEnabled || imageAttachmentsEnabled;
 	const attachmentAccept = imageAttachmentsEnabled ? `${ATTACHMENT_ACCEPT},${IMAGE_ATTACHMENT_ACCEPT}` : ATTACHMENT_ACCEPT;
 	const attachmentControlsDisabled = disabled || isSending;
-	// Voice controls are dev-gated AND require the operator-owned node gate (capabilities.showVoiceControls,
-	// derived from manifest.Enabled). The leaf components additionally self-gate on the runtime context.
-	const showVoiceControls = developerMode && capabilities.showVoiceControls;
+	// Voice controls require only the operator-owned node gate (capabilities.showVoiceControls, derived from
+	// manifest.Enabled). The leaf components additionally self-gate on the runtime context.
+	const showVoiceControls = capabilities.showVoiceControls;
 	const { width } = useWindowDimensions();
 	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH;
 	const autocomplete = useSlashCommandAutocomplete({

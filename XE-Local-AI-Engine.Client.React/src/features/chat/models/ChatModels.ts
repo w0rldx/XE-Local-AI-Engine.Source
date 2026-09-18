@@ -418,7 +418,6 @@ export interface ChatUiCapabilities {
 	readonly showAgentControls: boolean;
 	// When true the chat composer renders the voice controls (toggle, profile, rate) + per-message Play. Derived
 	// from the node `voice` surface flag AND the operator-owned manifest.Enabled (see buildChatUiCapabilities).
-	// Voice UI is additionally dev-gated at the render site.
 	readonly showVoiceControls: boolean;
 	// When true the chat composer renders the "Use Knowledge Base" toggle (opt-in plain-chat grounding). Derived
 	// from the node's knowledgeBase surface capability (see ChatCapabilityGates.buildChatUiCapabilities).

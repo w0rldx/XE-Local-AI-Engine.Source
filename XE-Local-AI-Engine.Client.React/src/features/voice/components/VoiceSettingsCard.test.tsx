@@ -20,16 +20,14 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	saveNodeSettingsMutation: () => ({ mutationFn: saveMutationFn }),
 }));
 
-vi.mock("@/core/dev-tools/stores/DeveloperModeStore", () => ({
-	useDeveloperModeStore: (selector: (state: { developerMode: boolean }) => unknown) => selector({ developerMode: true }),
-}));
-
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastError, success: vi.fn() } }));
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
 
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
 function renderCard(): { queryClient: QueryClient } {
@@ -49,6 +47,11 @@ function renderCard(): { queryClient: QueryClient } {
 
 describe("VoiceSettingsCard operator controls", () => {
 	beforeEach(() => {
+		// Developer Mode is deliberately OFF for every case in this file: the card is gated on the operator's node
+		// setting alone, so the real store's `false` must never hide it. The hook's own gate is the session, so the
+		// card only reads the node settings once a token exists.
+		useDeveloperModeStore.setState({ developerMode: false });
+		useNodeAuthStore.setState({ accessToken: "test-access-token" });
 		getNodeSettingsOptionsMock.mockReset();
 		saveMutationFn.mockReset();
 		toastError.mockReset();
@@ -82,6 +85,26 @@ describe("VoiceSettingsCard operator controls", () => {
 
 	afterEach(() => {
 		cleanup();
+		useNodeAuthStore.setState({ accessToken: undefined });
+	});
+
+	it("renders the per-user controls with Developer Mode off once the node gate is on", async () => {
+		getNodeSettingsOptionsMock.mockReturnValue({
+			queryKey: nodeSettingsQueryKey,
+			queryFn: async () => ({ voiceFeatureEnabled: true, defaultVoiceProfile: undefined }),
+		});
+
+		renderCard();
+
+		expect(useDeveloperModeStore.getState().developerMode).toBe(false);
+		expect(await screen.findByTestId("voice-settings-enable-switch")).toBeTruthy();
+	});
+
+	it("keeps the per-user controls behind the node gate, showing the operator block only, when the node gate is off", async () => {
+		renderCard();
+
+		expect(await screen.findByTestId("voice-settings-node-gate-switch")).toBeTruthy();
+		expect(screen.queryByTestId("voice-settings-enable-switch")).toBeNull();
 	});
 
 	it("writes voiceFeatureEnabled=true through the node-settings mutation when the operator toggles the node gate", async () => {

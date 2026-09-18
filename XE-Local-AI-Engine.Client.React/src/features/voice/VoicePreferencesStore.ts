@@ -3,7 +3,7 @@ import { create } from "zustand";
 // Client-side voice preferences (UI-state), mirroring NodeChatPreferencesStore: zustand + guarded
 // globalThis.localStorage, global (not per-conversation) keys, safe read/write with try/catch. These are the
 // runtime knobs the operator-owned node setting does NOT cover — voice is OFF and autoplay is OFF by default so the
-// dev-gated feature never speaks unless the user opts in. The selected profile + rate
+// feature never speaks unless the user opts in, even on a node whose operator enabled it. The selected profile + rate
 // persist across reloads. A legacy profile id remains harmless: Web Speech falls back to the requested language or
 // browser default when it cannot find the stored id.
 

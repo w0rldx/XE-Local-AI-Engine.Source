@@ -1,9 +1,9 @@
-// App-root Web Speech runtime owner. Voice remains developer-mode + node-setting gated, but no longer allocates an
-// AudioContext, starts a worker, opens a model cache, or performs any model/network request.
+// App-root Web Speech runtime owner. The operator's node setting is the only gate — voice is a thin SpeechSynthesis
+// wrapper and never allocates an AudioContext, starts a worker, opens a model cache, or performs any model/network
+// request, so there is nothing about it to keep behind developer mode.
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { detectVoiceCapabilities } from "@/core/runtime/CapabilityDetector";
 import { sanitizeForSpeech } from "@/core/runtime/SentenceBuffer";
 import { VoiceRuntime } from "@/core/runtime/VoiceRuntime";
@@ -16,9 +16,8 @@ import { VoiceRuntimeContext, type VoiceRuntimeContextValue } from "@/features/v
 import { resolveOsVoiceLanguage } from "@/features/voice/WebSpeechVoiceCatalog";
 
 export function ClientAiRuntimeProvider({ children }: { readonly children: ReactNode }) {
-	const developerMode = useDeveloperModeStore((state) => state.developerMode);
-	const nodeVoice = useVoiceNodeSettings(developerMode);
-	const enabled = developerMode && nodeVoice.voiceFeatureEnabled;
+	const nodeVoice = useVoiceNodeSettings();
+	const enabled = nodeVoice.voiceFeatureEnabled;
 	const defaultVoiceProfile = nodeVoice.defaultVoiceProfile;
 
 	const runtimeRef = useRef<VoiceRuntime | undefined>(undefined);

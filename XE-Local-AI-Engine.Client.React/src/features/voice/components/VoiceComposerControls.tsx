@@ -8,7 +8,7 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 import { useWebSpeechVoices } from "@/features/voice/WebSpeechVoiceCatalog";
 
 // Composer voice controls: on/off toggle + (when on) a settings menu with the voice-profile picker, autoplay switch,
-// and speaking-rate slider. Self-gates on the runtime context `enabled` flag (developer mode + node setting) so it
+// and speaking-rate slider. Self-gates on the runtime context `enabled` flag (the operator's node setting) so it
 // renders nothing when voice is unavailable. Voice choices come from the browser/OS Web Speech catalog.
 
 export function VoiceComposerControls() {

@@ -16,7 +16,6 @@ import { IconInfoCircle, IconVolume } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButton";
 import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";
@@ -61,9 +60,8 @@ function buildVoiceGroups(
 
 export function VoiceSettingsCard() {
 	const { t, i18n } = useTranslation();
-	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	// Operator-owned node settings (read + write the node-level voice fields via the existing node-settings endpoint).
-	const nodeVoice = useVoiceNodeSettings(developerMode);
+	const nodeVoice = useVoiceNodeSettings();
 	// Every OS/browser voice, grouped by language.
 	const osVoices = useWebSpeechVoices();
 
@@ -79,10 +77,6 @@ export function VoiceSettingsCard() {
 		() => buildVoiceGroups(osVoices, i18n.language, (language) => t("voice.settings.systemVoiceGroupLabel", { language })),
 		[osVoices, i18n.language, t],
 	);
-
-	if (!developerMode) {
-		return null;
-	}
 
 	const operatorEnabled = nodeVoice.voiceFeatureEnabled;
 	const selectedProfile = voiceProfile || nodeVoice.defaultVoiceProfile || null;
