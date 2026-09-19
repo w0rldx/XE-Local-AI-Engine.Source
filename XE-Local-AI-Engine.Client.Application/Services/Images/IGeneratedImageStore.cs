@@ -19,6 +19,18 @@ public interface IGeneratedImageStore
     ///     id is unknown or its blob is missing on disk.
     /// </summary>
     Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Best-effort removal of the encrypted blobs a deleted job's rows pointed at, plus that job's now-empty
+    ///     directory. Called AFTER the rows are gone, so a file that cannot be unlinked is logged and left behind
+    ///     rather than failing the delete — nothing here resurrects the job.
+    ///     <para>
+    ///         Every path is proved to resolve under the image blob root first; one that does not is skipped with a
+    ///         warning. The stored paths are server-computed, but this is the deletion boundary and it enforces that
+    ///         invariant itself rather than trusting the column.
+    ///     </para>
+    /// </summary>
+    void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths);
 }
 
 /// <summary>Non-secret metadata supplied when persisting a generated image.</summary>

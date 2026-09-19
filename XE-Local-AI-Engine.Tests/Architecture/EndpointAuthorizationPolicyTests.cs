@@ -21,7 +21,7 @@ using EndpointDefinition = FastEndpoints.EndpointDefinition;
 ///     <c>AnonymousVerbs</c>, and ASP.NET Core honours it over any policy also present.
 ///     <para>
 ///         The global <c>Endpoints.Configurator</c> in <c>Program.cs</c> is what makes a forgotten
-///         <c>Policies()</c> call harmless. Four hundred and forty-five of the endpoints also call it themselves,
+///         <c>Policies()</c> call harmless. Four hundred and forty-six of the endpoints also call it themselves,
 ///         so deleting the Configurator would leave a "does everything resolve to Operator" test green —
 ///         <see cref="ConfiguratorCanaryProbeEndpoint" /> is the one endpoint with no protection of its own, and
 ///         the named assertion on it is the actual regression guard.
@@ -31,8 +31,8 @@ using EndpointDefinition = FastEndpoints.EndpointDefinition;
 public sealed class EndpointAuthorizationPolicyTests
 {
     /// <summary>
-    ///     Non-vacuity floor for the FastEndpoints route set. The real count is four hundred and forty-six
-    ///     (four hundred and forty-five plus this slice's canary); the floor sits under it because it exists to
+    ///     Non-vacuity floor for the FastEndpoints route set. The real count is four hundred and forty-seven
+    ///     (four hundred and forty-six plus this slice's canary); the floor sits under it because it exists to
     ///     catch an empty or half-built route table, not to notice a retired endpoint.
     /// </summary>
     private const int EndpointFloor = 400;

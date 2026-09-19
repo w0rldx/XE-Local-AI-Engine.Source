@@ -181,11 +181,49 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         return await store.GetAsync(jobId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken)
+    public async Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-        return await store.ListAsync(cancellationToken);
+        var items = await store.ListAsync(limit, offset, cancellationToken);
+        var total = await store.CountAsync(cancellationToken);
+        return new ImageJobPage(items, total);
+    }
+
+    public async Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
+
+        var view = await store.GetAsync(jobId, cancellationToken);
+        if (view is null)
+        {
+            return ImageJobDeleteOutcome.NotFound;
+        }
+
+        // Reading the status and then deleting is safe without a lock because terminal is a ONE-WAY door: a job's row
+        // is only ever written by its own run task, which writes a terminal status once and never leaves it. A job
+        // that reads non-terminal here is refused; one that reads terminal cannot become active again.
+        if (!IsTerminalStatus(view.Status))
+        {
+            return ImageJobDeleteOutcome.NotTerminal;
+        }
+
+        var storagePaths = await store.DeleteAsync(jobId, cancellationToken);
+        if (storagePaths is null)
+        {
+            // Another delete won the race between the status read and this call.
+            return ImageJobDeleteOutcome.NotFound;
+        }
+
+        // Drop the replay log with the job, so a hub subscriber that arrives late replays nothing for a job that no
+        // longer exists instead of the deleted job's terminal event.
+        _ = _eventLogs.TryRemove(jobId, out _);
+
+        // Rows first, blobs second, best-effort: a file that cannot be unlinked leaves an orphan on disk rather than
+        // failing a delete whose rows are already gone.
+        _imageStore.RemoveJobBlobs(jobId, storagePaths);
+        return ImageJobDeleteOutcome.Deleted;
     }
 
     public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId)

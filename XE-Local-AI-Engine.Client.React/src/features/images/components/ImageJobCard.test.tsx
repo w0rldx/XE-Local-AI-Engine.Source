@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -67,11 +68,15 @@ function progress(overrides: Partial<ImageJobProgressView>): ImageJobProgressVie
 	};
 }
 
+// The card now carries a delete button whose mutation needs a client; the timeline assertions below are unaffected.
 function renderCard(view = job()) {
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider>
-			<ImageJobCard job={view} isCancelling={false} onCancel={() => undefined} />
-		</MantineProvider>,
+		<QueryClientProvider client={queryClient}>
+			<MantineProvider>
+				<ImageJobCard job={view} isCancelling={false} onCancel={() => undefined} />
+			</MantineProvider>
+		</QueryClientProvider>,
 	);
 }
 

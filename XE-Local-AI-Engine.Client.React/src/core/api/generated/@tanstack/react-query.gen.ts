@@ -103,6 +103,7 @@ import {
 	deleteExternalProviderConnection,
 	deleteGoldenConversation,
 	deleteGraphWorkflowDefinition,
+	deleteImageJob,
 	deleteImageModel,
 	deleteIntegrationSession,
 	deleteIntegrationTrigger,
@@ -689,6 +690,9 @@ import type {
 	DeleteGraphWorkflowDefinitionData,
 	DeleteGraphWorkflowDefinitionError,
 	DeleteGraphWorkflowDefinitionResponse,
+	DeleteImageJobData,
+	DeleteImageJobError,
+	DeleteImageJobResponse,
 	DeleteImageModelData,
 	DeleteImageModelError,
 	DeleteImageModelResponse,
@@ -1123,6 +1127,7 @@ import type {
 	ListGraphWorkflowToolsData,
 	ListGraphWorkflowToolsResponse,
 	ListImageJobsData,
+	ListImageJobsError,
 	ListImageJobsResponse,
 	ListImageModelDownloadsData,
 	ListImageModelDownloadsResponse,
@@ -6774,7 +6779,12 @@ export const cancelStableDiffusionCppSourceBuildMutation = (
 export const listImageJobsQueryKey = (options?: Options<ListImageJobsData>) => createQueryKey("listImageJobs", options);
 
 export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
-	queryOptions<ListImageJobsResponse, AxiosError<DefaultError>, ListImageJobsResponse, ReturnType<typeof listImageJobsQueryKey>>({
+	queryOptions<
+		ListImageJobsResponse,
+		AxiosError<ListImageJobsError>,
+		ListImageJobsResponse,
+		ReturnType<typeof listImageJobsQueryKey>
+	>({
 		queryFn: async ({ queryKey, signal }) => {
 			const { data } = await listImageJobs({
 				...options,
@@ -6786,6 +6796,44 @@ export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
 		},
 		queryKey: listImageJobsQueryKey(options),
 	});
+
+export const listImageJobsInfiniteQueryKey = (options?: Options<ListImageJobsData>): QueryKey<Options<ListImageJobsData>> =>
+	createQueryKey("listImageJobs", options, true);
+
+export const listImageJobsInfiniteOptions = (options?: Options<ListImageJobsData>) => {
+	const opts = infiniteQueryOptions<
+		ListImageJobsResponse,
+		AxiosError<ListImageJobsError>,
+		InfiniteData<ListImageJobsResponse>,
+		QueryKey<Options<ListImageJobsData>>,
+		number | null | Pick<QueryKey<Options<ListImageJobsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListImageJobsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listImageJobs({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listImageJobsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const createImageJobMutation = (
 	options?: Partial<Options<CreateImageJobData>>,
@@ -6806,6 +6854,42 @@ export const createImageJobMutation = (
 	};
 	return mutationOptions;
 };
+
+export const deleteImageJobMutation = (
+	options?: Partial<Options<DeleteImageJobData>>,
+): UseMutationOptions<DeleteImageJobResponse, AxiosError<DeleteImageJobError>, Options<DeleteImageJobData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteImageJobResponse,
+		AxiosError<DeleteImageJobError>,
+		Options<DeleteImageJobData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteImageJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getImageJobQueryKey = (options: Options<GetImageJobData>) => createQueryKey("getImageJob", options);
+
+export const getImageJobOptions = (options: Options<GetImageJobData>) =>
+	queryOptions<GetImageJobResponse, AxiosError<DefaultError>, GetImageJobResponse, ReturnType<typeof getImageJobQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getImageJob({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getImageJobQueryKey(options),
+	});
 
 export const deleteImageModelMutation = (
 	options?: Partial<Options<DeleteImageModelData>>,
@@ -6846,22 +6930,6 @@ export const ejectImageRuntimeMutation = (
 	};
 	return mutationOptions;
 };
-
-export const getImageJobQueryKey = (options: Options<GetImageJobData>) => createQueryKey("getImageJob", options);
-
-export const getImageJobOptions = (options: Options<GetImageJobData>) =>
-	queryOptions<GetImageJobResponse, AxiosError<DefaultError>, GetImageJobResponse, ReturnType<typeof getImageJobQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getImageJob({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getImageJobQueryKey(options),
-	});
 
 export const getImageModelCatalogQueryKey = (options?: Options<GetImageModelCatalogData>) =>
 	createQueryKey("getImageModelCatalog", options);

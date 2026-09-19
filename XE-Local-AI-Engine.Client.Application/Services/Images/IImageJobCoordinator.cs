@@ -30,14 +30,38 @@ public interface IImageJobCoordinator
     /// <summary>Reads one job's current status view, or <see langword="null" /> when unknown.</summary>
     Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Lists every persisted job (newest first).</summary>
-    Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken);
+    /// <summary>Lists one page of persisted jobs (newest first) plus the unpaged total.</summary>
+    Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Deletes a terminal job with its generated image(s) — the rows first, then the encrypted blobs on disk.
+    ///     A job that is still <see cref="ImageJobStatus.Queued" /> or <see cref="ImageJobStatus.Generating" /> is
+    ///     refused outright (<see cref="ImageJobDeleteOutcome.NotTerminal" />); cancel it first. Mirrors the benchmark
+    ///     project delete, which refuses an active run rather than cancelling it on the operator's behalf.
+    /// </summary>
+    Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Returns the job's buffered status events (in seq order) for a late hub subscriber to replay. Empty when the job
     ///     has no live replay log (already evicted or never seen).
     /// </summary>
     IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId);
+}
+
+/// <summary>One page of the job history plus the count of rows that exist in total, ignoring paging.</summary>
+public sealed record ImageJobPage(IReadOnlyList<ImageJobView> Items, int TotalCount);
+
+/// <summary>What a delete did, reported as a value rather than an exception (the endpoint maps it to a status code).</summary>
+public enum ImageJobDeleteOutcome
+{
+    /// <summary>The job, its image rows and its blobs are gone.</summary>
+    Deleted,
+
+    /// <summary>No job with that id exists.</summary>
+    NotFound,
+
+    /// <summary>The job is still queued or generating; cancel it before deleting it.</summary>
+    NotTerminal
 }
 
 /// <summary>

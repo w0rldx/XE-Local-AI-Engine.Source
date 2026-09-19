@@ -288,6 +288,9 @@ import type {
 	DeleteGraphWorkflowDefinitionData,
 	DeleteGraphWorkflowDefinitionErrors,
 	DeleteGraphWorkflowDefinitionResponses,
+	DeleteImageJobData,
+	DeleteImageJobErrors,
+	DeleteImageJobResponses,
 	DeleteImageModelData,
 	DeleteImageModelErrors,
 	DeleteImageModelResponses,
@@ -1533,6 +1536,8 @@ import {
 	zDeleteGoldenConversationResponse,
 	zDeleteGraphWorkflowDefinitionPath,
 	zDeleteGraphWorkflowDefinitionResponse,
+	zDeleteImageJobPath,
+	zDeleteImageJobResponse,
 	zDeleteImageModelPath,
 	zDeleteImageModelResponse,
 	zDeleteIntegrationSessionPath,
@@ -1875,6 +1880,7 @@ import {
 	zListGraphWorkflowRunsQuery,
 	zListGraphWorkflowRunsResponse,
 	zListGraphWorkflowToolsResponse,
+	zListImageJobsQuery,
 	zListImageJobsResponse,
 	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
@@ -9756,7 +9762,7 @@ export const listImageJobs = <ThrowOnError extends boolean = false>(
 				.object({
 					body: z.never().optional(),
 					path: z.never().optional(),
-					query: z.never().optional(),
+					query: zListImageJobsQuery.optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",
@@ -9809,6 +9815,65 @@ export const createImageJob = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const deleteImageJob = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteImageJobData, ThrowOnError>,
+): RequestResult<DeleteImageJobResponses, DeleteImageJobErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteImageJobResponses, DeleteImageJobErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteImageJobPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteImageJobResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/images/jobs/{jobId}",
+		...options,
+	});
+
+export const getImageJob = <ThrowOnError extends boolean = false>(
+	options: Options<GetImageJobData, ThrowOnError>,
+): RequestResult<GetImageJobResponses, GetImageJobErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetImageJobResponses, GetImageJobErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetImageJobPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetImageJobResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/images/jobs/{jobId}",
+		...options,
 	});
 
 export const deleteImageModel = <ThrowOnError extends boolean = false>(
@@ -9872,36 +9937,6 @@ export const ejectImageRuntime = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const getImageJob = <ThrowOnError extends boolean = false>(
-	options: Options<GetImageJobData, ThrowOnError>,
-): RequestResult<GetImageJobResponses, GetImageJobErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetImageJobResponses, GetImageJobErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zGetImageJobPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetImageJobResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/images/jobs/{jobId}",
-		...options,
 	});
 
 export const getImageModelCatalog = <ThrowOnError extends boolean = false>(

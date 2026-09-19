@@ -522,3 +522,9 @@ export interface BrowseInstallRequest {
 		sizeBytes: number;
 	}[];
 }
+
+// Job-history page size. Deliberately smaller than the app-wide default of 25: every succeeded card fetches,
+// decrypts and then holds its own PNG, so a page of this list costs real network and memory rather than a few
+// table rows. The node caps a page at 200 (ListImageJobsRequestValidator.MaxLimit), well above every option here.
+export const imageJobsPerPage = 10;
+export const imageJobPageSizeOptions: readonly number[] = [10, 25, 50];

@@ -2,6 +2,7 @@ import { Badge, Button, Card, Group, Progress, Stack, Text } from "@mantine/core
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ImageJobDeleteButton } from "@/features/images/components/ImageJobDeleteButton";
 import { ImageResultView } from "@/features/images/components/ImageResultView";
 import { useImageJobProgress } from "@/features/images/hooks/useImageJobHub";
 import {
@@ -106,7 +107,8 @@ interface ImageJobCardProps {
 
 // One image job row: queued → generating → succeeded/failed/cancelled, with the live generation timeline (phase, step
 // bar, estimate) underneath while the job runs. A cancellable job (queued or generating) shows a Cancel button; a
-// succeeded job shows its decrypted PNG.
+// succeeded job shows its decrypted PNG. Delete sits beside them and is disabled until the job is terminal — the
+// node refuses an active job, and the button says so rather than letting the operator find out through a toast.
 export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps) {
 	const { t } = useTranslation();
 	const isGenerating = job.status === "Generating";
@@ -147,18 +149,21 @@ export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps)
 							})}
 						</Text>
 					</Stack>
-					{canCancel ? (
-						<Button
-							size="xs"
-							variant="light"
-							color="red"
-							loading={isCancelling}
-							onClick={() => onCancel(job.id)}
-							data-testid="image-job-cancel"
-						>
-							{t("common.cancel", "Cancel")}
-						</Button>
-					) : null}
+					<Group gap="xs" wrap="nowrap">
+						{canCancel ? (
+							<Button
+								size="xs"
+								variant="light"
+								color="red"
+								loading={isCancelling}
+								onClick={() => onCancel(job.id)}
+								data-testid="image-job-cancel"
+							>
+								{t("common.cancel", "Cancel")}
+							</Button>
+						) : null}
+						<ImageJobDeleteButton job={job} />
+					</Group>
 				</Group>
 
 				{isTerminalStatus(job.status) ? null : <GenerationTimeline display={display} />}

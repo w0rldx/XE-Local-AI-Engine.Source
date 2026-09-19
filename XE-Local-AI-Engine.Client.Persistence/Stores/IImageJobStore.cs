@@ -18,8 +18,22 @@ public interface IImageJobStore
     /// <summary>Reads one job's decrypted view, or <see langword="null" /> when it does not exist.</summary>
     Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Lists every job (newest first) as a decrypted view.</summary>
-    Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken);
+    /// <summary>Lists one page of jobs (newest first) as a decrypted view.</summary>
+    Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken);
+
+    /// <summary>How many jobs exist in total, ignoring paging — what lets the client show a real pager.</summary>
+    Task<int> CountAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Deletes one job together with its <c>generated_images</c> rows in a single transaction and returns the
+    ///     storage paths of the blobs that are now unreferenced, or <see langword="null" /> when the job does not exist.
+    ///     <para>
+    ///         The caller unlinks those files best-effort. The blob files are deliberately NOT removed here: the rows
+    ///         are the record, so a file that could not be unlinked must leave an orphaned blob behind rather than
+    ///         resurrect the job an operator asked to delete.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>Transitions a job to <see cref="ImageJobStatus.Generating" /> and records its start time.</summary>
     Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken);

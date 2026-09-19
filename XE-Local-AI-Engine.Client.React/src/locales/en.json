@@ -3795,7 +3795,14 @@
 				"finishing": "Finishing (decoding image)…",
 				"steps": "Step {{step}} of {{totalSteps}}",
 				"stepProgressLabel": "Generation progress",
-				"eta": "~{{seconds}}s left"
+				"eta": "~{{seconds}}s left",
+				"deleteTitle": "Delete this image job?",
+				"deleteConfirm": "This job, its prompt and the image it produced are deleted — the picture is removed from disk. This cannot be undone.",
+				"deleteConfirmNoImage": "This job and its prompt are deleted. It produced no image. This cannot be undone.",
+				"deleteHint": "Deletes the job and the image it produced.",
+				"deleteBlocked": "This job is still running. Cancel it first, then delete it.",
+				"deleted": "Image job deleted.",
+				"deleteError": "Could not delete this image job."
 			},
 			"status": {
 				"Queued": "Queued",

@@ -13,6 +13,14 @@ import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 
 const IMAGE_BLOB_QUERY_KEY = "image-blob";
 
+/**
+ * The cache key one decrypted PNG is held under. Exported so a delete can drop the blob it just removed from the
+ * node: `staleTime: Infinity` means nothing else ever would, and the bytes would outlive the image for the session.
+ */
+export function imageBlobQueryKey(imageId: string): readonly [string, string] {
+	return [IMAGE_BLOB_QUERY_KEY, imageId];
+}
+
 async function fetchImageBlob(imageId: string, signal: AbortSignal): Promise<Blob> {
 	const response = await axiosInstance.get<Blob>(buildLocalApiUrl(`images/${imageId}`), {
 		responseType: "blob",

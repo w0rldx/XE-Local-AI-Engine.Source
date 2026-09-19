@@ -55,15 +55,57 @@ public sealed class ImageJobStore : IImageJobStore
         return entity is null ? null : ToView(entity);
     }
 
-    public async Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken)
     {
+        // Floor both bounds: a negative limit reaches SQLite as LIMIT -1, which is "no limit" — the whole table, every
+        // prompt decrypted, for a caller that asked for a page.
+        var take = Math.Max(val1: 0, limit);
+        var skip = Math.Max(val1: 0, offset);
+
         var entities = await _dbContext.ImageJobs
                                        .AsNoTracking()
                                        .OrderByDescending(job => job.CreatedAtUtc)
                                        .ThenByDescending(job => job.Id)
+                                       .Skip(skip)
+                                       .Take(take)
                                        .ToListAsync(cancellationToken);
 
         return entities.Select(ToView).ToArray();
+    }
+
+    public Task<int> CountAsync(CancellationToken cancellationToken)
+    {
+        return _dbContext.ImageJobs.CountAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        var entity = await LoadTrackedAsync(jobId, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        // The image rows are deleted set-based rather than by loading them: the relationship declares ON DELETE
+        // CASCADE, but the node connection leaves PRAGMA foreign_keys off, so the database will not enforce it and the
+        // rows would orphan. The two statements share one transaction so a job never survives its own images.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var storagePaths = await _dbContext.GeneratedImages
+                                           .AsNoTracking()
+                                           .Where(image => image.JobId == jobId)
+                                           .Select(image => image.StoragePath)
+                                           .ToArrayAsync(cancellationToken);
+
+        _ = await _dbContext.GeneratedImages
+                            .Where(image => image.JobId == jobId)
+                            .ExecuteDeleteAsync(cancellationToken);
+
+        _ = _dbContext.ImageJobs.Remove(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+        return storagePaths;
     }
 
     public async Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken)

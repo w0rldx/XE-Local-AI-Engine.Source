@@ -90,7 +90,7 @@ public sealed class ImageJobCoordinatorTests
 
         _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(() => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None));
 
-        AssertEx.Empty(await harness.Coordinator.ListAsync(CancellationToken.None));
+        AssertEx.Empty((await harness.Coordinator.ListAsync(limit: 50, offset: 0, CancellationToken.None)).Items);
         AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);
     }
 
@@ -171,6 +171,98 @@ public sealed class ImageJobCoordinatorTests
         var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None));
         AssertEx.Equal(expected: 128, view.Width, "A succeeded job must report the produced width (128), not the requested one (100).");
         AssertEx.Equal(expected: 512, view.Height);
+    }
+
+    [Test]
+    public async Task DeleteAsync_WhenTerminal_RemovesTheRowsAndAsksForTheBlobsAndDropsTheReplayLog()
+    {
+        using var harness = Harness.Create(blockRuntime: false);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("deleted-after-it-finished"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+
+        var outcome = await harness.Coordinator.DeleteAsync(jobId, CancellationToken.None);
+
+        AssertEx.Equal(ImageJobDeleteOutcome.Deleted, outcome);
+        AssertEx.Null(await harness.Coordinator.GetAsync(jobId, CancellationToken.None), "The deleted job must no longer resolve.");
+        AssertEx.True(harness.Images.BlobRemovals.ContainsKey(jobId), "The blobs the delete unreferenced must be handed to the image store.");
+        // A late hub subscriber must replay nothing for a job that no longer exists — the terminal event would
+        // otherwise linger in the replay log for the whole retention window.
+        AssertEx.Empty(harness.Coordinator.SnapshotBufferedEvents(jobId));
+    }
+
+    /// <summary>
+    ///     The refusal, mirroring the benchmark project delete: a job the node is still working on is not deleted and
+    ///     not cancelled on the operator's behalf — and nothing is removed, so the refusal is never half-applied.
+    /// </summary>
+    [Test]
+    public async Task DeleteAsync_WhileGenerating_IsRefusedAndRemovesNothing()
+    {
+        using var harness = Harness.Create(blockRuntime: true);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("still-running"), CancellationToken.None);
+        await harness.Runtime.Started.WaitAsync(Timeout);
+
+        var outcome = await harness.Coordinator.DeleteAsync(jobId, CancellationToken.None);
+
+        AssertEx.Equal(ImageJobDeleteOutcome.NotTerminal, outcome);
+        AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None), "A refused delete must leave the job row in place.");
+        AssertEx.Empty(harness.Images.BlobRemovals, "A refused delete must not touch any blob.");
+
+        harness.Runtime.Release();
+    }
+
+    [Test]
+    public async Task DeleteAsync_WhileQueuedBehindARunningJob_IsRefused()
+    {
+        using var harness = Harness.Create(blockRuntime: true);
+
+        _ = await harness.Coordinator.EnqueueAsync(NewInput("holds-the-slot"), CancellationToken.None);
+        await harness.Runtime.Started.WaitAsync(Timeout);
+        var queued = await harness.Coordinator.EnqueueAsync(NewInput("waiting-for-the-slot"), CancellationToken.None);
+
+        AssertEx.Equal(ImageJobDeleteOutcome.NotTerminal, await harness.Coordinator.DeleteAsync(queued, CancellationToken.None));
+
+        harness.Runtime.Release();
+    }
+
+    [Test]
+    public async Task DeleteAsync_WhenJobUnknown_ReportsNotFound()
+    {
+        using var harness = Harness.Create(blockRuntime: false);
+
+        AssertEx.Equal(ImageJobDeleteOutcome.NotFound, await harness.Coordinator.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    /// <summary>
+    ///     The page is a window on the newest-first order, and <c>TotalCount</c> describes the whole table rather than
+    ///     the window — without that a client could bound its reads but never number them.
+    /// </summary>
+    [Test]
+    public async Task ListAsync_PagesNewestFirstAndReportsTheUnpagedTotal()
+    {
+        using var harness = Harness.Create(blockRuntime: false);
+
+        var ids = new List<Guid>();
+        for (var index = 0; index < 3; index++)
+        {
+            var jobId = await harness.Coordinator.EnqueueAsync(NewInput($"paged-{index}"), CancellationToken.None);
+            await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+            ids.Add(jobId);
+        }
+
+        var firstPage = await harness.Coordinator.ListAsync(limit: 2, offset: 0, CancellationToken.None);
+        AssertEx.Equal(expected: 2, firstPage.Items.Count);
+        AssertEx.Equal(expected: 3, firstPage.TotalCount, "TotalCount counts every job, not the page.");
+
+        var secondPage = await harness.Coordinator.ListAsync(limit: 2, offset: 2, CancellationToken.None);
+        AssertEx.Equal(expected: 1, secondPage.Items.Count);
+        AssertEx.Equal(expected: 3, secondPage.TotalCount);
+
+        // The two pages together are the whole table with no row seen twice, which is what a stable order buys.
+        var paged = firstPage.Items.Concat(secondPage.Items).Select(view => view.Id).ToArray();
+        AssertEx.Equal(expected: 3, paged.Distinct().Count(), "No job may appear on two pages.");
+        AssertEx.True(ids.TrueForAll(paged.Contains), "Every job must appear on exactly one page.");
     }
 
     [Test]
@@ -569,9 +661,32 @@ public sealed class ImageJobCoordinatorTests
             return Task.FromResult(_jobs.TryGetValue(jobId, out var view) ? view : null);
         }
 
-        public Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken)
+        public Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<ImageJobView>>(_jobs.Values.ToArray());
+            var page = _jobs.Values
+                            .OrderByDescending(view => view.CreatedAtUtc)
+                            .ThenByDescending(view => view.Id)
+                            .Skip(Math.Max(val1: 0, offset))
+                            .Take(Math.Max(val1: 0, limit))
+                            .ToArray();
+            return Task.FromResult<IReadOnlyList<ImageJobView>>(page);
+        }
+
+        public Task<int> CountAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_jobs.Count);
+        }
+
+        public Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken)
+        {
+            if (!_jobs.TryRemove(jobId, out var view))
+            {
+                return Task.FromResult<IReadOnlyList<string>?>(result: null);
+            }
+
+            // One recorded blob path per produced image, matching the real store's contract (no image → no path).
+            IReadOnlyList<string> paths = view.ImageId is { } imageId ? [imageId.ToString("D")] : [];
+            return Task.FromResult<IReadOnlyList<string>?>(paths);
         }
 
         public Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken)
@@ -674,6 +789,9 @@ public sealed class ImageJobCoordinatorTests
     {
         public ConcurrentDictionary<Guid, Guid> Added { get; } = new();
 
+        /// <summary>Job ids whose blobs were asked to be removed, with the paths handed over.</summary>
+        public ConcurrentDictionary<Guid, IReadOnlyList<string>> BlobRemovals { get; } = new();
+
         public Task<GeneratedImageInfo> AddAsync(Guid jobId, Guid imageId, ReadOnlyMemory<byte> pngBytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken)
         {
             Added[imageId] = jobId;
@@ -683,6 +801,11 @@ public sealed class ImageJobCoordinatorTests
         public Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken)
         {
             return Task.FromResult<GeneratedImageContent?>(null);
+        }
+
+        public void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths)
+        {
+            BlobRemovals[jobId] = storagePaths;
         }
     }
 }

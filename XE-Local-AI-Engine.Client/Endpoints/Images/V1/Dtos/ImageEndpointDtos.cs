@@ -91,10 +91,21 @@ public sealed class ImageJobResponse
     public long? CancellationRequestedAtUtc { get; init; }
 }
 
-/// <summary>Response envelope for <c>GET images/jobs</c>.</summary>
+/// <summary>Response envelope for <c>GET images/jobs</c>, newest first, with the unpaged total.</summary>
 public sealed class ListImageJobsResponse
 {
     public required IReadOnlyList<ImageJobResponse> Items { get; init; }
+
+    /// <summary>How many jobs exist in total, ignoring paging — what lets the client show a real pager.</summary>
+    public required int TotalCount { get; init; }
+}
+
+/// <summary>Query for <c>GET images/jobs</c>; both bounds are clamped in the handler.</summary>
+public sealed class ListImageJobsRequest
+{
+    public int? Limit { get; init; }
+
+    public int? Offset { get; init; }
 }
 
 /// <summary>

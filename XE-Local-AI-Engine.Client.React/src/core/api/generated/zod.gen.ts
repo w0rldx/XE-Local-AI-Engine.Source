@@ -3990,7 +3990,13 @@ export const zXeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryReques
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelDownloadStatusResponse = z.object({
 	modelName: z.string(),
@@ -9805,6 +9811,19 @@ export const zCancelStableDiffusionCppSourceBuildBody = zXeLocalAiEngineClientEn
 export const zCancelStableDiffusionCppSourceBuildResponse =
 	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
 
+export const zListImageJobsQuery = z.object({
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
 /**
  * Success
  */
@@ -9816,6 +9835,24 @@ export const zCreateImageJobBody = zXeLocalAiEngineClientEndpointsImagesV1Create
  * Success
  */
 export const zCreateImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+export const zDeleteImageJobPath = z.object({
+	jobId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteImageJobResponse = z.void();
+
+export const zGetImageJobPath = z.object({
+	jobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
 
 export const zDeleteImageModelPath = z.object({
 	modelName: z.string(),
@@ -9832,15 +9869,6 @@ export const zEjectImageRuntimeBody = zXeLocalAiEngineClientEndpointsImagesV1Ima
  * Success
  */
 export const zEjectImageRuntimeResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageRuntimeStatusResponse;
-
-export const zGetImageJobPath = z.object({
-	jobId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
 
 /**
  * Success

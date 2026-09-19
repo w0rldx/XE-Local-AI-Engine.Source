@@ -1,11 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import type {
+	XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest as CreateImageJobRequest,
+	XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
+} from "@/core/api/generated";
 import {
 	browseImageRepositoriesOptions,
 	cancelImageJobMutation,
 	cancelImageModelDownloadMutation,
 	createImageJobMutation,
+	deleteImageJobMutation,
 	deleteImageModelMutation,
 	getImageModelCatalogOptions,
 	inspectImageRepositoryOptions,
@@ -14,11 +19,8 @@ import {
 	listImageModelsOptions,
 	startImageModelDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import type {
-	XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest as CreateImageJobRequest,
-	XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
-} from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { imageBlobQueryKey } from "@/features/images/hooks/useImageObjectUrl";
 import {
 	toImageJobView,
 	toImageModelCatalogEntryView,
@@ -147,12 +149,17 @@ export function useInspectImageRepository(repoId: string | null) {
 	});
 }
 
-// All image jobs, newest-first. The hub push invalidates this key on every coarse status transition, so no polling is
-// needed; a refetchInterval fallback keeps the coarse "elapsed" fresh even if the hub is momentarily down.
-export function useImageJobs() {
+// One page of image jobs, newest-first, plus the count of jobs that exist in total — which is what lets the pager
+// number the pages honestly. The hub push invalidates this key on every coarse status transition, so no polling is
+// needed. The server orders the page; it is never re-sorted here.
+export function useImageJobs(limit: number, offset: number) {
 	return useQuery({
-		...withResponseValidation(listImageJobsOptions()),
-		select: (data) => (data.items ?? []).map(toImageJobView).sort((a, b) => b.createdAtUtc - a.createdAtUtc),
+		...withResponseValidation(listImageJobsOptions({ query: { limit, offset } })),
+		// `limit`/`offset` are part of the query key, so page 2 is a cache entry with no data of its own. Without the
+		// previous page held over, `totalCount` would read as 0 for a render, the pager would compute one page, and its
+		// clamp would send the operator back to page 1 while the page-2 request was still in flight.
+		placeholderData: keepPreviousData,
+		select: (data) => ({ items: (data.items ?? []).map(toImageJobView), totalCount: data.totalCount ?? 0 }),
 	});
 }
 
@@ -181,6 +188,31 @@ export function useCancelImageJob() {
 			return await options.mutationFn?.({ path: { jobId } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, imageQueryIds.jobs),
+	});
+}
+
+/**
+ * Deletes one finished job with its generated image — rows and encrypted blob. The node refuses a job that is still
+ * queued or generating (409), so the caller surfaces that message rather than retrying.
+ *
+ * The job's decrypted PNG is dropped from the cache alongside the list: `useImageObjectUrl` holds it under
+ * `staleTime: Infinity`, so nothing else would ever evict the bytes of an image that no longer exists. The object URL
+ * built from those bytes is revoked by the hook's own effect cleanup when the deleted card unmounts.
+ */
+export function useDeleteImageJob() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({ jobId }: { jobId: string; imageId: string | null }) => {
+			const options = withResponseValidation(deleteImageJobMutation());
+			return await options.mutationFn?.({ path: { jobId } }, undefined as never);
+		},
+		onSuccess: async (_data, variables) => {
+			if (variables.imageId !== null) {
+				queryClient.removeQueries({ queryKey: imageBlobQueryKey(variables.imageId) });
+			}
+			await invalidate(queryClient, imageQueryIds.jobs);
+		},
 	});
 }
 

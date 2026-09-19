@@ -14,7 +14,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Endpoint integration tests for the image-job API: every route requires the operator token (401 without it), a
 ///     create → get round-trip returns the persisted Queued view through a stubbed coordinator, and the body-less cancel
-///     POST is accepted (not 415) — an unknown job reports 404.
+///     POST is accepted (not 415) — an unknown job reports 404. Delete answers 204 for a terminal job, 404 for an
+///     unknown one and 409 while the job is still in play; the list is paged server-side and carries the unpaged total.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ImageJobEndpointTests
@@ -35,6 +36,7 @@ public sealed class ImageJobEndpointTests
             (HttpMethod.Post, $"{ApiPrefix}/images/jobs"),
             (HttpMethod.Get, $"{ApiPrefix}/images/jobs/{Guid.NewGuid()}"),
             (HttpMethod.Post, $"{ApiPrefix}/images/jobs/{Guid.NewGuid()}/cancel"),
+            (HttpMethod.Delete, $"{ApiPrefix}/images/jobs/{Guid.NewGuid()}"),
             (HttpMethod.Get, $"{ApiPrefix}/images/{Guid.NewGuid()}"),
             (HttpMethod.Get, $"{ApiPrefix}/images/models"),
             (HttpMethod.Post, $"{ApiPrefix}/images/models/downloads")
@@ -228,6 +230,145 @@ public sealed class ImageJobEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "An unknown job on body-less cancel must report 404 (authorized + bound).");
     }
 
+    [Test]
+    public async Task DeleteImageJob_WhenTerminal_Returns204AndRemovesTheJob()
+    {
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        var jobId = await CreateJobAsync(factory, client);
+        coordinator.Terminalize(jobId);
+
+        using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/images/jobs/{jobId}");
+        factory.AddNodeBearerToken(deleteRequest);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+        AssertEx.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/jobs/{jobId}");
+        factory.AddNodeBearerToken(getRequest);
+        using var getResponse = await client.SendAsync(getRequest);
+        AssertEx.Equal(HttpStatusCode.NotFound, getResponse.StatusCode, "A deleted job must no longer resolve.");
+    }
+
+    [Test]
+    public async Task DeleteImageJob_WhenUnknown_Returns404()
+    {
+        await using var factory = NewFactory(new StubImageJobCoordinator());
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/images/jobs/{Guid.NewGuid()}");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    public async Task DeleteImageJob_WhileQueued_Returns409WithTheOutcomeCode()
+    {
+        // The node refuses to delete a job it is still working on rather than cancelling it on the operator's behalf,
+        // and the reason rides as a machine-readable `outcome` member so the SPA need not match on the message.
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        var jobId = await CreateJobAsync(factory, client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/images/jobs/{jobId}");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        AssertEx.Equal("NotTerminal", problem.GetProperty("outcome").GetString());
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/jobs/{jobId}");
+        factory.AddNodeBearerToken(getRequest);
+        using var getResponse = await client.SendAsync(getRequest);
+        AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode, "A refused delete must leave the job in place.");
+    }
+
+    [Test]
+    public async Task ListImageJobs_HonoursLimitAndOffsetAndReportsTheUnpagedTotal()
+    {
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        for (var index = 0; index < 3; index++)
+        {
+            _ = await CreateJobAsync(factory, client);
+        }
+
+        var firstPage = await ReadJobPageAsync(factory, client, "?limit=2&offset=0");
+        AssertEx.Equal(expected: 2, firstPage.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 3, firstPage.GetProperty("totalCount").GetInt32(), "TotalCount counts every job, not the page.");
+
+        var secondPage = await ReadJobPageAsync(factory, client, "?limit=2&offset=2");
+        AssertEx.Equal(expected: 1, secondPage.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 3, secondPage.GetProperty("totalCount").GetInt32());
+
+        // No bounds named: the handler's default page still carries the total.
+        var defaulted = await ReadJobPageAsync(factory, client, query: "");
+        AssertEx.Equal(expected: 3, defaulted.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 3, defaulted.GetProperty("totalCount").GetInt32());
+    }
+
+    [Test]
+    public async Task ListImageJobs_WithOutOfRangeBounds_Returns400()
+    {
+        await using var factory = NewFactory(new StubImageJobCoordinator());
+        using var client = factory.CreateClient();
+
+        foreach (var query in new[] { "?limit=0", "?limit=201", "?offset=-1" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/jobs{query}");
+            factory.AddNodeBearerToken(request);
+            using var response = await client.SendAsync(request);
+            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"images/jobs{query} must be rejected by the validator.");
+        }
+    }
+
+    private static TestServerWebAppFactory NewFactory(IImageJobCoordinator coordinator)
+    {
+        return new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IImageJobCoordinator>();
+                services.AddSingleton(coordinator);
+            }
+        };
+    }
+
+    private static async Task<Guid> CreateJobAsync(TestServerWebAppFactory factory, HttpClient client)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "stable-diffusion-1.5",
+                prompt = "a watercolor fox"
+            })
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        return created.GetProperty("id").GetGuid();
+    }
+
+    private static async Task<JsonElement> ReadJobPageAsync(TestServerWebAppFactory factory, HttpClient client, string query)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/jobs{query}");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+    }
+
     // Deterministic in-memory coordinator: EnqueueAsync mints an id and stores a Queued view GetAsync then returns; no
     // sd-server, DbContext, or encryption is exercised. CancelAsync returns false for an unknown id (→ 404).
     private sealed class StubImageJobCoordinator : IImageJobCoordinator
@@ -267,8 +408,44 @@ public sealed class ImageJobEndpointTests
         public Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken) =>
             Task.FromResult(_jobs.TryGetValue(jobId, out var view) ? view : null);
 
-        public Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<ImageJobView>>([.. _jobs.Values]);
+        public Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken)
+        {
+            var page = _jobs.Values
+                            .OrderByDescending(view => view.CreatedAtUtc)
+                            .ThenByDescending(view => view.Id)
+                            .Skip(offset)
+                            .Take(limit)
+                            .ToArray();
+            return Task.FromResult(new ImageJobPage(page, _jobs.Count));
+        }
+
+        public Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken)
+        {
+            if (!_jobs.TryGetValue(jobId, out var view))
+            {
+                return Task.FromResult(ImageJobDeleteOutcome.NotFound);
+            }
+
+            if (view.Status is ImageJobStatus.Queued or ImageJobStatus.Generating)
+            {
+                return Task.FromResult(ImageJobDeleteOutcome.NotTerminal);
+            }
+
+            _ = _jobs.TryRemove(jobId, out _);
+            return Task.FromResult(ImageJobDeleteOutcome.Deleted);
+        }
+
+        /// <summary>Drops the job to a terminal state so a delete against it is not refused.</summary>
+        public void Terminalize(Guid jobId)
+        {
+            if (_jobs.TryGetValue(jobId, out var view))
+            {
+                _jobs[jobId] = view with
+                {
+                    Status = ImageJobStatus.Succeeded
+                };
+            }
+        }
 
         public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId) =>
             [];

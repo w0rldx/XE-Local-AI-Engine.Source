@@ -48,7 +48,8 @@ Operator (React) ──REST /api/local/v1/images/* ──▶ FastEndpoints
 
 - **`EnqueueAsync`** persists a `Queued` job to `image_jobs`, mints its token, kicks the serialized worker, and returns the job id. Generation runs **detached** after the call returns (the registry is Singleton so it outlives the request).
 - **`CancelAsync`** signals the tracked job's token: a still-queued job is dropped to `Cancelled` **without ever calling the runtime**; a generating job's token is cancelled so the runtime performs the queued-cancel or kill+restart. Returns `false` for an unknown or already-terminal job.
-- **`GetAsync` / `ListAsync`** read the persisted status view (newest first).
+- **`GetAsync` / `ListAsync`** read the persisted status view (newest first); `ListAsync` is paged (`limit`/`offset`) and reports the unpaged total.
+- **`DeleteAsync`** removes a terminal job with its images — see [Deleting a job](#deleting-a-job).
 - **`SnapshotBufferedEvents`** returns a late hub subscriber's replay log. The coordinator keeps a per-job ordered event buffer (cap 128) that lingers ~5 minutes after a terminal event so a client that connects late can catch up.
 
 Progress is **coarse status only** — never the prompt, a path, or a step/percent — and non-terminal pushes are throttled to at most one per second per job. On success the image is persisted encrypted-at-rest **before** the job is marked `Succeeded`.
@@ -102,9 +103,10 @@ Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file i
 | Endpoint | Route | Role |
 |---|---|---|
 | `CreateImageJobEndpoint` | `POST images/jobs` | Enqueue a new generation job (prompt, negative prompt, width/height/steps/sampler). Returns the job id. |
-| `ListImageJobsEndpoint` | `GET images/jobs` | All persisted jobs, newest first. |
+| `ListImageJobsEndpoint` | `GET images/jobs` | One page of persisted jobs, newest first (`limit`/`offset`, with the unpaged `totalCount`). |
 | `GetImageJobEndpoint` | `GET images/jobs/{jobId}` | One job's current status view. |
 | `CancelImageJobEndpoint` | `POST images/jobs/{jobId}/cancel` | Request cancellation of a tracked job. |
+| `DeleteImageJobEndpoint` | `DELETE images/jobs/{jobId}` | Delete a terminal job with its image(s) — rows and encrypted blobs. 409 while the job is still queued or generating. |
 | `RetrieveImageEndpoint` | `GET images/{imageId}` | Fetch the produced image bytes for a succeeded job (decrypted on read). |
 | `ListImageModelsEndpoint` | `GET images/models` | Installed image models available to the runtime. |
 | `DeleteImageModelEndpoint` | `DELETE images/models/{modelName}` | Remove an installed image model. |
@@ -122,6 +124,16 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 
 > **Download progress is polled, not pushed.** Unlike generation jobs, image-model downloads have no hub: `GET images/models/downloads` is the progress surface, and the React model manager polls it while a download is pending. Byte counts plus part index/count are reported, so a multi-part weight download is legible; cancellation goes through `POST images/models/downloads/cancel`.
 
+## Deleting a job
+
+Nothing is deleted until an operator asks. `IImageJobCoordinator.DeleteAsync` is the whole path, and its order is the referential integrity: the node connection leaves `PRAGMA foreign_keys` **off**, so the `ON DELETE CASCADE` declared on `generated_images` is inert and an explicit ordered delete is all that stands between a deleted job and orphaned rows.
+
+1. **Refuse a job that is not terminal.** A `Queued` or `Generating` job answers **409** with an `outcome` member of `NotTerminal`; cancel it first (`POST images/jobs/{jobId}/cancel`). The node refuses rather than cancelling on the operator's behalf — the same posture [benchmark project delete](20-benchmarks.md) takes for an active run. Terminal is a one-way door, so reading the status and then deleting needs no lock.
+2. **Delete the rows in one transaction** (`IImageJobStore.DeleteAsync`): the job's `generated_images` rows first, then the `image_jobs` row. It hands back the `storage_path` of every blob it unreferenced, or `null` when the job never existed (→ **404**).
+3. **Unlink the blobs best-effort** (`IGeneratedImageStore.RemoveJobBlobs`), then the job's now-empty directory. Each path must first resolve **under the image blob root** — the stored `storage_path` is server-computed, but the deletion boundary enforces that itself rather than trusting the column, so a legacy or hand-edited row can never unlink a file the feature does not own; one that escapes is skipped with a warning. A file that cannot be removed is logged and left behind: the rows are already gone, and no sweep will revisit it — an orphaned blob is the accepted cost of never resurrecting a job an operator deleted.
+
+The job's replay log is dropped with it, so a late hub subscriber replays nothing for a job that no longer exists. There is no retention cap and no bulk purge: growth is bounded by the operator, not by a policy.
+
 ## React feature
 
 `src/features/images/` (`pages/`, `hooks/`, `queries/`) renders the generation form, the job list, and the produced images. It follows the standard client conventions: TanStack Query for server state, a SignalR hub (`useImageJobHub`) that **invalidates** the matching query on each pushed job event (notification-only; the query refetches canonical state). See [React Client](10-react-client.md).
@@ -135,6 +147,8 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 5. **The sd-server port range (18200–18299) is disjoint from llama.cpp's (18100–18199)** — keep them from ever colliding.
 6. **Managed runtime records are authoritative and fail closed.** Never fall back to another binary after drift without an explicit operator remove/repair.
 7. **Eject before build/remove.** Runtime mutation must not race active jobs, spawn/readiness, or a resident daemon.
+8. **Nothing outside the image blob root is ever unlinked.** `RemoveJobBlobs` proves containment for every recorded path and for the job directory before deleting either.
+9. **Delete rows before blobs, children before parents.** Foreign keys are not enforced on this connection, so the delete order in `ImageJobStore.DeleteAsync` is the only thing keeping `generated_images` from orphaning.
 
 ## Related pages
 

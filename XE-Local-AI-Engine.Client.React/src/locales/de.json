@@ -3795,7 +3795,14 @@
 				"finishing": "Abschluss (Bild wird dekodiert)…",
 				"steps": "Schritt {{step}} von {{totalSteps}}",
 				"stepProgressLabel": "Fortschritt der Generierung",
-				"eta": "noch ca. {{seconds}} s"
+				"eta": "noch ca. {{seconds}} s",
+				"deleteTitle": "Diesen Bildauftrag löschen?",
+				"deleteConfirm": "Dieser Auftrag, sein Prompt und das erzeugte Bild werden gelöscht — das Bild wird von der Festplatte entfernt. Das lässt sich nicht rückgängig machen.",
+				"deleteConfirmNoImage": "Dieser Auftrag und sein Prompt werden gelöscht. Es wurde kein Bild erzeugt. Das lässt sich nicht rückgängig machen.",
+				"deleteHint": "Löscht den Auftrag und das erzeugte Bild.",
+				"deleteBlocked": "Dieser Auftrag läuft noch. Brich ihn zuerst ab, dann kannst du ihn löschen.",
+				"deleted": "Bildauftrag gelöscht.",
+				"deleteError": "Der Bildauftrag konnte nicht gelöscht werden."
 			},
 			"status": {
 				"Queued": "In Warteschlange",

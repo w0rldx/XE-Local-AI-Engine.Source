@@ -3382,6 +3382,11 @@ export type XeLocalAiEngineClientEndpointsImagesV1InspectImageRepositoryRequest 
 
 export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse>;
+	totalCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsResponse = {
@@ -13714,11 +13719,18 @@ export type CancelStableDiffusionCppSourceBuildResponse =
 export type ListImageJobsData = {
 	body?: never;
 	path?: never;
-	query?: never;
+	query?: {
+		limit?: number | null;
+		offset?: number | null;
+	};
 	url: "/api/local/v1/images/jobs";
 };
 
 export type ListImageJobsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -13728,6 +13740,8 @@ export type ListImageJobsErrors = {
 	 */
 	403: unknown;
 };
+
+export type ListImageJobsError = ListImageJobsErrors[keyof ListImageJobsErrors];
 
 export type ListImageJobsResponses = {
 	/**
@@ -13771,6 +13785,71 @@ export type CreateImageJobResponses = {
 };
 
 export type CreateImageJobResponse = CreateImageJobResponses[keyof CreateImageJobResponses];
+
+export type DeleteImageJobData = {
+	body?: never;
+	path: {
+		jobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/jobs/{jobId}";
+};
+
+export type DeleteImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type DeleteImageJobError = DeleteImageJobErrors[keyof DeleteImageJobErrors];
+
+export type DeleteImageJobResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteImageJobResponse = DeleteImageJobResponses[keyof DeleteImageJobResponses];
+
+export type GetImageJobData = {
+	body?: never;
+	path: {
+		jobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/jobs/{jobId}";
+};
+
+export type GetImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetImageJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+};
+
+export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
 
 export type DeleteImageModelData = {
 	body?: never;
@@ -13837,35 +13916,6 @@ export type EjectImageRuntimeResponses = {
 };
 
 export type EjectImageRuntimeResponse = EjectImageRuntimeResponses[keyof EjectImageRuntimeResponses];
-
-export type GetImageJobData = {
-	body?: never;
-	path: {
-		jobId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/images/jobs/{jobId}";
-};
-
-export type GetImageJobErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetImageJobResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
-};
-
-export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
 
 export type GetImageModelCatalogData = {
 	body?: never;

@@ -7,13 +7,17 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { useTablePaginationStore } from "@/core/ui/components/TablePagination/useTablePaginationStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ImageGenerationForm } from "@/features/images/components/ImageGenerationForm";
 import { ImageJobList } from "@/features/images/components/ImageJobList";
 import { ImageModelManager } from "@/features/images/components/ImageModelManager";
 import { useImageJobHub } from "@/features/images/hooks/useImageJobHub";
-import { type ImageGenerationFormValues, isTerminalStatus } from "@/features/images/models/ImageModels";
+import { type ImageGenerationFormValues, imageJobsPerPage, isTerminalStatus } from "@/features/images/models/ImageModels";
 import { useCancelImageJob, useCreateImageJob, useImageJobs, useImageModels } from "@/features/images/queries/useImageQueries";
+
+/** Keyed so the job list remembers its own rows-per-page, independently of every other table. */
+const jobsPageSizeStorageKey = "images.jobs";
 
 // Local image-generation page (text-to-image). Server-state is TanStack Query; live coarse status arrives over the
 // image SignalR hub, which invalidates the jobs cache on each transition (job state is never mirrored into a store).
@@ -25,7 +29,23 @@ export function ImagesPage() {
 	// downloaded model surfaces on completion — the backend exposes no download-progress hub yet.
 	const [modelDownloadPending, setModelDownloadPending] = useState(false);
 	const modelsQuery = useImageModels(modelDownloadPending);
-	const jobsQuery = useImageJobs();
+
+	// The job history is paged by the NODE: every row carries a decrypted prompt, so asking for all of them grew the
+	// payload without limit. The page size is remembered per table (localStorage); the active page is not — a reload
+	// starts at the newest jobs, which is where the operator wants to be.
+	const [page, setPage] = useState(1);
+	const pageSize = useTablePaginationStore((state) => state.pageSizeByKey[jobsPageSizeStorageKey] ?? imageJobsPerPage);
+	const persistPageSize = useTablePaginationStore((state) => state.setPageSize);
+	// A new page size renumbers the pages, so the old page number means nothing against it.
+	const handlePageSizeChange = useCallback(
+		(next: number) => {
+			persistPageSize(jobsPageSizeStorageKey, next);
+			setPage(1);
+		},
+		[persistPageSize],
+	);
+
+	const jobsQuery = useImageJobs(pageSize, (page - 1) * pageSize);
 	const createMutation = useCreateImageJob();
 	const cancelMutation = useCancelImageJob();
 
@@ -33,9 +53,10 @@ export function ImagesPage() {
 	const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
 
 	const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
-	const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
+	const jobs = useMemo(() => jobsQuery.data?.items ?? [], [jobsQuery.data]);
 
 	// Subscribe the hub only to jobs that can still transition (queued / generating) — a terminal job needs no push.
+	// Only the page on screen is subscribed, which is enough: jobs are newest-first, so an active one is on page 1.
 	const activeJobIds = useMemo(() => jobs.filter((job) => !isTerminalStatus(job.status)).map((job) => job.id), [jobs]);
 	useImageJobHub(activeJobIds);
 
@@ -116,7 +137,17 @@ export function ImagesPage() {
 					</Card>
 				</Stack>
 				<SectionCard title={t("pages.images.jobs.title", "Jobs")} gap="sm">
-					<ImageJobList jobs={jobs} isLoading={jobsQuery.isLoading} cancellingJobId={cancellingJobId} onCancel={handleCancel} />
+					<ImageJobList
+						jobs={jobs}
+						totalCount={jobsQuery.data?.totalCount ?? 0}
+						page={page}
+						pageSize={pageSize}
+						isLoading={jobsQuery.isLoading}
+						cancellingJobId={cancellingJobId}
+						onCancel={handleCancel}
+						onPageChange={setPage}
+						onPageSizeChange={handlePageSizeChange}
+					/>
 				</SectionCard>
 			</SimpleGrid>
 		</PageShell>

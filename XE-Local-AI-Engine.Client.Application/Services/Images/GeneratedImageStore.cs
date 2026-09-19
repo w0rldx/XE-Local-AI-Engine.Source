@@ -20,16 +20,19 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
     private readonly INodeDataDirectory _dataDirectory;
     private readonly ImageBlobProtector _blobProtector;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<GeneratedImageStore> _logger;
 
     public GeneratedImageStore(IServiceScopeFactory scopeFactory,
         INodeDataDirectory dataDirectory,
         INodeSqliteKeyHolder keyHolder,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<GeneratedImageStore> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
         ArgumentNullException.ThrowIfNull(keyHolder);
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _blobProtector = new ImageBlobProtector(keyHolder);
     }
 
@@ -114,6 +117,86 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         var encrypted = await File.ReadAllBytesAsync(storagePath, cancellationToken);
         var plaintext = _blobProtector.Decrypt(jobId, imageId, ImageBlobProtector.ImageBytesColumn, encrypted);
         return new GeneratedImageContent(plaintext, mimeType, width, height);
+    }
+
+    public void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths)
+    {
+        ArgumentNullException.ThrowIfNull(storagePaths);
+
+        // Every path is proved to resolve under the blob root before it is unlinked. The stored value is
+        // server-computed today (AddAsync builds it from two minted Guids), but this is the deletion boundary: it
+        // enforces its own invariant rather than trusting a column, so a legacy, migrated or hand-edited row can
+        // never make this method delete a file it does not own.
+        var blobRoot = Path.GetFullPath(Path.Combine(_dataDirectory.Root, RootFolderName));
+
+        // The recorded storage_path is unlinked rather than a path recomputed from the current data directory: the
+        // row is what says where the bytes actually landed, and a node whose data directory moved would otherwise
+        // leave every older blob behind.
+        foreach (var storagePath in storagePaths)
+        {
+            if (!IsUnderRoot(storagePath, blobRoot))
+            {
+                // The path itself is never logged (privacy §10 — no path leaves this feature), so the warning names
+                // the job and the refusal only.
+                _logger.LogWarning("An image blob of deleted job {JobId} resolves outside the image blob root; it was left untouched.", jobId);
+                continue;
+            }
+
+            try
+            {
+                File.Delete(storagePath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(exception, "Could not delete the image blob of deleted job {JobId}; the file is left orphaned.", jobId);
+            }
+        }
+
+        var jobDirectory = JobDirectory(jobId);
+        if (!IsUnderRoot(jobDirectory, blobRoot))
+        {
+            // Unreachable while the data directory is a normal absolute path, but the guard is on the delete, not on
+            // the caller: the same rule that protects a blob protects the directory it sat in.
+            _logger.LogWarning("The image directory of deleted job {JobId} resolves outside the image blob root; it was left untouched.", jobId);
+            return;
+        }
+
+        try
+        {
+            // Non-recursive on purpose: it removes the directory only once it is empty, so a blob that survived the
+            // loop above (or one this job never knew about) is never taken out with it.
+            Directory.Delete(jobDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(exception, "Could not remove the image directory of deleted job {JobId}.", jobId);
+        }
+    }
+
+    /// <summary>
+    ///     <see langword="true" /> when <paramref name="path" /> is a descendant of <paramref name="root" />. The
+    ///     trailing-separator guard prevents a sibling-prefix false match and the comparison is case-insensitive only
+    ///     on Windows — parity with <c>SandboxOrphanReaper.IsUnderRoot</c> and <c>StaleLlamaServerReaper.IsUnderRoot</c>.
+    /// </summary>
+    private static bool IsUnderRoot(string path, string root)
+    {
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // An unparseable path can never be under our root.
+            return false;
+        }
+
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return fullPath.StartsWith(rootWithSeparator, comparison);
     }
 
     private string JobDirectory(Guid jobId)
