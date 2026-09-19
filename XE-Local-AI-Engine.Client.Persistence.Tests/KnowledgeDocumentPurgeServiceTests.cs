@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -47,7 +48,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
             await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
-            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>());
+            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
             var purged = await purge.PurgeAsync(documentId, CancellationToken.None);
             AssertEx.True(purged, "Purge should report success for an existing document.");
         }
@@ -77,7 +78,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
             await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
-            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>());
+            var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
             _ = await purge.PurgeAsync(documentId, CancellationToken.None);
         }
 
@@ -94,11 +95,77 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
-        var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>());
+        var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>(), NullLogger<KnowledgeDocumentPurgeService>.Instance);
 
         var purged = await purge.PurgeAsync(Guid.NewGuid(), CancellationToken.None);
 
         AssertEx.False(purged, "Purging a non-existent document should return false so the endpoint maps it to a 404.");
+    }
+
+    [Test]
+    public async Task PurgeAsync_WhenBlobDeleteThrows_StillReportsSuccessAndCommitsTheRowDeletes()
+    {
+        // The row deletes are already committed when the blob delete runs, so the delete HAS happened: a failure there
+        // must not be turned into a 500 for the client. Only IOException/UnauthorizedAccessException are swallowed
+        // inside the store, so an exception of any other type reaching PurgeAsync is the regression this locks down.
+        var databasePath = GetDatabasePath("purge-blob-failure.sqlite");
+        var documentId = Guid.NewGuid();
+        var controlDocumentId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentGraphAsync(databasePath, documentId);
+        await SeedDocumentGraphAsync(databasePath, controlDocumentId);
+
+        var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
+        blobStore.When(store => store.DeleteBytesAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
+                 .Do(_ => throw new NotSupportedException("The blob path could not be deleted."));
+
+        bool purged;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
+            var purge = new KnowledgeDocumentPurgeService(context, blobStore, NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            purged = await purge.PurgeAsync(documentId, CancellationToken.None);
+        }
+
+        AssertEx.True(purged, "A failed blob delete must not turn a committed row delete into a failed purge.");
+
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.Equal(expected: 0L,
+            await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_documents WHERE document_id = $document_id;", ("$document_id", documentId)));
+        AssertEx.Equal(expected: 1L,
+            await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_documents WHERE document_id = $document_id;", ("$document_id", controlDocumentId)));
+        // Unfiltered totals plus the untouched control document: the purge deleted exactly one document's graph.
+        AssertEx.Equal(expected: 1L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_documents;"));
+        AssertEx.Equal(expected: 2L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_chunks;"));
+        AssertEx.Equal(expected: 2L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_chunk_vectors;"));
+        AssertEx.Equal(expected: 1L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_sections;"));
+    }
+
+    [Test]
+    public async Task PurgeAsync_WhenBlobDeleteIsCancelled_PropagatesTheCancellation()
+    {
+        // Cancellation is not a blob failure: it must still surface, exactly as it does from every other await in the
+        // method. The rows stay deleted because they committed before the blob delete was ever attempted.
+        var databasePath = GetDatabasePath("purge-blob-cancelled.sqlite");
+        var documentId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentGraphAsync(databasePath, documentId);
+
+        var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
+        blobStore.When(store => store.DeleteBytesAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
+                 .Do(_ => throw new OperationCanceledException());
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
+            var purge = new KnowledgeDocumentPurgeService(context, blobStore, NullLogger<KnowledgeDocumentPurgeService>.Instance);
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => purge.PurgeAsync(documentId, CancellationToken.None));
+        }
+
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_documents;"));
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
@@ -178,12 +245,17 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         _ = await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<long> CountAsync(SqliteConnection connection, string sql)
+    private static async Task<long> CountAsync(SqliteConnection connection, string sql, params (string Name, object Value)[] parameters)
     {
         await using var command = connection.CreateCommand();
 #pragma warning disable CA2100 // SQL text is a fixed internal test literal, never user input.
         command.CommandText = sql;
 #pragma warning restore CA2100
+        foreach (var (name, value) in parameters)
+        {
+            _ = command.Parameters.AddWithValue(name, value);
+        }
+
         return (long)(await command.ExecuteScalarAsync())!;
     }
 

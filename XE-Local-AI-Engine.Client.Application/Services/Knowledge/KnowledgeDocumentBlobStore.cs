@@ -238,6 +238,51 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return Task.CompletedTask;
     }
 
+    public IReadOnlyList<Guid> ListStoredDocumentIds()
+    {
+        var documentsDirectory = DocumentsDirectory();
+        if (!Directory.Exists(documentsDirectory))
+        {
+            return [];
+        }
+
+        // File leaves are "{documentId:D}{extension}". Ignore any stray file whose leading name is not a valid id: a
+        // foreign file dropped into the directory, and the ".{guid:N}.tmp"/".backup" siblings an interrupted write can
+        // leave behind (those are reclaimed with their document below, never on their own).
+        var ids = new HashSet<Guid>();
+        foreach (var file in Directory.EnumerateFiles(documentsDirectory))
+        {
+            if (Guid.TryParse(Path.GetFileNameWithoutExtension(file.AsSpan()), out var documentId))
+            {
+                _ = ids.Add(documentId);
+            }
+        }
+
+        return [.. ids];
+    }
+
+    public Task DeleteAllBytesAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var documentsDirectory = DocumentsDirectory();
+        if (!Directory.Exists(documentsDirectory))
+        {
+            return Task.CompletedTask;
+        }
+
+        // The extension died with the row, so match every file this store could have written under the id: the blob
+        // itself plus any temp/backup sibling of an interrupted write. The id is server-generated and formatted here, so
+        // the pattern can never carry a caller-supplied wildcard. Materialized before deleting — never enumerate lazily
+        // over a directory being modified.
+        foreach (var file in Directory.GetFiles(documentsDirectory, string.Concat(documentId.ToString("D"), "*")))
+        {
+            DeleteFileIfExists(file);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private async Task UpdateRepositoryDocumentAsync(DbConnection connection,
         NodeChatDbContext dbContext,
         DocumentIdentity row,
@@ -460,11 +505,13 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         }
         catch (IOException)
         {
-            // Best-effort cleanup; a transient IO error leaves an orphan blob that a later purge also covers.
+            // Best-effort cleanup; a transient IO error leaves the file behind. When it was a purged document's blob,
+            // KnowledgeBlobOrphanSweeper reclaims it on the next start — a repeat purge never would, since the row it
+            // keys on is already gone.
         }
         catch (UnauthorizedAccessException)
         {
-            // Best-effort cleanup; a permission error leaves an orphan blob that a later purge also covers.
+            // Best-effort cleanup; a permission error leaves the file behind, reclaimed by the same startup sweep.
         }
     }
 

@@ -26,4 +26,18 @@ public interface IKnowledgeDocumentBlobStore
     ///     deletion still runs after the row (and its extension) is gone. Best-effort: a missing file is a no-op.
     /// </summary>
     Task DeleteBytesAsync(Guid documentId, string extension, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Lists the document ids that currently have on-disk bytes. Used by <c>KnowledgeBlobOrphanSweeper</c> to find
+    ///     blobs whose <c>knowledge_documents</c> row is gone (a purge whose post-commit file delete failed) and reclaim
+    ///     them. Any file whose leading name is not a document id is skipped, so a foreign file is never a candidate.
+    /// </summary>
+    IReadOnlyList<Guid> ListStoredDocumentIds();
+
+    /// <summary>
+    ///     Removes every on-disk file this store holds for one document. Unlike
+    ///     <see cref="DeleteBytesAsync(Guid, string, CancellationToken)" /> it needs no extension, because the sweeper
+    ///     reaches a document only once its row — and with it the stored extension — is already gone. Best-effort.
+    /// </summary>
+    Task DeleteAllBytesAsync(Guid documentId, CancellationToken cancellationToken);
 }

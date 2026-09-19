@@ -17,11 +17,15 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
 {
     private readonly NodeChatDbContext _dbContext;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
+    private readonly ILogger<KnowledgeDocumentPurgeService> _logger;
 
-    public KnowledgeDocumentPurgeService(NodeChatDbContext dbContext, IKnowledgeDocumentBlobStore blobStore)
+    public KnowledgeDocumentPurgeService(NodeChatDbContext dbContext,
+        IKnowledgeDocumentBlobStore blobStore,
+        ILogger<KnowledgeDocumentPurgeService> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<bool> PurgeAsync(Guid documentId, CancellationToken cancellationToken)
@@ -76,9 +80,22 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
 
         await transaction.CommitAsync(cancellationToken);
 
-        // Only after the rows are gone remove the encrypted bytes from disk; a best-effort failure leaves an orphan blob
-        // that a later purge also covers rather than a live row without its content.
-        await _blobStore.DeleteBytesAsync(documentId, extension, cancellationToken);
+        // Only after the rows are gone remove the encrypted bytes from disk, so a failure here can never leave a live row
+        // without its content. The rows are already committed, so the delete IS done from the caller's point of view: a
+        // failed file delete is logged and reported as success rather than turned into a 500, and the file itself is
+        // reclaimed by KnowledgeBlobOrphanSweeper on the next start (a repeat purge cannot — its row lookup finds
+        // nothing and returns before it reaches this line). Cancellation still propagates.
+        try
+        {
+            await _blobStore.DeleteBytesAsync(documentId, extension, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception,
+                "Deleted knowledge document {DocumentId} but could not remove its encrypted bytes; the startup orphan sweep will reclaim them.",
+                documentId);
+        }
+
         return true;
     }
 

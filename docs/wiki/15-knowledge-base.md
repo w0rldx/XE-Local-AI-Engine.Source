@@ -107,7 +107,7 @@ Routes under `knowledge/*`, one endpoint class per file in `Endpoints/Knowledge/
 | `UploadKnowledgeDocumentEndpoint` | Upload a document; returns immediately, ingestion runs async. |
 | `ListKnowledgeDocumentsEndpoint` | List documents with their ingestion status. |
 | `GetKnowledgeDocumentEndpoint` | One document's detail. |
-| `DeleteKnowledgeDocumentEndpoint` | Delete a document and its chunks/index rows. |
+| `DeleteKnowledgeDocumentEndpoint` | Delete a document and its chunks/index rows, then its encrypted blob. |
 | `SearchKnowledgeEndpoint` | Hybrid search over the corpus (or a single document). |
 | `ImportKnowledgeRepositoryEndpoint` | Import supported files from a registered local Git repository into one collection. |
 | `ReindexKnowledgeDocumentEndpoint` | Re-run ingestion for one document. |
@@ -115,6 +115,8 @@ Routes under `knowledge/*`, one endpoint class per file in `Endpoints/Knowledge/
 | `DownloadRecommendedRerankerEndpoint` | POST: one-click download of the recommended cross-encoder reranker via the same GGUF download coordinator operator HF downloads use; idempotent no-op if already installed or in flight. |
 
 All endpoints are loopback/local-only, operator-authenticated, and secret-redacted — see [Security & Privacy](12-security-and-privacy.md). They are surfaced to React via OpenAPI → hey-api; see [API & Hubs](09-api-and-hubs.md).
+
+**Delete leaves nothing behind.** `KnowledgeDocumentPurgeService` deletes every dependent row child-to-parent in one transaction (FK enforcement is off on the node connection, so the cascade cannot be relied upon) and removes the encrypted blob only after that commit — a failure there can therefore never leave a live row without its content. Because the rows are already gone, a failed blob delete is logged and still reported as a successful delete rather than a 500, and the file is reclaimed by `KnowledgeBlobOrphanSweeper`, a one-shot startup sweep that deletes any blob whose `knowledge_documents` row no longer exists. A repeat purge cannot do that job: it keys on the row it already deleted, returns 404, and never touches the disk.
 
 ## React feature
 

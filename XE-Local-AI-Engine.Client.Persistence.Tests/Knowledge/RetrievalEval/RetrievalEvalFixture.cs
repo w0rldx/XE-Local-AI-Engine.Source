@@ -288,6 +288,15 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
         public Task DeleteBytesAsync(Guid documentId, string extension, CancellationToken cancellationToken) =>
             Task.CompletedTask;
+
+        public IReadOnlyList<Guid> ListStoredDocumentIds() =>
+            [.. _bytesById.Keys];
+
+        public Task DeleteAllBytesAsync(Guid documentId, CancellationToken cancellationToken)
+        {
+            _ = _bytesById.Remove(documentId);
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>Returns the one managed cosine search instance bound to the search service's scoped context.</summary>

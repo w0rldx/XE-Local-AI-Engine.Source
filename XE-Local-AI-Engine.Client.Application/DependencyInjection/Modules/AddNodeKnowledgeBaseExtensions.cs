@@ -99,6 +99,10 @@ internal static class AddNodeKnowledgeBaseExtensions
         builder.Services.AddHostedService<KnowledgeIngestionWorker>();
         builder.Services.AddHostedService<KnowledgeScheduledModelReindexWorker>();
 
+        // One-shot startup sweep that reclaims document blobs whose row is gone (a purge whose post-commit file delete
+        // failed). Nothing else ever revisits such a file: the purge keys on the row it just deleted.
+        builder.Services.AddHostedService<KnowledgeBlobOrphanSweeper>();
+
         // Read-only knowledge-base agent tools (search_knowledge_base / read_document / read_surrounding_chunks). All
         // Singleton: ClientLocalToolRegistry captures the IClientLocalToolHandler IEnumerable at construction, so a
         // scoped handler would be a captive dependency; each resolves its scoped retrieval service from a fresh scope

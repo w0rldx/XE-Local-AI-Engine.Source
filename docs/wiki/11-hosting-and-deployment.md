@@ -113,7 +113,7 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `BenchmarkQueueHostedService` | `AddNodeBenchmarksExtensions` | single-consumer durable benchmark run queue |
 | `DatasetGenerationHostedService` | `AddNodeTrainingDatasetExtensions` | single-consumer durable dataset-generation queue (see [Training](18-training.md)) |
 | `TrainingRunQueueHostedService`, `TrainingRunStartupReaper` | `AddNodeTrainingRunExtensions` | the single-consumer training/evaluation run queue, and the startup reaper that kills Python trainers orphaned by a host crash using their persisted launch receipts |
-| `KnowledgeIngestionWorker`, `KnowledgeScheduledModelReindexWorker` | `AddNodeKnowledgeBaseExtensions` | KB ingestion queue and scheduled reindex (see [Knowledge Base](15-knowledge-base.md)) |
+| `KnowledgeIngestionWorker`, `KnowledgeScheduledModelReindexWorker`, `KnowledgeBlobOrphanSweeper` | `AddNodeKnowledgeBaseExtensions` | KB ingestion queue, scheduled reindex, and the one-shot startup sweep that reclaims document blobs whose row is gone (see [Knowledge Base](15-knowledge-base.md)) |
 | `McpAgentRunDispatcher`, `McpAgentRunRecoveryService`, `McpAgentRunCompactionService` | `AddNodeMcpAgentRunsExtensions` | inbound-MCP agent run dispatch, restart recovery, compaction |
 | `RetentionSweeperService` | `AddNodeChatExtensions` | chat retention sweep, disabled by default (see [Security & Privacy](12-security-and-privacy.md)) |
 | `AgentExecutionLogRetentionService` | `AddNodeAdaptiveMemoryExtensions` | ages out the append-only `agent_execution_logs` telemetry |
