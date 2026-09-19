@@ -155,7 +155,15 @@ internal sealed class ManagedEncryptedBlobStore
             : Failure(ManagedBlobReadStatus.HashMismatch);
     }
 
-    /// <summary>Best-effort removal of one blob. A blob that cannot be removed is left for a later orphan sweep.</summary>
+    /// <summary>
+    ///     Best-effort removal of one blob. A blob that cannot be removed stays on disk for good: nothing sweeps it, and
+    ///     nothing can. Every writer of this store commits the blob BEFORE the row that names it
+    ///     (<c>SaveArtifactToolHandler</c> states that order as its guarantee, and <c>DevelopmentEvidenceService.PrepareAsync</c>
+    ///     hands the row back as a command the caller applies later), so a file whose blob id has no row is
+    ///     indistinguishable from one whose row is still in flight — the knowledge-base sweep
+    ///     (<c>KnowledgeBlobOrphanSweeper</c>) is safe only because that store commits the row first. The leak is bounded
+    ///     by the per-convention byte limit; <see cref="DeleteScope" /> is what actually reclaims a deleted owner's bytes.
+    /// </summary>
     public void Delete(Guid scopeId, Guid blobId)
     {
         DeleteIfPresent(BlobPath(scopeId, blobId));
@@ -174,11 +182,13 @@ internal sealed class ManagedEncryptedBlobStore
         }
         catch (IOException)
         {
-            // The rows are already gone; an un-removable directory is an orphan for a later sweep, not a failed delete.
+            // The rows are already gone; leftover bytes must never turn a successful row delete into a caller-visible
+            // failure. The callers log the scope id so an operator can remove the directory by hand — nothing collects
+            // it automatically.
         }
         catch (UnauthorizedAccessException)
         {
-            // Same: never turn a successful row delete into a caller-visible failure over leftover bytes.
+            // Same.
         }
     }
 
@@ -266,7 +276,8 @@ internal sealed class ManagedEncryptedBlobStore
         }
         catch (IOException)
         {
-            // The caller's write already failed, or the row is already gone. A later orphan sweep may remove the file.
+            // The caller's write already failed, or the row is already gone. Nothing revisits the file — see
+            // <see cref="Delete" /> for why an id-keyed sweep cannot exist for this store.
         }
         catch (UnauthorizedAccessException)
         {

@@ -124,8 +124,8 @@ internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtif
 
         if (result.SupersededArtifactId is { } supersededId)
         {
-            // Best-effort by contract: the row is already gone, so a stubborn file is an orphan to sweep, not a failure
-            // to hand back to the model.
+            // Best-effort by contract: the row is already gone, so a stubborn file is leaked disk space nothing
+            // collects (see ManagedEncryptedBlobStore.Delete), not a failure to hand back to the model.
             try
             {
                 _blobStore.Delete(session.Id, supersededId);
