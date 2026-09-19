@@ -74,23 +74,25 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             ? BenchmarkBradleyTerry.Fit([.. succeeded.Select(static comparison => new BenchmarkPairwiseVerdict(comparison.RunAId, comparison.RunBId, comparison.Verdict!))])
             : null;
         var scores = ToScoreEntries(cohort, fit, refusal ?? fit?.Refusal);
-        var command = new BenchmarkPairwiseFitCommand(projectId,
-            revisionId,
-            cohort.CohortGeneration,
-            TaskCaseId: null,
-            fitKey,
-            cohort.ReferenceExecutionKey ?? string.Empty,
-            cohort.ComparisonSetVersion,
-            BenchmarkCanonicalJson.Serialize(succeeded.Select(static comparison => new FittedVerdict(comparison.RunAId,
+        var command = new BenchmarkPairwiseFitCommand
+        {
+            ProjectId = projectId,
+            PolicyRevisionId = revisionId,
+            CohortGeneration = cohort.CohortGeneration,
+            TaskCaseId = null,
+            FitKey = fitKey,
+            JudgeExecutionKey = cohort.ReferenceExecutionKey ?? string.Empty,
+            ComparisonSetVersion = cohort.ComparisonSetVersion,
+            FittedSetJson = BenchmarkCanonicalJson.Serialize(succeeded.Select(static comparison => new FittedVerdict(comparison.RunAId,
                 comparison.RunBId,
                 comparison.Order,
                 comparison.Verdict!))),
-            BenchmarkCanonicalJson.Serialize(scores),
-
+            ScoresJson = BenchmarkCanonicalJson.Serialize(scores),
             // The shipped CHECK requires both to be positive, so a refusal records the sweep budget it exhausted and
             // the replicate budget it was configured with rather than a zero the row cannot hold.
-            fit is { Iterations: > 0 } ? fit.Iterations : BenchmarkBradleyTerry.MaximumIterations,
-            BenchmarkBradleyTerry.DefaultReplicates);
+            Iterations = fit is { Iterations: > 0 } ? fit.Iterations : BenchmarkBradleyTerry.MaximumIterations,
+            BootstrapReplicates = BenchmarkBradleyTerry.DefaultReplicates
+        };
         var published = await _store.PublishPairwiseFitAsync(command, cancellationToken);
         if (published)
         {

@@ -17,15 +17,26 @@ public interface IGoldenHarvestSourceStore
 }
 
 /// <summary>One reconstructed conversation turn: a role (<c>"user"</c>/<c>"assistant"</c>) and its decrypted text.</summary>
-public sealed record HarvestTurn(string Role, string Text);
+public sealed class HarvestTurn
+{
+    public required string Role { get; init; }
+
+    public required string Text { get; init; }
+}
 
 /// <summary>
 ///     A harvest candidate built from a single thumbs-up assistant message: the lead-up <see cref="PriorTurns" /> and the
 ///     operator-approved <see cref="ApprovedAnswerText" />, plus provenance ids for dedup and review.
 /// </summary>
-public sealed record HarvestCandidateSource(
-    Guid MessageId,
-    Guid ConversationId,
-    string? ConversationTitle,
-    IReadOnlyList<HarvestTurn> PriorTurns,
-    string ApprovedAnswerText);
+public sealed class HarvestCandidateSource
+{
+    public required Guid MessageId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required string? ConversationTitle { get; init; }
+
+    public required IReadOnlyList<HarvestTurn> PriorTurns { get; init; }
+
+    public required string ApprovedAnswerText { get; init; }
+}

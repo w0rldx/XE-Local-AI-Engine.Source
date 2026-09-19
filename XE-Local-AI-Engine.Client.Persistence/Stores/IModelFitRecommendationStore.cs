@@ -21,40 +21,72 @@ public interface IModelFitRecommendationStore
 /// <summary>
 ///     Typed projection of a persisted model-fit recommendation row. All fields are plaintext.
 /// </summary>
-public sealed record ModelFitRecommendationRecord(
-    Guid Id,
-    Guid SnapshotId,
-    int Rank,
-    string ModelName,
-    string? ProviderModelName,
-    double Score,
-    string? FitLevel,
-    string? RunMode,
-    string? Quantization,
-    double? EstimatedTokensPerSecond,
-    double? RequiredRamMb,
-    double? RequiredVramMb,
-    int? ContextTokens,
-    bool IsInstalled,
-    string? PullModelName,
-    string? DiagnosticsJson);
+public sealed record ModelFitRecommendationRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SnapshotId { get; init; }
+
+    public required int Rank { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string? ProviderModelName { get; init; }
+
+    public required double Score { get; init; }
+
+    public required string? FitLevel { get; init; }
+
+    public required string? RunMode { get; init; }
+
+    public required string? Quantization { get; init; }
+
+    public required double? EstimatedTokensPerSecond { get; init; }
+
+    public required double? RequiredRamMb { get; init; }
+
+    public required double? RequiredVramMb { get; init; }
+
+    public required int? ContextTokens { get; init; }
+
+    public required bool IsInstalled { get; init; }
+
+    public required string? PullModelName { get; init; }
+
+    public required string? DiagnosticsJson { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a recommendation row supplied on replace. <c>Id</c> and <c>SnapshotId</c> are assigned by the
 ///     store.
 /// </summary>
-public sealed record ModelFitRecommendationInput(
-    int Rank,
-    string ModelName,
-    string? ProviderModelName,
-    double Score,
-    string? FitLevel,
-    string? RunMode,
-    string? Quantization,
-    double? EstimatedTokensPerSecond,
-    double? RequiredRamMb,
-    double? RequiredVramMb,
-    int? ContextTokens,
-    bool IsInstalled,
-    string? PullModelName,
-    string? DiagnosticsJson);
+public sealed class ModelFitRecommendationInput
+{
+    public required int Rank { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string? ProviderModelName { get; init; }
+
+    public required double Score { get; init; }
+
+    public required string? FitLevel { get; init; }
+
+    public required string? RunMode { get; init; }
+
+    public required string? Quantization { get; init; }
+
+    public required double? EstimatedTokensPerSecond { get; init; }
+
+    public required double? RequiredRamMb { get; init; }
+
+    public required double? RequiredVramMb { get; init; }
+
+    public required int? ContextTokens { get; init; }
+
+    public required bool IsInstalled { get; init; }
+
+    public required string? PullModelName { get; init; }
+
+    public required string? DiagnosticsJson { get; init; }
+}

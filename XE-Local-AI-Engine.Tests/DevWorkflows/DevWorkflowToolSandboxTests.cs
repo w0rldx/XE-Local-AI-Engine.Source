@@ -265,7 +265,7 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var taskId = Guid.NewGuid();
-        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId, taskId, Guid.NewGuid(), "Add the slice", "Add slice.txt.", "[]"));
+        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand { ProjectId = projectId, TaskId = taskId, OperationId = Guid.NewGuid(), Title = "Add the slice", Requirements = "Add slice.txt.", AcceptanceCriteriaJson = "[]" });
 
         var attemptId = Guid.NewGuid();
         var task = await store.GetTaskAsync(taskId);
@@ -280,25 +280,34 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         {
             if (next == DevelopmentTaskStatus.Validation)
             {
-                _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
-                                   attemptId,
-                                   Guid.NewGuid(),
-                                   DevelopmentAttemptRole.Coder,
-                                   "scripted-model",
-                                   "local",
-                                   task.Version));
-                _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
-                                   Guid.NewGuid(),
-                                   DevelopmentAttemptStatus.Succeeded,
-                                   ExpectedAttemptVersion: 1));
+                _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand
+                {
+                    TaskId = taskId,
+                    AttemptId = attemptId,
+                    OperationId = Guid.NewGuid(),
+                    Role = DevelopmentAttemptRole.Coder,
+                    ModelId = "scripted-model",
+                    Provider = "local",
+                    ExpectedTaskVersion = task.Version
+                });
+                _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
+                {
+                    AttemptId = attemptId,
+                    OperationId = Guid.NewGuid(),
+                    Status = DevelopmentAttemptStatus.Succeeded,
+                    ExpectedAttemptVersion = 1
+                });
                 task = await store.GetTaskAsync(taskId);
             }
 
-            var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                       Guid.NewGuid(),
-                                       next,
-                                       task.Version,
-                                       ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null));
+            var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = taskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = next,
+                ExpectedTaskVersion = task.Version,
+                ApprovedSubjectHash = next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null
+            });
             task = task with
             {
                 Status = next,
@@ -309,18 +318,21 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         var artifactId = Guid.NewGuid();
         var written = await scope.ServiceProvider.GetRequiredService<IDevelopmentArtifactBlobStore>()
                                  .WriteAsync(projectId, artifactId, Encoding.UTF8.GetBytes(ChildPatch));
-        _ = await store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
-                           projectId,
-                           taskId,
-                           attemptId,
-                           Guid.NewGuid(),
-                           DevelopmentArtifactKind.Patch,
-                           SchemaVersion: 1,
-                           written.ContentHash,
-                           written.ByteCount,
-                           ManagedReference: written.OpaqueReference,
-                           BaseCommit: "base",
-                           SubjectHash: "subject"));
+        _ = await store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand
+        {
+            ArtifactId = artifactId,
+            ProjectId = projectId,
+            TaskId = taskId,
+            AttemptId = attemptId,
+            OperationId = Guid.NewGuid(),
+            Kind = DevelopmentArtifactKind.Patch,
+            SchemaVersion = 1,
+            ContentHash = written.ContentHash,
+            ByteCount = written.ByteCount,
+            ManagedReference = written.OpaqueReference,
+            BaseCommit = "base",
+            SubjectHash = "subject"
+        });
         return taskId;
     }
 
@@ -334,33 +346,45 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         var implementId = Guid.NewGuid();
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
-        _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
-                           DevWorkflowVersions.Any,
-                           Guid.NewGuid(),
-                           [
-                               new DevWorkflowNodeRunSeed(implementId,
-                                   "implement#1",
-                                   DevWorkflowNodeType.DevTask,
-                                   MaxAttempts: 1,
-                                   DevelopmentProjectId: projectId,
-                                   MaterializedFromNodeRunId: gate.Id,
-                                   MaterializationIndex: 1),
-                               new DevWorkflowNodeRunSeed(Guid.NewGuid(),
-                                   "validate#1",
-                                   DevWorkflowNodeType.Tool,
-                                   MaxAttempts: 1,
-                                   DevelopmentProjectId: projectId,
-                                   MaterializedFromNodeRunId: gate.Id,
-                                   MaterializationIndex: 1)
+        _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        {
+            RunId = runId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            OperationId = Guid.NewGuid(),
+            NodeRuns = [
+                               new DevWorkflowNodeRunSeed
+                               {
+                                   NodeRunId = implementId,
+                                   NodeKey = "implement#1",
+                                   NodeType = DevWorkflowNodeType.DevTask,
+                                   MaxAttempts = 1,
+                                   DevelopmentProjectId = projectId,
+                                   MaterializedFromNodeRunId = gate.Id,
+                                   MaterializationIndex = 1
+                               },
+                               new DevWorkflowNodeRunSeed
+                               {
+                                   NodeRunId = Guid.NewGuid(),
+                                   NodeKey = "validate#1",
+                                   NodeType = DevWorkflowNodeType.Tool,
+                                   MaxAttempts = 1,
+                                   DevelopmentProjectId = projectId,
+                                   MaterializedFromNodeRunId = gate.Id,
+                                   MaterializationIndex = 1
+                               }
                            ],
-                           GateThenCloneGroup));
+            GraphJson = GateThenCloneGroup
+        });
 
         // The implementation is done and names its task, which is the state the validation node reads it in.
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
-                           implementId,
-                           DevWorkflowVersions.Any,
-                           DevWorkflowNodeRunStatus.Succeeded,
-                           DevelopmentTaskId: childTaskId));
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = runId,
+            NodeRunId = implementId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
+            DevelopmentTaskId = childTaskId
+        });
     }
 
     private static async Task<Guid> CreateProjectAsync(DevWorkflowHarness harness, string repository)
@@ -373,27 +397,30 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
 
         var projectId = Guid.NewGuid();
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>()
-                       .CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
-                           Guid.NewGuid(),
-                           Guid.NewGuid(),
-                           "Keep the solution building.",
-                           Guid.Parse(reference.Id),
-                           DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)),
-                           "main",
-                           "Build",
-                           "Build the solution.",
-                           "[]",
-                           DevelopmentEgressPolicy.LocalOnly,
-                           CoderModelId: null,
-                           ReviewerModelId: null,
-                           MaxReviewRounds: 3,
-                           ConfigurationVersion: 1,
-                           TrustedRepositoryAcknowledged: true,
-                           DevelopmentTrustPolicy.CurrentVersion,
-                           DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                           MaxTokens: 2048,
-                           MaxDurationSeconds: 600,
-                           Encoding.UTF8.GetString(profile.ToCanonicalUtf8())));
+                       .CreateProjectAsync(new DevelopmentCreateProjectCommand
+                       {
+                           ProjectId = projectId,
+                           TaskId = Guid.NewGuid(),
+                           OperationId = Guid.NewGuid(),
+                           Objective = "Keep the solution building.",
+                           SelectedFolderId = Guid.Parse(reference.Id),
+                           RepositoryIdentityHash = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)),
+                           BaseBranch = "main",
+                           Title = "Build",
+                           Requirements = "Build the solution.",
+                           AcceptanceCriteriaJson = "[]",
+                           EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+                           CoderModelId = null,
+                           ReviewerModelId = null,
+                           MaxReviewRounds = 3,
+                           ConfigurationVersion = 1,
+                           TrustedRepositoryAcknowledged = true,
+                           TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+                           TrustedRepositoryAcknowledgedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                           MaxTokens = 2048,
+                           MaxDurationSeconds = 600,
+                           CommandProfileJson = Encoding.UTF8.GetString(profile.ToCanonicalUtf8())
+                       });
         return projectId;
     }
 

@@ -21,162 +21,300 @@ public enum WorkPlanTaskOperation
     Drop
 }
 
-public sealed record AgentWorkSessionSnapshot(
-    Guid Id,
-    string Title,
-    string Objective,
-    AgentWorkSessionKind Kind,
-    AgentWorkSessionStatus Status,
-    Guid AgentDefinitionId,
-    Guid ConversationId,
-    Guid? CurrentTaskId,
-    int StepCount,
-    Guid? LastCheckpointId,
-    long LastSequence,
-    int ConfigVersion,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version);
+public sealed record AgentWorkSessionSnapshot
+{
+    public required Guid Id { get; init; }
 
-public sealed record WorkSessionTaskSnapshot(
-    Guid Id,
-    Guid SessionId,
-    Guid? ParentTaskId,
-    long Sequence,
-    string Title,
-    string? Detail,
-    AgentWorkSessionTaskStatus Status,
-    string? BlockedReason,
-    AgentWorkSessionTaskOrigin Origin,
-    int CreatedStep,
-    int UpdatedStep);
+    public required string Title { get; init; }
 
-public sealed record WorkSessionFindingSnapshot(
-    Guid Id,
-    Guid SessionId,
-    Guid? TaskId,
-    long Sequence,
-    AgentWorkSessionFindingKind Kind,
-    string Text,
-    string? SourceRef,
-    int CreatedStep,
-    bool Superseded);
+    public required string Objective { get; init; }
 
-public sealed record WorkSessionArtifactSnapshot(
-    Guid Id,
-    Guid SessionId,
-    long Sequence,
-    AgentWorkSessionArtifactKind Kind,
-    string Name,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    bool IsValid,
-    string ManagedReference,
-    int CreatedStep);
+    public required AgentWorkSessionKind Kind { get; init; }
 
-public sealed record WorkSessionCheckpointSnapshot(
-    Guid Id,
-    Guid SessionId,
-    long Sequence,
-    int Step,
-    string? Summary,
-    string StateJson,
-    long CreatedAtUtc);
+    public required AgentWorkSessionStatus Status { get; init; }
 
-public sealed record WorkSessionEventSnapshot(
-    Guid Id,
-    Guid SessionId,
-    long Sequence,
-    int Step,
-    string EventType,
-    string? DetailJson,
-    Guid? OperationId,
-    string? Outcome,
-    long OccurredAtUtc);
+    public required Guid AgentDefinitionId { get; init; }
 
-public sealed record CreateWorkSessionCommand(
-    Guid SessionId,
-    Guid ConversationId,
-    Guid AgentDefinitionId,
-    AgentWorkSessionKind Kind,
-    string Title,
-    string Objective,
-    int ConfigVersion = 1);
+    public required Guid ConversationId { get; init; }
 
-public sealed record UpdateWorkSessionCommand(
-    Guid SessionId,
-    long ExpectedVersion,
-    string? Title = null,
-    string? Objective = null,
-    Guid? AgentDefinitionId = null);
+    public required Guid? CurrentTaskId { get; init; }
+
+    public required int StepCount { get; init; }
+
+    public required Guid? LastCheckpointId { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required int ConfigVersion { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
+
+public sealed class WorkSessionTaskSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required Guid? ParentTaskId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string? Detail { get; init; }
+
+    public required AgentWorkSessionTaskStatus Status { get; init; }
+
+    public required string? BlockedReason { get; init; }
+
+    public required AgentWorkSessionTaskOrigin Origin { get; init; }
+
+    public required int CreatedStep { get; init; }
+
+    public required int UpdatedStep { get; init; }
+}
+
+public sealed class WorkSessionFindingSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required Guid? TaskId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required AgentWorkSessionFindingKind Kind { get; init; }
+
+    public required string Text { get; init; }
+
+    public required string? SourceRef { get; init; }
+
+    public required int CreatedStep { get; init; }
+
+    public required bool Superseded { get; init; }
+}
+
+public sealed class WorkSessionArtifactSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required AgentWorkSessionArtifactKind Kind { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required bool IsValid { get; init; }
+
+    public required string ManagedReference { get; init; }
+
+    public required int CreatedStep { get; init; }
+}
+
+public sealed record WorkSessionCheckpointSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string? Summary { get; init; }
+
+    public required string StateJson { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
+
+public sealed class WorkSessionEventSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required Guid? OperationId { get; init; }
+
+    public required string? Outcome { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
+
+public sealed class CreateWorkSessionCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required AgentWorkSessionKind Kind { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Objective { get; init; }
+
+    public int ConfigVersion { get; init; } = 1;
+}
+
+public sealed class UpdateWorkSessionCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public string? Title { get; init; }
+
+    public string? Objective { get; init; }
+
+    public Guid? AgentDefinitionId { get; init; }
+}
 
 /// <summary>
 ///     A status move, optionally re-pointing the current task. A null <see cref="CurrentTaskId" /> leaves the current
 ///     task as it is; a terminal target clears it regardless.
 /// </summary>
-public sealed record TransitionWorkSessionStatusCommand(
-    Guid SessionId,
-    long ExpectedVersion,
-    AgentWorkSessionStatus TargetStatus,
-    Guid? CurrentTaskId = null,
-    string? SanitizedReason = null);
+public sealed class TransitionWorkSessionStatusCommand
+{
+    public required Guid SessionId { get; init; }
 
-public sealed record WorkPlanTaskChange(
-    Guid TaskId,
-    WorkPlanTaskOperation Operation,
-    Guid? ParentTaskId = null,
-    string? Title = null,
-    string? Detail = null,
-    AgentWorkSessionTaskStatus? Status = null,
-    string? BlockedReason = null);
+    public required long ExpectedVersion { get; init; }
 
-public sealed record ApplyWorkPlanCommand(
-    Guid SessionId,
-    long ExpectedVersion,
-    Guid OperationId,
-    AgentWorkSessionTaskOrigin Origin,
-    IReadOnlyList<WorkPlanTaskChange> Changes);
+    public required AgentWorkSessionStatus TargetStatus { get; init; }
 
-public sealed record AppendWorkSessionFindingCommand(
-    Guid SessionId,
-    Guid FindingId,
-    long ExpectedVersion,
-    Guid OperationId,
-    AgentWorkSessionFindingKind Kind,
-    string Text,
-    Guid? TaskId = null,
-    string? SourceRef = null,
-    Guid? SupersedesFindingId = null);
+    public Guid? CurrentTaskId { get; init; }
 
-public sealed record AppendWorkSessionArtifactCommand(
-    Guid SessionId,
-    Guid ArtifactId,
-    long ExpectedVersion,
-    Guid OperationId,
-    AgentWorkSessionArtifactKind Kind,
-    string Name,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    string ManagedReference);
+    public string? SanitizedReason { get; init; }
+}
 
-public sealed record AppendWorkSessionCheckpointCommand(
-    Guid SessionId,
-    Guid CheckpointId,
-    long ExpectedVersion,
-    Guid OperationId,
-    int Step,
-    string? Summary,
-    string StateJson);
+public sealed class WorkPlanTaskChange
+{
+    public required Guid TaskId { get; init; }
 
-public sealed record AppendWorkSessionEventCommand(
-    Guid SessionId,
-    long ExpectedVersion,
-    string EventType,
-    Guid? OperationId = null,
-    string? Outcome = null,
-    string? DetailJson = null);
+    public required WorkPlanTaskOperation Operation { get; init; }
+
+    public Guid? ParentTaskId { get; init; }
+
+    public string? Title { get; init; }
+
+    public string? Detail { get; init; }
+
+    public AgentWorkSessionTaskStatus? Status { get; init; }
+
+    public string? BlockedReason { get; init; }
+}
+
+public sealed class ApplyWorkPlanCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required AgentWorkSessionTaskOrigin Origin { get; init; }
+
+    public required IReadOnlyList<WorkPlanTaskChange> Changes { get; init; }
+}
+
+public sealed class AppendWorkSessionFindingCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required Guid FindingId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required AgentWorkSessionFindingKind Kind { get; init; }
+
+    public required string Text { get; init; }
+
+    public Guid? TaskId { get; init; }
+
+    public string? SourceRef { get; init; }
+
+    public Guid? SupersedesFindingId { get; init; }
+}
+
+public sealed class AppendWorkSessionArtifactCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required Guid ArtifactId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required AgentWorkSessionArtifactKind Kind { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string ManagedReference { get; init; }
+}
+
+public sealed class AppendWorkSessionCheckpointCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required Guid CheckpointId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string? Summary { get; init; }
+
+    public required string StateJson { get; init; }
+}
+
+public sealed class AppendWorkSessionEventCommand
+{
+    public required Guid SessionId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required string EventType { get; init; }
+
+    public Guid? OperationId { get; init; }
+
+    public string? Outcome { get; init; }
+
+    public string? DetailJson { get; init; }
+}
 
 /// <summary>
 ///     What one mutation committed: the watermark it allocated for its event, the session's step, and the session row's
@@ -187,14 +325,22 @@ public sealed record AppendWorkSessionEventCommand(
 ///         blob store deletes them after the commit, because the schema project cannot reach the blob layer.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionMutationResult(
-    Guid SessionId,
-    long Sequence,
-    int Step,
-    long Version,
-    AgentWorkSessionStatus Status,
-    Guid? CurrentTaskId,
-    Guid? SupersededArtifactId = null);
+public sealed class WorkSessionMutationResult
+{
+    public required Guid SessionId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required long Version { get; init; }
+
+    public required AgentWorkSessionStatus Status { get; init; }
+
+    public required Guid? CurrentTaskId { get; init; }
+
+    public Guid? SupersededArtifactId { get; init; }
+}
 
 /// <summary>
 ///     The durable substrate for agent work sessions: one monotonic sequence per session, an append-only event log, and

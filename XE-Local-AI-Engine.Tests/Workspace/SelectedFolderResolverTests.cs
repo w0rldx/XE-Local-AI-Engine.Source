@@ -150,7 +150,7 @@ public sealed class SelectedFolderResolverTests
 
         public Task<SelectedFolderRecord> AddAsync(string folderAlias, string hostPath, SelectedFolderMode mode, CancellationToken cancellationToken = default)
         {
-            var record = new SelectedFolderRecord(Guid.NewGuid(), folderAlias, hostPath, mode, CreatedAtUtc: 1);
+            var record = new SelectedFolderRecord { Id = Guid.NewGuid(), Alias = folderAlias, HostPath = hostPath, Mode = mode, CreatedAtUtc = 1 };
             _records.Add(record);
             return Task.FromResult(record);
         }

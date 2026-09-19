@@ -394,29 +394,32 @@ public sealed class InferenceInvalidationEvaluatorTests
 
     private static InferenceProfileRecord FrozenRecord(string build, long? freeVramAtFreeze)
     {
-        return new InferenceProfileRecord(Id: Guid.NewGuid(),
-            MachineKey: "machine-abc",
-            ModelName: "bartowski/Model-GGUF:Q4_K_M",
-            Role: (int)ModelRole.Chat,
-            Backend: "cuda",
-            LlamacppBuild: build,
-            Quant: "Q4_K_M",
-            CtxSize: 4096,
-            NGpuLayers: 20,
-            TensorSplit: null,
-            OverrideTensor: null,
-            KvTypeK: null,
-            KvTypeV: null,
-            FlashAttn: false,
-            NParams: 7_000_000_000,
-            IsMoe: false,
-            ExpertCount: null,
-            GlobalFreeVramAtFreezeBytes: freeVramAtFreeze,
-            Status: InferenceProfileStatus.Frozen,
-            BenchmarkSnapshotId: Guid.NewGuid(),
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            LaunchPolicyFingerprintVersion: LaunchPolicyFingerprintProvider.CurrentVersion,
-            LaunchPolicyFingerprint: "fingerprint");
+        return new InferenceProfileRecord
+        {
+            Id = Guid.NewGuid(),
+            MachineKey = "machine-abc",
+            ModelName = "bartowski/Model-GGUF:Q4_K_M",
+            Role = (int)ModelRole.Chat,
+            Backend = "cuda",
+            LlamacppBuild = build,
+            Quant = "Q4_K_M",
+            CtxSize = 4096,
+            NGpuLayers = 20,
+            TensorSplit = null,
+            OverrideTensor = null,
+            KvTypeK = null,
+            KvTypeV = null,
+            FlashAttn = false,
+            NParams = 7_000_000_000,
+            IsMoe = false,
+            ExpertCount = null,
+            GlobalFreeVramAtFreezeBytes = freeVramAtFreeze,
+            Status = InferenceProfileStatus.Frozen,
+            BenchmarkSnapshotId = Guid.NewGuid(),
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            LaunchPolicyFingerprintVersion = LaunchPolicyFingerprintProvider.CurrentVersion,
+            LaunchPolicyFingerprint = "fingerprint"
+        };
     }
 }

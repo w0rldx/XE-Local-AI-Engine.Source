@@ -364,22 +364,25 @@ public sealed class McpExecutionBindingResolverTests
         string? seedSlug,
         string? modelProfile = Model)
     {
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            name,
-            Description: null,
-            Instructions: "saved instructions",
-            ModelProfile: modelProfile,
-            ReasoningEffort: null,
-            Kind: AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson: null,
-            Version: 7,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Source: source,
-            SeedSlug: seedSlug,
-            AllowedSkillIds: [Guid.NewGuid()]);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = null,
+            Instructions = "saved instructions",
+            ModelProfile = modelProfile,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null,
+            Version = 7,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Source = source,
+            SeedSlug = seedSlug,
+            AllowedSkillIds = [Guid.NewGuid()]
+        };
     }
 
     private static AllowedToolDto Tool(string name,

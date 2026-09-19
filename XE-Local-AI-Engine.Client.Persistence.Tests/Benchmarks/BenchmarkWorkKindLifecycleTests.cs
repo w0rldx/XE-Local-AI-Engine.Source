@@ -141,7 +141,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         AssertEx.Equal("running",
             (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id)).FidelityStatus);
 
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = claimed.Version, FidelityAttemptId = attemptId, PerplexityMean = 6.7983 });
 
         context.ChangeTracker.Clear();
         AssertEx.Equal("succeeded",
@@ -193,8 +193,17 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         // A first measurement that succeeded, then a second one killed mid-flight.
         var first = await store.EnqueueFidelityAsync(run.Id, "ppl");
         var firstClaim = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, firstClaim.Version, first,
-                           PerplexityMean: 6.7983, PerplexityStdErr: 0.07405, PerplexityChunks: 200, PerplexityContextTokens: 512, CorpusId: "wikitext2-raw-test@abc"));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = firstClaim.Version,
+            FidelityAttemptId = first,
+            PerplexityMean = 6.7983,
+            PerplexityStdErr = 0.07405,
+            PerplexityChunks = 200,
+            PerplexityContextTokens = 512,
+            CorpusId = "wikitext2-raw-test@abc"
+        });
         var second = await store.EnqueueFidelityAsync(run.Id, "ppl");
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
@@ -226,11 +235,20 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         var (project, _) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version,
-                           Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = primary.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        });
         var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = claimed.Version, FidelityAttemptId = attemptId, PerplexityMean = 6.7983 });
 
         await store.DeleteRunAsync(run.Id, AssertEx.NotNull(await store.GetRunAsync(run.Id)).Version);
 
@@ -278,7 +296,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         _ = AssertEx.NotNull(await store.ClaimNextAsync());
         var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = claimed.Version, FidelityAttemptId = attemptId, PerplexityMean = 6.7983 });
 
         // A requeue racing a completion must not start a second measurement of a cell that already has its number.
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.RequeueFidelityAsync(run.Id, claimed.Version, "too late"));
@@ -379,7 +397,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         });
         await context.SaveChangesAsync();
 
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, firstClaim.Version, first, PerplexityMean: 99.0));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand { RunId = run.Id, ExpectedWorkVersion = firstClaim.Version, FidelityAttemptId = first, PerplexityMean = 99.0 });
 
         context.ChangeTracker.Clear();
         var afterStaleSuccess = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
@@ -390,8 +408,17 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         // And the ordinary path still projects: a fresh attempt above every succeeded sequence wins.
         var latest = await store.EnqueueFidelityAsync(run.Id, "ppl");
         var latestClaim = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, latestClaim.Version, latest,
-                           PerplexityMean: 6.7983, PerplexityStdErr: 0.07405, PerplexityChunks: 200, PerplexityContextTokens: 512, CorpusId: "wikitext2-raw-test@abc"));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = latestClaim.Version,
+            FidelityAttemptId = latest,
+            PerplexityMean = 6.7983,
+            PerplexityStdErr = 0.07405,
+            PerplexityChunks = 200,
+            PerplexityContextTokens = 512,
+            CorpusId = "wikitext2-raw-test@abc"
+        });
 
         context.ChangeTracker.Clear();
         var projected = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
@@ -500,8 +527,17 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var succeeded = await store.StartRunAsync(CreateRun(project));
         var succeededClaim = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(succeeded.Id, succeededClaim.Run.Version,
-                           Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = succeeded.Id,
+            ExpectedWorkVersion = succeededClaim.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        });
 
         context.ChangeTracker.Clear();
         var items = await context.BenchmarkWorkItems.AsNoTracking()
@@ -620,9 +656,20 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     private static BenchmarkProjectInput CreateProject() =>
-        new(Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), 4096, Guid.NewGuid());
+        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version,
-            Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('a', 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 }

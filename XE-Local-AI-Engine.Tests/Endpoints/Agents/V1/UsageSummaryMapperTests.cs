@@ -17,7 +17,7 @@ public sealed class UsageSummaryMapperTests
 {
     private static TokenUsageAggregateRecord Bucket(string model, string provider, long day, int runs, long prompt, long completion, long reasoning, long total)
     {
-        return new TokenUsageAggregateRecord(model, provider, day, runs, prompt, completion, reasoning, total);
+        return new TokenUsageAggregateRecord { ModelName = model, Provider = provider, DayStartUtcMs = day, RunCount = runs, PromptTokens = prompt, CompletionTokens = completion, ReasoningTokens = reasoning, TotalTokens = total };
     }
 
     // A resolver that prices one model (gpt-5) with round rates and leaves everything else to the default table / free.

@@ -179,30 +179,33 @@ public sealed class InferenceProfileStore : IInferenceProfileStore
 
     private static InferenceProfileRecord ToRecord(InferenceProfile entity)
     {
-        return new InferenceProfileRecord(entity.Id,
-            entity.MachineKey,
-            entity.ModelName,
-            entity.Role,
-            entity.Backend,
-            entity.LlamacppBuild,
-            entity.Quant,
-            entity.CtxSize,
-            entity.NGpuLayers,
-            entity.TensorSplit,
-            entity.OverrideTensor,
-            entity.KvTypeK,
-            entity.KvTypeV,
-            entity.FlashAttn,
-            entity.NParams,
-            entity.IsMoe,
-            entity.ExpertCount,
-            entity.Status,
-            entity.BenchmarkSnapshotId,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.LaunchPolicyFingerprintVersion,
-            entity.LaunchPolicyFingerprint,
-            entity.GlobalFreeVramAtFreezeBytes,
-            entity.ProcessBudgetVramAtFreezeBytes);
+        return new InferenceProfileRecord
+        {
+            Id = entity.Id,
+            MachineKey = entity.MachineKey,
+            ModelName = entity.ModelName,
+            Role = entity.Role,
+            Backend = entity.Backend,
+            LlamacppBuild = entity.LlamacppBuild,
+            Quant = entity.Quant,
+            CtxSize = entity.CtxSize,
+            NGpuLayers = entity.NGpuLayers,
+            TensorSplit = entity.TensorSplit,
+            OverrideTensor = entity.OverrideTensor,
+            KvTypeK = entity.KvTypeK,
+            KvTypeV = entity.KvTypeV,
+            FlashAttn = entity.FlashAttn,
+            NParams = entity.NParams,
+            IsMoe = entity.IsMoe,
+            ExpertCount = entity.ExpertCount,
+            Status = entity.Status,
+            BenchmarkSnapshotId = entity.BenchmarkSnapshotId,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            LaunchPolicyFingerprintVersion = entity.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint = entity.LaunchPolicyFingerprint,
+            GlobalFreeVramAtFreezeBytes = entity.GlobalFreeVramAtFreezeBytes,
+            ProcessBudgetVramAtFreezeBytes = entity.ProcessBudgetVramAtFreezeBytes
+        };
     }
 }

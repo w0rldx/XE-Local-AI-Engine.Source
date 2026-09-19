@@ -153,58 +153,64 @@ public sealed class DevWorkflowRunHubTests
     private static IDevWorkflowRunService Runs()
     {
         var runs = Substitute.For<IDevWorkflowRunService>();
-        var run = new DevWorkflowRunSnapshot(RunId,
-            WorkItemId: Guid.NewGuid(),
-            DefinitionId: Guid.NewGuid(),
-            DefinitionVersion: 1,
-            "graph-hash",
-            """{"schemaVersion":1,"nodes":[{"nodeKey":"approval","nodeType":"HumanGate"}],"edges":[]}""",
-            GraphRevision: 0,
-            DevWorkflowRunStatus.WaitingForApproval,
-            LastSequence: 14,
-            FailureClass: null,
-            TerminalReason: null,
-            StartedAtUtc: 11,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 20,
-            Version: 6);
+        var run = new DevWorkflowRunSnapshot
+        {
+            Id = RunId,
+            WorkItemId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionGraphHash = "graph-hash",
+            GraphJson = """{"schemaVersion":1,"nodes":[{"nodeKey":"approval","nodeType":"HumanGate"}],"edges":[]}""",
+            GraphRevision = 0,
+            Status = DevWorkflowRunStatus.WaitingForApproval,
+            LastSequence = 14,
+            FailureClass = null,
+            TerminalReason = null,
+            StartedAtUtc = 11,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            Version = 6
+        };
         runs.GetAsync(RunId, Arg.Any<CancellationToken>())
             .Returns(new DevWorkflowRunDetail(run, [NodeRun(GateNodeRunId, DevWorkflowNodeRunStatus.WaitingForApproval), NodeRun(Guid.NewGuid(), DevWorkflowNodeRunStatus.Running)], 1, GateNodeRunId));
         return runs;
     }
 
     private static DevWorkflowNodeRunSnapshot NodeRun(Guid id, DevWorkflowNodeRunStatus status) =>
-        new(id,
-            RunId,
-            status == DevWorkflowNodeRunStatus.WaitingForApproval ? "approval" : "research",
-            DevWorkflowNodeType.HumanGate,
-            Attempt: 1,
-            MaxAttempts: 1,
-            SessionResumes: 0,
-            status,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 5,
-            WorkSessionId: null,
-            WorkSessionAvailable: false,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: null,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10);
+        new()
+        {
+            Id = id,
+            RunId = RunId,
+            NodeKey = status == DevWorkflowNodeRunStatus.WaitingForApproval ? "approval" : "research",
+            NodeType = DevWorkflowNodeType.HumanGate,
+            Attempt = 1,
+            MaxAttempts = 1,
+            SessionResumes = 0,
+            Status = status,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 5,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = null,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10
+        };
 
     private static DevWorkflowRunEventSnapshot Event(long sequence) =>
-        new(Guid.NewGuid(), RunId, NodeRunId: null, sequence, "node.started", DetailJson: null, OperationId: null, Outcome: null, OccurredAtUtc: 100);
+        new() { Id = Guid.NewGuid(), RunId = RunId, NodeRunId = null, Sequence = sequence, EventType = "node.started", DetailJson = null, OperationId = null, Outcome = null, OccurredAtUtc = 100 };
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",

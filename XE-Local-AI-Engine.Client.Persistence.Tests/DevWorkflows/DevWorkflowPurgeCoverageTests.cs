@@ -105,28 +105,34 @@ public sealed class DevWorkflowPurgeCoverageTests
             version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, consumerId, "approval", version, DevWorkflowNodeType.HumanGate);
 
             var artifactId = Guid.NewGuid();
-            var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
-                                          artifactId,
-                                          producerId,
-                                          version,
-                                          Guid.NewGuid(),
-                                          DevWorkflowArtifactKind.Research,
-                                          "brief",
-                                          "text/markdown",
-                                          "hash-1",
-                                          SizeBytes: 10,
-                                          "reference-1"));
-            var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, appended.Version, Guid.NewGuid(), [artifactId]));
-            _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
-                               Guid.NewGuid(),
-                               consumerId,
-                               used.Version,
-                               Guid.NewGuid(),
-                               DevWorkflowDecisionKind.Approve));
+            var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
+            {
+                RunId = seed.RunId,
+                ArtifactId = artifactId,
+                NodeRunId = producerId,
+                ExpectedVersion = version,
+                OperationId = Guid.NewGuid(),
+                Kind = DevWorkflowArtifactKind.Research,
+                Name = "brief",
+                MediaType = "text/markdown",
+                ContentSha256 = "hash-1",
+                SizeBytes = 10,
+                ManagedReference = "reference-1"
+            });
+            var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand { RunId = seed.RunId, NodeRunId = consumerId, ExpectedVersion = appended.Version, OperationId = Guid.NewGuid(), ArtifactIds = [artifactId] });
+            _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
+            {
+                RunId = seed.RunId,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = consumerId,
+                ExpectedVersion = used.Version,
+                OperationId = Guid.NewGuid(),
+                Decision = DevWorkflowDecisionKind.Approve
+            });
 
             _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.DeleteWorkItemAsync(workItemId),
                                   "A work item whose run is still live must not be deleted out from under the executor driving it.");
-            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Cancelled));
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = seed.RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Cancelled });
 
             var removed = await store.DeleteWorkItemAsync(workItemId);
             AssertEx.True(removed.RemovedRows > 0, "The delete must report the rows it removed.");
@@ -166,17 +172,20 @@ public sealed class DevWorkflowPurgeCoverageTests
 
         var nodeRunId = Guid.NewGuid();
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion);
-        _ = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
-                           Guid.NewGuid(),
-                           nodeRunId,
-                           version,
-                           Guid.NewGuid(),
-                           DevWorkflowArtifactKind.Research,
-                           "brief",
-                           "text/markdown",
-                           "hash-1",
-                           SizeBytes: 10,
-                           "reference-1"));
+        _ = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
+        {
+            RunId = seed.RunId,
+            ArtifactId = Guid.NewGuid(),
+            NodeRunId = nodeRunId,
+            ExpectedVersion = version,
+            OperationId = Guid.NewGuid(),
+            Kind = DevWorkflowArtifactKind.Research,
+            Name = "brief",
+            MediaType = "text/markdown",
+            ContentSha256 = "hash-1",
+            SizeBytes = 10,
+            ManagedReference = "reference-1"
+        });
 
         await using (var transaction = await context.Database.BeginTransactionAsync())
         {

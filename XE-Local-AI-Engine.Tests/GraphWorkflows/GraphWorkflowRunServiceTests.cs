@@ -119,36 +119,42 @@ public sealed class GraphWorkflowRunServiceTests
         var store = Substitute.For<IGraphWorkflowStore>();
         _ = store.FindRunByRequestAsync(requestId, Arg.Any<CancellationToken>()).Returns((GraphWorkflowRunSnapshot?)null);
         _ = store.GetDefinitionAsync(definitionId, Arg.Any<CancellationToken>())
-                 .Returns(new GraphWorkflowDefinitionSnapshot(definitionId,
-                     "Substituted",
-                     Description: null,
-                     GraphWorkflowGraphs.InlineLinear,
-                     "graph-hash",
-                     NodeCount: 3,
-                     SchemaVersion: 1,
-                     Version: 1,
-                     CreatedAtUtc: 0,
-                     UpdatedAtUtc: 0));
+                 .Returns(new GraphWorkflowDefinitionSnapshot
+                 {
+                     Id = definitionId,
+                     Name = "Substituted",
+                     Description = null,
+                     GraphJson = GraphWorkflowGraphs.InlineLinear,
+                     GraphHash = "graph-hash",
+                     NodeCount = 3,
+                     SchemaVersion = 1,
+                     Version = 1,
+                     CreatedAtUtc = 0,
+                     UpdatedAtUtc = 0
+                 });
 
         // What the store answers a LOST unique-index race with: the run that won the request id, which is a run of
         // somebody else's definition.
         _ = store.StartRunAsync(Arg.Any<StartGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>())
-                 .Returns(new GraphWorkflowRunSnapshot(winnerRunId,
-                     requestId,
-                     Guid.NewGuid(),
-                     DefinitionVersion: 1,
-                     "graph-hash",
-                     GraphWorkflowRunStatus.Pending,
-                     GraphWorkflowFailureClass.None,
-                     GraphWorkflowGraphs.InlineLinear,
-                     InputJson: null,
-                     OutputJson: null,
-                     Seq: 1,
-                     Version: 1,
-                     CancelRequestedAtUtc: null,
-                     StartedAtUtc: null,
-                     CompletedAtUtc: null,
-                     CreatedAtUtc: 0));
+                 .Returns(new GraphWorkflowRunSnapshot
+                 {
+                     Id = winnerRunId,
+                     RequestId = requestId,
+                     DefinitionId = Guid.NewGuid(),
+                     DefinitionVersion = 1,
+                     GraphHash = "graph-hash",
+                     Status = GraphWorkflowRunStatus.Pending,
+                     FailureClass = GraphWorkflowFailureClass.None,
+                     GraphJson = GraphWorkflowGraphs.InlineLinear,
+                     InputJson = null,
+                     OutputJson = null,
+                     Seq = 1,
+                     Version = 1,
+                     CancelRequestedAtUtc = null,
+                     StartedAtUtc = null,
+                     CompletedAtUtc = null,
+                     CreatedAtUtc = 0
+                 });
 
         var signals = new RecordingGraphWorkflowDispatcherSignal();
 
@@ -382,10 +388,13 @@ public sealed class GraphWorkflowRunServiceTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        var definition = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
-                                        "Saved under a wider cap",
-                                        GraphWorkflowGraphs.StartAgentEnd,
-                                        NodeCount: 3));
+        var definition = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "Saved under a wider cap",
+            GraphJson = GraphWorkflowGraphs.StartAgentEnd,
+            NodeCount = 3
+        });
 
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         var thrown = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
@@ -443,10 +452,13 @@ public sealed class GraphWorkflowRunServiceTests
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
 
         // Driven terminal through the store, because there is no dispatcher in this slice to do it.
-        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(started.Run.Id,
-                           started.Run.Version,
-                           GraphWorkflowRunStatus.Failed,
-                           GraphWorkflowFailureClass.NodeFailed));
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = started.Run.Id,
+            ExpectedVersion = started.Run.Version,
+            TargetStatus = GraphWorkflowRunStatus.Failed,
+            FailureClass = GraphWorkflowFailureClass.NodeFailed
+        });
 
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => runs.CancelAsync(started.Run.Id));
@@ -469,9 +481,12 @@ public sealed class GraphWorkflowRunServiceTests
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         for (var index = 0; index < 3; index++)
         {
-            _ = await store.AppendEventAsync(new AppendGraphWorkflowEventCommand(started.Run.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowEventTypes.RunStarted));
+            _ = await store.AppendEventAsync(new AppendGraphWorkflowEventCommand
+            {
+                RunId = started.Run.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                EventType = GraphWorkflowEventTypes.RunStarted
+            });
         }
 
         var first = await runs.ListEventsAsync(started.Run.Id, afterSeq: 0);
@@ -626,13 +641,16 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
     private async Task CommitIdenticalAnswerAsync(Guid runId, CancellationToken cancellationToken, Guid? operationId = null)
     {
         var waiting = await _inner.GetNodeRunAsync(runId, "review", cancellationToken);
-        _ = await _inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
-                               waiting.Id,
-                               GraphWorkflowVersions.Any,
-                               operationId ?? _callerOperationId,
-                               _winningDecision,
-                               "operator",
-                               GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)),
+        _ = await _inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand
+        {
+            RunId = runId,
+            NodeRunId = waiting.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            OperationId = operationId ?? _callerOperationId,
+            Decision = _winningDecision,
+            DecidedBySubject = "operator",
+            OutputJson = GraphWorkflowStateMachine.PauseOutputJson(_winningDecision)
+        },
                            cancellationToken);
     }
 
@@ -651,7 +669,7 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
         // The answer lands BEFORE the cancel: the store refuses a decision on a run that has stopped, so the other
         // request only wins if it got there first — which is exactly the interleaving this reproduces.
         await CommitIdenticalAnswerAsync(runId, cancellationToken);
-        _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling), cancellationToken);
+        _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Cancelling }, cancellationToken);
         return await _inner.GetRunAsync(runId, cancellationToken);
     }
 
@@ -661,7 +679,7 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
         {
             // A cancel committing between this caller's checks and its write. Delegated afterwards, so what refuses the
             // decision is the store's own in-transaction re-read rather than anything this seam decides.
-            _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(command.RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling),
+            _ = await _inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = command.RunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Cancelling },
                                cancellationToken);
             return await _inner.DecideNodeRunAsync(command, cancellationToken);
         }

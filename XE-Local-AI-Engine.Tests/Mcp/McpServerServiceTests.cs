@@ -496,47 +496,56 @@ public sealed class McpServerServiceTests
         string? command = "npx",
         bool enabled = false)
     {
-        return new McpServerInput(name,
-            "A filesystem MCP server.",
-            McpTransportKind.Stdio,
-            command,
-            ["-y", "@modelcontextprotocol/server-filesystem"],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            Url: null,
-            McpTrustTier.Sandboxed,
-            enabled);
+        return new McpServerInput
+        {
+            Name = name,
+            Description = "A filesystem MCP server.",
+            TransportKind = McpTransportKind.Stdio,
+            Command = command,
+            Arguments = ["-y", "@modelcontextprotocol/server-filesystem"],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal),
+            Url = null,
+            TrustTier = McpTrustTier.Sandboxed,
+            Enabled = enabled
+        };
     }
 
     private static McpServerInput CreateHttpInput(string? url, string name = "RemoteTools", bool enabled = false)
     {
-        return new McpServerInput(name,
-            Description: null,
-            McpTransportKind.Http,
-            Command: null,
-            [],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            url,
-            McpTrustTier.Sandboxed,
-            enabled);
+        return new McpServerInput
+        {
+            Name = name,
+            Description = null,
+            TransportKind = McpTransportKind.Http,
+            Command = null,
+            Arguments = [],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal),
+            Url = url,
+            TrustTier = McpTrustTier.Sandboxed,
+            Enabled = enabled
+        };
     }
 
     private static McpServerRecord CreateRecord(McpServerInput input, bool enabled)
     {
-        return new McpServerRecord(Guid.NewGuid(),
-            input.Name,
-            input.Description,
-            input.TransportKind,
-            input.Command,
-            input.Arguments,
-            input.WorkingDirectory,
-            input.Environment,
-            input.Url,
-            input.TrustTier,
-            enabled,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new McpServerRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = input.Name,
+            Description = input.Description,
+            TransportKind = input.TransportKind,
+            Command = input.Command,
+            Arguments = input.Arguments,
+            WorkingDirectory = input.WorkingDirectory,
+            Environment = input.Environment,
+            Url = input.Url,
+            TrustTier = input.TrustTier,
+            Enabled = enabled,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 }

@@ -40,19 +40,32 @@ public interface ICustomToolStore
 ///     header/env values in the clear on the read side — the CRUD read path is responsible for masking them before they
 ///     reach an operator or the model.
 /// </summary>
-public sealed record CustomToolRecord(
-    Guid Id,
-    string Name,
-    string Description,
-    CustomToolKind Kind,
-    CustomToolMode Mode,
-    string ParametersJson,
-    string ConfigJson,
-    bool Enabled,
-    bool Acknowledged,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class CustomToolRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required CustomToolKind Kind { get; init; }
+
+    public required CustomToolMode Mode { get; init; }
+
+    public required string ParametersJson { get; init; }
+
+    public required string ConfigJson { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required bool Acknowledged { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a custom tool supplied on create/update. Free text is passed as plaintext strings; the store
@@ -60,12 +73,21 @@ public sealed record CustomToolRecord(
 ///     them. <see cref="ParametersJson" /> and <see cref="ConfigJson" /> are opaque JSON to the store — the application
 ///     service owns their shape and validation.
 /// </summary>
-public sealed record CustomToolInput(
-    string Name,
-    string Description,
-    CustomToolKind Kind,
-    CustomToolMode Mode,
-    string ConfigJson,
-    string ParametersJson = "[]",
-    bool Enabled = true,
-    bool Acknowledged = false);
+public sealed class CustomToolInput
+{
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required CustomToolKind Kind { get; init; }
+
+    public required CustomToolMode Mode { get; init; }
+
+    public required string ConfigJson { get; init; }
+
+    public string ParametersJson { get; init; } = "[]";
+
+    public bool Enabled { get; init; } = true;
+
+    public bool Acknowledged { get; init; }
+}

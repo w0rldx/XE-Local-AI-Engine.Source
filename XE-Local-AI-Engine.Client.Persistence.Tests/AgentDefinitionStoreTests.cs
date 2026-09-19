@@ -459,15 +459,18 @@ public sealed class AgentDefinitionStoreTests : IDisposable
 
     private static AgentDefinitionInput CreateInput()
     {
-        return new AgentDefinitionInput("Builder",
-            Description,
-            Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = "Builder",
+            Description = Description,
+            Instructions = Instructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        };
     }
 
     private static async Task TamperInstructionsAsync(string databasePath)

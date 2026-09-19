@@ -55,7 +55,7 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
             throw new TrainingConflictException("TrainingBusy");
         }
 
-        var dataset = await _store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definitionId, expectedDefinitionVersion, name),
+        var dataset = await _store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definitionId, ExpectedDefinitionVersion = expectedDefinitionVersion, Name = name },
                                       cancellationToken);
         _signal.Wake();
         return dataset;

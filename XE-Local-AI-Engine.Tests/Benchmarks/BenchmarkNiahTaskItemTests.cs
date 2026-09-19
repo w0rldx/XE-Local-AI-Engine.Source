@@ -248,23 +248,75 @@ public sealed class BenchmarkNiahTaskItemTests
                 new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, [rubric]),
                 ReferenceAnswer: null);
             _ = store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 1,
-                         BenchmarkJudgeSerialization.SerializePolicy(policy), new string('0', count: 64), null, 1, 0));
+                     .Returns(new BenchmarkJudgePolicyRevisionRecord
+                     {
+                         Id = Guid.NewGuid(),
+                         ProjectId = ProjectId,
+                         Revision = 1,
+                         PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(policy),
+                         PolicyHash = new string('0', count: 64),
+                         ReferenceExecutionKey = null,
+                         CohortGeneration = 1,
+                         CreatedAtUtc = 0
+                     });
         }
 
         return store;
     }
 
     private static BenchmarkTaskItemRecord Item(Guid id, string kind, Guid? parentItemId) =>
-        new(id, ProjectId, parentItemId, Index: 0, kind, Revision: 1, "v1:hash", CountsTowardScore: true,
-            "{}"u8.ToArray(), null, null, null, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = id,
+            ProjectId = ProjectId,
+            ParentItemId = parentItemId,
+            Index = 0,
+            Kind = kind,
+            Revision = 1,
+            InputHash = "v1:hash",
+            CountsTowardScore = true,
+            PromptJson = "{}"u8.ToArray(),
+            ReferenceAnswerJson = null,
+            VerifierConfigJson = null,
+            GeneratorConfigJson = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private static BenchmarkTaskItemRecord Record(BenchmarkTaskItemInput input) =>
-        new(input.Id, ProjectId, input.ParentItemId, Index: 0, input.Kind, Revision: 1, "v1:hash", input.CountsTowardScore,
-            input.PromptJson, input.ReferenceAnswerJson, input.VerifierConfigJson, input.GeneratorConfigJson,
-            Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = input.Id,
+            ProjectId = ProjectId,
+            ParentItemId = input.ParentItemId,
+            Index = 0,
+            Kind = input.Kind,
+            Revision = 1,
+            InputHash = "v1:hash",
+            CountsTowardScore = input.CountsTowardScore,
+            PromptJson = input.PromptJson,
+            ReferenceAnswerJson = input.ReferenceAnswerJson,
+            VerifierConfigJson = input.VerifierConfigJson,
+            GeneratorConfigJson = input.GeneratorConfigJson,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private static BenchmarkProjectRecord Project(int contextTokens) =>
-        new(ProjectId, "probe project", "{}"u8.ToArray(), contextTokens, Guid.NewGuid(), JudgeEnabled: true,
-            CurrentJudgePolicyRevisionId: null, IsFrozen: false, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = ProjectId,
+            Name = "probe project",
+            CoreTaskJson = "{}"u8.ToArray(),
+            ContextTokens = contextTokens,
+            AgentDefinitionId = Guid.NewGuid(),
+            JudgeEnabled = true,
+            CurrentJudgePolicyRevisionId = null,
+            IsFrozen = false,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 }

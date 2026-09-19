@@ -283,11 +283,14 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             var terminalEvent = _events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
-            var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
-                                           work.Version,
-                                           BenchmarkJudgeSerialization.SerializeResult(parsed),
-                                           terminalEvent.Sequence,
-                                           parsed.Score), CancellationToken.None);
+            var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+            {
+                RunId = work.RunId,
+                ExpectedWorkVersion = work.Version,
+                JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(parsed),
+                LastStreamSequence = terminalEvent.Sequence,
+                Score = parsed.Score
+            }, CancellationToken.None);
             _events.PublishReserved(terminalEvent with
             {
                 Payload = terminalEvent.Payload with
@@ -484,12 +487,15 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         var terminalEvent = _events.Reserve(work.RunId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
-        var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
-                                       work.Version,
-                                       BenchmarkJudgeSerialization.SerializeResult(result),
-                                       terminalEvent.Sequence,
-                                       result.Score,
-                                       BenchmarkJudgeExecutionKey.VerifiedSentinel), CancellationToken.None);
+        var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        {
+            RunId = work.RunId,
+            ExpectedWorkVersion = work.Version,
+            JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(result),
+            LastStreamSequence = terminalEvent.Sequence,
+            Score = result.Score,
+            VerifiedExecutionKey = BenchmarkJudgeExecutionKey.VerifiedSentinel
+        }, CancellationToken.None);
         _events.PublishReserved(terminalEvent with
         {
             Payload = terminalEvent.Payload with

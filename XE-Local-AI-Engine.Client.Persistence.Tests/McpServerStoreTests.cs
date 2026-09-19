@@ -542,37 +542,43 @@ public sealed class McpServerStoreTests : IDisposable
 
     private static McpServerInput CreateStdioInput()
     {
-        return new McpServerInput("filesystem",
-            Description,
-            McpTransportKind.Stdio,
-            "npx",
-            new[]
+        return new McpServerInput
+        {
+            Name = "filesystem",
+            Description = Description,
+            TransportKind = McpTransportKind.Stdio,
+            Command = "npx",
+            Arguments = new[]
             {
                 "--root",
                 "repo"
             },
-            "work-dir",
-            new Dictionary<string, string>
+            WorkingDirectory = "work-dir",
+            Environment = new Dictionary<string, string>
             {
                 ["API_TOKEN"] = "s3cr3t"
             },
-            Url: null,
-            McpTrustTier.Sandboxed,
-            Enabled: false);
+            Url = null,
+            TrustTier = McpTrustTier.Sandboxed,
+            Enabled = false
+        };
     }
 
     private static McpServerInput CreateHttpInput()
     {
-        return new McpServerInput("playwright",
-            Description: null,
-            McpTransportKind.Http,
-            Command: null,
-            [],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(),
-            LoopbackSseUrl,
-            McpTrustTier.Sandboxed,
-            Enabled: false);
+        return new McpServerInput
+        {
+            Name = "playwright",
+            Description = null,
+            TransportKind = McpTransportKind.Http,
+            Command = null,
+            Arguments = [],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(),
+            Url = LoopbackSseUrl,
+            TrustTier = McpTrustTier.Sandboxed,
+            Enabled = false
+        };
     }
 
     private static async Task TamperArgumentsAsync(string databasePath)

@@ -115,17 +115,20 @@ public sealed class PlaybookPromptComposerTests
 
     private static PlaybookActionRecord Scoped(string behavior, int priority, long createdAtUtc, MemoryScope? scope)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            behavior,
-            Scope: null,
-            priority,
-            Version: 1,
-            createdAtUtc,
-            createdAtUtc,
-            MemoryScope: scope);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = behavior,
+            Scope = null,
+            Priority = priority,
+            Version = 1,
+            CreatedAtUtc = createdAtUtc,
+            UpdatedAtUtc = createdAtUtc,
+            MemoryScope = scope
+        };
     }
 }

@@ -175,51 +175,57 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
 
     private static ScheduledJobDefinitionRecord DefinitionRecord()
     {
-        return new ScheduledJobDefinitionRecord(JobId,
-            ModelRecommendationCheckHandler.TemplateIdValue,
-            "Model recommendation check",
-            Description: null,
-            Enabled: true,
-            ScheduleKind.Cron,
-            "0 0 * * * ?",
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.SkipMissed,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: 600,
-            ParametersJson,
-            ScheduledJobCreator.User,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: null);
+        return new ScheduledJobDefinitionRecord
+        {
+            Id = JobId,
+            TemplateId = ModelRecommendationCheckHandler.TemplateIdValue,
+            DisplayName = "Model recommendation check",
+            Description = null,
+            Enabled = true,
+            ScheduleKind = ScheduleKind.Cron,
+            CronExpression = "0 0 * * * ?",
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = 600,
+            ParameterJson = ParametersJson,
+            CreatedBy = ScheduledJobCreator.User,
+            CreatedAtUtc = 0L,
+            UpdatedAtUtc = 0L,
+            DisabledAtUtc = null,
+            DeletedAtUtc = null
+        };
     }
 
     private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status)
     {
-        return new ScheduledJobRunRecord(RunId,
-            JobId,
-            ModelRecommendationCheckHandler.TemplateIdValue,
-            "fire-modelfit",
-            ScheduledRunTrigger.Schedule,
-            status,
-            ScheduledFireTimeUtc: null,
-            Now.ToUnixTimeMilliseconds(),
-            CompletedAtUtc: null,
-            DurationMs: null,
-            Summary: null,
-            DetailsJson: null,
-            ErrorMessage: null,
-            ErrorDetails: null,
-            CancellationRequestedAtUtc: null,
-            CreatedAtUtc: 1L);
+        return new ScheduledJobRunRecord
+        {
+            Id = RunId,
+            ScheduledJobId = JobId,
+            TemplateId = ModelRecommendationCheckHandler.TemplateIdValue,
+            QuartzFireInstanceId = "fire-modelfit",
+            TriggeredBy = ScheduledRunTrigger.Schedule,
+            Status = status,
+            ScheduledFireTimeUtc = null,
+            ActualFireTimeUtc = Now.ToUnixTimeMilliseconds(),
+            CompletedAtUtc = null,
+            DurationMs = null,
+            Summary = null,
+            DetailsJson = null,
+            ErrorMessage = null,
+            ErrorDetails = null,
+            CancellationRequestedAtUtc = null,
+            CreatedAtUtc = 1L
+        };
     }
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
     {
-        return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, OccurredAtUtc: 1L);
+        return new ScheduledJobRunEventRecord { Id = Guid.NewGuid(), RunId = input.RunId, Sequence = input.Sequence, Level = input.Level, Message = input.Message, DataJson = input.DataJson, OccurredAtUtc = 1L };
     }
 }

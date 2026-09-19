@@ -17,14 +17,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunRecoveryServiceTests
 {
-    private static readonly McpAgentRunLedgerCounters Counters = new(AccountingVersion: 1,
-        NonterminalRunCount: 0,
-        QueuedRunCount: 0,
-        RunningRunCount: 0,
-        IdentityCount: 0,
-        ActivePayloadBytes: 0,
-        TombstoneLogicalBytes: 0,
-        UpdatedAtUtc: 0);
+    private static readonly McpAgentRunLedgerCounters Counters = new()
+    {
+        AccountingVersion = 1,
+        NonterminalRunCount = 0,
+        QueuedRunCount = 0,
+        RunningRunCount = 0,
+        IdentityCount = 0,
+        ActivePayloadBytes = 0,
+        TombstoneLogicalBytes = 0,
+        UpdatedAtUtc = 0
+    };
 
     [Test]
     public async Task StartAsync_WhenTheLedgerIsConsistentAndNothingWasInterrupted_RepairsQuietly()
@@ -94,9 +97,9 @@ public sealed class McpAgentRunRecoveryServiceTests
         public Harness()
         {
             _ = Store.VerifyLedgerAsync(Arg.Any<CancellationToken>())
-                     .Returns(new McpAgentRunLedgerVerification(IsConsistent: true, Counters, Counters));
+                     .Returns(new McpAgentRunLedgerVerification { IsConsistent = true, Persisted = Counters, Reconstructed = Counters });
             _ = Store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>())
-                     .Returns(new McpAgentRunLedgerSnapshot(QueueDepth: 0, RunningCount: 0, Counters));
+                     .Returns(new McpAgentRunLedgerSnapshot { QueueDepth = 0, RunningCount = 0, Counters = Counters });
             _ = Store.ReconcileInterruptedRunsAsync(Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(0);
 
             var services = new ServiceCollection();

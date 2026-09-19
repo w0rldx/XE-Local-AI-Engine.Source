@@ -58,47 +58,86 @@ public interface IScheduledJobDefinitionStore
 ///     plaintext (decrypted on materialization); the store converts to and from this shape at the boundary so callers
 ///     never touch the encrypted byte column.
 /// </summary>
-public sealed record ScheduledJobDefinitionRecord(
-    Guid Id,
-    string TemplateId,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    ScheduleKind ScheduleKind,
-    string? CronExpression,
-    long? IntervalSeconds,
-    int? RepeatCount,
-    long? StartAtUtc,
-    long? EndAtUtc,
-    string TimeZoneId,
-    SchedulerMisfirePolicy MisfirePolicy,
-    bool PreventOverlap,
-    int? MaxRuntimeSeconds,
-    string? ParameterJson,
-    ScheduledJobCreator CreatedBy,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long? DisabledAtUtc,
-    long? DeletedAtUtc);
+public sealed class ScheduledJobDefinitionRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string TemplateId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required ScheduleKind ScheduleKind { get; init; }
+
+    public required string? CronExpression { get; init; }
+
+    public required long? IntervalSeconds { get; init; }
+
+    public required int? RepeatCount { get; init; }
+
+    public required long? StartAtUtc { get; init; }
+
+    public required long? EndAtUtc { get; init; }
+
+    public required string TimeZoneId { get; init; }
+
+    public required SchedulerMisfirePolicy MisfirePolicy { get; init; }
+
+    public required bool PreventOverlap { get; init; }
+
+    public required int? MaxRuntimeSeconds { get; init; }
+
+    public required string? ParameterJson { get; init; }
+
+    public required ScheduledJobCreator CreatedBy { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long? DisabledAtUtc { get; init; }
+
+    public required long? DeletedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a scheduled job definition supplied on create/update. <see cref="ParameterJson" /> is passed as
 ///     a plaintext string; the store encodes it to UTF-8 bytes before the interceptors encrypt it.
 /// </summary>
-public sealed record ScheduledJobDefinitionInput(
-    string TemplateId,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    ScheduleKind ScheduleKind,
-    string? CronExpression,
-    long? IntervalSeconds,
-    int? RepeatCount,
-    long? StartAtUtc,
-    long? EndAtUtc,
-    string TimeZoneId,
-    SchedulerMisfirePolicy MisfirePolicy,
-    bool PreventOverlap,
-    int? MaxRuntimeSeconds,
-    string? ParameterJson,
-    ScheduledJobCreator CreatedBy);
+public sealed record ScheduledJobDefinitionInput
+{
+    public required string TemplateId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required ScheduleKind ScheduleKind { get; init; }
+
+    public required string? CronExpression { get; init; }
+
+    public required long? IntervalSeconds { get; init; }
+
+    public required int? RepeatCount { get; init; }
+
+    public required long? StartAtUtc { get; init; }
+
+    public required long? EndAtUtc { get; init; }
+
+    public required string TimeZoneId { get; init; }
+
+    public required SchedulerMisfirePolicy MisfirePolicy { get; init; }
+
+    public required bool PreventOverlap { get; init; }
+
+    public required int? MaxRuntimeSeconds { get; init; }
+
+    public required string? ParameterJson { get; init; }
+
+    public required ScheduledJobCreator CreatedBy { get; init; }
+}

@@ -53,7 +53,7 @@ public sealed partial class BenchmarkStore
                                              .Where(project => project.Id == entity.ProjectId)
                                              .Select(static project => project.TaskItemSetHash)
                                              .FirstOrDefaultAsync(cancellationToken);
-        return new BenchmarkRunIdentity(entity.TaskInputHash, currentInputHash, entity.TaskItemSetHash, currentSetHash);
+        return new BenchmarkRunIdentity { TaskInputHash = entity.TaskInputHash, CurrentInputHash = currentInputHash, TaskItemSetHash = entity.TaskItemSetHash, CurrentItemSetHash = currentSetHash };
     }
 
     /// <summary>
@@ -115,10 +115,13 @@ public sealed partial class BenchmarkStore
         var setRevised = new HashSet<Guid>();
         foreach (var run in scored)
         {
-            var identity = new BenchmarkRunIdentity(run.TaskInputHash,
-                run.TaskItemId is { } itemId && currentInputHashes.TryGetValue(itemId, out var hash) ? hash : null,
-                run.TaskItemSetHash,
-                currentSetHash);
+            var identity = new BenchmarkRunIdentity
+            {
+                TaskInputHash = run.TaskInputHash,
+                CurrentInputHash = run.TaskItemId is { } itemId && currentInputHashes.TryGetValue(itemId, out var hash) ? hash : null,
+                TaskItemSetHash = run.TaskItemSetHash,
+                CurrentItemSetHash = currentSetHash
+            };
             var (judge, qualityScore, source, runRankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
                 run.UserScore,
                 run.IsWarmup,
@@ -133,7 +136,7 @@ public sealed partial class BenchmarkStore
                 _ = setRevised.Add(run.Id);
             }
 
-            runs[run.Id] = new BenchmarkRunRanking(judge, qualityScore, source, Rank: null, CellQuality: null);
+            runs[run.Id] = new BenchmarkRunRanking { Judge = judge, QualityScore = qualityScore, Source = source, Rank = null, CellQuality = null };
         }
 
         // Warm-ups are dropped BEFORE grouping. A warm-up sits at repeat index 0, so it forms a cell of its own that
@@ -149,7 +152,7 @@ public sealed partial class BenchmarkStore
             // both sides agree on what the set is. Asking it of a cell frozen under a different set is the bug.
             if (Array.Exists(members, member => setRevised.Contains(member.Id)))
             {
-                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonItemSetRevised, Countable: false);
+                cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonItemSetRevised, Countable = false };
                 continue;
             }
 
@@ -159,9 +162,12 @@ public sealed partial class BenchmarkStore
             if (contributing.Length == 0 && Array.TrueForAll(members, static member => member.TaskItemId is null))
             {
                 var only = members[0];
-                cells[cell.Key] = new CellRanking(runs[only.Id].QualityScore,
-                    runs[only.Id].QualityScore is null ? runs[only.Id].Judge.RankExclusionReason : null,
-                    rankable[only.Id] && anyScore[only.Id]);
+                cells[cell.Key] = new CellRanking
+                {
+                    Quality = runs[only.Id].QualityScore,
+                    Reason = runs[only.Id].QualityScore is null ? runs[only.Id].Judge.RankExclusionReason : null,
+                    Countable = rankable[only.Id] && anyScore[only.Id]
+                };
                 continue;
             }
 
@@ -171,7 +177,7 @@ public sealed partial class BenchmarkStore
             // carry their own scores, and those are what the recall axis reads.
             if (scorableItemIds.Count == 0)
             {
-                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonNoScore, Countable: false);
+                cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonNoScore, Countable = false };
                 continue;
             }
 
@@ -180,7 +186,7 @@ public sealed partial class BenchmarkStore
                            && Array.TrueForAll(contributing, member => rankable[member.Id]);
             if (!complete)
             {
-                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonItemIncomplete, Countable: false);
+                cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonItemIncomplete, Countable = false };
                 continue;
             }
 
@@ -188,9 +194,12 @@ public sealed partial class BenchmarkStore
             var quality = Array.TrueForAll(contributing, member => runs[member.Id].QualityScore is not null)
                 ? (int)Math.Round(contributing.Average(member => (double)runs[member.Id].QualityScore!.Value), MidpointRounding.AwayFromZero)
                 : (int?)null;
-            cells[cell.Key] = new CellRanking(quality,
-                quality is null ? BenchmarkRunJudgeStates.ReasonItemIncomplete : null,
-                Array.TrueForAll(contributing, member => anyScore[member.Id]));
+            cells[cell.Key] = new CellRanking
+            {
+                Quality = quality,
+                Reason = quality is null ? BenchmarkRunJudgeStates.ReasonItemIncomplete : null,
+                Countable = Array.TrueForAll(contributing, member => anyScore[member.Id])
+            };
         }
 
         // Dense rank over CELLS: equal scores share a position and the next distinct score is the next integer, so
@@ -225,14 +234,20 @@ public sealed partial class BenchmarkStore
             };
         }
 
-        return new BenchmarkProjectRanking(runs,
-            new BenchmarkRankCohort(current?.Revision,
-                current?.ReferenceExecutionKey,
-                current?.CohortGeneration,
-                cells.Values.Count(static entry => entry.Quality is not null),
-                cells.Values.Count(static entry => entry.Countable)),
-            cells,
-            scorableItemIds.Count);
+        return new BenchmarkProjectRanking
+        {
+            Runs = runs,
+            Cohort = new BenchmarkRankCohort
+            {
+                PolicyRevision = current?.Revision,
+                ExecutionKey = current?.ReferenceExecutionKey,
+                CohortGeneration = current?.CohortGeneration,
+                RankedCount = cells.Values.Count(static entry => entry.Quality is not null),
+                TotalScored = cells.Values.Count(static entry => entry.Countable)
+            },
+            Cells = cells,
+            ScorableItemCount = scorableItemIds.Count
+        };
     }
 
     /// <summary>
@@ -314,26 +329,30 @@ public sealed partial class BenchmarkStore
     ///     What a run was asked, against what the project asks now. Both sides are plaintext, so the ranking read still
     ///     never decrypts anything.
     ///     <para>
-    ///         The two axes fail differently and neither implies the other. <paramref name="TaskInputHash" /> answers
+    ///         The two axes fail differently and neither implies the other. <see cref="TaskInputHash" /> answers
     ///         "was this run's own question edited"; every run of an untouched item passes it.
-    ///         <paramref name="TaskItemSetHash" /> answers "was this cell measured against the suite the project now
+    ///         <see cref="TaskItemSetHash" /> answers "was this cell measured against the suite the project now
     ///         claims" — and the deletion case is the one nothing else catches: delete the item a cell never answered
     ///         and its two surviving runs keep matching their own item hashes, satisfy every per-item check, and now
     ///         constitute a COMPLETE two-item cell whose mean is over a suite the model was never scored on.
     ///     </para>
     /// </summary>
-    /// <param name="CurrentInputHash">
-    ///     The item's hash now, or <see langword="null" /> when the run names no item (pre-suite) or names one that no
-    ///     longer exists — in which case the set hash has moved and is the accurate reason.
-    /// </param>
-    private sealed record BenchmarkRunIdentity(
-        string? TaskInputHash,
-        string? CurrentInputHash,
-        string? TaskItemSetHash,
-        string? CurrentItemSetHash)
+    private sealed record BenchmarkRunIdentity
     {
+        public required string? TaskInputHash { get; init; }
+
+        /// <summary>
+        ///     The item's hash now, or <see langword="null" /> when the run names no item (pre-suite) or names one that no
+        ///     longer exists — in which case the set hash has moved and is the accurate reason.
+        /// </summary>
+        public required string? CurrentInputHash { get; init; }
+
+        public required string? TaskItemSetHash { get; init; }
+
+        public required string? CurrentItemSetHash { get; init; }
+
         /// <summary>A run frozen before task suites, or a projection that has no project state to compare against.</summary>
-        public static BenchmarkRunIdentity Unstamped { get; } = new(null, null, null, null);
+        public static BenchmarkRunIdentity Unstamped { get; } = new() { TaskInputHash = null, CurrentInputHash = null, TaskItemSetHash = null, CurrentItemSetHash = null };
 
         public bool Revised => CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
 
@@ -395,10 +414,20 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>One run's place in the active fit: the strength that ranks it, or the reason it has none.</summary>
-    private sealed record PairwiseRunView(int? Score, string? Reason);
+    private sealed record PairwiseRunView
+    {
+        public required int? Score { get; init; }
+
+        public required string? Reason { get; init; }
+    }
 
     /// <summary>The whole project's pairwise ranking input — one parsed fit row, or the reason there is no usable one.</summary>
-    private sealed record PairwiseRanking(IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> Scores, string? ScopeReason);
+    private sealed record PairwiseRanking
+    {
+        public required IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> Scores { get; init; }
+
+        public required string? ScopeReason { get; init; }
+    }
 
     /// <summary>
     ///     The project's pairwise ranking input, or <see langword="null" /> when it does not judge pairwise.
@@ -425,17 +454,17 @@ public sealed partial class BenchmarkStore
         var fit = await ActiveFitAsync(current.Id, current.CohortGeneration, cancellationToken);
         if (fit is null)
         {
-            return new PairwiseRanking(new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), BenchmarkRunJudgeStates.ReasonPairwisePending);
+            return new PairwiseRanking { Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), ScopeReason = BenchmarkRunJudgeStates.ReasonPairwisePending };
         }
 
         if (fit.ComparisonSetVersion != current.ComparisonSetVersion
             || !string.Equals(fit.JudgeExecutionKey, current.ReferenceExecutionKey ?? string.Empty, StringComparison.Ordinal))
         {
-            return new PairwiseRanking(new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), BenchmarkRunJudgeStates.ReasonPairwiseStale);
+            return new PairwiseRanking { Scores = new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), ScopeReason = BenchmarkRunJudgeStates.ReasonPairwiseStale };
         }
 
         var entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, PairwiseScoreOptions) ?? [];
-        return new PairwiseRanking(entries.ToDictionary(static entry => entry.RunId), ScopeReason: null);
+        return new PairwiseRanking { Scores = entries.ToDictionary(static entry => entry.RunId), ScopeReason = null };
     }
 
     private static BenchmarkPairwiseScoreEntry? PairwiseScoreFor(PairwiseRanking? pairwise, Guid runId) =>
@@ -453,26 +482,52 @@ public sealed partial class BenchmarkStore
         }
 
         var entry = PairwiseScoreFor(pairwise, runId);
-        return new PairwiseRunView(entry?.Score,
-            entry?.Reason ?? pairwise.ScopeReason ?? (entry is null ? BenchmarkRunJudgeStates.ReasonPairwiseInsufficient : null));
+        return new PairwiseRunView
+        {
+            Score = entry?.Score,
+            Reason = entry?.Reason ?? pairwise.ScopeReason ?? (entry is null ? BenchmarkRunJudgeStates.ReasonPairwiseInsufficient : null)
+        };
     }
 
-    private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank, int? CellQuality);
+    private sealed record BenchmarkRunRanking
+    {
+        public required BenchmarkRunJudgeView Judge { get; init; }
+
+        public required int? QualityScore { get; init; }
+
+        public required string Source { get; init; }
+
+        public required int? Rank { get; init; }
+
+        public required int? CellQuality { get; init; }
+    }
 
     /// <summary>
     ///     One measurement cell: the mean of its scorable items' qualities, or the reason it has none.
     /// </summary>
-    /// <param name="Countable">
-    ///     Whether this cell belongs in the "n of m ranked" denominator — complete, every member rankable, every member
-    ///     carrying some score. A cell nothing the operator does could ever rank must not sit in it.
-    /// </param>
-    private sealed record CellRanking(int? Quality, string? Reason, bool Countable);
+    private sealed record CellRanking
+    {
+        public required int? Quality { get; init; }
 
-    private sealed record BenchmarkProjectRanking(
-        IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs,
-        BenchmarkRankCohort Cohort,
-        IReadOnlyDictionary<string, CellRanking> Cells,
-        int ScorableItemCount);
+        public required string? Reason { get; init; }
+
+        /// <summary>
+        ///     Whether this cell belongs in the "n of m ranked" denominator — complete, every member rankable, every member
+        ///     carrying some score. A cell nothing the operator does could ever rank must not sit in it.
+        /// </summary>
+        public required bool Countable { get; init; }
+    }
+
+    private sealed record BenchmarkProjectRanking
+    {
+        public required IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs { get; init; }
+
+        public required BenchmarkRankCohort Cohort { get; init; }
+
+        public required IReadOnlyDictionary<string, CellRanking> Cells { get; init; }
+
+        public required int ScorableItemCount { get; init; }
+    }
 
     private static BenchmarkRunJudgeView JudgeViewFor(IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views, Guid runId, int? userScore)
     {
@@ -483,9 +538,21 @@ public sealed partial class BenchmarkStore
 
         // No attempt: there is nothing to derive a judging from, so the run is unranked unless the operator scored it.
         var reason = userScore is null ? BenchmarkRunJudgeStates.ReasonNoScore : null;
-        return new BenchmarkRunJudgeView(BenchmarkRunJudgeStates.None, AttemptId: null, Score: null, PolicyRevision: null, PolicyRevisionId: null,
-            AttemptSequence: null, CohortGeneration: null, ExecutionKey: null, ErrorMessage: null, PolicyCurrent: false,
-            ExecutionCurrent: false, reason);
+        return new BenchmarkRunJudgeView
+        {
+            State = BenchmarkRunJudgeStates.None,
+            AttemptId = null,
+            Score = null,
+            PolicyRevision = null,
+            PolicyRevisionId = null,
+            AttemptSequence = null,
+            CohortGeneration = null,
+            ExecutionKey = null,
+            ErrorMessage = null,
+            PolicyCurrent = false,
+            ExecutionCurrent = false,
+            RankExclusionReason = reason
+        };
     }
 
     /// <summary>
@@ -505,20 +572,23 @@ public sealed partial class BenchmarkStore
             join revision in _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking() on attempt.PolicyRevisionId equals revision.Id
             join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
             where runIds.Contains(run.Id)
-            select new JudgeViewRow(run.Id,
-                attempt.Id,
-                run.UserScore,
-                attempt.Status,
-                attempt.Score,
-                attempt.Sequence,
-                attempt.CohortGeneration,
-                attempt.JudgeExecutionKey,
-                attempt.ErrorMessage,
-                attempt.PolicyRevisionId,
-                revision.Revision,
-                revision.CohortGeneration,
-                revision.ReferenceExecutionKey,
-                project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken);
+            select new JudgeViewRow
+            {
+                RunId = run.Id,
+                AttemptId = attempt.Id,
+                UserScore = run.UserScore,
+                Status = attempt.Status,
+                Score = attempt.Score,
+                Sequence = attempt.Sequence,
+                AttemptGeneration = attempt.CohortGeneration,
+                ExecutionKey = attempt.JudgeExecutionKey,
+                ErrorMessage = attempt.ErrorMessage,
+                PolicyRevisionId = attempt.PolicyRevisionId,
+                RevisionNumber = revision.Revision,
+                RevisionGeneration = revision.CohortGeneration,
+                ReferenceExecutionKey = revision.ReferenceExecutionKey,
+                ProjectCurrentRevisionId = project.CurrentJudgePolicyRevisionId
+            }).ToArrayAsync(cancellationToken);
         return rows.ToDictionary(static row => row.RunId, BuildJudgeView);
     }
 
@@ -541,18 +611,21 @@ public sealed partial class BenchmarkStore
         var executionCurrent = row.AttemptGeneration == row.RevisionGeneration
                                && row.ExecutionKey is not null
                                && string.Equals(row.ExecutionKey, row.ReferenceExecutionKey, StringComparison.Ordinal);
-        return new BenchmarkRunJudgeView(state,
-            row.AttemptId,
-            row.Score,
-            row.RevisionNumber,
-            row.PolicyRevisionId,
-            row.Sequence,
-            row.AttemptGeneration,
-            row.ExecutionKey,
-            row.ErrorMessage,
-            policyCurrent,
-            executionCurrent,
-            RankExclusionReason(row, policyCurrent, executionCurrent));
+        return new BenchmarkRunJudgeView
+        {
+            State = state,
+            AttemptId = row.AttemptId,
+            Score = row.Score,
+            PolicyRevision = row.RevisionNumber,
+            PolicyRevisionId = row.PolicyRevisionId,
+            AttemptSequence = row.Sequence,
+            CohortGeneration = row.AttemptGeneration,
+            ExecutionKey = row.ExecutionKey,
+            ErrorMessage = row.ErrorMessage,
+            PolicyCurrent = policyCurrent,
+            ExecutionCurrent = executionCurrent,
+            RankExclusionReason = RankExclusionReason(row, policyCurrent, executionCurrent)
+        };
     }
 
     private static string? RankExclusionReason(JudgeViewRow row, bool policyCurrent, bool executionCurrent)
@@ -595,21 +668,36 @@ public sealed partial class BenchmarkStore
         };
 
     /// <summary>The flat columns the derived judge view is computed from. Never leaves this class.</summary>
-    private sealed record JudgeViewRow(
-        Guid RunId,
-        Guid AttemptId,
-        int? UserScore,
-        BenchmarkJudgeAttemptStatus Status,
-        int? Score,
-        int Sequence,
-        int AttemptGeneration,
-        string? ExecutionKey,
-        string? ErrorMessage,
-        Guid PolicyRevisionId,
-        int RevisionNumber,
-        int RevisionGeneration,
-        string? ReferenceExecutionKey,
-        Guid? ProjectCurrentRevisionId);
+    private sealed record JudgeViewRow
+    {
+        public required Guid RunId { get; init; }
+
+        public required Guid AttemptId { get; init; }
+
+        public required int? UserScore { get; init; }
+
+        public required BenchmarkJudgeAttemptStatus Status { get; init; }
+
+        public required int? Score { get; init; }
+
+        public required int Sequence { get; init; }
+
+        public required int AttemptGeneration { get; init; }
+
+        public required string? ExecutionKey { get; init; }
+
+        public required string? ErrorMessage { get; init; }
+
+        public required Guid PolicyRevisionId { get; init; }
+
+        public required int RevisionNumber { get; init; }
+
+        public required int RevisionGeneration { get; init; }
+
+        public required string? ReferenceExecutionKey { get; init; }
+
+        public required Guid? ProjectCurrentRevisionId { get; init; }
+    }
 
     /// <summary>
     ///     Applies a project write's judge half to the tracked project: null policy disables, an unchanged hash is a

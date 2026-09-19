@@ -1394,24 +1394,27 @@ public sealed class AgentDefinitionResolverTests
         string? sourceUri = null,
         IReadOnlyList<AgentSkillResourceRecord>? resources = null)
     {
-        return new AgentSkillRecord(id,
-            name,
-            description,
-            body,
-            Enabled: true,
-            version,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            License: license,
-            AllowedTools: allowedTools,
-            Origin: origin,
-            SourceUri: sourceUri,
-            Resources: resources);
+        return new AgentSkillRecord
+        {
+            Id = id,
+            Name = name,
+            Description = description,
+            Body = body,
+            Enabled = true,
+            Version = version,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            License = license,
+            AllowedTools = allowedTools,
+            Origin = origin,
+            SourceUri = sourceUri,
+            Resources = resources
+        };
     }
 
     private static AgentSkillResourceRecord ResourceRecord(Guid skillId, string name, string description, string content)
     {
-        return new AgentSkillResourceRecord(Guid.NewGuid(), skillId, name, description, "text/markdown", content, content.Length);
+        return new AgentSkillResourceRecord { Id = Guid.NewGuid(), SkillId = skillId, Name = name, Description = description, MediaType = "text/markdown", Content = content, SizeBytes = content.Length };
     }
 
     // Builds a resolver over the REAL LocalToolOfferProvider so the locality-gate tests observe the actual knowledge-tool
@@ -1580,37 +1583,43 @@ public sealed class AgentDefinitionResolverTests
         IReadOnlyList<Guid>? allowedSkillIds = null,
         bool disableBaseScaffold = false)
     {
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            name,
-            description,
-            SystemPrompt,
-            modelProfile,
-            reasoningEffort,
-            AgentDefinitionKind.Single,
-            allowedTools ?? [],
-            toolApprovals ?? new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            version,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            playbookEnabled,
-            AllowedSkillIds: allowedSkillIds,
-            DisableBaseScaffold: disableBaseScaffold);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = description,
+            Instructions = SystemPrompt,
+            ModelProfile = modelProfile,
+            ReasoningEffort = reasoningEffort,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowedTools ?? [],
+            ToolApprovals = toolApprovals ?? new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = version,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            PlaybookEnabled = playbookEnabled,
+            AllowedSkillIds = allowedSkillIds,
+            DisableBaseScaffold = disableBaseScaffold
+        };
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            agentDefinitionId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            behavior,
-            Scope: null,
-            priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = behavior,
+            Scope = null,
+            Priority = priority,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     // Stand-in offered tools default to a concrete ReadLocal category (never Unknown) to mirror the production invariant

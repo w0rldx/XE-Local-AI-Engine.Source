@@ -113,13 +113,13 @@ public sealed class DevWorkflowAttemptCostTests
         var runId = Guid.NewGuid();
         inner.GetNodeRunAsync(nodeRunId, Arg.Any<CancellationToken>()).Returns(NodeRun(runId, nodeRunId));
         inner.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
-             .Returns(new DevWorkflowMutationResult(runId, Sequence: 1, Version: 2, DevWorkflowRunStatus.Running, GraphRevision: 0));
+             .Returns(new DevWorkflowMutationResult { RunId = runId, Sequence = 1, Version = 2, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
 
         var store = new PublishingDevWorkflowStore(inner,
             Substitute.For<IDevWorkflowEventPublisher>(),
             new RecordingTelemetryScopeFactory(inner, new StubDevWorkflowNodeTelemetrySource
             {
-                Answer = new DevWorkflowNodeTelemetry(InputTokens: 5)
+                Answer = new DevWorkflowNodeTelemetry { InputTokens = 5 }
             }),
             new DevWorkflowGraphCache(),
 
@@ -128,13 +128,16 @@ public sealed class DevWorkflowAttemptCostTests
             new DevWorkflowNodeTelemetryCollectionPool(slots: 1),
             NullLogger<PublishingDevWorkflowStore>.Instance);
 
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
-                           nodeRunId,
-                           DevWorkflowVersions.Any,
-                           DevWorkflowNodeRunStatus.Pending,
-                           DetailJson: RawDetail,
-                           IncrementAttempt: true,
-                           ClearWorkSession: true));
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = runId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Pending,
+            DetailJson = RawDetail,
+            IncrementAttempt = true,
+            ClearWorkSession = true
+        });
 
         _ = await inner.Received(1)
                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(forwarded => forwarded.DetailJson == RawDetail),
@@ -300,31 +303,34 @@ public sealed class DevWorkflowAttemptCostTests
         };
 
     private static DevWorkflowNodeRunSnapshot NodeRun(Guid runId, Guid nodeRunId) =>
-        new(nodeRunId,
-            runId,
-            "research",
-            DevWorkflowNodeType.Agent,
-            Attempt: 1,
-            MaxAttempts: 3,
-            SessionResumes: 0,
-            DevWorkflowNodeRunStatus.Running,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 1,
-            WorkSessionId: Guid.NewGuid(),
-            WorkSessionAvailable: true,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: 1,
-            EndedAtUtc: null,
-            CreatedAtUtc: 0);
+        new()
+        {
+            Id = nodeRunId,
+            RunId = runId,
+            NodeKey = "research",
+            NodeType = DevWorkflowNodeType.Agent,
+            Attempt = 1,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = DevWorkflowNodeRunStatus.Running,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 1,
+            WorkSessionId = Guid.NewGuid(),
+            WorkSessionAvailable = true,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = 1,
+            EndedAtUtc = null,
+            CreatedAtUtc = 0
+        };
 }

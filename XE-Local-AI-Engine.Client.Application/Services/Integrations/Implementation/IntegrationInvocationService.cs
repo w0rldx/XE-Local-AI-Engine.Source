@@ -173,12 +173,15 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             // The buffer is the only minter of a sequence, so the accepted event is minted here and CARRIED into the
             // command — the number that reaches the row is provably the one the buffer returned.
             var accepted = _buffer.Append(executionId, sessionId, IntegrationStreamEventTypes.ExecutionAccepted, contentType: null, payload: null);
-            var acceptedEvent = new IntegrationEventAppend(Guid.NewGuid(),
-                executionId,
-                accepted.Sequence,
-                accepted.Type,
-                DetailJson: null,
-                accepted.OccurredAtUtc);
+            var acceptedEvent = new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = executionId,
+                Sequence = accepted.Sequence,
+                EventType = accepted.Type,
+                DetailJson = null,
+                OccurredAtUtc = accepted.OccurredAtUtc
+            };
 
             // 6. One raw-connection transaction under BEGIN IMMEDIATE: the write lock is taken before the counts are
             //    read, which is what makes the advertised bound the enforced bound.
@@ -186,18 +189,21 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             // ExecutionCount and LastActivityUtc inside the same commit, scoped to the caller's own Active session, and
             // throws IntegrationSessionUnavailableException if that scoped update matches nothing — the race-free
             // backstop behind the gate's own pre-checks.
-            var command = new IntegrationAcceptCommand(existingSession is null
-                    ? new IntegrationSessionCreate(sessionId, trigger.Id, conversationId, trigger.TargetAgentDefinitionId)
+            var command = new IntegrationAcceptCommand
+            {
+                NewSession = existingSession is null
+                    ? new IntegrationSessionCreate { SessionId = sessionId, TriggerId = trigger.Id, ConversationId = conversationId, AgentDefinitionId = trigger.TargetAgentDefinitionId }
                     : null,
-                executionId,
-                trigger.Id,
-                sessionId,
-                principalId,
-                request.RequestId,
-                fingerprint,
-                request.KeyPrefix,
-                receivedAtUtc,
-                acceptedEvent);
+                ExecutionId = executionId,
+                TriggerId = trigger.Id,
+                SessionId = sessionId,
+                PrincipalId = principalId,
+                RequestId = request.RequestId,
+                RequestFingerprint = fingerprint,
+                KeyPrefix = request.KeyPrefix,
+                ReceivedAtUtc = receivedAtUtc,
+                AcceptedEvent = acceptedEvent
+            };
 
             bool committed;
             try
@@ -319,19 +325,22 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 
         try
         {
-            var terminalized = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand(executionId,
-                                                        ExpectedVersion: 0,
-                                                        new HashSet<IntegrationExecutionStatus>
+            var terminalized = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand
+            {
+                ExecutionId = executionId,
+                ExpectedVersion = 0,
+                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
                                                         {
                                                             IntegrationExecutionStatus.Accepted
                                                         },
-                                                        IntegrationExecutionStatus.Failed,
-                                                        sequence,
-                                                        IntegrationStreamEventTypes.ExecutionFailed,
-                                                        endedAtUtc,
-                                                        IntegrationFailureCategories.QueueFull,
-                                                        QueueFullSummary,
-                                                        payload.GetRawText()),
+                NewStatus = IntegrationExecutionStatus.Failed,
+                Sequence = sequence,
+                EventType = IntegrationStreamEventTypes.ExecutionFailed,
+                EndedAtUtc = endedAtUtc,
+                FailureCategory = IntegrationFailureCategories.QueueFull,
+                FailureSummary = QueueFullSummary,
+                EventDetailJson = payload.GetRawText()
+            },
                                                     CancellationToken.None);
 
             if (terminalized)

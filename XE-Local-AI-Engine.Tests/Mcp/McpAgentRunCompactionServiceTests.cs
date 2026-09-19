@@ -22,16 +22,22 @@ public sealed class McpAgentRunCompactionServiceTests
         store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             stop.Cancel();
-            return new McpAgentRunLedgerSnapshot(QueueDepth: 0,
-                RunningCount: 0,
-                new McpAgentRunLedgerCounters(AccountingVersion: 1,
-                    NonterminalRunCount: 0,
-                    QueuedRunCount: 0,
-                    RunningRunCount: 0,
-                    IdentityCount: 1,
-                    ActivePayloadBytes: 0,
-                    TombstoneLogicalBytes: 288,
-                    UpdatedAtUtc: 1));
+            return new McpAgentRunLedgerSnapshot
+            {
+                QueueDepth = 0,
+                RunningCount = 0,
+                Counters = new McpAgentRunLedgerCounters
+                {
+                    AccountingVersion = 1,
+                    NonterminalRunCount = 0,
+                    QueuedRunCount = 0,
+                    RunningRunCount = 0,
+                    IdentityCount = 1,
+                    ActivePayloadBytes = 0,
+                    TombstoneLogicalBytes = 288,
+                    UpdatedAtUtc = 1
+                }
+            };
         });
         var services = new ServiceCollection();
         services.AddSingleton(store);

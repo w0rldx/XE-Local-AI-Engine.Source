@@ -113,15 +113,18 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput("Owner",
-            Description: null,
-            "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = "Owner",
+            Description = null,
+            Instructions = "You are a careful engineering agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 

@@ -138,29 +138,46 @@ public sealed class BenchmarkExportEndpointTests
         context.Store.GetRunAsync(summary.Id, Arg.Any<CancellationToken>()).Returns(full);
         context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns([
-                   new BenchmarkTaskItemRecord(taskItemId,
-                       ProjectId,
-                       ParentItemId: null,
-                       Index: 0,
-                       BenchmarkTaskItemKinds.Prompt,
-                       Revision: 1,
-                       InputHash: "v1:item",
-                       CountsTowardScore: true,
-                       JsonSerializer.SerializeToUtf8Bytes("Score this answer."),
-                       ReferenceAnswerJson: null,
-                       VerifierConfigJson: null,
-                       GeneratorConfigJson: null,
-                       Version: 1,
-                       CreatedAtUtc: 10,
-                       UpdatedAtUtc: 20)
+                   new BenchmarkTaskItemRecord
+                   {
+                       Id = taskItemId,
+                       ProjectId = ProjectId,
+                       ParentItemId = null,
+                       Index = 0,
+                       Kind = BenchmarkTaskItemKinds.Prompt,
+                       Revision = 1,
+                       InputHash = "v1:item",
+                       CountsTowardScore = true,
+                       PromptJson = JsonSerializer.SerializeToUtf8Bytes("Score this answer."),
+                       ReferenceAnswerJson = null,
+                       VerifierConfigJson = null,
+                       GeneratorConfigJson = null,
+                       Version = 1,
+                       CreatedAtUtc = 10,
+                       UpdatedAtUtc = 20
+                   }
                ]);
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkCellPage([
-                       new BenchmarkCellRecord("cell:model:1", "model", "v1:aggregate", null, null, null, 84, 1, null,
-                           [new BenchmarkCellItemRecord(summary.Id, taskItemId, 0, 84, null, null)])
+               .Returns(new BenchmarkCellPage
+               {
+                   Cells = [
+                       new BenchmarkCellRecord
+                       {
+                           CellKey = "cell:model:1",
+                           PrimaryModelName = "model",
+                           ModelContentFingerprint = "v1:aggregate",
+                           KvCacheType = null,
+                           RepeatGroupId = null,
+                           RepeatIndex = null,
+                           Quality = 84,
+                           Rank = 1,
+                           RankExclusionReason = null,
+                           Items = [new BenchmarkCellItemRecord { RunId = summary.Id, TaskItemId = taskItemId, TaskItemIndex = 0, QualityScore = 84, PrimaryStopReason = null, RankExclusionReason = null }]
+                       }
                    ],
-                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1),
-                   ScorableItemCount: 1));
+                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 },
+                   ScorableItemCount = 1
+               });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
@@ -221,8 +238,16 @@ public sealed class BenchmarkExportEndpointTests
                 DurationMs = 12_340,
                 QualityScore = 73,
                 QualityScoreSource = BenchmarkQualityScoreSources.Judge,
-                Throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 500,
-                    GenerationTokens: 89, GenerationMs: 2000, CachedPromptTokens: 7, SegmentCount: 2),
+                Throughput = new BenchmarkRunThroughput
+                {
+                    TtftMs = 180.25,
+                    PromptTokens = 123,
+                    PromptMs = 500,
+                    GenerationTokens = 89,
+                    GenerationMs = 2000,
+                    CachedPromptTokens = 7,
+                    SegmentCount = 2
+                },
                 RepeatGroupId = Guid.Parse("50000000-0000-0000-0000-000000000005"),
                 RepeatIndex = 2,
                 IsWarmup = false,
@@ -358,17 +383,29 @@ public sealed class BenchmarkExportEndpointTests
     private const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     private static BenchmarkRunFidelity Fidelity(string digest) =>
-        new("succeeded", Guid.NewGuid(), 6.7977, 0.074, 200, 512, "wikitext2", 0.012, 0.31, 0.94, BaseFingerprint, digest, null);
+        new() { Status = "succeeded", AttemptId = Guid.NewGuid(), PerplexityMean = 6.7977, PerplexityStdErr = 0.074, PerplexityChunks = 200, PerplexityContextTokens = 512, PerplexityCorpusId = "wikitext2", KldMean = 0.012, KldP99 = 0.31, TopTokenAgreement = 0.94, KldBaseFingerprint = BaseFingerprint, KldBaseLogitsDigest = digest, ErrorMessage = null };
 
     private static BenchmarkPairwiseFitRecord Fit(Guid first, Guid second) =>
-        new(Guid.NewGuid(), ProjectId, Guid.NewGuid(), 3, null, "fit-key-1", "judge-key", 7,
-            "[]",
-            JsonSerializer.Serialize(new[]
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = ProjectId,
+            PolicyRevisionId = Guid.NewGuid(),
+            CohortGeneration = 3,
+            TaskCaseId = null,
+            FitKey = "fit-key-1",
+            JudgeExecutionKey = "judge-key",
+            ComparisonSetVersion = 7,
+            FittedSetJson = "[]",
+            ScoresJson = JsonSerializer.Serialize(new[]
             {
                 new BenchmarkPairwiseScoreEntry(first, 62, 55, 69, 6, 1000, null),
                 new BenchmarkPairwiseScoreEntry(second, 41, 33, 49, 6, 1000, null)
             }, PairwiseScoreOptions),
-            42, 1000, 99);
+            Iterations = 42,
+            BootstrapReplicates = 1000,
+            CreatedAtUtc = 99
+        };
 
     [Test]
     public async Task ExportCsv_ForAValueASpreadsheetWouldEvaluate_EscapesItAsText()
@@ -510,8 +547,17 @@ public sealed class BenchmarkExportEndpointTests
             BenchmarkJudgeRubricDefaults.Default(),
             ReferenceAnswer: null);
         context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 2,
-                   BenchmarkJudgeSerialization.SerializePolicy(policy), new string('h', 64), "cohort-key", 3, 10));
+               .Returns(new BenchmarkJudgePolicyRevisionRecord
+               {
+                   Id = Guid.NewGuid(),
+                   ProjectId = ProjectId,
+                   Revision = 2,
+                   PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(policy),
+                   PolicyHash = new string('h', 64),
+                   ReferenceExecutionKey = "cohort-key",
+                   CohortGeneration = 3,
+                   CreatedAtUtc = 10
+               });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
@@ -537,18 +583,21 @@ public sealed class BenchmarkExportEndpointTests
         // both come back empty rather than absent — the export still has to say what the ranking counted.
         context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([]);
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkCellPage([], new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1), ScorableItemCount: 0));
+               .Returns(new BenchmarkCellPage { Cells = [], RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 }, ScorableItemCount = 0 });
     }
 
     private static void ArrangeRuns(Context context, params BenchmarkRunRecord[] runs)
     {
         context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkRunPage(runs.Select(static run => run with
+               .Returns(new BenchmarkRunPage
+               {
+                   Items = runs.Select(static run => run with
                    {
                        Rank = 1
                    }).ToArray(),
-                   runs.Length,
-                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1)));
+                   TotalCount = runs.Length,
+                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 }
+               });
         foreach (var run in runs)
         {
             context.Store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
@@ -563,13 +612,41 @@ public sealed class BenchmarkExportEndpointTests
             80,
             "v1:aggregate"));
         context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
-                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
+               .Returns(new BenchmarkJudgeAttemptRecord
+               {
+                   Id = attemptId,
+                   RunId = RunId,
+                   Sequence = 1,
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 1,
+                   JudgeRuntimeJson = null,
+                   JudgeExecutionKey = null,
+                   Status = BenchmarkJudgeAttemptStatus.Succeeded,
+                   ResultJson = stored,
+                   Score = 80,
+                   ErrorMessage = null,
+                   EnqueuedAtUtc = 0,
+                   StartedAtUtc = null,
+                   CompletedAtUtc = null,
+                   Version = 1
+               });
     }
 
     private static BenchmarkProjectRecord Project() =>
-        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, IsFrozen: true, 4, 10, 20);
+        new()
+        {
+            Id = ProjectId,
+            Name = "Project",
+            CoreTaskJson = Encoding.UTF8.GetBytes("\"Answer exactly.\""),
+            ContextTokens = 4096,
+            AgentDefinitionId = AgentId,
+            JudgeEnabled = false,
+            CurrentJudgePolicyRevisionId = null,
+            IsFrozen = true,
+            Version = 4,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20
+        };
 
     [Test]
     public async Task ExportJson_SummarizesEachRepeatGroupAndTranslatesItIntoLlamaBenchFields()
@@ -718,8 +795,16 @@ public sealed class BenchmarkExportEndpointTests
             RepeatGroupId = groupId,
             RepeatIndex = repeatIndex,
             IsWarmup = warmup,
-            Throughput = new BenchmarkRunThroughput(ttftMs, promptTokens, promptMs, generationTokens, generationMs, CachedPromptTokens: 0,
-                SegmentCount: 1)
+            Throughput = new BenchmarkRunThroughput
+            {
+                TtftMs = ttftMs,
+                PromptTokens = promptTokens,
+                PromptMs = promptMs,
+                GenerationTokens = generationTokens,
+                GenerationMs = generationMs,
+                CachedPromptTokens = 0,
+                SegmentCount = 1
+            }
         };
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
@@ -727,31 +812,47 @@ public sealed class BenchmarkExportEndpointTests
         Guid? judgeAttemptId = null,
         string modelName = "model",
         Guid? runId = null) =>
-        new(runId ?? RunId,
-            ProjectId,
-            Encoding.UTF8.GetBytes("secret-runtime"),
-            modelName,
-            LocalModelOrigin.Imported,
-            "v1:aggregate",
-            "Agent",
-            2,
-            4096,
-            primary,
-            null,
-            null,
-            null,
-            null,
-            output is null ? null : Encoding.UTF8.GetBytes(output),
-            0,
-            null,
-            null,
-            3,
-            10,
-            null,
-            null,
-            20,
-            Judge: new BenchmarkRunJudgeView(judgeAttemptId is null ? BenchmarkRunJudgeStates.None : BenchmarkRunJudgeStates.Succeeded,
-                judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
+        new()
+        {
+            Id = runId ?? RunId,
+            ProjectId = ProjectId,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("secret-runtime"),
+            PrimaryModelName = modelName,
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:aggregate",
+            AgentName = "Agent",
+            AgentVersion = 2,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = primary,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = output is null ? null : Encoding.UTF8.GetBytes(output),
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 3,
+            CreatedAtUtc = 10,
+            StartedAtUtc = null,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 20,
+            Judge = new BenchmarkRunJudgeView
+            {
+                State = judgeAttemptId is null ? BenchmarkRunJudgeStates.None : BenchmarkRunJudgeStates.Succeeded,
+                AttemptId = judgeAttemptId,
+                Score = null,
+                PolicyRevision = null,
+                PolicyRevisionId = null,
+                AttemptSequence = null,
+                CohortGeneration = null,
+                ExecutionKey = null,
+                ErrorMessage = null,
+                PolicyCurrent = false,
+                ExecutionCurrent = false,
+                RankExclusionReason = null
+            }
+        };
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, string path)
     {

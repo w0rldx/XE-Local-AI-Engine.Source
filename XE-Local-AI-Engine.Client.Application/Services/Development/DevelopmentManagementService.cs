@@ -211,25 +211,28 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var profile = ResolveCommandProfile(input, repository.RepositoryRoot, materialization?.TemplateId.ToString());
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
-        _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
-                                      taskId,
-                                      input.OperationId,
-                                      input.Objective,
-                                      input.SelectedFolderId,
-                                      repository.RepositoryIdentityHash,
-                                      input.BaseBranch,
-                                      input.TaskTitle,
-                                      input.Requirements,
-                                      input.AcceptanceCriteriaJson,
-                                      input.EgressPolicy,
-                                      input.CoderModelId,
-                                      input.ReviewerModelId,
-                                      TrustedRepositoryAcknowledged: true,
-                                      TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
-                                      TrustedRepositoryAcknowledgedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                                      MaxTokens: input.MaxTokens,
-                                      MaxDurationSeconds: input.MaxDurationSeconds,
-                                      CommandProfileJson: Encoding.UTF8.GetString(profile.ToCanonicalUtf8())),
+        _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand
+        {
+            ProjectId = projectId,
+            TaskId = taskId,
+            OperationId = input.OperationId,
+            Objective = input.Objective,
+            SelectedFolderId = input.SelectedFolderId,
+            RepositoryIdentityHash = repository.RepositoryIdentityHash,
+            BaseBranch = input.BaseBranch,
+            Title = input.TaskTitle,
+            Requirements = input.Requirements,
+            AcceptanceCriteriaJson = input.AcceptanceCriteriaJson,
+            EgressPolicy = input.EgressPolicy,
+            CoderModelId = input.CoderModelId,
+            ReviewerModelId = input.ReviewerModelId,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            MaxTokens = input.MaxTokens,
+            MaxDurationSeconds = input.MaxDurationSeconds,
+            CommandProfileJson = Encoding.UTF8.GetString(profile.ToCanonicalUtf8())
+        },
                                   cancellationToken);
         return await GetProjectAsync(projectId, cancellationToken);
     }
@@ -342,10 +345,13 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
         if (task.Status == DevelopmentTaskStatus.Planned)
         {
-            var ready = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                                  DerivedOperationId(operationId, "ready"),
-                                                  DevelopmentTaskStatus.Ready,
-                                                  task.Version),
+            var ready = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = taskId,
+                OperationId = DerivedOperationId(operationId, "ready"),
+                TargetStatus = DevelopmentTaskStatus.Ready,
+                ExpectedTaskVersion = task.Version
+            },
                                               cancellationToken);
             task = (await _store.GetTaskAsync(taskId, cancellationToken)) with
             {
@@ -372,11 +378,14 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         if ((awaitingValidation || task.Status == DevelopmentTaskStatus.ChangesRequested)
             && task.CurrentReviewRound >= task.MaxReviewRounds)
         {
-            _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                          DerivedOperationId(operationId, "review-round-limit"),
-                                          DevelopmentTaskStatus.Blocked,
-                                          task.Version,
-                                          ReviewRoundLimitReason),
+            _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = taskId,
+                OperationId = DerivedOperationId(operationId, "review-round-limit"),
+                TargetStatus = DevelopmentTaskStatus.Blocked,
+                ExpectedTaskVersion = task.Version,
+                Reason = ReviewRoundLimitReason
+            },
                                       cancellationToken);
             _logger.LogInformation("Development task status moved {From} to Blocked for task {TaskId} in project {ProjectId} after {Round} of {Max} rounds: {Reason}",
                 task.Status,
@@ -430,14 +439,17 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
         var predecessor = attempts.LastOrDefault(attempt => attempt.Role == role && attempt.Status == DevelopmentAttemptStatus.Interrupted)?.Id;
         var attemptId = Guid.NewGuid();
-        _ = await _coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
-                                      attemptId,
-                                      operationId,
-                                      role,
-                                      modelId,
-                                      provider,
-                                      task.Version,
-                                      predecessor),
+        _ = await _coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = taskId,
+            AttemptId = attemptId,
+            OperationId = operationId,
+            Role = role,
+            ModelId = modelId,
+            Provider = provider,
+            ExpectedTaskVersion = task.Version,
+            PredecessorAttemptId = predecessor
+        },
                                   cancellationToken);
         if (!_supervisor.StartAttempt(attemptId, role))
         {

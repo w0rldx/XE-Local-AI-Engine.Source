@@ -87,85 +87,167 @@ public enum McpAgentRunStopKind
 ///     Admission input. <c>CanonicalRequest</c> is the permanent 32-byte keyed fingerprint produced by
 ///     <c>McpAgentRunPayloadProtector.ComputeRequestFingerprint</c>; the canonical plaintext is never persisted.
 /// </summary>
-public sealed record McpAgentRunAdmissionRequest(
-    Guid RequestId,
-    ReadOnlyMemory<byte> CanonicalRequest,
-    string Task,
-    string? Instructions,
-    Guid? AgentDefinitionId,
-    long? AgentDefinitionVersion,
-    string ModelId,
-    string? ModelOverrideId,
-    Guid? WorkspaceId,
-    ReadOnlyMemory<byte> BindingFingerprint,
-    long CreatedAtUtc,
-    bool IsAgenticAutoApprove = false,
-    string? RequestingKeyPrefix = null);
+public sealed record McpAgentRunAdmissionRequest
+{
+    public required Guid RequestId { get; init; }
 
-public sealed record McpAgentRunAdmissionResult(
-    McpAgentRunAdmissionKind Kind,
-    McpAgentRunRecord? Run,
-    McpAgentRunCapacityKind CapacityKind = McpAgentRunCapacityKind.None);
+    public required ReadOnlyMemory<byte> CanonicalRequest { get; init; }
 
-public sealed record McpAgentRunClaimResult(McpAgentRunClaimKind Kind, McpAgentRunRecord? Run);
+    public required string Task { get; init; }
 
-public sealed record McpAgentRunStopResult(McpAgentRunStopKind Kind, McpAgentRunRecord? Run);
+    public required string? Instructions { get; init; }
 
-public sealed record McpAgentRunFinalization(
-    Guid RequestId,
-    long ExpectedVersion,
-    Guid ClaimToken,
-    McpAgentRunStatus Status,
-    McpAgentRunStopReason ExpectedStopReason,
-    string? FailureCode,
-    string? Result,
-    string? DisplayMessage,
-    long CompletedAtUtc);
+    public required Guid? AgentDefinitionId { get; init; }
 
-public sealed record McpAgentRunRecord(
-    Guid RequestId,
-    ReadOnlyMemory<byte> RequestFingerprint,
-    McpAgentRunStatus Status,
-    long Version,
-    Guid? ClaimToken,
-    McpAgentRunStopReason StopReason,
-    long? StopRequestedAtUtc,
-    Guid? AgentDefinitionId,
-    long? AgentDefinitionVersion,
-    string? ModelId,
-    string? ModelOverrideId,
-    Guid? WorkspaceId,
-    ReadOnlyMemory<byte>? BindingFingerprint,
-    string? Task,
-    string? Instructions,
-    string? Result,
-    string? DisplayMessage,
-    string? FailureCode,
-    long CreatedAtUtc,
-    long? ClaimedAtUtc,
-    long? CompletedAtUtc,
-    long? PayloadExpiresAtUtc,
-    long? CompactedAtUtc,
-    bool PayloadExpired,
-    bool IsAgenticAutoApprove = false,
-    string? RequestingKeyPrefix = null);
+    public required long? AgentDefinitionVersion { get; init; }
 
-public sealed record McpAgentRunLedgerCounters(
-    int AccountingVersion,
-    long NonterminalRunCount,
-    long QueuedRunCount,
-    long RunningRunCount,
-    long IdentityCount,
-    long ActivePayloadBytes,
-    long TombstoneLogicalBytes,
-    long UpdatedAtUtc);
+    public required string ModelId { get; init; }
 
-public sealed record McpAgentRunLedgerVerification(
-    bool IsConsistent,
-    McpAgentRunLedgerCounters Persisted,
-    McpAgentRunLedgerCounters Reconstructed);
+    public required string? ModelOverrideId { get; init; }
 
-public sealed record McpAgentRunLedgerSnapshot(
-    long QueueDepth,
-    long RunningCount,
-    McpAgentRunLedgerCounters Counters);
+    public required Guid? WorkspaceId { get; init; }
+
+    public required ReadOnlyMemory<byte> BindingFingerprint { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public bool IsAgenticAutoApprove { get; init; }
+
+    public string? RequestingKeyPrefix { get; init; }
+}
+
+public sealed class McpAgentRunAdmissionResult
+{
+    public required McpAgentRunAdmissionKind Kind { get; init; }
+
+    public required McpAgentRunRecord? Run { get; init; }
+
+    public McpAgentRunCapacityKind CapacityKind { get; init; }
+}
+
+public sealed class McpAgentRunClaimResult
+{
+    public required McpAgentRunClaimKind Kind { get; init; }
+
+    public required McpAgentRunRecord? Run { get; init; }
+}
+
+public sealed class McpAgentRunStopResult
+{
+    public required McpAgentRunStopKind Kind { get; init; }
+
+    public required McpAgentRunRecord? Run { get; init; }
+}
+
+public sealed record McpAgentRunFinalization
+{
+    public required Guid RequestId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid ClaimToken { get; init; }
+
+    public required McpAgentRunStatus Status { get; init; }
+
+    public required McpAgentRunStopReason ExpectedStopReason { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required string? Result { get; init; }
+
+    public required string? DisplayMessage { get; init; }
+
+    public required long CompletedAtUtc { get; init; }
+}
+
+public sealed record McpAgentRunRecord
+{
+    public required Guid RequestId { get; init; }
+
+    public required ReadOnlyMemory<byte> RequestFingerprint { get; init; }
+
+    public required McpAgentRunStatus Status { get; init; }
+
+    public required long Version { get; init; }
+
+    public required Guid? ClaimToken { get; init; }
+
+    public required McpAgentRunStopReason StopReason { get; init; }
+
+    public required long? StopRequestedAtUtc { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required long? AgentDefinitionVersion { get; init; }
+
+    public required string? ModelId { get; init; }
+
+    public required string? ModelOverrideId { get; init; }
+
+    public required Guid? WorkspaceId { get; init; }
+
+    public required ReadOnlyMemory<byte>? BindingFingerprint { get; init; }
+
+    public required string? Task { get; init; }
+
+    public required string? Instructions { get; init; }
+
+    public required string? Result { get; init; }
+
+    public required string? DisplayMessage { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long? ClaimedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long? PayloadExpiresAtUtc { get; init; }
+
+    public required long? CompactedAtUtc { get; init; }
+
+    public required bool PayloadExpired { get; init; }
+
+    public bool IsAgenticAutoApprove { get; init; }
+
+    public string? RequestingKeyPrefix { get; init; }
+}
+
+public sealed record McpAgentRunLedgerCounters
+{
+    public required int AccountingVersion { get; init; }
+
+    public required long NonterminalRunCount { get; init; }
+
+    public required long QueuedRunCount { get; init; }
+
+    public required long RunningRunCount { get; init; }
+
+    public required long IdentityCount { get; init; }
+
+    public required long ActivePayloadBytes { get; init; }
+
+    public required long TombstoneLogicalBytes { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class McpAgentRunLedgerVerification
+{
+    public required bool IsConsistent { get; init; }
+
+    public required McpAgentRunLedgerCounters Persisted { get; init; }
+
+    public required McpAgentRunLedgerCounters Reconstructed { get; init; }
+}
+
+public sealed class McpAgentRunLedgerSnapshot
+{
+    public required long QueueDepth { get; init; }
+
+    public required long RunningCount { get; init; }
+
+    public required McpAgentRunLedgerCounters Counters { get; init; }
+}

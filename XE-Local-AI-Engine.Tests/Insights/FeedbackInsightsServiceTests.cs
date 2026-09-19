@@ -27,7 +27,7 @@ public sealed class FeedbackInsightsServiceTests
         var service = CreateService(out var store, nowUtcMs: 4_242);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId, "Agent", UpCount: 0, DownCount: 0, [], [])));
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate { AgentDefinitionId = agentId, AgentName = "Agent", UpCount = 0, DownCount = 0, ByTool = [], Exemplars = [] }));
 
         var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "Existing agent should produce a result.");
 
@@ -44,7 +44,7 @@ public sealed class FeedbackInsightsServiceTests
         var service = CreateService(out var store, nowUtcMs: 1);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId, "Agent", UpCount: 0, DownCount: 0, [], [])));
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate { AgentDefinitionId = agentId, AgentName = "Agent", UpCount = 0, DownCount = 0, ByTool = [], Exemplars = [] }));
 
         var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "Existing agent should produce a result.");
 
@@ -62,9 +62,9 @@ public sealed class FeedbackInsightsServiceTests
         var below = Guid.NewGuid();
         var meets = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(below, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(below, "A", UpCount: 1, DownCount: 1, [], [])));
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate { AgentDefinitionId = below, AgentName = "A", UpCount = 1, DownCount = 1, ByTool = [], Exemplars = [] }));
         store.GetAgentFeedbackAggregateAsync(meets, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(meets, "A", UpCount: 1, DownCount: 2, [], [])));
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate { AgentDefinitionId = meets, AgentName = "A", UpCount = 1, DownCount = 2, ByTool = [], Exemplars = [] }));
 
         var belowResult = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(below), "result");
         var meetsResult = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(meets), "result");
@@ -82,12 +82,15 @@ public sealed class FeedbackInsightsServiceTests
         var service = CreateService(out var store, nowUtcMs: 1);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId,
-                 "Agent",
-                 UpCount: 3,
-                 DownCount: 1,
-                 [new ToolFeedbackCount("search", UpCount: 2, DownCount: 2), new ToolFeedbackCount("calc", UpCount: 1, DownCount: 0)],
-                 [])));
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate
+             {
+                 AgentDefinitionId = agentId,
+                 AgentName = "Agent",
+                 UpCount = 3,
+                 DownCount = 1,
+                 ByTool = [new ToolFeedbackCount { ToolName = "search", UpCount = 2, DownCount = 2 }, new ToolFeedbackCount { ToolName = "calc", UpCount = 1, DownCount = 0 }],
+                 Exemplars = []
+             }));
 
         var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "result");
 
@@ -110,15 +113,18 @@ public sealed class FeedbackInsightsServiceTests
         var longComment = new string(c: 'x', FeedbackInsightsService.MaxExemplarCommentLength + 20);
         const string ShortComment = "concise feedback";
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId,
-                 "Agent",
-                 UpCount: 0,
-                 DownCount: 2,
-                 [],
-                 [
-                     new FeedbackExemplar("down", longComment, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 200),
-                     new FeedbackExemplar("down", ShortComment, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 100)
-                 ])));
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate
+             {
+                 AgentDefinitionId = agentId,
+                 AgentName = "Agent",
+                 UpCount = 0,
+                 DownCount = 2,
+                 ByTool = [],
+                 Exemplars = [
+                     new FeedbackExemplar { Rating = "down", Comment = longComment, MessageId = Guid.NewGuid(), ConversationId = Guid.NewGuid(), CreatedAtUtc = 200 },
+                     new FeedbackExemplar { Rating = "down", Comment = ShortComment, MessageId = Guid.NewGuid(), ConversationId = Guid.NewGuid(), CreatedAtUtc = 100 }
+                 ]
+             }));
 
         var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "result");
 

@@ -141,7 +141,7 @@ public sealed class TrainingRunStore : ITrainingRunStore
                             work.TryGetValue(run.Id, out var found) ? found.Status : null,
                             work.TryGetValue(run.Id, out var byId) ? byId.ErrorMessage : null))
                         .ToArray();
-        return new TrainingRunPage(items, total);
+        return new TrainingRunPage { Items = items, TotalCount = total };
     }
 
     public async Task<IReadOnlyList<TrainingRunLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default)
@@ -151,7 +151,7 @@ public sealed class TrainingRunStore : ITrainingRunStore
         var runs = await _dbContext.TrainingRuns.AsNoTracking()
                                    .Where(item => item.LaunchReceiptJson != null)
                                    .ToListAsync(cancellationToken);
-        return [.. runs.Select(static run => new TrainingRunLaunchReceipt(run.Id, run.LaunchReceiptJson!))];
+        return [.. runs.Select(static run => new TrainingRunLaunchReceipt { RunId = run.Id, LaunchReceiptJson = run.LaunchReceiptJson! })];
     }
 
     public async Task<TrainingWorkKind?> PeekNextKindAsync(CancellationToken cancellationToken = default)
@@ -214,7 +214,7 @@ public sealed class TrainingRunStore : ITrainingRunStore
                 ? await GetAsync(work.TargetId, cancellationToken)
                 : null;
             await transaction.CommitAsync(cancellationToken);
-            return new TrainingWorkClaim(work.QueueSequence, work.Kind, work.TargetId, work.Version, run);
+            return new TrainingWorkClaim { QueueSequence = work.QueueSequence, Kind = work.Kind, TargetId = work.TargetId, Version = work.Version, Run = run };
         }
     }
 
@@ -718,18 +718,49 @@ public sealed class TrainingRunStore : ITrainingRunStore
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static TrainingRunRecord ToRecord(TrainingRun entity, TrainingWorkStatus? workStatus, string? workErrorMessage) =>
-        new(entity.Id, entity.DatasetId, entity.DatasetContentFingerprint, entity.DatasetRevision, entity.FreezeJson.ToArray(),
-            entity.BaseArtifactId, entity.LinkedInstalledModelName, entity.LinkedModelContentFingerprint, entity.OptionsJson.ToArray(),
-            OptionalBlob.AsOptionalMemory(entity.LicenseConfirmationJson), entity.Status, OptionalBlob.AsOptionalMemory(entity.ProgressJson),
-            entity.LogTail is null ? null : Encoding.UTF8.GetString(entity.LogTail), OptionalBlob.AsOptionalMemory(entity.LaunchReceiptJson),
-            entity.ErrorMessage, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus, workErrorMessage);
+        new()
+        {
+            Id = entity.Id,
+            DatasetId = entity.DatasetId,
+            DatasetContentFingerprint = entity.DatasetContentFingerprint,
+            DatasetRevision = entity.DatasetRevision,
+            FreezeJson = entity.FreezeJson.ToArray(),
+            BaseArtifactId = entity.BaseArtifactId,
+            LinkedInstalledModelName = entity.LinkedInstalledModelName,
+            LinkedModelContentFingerprint = entity.LinkedModelContentFingerprint,
+            OptionsJson = entity.OptionsJson.ToArray(),
+            LicenseConfirmationJson = OptionalBlob.AsOptionalMemory(entity.LicenseConfirmationJson),
+            Status = entity.Status,
+            ProgressJson = OptionalBlob.AsOptionalMemory(entity.ProgressJson),
+            LogTail = entity.LogTail is null ? null : Encoding.UTF8.GetString(entity.LogTail),
+            LaunchReceiptJson = OptionalBlob.AsOptionalMemory(entity.LaunchReceiptJson),
+            ErrorMessage = entity.ErrorMessage,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            WorkStatus = workStatus,
+            WorkErrorMessage = workErrorMessage
+        };
 
     private static TrainingArtifactRecord ToRecord(TrainingArtifact entity) =>
-        new(entity.Id, entity.RunId, entity.Kind, entity.Path, entity.Sha256, entity.SizeBytes, entity.SmokeState,
-            entity.SmokeReason, entity.CommittedModelName, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc,
-            entity.QualityComparisonId,
-            OptionalBlob.AsOptionalMemory(entity.QualityDecisionJson),
-            entity.DiscardedAtUtc,
-            entity.DiscardReason,
-            entity.DiscardCleanupPending);
+        new()
+        {
+            Id = entity.Id,
+            RunId = entity.RunId,
+            Kind = entity.Kind,
+            Path = entity.Path,
+            Sha256 = entity.Sha256,
+            SizeBytes = entity.SizeBytes,
+            SmokeState = entity.SmokeState,
+            SmokeReason = entity.SmokeReason,
+            CommittedModelName = entity.CommittedModelName,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            QualityComparisonId = entity.QualityComparisonId,
+            QualityDecisionJson = OptionalBlob.AsOptionalMemory(entity.QualityDecisionJson),
+            DiscardedAtUtc = entity.DiscardedAtUtc,
+            DiscardReason = entity.DiscardReason,
+            DiscardCleanupPending = entity.DiscardCleanupPending
+        };
 }

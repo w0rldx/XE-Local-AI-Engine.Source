@@ -38,13 +38,16 @@ public sealed class CustomToolStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
 
             var store = new CustomToolStore(writeContext, TimeProvider.System);
-            var added = await store.CreateAsync(new CustomToolInput(Name,
-                Description,
-                CustomToolKind.HttpFetch,
-                CustomToolMode.Parameterized,
-                configJson,
-                ParametersJson,
-                Acknowledged: true));
+            var added = await store.CreateAsync(new CustomToolInput
+            {
+                Name = Name,
+                Description = Description,
+                Kind = CustomToolKind.HttpFetch,
+                Mode = CustomToolMode.Parameterized,
+                ConfigJson = configJson,
+                ParametersJson = ParametersJson,
+                Acknowledged = true
+            });
 
             AssertEx.Equal(Name, added.Name);
             AssertEx.Equal(Description, added.Description);
@@ -98,12 +101,15 @@ public sealed class CustomToolStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
 
             var store = new CustomToolStore(writeContext, TimeProvider.System);
-            var added = await store.CreateAsync(new CustomToolInput(Name,
-                Description,
-                CustomToolKind.Command,
-                CustomToolMode.Fixed,
-                configJson,
-                Acknowledged: true));
+            var added = await store.CreateAsync(new CustomToolInput
+            {
+                Name = Name,
+                Description = Description,
+                Kind = CustomToolKind.Command,
+                Mode = CustomToolMode.Fixed,
+                ConfigJson = configJson,
+                Acknowledged = true
+            });
             toolId = added.Id;
         }
 
@@ -137,14 +143,14 @@ public sealed class CustomToolStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new CustomToolStore(context, clock);
 
-        var added = await store.CreateAsync(new CustomToolInput(Name, Description, CustomToolKind.HttpFetch, CustomToolMode.Fixed, configJson));
+        var added = await store.CreateAsync(new CustomToolInput { Name = Name, Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Fixed, ConfigJson = configJson });
         AssertEx.Equal(expected: 1, added.Version);
 
         // Toggling Enabled and Acknowledged only gates the offered set / authoring; neither is model-facing content, so
         // neither may bump Version.
         clock.Advance(10);
         var toggled = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, new CustomToolInput(Name, Description, CustomToolKind.HttpFetch, CustomToolMode.Fixed, configJson, Enabled: false, Acknowledged: true)),
+            await store.UpdateAsync(added.Id, new CustomToolInput { Name = Name, Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Fixed, ConfigJson = configJson, Enabled = false, Acknowledged = true }),
             "Update should find the tool.");
         AssertEx.False(toggled.Enabled, "The disable toggle should round-trip.");
         AssertEx.True(toggled.Acknowledged, "The acknowledgement toggle should round-trip.");
@@ -155,14 +161,14 @@ public sealed class CustomToolStoreTests : IDisposable
         clock.Advance(10);
         var editedConfig = """{"method":"GET","urlTemplate":"https://example.com/b"}""";
         var edited = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, new CustomToolInput(Name, Description, CustomToolKind.HttpFetch, CustomToolMode.Fixed, editedConfig, Enabled: false, Acknowledged: true)),
+            await store.UpdateAsync(added.Id, new CustomToolInput { Name = Name, Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Fixed, ConfigJson = editedConfig, Enabled = false, Acknowledged = true }),
             "Update should find the tool.");
         AssertEx.Equal(expected: 2, edited.Version);
 
         // Switching the mode is also content-affecting (it changes the approval floor and the model-facing schema).
         clock.Advance(10);
         var reMode = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, new CustomToolInput(Name, Description, CustomToolKind.HttpFetch, CustomToolMode.Parameterized, editedConfig, Enabled: false, Acknowledged: true)),
+            await store.UpdateAsync(added.Id, new CustomToolInput { Name = Name, Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Parameterized, ConfigJson = editedConfig, Enabled = false, Acknowledged = true }),
             "Update should find the tool.");
         AssertEx.Equal(expected: 3, reMode.Version);
     }
@@ -179,10 +185,10 @@ public sealed class CustomToolStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new CustomToolStore(context, TimeProvider.System);
 
-        _ = await store.CreateAsync(new CustomToolInput("custom__weather", Description, CustomToolKind.HttpFetch, CustomToolMode.Fixed, configJson));
+        _ = await store.CreateAsync(new CustomToolInput { Name = "custom__weather", Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Fixed, ConfigJson = configJson });
 
         var exception = AssertEx.Throws<DbUpdateException>(
-            () => store.CreateAsync(new CustomToolInput("custom__WEATHER", Description, CustomToolKind.HttpFetch, CustomToolMode.Fixed, configJson)).GetAwaiter().GetResult(),
+            () => store.CreateAsync(new CustomToolInput { Name = "custom__WEATHER", Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Fixed, ConfigJson = configJson }).GetAwaiter().GetResult(),
             "A name differing only in case must be rejected as a duplicate.");
         AssertEx.True(exception.InnerException is SqliteException,
             "The duplicate should surface as a SQLite unique-constraint violation.");
@@ -200,7 +206,7 @@ public sealed class CustomToolStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new CustomToolStore(context, TimeProvider.System);
 
-        var added = await store.CreateAsync(new CustomToolInput(Name, Description, CustomToolKind.HttpFetch, CustomToolMode.Fixed, configJson));
+        var added = await store.CreateAsync(new CustomToolInput { Name = Name, Description = Description, Kind = CustomToolKind.HttpFetch, Mode = CustomToolMode.Fixed, ConfigJson = configJson });
 
         AssertEx.True(await store.DeleteAsync(added.Id), "Delete should report a removed row.");
         AssertEx.Null(await store.GetByIdAsync(added.Id), "Deleted tool should no longer be found.");

@@ -55,13 +55,16 @@ public sealed class ScheduledJobRunEventStore : IScheduledJobRunEventStore
 
     private static ScheduledJobRunEventRecord ToRecord(ScheduledJobRunEvent entity)
     {
-        return new ScheduledJobRunEventRecord(entity.Id,
-            entity.RunId,
-            entity.Sequence,
-            entity.Level,
-            entity.Message,
-            entity.DataJson is null ? null : Decode(entity.DataJson),
-            entity.OccurredAtUtc);
+        return new ScheduledJobRunEventRecord
+        {
+            Id = entity.Id,
+            RunId = entity.RunId,
+            Sequence = entity.Sequence,
+            Level = entity.Level,
+            Message = entity.Message,
+            DataJson = entity.DataJson is null ? null : Decode(entity.DataJson),
+            OccurredAtUtc = entity.OccurredAtUtc
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

@@ -171,17 +171,20 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
         var row = AssertEx.NotNull(await store.GetAsync(instanceId));
 
-        var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                     row.Version,
-                                     new HashSet<ExternalAppInstanceStatus>
+        var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
+        {
+            InstanceId = instanceId,
+            ExpectedVersion = row.Version,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
                                      {
                                          row.Status
                                      },
-                                     status,
-                                     ExternalAppInstanceEventKind.Failed,
-                                     EventDetailJson: null,
-                                     OccurredAtUtc: 50,
-                                     desiredState));
+            NewStatus = status,
+            EventKind = ExternalAppInstanceEventKind.Failed,
+            EventDetailJson = null,
+            OccurredAtUtc = 50,
+            DesiredState = desiredState
+        });
         AssertEx.True(applied.Applied, $"Forcing instance {instanceId:N} to {status} must not lose its compare-and-swap.");
 
         return AssertEx.NotNull(await store.GetAsync(instanceId));
@@ -348,17 +351,20 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var currentStatus = ExternalAppInstanceStatus.Installing;
         if (status != ExternalAppInstanceStatus.Installing)
         {
-            var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                         version,
-                                         new HashSet<ExternalAppInstanceStatus>
+            var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
+            {
+                InstanceId = instanceId,
+                ExpectedVersion = version,
+                ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
                                          {
                                              currentStatus
                                          },
-                                         status,
-                                         ExternalAppInstanceEventKind.Installed,
-                                         EventDetailJson: null,
-                                         OccurredAtUtc: 2,
-                                         desiredState));
+                NewStatus = status,
+                EventKind = ExternalAppInstanceEventKind.Installed,
+                EventDetailJson = null,
+                OccurredAtUtc = 2,
+                DesiredState = desiredState
+            });
             AssertEx.True(applied.Applied, "Seeding the row must not lose its compare-and-swap.");
         }
 
@@ -382,17 +388,20 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
         var row = AssertEx.NotNull(await store.GetAsync(instanceId));
 
-        var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                     row.Version,
-                                     new HashSet<ExternalAppInstanceStatus>
+        var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
+        {
+            InstanceId = instanceId,
+            ExpectedVersion = row.Version,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
                                      {
                                          row.Status
                                      },
-                                     row.Status,
-                                     ExternalAppInstanceEventKind.Installed,
-                                     EventDetailJson: null,
-                                     OccurredAtUtc: 60,
-                                     ManifestSnapshotJson: manifestJson));
+            NewStatus = row.Status,
+            EventKind = ExternalAppInstanceEventKind.Installed,
+            EventDetailJson = null,
+            OccurredAtUtc = 60,
+            ManifestSnapshotJson = manifestJson
+        });
         AssertEx.True(applied.Applied, "Replacing the manifest snapshot must not lose its compare-and-swap.");
     }
 
@@ -406,16 +415,19 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
         var row = AssertEx.NotNull(await store.GetAsync(instanceId));
 
-        var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                     row.Version,
-                                     new HashSet<ExternalAppInstanceStatus>
+        var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
+        {
+            InstanceId = instanceId,
+            ExpectedVersion = row.Version,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
                                      {
                                          row.Status
                                      },
-                                     row.Status,
-                                     ExternalAppInstanceEventKind.Failed,
-                                     EventDetailJson: null,
-                                     OccurredAtUtc: 99));
+            NewStatus = row.Status,
+            EventKind = ExternalAppInstanceEventKind.Failed,
+            EventDetailJson = null,
+            OccurredAtUtc = 99
+        });
         AssertEx.True(applied.Applied, "The competing write must land, or the test is not testing a lost swap.");
     }
 

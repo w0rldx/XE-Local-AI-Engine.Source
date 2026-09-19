@@ -360,15 +360,18 @@ public sealed class AgentDefinitionServiceTests
         IReadOnlyDictionary<string, bool>? toolApprovals = null,
         string? orchestrationTopologyJson = null)
     {
-        return new AgentDefinitionInput(name,
-            description,
-            instructions,
-            modelProfile,
-            reasoningEffort,
-            kind,
-            allowedTools ?? [],
-            toolApprovals ?? new Dictionary<string, bool>(),
-            orchestrationTopologyJson);
+        return new AgentDefinitionInput
+        {
+            Name = name,
+            Description = description,
+            Instructions = instructions,
+            ModelProfile = modelProfile,
+            ReasoningEffort = reasoningEffort,
+            Kind = kind,
+            AllowedToolNames = allowedTools ?? [],
+            ToolApprovals = toolApprovals ?? new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = orchestrationTopologyJson
+        };
     }
 
     // Serializes a topology through the SHARED parser's canonical shape so these tests stay coupled to the real wire
@@ -386,35 +389,41 @@ public sealed class AgentDefinitionServiceTests
 
     private static AgentDefinitionRecord StoredRecord(Guid id)
     {
-        return new AgentDefinitionRecord(id,
-            "Stored",
-            Description: null,
-            "Be helpful.",
-            "qwen3:8b",
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = id,
+            Name = "Stored",
+            Description = null,
+            Instructions = "Be helpful.",
+            ModelProfile = "qwen3:8b",
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static AgentDefinitionRecord CreateRecord(AgentDefinitionInput input)
     {
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            input.Name,
-            input.Description,
-            input.Instructions,
-            input.ModelProfile,
-            input.ReasoningEffort,
-            input.Kind,
-            input.AllowedToolNames,
-            input.ToolApprovals,
-            input.OrchestrationTopologyJson,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = input.Name,
+            Description = input.Description,
+            Instructions = input.Instructions,
+            ModelProfile = input.ModelProfile,
+            ReasoningEffort = input.ReasoningEffort,
+            Kind = input.Kind,
+            AllowedToolNames = input.AllowedToolNames,
+            ToolApprovals = input.ToolApprovals,
+            OrchestrationTopologyJson = input.OrchestrationTopologyJson,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 }

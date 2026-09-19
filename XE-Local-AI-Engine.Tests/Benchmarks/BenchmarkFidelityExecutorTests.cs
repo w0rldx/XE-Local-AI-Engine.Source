@@ -270,17 +270,51 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
             Store = Substitute.For<IBenchmarkStore>();
             _ = Store.GetFidelityAttemptAsync(AttemptId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkFidelityAttemptRecord(AttemptId, RunId, 1, kind, BenchmarkJudgeAttemptStatus.Running,
-                         null, null, null, null, null, null, null, null, null, null, null, null, 1, null, null));
+                     .Returns(new BenchmarkFidelityAttemptRecord
+                     {
+                         Id = AttemptId,
+                         RunId = RunId,
+                         Sequence = 1,
+                         Kind = kind,
+                         Status = BenchmarkJudgeAttemptStatus.Running,
+                         PerplexityMean = null,
+                         PerplexityStdErr = null,
+                         PerplexityChunks = null,
+                         PerplexityContextTokens = null,
+                         CorpusId = null,
+                         KldMean = null,
+                         KldP99 = null,
+                         TopTokenAgreement = null,
+                         BaseModelName = null,
+                         BaseModelContentFingerprint = null,
+                         BaseLogitsDigest = null,
+                         ErrorMessage = null,
+                         EnqueuedAtUtc = 1,
+                         StartedAtUtc = null,
+                         CompletedAtUtc = null
+                     });
             _ = Store.GetProjectAsync(_run.ProjectId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkProjectRecord(_run.ProjectId, "p", new byte[]
+                     .Returns(new BenchmarkProjectRecord
+                     {
+                         Id = _run.ProjectId,
+                         Name = "p",
+                         CoreTaskJson = new byte[]
                          {
                              1
-                         }, 4096, Guid.NewGuid(), false, null, true, 1, 1, 1,
-                         FidelityEnabled: true,
-                         FidelityKldEnabled: kind == "kld",
-                         FidelityKldBaseModelName: BaseModelName,
-                         FidelityKldBaseFingerprint: BaseFingerprint));
+                         },
+                         ContextTokens = 4096,
+                         AgentDefinitionId = Guid.NewGuid(),
+                         JudgeEnabled = false,
+                         CurrentJudgePolicyRevisionId = null,
+                         IsFrozen = true,
+                         Version = 1,
+                         CreatedAtUtc = 1,
+                         UpdatedAtUtc = 1,
+                         FidelityEnabled = true,
+                         FidelityKldEnabled = kind == "kld",
+                         FidelityKldBaseModelName = BaseModelName,
+                         FidelityKldBaseFingerprint = BaseFingerprint
+                     });
             _ = Store.ListLiveFidelityDigestsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlySet<string>>(_ => new HashSet<string>(StringComparer.Ordinal));
             _leases = new Dictionary<string, IBenchmarkInstalledModelLease>(StringComparer.Ordinal)
             {
@@ -319,7 +353,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                                              """;
 
         public BenchmarkClaimedWork Work() =>
-            new(3, RunId, BenchmarkWorkKind.Fidelity, 1, WorkVersion, _run, null, AttemptId);
+            new() { QueueSequence = 3, RunId = RunId, Kind = BenchmarkWorkKind.Fidelity, Attempt = 1, Version = WorkVersion, Run = _run, JudgeAttemptId = null, FidelityAttemptId = AttemptId };
 
         /// <summary>
         ///     PerplexityExecutablePath resolves off DISK, beside the server binary, so the two cases are two real
@@ -429,32 +463,35 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 "hash");
 
         private static BenchmarkRunRecord RunFor(BenchmarkRuntimeSnapshotV1 snapshot) =>
-            new(Guid.NewGuid(),
-                snapshot.ProjectId,
-                new byte[]
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = snapshot.ProjectId,
+                RuntimeSnapshotJson = new byte[]
                 {
                     1
                 },
-                snapshot.PrimaryModel.ModelName,
-                snapshot.PrimaryModel.Origin,
-                snapshot.PrimaryModel.ModelContentFingerprint,
-                "Agent",
-                1,
-                4096,
-                BenchmarkPrimaryStatus.Succeeded,
-                4096,
-                10,
-                5,
-                500,
-                null,
-                1,
-                null,
-                null,
-                1,
-                1,
-                1,
-                1,
-                1);
+                PrimaryModelName = snapshot.PrimaryModel.ModelName,
+                PrimaryModelOrigin = snapshot.PrimaryModel.Origin,
+                ModelContentFingerprint = snapshot.PrimaryModel.ModelContentFingerprint,
+                AgentName = "Agent",
+                AgentVersion = 1,
+                RequestedContextTokens = 4096,
+                PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                EffectiveContextTokens = 4096,
+                DurationMs = 10,
+                TotalTokens = 5,
+                TokensPerSecond = 500,
+                OutputPartsJson = null,
+                LastStreamSequence = 1,
+                UserScore = null,
+                PrimaryErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 1,
+                StartedAtUtc = 1,
+                PrimaryCompletedAtUtc = 1,
+                UpdatedAtUtc = 1
+            };
     }
 
     private sealed class FixedSnapshots : IBenchmarkRuntimeSnapshotFactory

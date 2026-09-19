@@ -116,7 +116,7 @@ public sealed class McpAgentRunDispatcherTests
                  Arg.Is<long>(version => version == queued.Version),
                  Arg.Any<long>(),
                  Arg.Any<CancellationToken>())
-             .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
+             .Returns(new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.Claimed, Run = claimed });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(_ =>
         {
             AssertEx.True(registry.Signal(claimed.RequestId, claimToken),
@@ -165,7 +165,7 @@ public sealed class McpAgentRunDispatcherTests
                  Arg.Is<long>(version => version == queued.Version),
                  Arg.Any<long>(),
                  Arg.Any<CancellationToken>())
-             .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
+             .Returns(new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.Claimed, Run = claimed });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(claimed);
         executor.ExecuteAsync(claimed, Arg.Any<CancellationToken>()).Returns(SpawnOutcome.Success("completed first"));
         store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
@@ -214,7 +214,7 @@ public sealed class McpAgentRunDispatcherTests
                  Arg.Is<long>(version => version == queued.Version),
                  Arg.Any<long>(),
                  Arg.Any<CancellationToken>())
-             .Returns(new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed, claimed));
+             .Returns(new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.Claimed, Run = claimed });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(_ => current);
         store.RequestStopAsync(Arg.Is<Guid>(requestId => requestId == claimed.RequestId),
                  Arg.Any<long>(),
@@ -229,7 +229,7 @@ public sealed class McpAgentRunDispatcherTests
                      StopReason = McpAgentRunStopReason.WatchdogExpired,
                      StopRequestedAtUtc = 30
                  };
-                 return new McpAgentRunStopResult(McpAgentRunStopKind.Requested, current);
+                 return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.Requested, Run = current };
              });
         executor.ExecuteAsync(Arg.Any<McpAgentRunRecord>(), Arg.Any<CancellationToken>()).Returns(async callInfo =>
         {
@@ -297,42 +297,51 @@ public sealed class McpAgentRunDispatcherTests
         long version,
         Guid? claimToken,
         McpAgentRunStopReason stopReason) =>
-        new(Guid.Parse("4f42e874-a781-4f2a-a4d2-b6d5bd6f00cc"),
-            SHA256.HashData("request"u8),
-            status,
-            version,
-            claimToken,
-            stopReason,
-            StopRequestedAtUtc: null,
-            AgentDefinitionId: null,
-            AgentDefinitionVersion: null,
-            ModelId: "local-model",
-            ModelOverrideId: null,
-            WorkspaceId: null,
-            BindingFingerprint: SHA256.HashData("binding"u8),
-            Task: "task",
-            Instructions: "read only",
-            Result: null,
-            DisplayMessage: null,
-            FailureCode: null,
-            CreatedAtUtc: 1,
-            ClaimedAtUtc: null,
-            CompletedAtUtc: null,
-            PayloadExpiresAtUtc: 86_400_001,
-            CompactedAtUtc: null,
-            PayloadExpired: false);
+        new()
+        {
+            RequestId = Guid.Parse("4f42e874-a781-4f2a-a4d2-b6d5bd6f00cc"),
+            RequestFingerprint = SHA256.HashData("request"u8),
+            Status = status,
+            Version = version,
+            ClaimToken = claimToken,
+            StopReason = stopReason,
+            StopRequestedAtUtc = null,
+            AgentDefinitionId = null,
+            AgentDefinitionVersion = null,
+            ModelId = "local-model",
+            ModelOverrideId = null,
+            WorkspaceId = null,
+            BindingFingerprint = SHA256.HashData("binding"u8),
+            Task = "task",
+            Instructions = "read only",
+            Result = null,
+            DisplayMessage = null,
+            FailureCode = null,
+            CreatedAtUtc = 1,
+            ClaimedAtUtc = null,
+            CompletedAtUtc = null,
+            PayloadExpiresAtUtc = 86_400_001,
+            CompactedAtUtc = null,
+            PayloadExpired = false
+        };
 
     private static McpAgentRunLedgerSnapshot EmptySnapshot() =>
-        new(QueueDepth: 0,
-            RunningCount: 0,
-            new McpAgentRunLedgerCounters(AccountingVersion: 1,
-                NonterminalRunCount: 0,
-                QueuedRunCount: 0,
-                RunningRunCount: 0,
-                IdentityCount: 0,
-                ActivePayloadBytes: 0,
-                TombstoneLogicalBytes: 0,
-                UpdatedAtUtc: 0));
+        new()
+        {
+            QueueDepth = 0,
+            RunningCount = 0,
+            Counters = new McpAgentRunLedgerCounters
+            {
+                AccountingVersion = 1,
+                NonterminalRunCount = 0,
+                QueuedRunCount = 0,
+                RunningRunCount = 0,
+                IdentityCount = 0,
+                ActivePayloadBytes = 0,
+                TombstoneLogicalBytes = 0,
+                UpdatedAtUtc = 0
+            }
+        };
 
     private sealed class ManualTimeProvider : TimeProvider
     {

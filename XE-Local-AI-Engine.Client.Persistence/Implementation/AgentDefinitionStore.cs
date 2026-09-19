@@ -236,28 +236,31 @@ public sealed class AgentDefinitionStore : IAgentDefinitionStore
 
     private static AgentDefinitionRecord ToRecord(AgentDefinition entity)
     {
-        return new AgentDefinitionRecord(entity.Id,
-            entity.Name,
-            entity.Description is null ? null : Decode(entity.Description),
-            Decode(entity.Instructions),
-            entity.ModelProfile,
-            entity.ReasoningEffort,
-            (AgentDefinitionKind)entity.Kind,
-            DeserializeToolNames(entity.AllowedToolNamesJson),
-            DeserializeApprovals(entity.ToolApprovalsJson),
-            entity.OrchestrationTopologyJson,
-            entity.Version,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.PlaybookEnabled,
-            (AgentDefinitionSource)entity.Source,
-            entity.SeedSlug,
-            DeserializeSkillIds(entity.AllowedSkillIdsJson),
-            entity.DefaultTemporaryChat,
-            entity.MemoryExtractionEnabled,
-            entity.DisableBaseScaffold,
-            entity.GenerationMetadataJson is null ? null : Decode(entity.GenerationMetadataJson),
-            entity.DisableToolRelevanceFilter);
+        return new AgentDefinitionRecord
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = entity.Description is null ? null : Decode(entity.Description),
+            Instructions = Decode(entity.Instructions),
+            ModelProfile = entity.ModelProfile,
+            ReasoningEffort = entity.ReasoningEffort,
+            Kind = (AgentDefinitionKind)entity.Kind,
+            AllowedToolNames = DeserializeToolNames(entity.AllowedToolNamesJson),
+            ToolApprovals = DeserializeApprovals(entity.ToolApprovalsJson),
+            OrchestrationTopologyJson = entity.OrchestrationTopologyJson,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            PlaybookEnabled = entity.PlaybookEnabled,
+            Source = (AgentDefinitionSource)entity.Source,
+            SeedSlug = entity.SeedSlug,
+            AllowedSkillIds = DeserializeSkillIds(entity.AllowedSkillIdsJson),
+            DefaultTemporaryChat = entity.DefaultTemporaryChat,
+            MemoryExtractionEnabled = entity.MemoryExtractionEnabled,
+            DisableBaseScaffold = entity.DisableBaseScaffold,
+            GenerationMetadataJson = entity.GenerationMetadataJson is null ? null : Decode(entity.GenerationMetadataJson),
+            DisableToolRelevanceFilter = entity.DisableToolRelevanceFilter
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

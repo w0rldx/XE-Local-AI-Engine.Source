@@ -99,19 +99,22 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
             }
 
             var now = _timeProvider.GetUtcNow();
-            var admission = await _store.AdmitAsync(new McpAgentRunAdmissionRequest(request.RequestId,
-                    requestFingerprint,
-                    request.Task,
-                    binding.Instructions,
-                    binding.AgentDefinitionId,
-                    binding.AgentDefinitionVersion,
-                    binding.ModelId,
-                    NullIfWhiteSpace(request.Binding.ModelOverrideId),
-                    request.WorkspaceId,
-                    Convert.FromHexString(binding.BindingFingerprint),
-                    now.ToUnixTimeMilliseconds(),
-                    request.Binding.InboundContext.IsAgentic,
-                    request.Binding.InboundContext.KeyPrefix),
+            var admission = await _store.AdmitAsync(new McpAgentRunAdmissionRequest
+            {
+                RequestId = request.RequestId,
+                CanonicalRequest = requestFingerprint,
+                Task = request.Task,
+                Instructions = binding.Instructions,
+                AgentDefinitionId = binding.AgentDefinitionId,
+                AgentDefinitionVersion = binding.AgentDefinitionVersion,
+                ModelId = binding.ModelId,
+                ModelOverrideId = NullIfWhiteSpace(request.Binding.ModelOverrideId),
+                WorkspaceId = request.WorkspaceId,
+                BindingFingerprint = Convert.FromHexString(binding.BindingFingerprint),
+                CreatedAtUtc = now.ToUnixTimeMilliseconds(),
+                IsAgenticAutoApprove = request.Binding.InboundContext.IsAgentic,
+                RequestingKeyPrefix = request.Binding.InboundContext.KeyPrefix
+            },
                 cancellationToken);
 
             await _metrics.RefreshAsync(_store, CancellationToken.None);

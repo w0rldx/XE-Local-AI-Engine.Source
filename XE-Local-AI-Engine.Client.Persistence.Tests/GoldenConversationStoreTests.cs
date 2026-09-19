@@ -237,15 +237,18 @@ public sealed class GoldenConversationStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
             agentId = await SeedAgentAsync(writeContext);
             var store = new GoldenConversationStore(writeContext, TimeProvider.System);
-            var added = await store.AddAsync(new GoldenConversationInput(agentId,
-                "Harvested case",
-                InputTurns,
-                Assertion: null,
-                rubric,
-                Enabled: false,
-                GoldenConversationSource.Harvested,
-                sourceMessageId,
-                sourceConversationId));
+            var added = await store.AddAsync(new GoldenConversationInput
+            {
+                AgentDefinitionId = agentId,
+                Title = "Harvested case",
+                InputTurns = InputTurns,
+                Assertion = null,
+                Rubric = rubric,
+                Enabled = false,
+                Source = GoldenConversationSource.Harvested,
+                SourceMessageId = sourceMessageId,
+                SourceConversationId = sourceConversationId
+            });
 
             AssertEx.Equal(GoldenConversationSource.Harvested, added.Source);
             AssertEx.Equal(sourceMessageId, added.SourceMessageId);
@@ -389,26 +392,32 @@ public sealed class GoldenConversationStoreTests : IDisposable
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-            Description: null,
-            Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = "Builder",
+            Description = null,
+            Instructions = Instructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 
     private static GoldenConversationInput CreateInput(Guid agentDefinitionId)
     {
-        return new GoldenConversationInput(agentDefinitionId,
-            "Summary case",
-            InputTurns,
-            Assertion,
-            Rubric,
-            Enabled: true);
+        return new GoldenConversationInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            Title = "Summary case",
+            InputTurns = InputTurns,
+            Assertion = Assertion,
+            Rubric = Rubric,
+            Enabled = true
+        };
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)

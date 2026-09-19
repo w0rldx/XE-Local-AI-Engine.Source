@@ -163,76 +163,161 @@ public interface ITrainingRunStore
 }
 
 /// <summary>
-///     Everything the freeze needs. <paramref name="ExpectedDatasetVersion" /> pins the dataset the caller inspected:
+///     Everything the freeze needs. <see cref="ExpectedDatasetVersion" /> pins the dataset the caller inspected:
 ///     any sample mutation bumps it, so a stale confirmation dialog cannot start a run against a dataset that moved.
 /// </summary>
-public sealed record TrainingRunEnqueueCommand(
-    Guid DatasetId,
-    long ExpectedDatasetVersion,
-    Guid BaseArtifactId,
-    ReadOnlyMemory<byte> FreezeJson,
-    ReadOnlyMemory<byte> OptionsJson,
-    ReadOnlyMemory<byte> LicenseConfirmationJson,
-    string? LinkedInstalledModelName = null,
-    string? LinkedModelContentFingerprint = null);
+public sealed record TrainingRunEnqueueCommand
+{
+    public required Guid DatasetId { get; init; }
+
+    public required long ExpectedDatasetVersion { get; init; }
+
+    public required Guid BaseArtifactId { get; init; }
+
+    public required ReadOnlyMemory<byte> FreezeJson { get; init; }
+
+    public required ReadOnlyMemory<byte> OptionsJson { get; init; }
+
+    public required ReadOnlyMemory<byte> LicenseConfirmationJson { get; init; }
+
+    public string? LinkedInstalledModelName { get; init; }
+
+    public string? LinkedModelContentFingerprint { get; init; }
+}
 
 /// <summary>
 ///     A run as the application layer sees it. The encrypted documents are carried as <see cref="ReadOnlyMemory{T}" />
 ///     so the record cannot hand a caller a mutable reference to the decrypted column contents; the log tail is
 ///     decoded to text because the store owns its encoding.
 /// </summary>
-public sealed record TrainingRunRecord(
-    Guid Id,
-    Guid DatasetId,
-    string DatasetContentFingerprint,
-    int DatasetRevision,
-    ReadOnlyMemory<byte> FreezeJson,
-    Guid BaseArtifactId,
-    string? LinkedInstalledModelName,
-    string? LinkedModelContentFingerprint,
-    ReadOnlyMemory<byte> OptionsJson,
-    ReadOnlyMemory<byte>? LicenseConfirmationJson,
-    TrainingRunStatus Status,
-    ReadOnlyMemory<byte>? ProgressJson,
-    string? LogTail,
-    ReadOnlyMemory<byte>? LaunchReceiptJson,
-    string? ErrorMessage,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    TrainingWorkStatus? WorkStatus,
-    string? WorkErrorMessage);
+public sealed record TrainingRunRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid DatasetId { get; init; }
+
+    public required string DatasetContentFingerprint { get; init; }
+
+    public required int DatasetRevision { get; init; }
+
+    public required ReadOnlyMemory<byte> FreezeJson { get; init; }
+
+    public required Guid BaseArtifactId { get; init; }
+
+    public required string? LinkedInstalledModelName { get; init; }
+
+    public required string? LinkedModelContentFingerprint { get; init; }
+
+    public required ReadOnlyMemory<byte> OptionsJson { get; init; }
+
+    public required ReadOnlyMemory<byte>? LicenseConfirmationJson { get; init; }
+
+    public required TrainingRunStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte>? ProgressJson { get; init; }
+
+    public required string? LogTail { get; init; }
+
+    public required ReadOnlyMemory<byte>? LaunchReceiptJson { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required TrainingWorkStatus? WorkStatus { get; init; }
+
+    public required string? WorkErrorMessage { get; init; }
+}
 
 /// <summary>One run's recorded launch receipt. Carries the run id because the reaper clears the receipt it acted on.</summary>
-public sealed record TrainingRunLaunchReceipt(Guid RunId, ReadOnlyMemory<byte> LaunchReceiptJson);
+public sealed class TrainingRunLaunchReceipt
+{
+    public required Guid RunId { get; init; }
 
-public sealed record TrainingRunQuery(int Page, int PageSize, Guid? DatasetId = null, TrainingRunStatus? Status = null);
+    public required ReadOnlyMemory<byte> LaunchReceiptJson { get; init; }
+}
 
-public sealed record TrainingRunPage(IReadOnlyList<TrainingRunRecord> Items, int TotalCount);
+public sealed class TrainingRunQuery
+{
+    public required int Page { get; init; }
+
+    public required int PageSize { get; init; }
+
+    public Guid? DatasetId { get; init; }
+
+    public TrainingRunStatus? Status { get; init; }
+}
+
+public sealed class TrainingRunPage
+{
+    public required IReadOnlyList<TrainingRunRecord> Items { get; init; }
+
+    public required int TotalCount { get; init; }
+}
 
 /// <summary>
-///     A claimed work item. <paramref name="Run" /> is populated only for <see cref="TrainingWorkKind.TrainingRun" /> —
+///     A claimed work item. <see cref="Run" /> is populated only for <see cref="TrainingWorkKind.TrainingRun" /> —
 ///     an evaluation target lives in another table this store does not own.
 /// </summary>
-public sealed record TrainingWorkClaim(long QueueSequence, TrainingWorkKind Kind, Guid TargetId, long Version, TrainingRunRecord? Run);
+public sealed class TrainingWorkClaim
+{
+    public required long QueueSequence { get; init; }
 
-public sealed record TrainingArtifactInput(Guid RunId, TrainingArtifactKind Kind, string Path);
+    public required TrainingWorkKind Kind { get; init; }
 
-public sealed record TrainingArtifactRecord(
-    Guid Id,
-    Guid RunId,
-    TrainingArtifactKind Kind,
-    string Path,
-    string? Sha256,
-    long SizeBytes,
-    TrainingArtifactSmokeState SmokeState,
-    string? SmokeReason,
-    string? CommittedModelName,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    Guid? QualityComparisonId = null,
-    ReadOnlyMemory<byte>? QualityDecisionJson = null,
-    long? DiscardedAtUtc = null,
-    string? DiscardReason = null,
-    bool DiscardCleanupPending = false);
+    public required Guid TargetId { get; init; }
+
+    public required long Version { get; init; }
+
+    public required TrainingRunRecord? Run { get; init; }
+}
+
+public sealed record TrainingArtifactInput
+{
+    public required Guid RunId { get; init; }
+
+    public required TrainingArtifactKind Kind { get; init; }
+
+    public required string Path { get; init; }
+}
+
+public sealed record TrainingArtifactRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required TrainingArtifactKind Kind { get; init; }
+
+    public required string Path { get; init; }
+
+    public required string? Sha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required TrainingArtifactSmokeState SmokeState { get; init; }
+
+    public required string? SmokeReason { get; init; }
+
+    public required string? CommittedModelName { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public Guid? QualityComparisonId { get; init; }
+
+    public ReadOnlyMemory<byte>? QualityDecisionJson { get; init; }
+
+    public long? DiscardedAtUtc { get; init; }
+
+    public string? DiscardReason { get; init; }
+
+    public bool DiscardCleanupPending { get; init; }
+}

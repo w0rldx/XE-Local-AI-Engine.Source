@@ -312,15 +312,21 @@ public sealed class GraphWorkflowRestartTests
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => store.ReconcileNonTerminalNodeRunsAsync("the host restarted",
                           [
-                              .. interrupted.Select(static row => new GraphWorkflowNodeRunVerdict(row.NodeRunId,
-                                  row.Status,
-                                  row.Attempt,
-                                  [
-                                      new TransitionGraphWorkflowNodeRunCommand(row.RunId,
-                                          row.NodeRunId,
-                                          long.MaxValue,
-                                          GraphWorkflowNodeRunStatus.Pending)
-                                  ]))
+                              .. interrupted.Select(static row => new GraphWorkflowNodeRunVerdict
+                              {
+                                  NodeRunId = row.NodeRunId,
+                                  ObservedStatus = row.Status,
+                                  ObservedAttempt = row.Attempt,
+                                  Repairs = [
+                                      new TransitionGraphWorkflowNodeRunCommand
+                                      {
+                                          RunId = row.RunId,
+                                          NodeRunId = row.NodeRunId,
+                                          ExpectedVersion = long.MaxValue,
+                                          TargetStatus = GraphWorkflowNodeRunStatus.Pending
+                                      }
+                                  ]
+                              })
                           ]));
     }
 
@@ -370,12 +376,15 @@ public sealed class GraphWorkflowRestartTests
 /// </summary>
 internal sealed class DriftingGraphWorkflowStore : IGraphWorkflowStore
 {
-    private readonly GraphWorkflowReconciledNodeRun _stranded = new(Guid.NewGuid(),
-        Guid.NewGuid(),
-        "work",
-        GraphWorkflowNodeKind.Agent,
-        GraphWorkflowNodeRunStatus.Running,
-        Attempt: 1);
+    private readonly GraphWorkflowReconciledNodeRun _stranded = new()
+    {
+        NodeRunId = Guid.NewGuid(),
+        RunId = Guid.NewGuid(),
+        NodeKey = "work",
+        Kind = GraphWorkflowNodeKind.Agent,
+        Status = GraphWorkflowNodeRunStatus.Running,
+        Attempt = 1
+    };
 
     private int _reads;
 

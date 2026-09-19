@@ -118,12 +118,33 @@ public sealed class DatasetGenerationHostedServiceTests
     private static DatasetGenerationClaimedWork Work()
     {
         var datasetId = Guid.NewGuid();
-        return new DatasetGenerationClaimedWork(QueueSequence: 1,
-            datasetId,
-            Version: 1,
-            new TrainingDatasetRecord(datasetId, Guid.NewGuid(), 1, ReadOnlyMemory<byte>.Empty, "dataset",
-                TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
-                DatasetGenerationWorkStatus.Running, null));
+        return new DatasetGenerationClaimedWork
+        {
+            QueueSequence = 1,
+            DatasetId = datasetId,
+            Version = 1,
+            Dataset = new TrainingDatasetRecord
+            {
+                Id = datasetId,
+                DefinitionId = Guid.NewGuid(),
+                DefinitionVersion = 1,
+                DefinitionJson = ReadOnlyMemory<byte>.Empty,
+                Name = "dataset",
+                Status = TrainingDatasetStatus.Generating,
+                Revision = 1,
+                ContentFingerprint = null,
+                TotalSampleCount = 0,
+                GoodSampleCount = 0,
+                BadSampleCount = 0,
+                RejectedSampleCount = 0,
+                DuplicateSampleCount = 0,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = DatasetGenerationWorkStatus.Running,
+                WorkErrorMessage = null
+            }
+        };
     }
 
     private sealed class Harness : IDisposable

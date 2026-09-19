@@ -495,14 +495,45 @@ public sealed class TrainingEvaluationStore : ITrainingEvaluationStore
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static TrainingEvaluationRecord ToRecord(TrainingEvaluationRun entity, TrainingWorkStatus? workStatus) =>
-        new(entity.Id, entity.TrainingRunId, entity.ComparisonId, entity.ModelName, entity.ModelContentFingerprint, entity.DatasetId,
-            entity.DatasetContentFingerprint, entity.MembershipJson.ToArray(), entity.Status,
-            OptionalBlob.AsOptionalMemory(entity.ResultsJson), entity.TotalCount, entity.ScoredCount, entity.PassedCount,
-            entity.PerKindJson, entity.ErrorMessage, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus,
-            entity.TargetKind, entity.SourceArtifactId, OptionalBlob.AsOptionalMemory(entity.ExecutionProvenanceJson));
+        new()
+        {
+            Id = entity.Id,
+            TrainingRunId = entity.TrainingRunId,
+            ComparisonId = entity.ComparisonId,
+            ModelName = entity.ModelName,
+            ModelContentFingerprint = entity.ModelContentFingerprint,
+            DatasetId = entity.DatasetId,
+            DatasetContentFingerprint = entity.DatasetContentFingerprint,
+            MembershipJson = entity.MembershipJson.ToArray(),
+            Status = entity.Status,
+            ResultsJson = OptionalBlob.AsOptionalMemory(entity.ResultsJson),
+            TotalCount = entity.TotalCount,
+            ScoredCount = entity.ScoredCount,
+            PassedCount = entity.PassedCount,
+            PerKindJson = entity.PerKindJson,
+            ErrorMessage = entity.ErrorMessage,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            WorkStatus = workStatus,
+            TargetKind = entity.TargetKind,
+            SourceArtifactId = entity.SourceArtifactId,
+            ExecutionProvenanceJson = OptionalBlob.AsOptionalMemory(entity.ExecutionProvenanceJson)
+        };
 
     private static TrainingComparisonRecord ToRecord(TrainingComparisonReport entity) =>
-        new(entity.Id, entity.Name, entity.BaseEvaluationRunId, entity.TunedEvaluationRunId, entity.BaseBenchmarkRunId,
-            entity.TunedBenchmarkRunId, entity.TrainingRunId, entity.DeltasJson.ToArray(), entity.Version, entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+        new()
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            BaseEvaluationRunId = entity.BaseEvaluationRunId,
+            TunedEvaluationRunId = entity.TunedEvaluationRunId,
+            BaseBenchmarkRunId = entity.BaseBenchmarkRunId,
+            TunedBenchmarkRunId = entity.TunedBenchmarkRunId,
+            TrainingRunId = entity.TrainingRunId,
+            DeltasJson = entity.DeltasJson.ToArray(),
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
 }

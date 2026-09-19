@@ -47,7 +47,7 @@ public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
         var byTool = await ReadByToolAsync(connection, agentDefinitionId, cancellationToken);
         var exemplars = await ReadExemplarsAsync(connection, agentDefinitionId, exemplarCap, cancellationToken);
 
-        return new AgentFeedbackAggregate(agentDefinitionId, agentName, upCount, downCount, byTool, exemplars);
+        return new AgentFeedbackAggregate { AgentDefinitionId = agentDefinitionId, AgentName = agentName, UpCount = upCount, DownCount = downCount, ByTool = byTool, Exemplars = exemplars };
     }
 
     private static async Task<VoteCounts> ReadOverallAsync(DbConnection connection, Guid agentDefinitionId, CancellationToken cancellationToken)
@@ -111,7 +111,7 @@ public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
         }
 
         return byTool
-               .Select(static entry => new ToolFeedbackCount(entry.Key, entry.Value.UpCount, entry.Value.DownCount))
+               .Select(static entry => new ToolFeedbackCount { ToolName = entry.Key, UpCount = entry.Value.UpCount, DownCount = entry.Value.DownCount })
                .OrderByDescending(static tool => tool.UpCount + tool.DownCount)
                .ThenBy(static tool => tool.ToolName, StringComparer.Ordinal)
                .ToArray();
@@ -144,11 +144,14 @@ public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            exemplars.Add(new FeedbackExemplar(reader.GetString(0),
-                reader.GetString(1),
-                Guid.Parse(reader.GetString(2)),
-                Guid.Parse(reader.GetString(3)),
-                reader.GetInt64(4)));
+            exemplars.Add(new FeedbackExemplar
+            {
+                Rating = reader.GetString(0),
+                Comment = reader.GetString(1),
+                MessageId = Guid.Parse(reader.GetString(2)),
+                ConversationId = Guid.Parse(reader.GetString(3)),
+                CreatedAtUtc = reader.GetInt64(4)
+            });
         }
 
         return exemplars;

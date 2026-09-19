@@ -170,10 +170,13 @@ public sealed class GraphWorkflowRunEndpointTests
         {
             var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
             var run = await store.GetRunAsync(runId);
-            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId,
-                               run.Version,
-                               GraphWorkflowRunStatus.Failed,
-                               GraphWorkflowFailureClass.NodeFailed));
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = runId,
+                ExpectedVersion = run.Version,
+                TargetStatus = GraphWorkflowRunStatus.Failed,
+                FailureClass = GraphWorkflowFailureClass.NodeFailed
+            });
         }
 
         using var response = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}");

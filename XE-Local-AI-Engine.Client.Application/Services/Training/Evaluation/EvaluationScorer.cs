@@ -202,8 +202,8 @@ internal static class EvaluationScorer
     }
 
     private static TrainingEvaluationResultEntry Pass(Guid sampleId, string kind) =>
-        new(sampleId, kind, Passed: true, Deterministic);
+        new() { SampleId = sampleId, Kind = kind, Passed = true, ScoredBy = Deterministic };
 
     private static TrainingEvaluationResultEntry Fail(Guid sampleId, string kind, string reason) =>
-        new(sampleId, kind, Passed: false, Deterministic, reason);
+        new() { SampleId = sampleId, Kind = kind, Passed = false, ScoredBy = Deterministic, Reason = reason };
 }

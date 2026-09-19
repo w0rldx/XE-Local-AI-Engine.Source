@@ -114,9 +114,21 @@ public sealed class TrainingExportEndpointTests
         await using var context = new Context();
         _ = context.Exports.ListArtifactsAsync(RunId, Arg.Any<CancellationToken>())
                    .Returns<IReadOnlyList<TrainingArtifactRecord>>([
-                       new TrainingArtifactRecord(ArtifactId, RunId, TrainingArtifactKind.MergedGguf,
-                           "/var/lib/xe/training/runs/x/staged/merged-Q4_K_M.gguf", "abc", 1024,
-                           TrainingArtifactSmokeState.Passed, null, null, 2, 0, 0)
+                       new TrainingArtifactRecord
+                       {
+                           Id = ArtifactId,
+                           RunId = RunId,
+                           Kind = TrainingArtifactKind.MergedGguf,
+                           Path = "/var/lib/xe/training/runs/x/staged/merged-Q4_K_M.gguf",
+                           Sha256 = "abc",
+                           SizeBytes = 1024,
+                           SmokeState = TrainingArtifactSmokeState.Passed,
+                           SmokeReason = null,
+                           CommittedModelName = null,
+                           Version = 2,
+                           CreatedAtUtc = 0,
+                           UpdatedAtUtc = 0
+                       }
                    ]);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/runs/{RunId}/artifacts");
@@ -448,9 +460,23 @@ public sealed class TrainingExportEndpointTests
             OverrideReason = outcome == ArtifactQualityOutcome.Overridden ? "accepted regression" : null,
             OverriddenAtUtc = outcome == ArtifactQualityOutcome.Overridden ? 123 : null
         };
-        return new TrainingArtifactRecord(ArtifactId, RunId, TrainingArtifactKind.MergedGguf, "staged.gguf", sha, 4,
-            TrainingArtifactSmokeState.Passed, null, null, version, 0, 0, comparisonId,
-            JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options));
+        return new TrainingArtifactRecord
+        {
+            Id = ArtifactId,
+            RunId = RunId,
+            Kind = TrainingArtifactKind.MergedGguf,
+            Path = "staged.gguf",
+            Sha256 = sha,
+            SizeBytes = 4,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            SmokeReason = null,
+            CommittedModelName = null,
+            Version = version,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            QualityComparisonId = comparisonId,
+            QualityDecisionJson = JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options)
+        };
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)

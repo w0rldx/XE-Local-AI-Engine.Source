@@ -876,7 +876,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             recordId,
             columnName);
 
-        trackedProperties.Add(new TrackedEncryptedProperty(propertyEntry, plaintextCopy));
+        trackedProperties.Add(new TrackedEncryptedProperty { PropertyEntry = propertyEntry, Plaintext = plaintextCopy });
     }
 
     private static void EncryptOptionalProperty<TEntity>(EntityEntry<TEntity> entry,
@@ -924,8 +924,13 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             recordId,
             columnName);
 
-        trackedProperties.Add(new TrackedEncryptedProperty(propertyEntry, plaintextCopy));
+        trackedProperties.Add(new TrackedEncryptedProperty { PropertyEntry = propertyEntry, Plaintext = plaintextCopy });
     }
 
-    private sealed record TrackedEncryptedProperty(PropertyEntry PropertyEntry, byte[] Plaintext);
+    private sealed record TrackedEncryptedProperty
+    {
+        public required PropertyEntry PropertyEntry { get; init; }
+
+        public required byte[] Plaintext { get; init; }
+    }
 }

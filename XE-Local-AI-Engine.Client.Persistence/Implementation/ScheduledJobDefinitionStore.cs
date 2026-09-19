@@ -179,27 +179,30 @@ public sealed class ScheduledJobDefinitionStore : IScheduledJobDefinitionStore
 
     private static ScheduledJobDefinitionRecord ToRecord(ScheduledJobDefinition entity)
     {
-        return new ScheduledJobDefinitionRecord(entity.Id,
-            entity.TemplateId,
-            entity.DisplayName,
-            entity.Description,
-            entity.Enabled,
-            entity.ScheduleKind,
-            entity.CronExpression,
-            entity.IntervalSeconds,
-            entity.RepeatCount,
-            entity.StartAtUtc,
-            entity.EndAtUtc,
-            entity.TimeZoneId,
-            entity.MisfirePolicy,
-            entity.PreventOverlap,
-            entity.MaxRuntimeSeconds,
-            entity.ParameterJson is null ? null : Decode(entity.ParameterJson),
-            entity.CreatedBy,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.DisabledAtUtc,
-            entity.DeletedAtUtc);
+        return new ScheduledJobDefinitionRecord
+        {
+            Id = entity.Id,
+            TemplateId = entity.TemplateId,
+            DisplayName = entity.DisplayName,
+            Description = entity.Description,
+            Enabled = entity.Enabled,
+            ScheduleKind = entity.ScheduleKind,
+            CronExpression = entity.CronExpression,
+            IntervalSeconds = entity.IntervalSeconds,
+            RepeatCount = entity.RepeatCount,
+            StartAtUtc = entity.StartAtUtc,
+            EndAtUtc = entity.EndAtUtc,
+            TimeZoneId = entity.TimeZoneId,
+            MisfirePolicy = entity.MisfirePolicy,
+            PreventOverlap = entity.PreventOverlap,
+            MaxRuntimeSeconds = entity.MaxRuntimeSeconds,
+            ParameterJson = entity.ParameterJson is null ? null : Decode(entity.ParameterJson),
+            CreatedBy = entity.CreatedBy,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            DisabledAtUtc = entity.DisabledAtUtc,
+            DeletedAtUtc = entity.DeletedAtUtc
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

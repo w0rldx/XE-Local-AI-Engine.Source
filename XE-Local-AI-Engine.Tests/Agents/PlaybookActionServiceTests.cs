@@ -210,15 +210,18 @@ public sealed class PlaybookActionServiceTests
             Guid.NewGuid()
         };
         var input = CreateSuggestionInput(agentId, feedbackIds, confidence: 0.7d);
-        var stored = CreateRecord(new PlaybookActionInput(agentId,
-            PlaybookActionState.Suggested,
-            PlaybookActionSource.Analysis,
-            input.TriggerCondition,
-            input.Behavior,
-            input.Scope,
-            input.Priority,
-            feedbackIds,
-            input.Confidence));
+        var stored = CreateRecord(new PlaybookActionInput
+        {
+            AgentDefinitionId = agentId,
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            TriggerCondition = input.TriggerCondition,
+            Behavior = input.Behavior,
+            Scope = input.Scope,
+            Priority = input.Priority,
+            SourceFeedbackIds = feedbackIds,
+            Confidence = input.Confidence
+        });
         store.AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).Returns(stored);
 
         var result = await service.CreateAnalysisSuggestionAsync(input);
@@ -324,10 +327,14 @@ public sealed class PlaybookActionServiceTests
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         // The gated promote now writes through the atomic CAS, threading the validated snapshot's Version and the cap.
         store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), pending.EvalResult, Arg.Any<CancellationToken>())
-             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, pending with
+             .Returns(new PlaybookPromotionCommit
+             {
+                 Status = PlaybookPromotionCommitStatus.Committed,
+                 Record = pending with
              {
                  State = PlaybookActionState.Enabled
-             }));
+             }
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
@@ -358,7 +365,7 @@ public sealed class PlaybookActionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(enabled));
         // The cap is now enforced atomically inside the store CAS; a full-cap agent yields CapReached with no write.
         store.PromoteSuggestedIfCurrentAsync(actionId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.CapReached, Record: null));
+             .Returns(new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.CapReached, Record = null });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
@@ -386,10 +393,14 @@ public sealed class PlaybookActionServiceTests
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(enabled));
         store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, pending with
+             .Returns(new PlaybookPromotionCommit
+             {
+                 Status = PlaybookPromotionCommitStatus.Committed,
+                 Record = pending with
              {
                  State = PlaybookActionState.Enabled
-             }));
+             }
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
@@ -413,7 +424,7 @@ public sealed class PlaybookActionServiceTests
         };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.VersionConflict, Record: null));
+             .Returns(new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.VersionConflict, Record = null });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
@@ -910,22 +921,25 @@ public sealed class PlaybookActionServiceTests
 
     private static PlaybookActionRecord CreateSuggestedRecord(Guid agentDefinitionId, Guid actionId)
     {
-        return new PlaybookActionRecord(actionId,
-            agentDefinitionId,
-            PlaybookActionState.Suggested,
-            PlaybookActionSource.Analysis,
-            TriggerCondition: null,
-            "A suggested behavior.",
-            Scope: null,
-            Priority: 100,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            new[]
+        return new PlaybookActionRecord
+        {
+            Id = actionId,
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            TriggerCondition = null,
+            Behavior = "A suggested behavior.",
+            Scope = null,
+            Priority = 100,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            SourceFeedbackIds = new[]
             {
                 Guid.NewGuid()
             },
-            Confidence: 0.6d);
+            Confidence = 0.6d
+        };
     }
 
     // Fixed inputs the fingerprint gate hashes, so a test can build an eval result whose fingerprint matches what the
@@ -1028,72 +1042,87 @@ public sealed class PlaybookActionServiceTests
         PlaybookActionSource source = PlaybookActionSource.Manual,
         string behavior = "Always run the full test suite before reporting complete.")
     {
-        return new PlaybookActionInput(agentDefinitionId ?? Guid.NewGuid(),
-            state,
-            source,
-            TriggerCondition: null,
-            behavior,
-            Scope: null,
-            Priority: 10);
+        return new PlaybookActionInput
+        {
+            AgentDefinitionId = agentDefinitionId ?? Guid.NewGuid(),
+            State = state,
+            Source = source,
+            TriggerCondition = null,
+            Behavior = behavior,
+            Scope = null,
+            Priority = 10
+        };
     }
 
     private static PlaybookActionRecord CreateRecord(PlaybookActionInput input)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            input.AgentDefinitionId,
-            input.State,
-            input.Source,
-            input.TriggerCondition,
-            input.Behavior,
-            input.Scope,
-            input.Priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = input.AgentDefinitionId,
+            State = input.State,
+            Source = input.Source,
+            TriggerCondition = input.TriggerCondition,
+            Behavior = input.Behavior,
+            Scope = input.Scope,
+            Priority = input.Priority,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static GoldenConversationRecord GoldenCase(Guid agentDefinitionId)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            agentDefinitionId,
-            "A golden case",
-            "[]",
-            Assertion: "expected",
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentDefinitionId,
+            Title = "A golden case",
+            InputTurns = "[]",
+            Assertion = "expected",
+            Rubric = null,
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static PlaybookActionRecord EnabledRecord(Guid agentDefinitionId)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            agentDefinitionId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            "An already-enabled behavior.",
-            Scope: null,
-            Priority: 10,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = "An already-enabled behavior.",
+            Scope = null,
+            Priority = 10,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static AgentDefinitionRecord CreateAgent()
     {
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            "Builder",
-            Description: null,
-            "Instructions.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "Builder",
+            Description = null,
+            Instructions = "Instructions.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 }

@@ -157,29 +157,32 @@ public sealed class BenchmarkRunHubTests
     }
 
     private static BenchmarkRunRecord Run(Guid runId, long lastStreamSequence) =>
-        new(runId,
-            Guid.NewGuid(),
-            ReadOnlyMemory<byte>.Empty,
-            "model",
-            PrimaryModelOrigin: null,
-            "v1:fingerprint",
-            "agent",
-            AgentVersion: 1,
-            RequestedContextTokens: 4096,
-            BenchmarkPrimaryStatus.Succeeded,
-            EffectiveContextTokens: 4096,
-            DurationMs: 1,
-            TotalTokens: 1,
-            TokensPerSecond: 1,
-            OutputPartsJson: null,
-            lastStreamSequence,
-            UserScore: null,
-            PrimaryErrorMessage: null,
-            Version: 4,
-            CreatedAtUtc: 1,
-            StartedAtUtc: 1,
-            PrimaryCompletedAtUtc: 2,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = runId,
+            ProjectId = Guid.NewGuid(),
+            RuntimeSnapshotJson = ReadOnlyMemory<byte>.Empty,
+            PrimaryModelName = "model",
+            PrimaryModelOrigin = null,
+            ModelContentFingerprint = "v1:fingerprint",
+            AgentName = "agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+            EffectiveContextTokens = 4096,
+            DurationMs = 1,
+            TotalTokens = 1,
+            TokensPerSecond = 1,
+            OutputPartsJson = null,
+            LastStreamSequence = lastStreamSequence,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 4,
+            CreatedAtUtc = 1,
+            StartedAtUtc = 1,
+            PrimaryCompletedAtUtc = 2,
+            UpdatedAtUtc = 2
+        };
 
     private sealed class HubFixture : IDisposable
     {

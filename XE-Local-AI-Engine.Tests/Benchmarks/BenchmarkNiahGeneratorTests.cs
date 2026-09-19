@@ -224,9 +224,24 @@ public sealed class BenchmarkNiahGeneratorTests
     }
 
     private static BenchmarkTaskItemRecord ItemCarrying(string kind, byte[]? generatorConfigJson) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), ParentId, Index: 1, kind, Revision: 1, "v1:hash", CountsTowardScore: false,
-            PromptJson: "{}"u8.ToArray(), ReferenceAnswerJson: null, VerifierConfigJson: null,
-            GeneratorConfigJson: generatorConfigJson, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = Guid.NewGuid(),
+            ParentItemId = ParentId,
+            Index = 1,
+            Kind = kind,
+            Revision = 1,
+            InputHash = "v1:hash",
+            CountsTowardScore = false,
+            PromptJson = "{}"u8.ToArray(),
+            ReferenceAnswerJson = null,
+            VerifierConfigJson = null,
+            GeneratorConfigJson = generatorConfigJson,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     /// <summary>The haystack as the model sees it, without the framing the depth assertion is not about.</summary>
     private static string Document(string prompt)

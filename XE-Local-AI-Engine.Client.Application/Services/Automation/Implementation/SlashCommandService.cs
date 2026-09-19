@@ -95,7 +95,7 @@ internal sealed partial class SlashCommandService : ISlashCommandService
             throw new SlashCommandValidationException("Description must be at most 1,024 UTF-8 bytes.");
         }
 
-        return new SlashCommandInput(name, description, input.ActionType, prompt);
+        return new SlashCommandInput { Name = name, Description = description, ActionType = input.ActionType, Prompt = prompt };
     }
 
     private static SlashCommandCatalogItem ToCatalogItem(SlashCommandRecord record) =>

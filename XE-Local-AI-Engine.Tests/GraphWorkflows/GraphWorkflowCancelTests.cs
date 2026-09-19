@@ -337,23 +337,26 @@ public sealed class GraphWorkflowCancelTests
     }
 
     private static GraphWorkflowNodeRunSnapshot Row(Guid nodeRunId, GraphWorkflowNodeRunStatus status, int attempt) =>
-        new(nodeRunId,
-            Guid.NewGuid(),
-            "work",
-            GraphWorkflowNodeKind.Agent,
-            status,
-            attempt,
-            PendingDecisionKind: null,
-            DecisionOperationId: null,
-            DecidedBySubject: null,
-            GraphWorkflowFailureClass.None,
-            Error: null,
-            InputJson: null,
-            OutputJson: null,
-            InvocationId: null,
-            StartedAtUtc: null,
-            CompletedAtUtc: null,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = nodeRunId,
+            RunId = Guid.NewGuid(),
+            NodeKey = "work",
+            Kind = GraphWorkflowNodeKind.Agent,
+            Status = status,
+            Attempt = attempt,
+            PendingDecisionKind = null,
+            DecisionOperationId = null,
+            DecidedBySubject = null,
+            FailureClass = GraphWorkflowFailureClass.None,
+            Error = null,
+            InputJson = null,
+            OutputJson = null,
+            InvocationId = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null,
+            UpdatedAtUtc = 0
+        };
 
     /// <summary>
     ///     S2's Codex finding, pinned: a pause ANSWERED between the drain tick's snapshot and its cancel write. The

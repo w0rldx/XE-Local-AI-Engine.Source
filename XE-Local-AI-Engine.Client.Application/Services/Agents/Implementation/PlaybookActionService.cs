@@ -135,15 +135,18 @@ internal sealed class PlaybookActionService : IPlaybookActionService
 
         // State/Source are pinned here (Suggested/Analysis) — never client-supplied — so the manual CRUD route stays
         // the only path that authors Manual actions, and a suggestion stays inert until a human promotes it.
-        var storeInput = new PlaybookActionInput(input.AgentDefinitionId,
-            PlaybookActionState.Suggested,
-            PlaybookActionSource.Analysis,
-            input.TriggerCondition,
-            input.Behavior,
-            input.Scope,
-            input.Priority,
-            input.SourceFeedbackIds,
-            input.Confidence);
+        var storeInput = new PlaybookActionInput
+        {
+            AgentDefinitionId = input.AgentDefinitionId,
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            TriggerCondition = input.TriggerCondition,
+            Behavior = input.Behavior,
+            Scope = input.Scope,
+            Priority = input.Priority,
+            SourceFeedbackIds = input.SourceFeedbackIds,
+            Confidence = input.Confidence
+        };
 
         return await _store.AddAsync(storeInput, cancellationToken);
     }
@@ -267,17 +270,20 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         // Record the eval JSON only — the action stays Suggested with every injected field (Behavior, Priority, State)
         // and its staging provenance (Analysis/Extracted) unchanged, so the store leaves Version alone (EvalResult is
         // excluded from its config-affecting rule).
-        var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
-            PlaybookActionState.Suggested,
-            pending.Source,
-            pending.TriggerCondition,
-            pending.Behavior,
-            pending.Scope,
-            pending.Priority,
-            pending.SourceFeedbackIds,
-            pending.Confidence,
-            evalResultJson,
-            MemoryScope: pending.MemoryScope);
+        var storeInput = new PlaybookActionInput
+        {
+            AgentDefinitionId = pending.AgentDefinitionId,
+            State = PlaybookActionState.Suggested,
+            Source = pending.Source,
+            TriggerCondition = pending.TriggerCondition,
+            Behavior = pending.Behavior,
+            Scope = pending.Scope,
+            Priority = pending.Priority,
+            SourceFeedbackIds = pending.SourceFeedbackIds,
+            Confidence = pending.Confidence,
+            EvalResult = evalResultJson,
+            MemoryScope = pending.MemoryScope
+        };
 
         return await _store.UpdateAsync(id, storeInput, cancellationToken);
     }
@@ -308,16 +314,19 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         // the operator-editable fields change. Editing clears any recorded EvalResult (the trailing argument is left
         // null) so a stale pass cannot promote an edited action — the operator must re-run the eval. Promotion remains a
         // separate, explicit step.
-        var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
-            PlaybookActionState.Suggested,
-            pending.Source,
-            input.TriggerCondition,
-            input.Behavior,
-            input.Scope,
-            input.Priority,
-            pending.SourceFeedbackIds,
-            pending.Confidence,
-            MemoryScope: pending.MemoryScope);
+        var storeInput = new PlaybookActionInput
+        {
+            AgentDefinitionId = pending.AgentDefinitionId,
+            State = PlaybookActionState.Suggested,
+            Source = pending.Source,
+            TriggerCondition = input.TriggerCondition,
+            Behavior = input.Behavior,
+            Scope = input.Scope,
+            Priority = input.Priority,
+            SourceFeedbackIds = pending.SourceFeedbackIds,
+            Confidence = pending.Confidence,
+            MemoryScope = pending.MemoryScope
+        };
 
         return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken);
     }
@@ -361,17 +370,20 @@ internal sealed class PlaybookActionService : IPlaybookActionService
 
         // Preserve the candidate's staging provenance (Analysis/Extracted) and typed scope through the transition; only
         // the lifecycle State changes (Enabled on promote, Archived on reject).
-        var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
-            target,
-            pending.Source,
-            pending.TriggerCondition,
-            pending.Behavior,
-            pending.Scope,
-            pending.Priority,
-            pending.SourceFeedbackIds,
-            pending.Confidence,
-            evalResult,
-            MemoryScope: pending.MemoryScope);
+        var storeInput = new PlaybookActionInput
+        {
+            AgentDefinitionId = pending.AgentDefinitionId,
+            State = target,
+            Source = pending.Source,
+            TriggerCondition = pending.TriggerCondition,
+            Behavior = pending.Behavior,
+            Scope = pending.Scope,
+            Priority = pending.Priority,
+            SourceFeedbackIds = pending.SourceFeedbackIds,
+            Confidence = pending.Confidence,
+            EvalResult = evalResult,
+            MemoryScope = pending.MemoryScope
+        };
 
         return await _store.UpdateAsync(id, storeInput, cancellationToken);
     }

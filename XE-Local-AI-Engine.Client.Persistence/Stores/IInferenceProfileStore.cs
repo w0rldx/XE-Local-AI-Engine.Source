@@ -60,25 +60,44 @@ public interface IInferenceProfileStore
 ///     <c>BenchmarkSnapshotId</c> and the explicit global-free/process-budget VRAM fields (the last two are stamped on
 ///     freeze, not here).
 /// </summary>
-public sealed record InferenceProfileInput(
-    string MachineKey,
-    string ModelName,
-    int Role,
-    string Backend,
-    string LlamacppBuild,
-    string Quant,
-    int CtxSize,
-    int? NGpuLayers,
-    string? TensorSplit,
-    string? OverrideTensor,
-    string? KvTypeK,
-    string? KvTypeV,
-    bool FlashAttn,
-    long? NParams,
-    bool IsMoe,
-    int? ExpertCount,
-    int LaunchPolicyFingerprintVersion,
-    string LaunchPolicyFingerprint);
+public sealed class InferenceProfileInput
+{
+    public required string MachineKey { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required int Role { get; init; }
+
+    public required string Backend { get; init; }
+
+    public required string LlamacppBuild { get; init; }
+
+    public required string Quant { get; init; }
+
+    public required int CtxSize { get; init; }
+
+    public required int? NGpuLayers { get; init; }
+
+    public required string? TensorSplit { get; init; }
+
+    public required string? OverrideTensor { get; init; }
+
+    public required string? KvTypeK { get; init; }
+
+    public required string? KvTypeV { get; init; }
+
+    public required bool FlashAttn { get; init; }
+
+    public required long? NParams { get; init; }
+
+    public required bool IsMoe { get; init; }
+
+    public required int? ExpertCount { get; init; }
+
+    public required int LaunchPolicyFingerprintVersion { get; init; }
+
+    public required string LaunchPolicyFingerprint { get; init; }
+}
 
 /// <summary>
 ///     Typed projection of a persisted inference profile. The replay args (<see cref="CtxSize" />,
@@ -86,29 +105,55 @@ public sealed record InferenceProfileInput(
 ///     <see cref="KvTypeV" />, <see cref="FlashAttn" />) are exactly what the resolver feeds the supervisor's launch-spec
 ///     builder for a frozen/explored profile.
 /// </summary>
-public sealed record InferenceProfileRecord(
-    Guid Id,
-    string MachineKey,
-    string ModelName,
-    int Role,
-    string Backend,
-    string LlamacppBuild,
-    string Quant,
-    int CtxSize,
-    int? NGpuLayers,
-    string? TensorSplit,
-    string? OverrideTensor,
-    string? KvTypeK,
-    string? KvTypeV,
-    bool FlashAttn,
-    long? NParams,
-    bool IsMoe,
-    int? ExpertCount,
-    InferenceProfileStatus Status,
-    Guid? BenchmarkSnapshotId,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    int? LaunchPolicyFingerprintVersion = null,
-    string? LaunchPolicyFingerprint = null,
-    long? GlobalFreeVramAtFreezeBytes = null,
-    long? ProcessBudgetVramAtFreezeBytes = null);
+public sealed record InferenceProfileRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string MachineKey { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required int Role { get; init; }
+
+    public required string Backend { get; init; }
+
+    public required string LlamacppBuild { get; init; }
+
+    public required string Quant { get; init; }
+
+    public required int CtxSize { get; init; }
+
+    public required int? NGpuLayers { get; init; }
+
+    public required string? TensorSplit { get; init; }
+
+    public required string? OverrideTensor { get; init; }
+
+    public required string? KvTypeK { get; init; }
+
+    public required string? KvTypeV { get; init; }
+
+    public required bool FlashAttn { get; init; }
+
+    public required long? NParams { get; init; }
+
+    public required bool IsMoe { get; init; }
+
+    public required int? ExpertCount { get; init; }
+
+    public required InferenceProfileStatus Status { get; init; }
+
+    public required Guid? BenchmarkSnapshotId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public int? LaunchPolicyFingerprintVersion { get; init; }
+
+    public string? LaunchPolicyFingerprint { get; init; }
+
+    public long? GlobalFreeVramAtFreezeBytes { get; init; }
+
+    public long? ProcessBudgetVramAtFreezeBytes { get; init; }
+}

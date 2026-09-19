@@ -116,9 +116,31 @@ public sealed class DatasetGenerationCancelTests
     }
 
     private static DatasetGenerationClaimedWork Work(Guid datasetId) =>
-        new(1,
-            datasetId,
-            1,
-            new TrainingDatasetRecord(datasetId, Guid.NewGuid(), 1, PinnedDefinition(), "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
-                DatasetGenerationWorkStatus.Running, null));
+        new()
+        {
+            QueueSequence = 1,
+            DatasetId = datasetId,
+            Version = 1,
+            Dataset = new TrainingDatasetRecord
+            {
+                Id = datasetId,
+                DefinitionId = Guid.NewGuid(),
+                DefinitionVersion = 1,
+                DefinitionJson = PinnedDefinition(),
+                Name = "dataset",
+                Status = TrainingDatasetStatus.Generating,
+                Revision = 1,
+                ContentFingerprint = null,
+                TotalSampleCount = 0,
+                GoodSampleCount = 0,
+                BadSampleCount = 0,
+                RejectedSampleCount = 0,
+                DuplicateSampleCount = 0,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = DatasetGenerationWorkStatus.Running,
+                WorkErrorMessage = null
+            }
+        };
 }

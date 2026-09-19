@@ -104,16 +104,19 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
     }
 
     private static IntegrationTriggerSnapshot ToSnapshot(IntegrationTrigger entity) =>
-        new(entity.Id,
-            entity.Name,
-            entity.DisplayName,
-            entity.Description,
-            entity.Enabled,
-            entity.TargetKind,
-            entity.TargetAgentDefinitionId,
-            entity.SessionPolicy,
-            entity.AcceptedInputKinds,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.Version);
+        new()
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            DisplayName = entity.DisplayName,
+            Description = entity.Description,
+            Enabled = entity.Enabled,
+            TargetKind = entity.TargetKind,
+            TargetAgentDefinitionId = entity.TargetAgentDefinitionId,
+            SessionPolicy = entity.SessionPolicy,
+            AcceptedInputKinds = entity.AcceptedInputKinds,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            Version = entity.Version
+        };
 }

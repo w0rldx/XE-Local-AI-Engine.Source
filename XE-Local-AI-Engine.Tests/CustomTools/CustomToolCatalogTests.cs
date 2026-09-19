@@ -240,18 +240,21 @@ public sealed class CustomToolCatalogTests
         bool acknowledged = true,
         string parametersJson = "[]")
     {
-        return new CustomToolRecord(Guid.NewGuid(),
-            name,
-            $"Description of {name}",
-            CustomToolKind.HttpFetch,
-            CustomToolMode.Fixed,
-            parametersJson,
-            ConfigJson: "{}",
-            enabled,
-            acknowledged,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new CustomToolRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = $"Description of {name}",
+            Kind = CustomToolKind.HttpFetch,
+            Mode = CustomToolMode.Fixed,
+            ParametersJson = parametersJson,
+            ConfigJson = "{}",
+            Enabled = enabled,
+            Acknowledged = acknowledged,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     // Resolution silently drops a record whose Kind has no registered executor, so the seeded HttpFetch kind needs one.

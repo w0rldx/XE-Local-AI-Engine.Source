@@ -144,15 +144,18 @@ public sealed partial class BenchmarkStore
 
             await SaveAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new BenchmarkClaimedWork(work.QueueSequence,
-                work.RunId,
-                work.Kind,
-                work.Attempt,
-                work.Version,
-                ToRecord(run),
-                work.JudgeAttemptId,
-                work.FidelityAttemptId,
-                work.ComparisonId);
+            return new BenchmarkClaimedWork
+            {
+                QueueSequence = work.QueueSequence,
+                RunId = work.RunId,
+                Kind = work.Kind,
+                Attempt = work.Attempt,
+                Version = work.Version,
+                Run = ToRecord(run),
+                JudgeAttemptId = work.JudgeAttemptId,
+                FidelityAttemptId = work.FidelityAttemptId,
+                ComparisonId = work.ComparisonId
+            };
         }
     }
 

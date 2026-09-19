@@ -889,9 +889,24 @@ public sealed class BenchmarkRunFreezeServiceTests
             string? taskItemSetHash)
         {
             _ = judgeModel;
-            return new BenchmarkProjectRecord(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId,
-                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens, invocationTimeoutSeconds,
-                reasoningBudgetTokens, TaskItemSetHash: taskItemSetHash);
+            return new BenchmarkProjectRecord
+            {
+                Id = id,
+                Name = "Benchmark",
+                CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes("exact task"),
+                ContextTokens = 4096,
+                AgentDefinitionId = agentId,
+                JudgeEnabled = judgeEnabled,
+                CurrentJudgePolicyRevisionId = judgeEnabled ? Guid.NewGuid() : null,
+                IsFrozen = false,
+                Version = 7,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1,
+                MaxOutputTokens = maxOutputTokens,
+                InvocationTimeoutSeconds = invocationTimeoutSeconds,
+                ReasoningBudgetTokens = reasoningBudgetTokens,
+                TaskItemSetHash = taskItemSetHash
+            };
         }
 
         /// <summary>
@@ -899,21 +914,49 @@ public sealed class BenchmarkRunFreezeServiceTests
         ///     which is what lets the freeze re-check its length without parsing a haystack back out of the prompt.
         /// </summary>
         private static BenchmarkTaskItemRecord ProbeCase(Guid projectId, int index, int contextTokens) =>
-            new(Guid.NewGuid(), projectId, Guid.NewGuid(), index, BenchmarkTaskItemKinds.NiahCase, 1, "v1:case-" + index, false,
-                JsonSerializer.SerializeToUtf8Bytes("haystack " + index),
-                null,
-                null,
-                JsonSerializer.SerializeToUtf8Bytes(new BenchmarkNiahCaseV1(contextTokens, 50, contextTokens - 100, 0,
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = projectId,
+                ParentItemId = Guid.NewGuid(),
+                Index = index,
+                Kind = BenchmarkTaskItemKinds.NiahCase,
+                Revision = 1,
+                InputHash = "v1:case-" + index,
+                CountsTowardScore = false,
+                PromptJson = JsonSerializer.SerializeToUtf8Bytes("haystack " + index),
+                ReferenceAnswerJson = null,
+                VerifierConfigJson = null,
+                GeneratorConfigJson = JsonSerializer.SerializeToUtf8Bytes(new BenchmarkNiahCaseV1(contextTokens, 50, contextTokens - 100, 0,
                     $"NIAH ~{contextTokens} @ 50%", "Lisbon", "wikitext2-raw-test@abc"), BenchmarkNiahGenerator.SerializerOptions),
-                1, 1, 1);
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            };
 
         /// <summary>One leaf item, with the prompt encoded exactly as the item store encodes it.</summary>
         private static BenchmarkTaskItemRecord Item(Guid projectId, int index, string prompt) =>
-            new(Guid.NewGuid(), projectId, null, index, BenchmarkTaskItemKinds.Prompt, 1, "v1:item-" + index, true,
-                JsonSerializer.SerializeToUtf8Bytes(prompt), null, null, null, 1, 1, 1);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = projectId,
+                ParentItemId = null,
+                Index = index,
+                Kind = BenchmarkTaskItemKinds.Prompt,
+                Revision = 1,
+                InputHash = "v1:item-" + index,
+                CountsTowardScore = true,
+                PromptJson = JsonSerializer.SerializeToUtf8Bytes(prompt),
+                ReferenceAnswerJson = null,
+                VerifierConfigJson = null,
+                GeneratorConfigJson = null,
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            };
 
         private static AgentDefinitionRecord Definition(Guid id) =>
-            new(id, "Agent", null, "instructions", null, null, AgentDefinitionKind.Single, [], new Dictionary<string, bool>(), null, 3, 1, 1);
+            new() { Id = id, Name = "Agent", Description = null, Instructions = "instructions", ModelProfile = null, ReasoningEffort = null, Kind = AgentDefinitionKind.Single, AllowedToolNames = [], ToolApprovals = new Dictionary<string, bool>(), OrchestrationTopologyJson = null, Version = 3, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
 
         private static ResolvedAgentRuntime Runtime(Guid id) =>
             new("prompt", [], null, null, 3, id, "Agent", Kind: AgentDefinitionKind.Single);
@@ -1023,9 +1066,32 @@ public sealed class BenchmarkRunFreezeServiceTests
         }
 
         private static BenchmarkRunRecord Run(BenchmarkStartRunCommand command) =>
-            new(command.RunId, command.ProjectId, command.RuntimeSnapshotJson, command.PrimaryModelName, command.PrimaryModelOrigin,
-                command.ModelContentFingerprint, command.AgentName, command.AgentVersion, command.RequestedContextTokens,
-                BenchmarkPrimaryStatus.Queued, null, null, null, null, null, 0, null, null, 1, 1, null, null, 1);
+            new()
+            {
+                Id = command.RunId,
+                ProjectId = command.ProjectId,
+                RuntimeSnapshotJson = command.RuntimeSnapshotJson,
+                PrimaryModelName = command.PrimaryModelName,
+                PrimaryModelOrigin = command.PrimaryModelOrigin,
+                ModelContentFingerprint = command.ModelContentFingerprint,
+                AgentName = command.AgentName,
+                AgentVersion = command.AgentVersion,
+                RequestedContextTokens = command.RequestedContextTokens,
+                PrimaryStatus = BenchmarkPrimaryStatus.Queued,
+                EffectiveContextTokens = null,
+                DurationMs = null,
+                TotalTokens = null,
+                TokensPerSecond = null,
+                OutputPartsJson = null,
+                LastStreamSequence = 0,
+                UserScore = null,
+                PrimaryErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 1,
+                StartedAtUtc = null,
+                PrimaryCompletedAtUtc = null,
+                UpdatedAtUtc = 1
+            };
     }
 
     private sealed class RecordingLeaseProvider : IBenchmarkInstalledModelLeaseProvider

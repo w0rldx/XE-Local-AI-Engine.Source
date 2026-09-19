@@ -250,10 +250,13 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
                                        .SingleAsync(item => item.QueueSequence == candidate.QueueSequence, cancellationToken);
             var dataset = await RequireDatasetAsync(work.DatasetId, tracking: false, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new DatasetGenerationClaimedWork(work.QueueSequence,
-                work.DatasetId,
-                work.Version,
-                ToRecord(dataset, work.Status, work.ErrorMessage));
+            return new DatasetGenerationClaimedWork
+            {
+                QueueSequence = work.QueueSequence,
+                DatasetId = work.DatasetId,
+                Version = work.Version,
+                Dataset = ToRecord(dataset, work.Status, work.ErrorMessage)
+            };
         }
     }
 
@@ -337,7 +340,7 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
             dataset.UpdatedAtUtc = now;
             await SaveAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new TrainingSampleAppendResult(Sample: null, Duplicate: true);
+            return new TrainingSampleAppendResult { Sample = null, Duplicate = true };
         }
 
         var nextSequence = await _dbContext.TrainingDatasetSamples
@@ -378,7 +381,7 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
         dataset.UpdatedAtUtc = now;
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new TrainingSampleAppendResult(ToRecord(sample), Duplicate: false);
+        return new TrainingSampleAppendResult { Sample = ToRecord(sample), Duplicate = false };
     }
 
     public async Task RecordRejectedSampleAsync(Guid datasetId, CancellationToken cancellationToken = default)
@@ -419,7 +422,7 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
                                   .Skip((query.Page - 1) * query.PageSize)
                                   .Take(query.PageSize)
                                   .ToListAsync(cancellationToken);
-        return new TrainingSamplePage(items.Select(ToRecord).ToArray(), total);
+        return new TrainingSamplePage { Items = items.Select(ToRecord).ToArray(), TotalCount = total };
     }
 
     public async Task<IReadOnlyList<TrainingSampleRecord>> ListAllSamplesAsync(Guid datasetId, CancellationToken cancellationToken = default)
@@ -704,23 +707,71 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static TrainingDefinitionRecord ToRecord(TrainingDatasetDefinition entity) =>
-        new(entity.Id, entity.Name, entity.Kind, entity.DefinitionJson.ToArray(), entity.DefinitionVersion, entity.Version,
-            entity.CreatedAtUtc, entity.UpdatedAtUtc);
+        new()
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Kind = entity.Kind,
+            DefinitionJson = entity.DefinitionJson.ToArray(),
+            DefinitionVersion = entity.DefinitionVersion,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
 
     private static TrainingDatasetRecord ToRecord(TrainingDataset entity, DatasetGenerationWorkStatus? workStatus, string? workErrorMessage) =>
-        new(entity.Id, entity.DefinitionId, entity.DefinitionVersion,
+        new()
+        {
+            Id = entity.Id,
+            DefinitionId = entity.DefinitionId,
+            DefinitionVersion = entity.DefinitionVersion,
             // `?.ToArray()` would read back as an EMPTY memory rather than as null — see OptionalBlob.
-            OptionalBlob.AsOptionalMemory(entity.DefinitionJson),
-            entity.Name, entity.Status, entity.Revision, entity.ContentFingerprint,
-            entity.TotalSampleCount, entity.GoodSampleCount, entity.BadSampleCount, entity.RejectedSampleCount, entity.DuplicateSampleCount,
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, workStatus, workErrorMessage);
+            DefinitionJson = OptionalBlob.AsOptionalMemory(entity.DefinitionJson),
+            Name = entity.Name,
+            Status = entity.Status,
+            Revision = entity.Revision,
+            ContentFingerprint = entity.ContentFingerprint,
+            TotalSampleCount = entity.TotalSampleCount,
+            GoodSampleCount = entity.GoodSampleCount,
+            BadSampleCount = entity.BadSampleCount,
+            RejectedSampleCount = entity.RejectedSampleCount,
+            DuplicateSampleCount = entity.DuplicateSampleCount,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            WorkStatus = workStatus,
+            WorkErrorMessage = workErrorMessage
+        };
 
     private static TrainingSampleRecord ToRecord(TrainingDatasetSample entity) =>
-        new(entity.Id, entity.DatasetId, entity.Sequence, entity.Kind, entity.Label, entity.ReviewState, entity.ContentJson.ToArray(),
+        new()
+        {
+            Id = entity.Id,
+            DatasetId = entity.DatasetId,
+            Sequence = entity.Sequence,
+            Kind = entity.Kind,
+            Label = entity.Label,
+            ReviewState = entity.ReviewState,
+            ContentJson = entity.ContentJson.ToArray(),
             // `?.ToArray()` would read back as an EMPTY memory rather than as null — see OptionalBlob.
-            OptionalBlob.AsOptionalMemory(entity.ValidationJson), entity.Provenance, entity.SourceHash, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+            ValidationJson = OptionalBlob.AsOptionalMemory(entity.ValidationJson),
+            Provenance = entity.Provenance,
+            SourceHash = entity.SourceHash,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
 
     private static ToolMockRecord ToRecord(ToolMockDefinition entity) =>
-        new(entity.Id, entity.ToolName, entity.MockJson.ToArray(), OptionalBlob.AsOptionalMemory(entity.VerificationJson), entity.VerificationState,
-            entity.Enabled, entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+        new()
+        {
+            Id = entity.Id,
+            ToolName = entity.ToolName,
+            MockJson = entity.MockJson.ToArray(),
+            VerificationJson = OptionalBlob.AsOptionalMemory(entity.VerificationJson),
+            VerificationState = entity.VerificationState,
+            Enabled = entity.Enabled,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
 }

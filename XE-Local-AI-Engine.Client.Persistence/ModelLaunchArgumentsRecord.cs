@@ -5,4 +5,11 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 ///     extra <c>llama-server</c> argument string. Read on the cold spawn path to append the operator's experimentation
 ///     flags to the launched process, and by the settings endpoint to render the current override.
 /// </summary>
-public sealed record ModelLaunchArgumentsRecord(string ModelName, string RawArguments, long UpdatedAtUtc);
+public sealed class ModelLaunchArgumentsRecord
+{
+    public required string ModelName { get; init; }
+
+    public required string RawArguments { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}

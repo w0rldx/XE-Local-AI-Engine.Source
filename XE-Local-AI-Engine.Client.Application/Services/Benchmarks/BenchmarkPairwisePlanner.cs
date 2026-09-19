@@ -113,7 +113,7 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
                     var (runA, runB) = members[first].RunId.CompareTo(members[second].RunId) < 0
                         ? (members[first].RunId, members[second].RunId)
                         : (members[second].RunId, members[first].RunId);
-                    slots.Add(new BenchmarkPairwiseSlot(runA, runB, group.Key.TaskCaseId, group.Key.TaskInputHash));
+                    slots.Add(new BenchmarkPairwiseSlot { RunAId = runA, RunBId = runB, TaskCaseId = group.Key.TaskCaseId, TaskInputHash = group.Key.TaskInputHash });
                 }
             }
         }

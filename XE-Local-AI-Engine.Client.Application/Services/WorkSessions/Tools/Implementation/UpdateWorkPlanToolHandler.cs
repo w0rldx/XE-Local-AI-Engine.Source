@@ -107,12 +107,15 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
             return new WorkSessionToolOutcome(error);
         }
 
-        var result = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(session.Id,
-                                        session.Version,
-                                        // One operation id per batch content, so the same batch replayed after a lost response commits once.
-                                        WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
-                                        AgentWorkSessionTaskOrigin.Agent,
-                                        changes),
+        var result = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = session.Id,
+            ExpectedVersion = session.Version,
+            // One operation id per batch content, so the same batch replayed after a lost response commits once.
+            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = changes
+        },
                                     cancellationToken);
 
         return new WorkSessionToolOutcome(Describe(changes), result.Sequence, WorkSessionChangeKind.Task);
@@ -240,13 +243,16 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
             ? null
             : Enum.Parse<AgentWorkSessionTaskStatus>(operation.Status);
 
-        change = new WorkPlanTaskChange(taskId,
-            parsed,
-            parentTaskId,
-            operation.EffectiveTitle,
-            string.IsNullOrWhiteSpace(operation.Detail) ? null : operation.Detail,
-            status,
-            string.IsNullOrWhiteSpace(operation.BlockedReason) ? null : operation.BlockedReason);
+        change = new WorkPlanTaskChange
+        {
+            TaskId = taskId,
+            Operation = parsed,
+            ParentTaskId = parentTaskId,
+            Title = operation.EffectiveTitle,
+            Detail = string.IsNullOrWhiteSpace(operation.Detail) ? null : operation.Detail,
+            Status = status,
+            BlockedReason = string.IsNullOrWhiteSpace(operation.BlockedReason) ? null : operation.BlockedReason
+        };
         error = string.Empty;
         return true;
     }

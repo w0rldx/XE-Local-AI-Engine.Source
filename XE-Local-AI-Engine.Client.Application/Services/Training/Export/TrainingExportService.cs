@@ -330,7 +330,7 @@ public sealed class TrainingExportService : ITrainingExportService
 
             // Created up front so EVERY outcome — including a merge that never produces a file — is durably visible
             // on the run rather than surviving only as a hub event the operator may not have been watching for.
-            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput(plan.RunId, plan.Kind, plan.OutputPath), CancellationToken.None);
+            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = plan.RunId, Kind = plan.Kind, Path = plan.OutputPath }, CancellationToken.None);
             Publish(plan.RunId, "preparing", null);
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(_workspace.WorkDirectory(plan.RunId));
             var scripts = await _convertScripts.EnsureAsync(cancellationToken);

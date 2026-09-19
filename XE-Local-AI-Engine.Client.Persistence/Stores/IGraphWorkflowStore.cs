@@ -3,32 +3,53 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>What the definition list returns: no graph blob, so listing never decrypts one.</summary>
-public sealed record GraphWorkflowDefinitionSummary(
-    Guid Id,
-    string Name,
-    string? Description,
-    string GraphHash,
-    int NodeCount,
-    int SchemaVersion,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class GraphWorkflowDefinitionSummary
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One definition in full. <see cref="GraphJson" /> is the authored document as text: this assembly may reference
 ///     only <c>Providers.Abstractions</c>, so the parsed graph is the Application layer's type and never appears here.
 /// </summary>
-public sealed record GraphWorkflowDefinitionSnapshot(
-    Guid Id,
-    string Name,
-    string? Description,
-    string GraphJson,
-    string GraphHash,
-    int NodeCount,
-    int SchemaVersion,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class GraphWorkflowDefinitionSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     The canonical node-run field set: one row of <c>graph_workflow_node_runs</c> with its encrypted columns decoded
@@ -36,24 +57,42 @@ public sealed record GraphWorkflowDefinitionSnapshot(
 ///     <see cref="OutputJson" />; the rest is what a run-detail read returns. It lives here rather than in the
 ///     Application layer so the run store can return it without an Application reference this assembly may not have.
 /// </summary>
-public sealed record GraphWorkflowNodeRunSnapshot(
-    Guid Id,
-    Guid RunId,
-    string NodeKey,
-    GraphWorkflowNodeKind Kind,
-    GraphWorkflowNodeRunStatus Status,
-    int Attempt,
-    GraphWorkflowDecisionKind? PendingDecisionKind,
-    Guid? DecisionOperationId,
-    string? DecidedBySubject,
-    GraphWorkflowFailureClass FailureClass,
-    string? Error,
-    string? InputJson,
-    string? OutputJson,
-    Guid? InvocationId,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long UpdatedAtUtc);
+public sealed record GraphWorkflowNodeRunSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required GraphWorkflowNodeKind Kind { get; init; }
+
+    public required GraphWorkflowNodeRunStatus Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required GraphWorkflowDecisionKind? PendingDecisionKind { get; init; }
+
+    public required Guid? DecisionOperationId { get; init; }
+
+    public required string? DecidedBySubject { get; init; }
+
+    public required GraphWorkflowFailureClass FailureClass { get; init; }
+
+    public required string? Error { get; init; }
+
+    public required string? InputJson { get; init; }
+
+    public required string? OutputJson { get; init; }
+
+    public required Guid? InvocationId { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     The sentinel <see cref="Any" /> version. The dispatcher moves node-run status while a human HTTP action may be
@@ -70,33 +109,58 @@ public static class GraphWorkflowVersions
 ///     One run row with its encrypted columns decoded to text. <see cref="GraphJson" /> is the copy pinned at start:
 ///     the definition row may be edited, or deleted, without changing what this run executes.
 /// </summary>
-public sealed record GraphWorkflowRunSnapshot(
-    Guid Id,
-    Guid RequestId,
-    Guid DefinitionId,
-    int DefinitionVersion,
-    string GraphHash,
-    GraphWorkflowRunStatus Status,
-    GraphWorkflowFailureClass FailureClass,
-    string GraphJson,
-    string? InputJson,
-    string? OutputJson,
-    long Seq,
-    long Version,
-    long? CancelRequestedAtUtc,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long CreatedAtUtc);
+public sealed class GraphWorkflowRunSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required int DefinitionVersion { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required GraphWorkflowRunStatus Status { get; init; }
+
+    public required GraphWorkflowFailureClass FailureClass { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required string? InputJson { get; init; }
+
+    public required string? OutputJson { get; init; }
+
+    public required long Seq { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long? CancelRequestedAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>One entry of a run's append-only change log. <see cref="Seq" /> is its order as well as its watermark.</summary>
-public sealed record GraphWorkflowRunEventSnapshot(
-    Guid Id,
-    Guid RunId,
-    long Seq,
-    string EventType,
-    string? NodeKey,
-    string? DetailJson,
-    long CreatedAtUtc);
+public sealed class GraphWorkflowRunEventSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required long Seq { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? NodeKey { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     What one mutation committed: the run it belongs to and the watermark its event took.
@@ -106,7 +170,12 @@ public sealed record GraphWorkflowRunEventSnapshot(
 ///         of here would be stale by the time anything used it.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowMutationResult(Guid RunId, long Sequence);
+public sealed class GraphWorkflowMutationResult
+{
+    public required Guid RunId { get; init; }
+
+    public required long Sequence { get; init; }
+}
 
 /// <summary>
 ///     One node run to create at start. There is one per node of the pinned graph and they are all <c>Pending</c>:
@@ -117,7 +186,16 @@ public sealed record GraphWorkflowMutationResult(Guid RunId, long Sequence);
 ///         reads it from there, so a column beside it could only ever disagree with the document the run executes.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowNodeRunSeed(Guid NodeRunId, string NodeKey, GraphWorkflowNodeKind Kind, string? InputJson = null);
+public sealed class GraphWorkflowNodeRunSeed
+{
+    public required Guid NodeRunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required GraphWorkflowNodeKind Kind { get; init; }
+
+    public string? InputJson { get; init; }
+}
 
 /// <summary>
 ///     A run start, as ONE transaction: the run row, one <c>Pending</c> node run per graph node, and the
@@ -128,15 +206,24 @@ public sealed record GraphWorkflowNodeRunSeed(Guid NodeRunId, string NodeKey, Gr
 ///         transaction and inserted here in another could pin a definition a delete has already removed.
 ///     </para>
 /// </summary>
-public sealed record StartGraphWorkflowRunCommand(
-    Guid RunId,
-    Guid RequestId,
-    Guid DefinitionId,
-    int DefinitionVersion,
-    string GraphHash,
-    string GraphJson,
-    string? InputJson,
-    IReadOnlyList<GraphWorkflowNodeRunSeed> NodeRuns);
+public sealed class StartGraphWorkflowRunCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required int DefinitionVersion { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required string? InputJson { get; init; }
+
+    public required IReadOnlyList<GraphWorkflowNodeRunSeed> NodeRuns { get; init; }
+}
 
 /// <summary>
 ///     A run status move.
@@ -150,13 +237,20 @@ public sealed record StartGraphWorkflowRunCommand(
 ///         caller's clock cannot disagree with the row's.
 ///     </para>
 /// </summary>
-public sealed record TransitionGraphWorkflowRunCommand(
-    Guid RunId,
-    long ExpectedVersion,
-    GraphWorkflowRunStatus TargetStatus,
-    GraphWorkflowFailureClass? FailureClass = null,
-    string? SanitizedReason = null,
-    string? OutputJson = null);
+public sealed class TransitionGraphWorkflowRunCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required GraphWorkflowRunStatus TargetStatus { get; init; }
+
+    public GraphWorkflowFailureClass? FailureClass { get; init; }
+
+    public string? SanitizedReason { get; init; }
+
+    public string? OutputJson { get; init; }
+}
 
 /// <summary>
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated,
@@ -175,21 +269,36 @@ public sealed record TransitionGraphWorkflowRunCommand(
 ///         re-attempting because of.
 ///     </para>
 /// </summary>
-public sealed record TransitionGraphWorkflowNodeRunCommand(
-    Guid RunId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    GraphWorkflowNodeRunStatus TargetStatus,
-    string? QueueReason = null,
-    string? OutputJson = null,
-    string? InputJson = null,
-    GraphWorkflowFailureClass? FailureClass = null,
-    string? TerminalReason = null,
-    string? DetailJson = null,
-    Guid? InvocationId = null,
-    GraphWorkflowDecisionKind? PendingDecisionKind = null,
-    bool IncrementAttempt = false,
-    string? EventType = null);
+public sealed class TransitionGraphWorkflowNodeRunCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required GraphWorkflowNodeRunStatus TargetStatus { get; init; }
+
+    public string? QueueReason { get; init; }
+
+    public string? OutputJson { get; init; }
+
+    public string? InputJson { get; init; }
+
+    public GraphWorkflowFailureClass? FailureClass { get; init; }
+
+    public string? TerminalReason { get; init; }
+
+    public string? DetailJson { get; init; }
+
+    public Guid? InvocationId { get; init; }
+
+    public GraphWorkflowDecisionKind? PendingDecisionKind { get; init; }
+
+    public bool IncrementAttempt { get; init; }
+
+    public string? EventType { get; init; }
+}
 
 /// <summary>
 ///     A pause's answer, as ONE conditional write. Keyed by the node run rather than by the node key because the
@@ -206,34 +315,55 @@ public sealed record TransitionGraphWorkflowNodeRunCommand(
 ///         disagree about which out-edge fires.
 ///     </para>
 /// </summary>
-public sealed record DecideGraphWorkflowNodeRunCommand(
-    Guid RunId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    Guid OperationId,
-    GraphWorkflowDecisionKind Decision,
-    string? DecidedBySubject,
-    string OutputJson);
+public sealed record DecideGraphWorkflowNodeRunCommand
+{
+    public required Guid RunId { get; init; }
 
-public sealed record AppendGraphWorkflowEventCommand(
-    Guid RunId,
-    long ExpectedVersion,
-    string EventType,
-    string? NodeKey = null,
-    string? DetailJson = null);
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required GraphWorkflowDecisionKind Decision { get; init; }
+
+    public required string? DecidedBySubject { get; init; }
+
+    public required string OutputJson { get; init; }
+}
+
+public sealed class AppendGraphWorkflowEventCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required string EventType { get; init; }
+
+    public string? NodeKey { get; init; }
+
+    public string? DetailJson { get; init; }
+}
 
 /// <summary>
 ///     One row a host death stranded, carrying what the runtime needs to judge it without a follow-up read per row.
 ///     <see cref="Status" /> is what the row held BEFORE the collapse — what it was doing is the useful fact, since
 ///     where it lands is always <c>Pending</c> unless a repair moves it further.
 /// </summary>
-public sealed record GraphWorkflowReconciledNodeRun(
-    Guid NodeRunId,
-    Guid RunId,
-    string NodeKey,
-    GraphWorkflowNodeKind Kind,
-    GraphWorkflowNodeRunStatus Status,
-    int Attempt);
+public sealed record GraphWorkflowReconciledNodeRun
+{
+    public required Guid NodeRunId { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required GraphWorkflowNodeKind Kind { get; init; }
+
+    public required GraphWorkflowNodeRunStatus Status { get; init; }
+
+    public required int Attempt { get; init; }
+}
 
 /// <summary>
 ///     One judged node run: the row as the caller observed it, and what to do with it once the collapse has confirmed
@@ -245,26 +375,43 @@ public sealed record GraphWorkflowReconciledNodeRun(
 ///         its caller read is stale by construction and fails the whole recovery transaction rather than its own row.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowNodeRunVerdict(
-    Guid NodeRunId,
-    GraphWorkflowNodeRunStatus ObservedStatus,
-    int ObservedAttempt,
-    IReadOnlyList<TransitionGraphWorkflowNodeRunCommand> Repairs);
+public sealed class GraphWorkflowNodeRunVerdict
+{
+    public required Guid NodeRunId { get; init; }
+
+    public required GraphWorkflowNodeRunStatus ObservedStatus { get; init; }
+
+    public required int ObservedAttempt { get; init; }
+
+    public required IReadOnlyList<TransitionGraphWorkflowNodeRunCommand> Repairs { get; init; }
+}
 
 /// <summary>
 ///     Turns a reconciliation into a SETTLING pass: every stranded node run no verdict matched is failed rather than
 ///     left where it is. Pass it on the last pass only — walking away strands a row nothing downstream picks up again,
 ///     and v1 has no <c>Blocked</c> state to park it in.
 /// </summary>
-public sealed record GraphWorkflowUnjudgedNodeRunSettlement(GraphWorkflowFailureClass FailureClass, string SanitizedReason);
+public sealed class GraphWorkflowUnjudgedNodeRunSettlement
+{
+    public required GraphWorkflowFailureClass FailureClass { get; init; }
 
-public sealed record CreateGraphWorkflowDefinitionCommand(
-    Guid DefinitionId,
-    string Name,
-    string GraphJson,
-    int NodeCount,
-    int SchemaVersion = 1,
-    string? Description = null);
+    public required string SanitizedReason { get; init; }
+}
+
+public sealed class CreateGraphWorkflowDefinitionCommand
+{
+    public required Guid DefinitionId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public int SchemaVersion { get; init; } = 1;
+
+    public string? Description { get; init; }
+}
 
 /// <summary>
 ///     A partial edit: every optional member left null means "leave it alone", which is what lets a rename travel
@@ -279,14 +426,22 @@ public sealed record CreateGraphWorkflowDefinitionCommand(
 ///         says so.
 ///     </para>
 /// </summary>
-public sealed record UpdateGraphWorkflowDefinitionCommand(
-    Guid DefinitionId,
-    int ExpectedVersion,
-    string? Name = null,
-    string? Description = null,
-    string? GraphJson = null,
-    int? NodeCount = null,
-    int? SchemaVersion = null);
+public sealed class UpdateGraphWorkflowDefinitionCommand
+{
+    public required Guid DefinitionId { get; init; }
+
+    public required int ExpectedVersion { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? Description { get; init; }
+
+    public string? GraphJson { get; init; }
+
+    public int? NodeCount { get; init; }
+
+    public int? SchemaVersion { get; init; }
+}
 
 /// <summary>
 ///     The durable substrate for Graph Workflow definitions.

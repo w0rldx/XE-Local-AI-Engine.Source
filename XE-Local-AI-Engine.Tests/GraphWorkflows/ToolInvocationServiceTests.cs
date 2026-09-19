@@ -274,14 +274,17 @@ public sealed class ToolInvocationServiceTests
         using (var scope = factory.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<ICustomToolStore>()
-                       .CreateAsync(new CustomToolInput(name,
-                           "A probe tool for the Tool-node envelope.",
-                           CustomToolKind.HttpFetch,
-                           CustomToolMode.Fixed,
-                           ConfigJson: """{"method":"GET","urlTemplate":"https://api.example.com/things","headers":[]}""",
-                           ParametersJson: "[]",
-                           Enabled: true,
-                           Acknowledged: true));
+                       .CreateAsync(new CustomToolInput
+                       {
+                           Name = name,
+                           Description = "A probe tool for the Tool-node envelope.",
+                           Kind = CustomToolKind.HttpFetch,
+                           Mode = CustomToolMode.Fixed,
+                           ConfigJson = """{"method":"GET","urlTemplate":"https://api.example.com/things","headers":[]}""",
+                           ParametersJson = "[]",
+                           Enabled = true,
+                           Acknowledged = true
+                       });
         }
 
         var entry = AssertEx.NotNull((await factory.Services.GetRequiredService<ILocalToolOfferProvider>()

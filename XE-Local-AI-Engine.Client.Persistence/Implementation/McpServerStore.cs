@@ -182,20 +182,23 @@ public sealed class McpServerStore : IMcpServerStore
 
     private static McpServerRecord ToRecord(McpServerRegistration entity)
     {
-        return new McpServerRecord(entity.Id,
-            entity.Name,
-            entity.Description is null ? null : Decode(entity.Description),
-            (McpTransportKind)entity.TransportKind,
-            entity.Command,
-            DecodeArguments(entity.ArgumentsJson),
-            entity.WorkingDirectory,
-            DecodeEnvironment(entity.EnvJson),
-            entity.Url,
-            (McpTrustTier)entity.TrustTier,
-            entity.Enabled,
-            entity.Version,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+        return new McpServerRecord
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = entity.Description is null ? null : Decode(entity.Description),
+            TransportKind = (McpTransportKind)entity.TransportKind,
+            Command = entity.Command,
+            Arguments = DecodeArguments(entity.ArgumentsJson),
+            WorkingDirectory = entity.WorkingDirectory,
+            Environment = DecodeEnvironment(entity.EnvJson),
+            Url = entity.Url,
+            TrustTier = (McpTrustTier)entity.TrustTier,
+            Enabled = entity.Enabled,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

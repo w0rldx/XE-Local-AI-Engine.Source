@@ -64,9 +64,9 @@ public sealed class BenchmarkPairwiseTests
         // questions. Grouping by case identity makes such a comparison unrepresentable rather than merely unlikely.
         BenchmarkPairwiseCandidate[] candidates =
         [
-            new(RunA, null, "hash-one"),
-            new(RunB, null, "hash-one"),
-            new(RunC, null, "hash-two")
+            new() { RunId = RunA, TaskCaseId = null, TaskInputHash = "hash-one" },
+            new() { RunId = RunB, TaskCaseId = null, TaskInputHash = "hash-one" },
+            new() { RunId = RunC, TaskCaseId = null, TaskInputHash = "hash-two" }
         ];
 
         var plan = BenchmarkPairwisePlanner.Plan(candidates, BenchmarkPairwisePolicy.MaximumRuns);
@@ -179,12 +179,21 @@ public sealed class BenchmarkPairwiseTests
         // against a revision whose ranking never reads them.
         var store = StubStore(out _);
         store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-             .Returns(new BenchmarkJudgePolicyRevisionRecord(RevisionId, ProjectId, 1,
-                 BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy() with
+             .Returns(new BenchmarkJudgePolicyRevisionRecord
+             {
+                 Id = RevisionId,
+                 ProjectId = ProjectId,
+                 Revision = 1,
+                 PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy() with
                  {
                      Mode = BenchmarkJudgePolicyModes.Pointwise
                  }),
-                 PolicyHash, ExecutionKey, 1, 1, 7));
+                 PolicyHash = PolicyHash,
+                 ReferenceExecutionKey = ExecutionKey,
+                 CohortGeneration = 1,
+                 CreatedAtUtc = 1,
+                 ComparisonSetVersion = 7
+             });
         var runtimes = Substitute.For<IBenchmarkJudgeRuntimeResolver>();
         var planner = new BenchmarkPairwisePlanner(store, runtimes, Fitter(store), Substitute.For<IBenchmarkQueueSignal>(),
             NullLogger<BenchmarkPairwisePlanner>.Instance);
@@ -221,12 +230,29 @@ public sealed class BenchmarkPairwiseTests
             Comparison(runA, runB, order: 1, "a", BenchmarkJudgeAttemptStatus.Succeeded, ExecutionKey, false)
         ];
         store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-             .Returns(new BenchmarkJudgePolicyRevisionRecord(RevisionId, ProjectId, 1, BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy()),
-                 PolicyHash, referenceExecutionKey, 1, 1, 7));
+             .Returns(new BenchmarkJudgePolicyRevisionRecord
+             {
+                 Id = RevisionId,
+                 ProjectId = ProjectId,
+                 Revision = 1,
+                 PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy()),
+                 PolicyHash = PolicyHash,
+                 ReferenceExecutionKey = referenceExecutionKey,
+                 CohortGeneration = 1,
+                 CreatedAtUtc = 1,
+                 ComparisonSetVersion = 7
+             });
         store.GetPairwiseCohortAsync(ProjectId, Arg.Any<CancellationToken>())
-             .Returns(new BenchmarkPairwiseCohortState(RevisionId, 1, 7, referenceExecutionKey, 1,
-                 [new BenchmarkPairwiseCandidate(runA, null, string.Empty), new BenchmarkPairwiseCandidate(runB, null, string.Empty)],
-                 comparisons));
+             .Returns(new BenchmarkPairwiseCohortState
+             {
+                 PolicyRevisionId = RevisionId,
+                 CohortGeneration = 1,
+                 ComparisonSetVersion = 7,
+                 ReferenceExecutionKey = referenceExecutionKey,
+                 ProjectVersion = 1,
+                 Candidates = [new BenchmarkPairwiseCandidate { RunId = runA, TaskCaseId = null, TaskInputHash = string.Empty }, new BenchmarkPairwiseCandidate { RunId = runB, TaskCaseId = null, TaskInputHash = string.Empty }],
+                 Comparisons = comparisons
+             });
         store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkPairwiseFitRecord?)null);
         store.PublishPairwiseFitAsync(Arg.Do<BenchmarkPairwiseFitCommand>(command => capture.Value = command), Arg.Any<CancellationToken>())
              .Returns(true);
@@ -240,11 +266,34 @@ public sealed class BenchmarkPairwiseTests
         BenchmarkJudgeAttemptStatus status,
         string? executionKey,
         bool truncated) =>
-        new(Guid.NewGuid(), ProjectId, RevisionId, 1, null, string.Empty, runA, runB, order, 1, order + 1, status,
-            status == BenchmarkJudgeAttemptStatus.Succeeded ? verdict : null, truncated, false, executionKey, null, null, 1, 2, 3, 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = ProjectId,
+            PolicyRevisionId = RevisionId,
+            CohortGeneration = 1,
+            TaskCaseId = null,
+            TaskInputHash = string.Empty,
+            RunAId = runA,
+            RunBId = runB,
+            Order = order,
+            AttemptSequence = 1,
+            Sequence = order + 1,
+            Status = status,
+            Verdict = status == BenchmarkJudgeAttemptStatus.Succeeded ? verdict : null,
+            AnswerATruncated = truncated,
+            AnswerBTruncated = false,
+            JudgeExecutionKey = executionKey,
+            ErrorMessage = null,
+            JudgeRuntimeJson = null,
+            EnqueuedAtUtc = 1,
+            StartedAtUtc = 2,
+            CompletedAtUtc = 3,
+            Version = 1
+        };
 
     private static BenchmarkPairwiseCandidate[] Candidates(params Guid[] runs) =>
-        [.. runs.Select(static run => new BenchmarkPairwiseCandidate(run, null, string.Empty))];
+        [.. runs.Select(static run => new BenchmarkPairwiseCandidate { RunId = run, TaskCaseId = null, TaskInputHash = string.Empty })];
 
     private static BenchmarkJudgePolicyV1 PairwisePolicy() =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('c', 64), ["v1:" + new string('b', 64)]),

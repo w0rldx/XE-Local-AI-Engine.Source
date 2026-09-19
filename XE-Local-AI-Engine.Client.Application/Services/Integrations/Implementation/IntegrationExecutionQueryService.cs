@@ -120,17 +120,20 @@ public sealed class IntegrationExecutionQueryService
             //
             // NewStatus equal to the current status makes this a pure marker write under the same compare-and-swap, so
             // it cannot resurrect a row that terminalized a moment ago.
-            var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId,
-                                                  execution.Version,
-                                                  new HashSet<IntegrationExecutionStatus>
+            var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
+            {
+                ExecutionId = executionId,
+                ExpectedVersion = execution.Version,
+                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
                                                   {
                                                       execution.Status
                                                   },
-                                                  execution.Status,
-                                                  StartedAtUtc: null,
-                                                  EndedAtUtc: null,
-                                                  InvocationId: null,
-                                                  nowUnixMs),
+                NewStatus = execution.Status,
+                StartedAtUtc = null,
+                EndedAtUtc = null,
+                InvocationId = null,
+                StopRequestedAtUtc = nowUnixMs
+            },
                                               CancellationToken.None);
 
             if (!marked)
@@ -194,34 +197,40 @@ public sealed class IntegrationExecutionQueryService
         // The audit row is built BEFORE the terminal command and carried inside it, so the store inserts it in the
         // same transaction. Written only if the CAS below wins, because a lost CAS rolls that transaction back.
         var trigger = await _triggers.GetByIdAsync(execution.TriggerId, cancellationToken);
-        var audit = new IntegrationInvocationAuditInput(execution.InvocationId,
-            execution.RequestId,
-            trigger?.Name ?? execution.TriggerId.ToString("D"),
-            execution.KeyPrefix,
-            trigger?.TargetAgentDefinitionId ?? Guid.Empty,
-            NodeChatMessageStatusValues.Cancelled,
-            Activity.Current?.TraceId.ToString(),
-            Math.Max(val1: 0L, nowUnixMs - execution.ReceivedAtUtc));
+        var audit = new IntegrationInvocationAuditInput
+        {
+            InvocationId = execution.InvocationId,
+            RequestId = execution.RequestId,
+            TriggerName = trigger?.Name ?? execution.TriggerId.ToString("D"),
+            KeyPrefix = execution.KeyPrefix,
+            TargetAgentDefinitionId = trigger?.TargetAgentDefinitionId ?? Guid.Empty,
+            TerminalStatus = NodeChatMessageStatusValues.Cancelled,
+            TraceId = Activity.Current?.TraceId.ToString(),
+            LatencyMs = Math.Max(val1: 0L, nowUnixMs - execution.ReceivedAtUtc)
+        };
 
         var sequence = _buffer.Reserve(execution.Id);
         var published = false;
         try
         {
-            var won = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand(execution.Id,
-                                               expectedVersion,
-                                               new HashSet<IntegrationExecutionStatus>
+            var won = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand
+            {
+                ExecutionId = execution.Id,
+                ExpectedVersion = expectedVersion,
+                ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
                                                {
                                                    IntegrationExecutionStatus.Accepted,
                                                    IntegrationExecutionStatus.Queued
                                                },
-                                               IntegrationExecutionStatus.Cancelled,
-                                               sequence,
-                                               IntegrationStreamEventTypes.ExecutionCancelled,
-                                               nowUnixMs,
-                                               FailureCategory: null,
-                                               FailureSummary: null,
-                                               EventDetailJson: null,
-                                               audit),
+                NewStatus = IntegrationExecutionStatus.Cancelled,
+                Sequence = sequence,
+                EventType = IntegrationStreamEventTypes.ExecutionCancelled,
+                EndedAtUtc = nowUnixMs,
+                FailureCategory = null,
+                FailureSummary = null,
+                EventDetailJson = null,
+                Audit = audit
+            },
                                            cancellationToken);
             if (!won)
             {

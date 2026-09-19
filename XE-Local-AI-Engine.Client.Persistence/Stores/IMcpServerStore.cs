@@ -52,14 +52,25 @@ public interface IMcpServerStore
 ///     bytes before the interceptors encrypt them. On create, <see cref="Enabled" /> is ignored and the registration is
 ///     persisted disabled.
 /// </summary>
-public sealed record McpServerInput(
-    string Name,
-    string? Description,
-    McpTransportKind TransportKind,
-    string? Command,
-    IReadOnlyList<string> Arguments,
-    string? WorkingDirectory,
-    IReadOnlyDictionary<string, string> Environment,
-    string? Url,
-    McpTrustTier TrustTier,
-    bool Enabled);
+public sealed record McpServerInput
+{
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required McpTransportKind TransportKind { get; init; }
+
+    public required string? Command { get; init; }
+
+    public required IReadOnlyList<string> Arguments { get; init; }
+
+    public required string? WorkingDirectory { get; init; }
+
+    public required IReadOnlyDictionary<string, string> Environment { get; init; }
+
+    public required string? Url { get; init; }
+
+    public required McpTrustTier TrustTier { get; init; }
+
+    public required bool Enabled { get; init; }
+}

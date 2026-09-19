@@ -135,7 +135,7 @@ public static class BenchmarkE2ETestDoubles
                     policy.RequestedContextTokens,
                     runtime,
                     BenchmarkFrozenPolicies.DeterministicSampling()),
-                new BenchmarkRunLaunchIntent("cpu", "f16", "auto", "cpu-variant", "off", "e2e-intended-identity", null)));
+                new BenchmarkRunLaunchIntent { Variant = "cpu", KvCacheType = "f16", KvCacheTypeSource = "auto", KvAutoReason = "cpu-variant", FlashAttentionMode = "off", IntendedLaunchIdentity = "e2e-intended-identity", IntendedExecutableSha256 = null }));
         }
     }
 

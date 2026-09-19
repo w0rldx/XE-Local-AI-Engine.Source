@@ -156,45 +156,54 @@ public sealed class WorkSessionStateBlockTests
         new(Session(), tasks ?? [], findings ?? [], artifacts ?? [], checkpoint);
 
     private static AgentWorkSessionSnapshot Session() =>
-        new(Guid.NewGuid(),
-            "Seeded session",
-            "Seeded objective",
-            AgentWorkSessionKind.Research,
-            AgentWorkSessionStatus.Running,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            CurrentTaskId: null,
-            StepCount: 2,
-            LastCheckpointId: null,
-            LastSequence: 12,
-            ConfigVersion: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            Version: 3);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Title = "Seeded session",
+            Objective = "Seeded objective",
+            Kind = AgentWorkSessionKind.Research,
+            Status = AgentWorkSessionStatus.Running,
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            CurrentTaskId = null,
+            StepCount = 2,
+            LastCheckpointId = null,
+            LastSequence = 12,
+            ConfigVersion = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            Version = 3
+        };
 
     private static WorkSessionTaskSnapshot Task(string title, string? detail = null, AgentWorkSessionTaskStatus status = AgentWorkSessionTaskStatus.Planned) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            ParentTaskId: null,
-            Sequence: 1,
-            title,
-            detail,
-            status,
-            BlockedReason: null,
-            AgentWorkSessionTaskOrigin.Agent,
-            CreatedStep: 1,
-            UpdatedStep: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            SessionId = Guid.NewGuid(),
+            ParentTaskId = null,
+            Sequence = 1,
+            Title = title,
+            Detail = detail,
+            Status = status,
+            BlockedReason = null,
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            CreatedStep = 1,
+            UpdatedStep = 1
+        };
 
     private static WorkSessionFindingSnapshot Finding(string text, string? sourceRef = null, bool superseded = false) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            TaskId: null,
-            Sequence: 2,
-            AgentWorkSessionFindingKind.Finding,
-            text,
-            sourceRef,
-            CreatedStep: 1,
-            superseded);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            SessionId = Guid.NewGuid(),
+            TaskId = null,
+            Sequence = 2,
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = text,
+            SourceRef = sourceRef,
+            CreatedStep = 1,
+            Superseded = superseded
+        };
 
     private static string Marker(string block)
     {

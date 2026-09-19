@@ -347,18 +347,21 @@ public sealed class TrainingRunExecutorTests : IDisposable
                          Status = TrainingRunStatus.Failed
                      }));
             _ = store.CreateArtifactAsync(Arg.Any<TrainingArtifactInput>(), Arg.Any<CancellationToken>())
-                     .Returns(callInfo => Task.FromResult(new TrainingArtifactRecord(Guid.NewGuid(),
-                         runId,
-                         callInfo.Arg<TrainingArtifactInput>().Kind,
-                         callInfo.Arg<TrainingArtifactInput>().Path,
-                         Sha256: null,
-                         SizeBytes: 0,
-                         TrainingArtifactSmokeState.Pending,
-                         SmokeReason: null,
-                         CommittedModelName: null,
-                         Version: 1,
-                         CreatedAtUtc: 0,
-                         UpdatedAtUtc: 0)));
+                     .Returns(callInfo => Task.FromResult(new TrainingArtifactRecord
+                     {
+                         Id = Guid.NewGuid(),
+                         RunId = runId,
+                         Kind = callInfo.Arg<TrainingArtifactInput>().Kind,
+                         Path = callInfo.Arg<TrainingArtifactInput>().Path,
+                         Sha256 = null,
+                         SizeBytes = 0,
+                         SmokeState = TrainingArtifactSmokeState.Pending,
+                         SmokeReason = null,
+                         CommittedModelName = null,
+                         Version = 1,
+                         CreatedAtUtc = 0,
+                         UpdatedAtUtc = 0
+                     }));
 
             var capacity = Substitute.For<ITrainingCapacityGate>();
 #pragma warning disable CA2000 // Ownership passes to the executor, which disposes the reservation in its finally.
@@ -410,7 +413,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
                 NullLogger<TrainingRunExecutor>.Instance);
 
             var harness = new Harness(executor,
-                new TrainingWorkClaim(QueueSequence: 1, TrainingWorkKind.TrainingRun, runId, Version: 2, run),
+                new TrainingWorkClaim { QueueSequence = 1, Kind = TrainingWorkKind.TrainingRun, TargetId = runId, Version = 2, Run = run },
                 store,
                 spawner,
                 handle,
@@ -518,30 +521,33 @@ public sealed class TrainingRunExecutorTests : IDisposable
         }
 
         private static TrainingRunRecord Run(Guid runId, Guid datasetId, Guid freezeId) =>
-            new(runId,
-                datasetId,
-                "v1:abc",
-                DatasetRevision: 1,
-                JsonSerializer.SerializeToUtf8Bytes(new TrainingRunFreezeV1
+            new()
+            {
+                Id = runId,
+                DatasetId = datasetId,
+                DatasetContentFingerprint = "v1:abc",
+                DatasetRevision = 1,
+                FreezeJson = JsonSerializer.SerializeToUtf8Bytes(new TrainingRunFreezeV1
                 {
                     FreezeId = freezeId,
                     DatasetContentFingerprint = "v1:abc",
                     DatasetRevision = 1
                 }, TrainingJson.Options),
-                Guid.NewGuid(),
-                LinkedInstalledModelName: null,
-                LinkedModelContentFingerprint: null,
-                JsonSerializer.SerializeToUtf8Bytes(new TrainingRunOptionsV1(), TrainingJson.Options),
-                LicenseConfirmationJson: null,
-                TrainingRunStatus.Queued,
-                ProgressJson: null,
-                LogTail: null,
-                LaunchReceiptJson: null,
-                ErrorMessage: null,
-                Version: 2,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                TrainingWorkStatus.Running,
-                WorkErrorMessage: null);
+                BaseArtifactId = Guid.NewGuid(),
+                LinkedInstalledModelName = null,
+                LinkedModelContentFingerprint = null,
+                OptionsJson = JsonSerializer.SerializeToUtf8Bytes(new TrainingRunOptionsV1(), TrainingJson.Options),
+                LicenseConfirmationJson = null,
+                Status = TrainingRunStatus.Queued,
+                ProgressJson = null,
+                LogTail = null,
+                LaunchReceiptJson = null,
+                ErrorMessage = null,
+                Version = 2,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Running,
+                WorkErrorMessage = null
+            };
     }
 }

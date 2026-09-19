@@ -572,16 +572,19 @@ public sealed class RuntimePackageConfigHashTests
 
     private static PlaybookActionRecord EnabledAction(string behavior, int priority)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            behavior,
-            Scope: null,
-            priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = behavior,
+            Scope = null,
+            Priority = priority,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 }

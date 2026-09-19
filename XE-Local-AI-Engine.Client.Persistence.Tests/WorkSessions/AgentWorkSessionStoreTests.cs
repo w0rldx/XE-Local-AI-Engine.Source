@@ -66,7 +66,7 @@ public sealed class AgentWorkSessionStoreTests
         {
             var store = WorkSessionTestFixture.StoreFor(writeContext);
             var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-            var updated = await store.UpdateAsync(new UpdateWorkSessionCommand(sessionId, created.Version, "Renamed", replacement));
+            var updated = await store.UpdateAsync(new UpdateWorkSessionCommand { SessionId = sessionId, ExpectedVersion = created.Version, Title = "Renamed", Objective = replacement });
             AssertEx.Equal("Renamed", updated.Title);
             AssertEx.Equal(replacement, updated.Objective);
             AssertEx.Equal(created.Version + 1, updated.Version);
@@ -93,25 +93,31 @@ public sealed class AgentWorkSessionStoreTests
         {
             var store = WorkSessionTestFixture.StoreFor(writeContext);
             var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-            var added = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                                       created.Version,
-                                       Guid.NewGuid(),
-                                       AgentWorkSessionTaskOrigin.Agent,
-                                       [
-                                           new WorkPlanTaskChange(first, WorkPlanTaskOperation.Add, Title: "Survey sources"),
-                                           new WorkPlanTaskChange(second, WorkPlanTaskOperation.Add, Title: "Draft findings"),
-                                           new WorkPlanTaskChange(third, WorkPlanTaskOperation.Add, Title: "Abandoned branch")
-                                       ]));
+            var added = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+            {
+                SessionId = sessionId,
+                ExpectedVersion = created.Version,
+                OperationId = Guid.NewGuid(),
+                Origin = AgentWorkSessionTaskOrigin.Agent,
+                Changes = [
+                                           new WorkPlanTaskChange { TaskId = first, Operation = WorkPlanTaskOperation.Add, Title = "Survey sources" },
+                                           new WorkPlanTaskChange { TaskId = second, Operation = WorkPlanTaskOperation.Add, Title = "Draft findings" },
+                                           new WorkPlanTaskChange { TaskId = third, Operation = WorkPlanTaskOperation.Add, Title = "Abandoned branch" }
+                                       ]
+            });
 
-            _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                               added.Version,
-                               Guid.NewGuid(),
-                               AgentWorkSessionTaskOrigin.Agent,
-                               [
-                                   new WorkPlanTaskChange(first, WorkPlanTaskOperation.Complete),
-                                   new WorkPlanTaskChange(second, WorkPlanTaskOperation.Update, Title: "Draft the findings section", Status: AgentWorkSessionTaskStatus.Active),
-                                   new WorkPlanTaskChange(third, WorkPlanTaskOperation.Drop, BlockedReason: "Superseded by the second task.")
-                               ]));
+            _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+            {
+                SessionId = sessionId,
+                ExpectedVersion = added.Version,
+                OperationId = Guid.NewGuid(),
+                Origin = AgentWorkSessionTaskOrigin.Agent,
+                Changes = [
+                                   new WorkPlanTaskChange { TaskId = first, Operation = WorkPlanTaskOperation.Complete },
+                                   new WorkPlanTaskChange { TaskId = second, Operation = WorkPlanTaskOperation.Update, Title = "Draft the findings section", Status = AgentWorkSessionTaskStatus.Active },
+                                   new WorkPlanTaskChange { TaskId = third, Operation = WorkPlanTaskOperation.Drop, BlockedReason = "Superseded by the second task." }
+                               ]
+            });
         }
 
         await using (var readContext = fixture.CreateContext())
@@ -141,11 +147,14 @@ public sealed class AgentWorkSessionStoreTests
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
 
         // The declared foreign keys never fire on this connection, so ownership is the store's to check.
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                              created.Version,
-                              Guid.NewGuid(),
-                              AgentWorkSessionTaskOrigin.Agent,
-                              [new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Guid.NewGuid(), "Orphan child")])));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, ParentTaskId = Guid.NewGuid(), Title = "Orphan child" }]
+        }));
     }
 
     [Test]
@@ -163,27 +172,36 @@ public sealed class AgentWorkSessionStoreTests
         {
             var store = WorkSessionTestFixture.StoreFor(writeContext);
             var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-            var withFirst = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                           firstFinding,
-                                           created.Version,
-                                           Guid.NewGuid(),
-                                           AgentWorkSessionFindingKind.Finding,
-                                           text,
-                                           SourceRef: "kb://doc/1"));
-            var withSecond = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                            secondFinding,
-                                            withFirst.Version,
-                                            Guid.NewGuid(),
-                                            AgentWorkSessionFindingKind.Decision,
-                                            "Chose the newer source.",
-                                            SupersedesFindingId: firstFinding));
-            _ = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                               checkpointId,
-                               withSecond.Version,
-                               Guid.NewGuid(),
-                               Step: 0,
-                               Summary: null,
-                               state));
+            var withFirst = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+            {
+                SessionId = sessionId,
+                FindingId = firstFinding,
+                ExpectedVersion = created.Version,
+                OperationId = Guid.NewGuid(),
+                Kind = AgentWorkSessionFindingKind.Finding,
+                Text = text,
+                SourceRef = "kb://doc/1"
+            });
+            var withSecond = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+            {
+                SessionId = sessionId,
+                FindingId = secondFinding,
+                ExpectedVersion = withFirst.Version,
+                OperationId = Guid.NewGuid(),
+                Kind = AgentWorkSessionFindingKind.Decision,
+                Text = "Chose the newer source.",
+                SupersedesFindingId = firstFinding
+            });
+            _ = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand
+            {
+                SessionId = sessionId,
+                CheckpointId = checkpointId,
+                ExpectedVersion = withSecond.Version,
+                OperationId = Guid.NewGuid(),
+                Step = 0,
+                Summary = null,
+                StateJson = state
+            });
         }
 
         await using (var readContext = fixture.CreateContext())
@@ -217,7 +235,7 @@ public sealed class AgentWorkSessionStoreTests
         _ = await WorkSessionTestFixture.SeedAsync(store, newer, "Newer");
 
         // Same-millisecond creations are possible, so move the older row explicitly rather than trusting the clock.
-        _ = await store.UpdateAsync(new UpdateWorkSessionCommand(older, createdOlder.Version, "Older, touched"));
+        _ = await store.UpdateAsync(new UpdateWorkSessionCommand { SessionId = older, ExpectedVersion = createdOlder.Version, Title = "Older, touched" });
 
         var sessions = await store.ListAsync();
         AssertEx.Equal(expected: 2, sessions.Count);

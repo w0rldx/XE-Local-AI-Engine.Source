@@ -6,29 +6,46 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="PrincipalId" /> is the integrator identity every ownership question keys on;
 ///     <see cref="KeyPrefix" /> only names which credential was used.
 /// </summary>
-public sealed record IntegrationApiKeySnapshot(
-    Guid Id,
-    Guid PrincipalId,
-    string KeyPrefix,
-    ReadOnlyMemory<byte> KeyHash,
-    string Label,
-    string? AllowedTriggerIdsJson,
-    long CreatedAtUtc,
-    long? LastUsedAtUtc,
-    long? RevokedAtUtc);
+public sealed record IntegrationApiKeySnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required ReadOnlyMemory<byte> KeyHash { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string? AllowedTriggerIdsJson { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long? LastUsedAtUtc { get; init; }
+
+    public required long? RevokedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Everything a generate needs. The caller mints both ids: <c>PrincipalId</c> is fresh for a new integrator and
 ///     reused when rotating or adding a credential for an existing one, which is the whole point of separating it from
 ///     <c>KeyId</c>.
 /// </summary>
-public sealed record IntegrationApiKeyCreateCommand(
-    Guid KeyId,
-    Guid PrincipalId,
-    string KeyPrefix,
-    ReadOnlyMemory<byte> KeyHash,
-    string Label,
-    string? AllowedTriggerIdsJson);
+public sealed class IntegrationApiKeyCreateCommand
+{
+    public required Guid KeyId { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required ReadOnlyMemory<byte> KeyHash { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string? AllowedTriggerIdsJson { get; init; }
+}
 
 /// <summary>
 ///     Persistence boundary for the <c>xeint_</c> credentials. Unlike the two singleton key stores in this schema, a

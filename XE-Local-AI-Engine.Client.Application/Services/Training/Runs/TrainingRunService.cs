@@ -238,14 +238,17 @@ public sealed class TrainingRunService : ITrainingRunService
         // recorded at creation so a later re-install under the same name cannot silently swap the base out from under
         // the run — the fingerprint travels with the link.
         var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken);
-        var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand(command.DatasetId,
-                                         command.ExpectedDatasetVersion,
-                                         command.BaseArtifactId,
-                                         JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
-                                         JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
-                                         JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
-                                         link?.ModelName,
-                                         link?.ContentFingerprint),
+        var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand
+        {
+            DatasetId = command.DatasetId,
+            ExpectedDatasetVersion = command.ExpectedDatasetVersion,
+            BaseArtifactId = command.BaseArtifactId,
+            FreezeJson = JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
+            OptionsJson = JsonSerializer.SerializeToUtf8Bytes(resolved.Options, TrainingJson.Options),
+            LicenseConfirmationJson = JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
+            LinkedInstalledModelName = link?.ModelName,
+            LinkedModelContentFingerprint = link?.ContentFingerprint
+        },
                                      cancellationToken);
         _signal.Wake();
         return run;

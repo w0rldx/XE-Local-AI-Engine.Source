@@ -154,11 +154,14 @@ internal static class DevWorkflowUpstreamArtifacts
             return upstream;
         }
 
-        _ = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "consume-upstream"),
-                               [.. upstream.Select(static artifact => artifact.Id)]),
+        _ = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "consume-upstream"),
+            ArtifactIds = [.. upstream.Select(static artifact => artifact.Id)]
+        },
                            cancellationToken);
         return upstream;
     }

@@ -131,12 +131,15 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // and it is what the row persists, so a later reader can reconcile the arguments with what was bound.
             inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken);
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
-            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   GraphWorkflowVersions.Any,
-                                   GraphWorkflowNodeRunStatus.Queued,
-                                   QueueReason: AwaitingToolSlot,
-                                   InputJson: inputJson),
+            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Queued,
+                QueueReason = AwaitingToolSlot,
+                InputJson = inputJson
+            },
                                cancellationToken);
             nodeRun = nodeRun with
             {
@@ -383,10 +386,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         CancellationToken cancellationToken)
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Running),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Running
+        },
                            cancellationToken);
         return 1;
     }
@@ -459,11 +465,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Succeeded, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Succeeded,
-                               OutputJson: document),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Succeeded,
+            OutputJson = document
+        },
                            cancellationToken);
         return 1;
     }
@@ -476,12 +485,15 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         CancellationToken cancellationToken)
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Cancelled,
-                               FailureClass: GraphWorkflowFailureClass.Cancelled,
-                               TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Cancelled,
+            FailureClass = GraphWorkflowFailureClass.Cancelled,
+            TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)
+        },
                            cancellationToken);
         return 1;
     }
@@ -504,10 +516,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         if (nodeRun.Status == GraphWorkflowNodeRunStatus.Pending)
         {
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   GraphWorkflowVersions.Any,
-                                   GraphWorkflowNodeRunStatus.Running),
+            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Running
+            },
                                cancellationToken);
             nodeRun = nodeRun with
             {
@@ -532,14 +547,17 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Failed,
-                               OutputJson: document,
-                               FailureClass: failureClass,
-                               TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
-                               EventType: eventType),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+            OutputJson = document,
+            FailureClass = failureClass,
+            TerminalReason = GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
+            EventType = eventType
+        },
                            cancellationToken);
         return written + 1;
     }

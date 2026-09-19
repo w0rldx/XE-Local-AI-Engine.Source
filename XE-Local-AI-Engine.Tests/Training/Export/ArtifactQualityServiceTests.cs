@@ -404,11 +404,44 @@ public sealed class ArtifactQualityServiceTests
             var runId = Guid.NewGuid();
             var artifactId = Guid.NewGuid();
             const string sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-            var artifact = new TrainingArtifactRecord(artifactId, runId, artifactKind, "/staged/tuned.gguf", sha, 1,
-                TrainingArtifactSmokeState.Passed, null, null, 4, 0, 0);
-            var run = new TrainingRunRecord(runId, Guid.NewGuid(), "v1:dataset", 1, ReadOnlyMemory<byte>.Empty, Guid.NewGuid(), "base:Q4_K_M",
-                "v1:base", ReadOnlyMemory<byte>.Empty, null, TrainingRunStatus.Succeeded, null, null, null, null, 1, 0, 0,
-                TrainingWorkStatus.Succeeded, null);
+            var artifact = new TrainingArtifactRecord
+            {
+                Id = artifactId,
+                RunId = runId,
+                Kind = artifactKind,
+                Path = "/staged/tuned.gguf",
+                Sha256 = sha,
+                SizeBytes = 1,
+                SmokeState = TrainingArtifactSmokeState.Passed,
+                SmokeReason = null,
+                CommittedModelName = null,
+                Version = 4,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
+            var run = new TrainingRunRecord
+            {
+                Id = runId,
+                DatasetId = Guid.NewGuid(),
+                DatasetContentFingerprint = "v1:dataset",
+                DatasetRevision = 1,
+                FreezeJson = ReadOnlyMemory<byte>.Empty,
+                BaseArtifactId = Guid.NewGuid(),
+                LinkedInstalledModelName = "base:Q4_K_M",
+                LinkedModelContentFingerprint = "v1:base",
+                OptionsJson = ReadOnlyMemory<byte>.Empty,
+                LicenseConfirmationJson = null,
+                Status = TrainingRunStatus.Succeeded,
+                ProgressJson = null,
+                LogTail = null,
+                LaunchReceiptJson = null,
+                ErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                WorkErrorMessage = null
+            };
             var firstSampleId = Guid.NewGuid();
             var secondSampleId = Guid.NewGuid();
             var kindOnlyRegression = aggregateDelta >= 0 && kindDelta < 0;
@@ -430,22 +463,25 @@ public sealed class ArtifactQualityServiceTests
             IReadOnlyList<TrainingEvaluationResultEntry> baseResults = kindOnlyRegression
                 ?
                 [
-                    new TrainingEvaluationResultEntry(firstSampleId, "tool", true, "deterministic"),
-                    new TrainingEvaluationResultEntry(secondSampleId, "other", false, "deterministic")
+                    new TrainingEvaluationResultEntry { SampleId = firstSampleId, Kind = "tool", Passed = true, ScoredBy = "deterministic" },
+                    new TrainingEvaluationResultEntry { SampleId = secondSampleId, Kind = "other", Passed = false, ScoredBy = "deterministic" }
                 ]
-                : [new TrainingEvaluationResultEntry(firstSampleId, "tool", true, "deterministic")];
+                : [new TrainingEvaluationResultEntry { SampleId = firstSampleId, Kind = "tool", Passed = true, ScoredBy = "deterministic" }];
             IReadOnlyList<TrainingEvaluationResultEntry> tunedResults = kindOnlyRegression
                 ?
                 [
-                    new TrainingEvaluationResultEntry(firstSampleId, "tool", false, "deterministic"),
-                    new TrainingEvaluationResultEntry(secondSampleId, "other", true, "deterministic")
+                    new TrainingEvaluationResultEntry { SampleId = firstSampleId, Kind = "tool", Passed = false, ScoredBy = "deterministic" },
+                    new TrainingEvaluationResultEntry { SampleId = secondSampleId, Kind = "other", Passed = true, ScoredBy = "deterministic" }
                 ]
                 :
                 [
-                    new TrainingEvaluationResultEntry(firstSampleId,
-                        "tool",
-                        aggregateDelta >= 0 && !currentEvaluationRegressed,
-                        "deterministic")
+                    new TrainingEvaluationResultEntry
+                    {
+                        SampleId = firstSampleId,
+                        Kind = "tool",
+                        Passed = aggregateDelta >= 0 && !currentEvaluationRegressed,
+                        ScoredBy = "deterministic"
+                    }
                 ];
             var baseEvaluation = Evaluation(runId, "base:Q4_K_M", "v1:base", membership, EvaluationModelTargetKind.InstalledModel, null,
                 variant: "Cuda", modelSha256: new string('b', 64), entries: baseResults);
@@ -501,9 +537,20 @@ public sealed class ArtifactQualityServiceTests
                 };
             }
 
-            var comparison = new TrainingComparisonRecord(Guid.NewGuid(), "quality", baseEvaluation.Id, tunedEvaluation.Id, null, null,
-                comparisonRunMismatch ? Guid.NewGuid() : runId,
-                JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options), 1, 0, 0);
+            var comparison = new TrainingComparisonRecord
+            {
+                Id = Guid.NewGuid(),
+                Name = "quality",
+                BaseEvaluationRunId = baseEvaluation.Id,
+                TunedEvaluationRunId = tunedEvaluation.Id,
+                BaseBenchmarkRunId = null,
+                TunedBenchmarkRunId = null,
+                TrainingRunId = comparisonRunMismatch ? Guid.NewGuid() : runId,
+                DeltasJson = JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options),
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
 
             var runs = Substitute.For<ITrainingRunStore>();
             _ = runs.GetArtifactAsync(artifactId, Arg.Any<CancellationToken>()).Returns(_ => artifact);
@@ -537,11 +584,30 @@ public sealed class ArtifactQualityServiceTests
             IReadOnlyList<TrainingEvaluationResultEntry>? entries = null)
         {
             var results = entries ?? [];
-            return new TrainingEvaluationRecord(Guid.NewGuid(), runId, Guid.NewGuid(), name, fingerprint, Guid.NewGuid(), "v1:dataset", membership,
-                TrainingEvaluationStatus.Succeeded, TrainingEvaluationResults.Write(results), results.Count, results.Count,
-                results.Count(item => item.Passed), TrainingEvaluationResults.WriteTally(TrainingEvaluationResults.Tally(results)), null, 2, 0, 0,
-                TrainingWorkStatus.Succeeded, kind, artifactId,
-                JsonSerializer.SerializeToUtf8Bytes(new TrainingEvaluationExecutionProvenanceV1
+            return new TrainingEvaluationRecord
+            {
+                Id = Guid.NewGuid(),
+                TrainingRunId = runId,
+                ComparisonId = Guid.NewGuid(),
+                ModelName = name,
+                ModelContentFingerprint = fingerprint,
+                DatasetId = Guid.NewGuid(),
+                DatasetContentFingerprint = "v1:dataset",
+                MembershipJson = membership,
+                Status = TrainingEvaluationStatus.Succeeded,
+                ResultsJson = TrainingEvaluationResults.Write(results),
+                TotalCount = results.Count,
+                ScoredCount = results.Count,
+                PassedCount = results.Count(item => item.Passed),
+                PerKindJson = TrainingEvaluationResults.WriteTally(TrainingEvaluationResults.Tally(results)),
+                ErrorMessage = null,
+                Version = 2,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                TargetKind = kind,
+                SourceArtifactId = artifactId,
+                ExecutionProvenanceJson = JsonSerializer.SerializeToUtf8Bytes(new TrainingEvaluationExecutionProvenanceV1
                 {
                     Variant = variant,
                     ExecutableVersion = "v1",
@@ -554,7 +620,8 @@ public sealed class ArtifactQualityServiceTests
                     ModelSizeBytes = 1,
                     AdapterSha256 = adapterSha256,
                     AdapterSizeBytes = adapterSha256 is null ? null : 1
-                }, TrainingJson.Options));
+                }, TrainingJson.Options)
+            };
         }
     }
 }

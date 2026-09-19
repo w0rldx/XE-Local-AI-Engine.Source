@@ -6,7 +6,16 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Down-rate (<c>Down / Total</c>) is derived in the application service so the store stays a pure count source
 ///     (÷0 → 0 is a service concern). Plaintext only — no encrypted column is read.
 /// </summary>
-public sealed record CohortComparison(int BeforeTotal, int BeforeDown, int AfterTotal, int AfterDown);
+public sealed class CohortComparison
+{
+    public required int BeforeTotal { get; init; }
+
+    public required int BeforeDown { get; init; }
+
+    public required int AfterTotal { get; init; }
+
+    public required int AfterDown { get; init; }
+}
 
 /// <summary>
 ///     Read-only cohort monitor over the node-local per-message feedback. Splits the

@@ -239,12 +239,15 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             }
 
             var parsed = BenchmarkPairwiseResultParser.Parse(terminal.StreamedContent);
-            await _store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(work.QueueSequence,
-                           work.Version,
-                           BenchmarkPairwiseResultParser.ToCanonicalVerdict(parsed.Verdict, comparison.Order),
-                           new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(BenchmarkCanonicalJson.Serialize(parsed))),
-                           truncatedA,
-                           truncatedB), CancellationToken.None);
+            await _store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand
+            {
+                QueueSequence = work.QueueSequence,
+                ExpectedWorkVersion = work.Version,
+                Verdict = BenchmarkPairwiseResultParser.ToCanonicalVerdict(parsed.Verdict, comparison.Order),
+                ResultJson = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(BenchmarkCanonicalJson.Serialize(parsed))),
+                AnswerATruncated = truncatedA,
+                AnswerBTruncated = truncatedB
+            }, CancellationToken.None);
             _events.EvictPlaintext(work.RunId);
             _ = await _fitter.TryPublishAsync(comparison.ProjectId, CancellationToken.None);
         }

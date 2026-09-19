@@ -188,19 +188,22 @@ public sealed class DevelopmentAttemptHubTests
             .Build();
 
     private static DevelopmentAttemptSnapshot Attempt(Guid attemptId, DevelopmentAttemptStatus status) =>
-        new(attemptId,
-            TaskId,
-            null,
-            DevelopmentAttemptRole.Coder,
-            "coder-model",
-            "local",
-            status,
-            1,
-            status is DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running ? null : 2,
-            null,
-            null,
-            null,
-            1);
+        new()
+        {
+            Id = attemptId,
+            TaskId = TaskId,
+            PredecessorAttemptId = null,
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-model",
+            Provider = "local",
+            Status = status,
+            StartedAtUtc = 1,
+            EndedAtUtc = status is DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running ? null : 2,
+            TerminalReason = null,
+            InputTokens = null,
+            OutputTokens = null,
+            Version = 1
+        };
 
     private static DevelopmentAttemptLiveUpdate Update(string output) =>
         new()

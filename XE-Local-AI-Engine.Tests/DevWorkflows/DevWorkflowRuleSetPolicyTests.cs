@@ -309,14 +309,17 @@ public sealed class DevWorkflowRuleSetPolicyTests
     }
 
     private static DevWorkflowRuleSetSnapshot Summary(string name, string scopeJson) =>
-        new(Guid.NewGuid(),
-            name,
-            Description: null,
-            scopeJson,
-            Enabled: true,
-            Body: $"the text of {name}",
-            ContentSha256: $"hash-of-{name}",
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = null,
+            ScopeJson = scopeJson,
+            Enabled = true,
+            Body = $"the text of {name}",
+            ContentSha256 = $"hash-of-{name}",
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 }

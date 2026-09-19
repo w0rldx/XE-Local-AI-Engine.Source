@@ -406,15 +406,21 @@ internal sealed class DevWorkflowRetryPolicy
         // Running. The run would then repeat the check and complete on evidence and an approval about an implementation
         // that no longer existed. All or nothing means a crash leaves the failure still recorded, which the next sweep
         // re-derives and re-routes.
-        var route = new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(run.Id,
-                DevWorkflowVersions.Any,
-                DevWorkflowEventTypes.NodeRetryRouted,
-                nodeRun.Id,
-                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
-                failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)),
-            [.. moves.Select(static move => move.Command)],
-            _options.MaxTotalAttempts);
+        var route = new RouteDevWorkflowRetryCommand
+        {
+            Route = new AppendDevWorkflowEventCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            EventType = DevWorkflowEventTypes.NodeRetryRouted,
+            NodeRunId = nodeRun.Id,
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
+            Outcome = failure.Outcome ?? DevWorkflowOutcomes.Failed,
+            DetailJson = JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)
+        },
+            Resets = [.. moves.Select(static move => move.Command)],
+            MaxTotalAttempts = _options.MaxTotalAttempts
+        };
         try
         {
             await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken);
@@ -591,24 +597,26 @@ internal sealed class DevWorkflowRetryPolicy
     {
         var delayUntil = delaySeconds > 0 ? _timeProvider.GetUtcNow().AddSeconds(delaySeconds) : (DateTimeOffset?)null;
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Pending, nodeRun.NodeKey);
-        return (new TransitionDevWorkflowNodeRunCommand(run.Id,
-            nodeRun.Id,
-            DevWorkflowVersions.Any,
-            DevWorkflowNodeRunStatus.Pending,
-            InputJson: inputJson,
-            DetailJson: JsonSerializer.Serialize(detail with
+        return (new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Pending,
+            InputJson = inputJson,
+            DetailJson = JsonSerializer.Serialize(detail with
             {
                 DelayUntil = delayUntil?.ToUnixTimeMilliseconds()
             }, JsonOptions),
-            IncrementAttempt: true,
-            ClearWorkSession: true,
-            Outcome: outcome,
-
+            IncrementAttempt = true,
+            ClearWorkSession = true,
+            Outcome = outcome,
             // The run-wide budget travels WITH the write, so the store re-checks it under the writer lock instead of
             // trusting the caller's earlier read (FU3-4). Inert on a reset inside a route — those go through the
             // route's own transaction, which admits the whole cascade once against RouteDevWorkflowRetryCommand's
             // budget rather than each reset against this one.
-            MaxTotalAttempts: _options.MaxTotalAttempts), delayUntil);
+            MaxTotalAttempts = _options.MaxTotalAttempts
+        }, delayUntil);
     }
 
     /// <summary>
@@ -639,15 +647,18 @@ internal sealed class DevWorkflowRetryPolicy
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Blocked, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Blocked,
-                               PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
-                               OutputJson: outputJson,
-                               FailureClass: failureClass,
-                               TerminalReason: sanitizedReason,
-                               WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+            OutputJson = outputJson,
+            FailureClass = failureClass,
+            TerminalReason = sanitizedReason,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+        },
                            cancellationToken);
         return 1;
     }
@@ -661,15 +672,18 @@ internal sealed class DevWorkflowRetryPolicy
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Failed,
-                               OutputJson: failure.OutputJson,
-                               FailureClass: failure.FailureClass,
-                               TerminalReason: failure.SanitizedReason,
-                               Outcome: failure.Outcome,
-                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, DevWorkflowNodeRunStatus.Failed)),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Failed,
+            OutputJson = failure.OutputJson,
+            FailureClass = failure.FailureClass,
+            TerminalReason = failure.SanitizedReason,
+            Outcome = failure.Outcome,
+            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, DevWorkflowNodeRunStatus.Failed)
+        },
                            cancellationToken);
         return 1;
     }

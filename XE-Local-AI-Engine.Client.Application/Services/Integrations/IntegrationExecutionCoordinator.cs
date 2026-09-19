@@ -345,7 +345,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //
         // A stale snapshot is harmless: TerminalizeAsync is a status/version CAS over NonTerminalStatuses, so a row
         // that went terminal between the read and its turn loses the CAS and this sweep writes nothing for it.
-        var interrupted = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, NonTerminalStatuses, int.MaxValue, Offset: 0), cancellationToken);
+        var interrupted = await store.ListAsync(new IntegrationExecutionFilter { TriggerId = null, SessionId = null, Status = NonTerminalStatuses, Limit = int.MaxValue, Offset = 0 }, cancellationToken);
 
         var recovered = 0;
         foreach (var row in interrupted)
@@ -792,13 +792,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //     "this one had to wait". Accepted -> Running directly is legal; Queued exists only for a real wait,
             //     and this is its only producer.
             if (!leaseTask.IsCompleted
-                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId, context.Version, AcceptedOnly, IntegrationExecutionStatus.Queued), runToken))
+                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate { ExecutionId = executionId, ExpectedVersion = context.Version, ExpectedStatuses = AcceptedOnly, NewStatus = IntegrationExecutionStatus.Queued }, runToken))
             {
                 // A false means a concurrent cancel already CASed the row on the same version, so the row is terminal
                 // and no execution.queued may follow it.
                 context.Version++;
                 var queued = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionQueued, contentType: null, payload: null);
-                await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, queued.Sequence, queued.Type, DetailJson: null, queued.OccurredAtUtc), runToken);
+                await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = queued.Sequence, EventType = queued.Type, DetailJson = null, OccurredAtUtc = queued.OccurredAtUtc }, runToken);
             }
         }
         catch
@@ -899,13 +899,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // 7d. The invocation id is stamped in this same update: the column is the audit row's correlation and
             //     nothing else ever writes it.
             var startedAtUtc = NowUnixMilliseconds();
-            if (!await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId,
-                                    context.Version,
-                                    BeforeRunStatuses,
-                                    IntegrationExecutionStatus.Running,
-                                    startedAtUtc,
-                                    EndedAtUtc: null,
-                                    package.InvocationId),
+            if (!await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
+            {
+                ExecutionId = executionId,
+                ExpectedVersion = context.Version,
+                ExpectedStatuses = BeforeRunStatuses,
+                NewStatus = IntegrationExecutionStatus.Running,
+                StartedAtUtc = startedAtUtc,
+                EndedAtUtc = null,
+                InvocationId = package.InvocationId
+            },
                                 runToken))
             {
                 var reloaded = await store.GetByIdAsync(executionId, runToken);
@@ -940,7 +943,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //     (ConversationId, MessageId, RequestId) against an EXISTING placeholder row, so creating it after the
             //     run would leave the assistant turn unpersisted.
             var started = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionStarted, contentType: null, payload: null);
-            await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, started.Sequence, started.Type, DetailJson: null, started.OccurredAtUtc), runToken);
+            await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = started.Sequence, EventType = started.Type, DetailJson = null, OccurredAtUtc = started.OccurredAtUtc }, runToken);
 
             var correlation = new NodeChatMessageCorrelation(session.ConversationId, messageId, executionId);
             _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(session.ConversationId,
@@ -1162,13 +1165,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         CancellationToken cancellationToken)
     {
         var store = services.GetRequiredService<IIntegrationExecutionStore>();
-        var executions = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null,
-                                            session.Id,
-                                            Status: null,
-                                            // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
-                                            // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
-                                            IntegrationPriorOutputsComposer.MaxPayloads + 1,
-                                            Offset: 0),
+        var executions = await store.ListAsync(new IntegrationExecutionFilter
+        {
+            TriggerId = null,
+            SessionId = session.Id,
+            Status = null,
+            // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
+            // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
+            Limit = IntegrationPriorOutputsComposer.MaxPayloads + 1,
+            Offset = 0
+        },
                                         cancellationToken);
 
         var envelopes = new List<string>(IntegrationPriorOutputsComposer.MaxPayloads);

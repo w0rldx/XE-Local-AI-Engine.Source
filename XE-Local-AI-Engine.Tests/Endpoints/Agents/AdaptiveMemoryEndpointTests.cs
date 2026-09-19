@@ -284,15 +284,18 @@ public sealed class AdaptiveMemoryEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput("Owner",
-            Description: null,
-            "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = "Owner",
+            Description = null,
+            Instructions = "You are a careful engineering agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 
@@ -301,16 +304,19 @@ public sealed class AdaptiveMemoryEndpointTests
         // Mirrors the extraction service write: Suggested + Source=Extracted + a typed MemoryScope, with evidence ids.
         using var scopeProvider = factory.Services.CreateScope();
         var store = scopeProvider.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-        var created = await store.AddAsync(new PlaybookActionInput(agentDefinitionId,
-            PlaybookActionState.Suggested,
-            PlaybookActionSource.Extracted,
-            TriggerCondition: null,
-            $"Lesson learned for {scope}.",
-            scope.ToString(),
-            Priority: 100,
-            [Guid.NewGuid()],
-            Confidence: 0.8d,
-            MemoryScope: scope));
+        var created = await store.AddAsync(new PlaybookActionInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Extracted,
+            TriggerCondition = null,
+            Behavior = $"Lesson learned for {scope}.",
+            Scope = scope.ToString(),
+            Priority = 100,
+            SourceFeedbackIds = [Guid.NewGuid()],
+            Confidence = 0.8d,
+            MemoryScope = scope
+        });
         return created.Id;
     }
 
@@ -318,16 +324,19 @@ public sealed class AdaptiveMemoryEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-        _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "test-model",
-            "deadbeef",
-            LatencyMs: 1_234,
-            success,
-            PromptTokens: 10,
-            CompletionTokens: 20,
-            errorClass));
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            ModelName = "test-model",
+            ConfigHash = "deadbeef",
+            LatencyMs = 1_234,
+            Success = success,
+            PromptTokens = 10,
+            CompletionTokens = 20,
+            ErrorClass = errorClass
+        });
     }
 
     private static async Task RecordPassingEvalAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, Guid actionId)

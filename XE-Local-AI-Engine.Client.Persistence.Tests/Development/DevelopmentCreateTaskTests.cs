@@ -30,13 +30,16 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         var seed = DevelopmentTestFixture.CreateSeed();
         _ = await store.CreateProjectAsync(seed);
 
-        var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                     Guid.NewGuid(),
-                                     Guid.NewGuid(),
-                                     "Implement the second slice",
-                                     "Do the other half.",
-                                     "[\"the other half is done\"]",
-                                     MaxReviewRounds: 5));
+        var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = seed.ProjectId,
+            TaskId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Title = "Implement the second slice",
+            Requirements = "Do the other half.",
+            AcceptanceCriteriaJson = "[\"the other half is done\"]",
+            MaxReviewRounds = 5
+        });
 
         var tasks = await store.ListTasksAsync(seed.ProjectId);
         AssertEx.Equal(expected: 2, tasks.Count, "A project carries as many tasks as its work was decomposed into.");
@@ -71,21 +74,27 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         _ = await store.CreateProjectAsync(seed);
         var operationId = Guid.NewGuid();
 
-        var first = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                   Guid.NewGuid(),
-                                   operationId,
-                                   "Implement the second slice",
-                                   "Do the other half.",
-                                   "[\"the other half is done\"]"));
+        var first = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = seed.ProjectId,
+            TaskId = Guid.NewGuid(),
+            OperationId = operationId,
+            Title = "Implement the second slice",
+            Requirements = "Do the other half.",
+            AcceptanceCriteriaJson = "[\"the other half is done\"]"
+        });
 
         // A different task id, deliberately: the replay must answer with the task that exists, not create the one the
         // retry was about to ask for.
-        var replay = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                    Guid.NewGuid(),
-                                    operationId,
-                                    "Implement the second slice",
-                                    "Do the other half.",
-                                    "[\"the other half is done\"]"));
+        var replay = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = seed.ProjectId,
+            TaskId = Guid.NewGuid(),
+            OperationId = operationId,
+            Title = "Implement the second slice",
+            Requirements = "Do the other half.",
+            AcceptanceCriteriaJson = "[\"the other half is done\"]"
+        });
 
         AssertEx.Equal(first.TaskId, replay.TaskId, "The same operation identity names the same task.");
         AssertEx.Equal(expected: 2,
@@ -124,12 +133,15 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                                                        await using var scope = provider.CreateAsyncScope();
                                                        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
                                                        _ = start.SignalAndWait(TimeSpan.FromSeconds(30));
-                                                       return await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                                                             Guid.NewGuid(),
-                                                                             Guid.NewGuid(),
-                                                                             $"Slice {index}",
-                                                                             $"Implement slice {index}.",
-                                                                             "[\"the slice is done\"]"));
+                                                       return await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+                                                       {
+                                                           ProjectId = seed.ProjectId,
+                                                           TaskId = Guid.NewGuid(),
+                                                           OperationId = Guid.NewGuid(),
+                                                           Title = $"Slice {index}",
+                                                           Requirements = $"Implement slice {index}.",
+                                                           AcceptanceCriteriaJson = "[\"the slice is done\"]"
+                                                       });
                                                    })));
 
         await using var readScope = provider.CreateAsyncScope();
@@ -152,12 +164,15 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var missingProjectId = Guid.NewGuid();
 
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => store.CreateTaskAsync(new DevelopmentCreateTaskCommand(missingProjectId,
-                              Guid.NewGuid(),
-                              Guid.NewGuid(),
-                              "Implement the second slice",
-                              "Do the other half.",
-                              "[\"the other half is done\"]")));
+        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = missingProjectId,
+            TaskId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Title = "Implement the second slice",
+            Requirements = "Do the other half.",
+            AcceptanceCriteriaJson = "[\"the other half is done\"]"
+        }));
 
         AssertEx.Empty(await store.ListTasksAsync(missingProjectId));
     }

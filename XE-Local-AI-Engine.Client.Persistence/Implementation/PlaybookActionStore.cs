@@ -136,7 +136,7 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
                                      .FirstOrDefaultAsync(action => action.Id == id, cancellationToken);
         if (entity is null)
         {
-            return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.NotFound, Record: null);
+            return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.NotFound, Record = null };
         }
 
         // Optimistic-concurrency guard: the row must still be the exact snapshot the caller validated. A concurrent
@@ -144,7 +144,7 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
         // either way the recorded eval evidence no longer proves this content, so refuse rather than enable on it.
         if (entity.Version != expectedVersion || entity.State != (int)PlaybookActionState.Suggested)
         {
-            return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.VersionConflict, Record: null);
+            return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.VersionConflict, Record = null };
         }
 
         // Cap re-check adjacent to the write, in the same transaction: two concurrent promotes cannot both read a
@@ -154,7 +154,7 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
                                            .CountAsync(action => action.AgentDefinitionId == entity.AgentDefinitionId && action.State == enabled, cancellationToken);
         if (enabledCount >= maxEnabledActions)
         {
-            return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.CapReached, Record: null);
+            return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.CapReached, Record = null };
         }
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
@@ -168,7 +168,7 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, ToRecord(entity));
+        return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.Committed, Record = ToRecord(entity) };
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -224,22 +224,25 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
 
     private static PlaybookActionRecord ToRecord(PlaybookAction entity)
     {
-        return new PlaybookActionRecord(entity.Id,
-            entity.AgentDefinitionId,
-            (PlaybookActionState)entity.State,
-            (PlaybookActionSource)entity.Source,
-            entity.TriggerCondition is null ? null : Decode(entity.TriggerCondition),
-            Decode(entity.Behavior),
-            entity.Scope,
-            entity.Priority,
-            entity.Version,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            DecodeFeedbackIds(entity.SourceFeedbackIds),
-            entity.Confidence,
-            entity.EvalResult,
-            entity.EnabledAtUtc,
-            (MemoryScope?)entity.MemoryScope);
+        return new PlaybookActionRecord
+        {
+            Id = entity.Id,
+            AgentDefinitionId = entity.AgentDefinitionId,
+            State = (PlaybookActionState)entity.State,
+            Source = (PlaybookActionSource)entity.Source,
+            TriggerCondition = entity.TriggerCondition is null ? null : Decode(entity.TriggerCondition),
+            Behavior = Decode(entity.Behavior),
+            Scope = entity.Scope,
+            Priority = entity.Priority,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            SourceFeedbackIds = DecodeFeedbackIds(entity.SourceFeedbackIds),
+            Confidence = entity.Confidence,
+            EvalResult = entity.EvalResult,
+            EnabledAtUtc = entity.EnabledAtUtc,
+            MemoryScope = (MemoryScope?)entity.MemoryScope
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

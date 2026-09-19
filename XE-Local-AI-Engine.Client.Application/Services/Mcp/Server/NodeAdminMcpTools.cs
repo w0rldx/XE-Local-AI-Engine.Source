@@ -240,25 +240,28 @@ public sealed partial class NodeAdminMcpTools
             return new McpAgentResponse("rejected", null, McpAdminToolFailureCodes.ValidationFailed, validationError);
         }
 
-        var input = new AgentDefinitionInput(name,
-            description,
-            instructions,
-            modelProfile,
-            reasoningEffort,
-            parsedKind,
-            allowedToolNames ?? [],
-            toolApprovals ?? new Dictionary<string, bool>(StringComparer.Ordinal),
-            orchestrationTopologyJson,
-            playbookEnabled,
-            parsedSkillIds,
-            defaultTemporaryChat,
-            memoryExtractionEnabled,
-            disableBaseScaffold,
-            GenerationProvenance.ToPersistedJson(metadata,
+        var input = new AgentDefinitionInput
+        {
+            Name = name,
+            Description = description,
+            Instructions = instructions,
+            ModelProfile = modelProfile,
+            ReasoningEffort = reasoningEffort,
+            Kind = parsedKind,
+            AllowedToolNames = allowedToolNames ?? [],
+            ToolApprovals = toolApprovals ?? new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = orchestrationTopologyJson,
+            PlaybookEnabled = playbookEnabled,
+            AllowedSkillIds = parsedSkillIds,
+            DefaultTemporaryChat = defaultTemporaryChat,
+            MemoryExtractionEnabled = memoryExtractionEnabled,
+            DisableBaseScaffold = disableBaseScaffold,
+            GenerationMetadataJson = GenerationProvenance.ToPersistedJson(metadata,
                 name,
                 description,
                 instructions,
-                _timeProvider.GetUtcNow()));
+                _timeProvider.GetUtcNow())
+        };
         try
         {
             var record = id is null

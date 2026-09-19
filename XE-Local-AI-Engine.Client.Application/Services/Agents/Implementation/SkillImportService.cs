@@ -162,18 +162,21 @@ internal sealed partial class SkillImportService : ISkillImportService
 
         // Enabled: false and Origin: Imported are not defaults to be overridden — they are the control. The definition
         // resolver only resolves enabled skills, so third-party instructions stay inert until an operator turns them on.
-        var input = new AgentSkillInput(candidate.Name,
-            candidate.Description,
-            candidate.Body,
-            Enabled: false,
-            candidate.License,
-            candidate.Compatibility,
-            candidate.AllowedTools,
-            candidate.Metadata,
-            AgentSkillOrigin.Imported,
-            sourceUri,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            ContentSha256(candidate));
+        var input = new AgentSkillInput
+        {
+            Name = candidate.Name,
+            Description = candidate.Description,
+            Body = candidate.Body,
+            Enabled = false,
+            License = candidate.License,
+            Compatibility = candidate.Compatibility,
+            AllowedTools = candidate.AllowedTools,
+            Metadata = candidate.Metadata,
+            Origin = AgentSkillOrigin.Imported,
+            SourceUri = sourceUri,
+            ImportedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            ContentSha256 = ContentSha256(candidate)
+        };
 
         var stored = existing is null
             ? await _store.CreateAsync(input, cancellationToken)
@@ -185,7 +188,7 @@ internal sealed partial class SkillImportService : ISkillImportService
         }
 
         var resources = candidate.Resources
-                                 .Select(static resource => new AgentSkillResourceInput(resource.Name, resource.Description, resource.MediaType, resource.Content))
+                                 .Select(static resource => new AgentSkillResourceInput { Name = resource.Name, Description = resource.Description, MediaType = resource.MediaType, Content = resource.Content })
                                  .ToList();
         await _store.ReplaceResourcesAsync(stored.Id, resources, cancellationToken);
 

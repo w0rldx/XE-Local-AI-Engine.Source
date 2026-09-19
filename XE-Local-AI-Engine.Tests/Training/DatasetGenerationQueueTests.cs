@@ -152,7 +152,25 @@ public sealed class DatasetGenerationQueueTests
         new(store, gate, cancellations ?? new TrainingRunCancellationRegistry(), signal);
 
     private static TrainingDatasetRecord Dataset() =>
-        new(Guid.NewGuid(), Guid.NewGuid(), 1, Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}"""),
-            "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
-            DatasetGenerationWorkStatus.Queued, null);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"teacherModelName":"teacher.gguf"}"""),
+            Name = "dataset",
+            Status = TrainingDatasetStatus.Generating,
+            Revision = 1,
+            ContentFingerprint = null,
+            TotalSampleCount = 0,
+            GoodSampleCount = 0,
+            BadSampleCount = 0,
+            RejectedSampleCount = 0,
+            DuplicateSampleCount = 0,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            WorkStatus = DatasetGenerationWorkStatus.Queued,
+            WorkErrorMessage = null
+        };
 }

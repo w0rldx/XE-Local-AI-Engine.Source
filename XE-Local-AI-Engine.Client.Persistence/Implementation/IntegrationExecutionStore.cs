@@ -381,12 +381,15 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
 
         return
         [
-            .. events.Select(static row => new IntegrationExecutionEventSnapshot(row.Id,
-                row.ExecutionId,
-                row.Sequence,
-                row.EventType,
-                TextOrNull(row.DetailJson),
-                row.OccurredAtUtc))
+            .. events.Select(static row => new IntegrationExecutionEventSnapshot
+            {
+                Id = row.Id,
+                ExecutionId = row.ExecutionId,
+                Sequence = row.Sequence,
+                EventType = row.EventType,
+                DetailJson = TextOrNull(row.DetailJson),
+                OccurredAtUtc = row.OccurredAtUtc
+            })
         ];
     }
 
@@ -429,40 +432,46 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             return null;
         }
 
-        return JsonSerializer.SerializeToUtf8Bytes(new IntegrationTerminalDetail(failureCategory, failureSummary));
+        return JsonSerializer.SerializeToUtf8Bytes(new IntegrationTerminalDetail { Category = failureCategory, Summary = failureSummary });
     }
 
     private static string? TextOrNull(byte[]? value) =>
         value is null ? null : Encoding.UTF8.GetString(value);
 
     private static IntegrationExecutionSnapshot ToSnapshot(IntegrationExecution entity) =>
-        new(entity.Id,
-            entity.TriggerId,
-            entity.SessionId,
-            entity.PrincipalId,
-            entity.RequestId,
-            entity.RequestFingerprint,
-            entity.KeyPrefix,
-            entity.InvocationId,
-            entity.Status,
-            entity.ReceivedAtUtc,
-            entity.StartedAtUtc,
-            entity.EndedAtUtc,
-            entity.StopRequestedAtUtc,
-            entity.FailureCategory,
-            entity.FailureSummary,
-            entity.OutputCount,
-            entity.OutputBytes,
-            entity.LastSequence,
-            entity.Version);
+        new()
+        {
+            Id = entity.Id,
+            TriggerId = entity.TriggerId,
+            SessionId = entity.SessionId,
+            PrincipalId = entity.PrincipalId,
+            RequestId = entity.RequestId,
+            RequestFingerprint = entity.RequestFingerprint,
+            KeyPrefix = entity.KeyPrefix,
+            InvocationId = entity.InvocationId,
+            Status = entity.Status,
+            ReceivedAtUtc = entity.ReceivedAtUtc,
+            StartedAtUtc = entity.StartedAtUtc,
+            EndedAtUtc = entity.EndedAtUtc,
+            StopRequestedAtUtc = entity.StopRequestedAtUtc,
+            FailureCategory = entity.FailureCategory,
+            FailureSummary = entity.FailureSummary,
+            OutputCount = entity.OutputCount,
+            OutputBytes = entity.OutputBytes,
+            LastSequence = entity.LastSequence,
+            Version = entity.Version
+        };
 
     /// <summary>
     ///     The SAME two names <c>IntegrationTerminalPayload.Failure</c> writes, so no writer — fallback or not — can put
     ///     a second failed-terminal shape in front of a reader.
     /// </summary>
-    private sealed record IntegrationTerminalDetail(
-        [property: JsonPropertyName("category")]
-        string? Category,
-        [property: JsonPropertyName("summary")]
-        string? Summary);
+    private sealed record IntegrationTerminalDetail
+    {
+        [JsonPropertyName("category")]
+        public required string? Category { get; init; }
+
+        [JsonPropertyName("summary")]
+        public required string? Summary { get; init; }
+    }
 }

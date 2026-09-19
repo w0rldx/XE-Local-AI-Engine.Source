@@ -46,7 +46,7 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>())
                  .Returns(_ => ++attempts == 1
                      ? throw new DevWorkflowConcurrencyException("A concurrent writer won the race before the route committed.")
-                     : new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+                     : new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
 
         var written = await RouteAsync(store);
 
@@ -96,7 +96,7 @@ public sealed class DevWorkflowRetryPolicyTests
     {
         var store = Store();
         _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
 
         var implement = NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running) with
         {
@@ -138,7 +138,7 @@ public sealed class DevWorkflowRetryPolicyTests
                      throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
                                                                        + "re-attempts as this run allows, so it cannot be retried again."));
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
 
         var written = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
 
@@ -165,7 +165,7 @@ public sealed class DevWorkflowRetryPolicyTests
                      throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
                                                                        + "re-attempts as this run allows, so it cannot be retried again."));
         _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
 
         var written = await RouteAsync(store);
 
@@ -210,10 +210,10 @@ public sealed class DevWorkflowRetryPolicyTests
 
                      slots--;
                      admitted.Add((TransitionDevWorkflowNodeRunCommand)call[0]!);
-                     return new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0);
+                     return new DevWorkflowMutationResult { RunId = RunId, Sequence = 7, Version = 3, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 };
                  });
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 8, Version: 4, DevWorkflowRunStatus.Running, GraphRevision: 0));
+                 .Returns(new DevWorkflowMutationResult { RunId = RunId, Sequence = 8, Version = 4, Status = DevWorkflowRunStatus.Running, GraphRevision = 0 });
 
         _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
         _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
@@ -303,49 +303,55 @@ public sealed class DevWorkflowRetryPolicyTests
     }
 
     private static DevWorkflowRunSnapshot Run() =>
-        new(RunId,
-            WorkItemId: Guid.NewGuid(),
-            DefinitionId: Guid.NewGuid(),
-            DefinitionVersion: 1,
-            DefinitionGraphHash: "hash",
-            FixLoop,
-            GraphRevision: 0,
-            DevWorkflowRunStatus.Running,
-            LastSequence: 9,
-            FailureClass: null,
-            TerminalReason: null,
-            StartedAtUtc: 1,
-            EndedAtUtc: null,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Version: 4);
+        new()
+        {
+            Id = RunId,
+            WorkItemId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionGraphHash = "hash",
+            GraphJson = FixLoop,
+            GraphRevision = 0,
+            Status = DevWorkflowRunStatus.Running,
+            LastSequence = 9,
+            FailureClass = null,
+            TerminalReason = null,
+            StartedAtUtc = 1,
+            EndedAtUtc = null,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 4
+        };
 
     private static DevWorkflowNodeRunSnapshot NodeRun(Guid id, string nodeKey, DevWorkflowNodeType nodeType, DevWorkflowNodeRunStatus status) =>
-        new(id,
-            RunId,
-            nodeKey,
-            nodeType,
-            Attempt: 1,
-            MaxAttempts: 3,
-            SessionResumes: 0,
-            status,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 1,
-            WorkSessionId: null,
-            WorkSessionAvailable: false,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: 1,
-            EndedAtUtc: null,
-            CreatedAtUtc: 1);
+        new()
+        {
+            Id = id,
+            RunId = RunId,
+            NodeKey = nodeKey,
+            NodeType = nodeType,
+            Attempt = 1,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = status,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 1,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = 1,
+            EndedAtUtc = null,
+            CreatedAtUtc = 1
+        };
 }

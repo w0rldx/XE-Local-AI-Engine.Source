@@ -888,27 +888,33 @@ public sealed class DevWorkflowEndpointTests
     }
 
     private static DevWorkflowRuleSetSnapshot RuleSetSnapshot() =>
-        new(RuleSetId,
-            "House rules",
-            "What every agent follows.",
-            $$"""{"projectIds":["{{WorkItemId}}"],"nodeTypes":["Agent"]}""",
-            Enabled: true,
-            "Never touch production.",
-            "content-hash",
-            Version: 4,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = RuleSetId,
+            Name = "House rules",
+            Description = "What every agent follows.",
+            ScopeJson = $$"""{"projectIds":["{{WorkItemId}}"],"nodeTypes":["Agent"]}""",
+            Enabled = true,
+            Body = "Never touch production.",
+            ContentSha256 = "content-hash",
+            Version = 4,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static DevWorkflowRuleSetSummary RuleSetSummary() =>
-        new(RuleSetId,
-            "House rules",
-            "What every agent follows.",
-            $$"""{"projectIds":["{{WorkItemId}}"],"nodeTypes":["Agent"]}""",
-            Enabled: true,
-            "content-hash",
-            Version: 4,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = RuleSetId,
+            Name = "House rules",
+            Description = "What every agent follows.",
+            ScopeJson = $$"""{"projectIds":["{{WorkItemId}}"],"nodeTypes":["Agent"]}""",
+            Enabled = true,
+            ContentSha256 = "content-hash",
+            Version = 4,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     /// <summary>
     ///     The node cap is the OPTION's, not a constant the endpoint carries: with it configured to one, the two-node
@@ -1082,56 +1088,68 @@ public sealed class DevWorkflowEndpointTests
     }
 
     private static DevWorkflowWorkItemSnapshot WorkItemSnapshot() =>
-        new(WorkItemId,
-            "Ship the thing",
-            "Research and plan it.",
-            DevWorkflowWorkItemStatus.Active,
-            DevelopmentProjectId: null,
-            RunId,
-            DevWorkflowRunStatus.WaitingForApproval,
-            "Research → Plan → Approval",
-            new DevWorkflowNodeCounters(Queued: 0, Running: 1, Completed: 1, Total: 2, PendingDecisionCount: 1, RunId),
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 20,
-            Version: 3);
+        new()
+        {
+            Id = WorkItemId,
+            Title = "Ship the thing",
+            Request = "Research and plan it.",
+            Status = DevWorkflowWorkItemStatus.Active,
+            DevelopmentProjectId = null,
+            LatestRunId = RunId,
+            LatestRunStatus = DevWorkflowRunStatus.WaitingForApproval,
+            LatestRunDefinitionName = "Research → Plan → Approval",
+            LatestRunNodes = new DevWorkflowNodeCounters { Queued = 0, Running = 1, Completed = 1, Total = 2, PendingDecisionCount = 1, BlockingGateNodeRunId = RunId },
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            Version = 3
+        };
 
     private static DevWorkflowRunSummary RunSummary() =>
-        new(RunId,
-            WorkItemId,
-            DefinitionId,
-            "Research → Plan → Approval",
-            DevWorkflowRunStatus.WaitingForApproval,
-            new DevWorkflowNodeCounters(Queued: 0, Running: 1, Completed: 1, Total: 2, PendingDecisionCount: 1, RunId),
-            FailureClass: null,
-            StartedAtUtc: 11,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 20);
+        new()
+        {
+            Id = RunId,
+            WorkItemId = WorkItemId,
+            DefinitionId = DefinitionId,
+            DefinitionName = "Research → Plan → Approval",
+            Status = DevWorkflowRunStatus.WaitingForApproval,
+            Nodes = new DevWorkflowNodeCounters { Queued = 0, Running = 1, Completed = 1, Total = 2, PendingDecisionCount = 1, BlockingGateNodeRunId = RunId },
+            FailureClass = null,
+            StartedAtUtc = 11,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20
+        };
 
     private static DevWorkflowDefinitionSnapshot DefinitionSnapshot(string? graphJson = null) =>
-        new(DefinitionId,
-            "Research → Plan → Approval",
-            graphJson ?? SampleGraph,
-            "graph-hash",
-            NodeCount: 2,
-            DevWorkflowDefinitionSource.Seeded,
-            "research-plan-approval",
-            Archived: false,
-            Version: 4,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = DefinitionId,
+            Name = "Research → Plan → Approval",
+            GraphJson = graphJson ?? SampleGraph,
+            GraphHash = "graph-hash",
+            NodeCount = 2,
+            Source = DevWorkflowDefinitionSource.Seeded,
+            SeedSlug = "research-plan-approval",
+            Archived = false,
+            Version = 4,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static DevWorkflowDefinitionSummary DefinitionSummary() =>
-        new(DefinitionId,
-            "Research → Plan → Approval",
-            "graph-hash",
-            NodeCount: 2,
-            DevWorkflowDefinitionSource.Seeded,
-            "research-plan-approval",
-            Archived: false,
-            Version: 4,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = DefinitionId,
+            Name = "Research → Plan → Approval",
+            GraphHash = "graph-hash",
+            NodeCount = 2,
+            Source = DevWorkflowDefinitionSource.Seeded,
+            SeedSlug = "research-plan-approval",
+            Archived = false,
+            Version = 4,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {

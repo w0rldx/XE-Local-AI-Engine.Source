@@ -297,8 +297,20 @@ public sealed class ComparisonReportServiceTests
         var baseEvaluation = Evaluation("base", membership, CompleteVerdicts(membership));
         var tunedEvaluation = Evaluation("tuned", membership, CompleteVerdicts(membership));
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
-        _ = evaluations.GetComparisonAsync(historicalComparisonId, Arg.Any<CancellationToken>()).Returns(new TrainingComparisonRecord(historicalComparisonId, "historical", baseEvaluation.Id,
-            tunedEvaluation.Id, null, null, wrongStoredRunId, "{}"u8.ToArray(), 1, 1, 1));
+        _ = evaluations.GetComparisonAsync(historicalComparisonId, Arg.Any<CancellationToken>()).Returns(new TrainingComparisonRecord
+        {
+            Id = historicalComparisonId,
+            Name = "historical",
+            BaseEvaluationRunId = baseEvaluation.Id,
+            TunedEvaluationRunId = tunedEvaluation.Id,
+            BaseBenchmarkRunId = null,
+            TunedBenchmarkRunId = null,
+            TrainingRunId = wrongStoredRunId,
+            DeltasJson = "{}"u8.ToArray(),
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        });
         _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
         var runs = Substitute.For<ITrainingRunStore>();
@@ -335,7 +347,7 @@ public sealed class ComparisonReportServiceTests
             Evaluation("tuned-model", tunedMembership, CompleteVerdicts(tunedMembership)));
 
     private static IReadOnlyList<TrainingEvaluationResultEntry> CompleteVerdicts(TrainingEvaluationMembershipV1 membership) =>
-        membership.HoldoutSampleIds.Select(sampleId => new TrainingEvaluationResultEntry(sampleId, "tool-call", true, "deterministic")).ToArray();
+        membership.HoldoutSampleIds.Select(sampleId => new TrainingEvaluationResultEntry { SampleId = sampleId, Kind = "tool-call", Passed = true, ScoredBy = "deterministic" }).ToArray();
 
     /// <summary>A refused comparison must also persist nothing — a stored report is what later reads are trusted from.</summary>
     private static async Task<EvaluationRejectedException> AssertRejectedAsync(TrainingEvaluationRecord baseEvaluation,
@@ -366,77 +378,89 @@ public sealed class ComparisonReportServiceTests
         };
 
     private static TrainingEvaluationResultEntry Verdict(int index, string kind, bool passed) =>
-        new(SampleId(index), kind, passed, "deterministic");
+        new() { SampleId = SampleId(index), Kind = kind, Passed = passed, ScoredBy = "deterministic" };
 
     private static TrainingEvaluationRecord Evaluation(string modelName,
         TrainingEvaluationMembershipV1 membership,
         IReadOnlyList<TrainingEvaluationResultEntry> entries) =>
-        new(Guid.NewGuid(),
-            membership.TrainingRunId,
-            ComparisonId: null,
-            modelName,
-            ModelContentFingerprint: null,
-            DatasetId,
-            membership.DatasetContentFingerprint,
-            JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
-            TrainingEvaluationStatus.Succeeded,
-            entries.Count == 0 ? null : TrainingEvaluationResults.Write(entries),
-            membership.HoldoutSampleIds.Count,
-            entries.Count,
-            entries.Count(entry => entry.Passed),
-            TrainingEvaluationResults.WriteTally(TrainingEvaluationResults.Tally(entries)),
-            ErrorMessage: null,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            TrainingWorkStatus.Succeeded);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TrainingRunId = membership.TrainingRunId,
+            ComparisonId = null,
+            ModelName = modelName,
+            ModelContentFingerprint = null,
+            DatasetId = DatasetId,
+            DatasetContentFingerprint = membership.DatasetContentFingerprint,
+            MembershipJson = JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
+            Status = TrainingEvaluationStatus.Succeeded,
+            ResultsJson = entries.Count == 0 ? null : TrainingEvaluationResults.Write(entries),
+            TotalCount = membership.HoldoutSampleIds.Count,
+            ScoredCount = entries.Count,
+            PassedCount = entries.Count(entry => entry.Passed),
+            PerKindJson = TrainingEvaluationResults.WriteTally(TrainingEvaluationResults.Tally(entries)),
+            ErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            WorkStatus = TrainingWorkStatus.Succeeded
+        };
 
     private static TrainingComparisonRecord Report(TrainingComparisonInput input) =>
-        new(Guid.NewGuid(),
-            input.Name,
-            input.BaseEvaluationRunId,
-            input.TunedEvaluationRunId,
-            input.BaseBenchmarkRunId,
-            input.TunedBenchmarkRunId,
-            input.TrainingRunId,
-            input.DeltasJson,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = input.Name,
+            BaseEvaluationRunId = input.BaseEvaluationRunId,
+            TunedEvaluationRunId = input.TunedEvaluationRunId,
+            BaseBenchmarkRunId = input.BaseBenchmarkRunId,
+            TunedBenchmarkRunId = input.TunedBenchmarkRunId,
+            TrainingRunId = input.TrainingRunId,
+            DeltasJson = input.DeltasJson,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 
     private static TrainingRunRecord Run(Guid runId, string? linkedModelName) =>
-        new(runId,
-            DatasetId,
-            "v1:" + new string('a', count: 64),
-            DatasetRevision: 1,
-            FreezeJson: JsonSerializer.SerializeToUtf8Bytes(new TrainingRunFreezeV1(), TrainingJson.Options),
-            BaseArtifactId: Guid.NewGuid(),
-            linkedModelName,
-            LinkedModelContentFingerprint: null,
-            OptionsJson: JsonSerializer.SerializeToUtf8Bytes(new TrainingRunOptionsV1(), TrainingJson.Options),
-            LicenseConfirmationJson: null,
-            TrainingRunStatus.Succeeded,
-            ProgressJson: null,
-            LogTail: null,
-            LaunchReceiptJson: null,
-            ErrorMessage: null,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            TrainingWorkStatus.Succeeded,
-            WorkErrorMessage: null);
+        new()
+        {
+            Id = runId,
+            DatasetId = DatasetId,
+            DatasetContentFingerprint = "v1:" + new string('a', count: 64),
+            DatasetRevision = 1,
+            FreezeJson = JsonSerializer.SerializeToUtf8Bytes(new TrainingRunFreezeV1(), TrainingJson.Options),
+            BaseArtifactId = Guid.NewGuid(),
+            LinkedInstalledModelName = linkedModelName,
+            LinkedModelContentFingerprint = null,
+            OptionsJson = JsonSerializer.SerializeToUtf8Bytes(new TrainingRunOptionsV1(), TrainingJson.Options),
+            LicenseConfirmationJson = null,
+            Status = TrainingRunStatus.Succeeded,
+            ProgressJson = null,
+            LogTail = null,
+            LaunchReceiptJson = null,
+            ErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            WorkStatus = TrainingWorkStatus.Succeeded,
+            WorkErrorMessage = null
+        };
 
     private static TrainingArtifactRecord Artifact(Guid runId, bool completed) =>
-        new(Guid.NewGuid(),
-            runId,
-            TrainingArtifactKind.AdapterGguf,
-            "tuned-model.gguf",
-            Sha256: completed ? new string('a', count: 64) : null,
-            SizeBytes: 0,
-            TrainingArtifactSmokeState.Passed,
-            SmokeReason: null,
-            CommittedModelName: null,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = runId,
+            Kind = TrainingArtifactKind.AdapterGguf,
+            Path = "tuned-model.gguf",
+            Sha256 = completed ? new string('a', count: 64) : null,
+            SizeBytes = 0,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            SmokeReason = null,
+            CommittedModelName = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 }

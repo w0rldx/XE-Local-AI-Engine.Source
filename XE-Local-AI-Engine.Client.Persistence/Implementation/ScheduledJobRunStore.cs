@@ -280,22 +280,25 @@ public sealed class ScheduledJobRunStore : IScheduledJobRunStore
 
     private static ScheduledJobRunRecord ToRecord(ScheduledJobRun entity)
     {
-        return new ScheduledJobRunRecord(entity.Id,
-            entity.ScheduledJobId,
-            entity.TemplateId,
-            entity.QuartzFireInstanceId,
-            entity.TriggeredBy,
-            entity.Status,
-            entity.ScheduledFireTimeUtc,
-            entity.ActualFireTimeUtc,
-            entity.CompletedAtUtc,
-            entity.DurationMs,
-            entity.Summary,
-            entity.DetailsJson is null ? null : Decode(entity.DetailsJson),
-            entity.ErrorMessage,
-            entity.ErrorDetails,
-            entity.CancellationRequestedAtUtc,
-            entity.CreatedAtUtc);
+        return new ScheduledJobRunRecord
+        {
+            Id = entity.Id,
+            ScheduledJobId = entity.ScheduledJobId,
+            TemplateId = entity.TemplateId,
+            QuartzFireInstanceId = entity.QuartzFireInstanceId,
+            TriggeredBy = entity.TriggeredBy,
+            Status = entity.Status,
+            ScheduledFireTimeUtc = entity.ScheduledFireTimeUtc,
+            ActualFireTimeUtc = entity.ActualFireTimeUtc,
+            CompletedAtUtc = entity.CompletedAtUtc,
+            DurationMs = entity.DurationMs,
+            Summary = entity.Summary,
+            DetailsJson = entity.DetailsJson is null ? null : Decode(entity.DetailsJson),
+            ErrorMessage = entity.ErrorMessage,
+            ErrorDetails = entity.ErrorDetails,
+            CancellationRequestedAtUtc = entity.CancellationRequestedAtUtc,
+            CreatedAtUtc = entity.CreatedAtUtc
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

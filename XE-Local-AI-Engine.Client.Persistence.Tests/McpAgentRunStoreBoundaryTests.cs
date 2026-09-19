@@ -184,15 +184,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         var requestId = Guid.NewGuid();
         var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "compact me"));
         var claimed = await fixture.Store.TryClaimAsync(requestId, accepted.Run!.Version, claimedAtUtc: 2);
-        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-            claimed.Run!.Version,
-            claimed.Run.ClaimToken!.Value,
-            McpAgentRunStatus.Succeeded,
-            McpAgentRunStopReason.None,
-            FailureCode: null,
-            Result: "answer",
-            DisplayMessage: "complete",
-            CompletedAtUtc: 3));
+        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = "answer",
+            DisplayMessage = "complete",
+            CompletedAtUtc = 3
+        });
 
         var before = (await fixture.Store.VerifyLedgerAsync()).Persisted.ActivePayloadBytes;
         var compacted = await fixture.Store.CompactExpiredPayloadsAsync(expiresBeforeUtc: 100_000_000);
@@ -256,15 +259,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         var expiredRequest = CreateAdmission(fixture.Protector, expiredId, "expired");
         var admittedExpired = await fixture.Store.AdmitAsync(expiredRequest);
         var claimedExpired = await fixture.Store.TryClaimAsync(expiredId, admittedExpired.Run!.Version, claimedAtUtc: 2);
-        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(expiredId,
-            claimedExpired.Run!.Version,
-            claimedExpired.Run.ClaimToken!.Value,
-            McpAgentRunStatus.Succeeded,
-            McpAgentRunStopReason.None,
-            FailureCode: null,
-            Result: "expired result",
-            DisplayMessage: "done",
-            CompletedAtUtc: 3));
+        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = expiredId,
+            ExpectedVersion = claimedExpired.Run!.Version,
+            ClaimToken = claimedExpired.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = "expired result",
+            DisplayMessage = "done",
+            CompletedAtUtc = 3
+        });
         _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds);
         await ExecuteAsync(databasePath, "DELETE FROM mcp_agent_run_ledger WHERE id = 1;");
 
@@ -293,15 +299,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
 
         const long completedAtUtc = 10L * 24 * 60 * 60 * 1000;
         var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run.Version, claimedAtUtc: completedAtUtc - 1);
-        AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-            claimed.Run!.Version,
-            claimed.Run.ClaimToken!.Value,
-            McpAgentRunStatus.Succeeded,
-            McpAgentRunStopReason.None,
-            FailureCode: null,
-            Result: "retained",
-            DisplayMessage: "done",
-            CompletedAtUtc: completedAtUtc)));
+        AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = "retained",
+            DisplayMessage = "done",
+            CompletedAtUtc = completedAtUtc
+        }));
 
         var terminal = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
         AssertEx.Equal(completedAtUtc + McpAgentRunStore.PayloadRetentionMilliseconds, terminal.PayloadExpiresAtUtc);
@@ -324,15 +333,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             WorkspaceId = Guid.NewGuid()
         });
         var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
-        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-            claimed.Run!.Version,
-            claimed.Run.ClaimToken!.Value,
-            McpAgentRunStatus.Failed,
-            McpAgentRunStopReason.None,
-            FailureCode: "stable_failure",
-            Result: null,
-            DisplayMessage: "safe display",
-            CompletedAtUtc: 3));
+        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Failed,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = "stable_failure",
+            Result = null,
+            DisplayMessage = "safe display",
+            CompletedAtUtc = 3
+        });
         _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
@@ -373,15 +385,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         var requestId = Guid.NewGuid();
         var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "retain after abort"));
         var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
-        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-            claimed.Run!.Version,
-            claimed.Run.ClaimToken!.Value,
-            McpAgentRunStatus.Succeeded,
-            McpAgentRunStopReason.None,
-            FailureCode: null,
-            Result: "answer",
-            DisplayMessage: "done",
-            CompletedAtUtc: 3));
+        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = "answer",
+            DisplayMessage = "done",
+            CompletedAtUtc = 3
+        });
         var retainedBeforeFailure = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
         var before = await fixture.Store.GetLedgerSnapshotAsync();
         await ExecuteAsync(databasePath, """
@@ -424,15 +439,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             Instructions = instructions
         });
         var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
-        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-            claimed.Run!.Version,
-            claimed.Run.ClaimToken!.Value,
-            McpAgentRunStatus.Succeeded,
-            McpAgentRunStopReason.None,
-            FailureCode: null,
-            Result: result,
-            DisplayMessage: display,
-            CompletedAtUtc: 3));
+        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = result,
+            DisplayMessage = display,
+            CompletedAtUtc = 3
+        });
 
         foreach (var path in new[]
                  {
@@ -482,17 +500,20 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         new(databasePath);
 
     private static McpAgentRunAdmissionRequest CreateAdmission(McpAgentRunPayloadProtector protector, Guid requestId, string task) =>
-        new(requestId,
-            protector.ComputeRequestFingerprint(Encoding.UTF8.GetBytes($"canonical:{task}")),
-            task,
-            Instructions: "read only",
-            AgentDefinitionId: Guid.Parse("61f97d46-14bb-47c0-8a58-ac66f2940e76"),
-            AgentDefinitionVersion: 7,
-            ModelId: "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M",
-            ModelOverrideId: null,
-            WorkspaceId: null,
-            BindingFingerprint: SHA256.HashData(Encoding.UTF8.GetBytes("binding")),
-            CreatedAtUtc: 1);
+        new()
+        {
+            RequestId = requestId,
+            CanonicalRequest = protector.ComputeRequestFingerprint(Encoding.UTF8.GetBytes($"canonical:{task}")),
+            Task = task,
+            Instructions = "read only",
+            AgentDefinitionId = Guid.Parse("61f97d46-14bb-47c0-8a58-ac66f2940e76"),
+            AgentDefinitionVersion = 7,
+            ModelId = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M",
+            ModelOverrideId = null,
+            WorkspaceId = null,
+            BindingFingerprint = SHA256.HashData(Encoding.UTF8.GetBytes("binding")),
+            CreatedAtUtc = 1
+        };
 
     private static long CalculateReservation(McpAgentRunPayloadProtector protector, string task) =>
         checked((long)Encoding.UTF8.GetByteCount(task)

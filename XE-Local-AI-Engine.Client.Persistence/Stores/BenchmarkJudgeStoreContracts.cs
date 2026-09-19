@@ -6,111 +6,175 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     What the run executor resolved for the automatic first judging, carried into the same transaction that commits
 ///     primary success so a crash can never leave a succeeded run without its attempt.
 /// </summary>
-/// <param name="ExpectedJudgePolicyRevisionId">
-///     The revision <see cref="RuntimeJson" /> was resolved for. When the project has moved on the store rolls back and
-///     throws <see cref="BenchmarkJudgePolicyChangedException" />, so the caller can re-resolve and retry.
-/// </param>
-/// <param name="RuntimeJson">
-///     The judge's frozen launch configuration. <see langword="null" /> means resolution failed, and the attempt is
-///     inserted directly as Failed together with a terminal work item.
-/// </param>
-/// <param name="SeedPointwiseAttempts">
-///     Whether a cohort-wide reset inserts one POINTWISE attempt per eligible run. False for a pairwise policy, whose
-///     cohort is judged by comparisons the planner enqueues instead: a pairwise cohort carrying pointwise attempts
-///     judges every run a second way and ranks off whichever source answered. The seed is still supplied, because
-///     <see cref="ExpectedJudgePolicyRevisionId" /> is what pins the revision the caller resolved against.
-/// </param>
-public sealed record BenchmarkJudgeAttemptSeed(
-    Guid? ExpectedJudgePolicyRevisionId = null,
-    ReadOnlyMemory<byte>? RuntimeJson = null,
-    string? RuntimeUnresolvedReason = null,
-    BenchmarkRunLaunchIntent? LaunchIntent = null,
-    bool SeedPointwiseAttempts = true);
+public sealed record BenchmarkJudgeAttemptSeed
+{
+    /// <summary>
+    ///     The revision <see cref="RuntimeJson" /> was resolved for. When the project has moved on the store rolls back and
+    ///     throws <see cref="BenchmarkJudgePolicyChangedException" />, so the caller can re-resolve and retry.
+    /// </summary>
+    public Guid? ExpectedJudgePolicyRevisionId { get; init; }
+
+    /// <summary>
+    ///     The judge's frozen launch configuration. <see langword="null" /> means resolution failed, and the attempt is
+    ///     inserted directly as Failed together with a terminal work item.
+    /// </summary>
+    public ReadOnlyMemory<byte>? RuntimeJson { get; init; }
+
+    public string? RuntimeUnresolvedReason { get; init; }
+
+    public BenchmarkRunLaunchIntent? LaunchIntent { get; init; }
+
+    /// <summary>
+    ///     Whether a cohort-wide reset inserts one POINTWISE attempt per eligible run. False for a pairwise policy, whose
+    ///     cohort is judged by comparisons the planner enqueues instead: a pairwise cohort carrying pointwise attempts
+    ///     judges every run a second way and ranks off whichever source answered. The seed is still supplied, because
+    ///     <see cref="ExpectedJudgePolicyRevisionId" /> is what pins the revision the caller resolved against.
+    /// </summary>
+    public bool SeedPointwiseAttempts { get; init; } = true;
+}
 
 /// <inheritdoc cref="IBenchmarkStore.EnqueueJudgeAttemptAsync" />
-/// <param name="Force">Bypasses the already-applied guard for a deliberate operator re-judge.</param>
-public sealed record BenchmarkEnqueueJudgeAttemptCommand(
-    Guid RunId,
-    long ExpectedRunVersion,
-    Guid PolicyRevisionId,
-    ReadOnlyMemory<byte>? RuntimeJson = null,
-    string? RuntimeUnresolvedReason = null,
-    bool Force = false,
-    BenchmarkRunLaunchIntent? LaunchIntent = null);
+public sealed record BenchmarkEnqueueJudgeAttemptCommand
+{
+    public required Guid RunId { get; init; }
 
-/// <param name="PolicyJson">Null on a listing, which never decrypts the payload.</param>
-public sealed record BenchmarkJudgePolicyRevisionRecord(
-    Guid Id,
-    Guid ProjectId,
-    int Revision,
-    ReadOnlyMemory<byte>? PolicyJson,
-    string PolicyHash,
-    string? ReferenceExecutionKey,
-    int CohortGeneration,
-    long CreatedAtUtc,
-    int ComparisonSetVersion = 0);
+    public required long ExpectedRunVersion { get; init; }
 
-/// <param name="SucceededRunIds">
-///     The project's succeeded runs with stored output — the complete eligible set. With a cohort attempt seed these
-///     are exactly the runs an attempt was enqueued for, in enqueue order. Empty on a no-op activation.
-/// </param>
-public sealed record BenchmarkJudgePolicyActivation(
-    BenchmarkJudgePolicyRevisionRecord Revision,
-    bool WasCreated,
-    IReadOnlyList<Guid> SucceededRunIds);
+    public required Guid PolicyRevisionId { get; init; }
 
-public sealed record BenchmarkJudgeAttemptRecord(
-    Guid Id,
-    Guid RunId,
-    int Sequence,
-    Guid PolicyRevisionId,
-    int CohortGeneration,
-    ReadOnlyMemory<byte>? JudgeRuntimeJson,
-    string? JudgeExecutionKey,
-    BenchmarkJudgeAttemptStatus Status,
-    ReadOnlyMemory<byte>? ResultJson,
-    int? Score,
-    string? ErrorMessage,
-    long EnqueuedAtUtc,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long Version,
-    BenchmarkRunLaunchIntent? LaunchIntent = null,
-    BenchmarkRunLaunchEvidence? LaunchEvidence = null);
+    public ReadOnlyMemory<byte>? RuntimeJson { get; init; }
 
-/// <param name="Score">The server-computed 0..100 rubric score stored on the attempt, plaintext and sortable.</param>
-/// <param name="VerifiedExecutionKey">
-///     The cohort key for a judging that ran no model because every rubric criterion was verified server-side.
-///     Applied only when the attempt has no measured execution key.
-/// </param>
-public sealed record BenchmarkJudgeSuccessCommand(
-    Guid RunId,
-    long ExpectedWorkVersion,
-    ReadOnlyMemory<byte> JudgeResultJson,
-    long LastStreamSequence = 0,
-    int? Score = null,
-    string? VerifiedExecutionKey = null);
+    public string? RuntimeUnresolvedReason { get; init; }
+
+    /// <summary>Bypasses the already-applied guard for a deliberate operator re-judge.</summary>
+    public bool Force { get; init; }
+
+    public BenchmarkRunLaunchIntent? LaunchIntent { get; init; }
+}
+
+public sealed class BenchmarkJudgePolicyRevisionRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid ProjectId { get; init; }
+
+    public required int Revision { get; init; }
+
+    /// <summary>Null on a listing, which never decrypts the payload.</summary>
+    public required ReadOnlyMemory<byte>? PolicyJson { get; init; }
+
+    public required string PolicyHash { get; init; }
+
+    public required string? ReferenceExecutionKey { get; init; }
+
+    public required int CohortGeneration { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public int ComparisonSetVersion { get; init; }
+}
+
+public sealed class BenchmarkJudgePolicyActivation
+{
+    public required BenchmarkJudgePolicyRevisionRecord Revision { get; init; }
+
+    public required bool WasCreated { get; init; }
+
+    /// <summary>
+    ///     The project's succeeded runs with stored output — the complete eligible set. With a cohort attempt seed these
+    ///     are exactly the runs an attempt was enqueued for, in enqueue order. Empty on a no-op activation.
+    /// </summary>
+    public required IReadOnlyList<Guid> SucceededRunIds { get; init; }
+}
+
+public sealed class BenchmarkJudgeAttemptRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required int Sequence { get; init; }
+
+    public required Guid PolicyRevisionId { get; init; }
+
+    public required int CohortGeneration { get; init; }
+
+    public required ReadOnlyMemory<byte>? JudgeRuntimeJson { get; init; }
+
+    public required string? JudgeExecutionKey { get; init; }
+
+    public required BenchmarkJudgeAttemptStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte>? ResultJson { get; init; }
+
+    public required int? Score { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required long EnqueuedAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+
+    public BenchmarkRunLaunchIntent? LaunchIntent { get; init; }
+
+    public BenchmarkRunLaunchEvidence? LaunchEvidence { get; init; }
+}
+
+public sealed record BenchmarkJudgeSuccessCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedWorkVersion { get; init; }
+
+    public required ReadOnlyMemory<byte> JudgeResultJson { get; init; }
+
+    public long LastStreamSequence { get; init; }
+
+    /// <summary>The server-computed 0..100 rubric score stored on the attempt, plaintext and sortable.</summary>
+    public int? Score { get; init; }
+
+    /// <summary>
+    ///     The cohort key for a judging that ran no model because every rubric criterion was verified server-side.
+    ///     Applied only when the attempt has no measured execution key.
+    /// </summary>
+    public string? VerifiedExecutionKey { get; init; }
+}
 
 /// <summary>
 ///     The run-level judge state derived from the run's current attempt and the project's current policy revision.
 /// </summary>
-/// <param name="State"><c>none</c> when there is no attempt, otherwise the current attempt's status, lowercased.</param>
-/// <param name="RankExclusionReason">
-///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked.
-/// </param>
-public sealed record BenchmarkRunJudgeView(
-    string State,
-    Guid? AttemptId,
-    int? Score,
-    int? PolicyRevision,
-    Guid? PolicyRevisionId,
-    int? AttemptSequence,
-    int? CohortGeneration,
-    string? ExecutionKey,
-    string? ErrorMessage,
-    bool PolicyCurrent,
-    bool ExecutionCurrent,
-    string? RankExclusionReason);
+public sealed record BenchmarkRunJudgeView
+{
+    /// <summary><c>none</c> when there is no attempt, otherwise the current attempt's status, lowercased.</summary>
+    public required string State { get; init; }
+
+    public required Guid? AttemptId { get; init; }
+
+    public required int? Score { get; init; }
+
+    public required int? PolicyRevision { get; init; }
+
+    public required Guid? PolicyRevisionId { get; init; }
+
+    public required int? AttemptSequence { get; init; }
+
+    public required int? CohortGeneration { get; init; }
+
+    public required string? ExecutionKey { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required bool PolicyCurrent { get; init; }
+
+    public required bool ExecutionCurrent { get; init; }
+
+    /// <summary>Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked.</summary>
+    public required string? RankExclusionReason { get; init; }
+}
 
 /// <summary>
 ///     The <see cref="BenchmarkRunRecord.PrimaryStopReason" /> vocabulary. Values are the provider's own

@@ -41,16 +41,19 @@ internal static class McpServerMapper
 
         // Enabled is always false on create: a registration is persisted disabled and the store ignores this flag, but
         // pass false explicitly so the input is unambiguous.
-        return new McpServerInput(request.Name ?? string.Empty,
-            request.Description,
-            request.TransportKind,
-            request.Command,
-            request.Arguments ?? [],
-            request.WorkingDirectory,
-            request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
-            request.Url,
-            request.TrustTier,
-            Enabled: false);
+        return new McpServerInput
+        {
+            Name = request.Name ?? string.Empty,
+            Description = request.Description,
+            TransportKind = request.TransportKind,
+            Command = request.Command,
+            Arguments = request.Arguments ?? [],
+            WorkingDirectory = request.WorkingDirectory,
+            Environment = request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            Url = request.Url,
+            TrustTier = request.TrustTier,
+            Enabled = false
+        };
     }
 
     public static McpServerInput ToInput(this UpdateMcpServerRequest request)
@@ -59,16 +62,19 @@ internal static class McpServerMapper
 
         // The service preserves the current enabled state on update (enabling is the dedicated PATCH), so the value here
         // is a placeholder the service overrides.
-        return new McpServerInput(request.Name ?? string.Empty,
-            request.Description,
-            request.TransportKind,
-            request.Command,
-            request.Arguments ?? [],
-            request.WorkingDirectory,
-            request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
-            request.Url,
-            request.TrustTier,
-            Enabled: false);
+        return new McpServerInput
+        {
+            Name = request.Name ?? string.Empty,
+            Description = request.Description,
+            TransportKind = request.TransportKind,
+            Command = request.Command,
+            Arguments = request.Arguments ?? [],
+            WorkingDirectory = request.WorkingDirectory,
+            Environment = request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            Url = request.Url,
+            TrustTier = request.TrustTier,
+            Enabled = false
+        };
     }
 
     // The node's tool-approval policy is reused (not reimplemented) to compute each entry's effective approval, so the

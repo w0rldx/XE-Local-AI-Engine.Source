@@ -306,33 +306,36 @@ public sealed class BenchmarkQueueHostedServiceTests
     private static BenchmarkClaimedWork Work(BenchmarkWorkKind kind)
     {
         var runId = Guid.NewGuid();
-        return new BenchmarkClaimedWork(QueueSequence: 1, runId, kind, Attempt: 1, Version: 1, Run(runId));
+        return new BenchmarkClaimedWork { QueueSequence = 1, RunId = runId, Kind = kind, Attempt = 1, Version = 1, Run = Run(runId) };
     }
 
     private static BenchmarkRunRecord Run(Guid runId) =>
-        new(runId,
-            Guid.NewGuid(),
-            ReadOnlyMemory<byte>.Empty,
-            "model",
-            PrimaryModelOrigin: null,
-            "v1:fingerprint",
-            "agent",
-            AgentVersion: 1,
-            RequestedContextTokens: 4096,
-            BenchmarkPrimaryStatus.Queued,
-            EffectiveContextTokens: null,
-            DurationMs: null,
-            TotalTokens: null,
-            TokensPerSecond: null,
-            OutputPartsJson: null,
-            LastStreamSequence: 0,
-            UserScore: null,
-            PrimaryErrorMessage: null,
-            Version: 1,
-            CreatedAtUtc: 1,
-            StartedAtUtc: null,
-            PrimaryCompletedAtUtc: null,
-            UpdatedAtUtc: 1);
+        new()
+        {
+            Id = runId,
+            ProjectId = Guid.NewGuid(),
+            RuntimeSnapshotJson = ReadOnlyMemory<byte>.Empty,
+            PrimaryModelName = "model",
+            PrimaryModelOrigin = null,
+            ModelContentFingerprint = "v1:fingerprint",
+            AgentName = "agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = BenchmarkPrimaryStatus.Queued,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = null,
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            StartedAtUtc = null,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 1
+        };
 
     private sealed class Harness : IDisposable
     {

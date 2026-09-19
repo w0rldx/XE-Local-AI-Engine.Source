@@ -36,11 +36,14 @@ public sealed class ListIntegrationExecutionsEndpoint : Endpoint<ListIntegration
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var filter = new IntegrationExecutionFilter(req.TriggerId,
-            req.SessionId,
-            req.Status is { Count: > 0 } statuses ? new HashSet<IntegrationExecutionStatus>(statuses) : null,
-            Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationExecutionsRequestValidator.MaxLimit),
-            Math.Max(req.Offset ?? 0, val2: 0));
+        var filter = new IntegrationExecutionFilter
+        {
+            TriggerId = req.TriggerId,
+            SessionId = req.SessionId,
+            Status = req.Status is { Count: > 0 } statuses ? new HashSet<IntegrationExecutionStatus>(statuses) : null,
+            Limit = Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationExecutionsRequestValidator.MaxLimit),
+            Offset = Math.Max(req.Offset ?? 0, val2: 0)
+        };
 
         var rows = await _executions.ListAsync(filter, ct);
 

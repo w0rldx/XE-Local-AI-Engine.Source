@@ -134,10 +134,13 @@ internal sealed class DevWorkflowAgentExecutor
             // row is settled off the session's own answer, which is exactly what that tick would have written. A retry
             // does not come through here: it releases its session first, precisely so it cannot.
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowNodeRunStatus.Running),
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Running
+            },
                                cancellationToken);
             return 1 + await PollAsync(store, graph, run, nodeRun with
             {
@@ -149,11 +152,14 @@ internal sealed class DevWorkflowAgentExecutor
         if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
         {
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowNodeRunStatus.Queued,
-                                   QueueReason: DevWorkflowQueueReasons.AwaitingAgentSlot),
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Queued,
+                QueueReason = DevWorkflowQueueReasons.AwaitingAgentSlot
+            },
                                cancellationToken);
             written++;
         }
@@ -197,10 +203,13 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         DevWorkflowStateMachine.EnsureLegal(DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Running),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Running
+        },
                            cancellationToken);
         return written + 1;
     }
@@ -354,11 +363,14 @@ internal sealed class DevWorkflowAgentExecutor
 
         try
         {
-            _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   created.Id,
-                                   DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")),
+            _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                WorkSessionId = created.Id,
+                OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")
+            },
                                cancellationToken);
         }
         catch
@@ -934,12 +946,15 @@ internal sealed class DevWorkflowAgentExecutor
 
         // Recorded AFTER the resume landed, and keyed by the resume index so a replayed tick cannot spend the budget
         // twice. The attach event is also the per-attempt history the single-row node-run schema does not keep.
-        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               session.Id,
-                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"resume-{nodeRun.SessionResumes}"),
-                               CountsAsResume: true),
+        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            WorkSessionId = session.Id,
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"resume-{nodeRun.SessionResumes}"),
+            CountsAsResume = true
+        },
                            cancellationToken);
         return 1;
     }
@@ -998,14 +1013,17 @@ internal sealed class DevWorkflowAgentExecutor
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               target,
-                               OutputJson: outputJson,
-                               FailureClass: failureClass,
-                               TerminalReason: terminalReason,
-                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = target,
+            OutputJson = outputJson,
+            FailureClass = failureClass,
+            TerminalReason = terminalReason,
+            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
+        },
                            cancellationToken);
         return 1;
     }
@@ -1022,14 +1040,17 @@ internal sealed class DevWorkflowAgentExecutor
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Blocked, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Blocked,
-                               PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
-                               FailureClass: failureClass,
-                               TerminalReason: sanitizedReason,
-                               WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+            FailureClass = failureClass,
+            TerminalReason = sanitizedReason,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+        },
                            cancellationToken);
         return 1;
     }

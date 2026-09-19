@@ -15,9 +15,33 @@ public enum SlashCommandActionType
     SendPrompt = 1
 }
 
-public sealed record SlashCommandInput(string Name, string? Description, SlashCommandActionType ActionType, string Prompt);
+public sealed class SlashCommandInput
+{
+    public required string Name { get; init; }
 
-public sealed record SlashCommandRecord(Guid Id, string Name, string? Description, SlashCommandActionType ActionType, string Prompt, long CreatedAtUtc, long UpdatedAtUtc);
+    public required string? Description { get; init; }
+
+    public required SlashCommandActionType ActionType { get; init; }
+
+    public required string Prompt { get; init; }
+}
+
+public sealed class SlashCommandRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required SlashCommandActionType ActionType { get; init; }
+
+    public required string Prompt { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 public sealed class SlashCommandCapacityException : Exception
 {

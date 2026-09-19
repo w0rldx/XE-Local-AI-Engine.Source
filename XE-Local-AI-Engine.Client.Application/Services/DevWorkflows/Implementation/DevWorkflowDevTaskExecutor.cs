@@ -186,11 +186,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         // The pointer is written with the status, in the same transaction: a row reading Running with no task named is
         // a row nothing can poll, and this is the only write that could leave one.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Running,
-                               DevelopmentTaskId: taskId),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Running,
+            DevelopmentTaskId = taskId
+        },
                            cancellationToken);
 
         return 1 + await AdvanceTaskAsync(store,
@@ -260,13 +263,16 @@ internal sealed class DevWorkflowDevTaskExecutor
         var requirements = Present(brief?.Requirements)
                            ?? throw new ArgumentException($"Node run '{nodeRun.NodeKey}' is a materialized development task whose input names no 'requirements' to implement.",
                                nameof(nodeRun));
-        var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
-                                               Guid.NewGuid(),
-                                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
-                                               Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
-                                               requirements,
-                                               Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
-                                               tasks[0].MaxReviewRounds),
+        var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = projectId,
+            TaskId = Guid.NewGuid(),
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
+            Title = Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
+            Requirements = requirements,
+            AcceptanceCriteriaJson = Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
+            MaxReviewRounds = tasks[0].MaxReviewRounds
+        },
                                            cancellationToken);
         return created.TaskId;
     }
@@ -474,12 +480,15 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               target,
-                               FailureClass: cancel ? DevWorkflowFailureClasses.Cancelled : null,
-                               TerminalReason: cancel ? "The run was cancelled while this node run was implementing its development task." : null),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = target,
+            FailureClass = cancel ? DevWorkflowFailureClasses.Cancelled : null,
+            TerminalReason = cancel ? "The run was cancelled while this node run was implementing its development task." : null
+        },
                            cancellationToken);
         return 1;
     }
@@ -752,19 +761,21 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         try
         {
-            _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
-                                         operationId,
-                                         DevelopmentTaskStatus.ChangesRequested,
-                                         task.Version,
-
-                                         // A silent Retry writes an operator row with NO reason, which is already the
-                                         // retraction: the round it buys is told nothing rather than told the last
-                                         // person's sentence.
-                                         said is null
+            _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = task.Id,
+                OperationId = operationId,
+                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                ExpectedTaskVersion = task.Version,
+                // A silent Retry writes an operator row with NO reason, which is already the
+                // retraction: the round it buys is told nothing rather than told the last
+                // person's sentence.
+                Reason = said is null
                                              ? null
                                              : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
-                                         OperatorDirected: true,
-                                         WidenReviewRounds: atTheRoundCap),
+                OperatorDirected = true,
+                WidenReviewRounds = atTheRoundCap
+            },
                                      cancellationToken);
 
             // The one task status hop nothing else records. DevelopmentManagementService logs the hops IT decides,
@@ -961,11 +972,14 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         try
         {
-            _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
-                                         ChangeRequestOperationId(run, nodeRun, routed),
-                                         DevelopmentTaskStatus.ChangesRequested,
-                                         task.Version,
-                                         reason.Reason),
+            _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = task.Id,
+                OperationId = ChangeRequestOperationId(run, nodeRun, routed),
+                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                ExpectedTaskVersion = task.Version,
+                Reason = reason.Reason
+            },
                                      cancellationToken);
             return 1;
         }
@@ -1320,14 +1334,17 @@ internal sealed class DevWorkflowDevTaskExecutor
     {
         await ClearPolicyAsync(run, nodeRun, cancellationToken);
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               target,
-                               OutputJson: outputJson,
-                               FailureClass: failureClass,
-                               TerminalReason: terminalReason,
-                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = target,
+            OutputJson = outputJson,
+            FailureClass = failureClass,
+            TerminalReason = terminalReason,
+            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
+        },
                            cancellationToken);
         return 1;
     }

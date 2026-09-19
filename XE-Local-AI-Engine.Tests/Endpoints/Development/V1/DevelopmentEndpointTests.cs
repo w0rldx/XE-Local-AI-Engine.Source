@@ -112,17 +112,20 @@ public sealed class DevelopmentEndpointTests
     }
 
     private static DevelopmentEventSnapshot Event(string eventType, string? reason) =>
-        new(Guid.NewGuid(),
-            ProjectId,
-            TaskId,
-            AttemptId: null,
-            Sequence: 1,
-            eventType,
-            OccurredAtUtc: 0,
-            OperationId: null,
-            OperationPhase: null,
-            Outcome: null,
-            reason);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = ProjectId,
+            TaskId = TaskId,
+            AttemptId = null,
+            Sequence = 1,
+            EventType = eventType,
+            OccurredAtUtc = 0,
+            OperationId = null,
+            OperationPhase = null,
+            Outcome = null,
+            Reason = reason
+        };
 
     /// <summary>
     ///     A task a workflow drives says so on the wire, and one an operator drives themselves says nothing — which is
@@ -357,45 +360,51 @@ public sealed class DevelopmentEndpointTests
         };
 
     private static DevelopmentProjectAggregate ProjectAggregate(Guid projectId) =>
-        new(new DevelopmentProjectSnapshot(projectId,
-                "objective",
-                Guid.NewGuid(),
-                "repository-hash",
-                "main",
-                DevelopmentProjectStatus.Active,
-                DevelopmentEgressPolicy.LocalOnly,
-                "coder-model",
-                "reviewer-model",
-                null,
-                null,
-                1,
-                true,
-                1,
-                1,
-                1,
-                1,
-                1,
-                CommandProfileJson: null),
+        new(new DevelopmentProjectSnapshot
+        {
+            Id = projectId,
+            Objective = "objective",
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = "repository-hash",
+            BaseBranch = "main",
+            Status = DevelopmentProjectStatus.Active,
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            CoderModelId = "coder-model",
+            ReviewerModelId = "reviewer-model",
+            MaxTokens = null,
+            MaxDurationSeconds = null,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = 1,
+            TrustedRepositoryAcknowledgedAtUtc = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 1,
+            CommandProfileJson = null
+        },
             [],
             []);
 
     internal static DevelopmentTaskAggregate TaskAggregate(Guid projectId,
         Guid taskId,
         IReadOnlyList<DevelopmentAttemptSnapshot> attempts) =>
-        new(new DevelopmentTaskSnapshot(taskId,
-                projectId,
-                "task",
-                "requirements",
-                "[]",
-                DevelopmentTaskStatus.InProgress,
-                0,
-                3,
-                null,
-                null,
-                null,
-                1,
-                1,
-                1),
+        new(new DevelopmentTaskSnapshot
+        {
+            Id = taskId,
+            ProjectId = projectId,
+            Title = "task",
+            Requirements = "requirements",
+            AcceptanceCriteriaJson = "[]",
+            Status = DevelopmentTaskStatus.InProgress,
+            CurrentReviewRound = 0,
+            MaxReviewRounds = 3,
+            BlockedReason = null,
+            BlockedAtUtc = null,
+            ApprovedSubjectHash = null,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 1
+        },
             attempts,
             []);
 }

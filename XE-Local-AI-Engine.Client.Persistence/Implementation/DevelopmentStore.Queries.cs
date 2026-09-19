@@ -23,17 +23,20 @@ public sealed partial class DevelopmentStore
                                      .Where(entity => entity.ProjectId == projectId)
                                      .OrderBy(entity => entity.Sequence)
                                      .ToListAsync(cancellationToken);
-        return events.Select(static entity => new DevelopmentEventSnapshot(entity.Id,
-                         entity.ProjectId,
-                         entity.TaskId,
-                         entity.AttemptId,
-                         entity.Sequence,
-                         entity.EventType,
-                         entity.OccurredAtUtc,
-                         entity.OperationId,
-                         entity.OperationPhase,
-                         entity.Outcome,
-                         ReasonOf(entity.DetailJson)))
+        return events.Select(static entity => new DevelopmentEventSnapshot
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            TaskId = entity.TaskId,
+            AttemptId = entity.AttemptId,
+            Sequence = entity.Sequence,
+            EventType = entity.EventType,
+            OccurredAtUtc = entity.OccurredAtUtc,
+            OperationId = entity.OperationId,
+            OperationPhase = entity.OperationPhase,
+            Outcome = entity.Outcome,
+            Reason = ReasonOf(entity.DetailJson)
+        })
                      .ToArray();
     }
 
@@ -52,37 +55,39 @@ public sealed partial class DevelopmentStore
                              .SingleOrDefaultAsync(cancellationToken)
                        ?? throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found.");
 
-        return new DevelopmentExecutionSnapshot(snapshot.Project.Id,
-            snapshot.Task.Id,
-            snapshot.Attempt.Id,
-            snapshot.Project.SelectedFolderId,
-            snapshot.Project.RepositoryIdentityHash,
-            snapshot.Project.BaseBranch,
-            snapshot.Project.EgressPolicy,
-            snapshot.Project.ConfigurationVersion,
-            snapshot.Project.TrustedRepositoryAcknowledged,
-            snapshot.Project.TrustedRepositoryPolicyVersion,
-            snapshot.Project.TrustedRepositoryAcknowledgedAtUtc,
-            snapshot.Project.MaxTokens,
-            snapshot.Project.MaxDurationSeconds,
-            Encoding.UTF8.GetString(snapshot.Task.Title),
-            Encoding.UTF8.GetString(snapshot.Task.Requirements),
-            Encoding.UTF8.GetString(snapshot.Task.AcceptanceCriteriaJson),
-            snapshot.Task.Status,
-            snapshot.Task.Version,
-            snapshot.Attempt.Role,
-            snapshot.Attempt.Status,
-            snapshot.Attempt.ModelId,
-            snapshot.Attempt.Provider,
-            snapshot.Attempt.Version,
-
+        return new DevelopmentExecutionSnapshot
+        {
+            ProjectId = snapshot.Project.Id,
+            TaskId = snapshot.Task.Id,
+            AttemptId = snapshot.Attempt.Id,
+            SelectedFolderId = snapshot.Project.SelectedFolderId,
+            RepositoryIdentityHash = snapshot.Project.RepositoryIdentityHash,
+            BaseBranch = snapshot.Project.BaseBranch,
+            EgressPolicy = snapshot.Project.EgressPolicy,
+            ConfigurationVersion = snapshot.Project.ConfigurationVersion,
+            TrustedRepositoryAcknowledged = snapshot.Project.TrustedRepositoryAcknowledged,
+            TrustedRepositoryPolicyVersion = snapshot.Project.TrustedRepositoryPolicyVersion,
+            TrustedRepositoryAcknowledgedAtUtc = snapshot.Project.TrustedRepositoryAcknowledgedAtUtc,
+            MaxTokens = snapshot.Project.MaxTokens,
+            MaxDurationSeconds = snapshot.Project.MaxDurationSeconds,
+            Title = Encoding.UTF8.GetString(snapshot.Task.Title),
+            Requirements = Encoding.UTF8.GetString(snapshot.Task.Requirements),
+            AcceptanceCriteriaJson = Encoding.UTF8.GetString(snapshot.Task.AcceptanceCriteriaJson),
+            TaskStatus = snapshot.Task.Status,
+            TaskVersion = snapshot.Task.Version,
+            AttemptRole = snapshot.Attempt.Role,
+            AttemptStatus = snapshot.Attempt.Status,
+            ModelId = snapshot.Attempt.ModelId,
+            Provider = snapshot.Attempt.Provider,
+            AttemptVersion = snapshot.Attempt.Version,
             // The attempt's own immutable snapshot wins. Falling back to the project only when the attempt has none
             // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
             // backfilled after the attempt started still resolve one.
-            snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
-            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken),
-            await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken),
-            await OperatorInstructionAsync(snapshot.Task.Id, cancellationToken));
+            CommandProfileJson = snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
+            PreviousRoundFeedback = await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken),
+            WorkflowPolicyText = await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken),
+            OperatorInstruction = await OperatorInstructionAsync(snapshot.Task.Id, cancellationToken)
+        };
     }
 
     /// <summary>
@@ -352,19 +357,22 @@ public sealed partial class DevelopmentStore
                                .Where(entity => entity.TaskId == taskId)
                                .OrderBy(entity => entity.StartedAtUtc)
                                .ThenBy(entity => entity.Id)
-                               .Select(entity => new DevelopmentAttemptSnapshot(entity.Id,
-                                   entity.TaskId,
-                                   entity.PredecessorAttemptId,
-                                   entity.Role,
-                                   entity.ModelId,
-                                   entity.Provider,
-                                   entity.Status,
-                                   entity.StartedAtUtc,
-                                   entity.EndedAtUtc,
-                                   entity.TerminalReason,
-                                   entity.InputTokens,
-                                   entity.OutputTokens,
-                                   entity.Version))
+                               .Select(entity => new DevelopmentAttemptSnapshot
+                               {
+                                   Id = entity.Id,
+                                   TaskId = entity.TaskId,
+                                   PredecessorAttemptId = entity.PredecessorAttemptId,
+                                   Role = entity.Role,
+                                   ModelId = entity.ModelId,
+                                   Provider = entity.Provider,
+                                   Status = entity.Status,
+                                   StartedAtUtc = entity.StartedAtUtc,
+                                   EndedAtUtc = entity.EndedAtUtc,
+                                   TerminalReason = entity.TerminalReason,
+                                   InputTokens = entity.InputTokens,
+                                   OutputTokens = entity.OutputTokens,
+                                   Version = entity.Version
+                               })
                                .ToListAsync(cancellationToken);
     }
 

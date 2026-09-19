@@ -235,11 +235,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // skipped) or as Failed (nothing failed) would both lie. It goes through the drain like every other
             // terminal, so live siblings settle and release what they hold instead of being orphaned.
             DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Cancelling);
-            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
-                                   await CurrentVersionAsync(store, run.Id, cancellationToken),
-                                   DevWorkflowRunStatus.Cancelling,
-                                   FailureClass: DevWorkflowFailureClasses.GateRejected,
-                                   SanitizedReason: rejection),
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+            {
+                RunId = run.Id,
+                ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+                TargetStatus = DevWorkflowRunStatus.Cancelling,
+                FailureClass = DevWorkflowFailureClasses.GateRejected,
+                SanitizedReason = rejection
+            },
                                cancellationToken);
             return written + 1;
         }
@@ -438,12 +441,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return 0;
         }
 
-        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
-                               await CurrentVersionAsync(store, run.Id, cancellationToken),
-                               DevWorkflowRunStatus.Failed,
-                               FailureClass: DevWorkflowFailureClasses.Configuration,
-                               SanitizedReason: exception.Message,
-                               WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
+        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+            TargetStatus = DevWorkflowRunStatus.Failed,
+            FailureClass = DevWorkflowFailureClasses.Configuration,
+            SanitizedReason = exception.Message,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+        },
                            cancellationToken);
         Forget(run.Id);
         return 1;
@@ -482,10 +488,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Running);
-        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
-                               await CurrentVersionAsync(store, run.Id, cancellationToken),
-                               DevWorkflowRunStatus.Running,
-                               WorkItemStatus: DevWorkflowWorkItemStatus.Active),
+        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+            TargetStatus = DevWorkflowRunStatus.Running,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Active
+        },
                            cancellationToken);
         return 1;
     }
@@ -568,12 +577,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
                 // Already Blocked: there is no status left to move it to, so only the note is new. Keyed by operation
                 // id, which the store resolves query-first — so it is written once and not on every tick thereafter.
-                _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
-                                       DevWorkflowVersions.Any,
-                                       DevWorkflowEventTypes.NodeInterventionRequired,
-                                       nodeRun.Id,
-                                       DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "decision-not-applicable"),
-                                       DetailJson: JsonSerializer.Serialize(new ReasonDetail(reason), JsonOptions)),
+                _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
+                {
+                    RunId = run.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    EventType = DevWorkflowEventTypes.NodeInterventionRequired,
+                    NodeRunId = nodeRun.Id,
+                    OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "decision-not-applicable"),
+                    DetailJson = JsonSerializer.Serialize(new ReasonDetail(reason), JsonOptions)
+                },
                                    cancellationToken);
                 continue;
             }
@@ -603,36 +615,36 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 : null;
             var retryInput = incrementAttempt ? DevWorkflowNodeInputs.Merge(nodeRun.InputJson, writeRetryMembers) : null;
 
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   target,
-                                   OutputJson: outputJson,
-                                   InputJson: retryInput,
-                                   FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
-                                   TerminalReason: DecidedReason(target, settled.Comment),
-                                   IncrementAttempt: incrementAttempt,
-
-                                   // EVERY Retry widens the cap by one, not only a Retry at the cap — that is the
-                                   // ruling as written, and the simpler rule to explain to the person clicking it.
-                                   // So a Retry at attempt 1 of 3 leaves a node that can now reach 4 on its own, and
-                                   // that fourth try is an ORDINARY automatic re-attempt: the operator's reason is
-                                   // scoped to the one attempt their decision started, so the attempt they bought
-                                   // carries it and nothing after it does. What still bounds all of this is the
-                                   // run-wide MaxTotalAttempts budget, which counts an operator's re-attempt and an
-                                   // automatic one alike and which no widening touches. Nothing else sets this flag.
-                                   WidenMaxAttempts: incrementAttempt,
-
-                                   // A retry gets a NEW session: resuming the one that just failed resumes the context
-                                   // that failed with it. Releasing it here is also what stops the fresh attempt being
-                                   // settled straight back off the old session's answer.
-                                   ClearWorkSession: incrementAttempt,
-                                   Outcome: outcome,
-
-                                   // An answered node run may be the last thing the work item was blocked on, and the run
-                                   // status often does not move when it settles — so the release travels with the answer,
-                                   // for the same reason blocking it does.
-                                   WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, settledSoFar, nodeRun.Id, target)),
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = target,
+                OutputJson = outputJson,
+                InputJson = retryInput,
+                FailureClass = target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
+                TerminalReason = DecidedReason(target, settled.Comment),
+                IncrementAttempt = incrementAttempt,
+                // EVERY Retry widens the cap by one, not only a Retry at the cap — that is the
+                // ruling as written, and the simpler rule to explain to the person clicking it.
+                // So a Retry at attempt 1 of 3 leaves a node that can now reach 4 on its own, and
+                // that fourth try is an ORDINARY automatic re-attempt: the operator's reason is
+                // scoped to the one attempt their decision started, so the attempt they bought
+                // carries it and nothing after it does. What still bounds all of this is the
+                // run-wide MaxTotalAttempts budget, which counts an operator's re-attempt and an
+                // automatic one alike and which no widening touches. Nothing else sets this flag.
+                WidenMaxAttempts = incrementAttempt,
+                // A retry gets a NEW session: resuming the one that just failed resumes the context
+                // that failed with it. Releasing it here is also what stops the fresh attempt being
+                // settled straight back off the old session's answer.
+                ClearWorkSession = incrementAttempt,
+                Outcome = outcome,
+                // An answered node run may be the last thing the work item was blocked on, and the run
+                // status often does not move when it settles — so the release travels with the answer,
+                // for the same reason blocking it does.
+                WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, settledSoFar, nodeRun.Id, target)
+            },
                                cancellationToken);
             settledSoFar =
             [
@@ -731,10 +743,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         var settledStatus = run.Status == DevWorkflowRunStatus.Pausing ? DevWorkflowRunStatus.Paused : DevWorkflowRunStatus.Cancelled;
         DevWorkflowStateMachine.EnsureLegal(run.Status, settledStatus);
-        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
-                               await CurrentVersionAsync(store, run.Id, cancellationToken),
-                               settledStatus,
-                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusFor(settledStatus, nodeRuns)),
+        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = await CurrentVersionAsync(store, run.Id, cancellationToken),
+            TargetStatus = settledStatus,
+            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(settledStatus, nodeRuns)
+        },
                            cancellationToken);
 
         // A PAUSED run keeps its promised re-attempts: it is coming back, and a resume that skipped every cushion a
@@ -802,10 +817,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 return 0;
             }
 
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowNodeRunStatus.Pending),
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Pending
+            },
                                cancellationToken);
             return 1;
         }
@@ -821,12 +839,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Cancelled,
-                               FailureClass: DevWorkflowFailureClasses.Cancelled,
-                               TerminalReason: "The run was cancelled."),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Cancelled,
+            FailureClass = DevWorkflowFailureClasses.Cancelled,
+            TerminalReason = "The run was cancelled."
+        },
                            cancellationToken);
         return 1;
     }
@@ -886,11 +907,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             {
                 // Named, not bare. A cascade writes as many Skipped rows as it reaches, and without the cause on each
                 // one an operator reading the tail cannot tell which row was the decision and which followed it.
-                _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                       nodeRun.Id,
-                                       DevWorkflowVersions.Any,
-                                       DevWorkflowNodeRunStatus.Skipped,
-                                       TerminalReason: DevWorkflowStateMachine.SkipReason(node, graph, byKey)),
+                _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+                {
+                    RunId = run.Id,
+                    NodeRunId = nodeRun.Id,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Skipped,
+                    TerminalReason = DevWorkflowStateMachine.SkipReason(node, graph, byKey)
+                },
                                    cancellationToken);
                 written++;
                 continue;
@@ -970,10 +994,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // No Queued hop: an inline node waits for no slot, and the three queue-reason tokens all name something real
         // to be waiting for. A Queued row with none of them would be the row lying about why it is not running.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Running),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Running
+        },
                            cancellationToken);
 
         if (node.NodeType == DevWorkflowNodeType.HumanGate)
@@ -983,11 +1010,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // approves a plan they cannot see — and the record is simply true, so it costs no new field.
             _ = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken);
 
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowNodeRunStatus.WaitingForApproval,
-                                   PendingDecisionKind: DevWorkflowDecisionKind.Approve),
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.WaitingForApproval,
+                PendingDecisionKind = DevWorkflowDecisionKind.Approve
+            },
                                cancellationToken);
             return 2;
         }
@@ -996,11 +1026,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             ? ComposeGateOutput(node, graph, byKey, nodeRun.Attempt)
             : JsonSerializer.Serialize(new InlineOutput(DevWorkflowNodeOutputStatuses.Succeeded, nodeRun.Attempt, Branch: null), JsonOptions);
 
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Succeeded,
-                               OutputJson: outputJson),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
+            OutputJson = outputJson
+        },
                            cancellationToken);
         return 2;
     }
@@ -1175,14 +1208,17 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Blocked, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Blocked,
-                               PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
-                               FailureClass: failureClass,
-                               TerminalReason: sanitizedReason,
-                               WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+            FailureClass = failureClass,
+            TerminalReason = sanitizedReason,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+        },
                            cancellationToken);
         return 1;
     }
@@ -1205,21 +1241,22 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         DevWorkflowStateMachine.EnsureLegal(current.Status, outcome.Status);
-        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
-
-                               // The version this decision was made against. Any would let a status move overwrite a
-                               // lifecycle command that landed between the read and this write — a cancel silently
-                               // becoming a Running again — and the run service is the second writer that makes it real.
-                               current.Version,
-                               outcome.Status,
-
-                               // Both are null for Completed and Failed: a failing node run already carries the class that
-                               // explains it, and a second, coarser copy on the run would only ever be a worse answer to
-                               // the same question. A run that reached no end is the one case with no such node run —
-                               // nothing failed — so there the outcome carries the whole account itself.
-                               FailureClass: outcome.FailureClass,
-                               SanitizedReason: outcome.TerminalReason,
-                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusFor(outcome.Status, nodeRuns)),
+        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
+        {
+            RunId = run.Id,
+            // The version this decision was made against. Any would let a status move overwrite a
+            // lifecycle command that landed between the read and this write — a cancel silently
+            // becoming a Running again — and the run service is the second writer that makes it real.
+            ExpectedVersion = current.Version,
+            TargetStatus = outcome.Status,
+            // Both are null for Completed and Failed: a failing node run already carries the class that
+            // explains it, and a second, coarser copy on the run would only ever be a worse answer to
+            // the same question. A run that reached no end is the one case with no such node run —
+            // nothing failed — so there the outcome carries the whole account itself.
+            FailureClass = outcome.FailureClass,
+            SanitizedReason = outcome.TerminalReason,
+            WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(outcome.Status, nodeRuns)
+        },
                            cancellationToken);
 
         if (DevWorkflowStateMachine.IsTerminal(outcome.Status))

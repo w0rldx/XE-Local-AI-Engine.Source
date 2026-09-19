@@ -169,15 +169,18 @@ public sealed class IntegrationSessionEndpointTests
         // The trigger goes in through the STORE rather than the admin endpoint: the endpoint probes the target agent
         // definition, and these suites assert the session surface rather than agent CRUD.
         var trigger = await scope.ServiceProvider.GetRequiredService<IIntegrationTriggerStore>()
-                                 .CreateAsync(new IntegrationTriggerCreateCommand(Guid.NewGuid(),
-                                     triggerName,
-                                     "Session feed",
-                                     Description: null,
-                                     Enabled: true,
-                                     IntegrationTargetKind.Agent,
-                                     Guid.NewGuid(),
-                                     IntegrationSessionPolicy.CallerManaged,
-                                     IntegrationInputKinds.Text | IntegrationInputKinds.Json));
+                                 .CreateAsync(new IntegrationTriggerCreateCommand
+                                 {
+                                     TriggerId = Guid.NewGuid(),
+                                     Name = triggerName,
+                                     DisplayName = "Session feed",
+                                     Description = null,
+                                     Enabled = true,
+                                     TargetKind = IntegrationTargetKind.Agent,
+                                     TargetAgentDefinitionId = Guid.NewGuid(),
+                                     SessionPolicy = IntegrationSessionPolicy.CallerManaged,
+                                     AcceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json
+                                 });
 
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
         var principalId = key.View.PrincipalId;
@@ -197,19 +200,22 @@ public sealed class IntegrationSessionEndpointTests
     {
         var executionId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
-        var admitted = await store.AcceptAsync(new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, triggerId, Guid.NewGuid(), Guid.NewGuid()),
-                executionId,
-                triggerId,
-                sessionId,
-                principalId,
-                Guid.NewGuid(),
-                new byte[]
+        var admitted = await store.AcceptAsync(new IntegrationAcceptCommand
+        {
+            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
+            ExecutionId = executionId,
+            TriggerId = triggerId,
+            SessionId = sessionId,
+            PrincipalId = principalId,
+            RequestId = Guid.NewGuid(),
+            RequestFingerprint = new byte[]
                 {
                     7
                 },
-                keyPrefix,
-                receivedAtUtc,
-                new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, receivedAtUtc)),
+            KeyPrefix = keyPrefix,
+            ReceivedAtUtc = receivedAtUtc,
+            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = IntegrationStreamEventTypes.ExecutionAccepted, DetailJson = null, OccurredAtUtc = receivedAtUtc }
+        },
             maxActive: 4096,
             maxActivePerPrincipal: 4096);
         AssertEx.True(admitted, "Seeding the session row must be admitted.");

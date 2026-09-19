@@ -61,13 +61,16 @@ internal sealed class WorkSessionCheckpointComposer
         // step-derived key would make the store's idempotency swallow the second, which is the one that records where
         // the work actually stopped.
         var checkpointId = Guid.NewGuid();
-        return await _store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                                   checkpointId,
-                                   WorkSessionVersions.Any,
-                                   checkpointId,
-                                   session.StepCount,
-                                   summary,
-                                   JsonSerializer.Serialize(state)),
+        return await _store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand
+        {
+            SessionId = sessionId,
+            CheckpointId = checkpointId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = checkpointId,
+            Step = session.StepCount,
+            Summary = summary,
+            StateJson = JsonSerializer.Serialize(state)
+        },
                                cancellationToken);
     }
 

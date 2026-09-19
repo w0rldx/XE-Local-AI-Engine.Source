@@ -178,10 +178,13 @@ public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
             return null;
         }
 
-        return new ModelFitSnapshotRawRecord(entity.Id,
-            entity.RawJson is null ? null : Decode(entity.RawJson),
-            entity.StderrExcerpt is null ? null : Decode(entity.StderrExcerpt),
-            entity.DiagnosticsJson is null ? null : Decode(entity.DiagnosticsJson));
+        return new ModelFitSnapshotRawRecord
+        {
+            Id = entity.Id,
+            RawJson = entity.RawJson is null ? null : Decode(entity.RawJson),
+            StderrExcerpt = entity.StderrExcerpt is null ? null : Decode(entity.StderrExcerpt),
+            DiagnosticsJson = entity.DiagnosticsJson is null ? null : Decode(entity.DiagnosticsJson)
+        };
     }
 
     private static void ApplyTerminalFields(ModelFitSnapshot entity,
@@ -204,20 +207,23 @@ public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
 
     private static ModelFitSnapshotSummaryRecord ToSummary(ModelFitSnapshot entity)
     {
-        return new ModelFitSnapshotSummaryRecord(entity.Id,
-            entity.ApprovedImageId,
-            entity.Operation,
-            entity.UseCase,
-            entity.ProviderName,
-            entity.ModelName,
-            entity.Status,
-            entity.StartedAtUtc,
-            entity.CompletedAtUtc,
-            entity.DurationMs,
-            entity.ExitCode,
-            entity.IsLatestSuccessful,
-            entity.CreatedByRunId,
-            entity.CreatedAtUtc);
+        return new ModelFitSnapshotSummaryRecord
+        {
+            Id = entity.Id,
+            ApprovedImageId = entity.ApprovedImageId,
+            Operation = entity.Operation,
+            UseCase = entity.UseCase,
+            ProviderName = entity.ProviderName,
+            ModelName = entity.ModelName,
+            Status = entity.Status,
+            StartedAtUtc = entity.StartedAtUtc,
+            CompletedAtUtc = entity.CompletedAtUtc,
+            DurationMs = entity.DurationMs,
+            ExitCode = entity.ExitCode,
+            IsLatestSuccessful = entity.IsLatestSuccessful,
+            CreatedByRunId = entity.CreatedByRunId,
+            CreatedAtUtc = entity.CreatedAtUtc
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

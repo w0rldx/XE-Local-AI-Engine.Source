@@ -416,15 +416,27 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         {
             // Defensive fallback for a malformed legacy corpus. New freezes validate complete membership before the
             // loop, but preserving a verdict here keeps an old resume cursor able to reach TotalCount.
-            return new TrainingEvaluationResultEntry(sampleId, "unknown", Passed: false, EvaluationScorer.Deterministic,
-                "The hold-out sample is not present in the frozen corpus.");
+            return new TrainingEvaluationResultEntry
+            {
+                SampleId = sampleId,
+                Kind = "unknown",
+                Passed = false,
+                ScoredBy = EvaluationScorer.Deterministic,
+                Reason = "The hold-out sample is not present in the frozen corpus."
+            };
         }
 
         var content = Read<TrainingSampleContentV1>(sample.ContentJson);
         if (content is null)
         {
-            return new TrainingEvaluationResultEntry(sampleId, sample.Kind, Passed: false, EvaluationScorer.Deterministic,
-                "The hold-out sample's frozen trajectory could not be read.");
+            return new TrainingEvaluationResultEntry
+            {
+                SampleId = sampleId,
+                Kind = sample.Kind,
+                Passed = false,
+                ScoredBy = EvaluationScorer.Deterministic,
+                Reason = "The hold-out sample's frozen trajectory could not be read."
+            };
         }
 
         if (EvaluationScorer.RejectMultiCall(sampleId, sample.Kind, content) is { } unsupported)
@@ -435,8 +447,14 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         var prompt = EvaluationScorer.ReadUserPrompt(content);
         if (string.IsNullOrWhiteSpace(prompt))
         {
-            return new TrainingEvaluationResultEntry(sampleId, sample.Kind, Passed: false, EvaluationScorer.Deterministic,
-                "The hold-out sample carries no user turn to replay.");
+            return new TrainingEvaluationResultEntry
+            {
+                SampleId = sampleId,
+                Kind = sample.Kind,
+                Passed = false,
+                ScoredBy = EvaluationScorer.Deterministic,
+                Reason = "The hold-out sample carries no user turn to replay."
+            };
         }
 
         var expectation = EvaluationScorer.ReadExpectation(content, context.Tools);
@@ -466,14 +484,26 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new TrainingEvaluationResultEntry(sampleId, sample.Kind, Passed: false, EvaluationScorer.Deterministic,
-                $"The model did not answer within {StructuredAgentRunner.TurnTimeout.TotalMinutes:0} minutes.");
+            return new TrainingEvaluationResultEntry
+            {
+                SampleId = sampleId,
+                Kind = sample.Kind,
+                Passed = false,
+                ScoredBy = EvaluationScorer.Deterministic,
+                Reason = $"The model did not answer within {StructuredAgentRunner.TurnTimeout.TotalMinutes:0} minutes."
+            };
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // One sample's transport or model failure is that sample's verdict, never the evaluation's.
-            return new TrainingEvaluationResultEntry(sampleId, sample.Kind, Passed: false, EvaluationScorer.Deterministic,
-                TrainingAiClientPolicy.TranslateProviderFailure(activity, exception));
+            return new TrainingEvaluationResultEntry
+            {
+                SampleId = sampleId,
+                Kind = sample.Kind,
+                Passed = false,
+                ScoredBy = EvaluationScorer.Deterministic,
+                Reason = TrainingAiClientPolicy.TranslateProviderFailure(activity, exception)
+            };
         }
 
         var calls = response.Messages

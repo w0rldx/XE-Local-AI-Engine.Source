@@ -96,6 +96,6 @@ public sealed class ToolMockService : IToolMockService
             throw new TrainingValidationException("A tool mock requires the tool name it stands in for.");
         }
 
-        return new ToolMockInput(draft.ToolName, JsonSerializer.SerializeToUtf8Bytes(draft.Body, TrainingJson.Options), draft.Enabled);
+        return new ToolMockInput { ToolName = draft.ToolName, MockJson = JsonSerializer.SerializeToUtf8Bytes(draft.Body, TrainingJson.Options), Enabled = draft.Enabled };
     }
 }

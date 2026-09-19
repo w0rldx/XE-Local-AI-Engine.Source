@@ -32,83 +32,157 @@ public interface IModelFitBenchmarkStore
 ///     Typed projection of a persisted model-fit benchmark row. <c>RawJson</c> and <c>DiagnosticsJson</c> are returned in
 ///     plaintext (decrypted on materialization); the structural metrics are plaintext columns.
 /// </summary>
-public sealed record ModelFitBenchmarkRecord(
-    Guid Id,
-    Guid SnapshotId,
-    string ModelName,
-    string ProviderName,
-    double? TokensPerSecond,
-    double? TtftMs,
-    double? TotalLatencyMs,
-    int? Runs,
-    string? RawJson,
-    string? DiagnosticsJson,
-    double? PpTokensPerSecond = null,
-    double? CacheHitRate = null,
-    double? ToolLoopMs = null,
-    long? VramLoadBytes = null,
-    long? VramAfterBytes = null,
-    string? LlamacppBuild = null,
-    string? Quant = null,
-    int? CtxSize = null,
-    string? KvType = null,
-    string? Backend = null,
-    string? MachineKey = null,
-    int? NGpuLayers = null,
-    string? TensorSplit = null,
-    string? OverrideTensor = null,
-    string? KvTypeV = null,
-    bool? FlashAttn = null,
-    Guid? ProfileId = null,
-    int? LaunchPolicyFingerprintVersion = null,
-    string? LaunchPolicyFingerprint = null,
-    long? GlobalFreeVramLoadBytes = null,
-    long? GlobalFreeVramAfterBytes = null,
-    long? ProcessBudgetVramLoadBytes = null,
-    long? ProcessBudgetVramAfterBytes = null,
-    long? MinimumGlobalFreeVramBytes = null,
-    long? MinimumProcessBudgetVramBytes = null,
-    long? PeakProcessRamBytes = null,
-    bool ExternalPressureDetected = false);
+public sealed record ModelFitBenchmarkRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SnapshotId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string ProviderName { get; init; }
+
+    public required double? TokensPerSecond { get; init; }
+
+    public required double? TtftMs { get; init; }
+
+    public required double? TotalLatencyMs { get; init; }
+
+    public required int? Runs { get; init; }
+
+    public required string? RawJson { get; init; }
+
+    public required string? DiagnosticsJson { get; init; }
+
+    public double? PpTokensPerSecond { get; init; }
+
+    public double? CacheHitRate { get; init; }
+
+    public double? ToolLoopMs { get; init; }
+
+    public long? VramLoadBytes { get; init; }
+
+    public long? VramAfterBytes { get; init; }
+
+    public string? LlamacppBuild { get; init; }
+
+    public string? Quant { get; init; }
+
+    public int? CtxSize { get; init; }
+
+    public string? KvType { get; init; }
+
+    public string? Backend { get; init; }
+
+    public string? MachineKey { get; init; }
+
+    public int? NGpuLayers { get; init; }
+
+    public string? TensorSplit { get; init; }
+
+    public string? OverrideTensor { get; init; }
+
+    public string? KvTypeV { get; init; }
+
+    public bool? FlashAttn { get; init; }
+
+    public Guid? ProfileId { get; init; }
+
+    public int? LaunchPolicyFingerprintVersion { get; init; }
+
+    public string? LaunchPolicyFingerprint { get; init; }
+
+    public long? GlobalFreeVramLoadBytes { get; init; }
+
+    public long? GlobalFreeVramAfterBytes { get; init; }
+
+    public long? ProcessBudgetVramLoadBytes { get; init; }
+
+    public long? ProcessBudgetVramAfterBytes { get; init; }
+
+    public long? MinimumGlobalFreeVramBytes { get; init; }
+
+    public long? MinimumProcessBudgetVramBytes { get; init; }
+
+    public long? PeakProcessRamBytes { get; init; }
+
+    public bool ExternalPressureDetected { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a benchmark row supplied on replace. <c>RawJson</c> and <c>DiagnosticsJson</c> are passed as
 ///     plaintext strings; the store encodes them to UTF-8 bytes before the interceptors encrypt them. <c>Id</c> and
 ///     <c>SnapshotId</c> are assigned by the store.
 /// </summary>
-public sealed record ModelFitBenchmarkInput(
-    string ModelName,
-    string ProviderName,
-    double? TokensPerSecond,
-    double? TtftMs,
-    double? TotalLatencyMs,
-    int? Runs,
-    string? RawJson,
-    string? DiagnosticsJson,
-    double? PpTokensPerSecond = null,
-    double? CacheHitRate = null,
-    double? ToolLoopMs = null,
-    long? VramLoadBytes = null,
-    long? VramAfterBytes = null,
-    string? LlamacppBuild = null,
-    string? Quant = null,
-    int? CtxSize = null,
-    string? KvType = null,
-    string? Backend = null,
-    string? MachineKey = null,
-    int? NGpuLayers = null,
-    string? TensorSplit = null,
-    string? OverrideTensor = null,
-    string? KvTypeV = null,
-    bool? FlashAttn = null,
-    Guid? ProfileId = null,
-    int? LaunchPolicyFingerprintVersion = null,
-    string? LaunchPolicyFingerprint = null,
-    long? GlobalFreeVramLoadBytes = null,
-    long? GlobalFreeVramAfterBytes = null,
-    long? ProcessBudgetVramLoadBytes = null,
-    long? ProcessBudgetVramAfterBytes = null,
-    long? MinimumGlobalFreeVramBytes = null,
-    long? MinimumProcessBudgetVramBytes = null,
-    long? PeakProcessRamBytes = null,
-    bool ExternalPressureDetected = false);
+public sealed class ModelFitBenchmarkInput
+{
+    public required string ModelName { get; init; }
+
+    public required string ProviderName { get; init; }
+
+    public required double? TokensPerSecond { get; init; }
+
+    public required double? TtftMs { get; init; }
+
+    public required double? TotalLatencyMs { get; init; }
+
+    public required int? Runs { get; init; }
+
+    public required string? RawJson { get; init; }
+
+    public required string? DiagnosticsJson { get; init; }
+
+    public double? PpTokensPerSecond { get; init; }
+
+    public double? CacheHitRate { get; init; }
+
+    public double? ToolLoopMs { get; init; }
+
+    public long? VramLoadBytes { get; init; }
+
+    public long? VramAfterBytes { get; init; }
+
+    public string? LlamacppBuild { get; init; }
+
+    public string? Quant { get; init; }
+
+    public int? CtxSize { get; init; }
+
+    public string? KvType { get; init; }
+
+    public string? Backend { get; init; }
+
+    public string? MachineKey { get; init; }
+
+    public int? NGpuLayers { get; init; }
+
+    public string? TensorSplit { get; init; }
+
+    public string? OverrideTensor { get; init; }
+
+    public string? KvTypeV { get; init; }
+
+    public bool? FlashAttn { get; init; }
+
+    public Guid? ProfileId { get; init; }
+
+    public int? LaunchPolicyFingerprintVersion { get; init; }
+
+    public string? LaunchPolicyFingerprint { get; init; }
+
+    public long? GlobalFreeVramLoadBytes { get; init; }
+
+    public long? GlobalFreeVramAfterBytes { get; init; }
+
+    public long? ProcessBudgetVramLoadBytes { get; init; }
+
+    public long? ProcessBudgetVramAfterBytes { get; init; }
+
+    public long? MinimumGlobalFreeVramBytes { get; init; }
+
+    public long? MinimumProcessBudgetVramBytes { get; init; }
+
+    public long? PeakProcessRamBytes { get; init; }
+
+    public bool ExternalPressureDetected { get; init; }
+}

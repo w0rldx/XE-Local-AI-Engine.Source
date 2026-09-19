@@ -107,14 +107,17 @@ public sealed class CoderAgentSeeder : IHostedService
             [CoderToolDefinition.SearchTextToolName] = false
         };
 
-        return new AgentDefinitionInput(AgentDefaults.CoderAgentName,
-            Description: "Read-only project-access agent: list, read, and search a selected project in the sandbox.",
-            Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            allowedToolNames,
-            toolApprovals,
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = AgentDefaults.CoderAgentName,
+            Description = "Read-only project-access agent: list, read, and search a selected project in the sandbox.",
+            Instructions = Instructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowedToolNames,
+            ToolApprovals = toolApprovals,
+            OrchestrationTopologyJson = null
+        };
     }
 }

@@ -156,29 +156,38 @@ public sealed class WorkSessionCheckpointTests
 
         var activeTaskId = Guid.NewGuid();
         var doneTaskId = Guid.NewGuid();
-        _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionTaskOrigin.Agent,
-                           [
-                               new WorkPlanTaskChange(activeTaskId, WorkPlanTaskOperation.Add, Title: "Read the ADR", Status: AgentWorkSessionTaskStatus.Active),
-                               new WorkPlanTaskChange(doneTaskId, WorkPlanTaskOperation.Add, Title: "Already finished", Status: AgentWorkSessionTaskStatus.Done)
-                           ]));
+        _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [
+                               new WorkPlanTaskChange { TaskId = activeTaskId, Operation = WorkPlanTaskOperation.Add, Title = "Read the ADR", Status = AgentWorkSessionTaskStatus.Active },
+                               new WorkPlanTaskChange { TaskId = doneTaskId, Operation = WorkPlanTaskOperation.Add, Title = "Already finished", Status = AgentWorkSessionTaskStatus.Done }
+                           ]
+        });
 
-        _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                           Guid.NewGuid(),
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionFindingKind.Finding,
-                           "A plain fact."));
+        _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = "A plain fact."
+        });
 
         var decisionId = Guid.NewGuid();
-        _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                           decisionId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionFindingKind.Decision,
-                           "Chose the process sandbox."));
+        _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = decisionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionFindingKind.Decision,
+            Text = "Chose the process sandbox."
+        });
 
         return (activeTaskId, decisionId);
     }

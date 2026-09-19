@@ -229,7 +229,7 @@ public sealed class ExternalAppHubTests
     }
 
     private static ExternalAppInstanceEventSnapshot Event(long sequence) =>
-        new(Guid.NewGuid(), InstanceId, sequence, ExternalAppInstanceEventKind.Started, DetailJson: null, OccurredAtUtc: 100);
+        new() { Id = Guid.NewGuid(), InstanceId = InstanceId, Sequence = sequence, Kind = ExternalAppInstanceEventKind.Started, DetailJson = null, OccurredAtUtc = 100 };
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",

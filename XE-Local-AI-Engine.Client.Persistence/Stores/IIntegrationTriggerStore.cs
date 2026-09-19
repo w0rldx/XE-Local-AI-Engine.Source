@@ -6,45 +6,77 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     A trigger as a reader sees it. Field order mirrors the entity. Every value is plaintext structural — the name is
 ///     the external contract, and the display fields are sorted and filtered on.
 /// </summary>
-public sealed record IntegrationTriggerSnapshot(
-    Guid Id,
-    string Name,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    IntegrationTargetKind TargetKind,
-    Guid TargetAgentDefinitionId,
-    IntegrationSessionPolicy SessionPolicy,
-    IntegrationInputKinds AcceptedInputKinds,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version);
+public sealed record IntegrationTriggerSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required IntegrationTargetKind TargetKind { get; init; }
+
+    public required Guid TargetAgentDefinitionId { get; init; }
+
+    public required IntegrationSessionPolicy SessionPolicy { get; init; }
+
+    public required IntegrationInputKinds AcceptedInputKinds { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>Everything a create needs. The store stamps <c>CreatedAtUtc</c>, <c>UpdatedAtUtc</c> and <c>Version</c>.</summary>
-public sealed record IntegrationTriggerCreateCommand(
-    Guid TriggerId,
-    string Name,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    IntegrationTargetKind TargetKind,
-    Guid TargetAgentDefinitionId,
-    IntegrationSessionPolicy SessionPolicy,
-    IntegrationInputKinds AcceptedInputKinds);
+public sealed class IntegrationTriggerCreateCommand
+{
+    public required Guid TriggerId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required IntegrationTargetKind TargetKind { get; init; }
+
+    public required Guid TargetAgentDefinitionId { get; init; }
+
+    public required IntegrationSessionPolicy SessionPolicy { get; init; }
+
+    public required IntegrationInputKinds AcceptedInputKinds { get; init; }
+}
 
 /// <summary>
 ///     An optimistic update. <c>Name</c> is absent on purpose: it is the external contract a caller addresses, so
 ///     renaming a live trigger is a delete-and-create decision rather than an edit.
 /// </summary>
-public sealed record IntegrationTriggerUpdateCommand(
-    Guid TriggerId,
-    long ExpectedVersion,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    Guid TargetAgentDefinitionId,
-    IntegrationSessionPolicy SessionPolicy,
-    IntegrationInputKinds AcceptedInputKinds);
+public sealed record IntegrationTriggerUpdateCommand
+{
+    public required Guid TriggerId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required Guid TargetAgentDefinitionId { get; init; }
+
+    public required IntegrationSessionPolicy SessionPolicy { get; init; }
+
+    public required IntegrationInputKinds AcceptedInputKinds { get; init; }
+}
 
 /// <summary>
 ///     Persistence boundary for integration triggers. The interface is <c>public</c> and speaks only in the records

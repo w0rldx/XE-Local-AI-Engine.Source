@@ -48,11 +48,14 @@ public sealed class GoldenHarvestServiceTests
         var harness = new Harness();
         var sourceMessageId = Guid.NewGuid();
         var sourceConversationId = Guid.NewGuid();
-        var source = new HarvestCandidateSource(sourceMessageId,
-            sourceConversationId,
-            "Original Conversation",
-            [new HarvestTurn("user", "How do I reset?"), new HarvestTurn("assistant", "Use the reset button.")],
-            "Hold the reset button for five seconds.");
+        var source = new HarvestCandidateSource
+        {
+            MessageId = sourceMessageId,
+            ConversationId = sourceConversationId,
+            ConversationTitle = "Original Conversation",
+            PriorTurns = [new HarvestTurn { Role = "user", Text = "How do I reset?" }, new HarvestTurn { Role = "assistant", Text = "Use the reset button." }],
+            ApprovedAnswerText = "Hold the reset button for five seconds."
+        };
         harness.WithSources(source);
 
         var captured = harness.CaptureCreateHarvested();
@@ -93,11 +96,14 @@ public sealed class GoldenHarvestServiceTests
     {
         var harness = new Harness();
         var sourceMessageId = Guid.NewGuid();
-        var source = new HarvestCandidateSource(sourceMessageId,
-            Guid.NewGuid(),
-            "Conv",
-            [new HarvestTurn("user", "q")],
-            "a");
+        var source = new HarvestCandidateSource
+        {
+            MessageId = sourceMessageId,
+            ConversationId = Guid.NewGuid(),
+            ConversationTitle = "Conv",
+            PriorTurns = [new HarvestTurn { Role = "user", Text = "q" }],
+            ApprovedAnswerText = "a"
+        };
         harness.WithSources(source);
         // The dedup set already contains this source's message id.
         harness.GoldenStore.ListSourceMessageIdsByAgentAsync(AgentId, Arg.Any<CancellationToken>())
@@ -115,12 +121,15 @@ public sealed class GoldenHarvestServiceTests
     public async Task HarvestAsync_WhenSourceHasNoPriorUserTurn_CountsSkippedAndDoesNotCreate()
     {
         var harness = new Harness();
-        var source = new HarvestCandidateSource(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Conv",
+        var source = new HarvestCandidateSource
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ConversationTitle = "Conv",
             // Only an assistant prior turn (no lead-up user turn) → unusable as an input conversation.
-            [new HarvestTurn("assistant", "answer with no question")],
-            "a");
+            PriorTurns = [new HarvestTurn { Role = "assistant", Text = "answer with no question" }],
+            ApprovedAnswerText = "a"
+        };
         harness.WithSources(source);
 
         var outcome = await harness.Service.HarvestAsync(AgentId);
@@ -172,27 +181,33 @@ public sealed class GoldenHarvestServiceTests
 
     private static HarvestCandidateSource FreshSource(string question)
     {
-        return new HarvestCandidateSource(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Conv",
-            [new HarvestTurn("user", question)],
-            "answer for " + question);
+        return new HarvestCandidateSource
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ConversationTitle = "Conv",
+            PriorTurns = [new HarvestTurn { Role = "user", Text = question }],
+            ApprovedAnswerText = "answer for " + question
+        };
     }
 
     private static GoldenConversationRecord StoredRecord(GoldenConversationCreateInput input)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            input.AgentDefinitionId,
-            input.Title,
-            input.InputTurns,
-            input.Assertion,
-            input.Rubric,
-            Enabled: false,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            GoldenConversationSource.Harvested,
-            input.SourceMessageId,
-            input.SourceConversationId);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = input.AgentDefinitionId,
+            Title = input.Title,
+            InputTurns = input.InputTurns,
+            Assertion = input.Assertion,
+            Rubric = input.Rubric,
+            Enabled = false,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = input.SourceMessageId,
+            SourceConversationId = input.SourceConversationId
+        };
     }
 
     private sealed class Harness
@@ -252,19 +267,22 @@ public sealed class GoldenHarvestServiceTests
 
         private static AgentDefinitionRecord CreateAgent()
         {
-            return new AgentDefinitionRecord(AgentId,
-                "Builder",
-                Description: null,
-                "Base instructions.",
-                ModelProfile: null,
-                ReasoningEffort: null,
-                AgentDefinitionKind.Single,
-                [],
-                new Dictionary<string, bool>(),
-                OrchestrationTopologyJson: null,
-                Version: 1,
-                CreatedAtUtc: 10,
-                UpdatedAtUtc: 10);
+            return new AgentDefinitionRecord
+            {
+                Id = AgentId,
+                Name = "Builder",
+                Description = null,
+                Instructions = "Base instructions.",
+                ModelProfile = null,
+                ReasoningEffort = null,
+                Kind = AgentDefinitionKind.Single,
+                AllowedToolNames = [],
+                ToolApprovals = new Dictionary<string, bool>(),
+                OrchestrationTopologyJson = null,
+                Version = 1,
+                CreatedAtUtc = 10,
+                UpdatedAtUtc = 10
+            };
         }
     }
 

@@ -42,8 +42,17 @@ public sealed class BenchmarkStoreTests : IDisposable
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(run.Id, claimed.RunId);
         AssertEx.Equal(BenchmarkWorkKind.Primary, claimed.Kind);
-        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 7,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        });
         var scored = await store.SetUserScoreAsync(run.Id, 5, succeeded.Version);
         AssertEx.Equal(expected: 5, scored.UserScore);
 
@@ -128,14 +137,31 @@ public sealed class BenchmarkStoreTests : IDisposable
         });
         var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version,
-            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = primary.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 7,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        });
 
         // Freeze queued the fidelity item beside the run; terminalize it so the run carries a stored KLD figure.
         var fidelity = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, fidelity.Version,
-            fidelity.FidelityAttemptId!.Value, PerplexityMean: 6.5, KldMean: 0.01, BaseModelName: "base.gguf",
-            BaseModelContentFingerprint: "v1:" + new string('b', 64), BaseLogitsDigest: OldDigest));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = fidelity.Version,
+            FidelityAttemptId = fidelity.FidelityAttemptId!.Value,
+            PerplexityMean = 6.5,
+            KldMean = 0.01,
+            BaseModelName = "base.gguf",
+            BaseModelContentFingerprint = "v1:" + new string('b', 64),
+            BaseLogitsDigest = OldDigest
+        });
 
         var frozen = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         AssertEx.True(frozen.IsFrozen, "The project has a run, so every ordinary edit is refused.");
@@ -143,8 +169,14 @@ public sealed class BenchmarkStoreTests : IDisposable
             store.UpdateProjectAsync(project.Id, frozen.Version, CreateProject(project.Id)));
 
         var change = await store.UpdateProjectFidelityAsync(project.Id, frozen.Version,
-            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: true, FidelityChunks: 50,
-                "other-base.gguf", "v1:" + new string('c', 64)));
+            new BenchmarkProjectFidelityInput
+            {
+                FidelityEnabled = true,
+                FidelityKldEnabled = true,
+                FidelityChunks = 50,
+                FidelityKldBaseModelName = "other-base.gguf",
+                FidelityKldBaseFingerprint = "v1:" + new string('c', 64)
+            });
 
         AssertEx.Equal("other-base.gguf", change.Project.FidelityKldBaseModelName);
         AssertEx.Equal<int?>(50, change.Project.FidelityChunks);
@@ -175,8 +207,17 @@ public sealed class BenchmarkStoreTests : IDisposable
             var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
             var run = await store.StartRunAsync(CreateRun(current));
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-                Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+            {
+                RunId = run.Id,
+                ExpectedWorkVersion = claimed.Run.Version,
+                OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+                LastStreamSequence = 7,
+                EffectiveContextTokens = 4096,
+                DurationMs = 100,
+                TotalTokens = 12,
+                TokensPerSecond = 120
+            });
             succeeded.Add(run.Id);
         }
 
@@ -185,7 +226,7 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         var latest = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var change = await store.UpdateProjectFidelityAsync(latest.Id, latest.Version,
-            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
             measureExisting: true);
 
         AssertEx.Equal(2, change.EnqueuedRunIds.Count, "Only the succeeded cells; the queued run gets its item at its own terminalization.");
@@ -196,7 +237,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         // Idempotent: a second measureExisting write finds nothing left to measure rather than doubling the queue.
         var after = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var again = await store.UpdateProjectFidelityAsync(after.Id, after.Version,
-            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
             measureExisting: true);
 
         AssertEx.Empty(again.EnqueuedRunIds);
@@ -214,12 +255,21 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 7,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        });
 
         var latest = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         _ = await store.UpdateProjectFidelityAsync(latest.Id, latest.Version,
-            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
             measureExisting: true);
 
         // 'queued' and null are different facts — "a measurement is on its way" versus "fidelity was never asked for" —
@@ -239,7 +289,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
 
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateProjectFidelityAsync(project.Id, project.Version + 1,
-            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null)));
+            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null }));
     }
 
     [Test]
@@ -256,11 +306,29 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project));
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        var throughput = new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
-            GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 2);
+        var throughput = new BenchmarkRunThroughput
+        {
+            TtftMs = 180.25,
+            PromptTokens = 123,
+            PromptMs = 456.5,
+            GenerationTokens = 89,
+            GenerationMs = 1011.5,
+            CachedPromptTokens = 7,
+            SegmentCount = 2
+        };
 
-        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88, Throughput: throughput));
+        var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 7,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 88,
+            Throughput = throughput
+        });
 
         var persisted = AssertEx.NotNull(succeeded.Throughput);
         AssertEx.Equal<double?>(180.25, persisted.TtftMs);
@@ -277,8 +345,17 @@ public sealed class BenchmarkStoreTests : IDisposable
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var second = await store.StartRunAsync(CreateRun(project));
         var secondClaim = AssertEx.NotNull(await store.ClaimNextAsync());
-        var untimed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(second.Id, secondClaim.Run.Version,
-            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        var untimed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = second.Id,
+            ExpectedWorkVersion = secondClaim.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 7,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 120
+        });
         AssertEx.Null(untimed.Throughput, "An unmeasured run must stay unmeasured, never be given an invented split.");
     }
 
@@ -302,10 +379,27 @@ public sealed class BenchmarkStoreTests : IDisposable
             IsWarmup = false
         });
         var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 88,
-            Throughput: new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5, GenerationTokens: 89,
-                GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 3)));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+            LastStreamSequence = 7,
+            EffectiveContextTokens = 4096,
+            DurationMs = 100,
+            TotalTokens = 12,
+            TokensPerSecond = 88,
+            Throughput = new BenchmarkRunThroughput
+            {
+                TtftMs = 180.25,
+                PromptTokens = 123,
+                PromptMs = 456.5,
+                GenerationTokens = 89,
+                GenerationMs = 1011.5,
+                CachedPromptTokens = 7,
+                SegmentCount = 3
+            }
+        });
 
         var listed = (await store.ListRunsAsync(project.Id, skip: 0, take: 10)).Items.Single(item => item.Id == run.Id);
 
@@ -420,8 +514,18 @@ public sealed class BenchmarkStoreTests : IDisposable
         var (projectB, revisionB) = await CreateJudgeProjectAsync(store);
         var judgeRun = await store.StartRunAsync(CreateRun(projectB));
         var judgePrimaryClaim = AssertEx.NotNull(await store.ClaimNextAsync());
-        var primarySucceeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(judgeRun.Id, judgePrimaryClaim.Run.Version,
-            Encoding.UTF8.GetBytes("[]"), 1, 4096, 10, null, null, JudgeAttempt: JudgeSeed(revisionB)));
+        var primarySucceeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = judgeRun.Id,
+            ExpectedWorkVersion = judgePrimaryClaim.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            JudgeAttempt = JudgeSeed(revisionB)
+        });
         var judgeClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judgeClaim.Kind);
         var queuedProject = await store.CreateProjectAsync(CreateProject());
@@ -513,10 +617,13 @@ public sealed class BenchmarkStoreTests : IDisposable
         var store = new BenchmarkStore(context, TimeProvider.System);
 
         var successful = await CreateRunningJudgeAsync(store);
-        var success = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(successful.RunId,
-            successful.Version,
-            Encoding.UTF8.GetBytes("{}"),
-            LastStreamSequence: 12));
+        var success = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        {
+            RunId = successful.RunId,
+            ExpectedWorkVersion = successful.Version,
+            JudgeResultJson = Encoding.UTF8.GetBytes("{}"),
+            LastStreamSequence = 12
+        });
         var failing = await CreateRunningJudgeAsync(store);
         var failure = await store.MarkJudgeFailedAsync(failing.RunId, failing.Version, "safe", lastStreamSequence: 22);
         var cancelling = await CreateRunningJudgeAsync(store);
@@ -541,10 +648,13 @@ public sealed class BenchmarkStoreTests : IDisposable
         var judge = await CreateRunningJudgeAsync(store);
 
         var scored = await store.SetUserScoreAsync(judge.RunId, 5, judge.Run.Version);
-        var completed = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(judge.RunId,
-            judge.Version,
-            Encoding.UTF8.GetBytes("{\"score\":4}"),
-            LastStreamSequence: 41));
+        var completed = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        {
+            RunId = judge.RunId,
+            ExpectedWorkVersion = judge.Version,
+            JudgeResultJson = Encoding.UTF8.GetBytes("{\"score\":4}"),
+            LastStreamSequence = 41
+        });
 
         AssertEx.Equal(expected: 5, completed.UserScore);
         AssertEx.Equal(BenchmarkRunJudgeStates.Succeeded, completed.Judge?.State);
@@ -564,14 +674,17 @@ public sealed class BenchmarkStoreTests : IDisposable
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
 
         _ = await store.CancelAsync(run.Id, primary.Run.Version);
-        var completed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id,
-            primary.Version,
-            Encoding.UTF8.GetBytes("[]"),
-            9,
-            4096,
-            10,
-            null,
-            null));
+        var completed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = primary.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 9,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = null,
+            TokensPerSecond = null
+        });
 
         AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, completed.PrimaryStatus);
         AssertEx.Equal(BenchmarkRunJudgeStates.None, completed.Judge?.State);
@@ -629,11 +742,21 @@ public sealed class BenchmarkStoreTests : IDisposable
                 RuntimeSnapshotJson = snapshot
             });
             var primary = AssertEx.NotNull(await store.ClaimNextAsync());
-            var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version, output, 1, 4096, 4, 1, 250,
-                JudgeAttempt: JudgeSeed(activation.Revision)));
+            var primaryDone = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+            {
+                RunId = run.Id,
+                ExpectedWorkVersion = primary.Run.Version,
+                OutputPartsJson = output,
+                LastStreamSequence = 1,
+                EffectiveContextTokens = 4096,
+                DurationMs = 4,
+                TotalTokens = 1,
+                TokensPerSecond = 250,
+                JudgeAttempt = JudgeSeed(activation.Revision)
+            });
             var judgeWork = AssertEx.NotNull(await store.ClaimNextAsync());
             attemptId = judgeWork.JudgeAttemptId!.Value;
-            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judgeWork.Version, judge, 5, 61));
+            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand { RunId = run.Id, ExpectedWorkVersion = judgeWork.Version, JudgeResultJson = judge, LastStreamSequence = 5, Score = 61 });
             projectId = project.Id;
             runId = run.Id;
             _ = primaryDone;
@@ -675,7 +798,7 @@ public sealed class BenchmarkStoreTests : IDisposable
             project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
             created.Add((await store.StartRunAsync(CreateRun(project) with
             {
-                PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "auto", null, "on", "intended", "manifest-sha")
+                PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "auto", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended", IntendedExecutableSha256 = "manifest-sha" }
             })).Id);
         }
 
@@ -709,7 +832,7 @@ public sealed class BenchmarkStoreTests : IDisposable
         var project = await store.CreateProjectAsync(CreateProject());
         var run = await store.StartRunAsync(CreateRun(project) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-primary", "manifest-sha")
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "explicit", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended-primary", IntendedExecutableSha256 = "manifest-sha" }
         });
 
         var reloaded = AssertEx.NotNull(await store.GetRunAsync(run.Id));
@@ -735,12 +858,12 @@ public sealed class BenchmarkStoreTests : IDisposable
 
         var stamped = await store.StartRunAsync(CreateRun(project) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-stamped", "manifest-sha", 2)
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "explicit", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended-stamped", IntendedExecutableSha256 = "manifest-sha", LaunchIdentityScheme = 2 }
         });
         project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var legacy = await store.StartRunAsync(CreateRun(project) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-legacy", "manifest-sha")
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "explicit", KvAutoReason = null, FlashAttentionMode = "on", IntendedLaunchIdentity = "intended-legacy", IntendedExecutableSha256 = "manifest-sha" }
         });
 
         var reloadedStamped = AssertEx.NotNull(await store.GetRunAsync(stamped.Id));
@@ -1093,7 +1216,7 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     private static BenchmarkJudgeAttemptSeed JudgeSeed(BenchmarkJudgePolicyRevisionRecord revision) =>
-        new(revision.Id, new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"judgeRuntime\":1}")));
+        new() { ExpectedJudgePolicyRevisionId = revision.Id, RuntimeJson = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"judgeRuntime\":1}")) };
 
     [Test]
     public async Task StartRuns_WithoutIdentityStamps_KeepsEveryRunItsOwnSingletonCell()
@@ -1192,8 +1315,17 @@ public sealed class BenchmarkStoreTests : IDisposable
         for (var drained = 0; drained < runs.Count; drained++)
         {
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
-                Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+            {
+                RunId = claimed.RunId,
+                ExpectedWorkVersion = claimed.Run.Version,
+                OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+                LastStreamSequence = 7,
+                EffectiveContextTokens = 4096,
+                DurationMs = 100,
+                TotalTokens = 12,
+                TokensPerSecond = 120
+            });
         }
 
         var attempts = await context.BenchmarkFidelityAttempts.AsNoTracking().CountAsync();
@@ -1202,32 +1334,46 @@ public sealed class BenchmarkStoreTests : IDisposable
         // And the sweep that measures existing runs must agree with the seed, or it re-adds what freeze excluded.
         var frozen = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var change = await store.UpdateProjectFidelityAsync(project.Id, frozen.Version,
-            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            new BenchmarkProjectFidelityInput { FidelityEnabled = true, FidelityKldEnabled = false, FidelityChunks = null, FidelityKldBaseModelName = null, FidelityKldBaseFingerprint = null },
             measureExisting: true);
         AssertEx.Empty(change.EnqueuedRunIds, "The sweep re-expresses the same rule; the cell is already measured.");
     }
 
     private static BenchmarkProjectInput CreateProject(Guid? id = null) =>
-        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), 4096, Guid.NewGuid());
+        new() { Id = id ?? Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version,
-            Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('a', 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 
     private static async Task<BenchmarkClaimedWork> CreateRunningJudgeAsync(BenchmarkStore store)
     {
         var (project, revision) = await CreateJudgeProjectAsync(store);
         var run = await store.StartRunAsync(CreateRun(project));
         var primary = AssertEx.NotNull(await store.ClaimNextAsync());
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id,
-            primary.Run.Version,
-            Encoding.UTF8.GetBytes("[]"),
-            LastStreamSequence: 10,
-            EffectiveContextTokens: 4096,
-            DurationMs: 1,
-            TotalTokens: null,
-            TokensPerSecond: null,
-            JudgeAttempt: JudgeSeed(revision)));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = primary.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 10,
+            EffectiveContextTokens = 4096,
+            DurationMs = 1,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            JudgeAttempt = JudgeSeed(revision)
+        });
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Judge, judge.Kind);
         AssertEx.True(judge.JudgeAttemptId is not null, "Claimed judge work must name the attempt it judges.");
@@ -1235,17 +1381,20 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     private static BenchmarkLaunchReceiptCommand Receipt(byte[] receiptJson, byte[] environmentJson, string receiptHash = "receipt-hash") =>
-        new(Encoding.UTF8.GetString(receiptJson),
-            Encoding.UTF8.GetString(environmentJson),
-            "environment-hash",
-            receiptHash,
-            "effective-identity",
-            "cuda",
-            33,
-            33,
-            "exe-sha",
-            true,
-            "auto");
+        new()
+        {
+            ReceiptJson = Encoding.UTF8.GetString(receiptJson),
+            EnvironmentFactsJson = Encoding.UTF8.GetString(environmentJson),
+            EnvironmentFactsHash = "environment-hash",
+            ReceiptHash = receiptHash,
+            EffectiveLaunchIdentity = "effective-identity",
+            EffectiveBackend = "cuda",
+            PlacementOffloaded = 33,
+            PlacementTotal = 33,
+            ExecutableSha256 = "exe-sha",
+            HasAuxAssets = true,
+            KvCacheTypeSource = "auto"
+        };
 
     private static async Task<byte[]> ReadRunLaunchReceiptAsync(SqliteConnection connection, Guid id)
     {

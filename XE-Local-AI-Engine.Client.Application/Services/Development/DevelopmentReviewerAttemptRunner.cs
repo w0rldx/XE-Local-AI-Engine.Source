@@ -159,17 +159,20 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             var target = submission.Disposition == DevelopmentReviewDisposition.Approved
                 ? DevelopmentTaskStatus.AwaitingApply
                 : DevelopmentTaskStatus.ChangesRequested;
-            _ = await _store.FinalizeReviewAsync(new DevelopmentFinalizeReviewCommand(prepared.Attachment,
-                                    Guid.NewGuid(),
-                                    snapshot.TaskVersion,
-                                    snapshot.AttemptVersion,
-                                    target,
-                                    target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
-                                    submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
+            _ = await _store.FinalizeReviewAsync(new DevelopmentFinalizeReviewCommand
+            {
+                Artifact = prepared.Attachment,
+                OperationId = Guid.NewGuid(),
+                ExpectedTaskVersion = snapshot.TaskVersion,
+                ExpectedAttemptVersion = snapshot.AttemptVersion,
+                TargetStatus = target,
+                ApprovedSubjectHash = target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
+                SanitizedReason = submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
                                         ? ChangeRequestReason(submission)
                                         : null,
-                                    model.InputTokens,
-                                    model.OutputTokens),
+                InputTokens = model.InputTokens,
+                OutputTokens = model.OutputTokens
+            },
                                 CancellationToken.None);
             return new DevelopmentReviewerAttemptResult(snapshot.AttemptId,
                 prepared.ArtifactId,
@@ -181,13 +184,16 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         {
             try
             {
-                _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
-                                        Guid.NewGuid(),
-                                        exception is OperationCanceledException
+                _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
+                {
+                    AttemptId = snapshot.AttemptId,
+                    OperationId = Guid.NewGuid(),
+                    Status = exception is OperationCanceledException
                                             ? DevelopmentAttemptStatus.Cancelled
                                             : DevelopmentAttemptStatus.Failed,
-                                        snapshot.AttemptVersion,
-                                        SanitizedReason(exception)),
+                    ExpectedAttemptVersion = snapshot.AttemptVersion,
+                    TerminalReason = SanitizedReason(exception)
+                },
                                     CancellationToken.None);
             }
             catch (DevelopmentInvalidTransitionException)

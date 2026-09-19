@@ -99,9 +99,12 @@ public sealed class LocalModelProxyApiKeyStore : ILocalModelProxyApiKeyStore
 
     private static LocalModelProxyApiKeyRecord ToRecord(LocalModelProxyApiKey entity)
     {
-        return new LocalModelProxyApiKeyRecord(entity.Prefix,
-            entity.KeyHash,
-            entity.CreatedAtUtc,
-            entity.LastUsedAtUtc);
+        return new LocalModelProxyApiKeyRecord
+        {
+            Prefix = entity.Prefix,
+            KeyHash = entity.KeyHash,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            LastUsedAtUtc = entity.LastUsedAtUtc
+        };
     }
 }

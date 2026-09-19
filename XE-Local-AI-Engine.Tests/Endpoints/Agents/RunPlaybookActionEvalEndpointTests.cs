@@ -122,13 +122,16 @@ public sealed class RunPlaybookActionEvalEndpointTests
         using (var scope = factory.Services.CreateScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-            var created = await service.CreateAsync(new PlaybookActionInput(agentId,
-                PlaybookActionState.Enabled,
-                PlaybookActionSource.Manual,
-                TriggerCondition: null,
-                "Always cite sources.",
-                Scope: null,
-                Priority: 10));
+            var created = await service.CreateAsync(new PlaybookActionInput
+            {
+                AgentDefinitionId = agentId,
+                State = PlaybookActionState.Enabled,
+                Source = PlaybookActionSource.Manual,
+                TriggerCondition = null,
+                Behavior = "Always cite sources.",
+                Scope = null,
+                Priority = 10
+            });
             enabledActionId = created.Id;
         }
 
@@ -182,15 +185,18 @@ public sealed class RunPlaybookActionEvalEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            Description: null,
-            "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = name,
+            Description = null,
+            Instructions = "You are a careful engineering agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 

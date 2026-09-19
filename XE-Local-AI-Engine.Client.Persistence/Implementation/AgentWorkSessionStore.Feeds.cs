@@ -18,17 +18,20 @@ internal sealed partial class AgentWorkSessionStore
                                     .ToListAsync(cancellationToken);
         return
         [
-            .. tasks.Select(entity => new WorkSessionTaskSnapshot(entity.Id,
-                entity.SessionId,
-                entity.ParentTaskId,
-                entity.Sequence,
-                Text(entity.Title),
-                TextOrNull(entity.Detail),
-                entity.Status,
-                TextOrNull(entity.BlockedReason),
-                entity.Origin,
-                entity.CreatedStep,
-                entity.UpdatedStep))
+            .. tasks.Select(entity => new WorkSessionTaskSnapshot
+            {
+                Id = entity.Id,
+                SessionId = entity.SessionId,
+                ParentTaskId = entity.ParentTaskId,
+                Sequence = entity.Sequence,
+                Title = Text(entity.Title),
+                Detail = TextOrNull(entity.Detail),
+                Status = entity.Status,
+                BlockedReason = TextOrNull(entity.BlockedReason),
+                Origin = entity.Origin,
+                CreatedStep = entity.CreatedStep,
+                UpdatedStep = entity.UpdatedStep
+            })
         ];
     }
 
@@ -43,15 +46,18 @@ internal sealed partial class AgentWorkSessionStore
                                        .ToListAsync(cancellationToken);
         return
         [
-            .. findings.Select(entity => new WorkSessionFindingSnapshot(entity.Id,
-                entity.SessionId,
-                entity.TaskId,
-                entity.Sequence,
-                entity.Kind,
-                Text(entity.Text),
-                TextOrNull(entity.SourceRef),
-                entity.CreatedStep,
-                entity.Superseded))
+            .. findings.Select(entity => new WorkSessionFindingSnapshot
+            {
+                Id = entity.Id,
+                SessionId = entity.SessionId,
+                TaskId = entity.TaskId,
+                Sequence = entity.Sequence,
+                Kind = entity.Kind,
+                Text = Text(entity.Text),
+                SourceRef = TextOrNull(entity.SourceRef),
+                CreatedStep = entity.CreatedStep,
+                Superseded = entity.Superseded
+            })
         ];
     }
 
@@ -90,15 +96,18 @@ internal sealed partial class AgentWorkSessionStore
                                      .ToListAsync(cancellationToken);
         return
         [
-            .. events.Select(entity => new WorkSessionEventSnapshot(entity.Id,
-                entity.SessionId,
-                entity.Sequence,
-                entity.Step,
-                entity.EventType,
-                TextOrNull(entity.DetailJson),
-                entity.OperationId,
-                entity.Outcome,
-                entity.OccurredAtUtc))
+            .. events.Select(entity => new WorkSessionEventSnapshot
+            {
+                Id = entity.Id,
+                SessionId = entity.SessionId,
+                Sequence = entity.Sequence,
+                Step = entity.Step,
+                EventType = entity.EventType,
+                DetailJson = TextOrNull(entity.DetailJson),
+                OperationId = entity.OperationId,
+                Outcome = entity.Outcome,
+                OccurredAtUtc = entity.OccurredAtUtc
+            })
         ];
     }
 
@@ -114,15 +123,18 @@ internal sealed partial class AgentWorkSessionStore
                                      .FirstOrDefaultAsync(cancellationToken);
         return latest is null
             ? null
-            : new WorkSessionEventSnapshot(latest.Id,
-                latest.SessionId,
-                latest.Sequence,
-                latest.Step,
-                latest.EventType,
-                TextOrNull(latest.DetailJson),
-                latest.OperationId,
-                latest.Outcome,
-                latest.OccurredAtUtc);
+            : new WorkSessionEventSnapshot
+            {
+                Id = latest.Id,
+                SessionId = latest.SessionId,
+                Sequence = latest.Sequence,
+                Step = latest.Step,
+                EventType = latest.EventType,
+                DetailJson = TextOrNull(latest.DetailJson),
+                OperationId = latest.OperationId,
+                Outcome = latest.Outcome,
+                OccurredAtUtc = latest.OccurredAtUtc
+            };
     }
 
     public async Task<WorkSessionArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)

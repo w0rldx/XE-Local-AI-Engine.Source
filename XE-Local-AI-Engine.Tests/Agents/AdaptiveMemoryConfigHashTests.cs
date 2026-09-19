@@ -161,19 +161,22 @@ public sealed class AdaptiveMemoryConfigHashTests
 
     private static AgentDefinitionRecord CreateDefinition(bool playbookEnabled = false)
     {
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            "Agent",
-            Description: null,
-            SystemPrompt,
-            "qwen3:8b",
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            playbookEnabled);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "Agent",
+            Description = null,
+            Instructions = SystemPrompt,
+            ModelProfile = "qwen3:8b",
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            PlaybookEnabled = playbookEnabled
+        };
     }
 }

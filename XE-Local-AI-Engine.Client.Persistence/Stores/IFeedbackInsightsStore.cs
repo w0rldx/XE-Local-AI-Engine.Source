@@ -19,13 +19,20 @@ public interface IFeedbackInsightsStore
 }
 
 /// <summary>Raw per-agent feedback aggregate (plaintext; no encrypted columns are read).</summary>
-public sealed record AgentFeedbackAggregate(
-    Guid AgentDefinitionId,
-    string AgentName,
-    int UpCount,
-    int DownCount,
-    IReadOnlyList<ToolFeedbackCount> ByTool,
-    IReadOnlyList<FeedbackExemplar> Exemplars);
+public sealed class AgentFeedbackAggregate
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required string AgentName { get; init; }
+
+    public required int UpCount { get; init; }
+
+    public required int DownCount { get; init; }
+
+    public required IReadOnlyList<ToolFeedbackCount> ByTool { get; init; }
+
+    public required IReadOnlyList<FeedbackExemplar> Exemplars { get; init; }
+}
 
 /// <summary>
 ///     Up/down feedback counts attributed to a tool. Attribution is <b>conversation-level</b>: a feedback row is
@@ -33,11 +40,29 @@ public sealed record AgentFeedbackAggregate(
 ///     (<c>tool_events</c> has no message link). Counts use <c>COUNT(DISTINCT message_id)</c> so a conversation that
 ///     used a tool many times still counts each rated message once.
 /// </summary>
-public sealed record ToolFeedbackCount(string ToolName, int UpCount, int DownCount);
+public sealed class ToolFeedbackCount
+{
+    public required string ToolName { get; init; }
+
+    public required int UpCount { get; init; }
+
+    public required int DownCount { get; init; }
+}
 
 /// <summary>
 ///     A single feedback comment exemplar with its evidence refs. <see cref="MessageId" /> / <see cref="ConversationId" />
 ///     are the references the analysis phase cites as source feedback; <see cref="Comment" /> is the raw
 ///     stored comment (truncation/capping is applied by the application service, not here).
 /// </summary>
-public sealed record FeedbackExemplar(string Rating, string Comment, Guid MessageId, Guid ConversationId, long CreatedAtUtc);
+public sealed class FeedbackExemplar
+{
+    public required string Rating { get; init; }
+
+    public required string Comment { get; init; }
+
+    public required Guid MessageId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}

@@ -82,83 +82,179 @@ public interface ITrainingDatasetStore
         CancellationToken cancellationToken = default);
 }
 
-public sealed record TrainingDefinitionInput(string Name, TrainingDatasetKind Kind, ReadOnlyMemory<byte> DefinitionJson);
+public sealed class TrainingDefinitionInput
+{
+    public required string Name { get; init; }
 
-public sealed record TrainingDefinitionRecord(
-    Guid Id,
-    string Name,
-    TrainingDatasetKind Kind,
-    ReadOnlyMemory<byte> DefinitionJson,
-    long DefinitionVersion,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+    public required TrainingDatasetKind Kind { get; init; }
 
-public sealed record TrainingDatasetEnqueueCommand(Guid DefinitionId, long ExpectedDefinitionVersion, string Name);
+    public required ReadOnlyMemory<byte> DefinitionJson { get; init; }
+}
+
+public sealed class TrainingDefinitionRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required TrainingDatasetKind Kind { get; init; }
+
+    public required ReadOnlyMemory<byte> DefinitionJson { get; init; }
+
+    public required long DefinitionVersion { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class TrainingDatasetEnqueueCommand
+{
+    public required Guid DefinitionId { get; init; }
+
+    public required long ExpectedDefinitionVersion { get; init; }
+
+    public required string Name { get; init; }
+}
 
 /// <summary>
-///     <paramref name="DefinitionJson" /> is the definition body PINNED at creation — what generation and evaluation
+///     <see cref="DefinitionJson" /> is the definition body PINNED at creation — what generation and evaluation
 ///     must read. Null means the dataset predates pinning; it is never a cue to fall back to the live definition.
 /// </summary>
-public sealed record TrainingDatasetRecord(
-    Guid Id,
-    Guid DefinitionId,
-    long DefinitionVersion,
-    ReadOnlyMemory<byte>? DefinitionJson,
-    string Name,
-    TrainingDatasetStatus Status,
-    int Revision,
-    string? ContentFingerprint,
-    int TotalSampleCount,
-    int GoodSampleCount,
-    int BadSampleCount,
-    int RejectedSampleCount,
-    int DuplicateSampleCount,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    DatasetGenerationWorkStatus? WorkStatus,
-    string? WorkErrorMessage);
+public sealed record TrainingDatasetRecord
+{
+    public required Guid Id { get; init; }
 
-public sealed record DatasetGenerationClaimedWork(long QueueSequence, Guid DatasetId, long Version, TrainingDatasetRecord Dataset);
+    public required Guid DefinitionId { get; init; }
 
-public sealed record TrainingSampleInput(
-    Guid DatasetId,
-    string Kind,
-    TrainingSampleLabel Label,
-    ReadOnlyMemory<byte> ContentJson,
-    ReadOnlyMemory<byte>? ValidationJson,
-    TrainingSampleProvenance Provenance,
-    string SourceHash);
+    public required long DefinitionVersion { get; init; }
 
-public sealed record TrainingSampleAppendResult(TrainingSampleRecord? Sample, bool Duplicate);
+    public required ReadOnlyMemory<byte>? DefinitionJson { get; init; }
 
-public sealed record TrainingSampleRecord(
-    Guid Id,
-    Guid DatasetId,
-    int Sequence,
-    string Kind,
-    TrainingSampleLabel Label,
-    TrainingSampleReviewState ReviewState,
-    ReadOnlyMemory<byte> ContentJson,
-    ReadOnlyMemory<byte>? ValidationJson,
-    TrainingSampleProvenance Provenance,
-    string SourceHash,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+    public required string Name { get; init; }
 
-public sealed record TrainingSampleQuery(
-    Guid DatasetId,
-    int Page,
-    int PageSize,
-    TrainingSampleLabel? Label = null,
-    TrainingSampleReviewState? ReviewState = null,
-    string? Kind = null);
+    public required TrainingDatasetStatus Status { get; init; }
 
-public sealed record TrainingSamplePage(IReadOnlyList<TrainingSampleRecord> Items, int TotalCount);
+    public required int Revision { get; init; }
 
-/// <summary>Review verbs. <paramref name="Label" /> is only honored by <see cref="TrainingSampleReviewVerb.Relabel" />.</summary>
-public sealed record TrainingSampleReviewCommand(Guid SampleId, TrainingSampleReviewVerb Verb, TrainingSampleLabel? Label = null);
+    public required string? ContentFingerprint { get; init; }
+
+    public required int TotalSampleCount { get; init; }
+
+    public required int GoodSampleCount { get; init; }
+
+    public required int BadSampleCount { get; init; }
+
+    public required int RejectedSampleCount { get; init; }
+
+    public required int DuplicateSampleCount { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required DatasetGenerationWorkStatus? WorkStatus { get; init; }
+
+    public required string? WorkErrorMessage { get; init; }
+}
+
+public sealed record DatasetGenerationClaimedWork
+{
+    public required long QueueSequence { get; init; }
+
+    public required Guid DatasetId { get; init; }
+
+    public required long Version { get; init; }
+
+    public required TrainingDatasetRecord Dataset { get; init; }
+}
+
+public sealed class TrainingSampleInput
+{
+    public required Guid DatasetId { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required TrainingSampleLabel Label { get; init; }
+
+    public required ReadOnlyMemory<byte> ContentJson { get; init; }
+
+    public required ReadOnlyMemory<byte>? ValidationJson { get; init; }
+
+    public required TrainingSampleProvenance Provenance { get; init; }
+
+    public required string SourceHash { get; init; }
+}
+
+public sealed class TrainingSampleAppendResult
+{
+    public required TrainingSampleRecord? Sample { get; init; }
+
+    public required bool Duplicate { get; init; }
+}
+
+public sealed class TrainingSampleRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid DatasetId { get; init; }
+
+    public required int Sequence { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required TrainingSampleLabel Label { get; init; }
+
+    public required TrainingSampleReviewState ReviewState { get; init; }
+
+    public required ReadOnlyMemory<byte> ContentJson { get; init; }
+
+    public required ReadOnlyMemory<byte>? ValidationJson { get; init; }
+
+    public required TrainingSampleProvenance Provenance { get; init; }
+
+    public required string SourceHash { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class TrainingSampleQuery
+{
+    public required Guid DatasetId { get; init; }
+
+    public required int Page { get; init; }
+
+    public required int PageSize { get; init; }
+
+    public TrainingSampleLabel? Label { get; init; }
+
+    public TrainingSampleReviewState? ReviewState { get; init; }
+
+    public string? Kind { get; init; }
+}
+
+public sealed class TrainingSamplePage
+{
+    public required IReadOnlyList<TrainingSampleRecord> Items { get; init; }
+
+    public required int TotalCount { get; init; }
+}
+
+/// <summary>Review verbs. <see cref="Label" /> is only honored by <see cref="TrainingSampleReviewVerb.Relabel" />.</summary>
+public sealed class TrainingSampleReviewCommand
+{
+    public required Guid SampleId { get; init; }
+
+    public required TrainingSampleReviewVerb Verb { get; init; }
+
+    public TrainingSampleLabel? Label { get; init; }
+}
 
 public enum TrainingSampleReviewVerb
 {
@@ -167,18 +263,35 @@ public enum TrainingSampleReviewVerb
     Relabel
 }
 
-public sealed record ToolMockInput(string ToolName, ReadOnlyMemory<byte> MockJson, bool Enabled);
+public sealed class ToolMockInput
+{
+    public required string ToolName { get; init; }
 
-public sealed record ToolMockRecord(
-    Guid Id,
-    string ToolName,
-    ReadOnlyMemory<byte> MockJson,
-    ReadOnlyMemory<byte>? VerificationJson,
-    ToolMockVerificationState VerificationState,
-    bool Enabled,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+    public required ReadOnlyMemory<byte> MockJson { get; init; }
+
+    public required bool Enabled { get; init; }
+}
+
+public sealed class ToolMockRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string ToolName { get; init; }
+
+    public required ReadOnlyMemory<byte> MockJson { get; init; }
+
+    public required ReadOnlyMemory<byte>? VerificationJson { get; init; }
+
+    public required ToolMockVerificationState VerificationState { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 public abstract class TrainingStoreException : InvalidOperationException
 {

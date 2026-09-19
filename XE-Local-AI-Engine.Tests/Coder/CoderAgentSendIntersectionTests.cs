@@ -99,22 +99,25 @@ public sealed class CoderAgentSendIntersectionTests
             [CoderToolDefinition.SearchTextToolName] = false
         };
 
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            AgentDefaults.CoderAgentName,
-            Description: "Read-only project access.",
-            Instructions: "You are a read-only coding agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            allowed,
-            approvals,
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            PlaybookEnabled: false,
-            Source: AgentDefinitionSource.Seeded,
-            SeedSlug: AgentDefaults.CoderAgentSeedSlug);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = AgentDefaults.CoderAgentName,
+            Description = "Read-only project access.",
+            Instructions = "You are a read-only coding agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowed,
+            ToolApprovals = approvals,
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            PlaybookEnabled = false,
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.CoderAgentSeedSlug
+        };
     }
 
     private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store, string capableModel)

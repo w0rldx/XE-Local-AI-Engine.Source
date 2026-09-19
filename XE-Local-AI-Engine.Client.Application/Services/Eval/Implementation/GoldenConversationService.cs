@@ -40,12 +40,15 @@ internal sealed class GoldenConversationService : IGoldenConversationService
 
         // A manual create never produces harvested provenance: pin Source=Manual regardless of the input so the manual
         // path always stamps Manual (the harvested staging path is the only producer of Harvested rows).
-        var storeInput = new GoldenConversationInput(input.AgentDefinitionId,
-            input.Title,
-            input.InputTurns,
-            input.Assertion,
-            input.Rubric,
-            input.Enabled);
+        var storeInput = new GoldenConversationInput
+        {
+            AgentDefinitionId = input.AgentDefinitionId,
+            Title = input.Title,
+            InputTurns = input.InputTurns,
+            Assertion = input.Assertion,
+            Rubric = input.Rubric,
+            Enabled = input.Enabled
+        };
 
         return await _store.AddAsync(storeInput, cancellationToken);
     }
@@ -62,15 +65,18 @@ internal sealed class GoldenConversationService : IGoldenConversationService
 
         // Stage every harvested candidate inert regardless of the input's Enabled flag: the operator approves it into the
         // active set later, so it stays out of eval runs until then (the Enabled==true runner filter).
-        var storeInput = new GoldenConversationInput(input.AgentDefinitionId,
-            input.Title,
-            input.InputTurns,
-            input.Assertion,
-            input.Rubric,
-            Enabled: false,
-            GoldenConversationSource.Harvested,
-            input.SourceMessageId,
-            input.SourceConversationId);
+        var storeInput = new GoldenConversationInput
+        {
+            AgentDefinitionId = input.AgentDefinitionId,
+            Title = input.Title,
+            InputTurns = input.InputTurns,
+            Assertion = input.Assertion,
+            Rubric = input.Rubric,
+            Enabled = false,
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = input.SourceMessageId,
+            SourceConversationId = input.SourceConversationId
+        };
 
         return await _store.AddAsync(storeInput, cancellationToken);
     }

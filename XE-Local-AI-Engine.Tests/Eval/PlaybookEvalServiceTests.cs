@@ -130,17 +130,20 @@ public sealed class PlaybookEvalServiceTests
         // The candidate is LOW priority (10) so it must sort BEFORE this already-enabled action (priority 50). Once
         // promoted, ListEnabledByAgentAsync re-orders by (Priority, CreatedAtUtc), so the eval must compose the
         // candidate in that SAME sorted position — not merely append it last — or the gate scores the wrong prompt.
-        var enabledAction = new PlaybookActionRecord(Guid.NewGuid(),
-            agentId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            "Enabled behaviour.",
-            Scope: null,
-            Priority: 50,
-            Version: 1,
-            CreatedAtUtc: 5,
-            UpdatedAtUtc: 5);
+        var enabledAction = new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = "Enabled behaviour.",
+            Scope = null,
+            Priority = 50,
+            Version = 1,
+            CreatedAtUtc = 5,
+            UpdatedAtUtc = 5
+        };
 
         var captureRunner = new CapturingEvalAgentRunner();
         var goldenCase = JudgeCase(agentId);
@@ -365,19 +368,22 @@ public sealed class PlaybookEvalServiceTests
         int maxGoldenCases,
         out IPlaybookActionService actionService)
     {
-        var pending = new PlaybookActionRecord(actionId,
-            agentId,
-            PlaybookActionState.Suggested,
-            PlaybookActionSource.Analysis,
-            TriggerCondition: null,
-            CandidateBehavior,
-            Scope: null,
-            suggestedPriority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            [Guid.NewGuid()],
-            Confidence: 0.6d);
+        var pending = new PlaybookActionRecord
+        {
+            Id = actionId,
+            AgentDefinitionId = agentId,
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            TriggerCondition = null,
+            Behavior = CandidateBehavior,
+            Scope = null,
+            Priority = suggestedPriority,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            SourceFeedbackIds = [Guid.NewGuid()],
+            Confidence = 0.6d
+        };
 
         actionService = Substitute.For<IPlaybookActionService>();
         actionService.LoadPendingSuggestionAsync(agentId, actionId, Arg.Any<CancellationToken>())
@@ -439,41 +445,50 @@ public sealed class PlaybookEvalServiceTests
 
     private static GoldenConversationRecord JudgeCase(Guid agentId)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            agentId,
-            "Judge case",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: null,
-            "The answer must be helpful.",
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            Title = "Judge case",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = null,
+            Rubric = "The answer must be helpful.",
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static GoldenConversationRecord CaseWithTurns(Guid agentId, string inputTurns)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            agentId,
-            "Turns case",
-            inputTurns,
-            Assertion: null,
-            "The answer must be helpful.",
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            Title = "Turns case",
+            InputTurns = inputTurns,
+            Assertion = null,
+            Rubric = "The answer must be helpful.",
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static GoldenConversationRecord AssertionCase(Guid agentId, string assertion)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            agentId,
-            "Assertion case",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            assertion,
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            Title = "Assertion case",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = assertion,
+            Rubric = null,
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static GoldenConversationRecord MalformedAssertionCase(Guid agentId)
@@ -481,32 +496,38 @@ public sealed class PlaybookEvalServiceTests
         // Valid input turns (so the case is evaluated, not short-circuited as invalid-input) but a non-blank assertion
         // that is NOT valid JSON — a corrupt/legacy stored scoring constraint. A rubric is present to prove the judge
         // never silently falls back to it: the malformed assertion must fail the case outright.
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            agentId,
-            "Malformed assertion case",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: "{ not valid json",
-            "The answer must be helpful.",
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            Title = "Malformed assertion case",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = "{ not valid json",
+            Rubric = "The answer must be helpful.",
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static AgentDefinitionRecord CreateAgent(Guid agentId)
     {
-        return new AgentDefinitionRecord(agentId,
-            "Builder",
-            Description: null,
-            "Base instructions.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = agentId,
+            Name = "Builder",
+            Description = null,
+            Instructions = "Base instructions.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     /// <summary>

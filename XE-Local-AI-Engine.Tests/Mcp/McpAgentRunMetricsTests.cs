@@ -27,16 +27,19 @@ public sealed class McpAgentRunMetricsTests
     {
         using var capture = new NodeMeterCapture();
         using var metrics = new McpAgentRunMetrics();
-        var counters = new McpAgentRunLedgerCounters(AccountingVersion: 1,
-            NonterminalRunCount: 7,
-            QueuedRunCount: 5,
-            RunningRunCount: 2,
-            IdentityCount: 19,
-            ActivePayloadBytes: 1234,
-            TombstoneLogicalBytes: 5678,
-            UpdatedAtUtc: 99);
+        var counters = new McpAgentRunLedgerCounters
+        {
+            AccountingVersion = 1,
+            NonterminalRunCount = 7,
+            QueuedRunCount = 5,
+            RunningRunCount = 2,
+            IdentityCount = 19,
+            ActivePayloadBytes = 1234,
+            TombstoneLogicalBytes = 5678,
+            UpdatedAtUtc = 99
+        };
 
-        metrics.Update(new McpAgentRunLedgerSnapshot(QueueDepth: 5, RunningCount: 2, counters));
+        metrics.Update(new McpAgentRunLedgerSnapshot { QueueDepth = 5, RunningCount = 2, Counters = counters });
         capture.Observe();
 
         AssertGauge(capture, "mcp_agent_run_queue_depth", 5);
@@ -210,16 +213,22 @@ public sealed class McpAgentRunMetricsTests
         long activeBytes,
         long tombstoneBytes,
         int accountingVersion = 1) =>
-        new(queue,
-            running,
-            new McpAgentRunLedgerCounters(accountingVersion,
-                NonterminalRunCount: nonterminal,
-                QueuedRunCount: queue,
-                RunningRunCount: running,
-                IdentityCount: identities,
-                ActivePayloadBytes: activeBytes,
-                TombstoneLogicalBytes: tombstoneBytes,
-                UpdatedAtUtc: 1));
+        new()
+        {
+            QueueDepth = queue,
+            RunningCount = running,
+            Counters = new McpAgentRunLedgerCounters
+            {
+                AccountingVersion = accountingVersion,
+                NonterminalRunCount = nonterminal,
+                QueuedRunCount = queue,
+                RunningRunCount = running,
+                IdentityCount = identities,
+                ActivePayloadBytes = activeBytes,
+                TombstoneLogicalBytes = tombstoneBytes,
+                UpdatedAtUtc = 1
+            }
+        };
 
     private static void AssertNoForbiddenTags(IEnumerable<CapturedMeasurement> measurements)
     {

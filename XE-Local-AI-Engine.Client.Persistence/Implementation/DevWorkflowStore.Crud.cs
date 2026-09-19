@@ -122,16 +122,22 @@ internal sealed partial class DevWorkflowStore
 
         var page = await query.OrderByDescending(entity => entity.UpdatedAtUtc)
                               .ThenBy(entity => entity.Id)
-                              .Select(entity => new WorkItemProjection(entity,
-                                  _dbContext.DevWorkflowRuns.Where(run => run.WorkItemId == entity.Id)
+                              .Select(entity => new WorkItemProjection
+                              {
+                                  WorkItem = entity,
+                                  LatestRun = _dbContext.DevWorkflowRuns.Where(run => run.WorkItemId == entity.Id)
                                             .OrderByDescending(run => run.CreatedAtUtc)
                                             .ThenByDescending(run => run.Id)
-                                            .Select(run => new LatestRunProjection(run.Id,
-                                                run.Status,
-                                                _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
+                                            .Select(run => new LatestRunProjection
+                                            {
+                                                RunId = run.Id,
+                                                Status = run.Status,
+                                                DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
                                                           .Select(definition => definition.Name)
-                                                          .FirstOrDefault()))
-                                            .FirstOrDefault()))
+                                                          .FirstOrDefault()
+                                            })
+                                            .FirstOrDefault()
+                              })
                               .ToListAsync(cancellationToken);
 
         // Query two: one pass over the node-runs of the listed runs, tallied in memory. Never one query per row.
@@ -196,7 +202,7 @@ internal sealed partial class DevWorkflowStore
             await DevWorkflowPurge.DeleteWorkItemAsync(_dbContext, workItemId, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             _dbContext.ChangeTracker.Clear();
-            return new DevWorkflowWorkItemDeletion(removed, runIds, sessionIds);
+            return new DevWorkflowWorkItemDeletion { RemovedRows = removed, RunIds = runIds, WorkSessionIds = sessionIds };
         }
         catch (DbUpdateException exception)
         {
@@ -306,16 +312,19 @@ internal sealed partial class DevWorkflowStore
 
         return await query.OrderBy(entity => entity.Name)
                           .ThenBy(entity => entity.Id)
-                          .Select(entity => new DevWorkflowDefinitionSummary(entity.Id,
-                              entity.Name,
-                              entity.GraphHash,
-                              entity.NodeCount,
-                              entity.Source,
-                              entity.SeedSlug,
-                              entity.Archived,
-                              entity.Version,
-                              entity.CreatedAtUtc,
-                              entity.UpdatedAtUtc))
+                          .Select(entity => new DevWorkflowDefinitionSummary
+                          {
+                              Id = entity.Id,
+                              Name = entity.Name,
+                              GraphHash = entity.GraphHash,
+                              NodeCount = entity.NodeCount,
+                              Source = entity.Source,
+                              SeedSlug = entity.SeedSlug,
+                              Archived = entity.Archived,
+                              Version = entity.Version,
+                              CreatedAtUtc = entity.CreatedAtUtc,
+                              UpdatedAtUtc = entity.UpdatedAtUtc
+                          })
                           .ToListAsync(cancellationToken);
     }
 
@@ -476,34 +485,40 @@ internal sealed partial class DevWorkflowStore
         var runs = await query.OrderByDescending(entity => entity.CreatedAtUtc)
                               .ThenByDescending(entity => entity.Id)
                               .Take(limit)
-                              .Select(entity => new RunSummaryProjection(entity.Id,
-                                  entity.WorkItemId,
-                                  entity.DefinitionId,
-                                  _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == entity.DefinitionId)
+                              .Select(entity => new RunSummaryProjection
+                              {
+                                  Id = entity.Id,
+                                  WorkItemId = entity.WorkItemId,
+                                  DefinitionId = entity.DefinitionId,
+                                  DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == entity.DefinitionId)
                                             .Select(definition => definition.Name)
                                             .FirstOrDefault(),
-                                  entity.Status,
-                                  entity.FailureClass,
-                                  entity.StartedAtUtc,
-                                  entity.EndedAtUtc,
-                                  entity.CreatedAtUtc,
-                                  entity.UpdatedAtUtc))
+                                  Status = entity.Status,
+                                  FailureClass = entity.FailureClass,
+                                  StartedAtUtc = entity.StartedAtUtc,
+                                  EndedAtUtc = entity.EndedAtUtc,
+                                  CreatedAtUtc = entity.CreatedAtUtc,
+                                  UpdatedAtUtc = entity.UpdatedAtUtc
+                              })
                               .ToListAsync(cancellationToken);
 
         var counters = await LoadNodeCountersAsync([.. runs.Select(run => run.Id)], cancellationToken);
         return
         [
-            .. runs.Select(run => new DevWorkflowRunSummary(run.Id,
-                run.WorkItemId,
-                run.DefinitionId,
-                run.DefinitionName,
-                run.Status,
-                Counters(counters, run.Id),
-                run.FailureClass,
-                run.StartedAtUtc,
-                run.EndedAtUtc,
-                run.CreatedAtUtc,
-                run.UpdatedAtUtc))
+            .. runs.Select(run => new DevWorkflowRunSummary
+            {
+                Id = run.Id,
+                WorkItemId = run.WorkItemId,
+                DefinitionId = run.DefinitionId,
+                DefinitionName = run.DefinitionName,
+                Status = run.Status,
+                Nodes = Counters(counters, run.Id),
+                FailureClass = run.FailureClass,
+                StartedAtUtc = run.StartedAtUtc,
+                EndedAtUtc = run.EndedAtUtc,
+                CreatedAtUtc = run.CreatedAtUtc,
+                UpdatedAtUtc = run.UpdatedAtUtc
+            })
         ];
     }
 
@@ -511,14 +526,17 @@ internal sealed partial class DevWorkflowStore
     [
         .. await StrandedNodeRuns()
                  .AsNoTracking()
-                 .Select(entity => new DevWorkflowReconciledNodeRun(entity.Id,
-                     entity.RunId,
-                     entity.NodeKey,
-                     entity.NodeType,
-                     entity.Status,
-                     entity.Attempt,
-                     entity.WorkSessionId,
-                     entity.MaxAttempts))
+                 .Select(entity => new DevWorkflowReconciledNodeRun
+                 {
+                     NodeRunId = entity.Id,
+                     RunId = entity.RunId,
+                     NodeKey = entity.NodeKey,
+                     NodeType = entity.NodeType,
+                     Status = entity.Status,
+                     Attempt = entity.Attempt,
+                     WorkSessionId = entity.WorkSessionId,
+                     MaxAttempts = entity.MaxAttempts
+                 })
                  .ToListAsync(cancellationToken)
     ];
 
@@ -575,14 +593,17 @@ internal sealed partial class DevWorkflowStore
 
                 // The status BEFORE the collapse is the informative one: it says whether the node-run was merely
                 // admitted or actually mid-execution. Where it lands is always Pending.
-                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id,
-                    nodeRun.RunId,
-                    nodeRun.NodeKey,
-                    nodeRun.NodeType,
-                    nodeRun.Status,
-                    nodeRun.Attempt,
-                    nodeRun.WorkSessionId,
-                    nodeRun.MaxAttempts));
+                reconciled.Add(new DevWorkflowReconciledNodeRun
+                {
+                    NodeRunId = nodeRun.Id,
+                    RunId = nodeRun.RunId,
+                    NodeKey = nodeRun.NodeKey,
+                    NodeType = nodeRun.NodeType,
+                    Status = nodeRun.Status,
+                    Attempt = nodeRun.Attempt,
+                    WorkSessionId = nodeRun.WorkSessionId,
+                    MaxAttempts = nodeRun.MaxAttempts
+                });
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
                 // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
@@ -641,14 +662,17 @@ internal sealed partial class DevWorkflowStore
 
     /// <summary>Where a settling pass puts a node-run it could not judge: a human's in-tray, with no attempt spent on it.</summary>
     private static TransitionDevWorkflowNodeRunCommand BlockUnjudged(DevWorkflowNodeRun nodeRun, DevWorkflowUnjudgedNodeRunBlock unjudged) =>
-        new(nodeRun.RunId,
-            nodeRun.Id,
-            DevWorkflowVersions.Any,
-            DevWorkflowNodeRunStatus.Blocked,
-            PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
-            FailureClass: unjudged.FailureClass,
-            TerminalReason: unjudged.SanitizedReason,
-            WorkItemStatus: DevWorkflowWorkItemStatus.Blocked);
+        new()
+        {
+            RunId = nodeRun.RunId,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+            FailureClass = unjudged.FailureClass,
+            TerminalReason = unjudged.SanitizedReason,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+        };
 
     /// <summary>
     ///     The node-runs a host death stranded. Only Queued and Running lost an executor: Pending was never dispatched,
@@ -696,11 +720,14 @@ internal sealed partial class DevWorkflowStore
                                      .Where(run => run.WorkItemId == workItem.Id)
                                      .OrderByDescending(run => run.CreatedAtUtc)
                                      .ThenByDescending(run => run.Id)
-                                     .Select(run => new LatestRunProjection(run.Id,
-                                         run.Status,
-                                         _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
+                                     .Select(run => new LatestRunProjection
+                                     {
+                                         RunId = run.Id,
+                                         Status = run.Status,
+                                         DefinitionName = _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
                                                    .Select(definition => definition.Name)
-                                                   .FirstOrDefault()))
+                                                   .FirstOrDefault()
+                                     })
                                      .FirstOrDefaultAsync(cancellationToken);
         if (latest is null)
         {
@@ -726,17 +753,20 @@ internal sealed partial class DevWorkflowStore
         var rows = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
                                    .Where(entity => runIds.Contains(entity.RunId))
                                    .OrderBy(entity => entity.Sequence)
-                                   .Select(entity => new NodeCounterRow(entity.RunId, entity.Id, entity.Status))
+                                   .Select(entity => new NodeCounterRow { RunId = entity.RunId, NodeRunId = entity.Id, Status = entity.Status })
                                    .ToListAsync(cancellationToken);
 
         return rows.GroupBy(row => row.RunId)
                    .ToDictionary(group => group.Key,
-                       group => new DevWorkflowNodeCounters(group.Count(row => row.Status == DevWorkflowNodeRunStatus.Queued),
-                           group.Count(row => row.Status == DevWorkflowNodeRunStatus.Running),
-                           group.Count(row => row.Status == DevWorkflowNodeRunStatus.Succeeded),
-                           group.Count(),
-                           group.Count(row => row.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
-                           group.FirstOrDefault(row => row.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)?.NodeRunId));
+                       group => new DevWorkflowNodeCounters
+                       {
+                           Queued = group.Count(row => row.Status == DevWorkflowNodeRunStatus.Queued),
+                           Running = group.Count(row => row.Status == DevWorkflowNodeRunStatus.Running),
+                           Completed = group.Count(row => row.Status == DevWorkflowNodeRunStatus.Succeeded),
+                           Total = group.Count(),
+                           PendingDecisionCount = group.Count(row => row.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
+                           BlockingGateNodeRunId = group.FirstOrDefault(row => row.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)?.NodeRunId
+                       });
     }
 
     private async Task<int> CountRowsAsync(IReadOnlyList<Guid> runIds, Guid workItemId, CancellationToken cancellationToken)
@@ -760,65 +790,104 @@ internal sealed partial class DevWorkflowStore
         counters.TryGetValue(runId, out var found) ? found : DevWorkflowNodeCounters.Empty;
 
     private static DevWorkflowWorkItemSnapshot WorkItemSnapshot(DevWorkflowWorkItem workItem, LatestRunProjection? latestRun, DevWorkflowNodeCounters counters) =>
-        new(workItem.Id,
-            workItem.Title,
-            Text(workItem.Request),
-            workItem.Status,
-            workItem.DevelopmentProjectId,
-            latestRun?.RunId,
-            latestRun?.Status,
-            latestRun?.DefinitionName,
-            counters,
-            workItem.CreatedAtUtc,
-            workItem.UpdatedAtUtc,
-            workItem.Version);
+        new()
+        {
+            Id = workItem.Id,
+            Title = workItem.Title,
+            Request = Text(workItem.Request),
+            Status = workItem.Status,
+            DevelopmentProjectId = workItem.DevelopmentProjectId,
+            LatestRunId = latestRun?.RunId,
+            LatestRunStatus = latestRun?.Status,
+            LatestRunDefinitionName = latestRun?.DefinitionName,
+            LatestRunNodes = counters,
+            CreatedAtUtc = workItem.CreatedAtUtc,
+            UpdatedAtUtc = workItem.UpdatedAtUtc,
+            Version = workItem.Version
+        };
 
     private static DevWorkflowDefinitionSnapshot DefinitionSnapshot(DevWorkflowDefinition definition) =>
-        new(definition.Id,
-            definition.Name,
-            Text(definition.GraphJson),
-            definition.GraphHash,
-            definition.NodeCount,
-            definition.Source,
-            definition.SeedSlug,
-            definition.Archived,
-            definition.Version,
-            definition.CreatedAtUtc,
-            definition.UpdatedAtUtc);
+        new()
+        {
+            Id = definition.Id,
+            Name = definition.Name,
+            GraphJson = Text(definition.GraphJson),
+            GraphHash = definition.GraphHash,
+            NodeCount = definition.NodeCount,
+            Source = definition.Source,
+            SeedSlug = definition.SeedSlug,
+            Archived = definition.Archived,
+            Version = definition.Version,
+            CreatedAtUtc = definition.CreatedAtUtc,
+            UpdatedAtUtc = definition.UpdatedAtUtc
+        };
 
     private static DevWorkflowRunSnapshot RunSnapshot(DevWorkflowRun run) =>
-        new(run.Id,
-            run.WorkItemId,
-            run.DefinitionId,
-            run.DefinitionVersion,
-            run.DefinitionGraphHash,
-            Text(run.GraphJson),
-            run.GraphRevision,
-            run.Status,
-            run.LastSequence,
-            run.FailureClass,
-            run.TerminalReason,
-            run.StartedAtUtc,
-            run.EndedAtUtc,
-            run.CreatedAtUtc,
-            run.UpdatedAtUtc,
-            run.Version);
+        new()
+        {
+            Id = run.Id,
+            WorkItemId = run.WorkItemId,
+            DefinitionId = run.DefinitionId,
+            DefinitionVersion = run.DefinitionVersion,
+            DefinitionGraphHash = run.DefinitionGraphHash,
+            GraphJson = Text(run.GraphJson),
+            GraphRevision = run.GraphRevision,
+            Status = run.Status,
+            LastSequence = run.LastSequence,
+            FailureClass = run.FailureClass,
+            TerminalReason = run.TerminalReason,
+            StartedAtUtc = run.StartedAtUtc,
+            EndedAtUtc = run.EndedAtUtc,
+            CreatedAtUtc = run.CreatedAtUtc,
+            UpdatedAtUtc = run.UpdatedAtUtc,
+            Version = run.Version
+        };
 
-    private sealed record WorkItemProjection(DevWorkflowWorkItem WorkItem, LatestRunProjection? LatestRun);
+    private sealed record WorkItemProjection
+    {
+        public required DevWorkflowWorkItem WorkItem { get; init; }
 
-    private sealed record LatestRunProjection(Guid RunId, DevWorkflowRunStatus Status, string? DefinitionName);
+        public required LatestRunProjection? LatestRun { get; init; }
+    }
 
-    private sealed record RunSummaryProjection(
-        Guid Id,
-        Guid WorkItemId,
-        Guid DefinitionId,
-        string? DefinitionName,
-        DevWorkflowRunStatus Status,
-        string? FailureClass,
-        long? StartedAtUtc,
-        long? EndedAtUtc,
-        long CreatedAtUtc,
-        long UpdatedAtUtc);
+    private sealed record LatestRunProjection
+    {
+        public required Guid RunId { get; init; }
 
-    private sealed record NodeCounterRow(Guid RunId, Guid NodeRunId, DevWorkflowNodeRunStatus Status);
+        public required DevWorkflowRunStatus Status { get; init; }
+
+        public required string? DefinitionName { get; init; }
+    }
+
+    private sealed record RunSummaryProjection
+    {
+        public required Guid Id { get; init; }
+
+        public required Guid WorkItemId { get; init; }
+
+        public required Guid DefinitionId { get; init; }
+
+        public required string? DefinitionName { get; init; }
+
+        public required DevWorkflowRunStatus Status { get; init; }
+
+        public required string? FailureClass { get; init; }
+
+        public required long? StartedAtUtc { get; init; }
+
+        public required long? EndedAtUtc { get; init; }
+
+        public required long CreatedAtUtc { get; init; }
+
+        public required long UpdatedAtUtc { get; init; }
+    }
+
+    private sealed record NodeCounterRow
+    {
+        public required Guid RunId { get; init; }
+
+        public required Guid NodeRunId { get; init; }
+
+        public required DevWorkflowNodeRunStatus Status { get; init; }
+    }
 }

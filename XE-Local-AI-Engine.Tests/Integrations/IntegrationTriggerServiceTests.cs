@@ -277,19 +277,22 @@ public sealed class IntegrationTriggerServiceTests
         {
             var agentId = Guid.NewGuid();
             _ = Agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>())
-                      .Returns(new AgentDefinitionRecord(agentId,
-                          "Agent",
-                          Description: null,
-                          "Instructions",
-                          modelProfile,
-                          ReasoningEffort: null,
-                          kind,
-                          [],
-                          new Dictionary<string, bool>(StringComparer.Ordinal),
-                          OrchestrationTopologyJson: null,
-                          Version: 1,
-                          CreatedAtUtc: 1,
-                          UpdatedAtUtc: 1));
+                      .Returns(new AgentDefinitionRecord
+                      {
+                          Id = agentId,
+                          Name = "Agent",
+                          Description = null,
+                          Instructions = "Instructions",
+                          ModelProfile = modelProfile,
+                          ReasoningEffort = null,
+                          Kind = kind,
+                          AllowedToolNames = [],
+                          ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                          OrchestrationTopologyJson = null,
+                          Version = 1,
+                          CreatedAtUtc = 1,
+                          UpdatedAtUtc = 1
+                      });
 
             _ = AgentResolver.ResolveAsync(agentId,
                                  Arg.Any<string?>(),

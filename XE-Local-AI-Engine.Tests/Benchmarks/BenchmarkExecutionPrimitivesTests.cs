@@ -285,11 +285,37 @@ public sealed class BenchmarkExecutionPrimitivesTests
         }));
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary, string judgeState, long version) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = Guid.NewGuid(),
+            RuntimeSnapshotJson = new byte[]
             {
                 1
-            }, "model.gguf", null, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
-            primary, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1, null, null,
-            PrimaryStopReason: null,
-            Judge: new BenchmarkRunJudgeView(judgeState, null, null, null, null, null, null, null, null, PolicyCurrent: false, ExecutionCurrent: false, null));
+            },
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = null,
+            ModelContentFingerprint = $"v1:{new string('a', 64)}",
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 8192,
+            PrimaryStatus = primary,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = null,
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = version,
+            CreatedAtUtc = 1,
+            StartedAtUtc = 1,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 1,
+            PrimaryLaunchIntent = null,
+            PrimaryLaunchEvidence = null,
+            PrimaryStopReason = null,
+            Judge = new BenchmarkRunJudgeView { State = judgeState, AttemptId = null, Score = null, PolicyRevision = null, PolicyRevisionId = null, AttemptSequence = null, CohortGeneration = null, ExecutionKey = null, ErrorMessage = null, PolicyCurrent = false, ExecutionCurrent = false, RankExclusionReason = null }
+        };
 }

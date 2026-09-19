@@ -58,35 +58,38 @@ public sealed partial class McpAgentRunStore
 
     private static McpAgentRunRow ReadRow(SqliteDataReader reader, bool includePayload)
     {
-        var row = new McpAgentRunRow(Guid.Parse(reader.GetString(0), CultureInfo.InvariantCulture),
-            (byte[])reader.GetValue(1),
-            reader.GetInt32(2),
-            (McpAgentRunStatus)reader.GetInt32(3),
-            reader.GetInt64(4),
-            GetNullableGuid(reader, 5),
-            (McpAgentRunStopReason)reader.GetInt32(6),
-            GetNullableInt64(reader, 7),
-            GetNullableGuid(reader, 8),
-            GetNullableInt64(reader, 9),
-            reader.IsDBNull(10) ? null : reader.GetString(10),
-            reader.IsDBNull(11) ? null : reader.GetString(11),
-            GetNullableGuid(reader, 12),
-            reader.GetInt32(13) != 0,
-            reader.IsDBNull(14) ? null : reader.GetString(14),
-            GetNullableBytes(reader, 15),
-            includePayload ? GetNullableBytes(reader, 16) : null,
-            includePayload ? GetNullableBytes(reader, 17) : null,
-            includePayload ? GetNullableBytes(reader, 18) : null,
-            includePayload ? GetNullableBytes(reader, 19) : null,
-            reader.IsDBNull(20) ? null : reader.GetString(20),
-            reader.GetInt64(21),
-            reader.GetInt64(22),
-            reader.GetInt64(23),
-            reader.GetInt64(24),
-            GetNullableInt64(reader, 25),
-            GetNullableInt64(reader, 26),
-            GetNullableInt64(reader, 27),
-            GetNullableInt64(reader, 28));
+        var row = new McpAgentRunRow
+        {
+            RequestId = Guid.Parse(reader.GetString(0), CultureInfo.InvariantCulture),
+            RequestFingerprint = (byte[])reader.GetValue(1),
+            StoredAccountingVersion = reader.GetInt32(2),
+            Status = (McpAgentRunStatus)reader.GetInt32(3),
+            Version = reader.GetInt64(4),
+            ClaimToken = GetNullableGuid(reader, 5),
+            StopReason = (McpAgentRunStopReason)reader.GetInt32(6),
+            StopRequestedAtUtc = GetNullableInt64(reader, 7),
+            AgentDefinitionId = GetNullableGuid(reader, 8),
+            AgentDefinitionVersion = GetNullableInt64(reader, 9),
+            ModelId = reader.IsDBNull(10) ? null : reader.GetString(10),
+            ModelOverrideId = reader.IsDBNull(11) ? null : reader.GetString(11),
+            WorkspaceId = GetNullableGuid(reader, 12),
+            IsAgenticAutoApprove = reader.GetInt32(13) != 0,
+            RequestingKeyPrefix = reader.IsDBNull(14) ? null : reader.GetString(14),
+            BindingFingerprint = GetNullableBytes(reader, 15),
+            TaskPayload = includePayload ? GetNullableBytes(reader, 16) : null,
+            InstructionsPayload = includePayload ? GetNullableBytes(reader, 17) : null,
+            ResultPayload = includePayload ? GetNullableBytes(reader, 18) : null,
+            DisplayPayload = includePayload ? GetNullableBytes(reader, 19) : null,
+            FailureCode = reader.IsDBNull(20) ? null : reader.GetString(20),
+            ReservedActivePayloadBytes = reader.GetInt64(21),
+            ActivePayloadBytes = reader.GetInt64(22),
+            TombstoneLogicalBytes = reader.GetInt64(23),
+            CreatedAtUtc = reader.GetInt64(24),
+            ClaimedAtUtc = GetNullableInt64(reader, 25),
+            CompletedAtUtc = GetNullableInt64(reader, 26),
+            PayloadExpiresAtUtc = GetNullableInt64(reader, 27),
+            CompactedAtUtc = GetNullableInt64(reader, 28)
+        };
         if (row.StoredAccountingVersion != AccountingVersion)
         {
             throw new InvalidOperationException($"Unsupported MCP run accounting version {row.StoredAccountingVersion}.");
@@ -97,32 +100,35 @@ public sealed partial class McpAgentRunStore
 
     private McpAgentRunRecord ToRecord(McpAgentRunRow row)
     {
-        return new McpAgentRunRecord(row.RequestId,
-            row.RequestFingerprint.ToArray(),
-            row.Status,
-            row.Version,
-            row.ClaimToken,
-            row.StopReason,
-            row.StopRequestedAtUtc,
-            row.AgentDefinitionId,
-            row.AgentDefinitionVersion,
-            row.ModelId,
-            row.ModelOverrideId,
-            row.WorkspaceId,
-            row.BindingFingerprint?.ToArray(),
-            UnprotectString(row.RequestId, "task", row.TaskPayload),
-            UnprotectString(row.RequestId, "instructions", row.InstructionsPayload),
-            UnprotectString(row.RequestId, "result", row.ResultPayload),
-            UnprotectString(row.RequestId, "display", row.DisplayPayload),
-            row.FailureCode,
-            row.CreatedAtUtc,
-            row.ClaimedAtUtc,
-            row.CompletedAtUtc,
-            row.PayloadExpiresAtUtc,
-            row.CompactedAtUtc,
-            PayloadExpired: row.ActivePayloadBytes == 0,
-            IsAgenticAutoApprove: row.IsAgenticAutoApprove,
-            RequestingKeyPrefix: row.RequestingKeyPrefix);
+        return new McpAgentRunRecord
+        {
+            RequestId = row.RequestId,
+            RequestFingerprint = row.RequestFingerprint.ToArray(),
+            Status = row.Status,
+            Version = row.Version,
+            ClaimToken = row.ClaimToken,
+            StopReason = row.StopReason,
+            StopRequestedAtUtc = row.StopRequestedAtUtc,
+            AgentDefinitionId = row.AgentDefinitionId,
+            AgentDefinitionVersion = row.AgentDefinitionVersion,
+            ModelId = row.ModelId,
+            ModelOverrideId = row.ModelOverrideId,
+            WorkspaceId = row.WorkspaceId,
+            BindingFingerprint = row.BindingFingerprint?.ToArray(),
+            Task = UnprotectString(row.RequestId, "task", row.TaskPayload),
+            Instructions = UnprotectString(row.RequestId, "instructions", row.InstructionsPayload),
+            Result = UnprotectString(row.RequestId, "result", row.ResultPayload),
+            DisplayMessage = UnprotectString(row.RequestId, "display", row.DisplayPayload),
+            FailureCode = row.FailureCode,
+            CreatedAtUtc = row.CreatedAtUtc,
+            ClaimedAtUtc = row.ClaimedAtUtc,
+            CompletedAtUtc = row.CompletedAtUtc,
+            PayloadExpiresAtUtc = row.PayloadExpiresAtUtc,
+            CompactedAtUtc = row.CompactedAtUtc,
+            PayloadExpired = row.ActivePayloadBytes == 0,
+            IsAgenticAutoApprove = row.IsAgenticAutoApprove,
+            RequestingKeyPrefix = row.RequestingKeyPrefix
+        };
     }
 
     private string? UnprotectString(Guid requestId, string fieldName, byte[]? payload)
@@ -164,14 +170,17 @@ public sealed partial class McpAgentRunStore
             return null;
         }
 
-        return new McpAgentRunLedgerCounters(reader.GetInt32(0),
-            reader.GetInt64(1),
-            reader.GetInt64(2),
-            reader.GetInt64(3),
-            reader.GetInt64(4),
-            reader.GetInt64(5),
-            reader.GetInt64(6),
-            reader.GetInt64(7));
+        return new McpAgentRunLedgerCounters
+        {
+            AccountingVersion = reader.GetInt32(0),
+            NonterminalRunCount = reader.GetInt64(1),
+            QueuedRunCount = reader.GetInt64(2),
+            RunningRunCount = reader.GetInt64(3),
+            IdentityCount = reader.GetInt64(4),
+            ActivePayloadBytes = reader.GetInt64(5),
+            TombstoneLogicalBytes = reader.GetInt64(6),
+            UpdatedAtUtc = reader.GetInt64(7)
+        };
     }
 
     private static async Task<McpAgentRunLedgerCounters> ReconstructCountersAsync(SqliteConnection connection,
@@ -203,14 +212,17 @@ public sealed partial class McpAgentRunStore
             throw new InvalidOperationException("MCP run rows use an unsupported accounting version.");
         }
 
-        return new McpAgentRunLedgerCounters(AccountingVersion,
-            reader.GetInt64(0),
-            reader.GetInt64(1),
-            reader.GetInt64(2),
-            reader.GetInt64(3),
-            reader.GetInt64(4),
-            reader.GetInt64(5),
-            updatedAtUtc);
+        return new McpAgentRunLedgerCounters
+        {
+            AccountingVersion = AccountingVersion,
+            NonterminalRunCount = reader.GetInt64(0),
+            QueuedRunCount = reader.GetInt64(1),
+            RunningRunCount = reader.GetInt64(2),
+            IdentityCount = reader.GetInt64(3),
+            ActivePayloadBytes = reader.GetInt64(4),
+            TombstoneLogicalBytes = reader.GetInt64(5),
+            UpdatedAtUtc = updatedAtUtc
+        };
     }
 
     private static bool CountersEqual(McpAgentRunLedgerCounters left, McpAgentRunLedgerCounters right)

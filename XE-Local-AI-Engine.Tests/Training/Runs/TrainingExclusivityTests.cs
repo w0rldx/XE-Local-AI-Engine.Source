@@ -175,7 +175,7 @@ public sealed class TrainingExclusivityTests
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
-        var claim = new TrainingWorkClaim(1, TrainingWorkKind.TrainingRun, Guid.NewGuid(), 1, null);
+        var claim = new TrainingWorkClaim { QueueSequence = 1, Kind = TrainingWorkKind.TrainingRun, TargetId = Guid.NewGuid(), Version = 1, Run = null };
         var claims = 0;
         _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>())
                 .Returns(_ => Task.FromResult(Interlocked.Increment(ref claims) == 1 ? claim : null));
@@ -349,11 +349,33 @@ public sealed class TrainingExclusivityTests
 
     /// <summary>One claimed generation work item; only its identity matters to the queue under test.</summary>
     private static DatasetGenerationClaimedWork Work() =>
-        new(1,
-            Guid.NewGuid(),
-            1,
-            new TrainingDatasetRecord(Guid.NewGuid(), Guid.NewGuid(), 1, null, "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
-                DatasetGenerationWorkStatus.Running, null));
+        new()
+        {
+            QueueSequence = 1,
+            DatasetId = Guid.NewGuid(),
+            Version = 1,
+            Dataset = new TrainingDatasetRecord
+            {
+                Id = Guid.NewGuid(),
+                DefinitionId = Guid.NewGuid(),
+                DefinitionVersion = 1,
+                DefinitionJson = null,
+                Name = "dataset",
+                Status = TrainingDatasetStatus.Generating,
+                Revision = 1,
+                ContentFingerprint = null,
+                TotalSampleCount = 0,
+                GoodSampleCount = 0,
+                BadSampleCount = 0,
+                RejectedSampleCount = 0,
+                DuplicateSampleCount = 0,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = DatasetGenerationWorkStatus.Running,
+                WorkErrorMessage = null
+            }
+        };
 
     private static BenchmarkQueueHostedService BuildBenchmarkQueue(IBenchmarkStore store, IBenchmarkQueueSignal signal, IGpuWorkGate gate)
     {

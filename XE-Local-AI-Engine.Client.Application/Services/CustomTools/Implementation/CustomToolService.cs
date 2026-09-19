@@ -162,14 +162,17 @@ internal sealed partial class CustomToolService : ICustomToolService
         await EnsureNameIsAvailableAsync(name, existingId, cancellationToken);
 
         var parametersJson = JsonSerializer.Serialize(parameters, CustomToolJson.Options);
-        return new CustomToolInput(name,
-            definition.Description,
-            definition.Kind,
-            definition.Mode,
-            configJson,
-            parametersJson,
-            definition.Enabled,
-            definition.Acknowledged);
+        return new CustomToolInput
+        {
+            Name = name,
+            Description = definition.Description,
+            Kind = definition.Kind,
+            Mode = definition.Mode,
+            ConfigJson = configJson,
+            ParametersJson = parametersJson,
+            Enabled = definition.Enabled,
+            Acknowledged = definition.Acknowledged
+        };
     }
 
     private static string NormalizeName(string? name)

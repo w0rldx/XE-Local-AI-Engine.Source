@@ -69,13 +69,16 @@ public sealed class ComparisonReportService : IComparisonReportService
         var tunedBenchmark = await RequireBenchmarkAsync(command.TunedBenchmarkRunId, cancellationToken);
 
         var deltas = ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark, tunedBenchmark);
-        return await _evaluations.CreateComparisonAsync(new TrainingComparisonInput(command.Name.Trim(),
-                                         baseEvaluation.Id,
-                                         tunedEvaluation.Id,
-                                         JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options),
-                                         command.BaseBenchmarkRunId,
-                                         command.TunedBenchmarkRunId,
-                                         trainingRunId),
+        return await _evaluations.CreateComparisonAsync(new TrainingComparisonInput
+        {
+            Name = command.Name.Trim(),
+            BaseEvaluationRunId = baseEvaluation.Id,
+            TunedEvaluationRunId = tunedEvaluation.Id,
+            DeltasJson = JsonSerializer.SerializeToUtf8Bytes(deltas, TrainingJson.Options),
+            BaseBenchmarkRunId = command.BaseBenchmarkRunId,
+            TunedBenchmarkRunId = command.TunedBenchmarkRunId,
+            TrainingRunId = trainingRunId
+        },
                                      cancellationToken);
     }
 

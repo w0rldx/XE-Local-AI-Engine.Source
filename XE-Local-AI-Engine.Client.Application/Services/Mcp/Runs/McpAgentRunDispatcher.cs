@@ -345,15 +345,18 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
-            var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization(claimed.RequestId,
-                    claimed.Version,
-                    claimToken,
-                    McpAgentRunStatus.Failed,
-                    McpAgentRunStopReason.None,
-                    InternalFailureCode,
-                    Result: null,
-                    DisplayMessage: "The run could not be started.",
-                    CompletedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+            var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization
+            {
+                RequestId = claimed.RequestId,
+                ExpectedVersion = claimed.Version,
+                ClaimToken = claimToken,
+                Status = McpAgentRunStatus.Failed,
+                ExpectedStopReason = McpAgentRunStopReason.None,
+                FailureCode = InternalFailureCode,
+                Result = null,
+                DisplayMessage = "The run could not be started.",
+                CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
                 CancellationToken.None);
             if (finalized)
             {
@@ -406,15 +409,18 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             _ => (McpAgentRunStatus.Interrupted, InterruptedCode, "The run was interrupted.")
         };
 
-        var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization(current.RequestId,
-                current.Version,
-                claimToken,
-                status,
-                current.StopReason,
-                failureCode,
-                Result: null,
-                DisplayMessage: displayMessage,
-                CompletedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+        var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = current.RequestId,
+            ExpectedVersion = current.Version,
+            ClaimToken = claimToken,
+            Status = status,
+            ExpectedStopReason = current.StopReason,
+            FailureCode = failureCode,
+            Result = null,
+            DisplayMessage = displayMessage,
+            CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        },
             CancellationToken.None);
         if (finalized)
         {
@@ -428,16 +434,19 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         SpawnOutcome outcome)
     {
         var succeeded = outcome.Kind == SpawnOutcomeKind.Success;
-        return new McpAgentRunFinalization(current.RequestId,
-            current.Version,
-            claimToken,
-            succeeded ? McpAgentRunStatus.Succeeded : McpAgentRunStatus.Failed,
-            McpAgentRunStopReason.None,
-            succeeded ? null : outcome.FailureCode ?? InternalFailureCode,
-            succeeded ? Truncate(outcome.Content, _options.MaxResultCharacters) : null,
+        return new McpAgentRunFinalization
+        {
+            RequestId = current.RequestId,
+            ExpectedVersion = current.Version,
+            ClaimToken = claimToken,
+            Status = succeeded ? McpAgentRunStatus.Succeeded : McpAgentRunStatus.Failed,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = succeeded ? null : outcome.FailureCode ?? InternalFailureCode,
+            Result = succeeded ? Truncate(outcome.Content, _options.MaxResultCharacters) : null,
             // At most 512 UTF-16 code units can encode to the store's 2 KiB UTF-8 display bound.
-            Truncate(outcome.DisplayMessage, 512),
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+            DisplayMessage = Truncate(outcome.DisplayMessage, 512),
+            CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
     }
 
     private async Task DelayAfterFailureAsync(CancellationToken stoppingToken)

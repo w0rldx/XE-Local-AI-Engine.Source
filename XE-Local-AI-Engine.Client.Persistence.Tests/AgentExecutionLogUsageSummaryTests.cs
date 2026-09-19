@@ -146,15 +146,18 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         // One run-envelope row (kind 1) and one adaptive-memory diagnostics row (kind 0) with tokens: only the envelope
         // may be summed. A leaking memory row would inflate the prompt total to 700.
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 10, prompt: 100, completion: 200, reasoning: 50, total: 350);
-        _ = await store.AddAsync(new AgentExecutionLogInput(Guid.NewGuid(),
-            ConversationId: Guid.NewGuid(),
-            MessageId: null,
-            "llama-x",
-            "h",
-            LatencyMs: 3L,
-            Success: true,
-            PromptTokens: 600,
-            CompletionTokens: 700));
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            MessageId = null,
+            ModelName = "llama-x",
+            ConfigHash = "h",
+            LatencyMs = 3L,
+            Success = true,
+            PromptTokens = 600,
+            CompletionTokens = 700
+        });
 
         var summary = await store.SummarizeTokenUsageAsync(fromEpochMsInclusive: null, toEpochMsExclusive: null);
 

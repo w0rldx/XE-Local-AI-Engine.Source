@@ -91,11 +91,14 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
         {
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowNodeRunStatus.Queued,
-                                   QueueReason: DevWorkflowQueueReasons.AwaitingSandboxSlot),
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Queued,
+                QueueReason = DevWorkflowQueueReasons.AwaitingSandboxSlot
+            },
                                cancellationToken);
             written++;
         }
@@ -467,10 +470,13 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Running),
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Running
+        },
                            cancellationToken);
         return 1;
     }
@@ -490,12 +496,15 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return;
         }
 
-        _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowEventTypes.WorkspaceSecretsDetected,
-                               nodeRun.Id,
-                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace-secrets"),
-                               DetailJson: JsonSerializer.Serialize(new SecretsDetail(result.SecretPaths), JsonOptions)),
+        _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
+        {
+            RunId = run.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            EventType = DevWorkflowEventTypes.WorkspaceSecretsDetected,
+            NodeRunId = nodeRun.Id,
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace-secrets"),
+            DetailJson = JsonSerializer.Serialize(new SecretsDetail(result.SecretPaths), JsonOptions)
+        },
                            cancellationToken);
     }
 
@@ -525,17 +534,20 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         var apply = IsApplying(graph, nodeRun);
         var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "validation-report");
         var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken);
-        var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(run.Id,
-                                          artifactId,
-                                          nodeRun.Id,
-                                          DevWorkflowVersions.Any,
-                                          DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
-                                          apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
-                                          apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
-                                          "application/json",
-                                          write.ContentHash,
-                                          write.ByteCount,
-                                          write.OpaqueReference),
+        var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
+        {
+            RunId = run.Id,
+            ArtifactId = artifactId,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
+            Kind = apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
+            Name = apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
+            MediaType = "application/json",
+            ContentSha256 = write.ContentHash,
+            SizeBytes = write.ByteCount,
+            ManagedReference = write.OpaqueReference
+        },
                                       cancellationToken);
 
         if (appended.SupersededArtifactId is not { } superseded)
@@ -545,11 +557,14 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         // A re-attempt's report replaces the one a downstream node may already have read. Mark-only: nothing is
         // regenerated, and a human decides what a stale consumer is worth.
-        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(run.Id,
-                               superseded,
-                               artifactId,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report-stale")),
+        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
+        {
+            RunId = run.Id,
+            SupersededArtifactId = superseded,
+            SupersedingArtifactId = artifactId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report-stale")
+        },
                            cancellationToken);
     }
 
@@ -565,21 +580,23 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-
-                               // A node run standing down for a human names the answer it is waiting for, the same way
-                               // every other blocked row does.
-                               target,
-                               PendingDecisionKind: target == DevWorkflowNodeRunStatus.Blocked ? DevWorkflowDecisionKind.Abandon : null,
-                               OutputJson: outputJson,
-                               FailureClass: failureClass,
-                               TerminalReason: terminalReason,
-                               Outcome: outcome,
-                               WorkItemStatus: target == DevWorkflowNodeRunStatus.Blocked
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            // A node run standing down for a human names the answer it is waiting for, the same way
+            // every other blocked row does.
+            TargetStatus = target,
+            PendingDecisionKind = target == DevWorkflowNodeRunStatus.Blocked ? DevWorkflowDecisionKind.Abandon : null,
+            OutputJson = outputJson,
+            FailureClass = failureClass,
+            TerminalReason = terminalReason,
+            Outcome = outcome,
+            WorkItemStatus = target == DevWorkflowNodeRunStatus.Blocked
                                    ? DevWorkflowWorkItemStatus.Blocked
-                                   : DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)),
+                                   : DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)
+        },
                            cancellationToken);
         return 1;
     }

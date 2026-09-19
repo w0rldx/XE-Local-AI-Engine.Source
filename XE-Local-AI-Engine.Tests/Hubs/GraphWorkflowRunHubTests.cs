@@ -218,22 +218,25 @@ public sealed class GraphWorkflowRunHubTests
     /// <summary>The run row and its node runs — the two reads the run service composes its detail from.</summary>
     private static IGraphWorkflowStore WithRun(IGraphWorkflowStore store)
     {
-        var run = new GraphWorkflowRunSnapshot(RunId,
-            RequestId: Guid.NewGuid(),
-            DefinitionId: Guid.NewGuid(),
-            DefinitionVersion: 1,
-            "graph-hash",
-            GraphWorkflowRunStatus.Running,
-            GraphWorkflowFailureClass.None,
-            """{"schemaVersion":1,"nodes":[],"edges":[]}""",
-            InputJson: null,
-            OutputJson: null,
-            Seq: 9,
-            Version: 6,
-            CancelRequestedAtUtc: null,
-            StartedAtUtc: 11,
-            CompletedAtUtc: null,
-            CreatedAtUtc: 10);
+        var run = new GraphWorkflowRunSnapshot
+        {
+            Id = RunId,
+            RequestId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            GraphHash = "graph-hash",
+            Status = GraphWorkflowRunStatus.Running,
+            FailureClass = GraphWorkflowFailureClass.None,
+            GraphJson = """{"schemaVersion":1,"nodes":[],"edges":[]}""",
+            InputJson = null,
+            OutputJson = null,
+            Seq = 9,
+            Version = 6,
+            CancelRequestedAtUtc = null,
+            StartedAtUtc = 11,
+            CompletedAtUtc = null,
+            CreatedAtUtc = 10
+        };
         store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
         store.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
              .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>(
@@ -264,26 +267,29 @@ public sealed class GraphWorkflowRunHubTests
     }
 
     private static GraphWorkflowNodeRunSnapshot NodeRun(string nodeKey, GraphWorkflowNodeRunStatus status) =>
-        new(Guid.NewGuid(),
-            RunId,
-            nodeKey,
-            GraphWorkflowNodeKind.Agent,
-            status,
-            Attempt: 1,
-            PendingDecisionKind: null,
-            DecisionOperationId: null,
-            DecidedBySubject: null,
-            GraphWorkflowFailureClass.None,
-            Error: null,
-            InputJson: null,
-            OutputJson: null,
-            InvocationId: null,
-            StartedAtUtc: null,
-            CompletedAtUtc: null,
-            UpdatedAtUtc: 20);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            NodeKey = nodeKey,
+            Kind = GraphWorkflowNodeKind.Agent,
+            Status = status,
+            Attempt = 1,
+            PendingDecisionKind = null,
+            DecisionOperationId = null,
+            DecidedBySubject = null,
+            FailureClass = GraphWorkflowFailureClass.None,
+            Error = null,
+            InputJson = null,
+            OutputJson = null,
+            InvocationId = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null,
+            UpdatedAtUtc = 20
+        };
 
     private static GraphWorkflowRunEventSnapshot Event(long sequence) =>
-        new(Guid.NewGuid(), RunId, sequence, "node.started", NodeKey: "draft", DetailJson: null, CreatedAtUtc: 100);
+        new() { Id = Guid.NewGuid(), RunId = RunId, Seq = sequence, EventType = "node.started", NodeKey = "draft", DetailJson = null, CreatedAtUtc = 100 };
 
     private static HubFixture CreateHub(IGraphWorkflowStore store, bool enabled = true)
     {

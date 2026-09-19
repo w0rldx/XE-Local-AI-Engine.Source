@@ -4,21 +4,34 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     A registered template. <see cref="HostPath" /> is trusted-side only and must never cross the API boundary — the
 ///     Development contracts project templates as id plus alias, exactly as they do selected folders.
 /// </summary>
-public sealed record DevelopmentTemplateSnapshot(
-    Guid Id,
-    string Alias,
-    string HostPath,
-    long CreatedAtUtc,
-    long Version);
+public sealed class DevelopmentTemplateSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required string Alias { get; init; }
+
+    public required string HostPath { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>Where a materialized repository came from. <see cref="TemplatePath" /> is trusted-side only.</summary>
-public sealed record DevelopmentTemplateMaterializationSnapshot(
-    Guid SelectedFolderId,
-    Guid TemplateId,
-    string TemplateAlias,
-    string TemplatePath,
-    string TemplateCommit,
-    long CreatedAtUtc);
+public sealed class DevelopmentTemplateMaterializationSnapshot
+{
+    public required Guid SelectedFolderId { get; init; }
+
+    public required Guid TemplateId { get; init; }
+
+    public required string TemplateAlias { get; init; }
+
+    public required string TemplatePath { get; init; }
+
+    public required string TemplateCommit { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     The template registry and the provenance of repositories materialized from it.

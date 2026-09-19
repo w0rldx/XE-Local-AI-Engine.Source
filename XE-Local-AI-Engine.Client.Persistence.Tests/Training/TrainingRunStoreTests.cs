@@ -167,7 +167,7 @@ public sealed class TrainingRunStoreTests : IDisposable
         var store = new TrainingRunStore(context, TimeProvider.System);
         var run = await store.CreateAndEnqueueAsync(Command(fixture));
 
-        var staged = await store.CreateArtifactAsync(new TrainingArtifactInput(run.Id, TrainingArtifactKind.AdapterGguf, "adapter.gguf"));
+        var staged = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = run.Id, Kind = TrainingArtifactKind.AdapterGguf, Path = "adapter.gguf" });
         AssertEx.Equal(TrainingArtifactSmokeState.Pending, staged.SmokeState);
         AssertEx.Null(staged.Sha256, "A freshly staged artifact has not been hashed yet.");
 
@@ -205,8 +205,8 @@ public sealed class TrainingRunStoreTests : IDisposable
 
             _ = AssertEx.NotNull(await store.ClaimNextAsync());
             // A second artifact stays staged, so the run delete has a child to remove explicitly.
-            _ = await store.CreateArtifactAsync(new TrainingArtifactInput(runId, TrainingArtifactKind.HfAdapterDir, "adapter/"));
-            var staged = await store.CreateArtifactAsync(new TrainingArtifactInput(runId, TrainingArtifactKind.MergedGguf, "merged.gguf"));
+            _ = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = TrainingArtifactKind.HfAdapterDir, Path = "adapter/" });
+            var staged = await store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = TrainingArtifactKind.MergedGguf, Path = "merged.gguf" });
             var passed = await store.SetArtifactSmokeStateAsync(staged.Id, staged.Version, TrainingArtifactSmokeState.Passed, reason: null);
             var promoted = await store.SetArtifactCommittedNameAsync(passed.Id, passed.Version, "merged-model");
             var done = await store.CompleteRunAsync(runId, TrainingWorkStatus.Succeeded, errorMessage: null);
@@ -251,27 +251,33 @@ public sealed class TrainingRunStoreTests : IDisposable
     }
 
     private static TrainingRunEnqueueCommand Command(RunFixture fixture) =>
-        new(fixture.DatasetId,
-            fixture.DatasetVersion,
-            fixture.BaseArtifactId,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"sampleIds":["a"],"holdout":[]}"""),
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"epochs":3}"""),
-            Encoding.UTF8.GetBytes("""{"license":"apache-2.0","confirmedAtUtc":1}"""));
+        new()
+        {
+            DatasetId = fixture.DatasetId,
+            ExpectedDatasetVersion = fixture.DatasetVersion,
+            BaseArtifactId = fixture.BaseArtifactId,
+            FreezeJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"sampleIds":["a"],"holdout":[]}"""),
+            OptionsJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"epochs":3}"""),
+            LicenseConfirmationJson = Encoding.UTF8.GetBytes("""{"license":"apache-2.0","confirmedAtUtc":1}""")
+        };
 
     /// <summary>Drives the shipped dataset and base-artifact stores to produce the Ready dataset and Ready checkpoint a run needs.</summary>
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasetStore = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
-        var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
+        var definition = await datasetStore.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
+        var dataset = await datasetStore.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
         _ = await datasetStore.ClaimNextAsync();
-        _ = await datasetStore.AppendSampleAsync(new TrainingSampleInput(dataset.Id,
-            "tool-call",
-            TrainingSampleLabel.Good,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"parts":[]}"""),
-            ValidationJson: null,
-            TrainingSampleProvenance.Generated,
-            new string('c', count: 64)));
+        _ = await datasetStore.AppendSampleAsync(new TrainingSampleInput
+        {
+            DatasetId = dataset.Id,
+            Kind = "tool-call",
+            Label = TrainingSampleLabel.Good,
+            ContentJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"parts":[]}"""),
+            ValidationJson = null,
+            Provenance = TrainingSampleProvenance.Generated,
+            SourceHash = new string('c', count: 64)
+        });
         var ready = await datasetStore.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null);
 
         var artifactStore = new TrainingBaseArtifactStore(context, TimeProvider.System);

@@ -115,11 +115,14 @@ public sealed class McpServerApiKeyStore : IMcpServerApiKeyStore
 
     private static McpServerApiKeyRecord ToRecord(McpServerApiKey entity)
     {
-        return new McpServerApiKeyRecord(entity.Prefix,
-            entity.KeyHash,
-            entity.Scope,
-            entity.GenerationId,
-            entity.CreatedAtUtc,
-            entity.LastUsedAtUtc);
+        return new McpServerApiKeyRecord
+        {
+            Prefix = entity.Prefix,
+            KeyHash = entity.KeyHash,
+            Scope = entity.Scope,
+            GenerationId = entity.GenerationId,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            LastUsedAtUtc = entity.LastUsedAtUtc
+        };
     }
 }

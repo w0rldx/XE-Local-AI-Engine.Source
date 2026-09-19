@@ -67,7 +67,7 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
                                    .ThenByDescending(session => session.Id)
                                    .Skip(skip)
                                    .Take(take)
-                                   .Select(session => new SessionCountRow(session, session.Segments.Count))
+                                   .Select(session => new SessionCountRow { Session = session, SegmentCount = session.Segments.Count })
                                    .ToListAsync(cancellationToken);
 
         return rows.Select(static row => ToSummaryView(row.Session, row.SegmentCount)).ToArray();
@@ -142,7 +142,7 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
         var row = await _dbContext.TranscriptionSessions
                                   .AsNoTracking()
                                   .Where(session => session.Id == sessionId)
-                                  .Select(session => new SessionCountRow(session, session.Segments.Count))
+                                  .Select(session => new SessionCountRow { Session = session, SegmentCount = session.Segments.Count })
                                   .FirstOrDefaultAsync(cancellationToken);
 
         return row is null ? null : ToSummaryView(row.Session, row.SegmentCount);
@@ -281,7 +281,12 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
 
     // The projection target for ListAsync. The session entity travels whole so the materialization interceptor still
     // decrypts its title; the count is a correlated subquery beside it, never a loaded collection.
-    private sealed record SessionCountRow(TranscriptionSession Session, int SegmentCount);
+    private sealed record SessionCountRow
+    {
+        public required TranscriptionSession Session { get; init; }
+
+        public required int SegmentCount { get; init; }
+    }
 
     private static TranscriptionSessionDetailView ToDetailView(TranscriptionSession entity)
     {

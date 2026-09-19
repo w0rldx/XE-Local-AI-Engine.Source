@@ -46,43 +46,49 @@ internal static class AgentDefinitionMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new AgentDefinitionInput(request.Name ?? string.Empty,
-            request.Description,
-            request.Instructions ?? string.Empty,
-            request.ModelProfile,
-            request.ReasoningEffort,
-            request.Kind,
-            request.AllowedToolNames ?? [],
-            request.ToolApprovals ?? new Dictionary<string, bool>(StringComparer.Ordinal),
-            request.OrchestrationTopologyJson,
-            request.PlaybookEnabled,
-            request.AllowedSkillIds ?? [],
-            request.DefaultTemporaryChat,
-            request.MemoryExtractionEnabled,
-            request.DisableBaseScaffold,
-            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now),
-            request.DisableToolRelevanceFilter);
+        return new AgentDefinitionInput
+        {
+            Name = request.Name ?? string.Empty,
+            Description = request.Description,
+            Instructions = request.Instructions ?? string.Empty,
+            ModelProfile = request.ModelProfile,
+            ReasoningEffort = request.ReasoningEffort,
+            Kind = request.Kind,
+            AllowedToolNames = request.AllowedToolNames ?? [],
+            ToolApprovals = request.ToolApprovals ?? new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = request.OrchestrationTopologyJson,
+            PlaybookEnabled = request.PlaybookEnabled,
+            AllowedSkillIds = request.AllowedSkillIds ?? [],
+            DefaultTemporaryChat = request.DefaultTemporaryChat,
+            MemoryExtractionEnabled = request.MemoryExtractionEnabled,
+            DisableBaseScaffold = request.DisableBaseScaffold,
+            GenerationMetadataJson = GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now),
+            DisableToolRelevanceFilter = request.DisableToolRelevanceFilter
+        };
     }
 
     public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new AgentDefinitionInput(request.Name ?? string.Empty,
-            request.Description,
-            request.Instructions ?? string.Empty,
-            request.ModelProfile,
-            request.ReasoningEffort,
-            request.Kind,
-            request.AllowedToolNames ?? [],
-            request.ToolApprovals ?? new Dictionary<string, bool>(StringComparer.Ordinal),
-            request.OrchestrationTopologyJson,
-            request.PlaybookEnabled,
-            request.AllowedSkillIds ?? [],
-            request.DefaultTemporaryChat,
-            request.MemoryExtractionEnabled,
-            request.DisableBaseScaffold,
-            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now),
-            request.DisableToolRelevanceFilter);
+        return new AgentDefinitionInput
+        {
+            Name = request.Name ?? string.Empty,
+            Description = request.Description,
+            Instructions = request.Instructions ?? string.Empty,
+            ModelProfile = request.ModelProfile,
+            ReasoningEffort = request.ReasoningEffort,
+            Kind = request.Kind,
+            AllowedToolNames = request.AllowedToolNames ?? [],
+            ToolApprovals = request.ToolApprovals ?? new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = request.OrchestrationTopologyJson,
+            PlaybookEnabled = request.PlaybookEnabled,
+            AllowedSkillIds = request.AllowedSkillIds ?? [],
+            DefaultTemporaryChat = request.DefaultTemporaryChat,
+            MemoryExtractionEnabled = request.MemoryExtractionEnabled,
+            DisableBaseScaffold = request.DisableBaseScaffold,
+            GenerationMetadataJson = GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now),
+            DisableToolRelevanceFilter = request.DisableToolRelevanceFilter
+        };
     }
 }

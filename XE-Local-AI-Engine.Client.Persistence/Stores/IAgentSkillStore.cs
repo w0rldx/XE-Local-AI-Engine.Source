@@ -90,25 +90,44 @@ public interface IAgentSkillStore
 ///     expose the row's provenance for the UI "Imported" badge, the runtime fencing decision and re-import change
 ///     detection.
 /// </summary>
-public sealed record AgentSkillRecord(
-    Guid Id,
-    string Name,
-    string Description,
-    string Body,
-    bool Enabled,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    string? License = null,
-    string? Compatibility = null,
-    string? AllowedTools = null,
-    IReadOnlyDictionary<string, string>? Metadata = null,
-    AgentSkillOrigin Origin = AgentSkillOrigin.Local,
-    string? SourceUri = null,
-    long? ImportedAtUtc = null,
-    string? ContentSha256 = null,
-    IReadOnlyList<AgentSkillResourceRecord>? Resources = null,
-    string? GenerationMetadataJson = null);
+public sealed class AgentSkillRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string Body { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public string? License { get; init; }
+
+    public string? Compatibility { get; init; }
+
+    public string? AllowedTools { get; init; }
+
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    public AgentSkillOrigin Origin { get; init; }
+
+    public string? SourceUri { get; init; }
+
+    public long? ImportedAtUtc { get; init; }
+
+    public string? ContentSha256 { get; init; }
+
+    public IReadOnlyList<AgentSkillResourceRecord>? Resources { get; init; }
+
+    public string? GenerationMetadataJson { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of an agent skill supplied on create/update. Free text is passed as plaintext strings; the store
@@ -131,41 +150,68 @@ public sealed record AgentSkillRecord(
 ///         the record of how the skill was drafted (same reasoning as the promote-only provenance above).
 ///     </para>
 /// </summary>
-public sealed record AgentSkillInput(
-    string Name,
-    string Description,
-    string Body,
-    bool Enabled = true,
-    string? License = null,
-    string? Compatibility = null,
-    string? AllowedTools = null,
-    IReadOnlyDictionary<string, string>? Metadata = null,
-    AgentSkillOrigin Origin = AgentSkillOrigin.Local,
-    string? SourceUri = null,
-    long? ImportedAtUtc = null,
-    string? ContentSha256 = null,
-    string? GenerationMetadataJson = null);
+public sealed record AgentSkillInput
+{
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string Body { get; init; }
+
+    public bool Enabled { get; init; } = true;
+
+    public string? License { get; init; }
+
+    public string? Compatibility { get; init; }
+
+    public string? AllowedTools { get; init; }
+
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    public AgentSkillOrigin Origin { get; init; }
+
+    public string? SourceUri { get; init; }
+
+    public long? ImportedAtUtc { get; init; }
+
+    public string? ContentSha256 { get; init; }
+
+    public string? GenerationMetadataJson { get; init; }
+}
 
 /// <summary>
 ///     Decrypted projection of one bundled skill file. <see cref="Name" /> is the skill-root-relative path the model
 ///     looks the file up by; <see cref="SizeBytes" /> is the plaintext UTF-8 length, carried so a list view does not
 ///     have to measure decrypted content.
 /// </summary>
-public sealed record AgentSkillResourceRecord(
-    Guid Id,
-    Guid SkillId,
-    string Name,
-    string Description,
-    string MediaType,
-    string Content,
-    int SizeBytes);
+public sealed class AgentSkillResourceRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid SkillId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string Content { get; init; }
+
+    public required int SizeBytes { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a bundled skill file. The store derives <c>SizeBytes</c> from <see cref="Content" /> — a
 ///     caller-supplied size could disagree with the payload it labels.
 /// </summary>
-public sealed record AgentSkillResourceInput(
-    string Name,
-    string Description,
-    string MediaType,
-    string Content);
+public sealed class AgentSkillResourceInput
+{
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string Content { get; init; }
+}

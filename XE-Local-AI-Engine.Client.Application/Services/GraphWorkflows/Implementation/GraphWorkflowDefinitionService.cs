@@ -57,7 +57,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         CancellationToken cancellationToken = default)
     {
         var nodeCount = (await ValidateAndParseAsync(graphJson, cancellationToken)).Nodes.Count;
-        return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(), name, graphJson, nodeCount, Description: description),
+        return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = name, GraphJson = graphJson, NodeCount = nodeCount, Description = description },
                                cancellationToken);
     }
 
@@ -71,7 +71,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         // A null graph leaves the stored one alone, so the node count must stay null with it: writing a count for a
         // graph nobody sent would denormalize a lie the definition list then reports.
         int? nodeCount = graphJson is null ? null : (await ValidateAndParseAsync(graphJson, cancellationToken)).Nodes.Count;
-        return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, expectedVersion, name, description, graphJson, nodeCount),
+        return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = expectedVersion, Name = name, Description = description, GraphJson = graphJson, NodeCount = nodeCount },
                                cancellationToken);
     }
 

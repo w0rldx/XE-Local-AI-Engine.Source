@@ -49,46 +49,64 @@ public sealed class DevWorkflowEncryptionTests
         await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = DevWorkflowTestFixture.StoreFor(context);
-            var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Plain title", request));
-            var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Plain definition", graph, NodeCount: 1));
-            var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
-                                     workItem.Id,
-                                     definition.Id,
-                                     definition.Version,
-                                     definition.GraphHash,
-                                     graph));
+            var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Plain title", Request = request });
+            var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Plain definition", GraphJson = graph, NodeCount = 1 });
+            var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
+            {
+                RunId = Guid.NewGuid(),
+                WorkItemId = workItem.Id,
+                DefinitionId = definition.Id,
+                DefinitionVersion = definition.Version,
+                DefinitionGraphHash = definition.GraphHash,
+                GraphJson = graph
+            });
 
             // Every encrypted column gets a needle, node-run input and policy included: a column nobody scans is a
             // column that can quietly stop being encrypted.
             var nodeRunId = Guid.NewGuid();
-            var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
-                                              run.Version,
-                                              Guid.NewGuid(),
-                                              [
-                                                  new DevWorkflowNodeRunSeed(nodeRunId,
-                                                      "approval",
-                                                      DevWorkflowNodeType.HumanGate,
-                                                      InputJson: $$"""{"workItemRequest":"{{input}}"}""",
-                                                      PolicyResolutionJson: $$"""[{"name":"{{policy}}","body":"{{snapshotBody}}"}]""")
-                                              ]));
-            var transitioned = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                              nodeRunId,
-                                              materialized.Version,
-                                              DevWorkflowNodeRunStatus.WaitingForApproval,
-                                              OutputJson: output,
-                                              PendingDecisionKind: DevWorkflowDecisionKind.Approve));
-            var decided = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(run.Id,
-                                         Guid.NewGuid(),
-                                         nodeRunId,
-                                         transitioned.Version,
-                                         Guid.NewGuid(),
-                                         DevWorkflowDecisionKind.Approve,
-                                         comment,
-                                         $$"""{"chosenOption":"{{payload}}"}"""));
-            _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
-                               decided.Version,
-                               DevWorkflowEventTypes.PolicyResolved,
-                               DetailJson: $$"""{"note":"{{eventDetail}}"}"""));
+            var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+            {
+                RunId = run.Id,
+                ExpectedVersion = run.Version,
+                OperationId = Guid.NewGuid(),
+                NodeRuns = [
+                                                  new DevWorkflowNodeRunSeed
+                                                  {
+                                                      NodeRunId = nodeRunId,
+                                                      NodeKey = "approval",
+                                                      NodeType = DevWorkflowNodeType.HumanGate,
+                                                      InputJson = $$"""{"workItemRequest":"{{input}}"}""",
+                                                      PolicyResolutionJson = $$"""[{"name":"{{policy}}","body":"{{snapshotBody}}"}]"""
+                                                  }
+                                              ]
+            });
+            var transitioned = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRunId,
+                ExpectedVersion = materialized.Version,
+                TargetStatus = DevWorkflowNodeRunStatus.WaitingForApproval,
+                OutputJson = output,
+                PendingDecisionKind = DevWorkflowDecisionKind.Approve
+            });
+            var decided = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
+            {
+                RunId = run.Id,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = nodeRunId,
+                ExpectedVersion = transitioned.Version,
+                OperationId = Guid.NewGuid(),
+                Decision = DevWorkflowDecisionKind.Approve,
+                Comment = comment,
+                PayloadJson = $$"""{"chosenOption":"{{payload}}"}"""
+            });
+            _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
+            {
+                RunId = run.Id,
+                ExpectedVersion = decided.Version,
+                EventType = DevWorkflowEventTypes.PolicyResolved,
+                DetailJson = $$"""{"note":"{{eventDetail}}"}"""
+            });
 
             // The rule-set body is the ninth encrypted column, and its plaintext NAME is the second positive control:
             // the list page sorts on the name, so that one is meant to be readable in the file.
@@ -156,16 +174,22 @@ public sealed class DevWorkflowEncryptionTests
             var nodeRunId = Guid.NewGuid();
             var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion);
 
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                               nodeRunId,
-                               version,
-                               DevWorkflowNodeRunStatus.Succeeded,
-                               Telemetry: new DevWorkflowNodeTelemetry(InputTokens: 10,
-                                   OutputTokens: 20,
-                                   ToolCalls: 1,
-                                   ToolNamesJson: $"""["{toolName}"]""",
-                                   ServedModelName: servedModel,
-                                   RouteJson: $$"""{"satisfied":["{{routeKey}}"],"dead":[],"gateAnswer":null,"truncated":false}""")));
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = seed.RunId,
+                NodeRunId = nodeRunId,
+                ExpectedVersion = version,
+                TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
+                Telemetry = new DevWorkflowNodeTelemetry
+                               {
+                                   InputTokens = 10,
+                                   OutputTokens = 20,
+                                   ToolCalls = 1,
+                                   ToolNamesJson = $"""["{toolName}"]""",
+                                   ServedModelName = servedModel,
+                                   RouteJson = $$"""{"satisfied":["{{routeKey}}"],"dead":[],"gateAnswer":null,"truncated":false}"""
+                               }
+            });
         }
 
         var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(fixture.DatabasePath);
@@ -234,7 +258,7 @@ public sealed class DevWorkflowEncryptionTests
         {
             var store = DevWorkflowTestFixture.StoreFor(context);
             var victim = await DevWorkflowTestFixture.SeedRunAsync(store, "Victim");
-            var attacker = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Attacker", "Attacker request"));
+            var attacker = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Attacker", Request = "Attacker request" });
             victimRunId = victim.RunId;
             attackerWorkItemId = attacker.Id;
         }
@@ -272,21 +296,30 @@ public sealed class DevWorkflowEncryptionTests
             var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
             runId = seed.RunId;
 
-            var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                         seed.RunVersion,
-                                         Guid.NewGuid(),
-                                         [
-                                             new DevWorkflowNodeRunSeed(nodeRunId,
-                                                 "gate",
-                                                 DevWorkflowNodeType.Gate,
-                                                 MaxAttempts: 1,
-                                                 PolicyResolutionJson: """[{"id":"11111111-1111-1111-1111-111111111111","name":"house rules","contentSha256":"abc"}]""")
-                                         ]));
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                               nodeRunId,
-                               version.Version,
-                               DevWorkflowNodeRunStatus.Succeeded,
-                               OutputJson: """{"status":"rejected"}"""));
+            var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+            {
+                RunId = seed.RunId,
+                ExpectedVersion = seed.RunVersion,
+                OperationId = Guid.NewGuid(),
+                NodeRuns = [
+                                             new DevWorkflowNodeRunSeed
+                                             {
+                                                 NodeRunId = nodeRunId,
+                                                 NodeKey = "gate",
+                                                 NodeType = DevWorkflowNodeType.Gate,
+                                                 MaxAttempts = 1,
+                                                 PolicyResolutionJson = """[{"id":"11111111-1111-1111-1111-111111111111","name":"house rules","contentSha256":"abc"}]"""
+                                             }
+                                         ]
+            });
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = seed.RunId,
+                NodeRunId = nodeRunId,
+                ExpectedVersion = version.Version,
+                TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
+                OutputJson = """{"status":"rejected"}"""
+            });
         }
 
         await fixture.RawExecuteAsync("UPDATE dev_workflow_node_runs SET output_json = policy_resolution_json WHERE id = $nodeRun;",
@@ -317,14 +350,17 @@ public sealed class DevWorkflowEncryptionTests
 
             var nodeRunId = Guid.NewGuid();
             var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "approval", seed.RunVersion, DevWorkflowNodeType.HumanGate);
-            _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
-                               Guid.NewGuid(),
-                               nodeRunId,
-                               version,
-                               Guid.NewGuid(),
-                               DevWorkflowDecisionKind.Approve,
-                               "Looks fine to me.",
-                               """{"chosenOption":"reject"}"""));
+            _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
+            {
+                RunId = seed.RunId,
+                DecisionId = Guid.NewGuid(),
+                NodeRunId = nodeRunId,
+                ExpectedVersion = version,
+                OperationId = Guid.NewGuid(),
+                Decision = DevWorkflowDecisionKind.Approve,
+                Comment = "Looks fine to me.",
+                PayloadJson = """{"chosenOption":"reject"}"""
+            });
         }
 
         await fixture.RawExecuteAsync("UPDATE dev_workflow_decisions SET payload_json = comment;");

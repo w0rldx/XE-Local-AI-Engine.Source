@@ -81,7 +81,7 @@ public sealed class CreateDevWorkflowDefinitionEndpoint : Endpoint<CreateDevWork
 
         var graphJson = DevWorkflowContractMapper.ToGraphJson(req.Graph);
         var nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
-        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), req.Name, graphJson, nodeCount), ct);
+        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = req.Name, GraphJson = graphJson, NodeCount = nodeCount }, ct);
         await Send.CreatedAtAsync<GetDevWorkflowDefinitionEndpoint>(new
             {
                 definitionId = created.Id
@@ -161,7 +161,7 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint : Endpoint<UpdateDevWork
             nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
         }
 
-        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(req.DefinitionId, req.Version, req.Name, graphJson, nodeCount), ct);
+        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = req.DefinitionId, ExpectedVersion = req.Version, Name = req.Name, GraphJson = graphJson, NodeCount = nodeCount }, ct);
         await Send.OkAsync(updated.ToResponse(), ct);
     }
 }

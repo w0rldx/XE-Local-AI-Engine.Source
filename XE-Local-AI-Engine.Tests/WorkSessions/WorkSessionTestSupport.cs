@@ -333,12 +333,15 @@ internal static class WorkSessionTestSupport
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
                                       .CreateConversationAsync(new NodeChatCreateConversationRequest("Seeded session", UserId: null, CreatedAtUtc: 0));
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        return await store.CreateAsync(new CreateWorkSessionCommand(sessionId,
-                              conversation.ConversationId,
-                              agentDefinitionId ?? Guid.NewGuid(),
-                              kind,
-                              "Seeded session",
-                              objective));
+        return await store.CreateAsync(new CreateWorkSessionCommand
+        {
+            SessionId = sessionId,
+            ConversationId = conversation.ConversationId,
+            AgentDefinitionId = agentDefinitionId ?? Guid.NewGuid(),
+            Kind = kind,
+            Title = "Seeded session",
+            Objective = objective
+        });
     }
 
     public static async Task<AgentWorkSessionSnapshot> ReadSessionAsync(IServiceProvider services, Guid sessionId)

@@ -167,12 +167,15 @@ public sealed class EvalModelIdentityResolverTests
 
     private static ModelClassificationRecord Classification(string? digest)
     {
-        return new ModelClassificationRecord(ModelName,
-            digest,
-            ModelKind.Chat,
-            DetectedCapabilitiesJson: null,
-            OverrideKind: null,
-            DetectedAtUtc: null,
-            UpdatedAtUtc: 0);
+        return new ModelClassificationRecord
+        {
+            ModelName = ModelName,
+            Digest = digest,
+            DetectedKind = ModelKind.Chat,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = null,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 0
+        };
     }
 }

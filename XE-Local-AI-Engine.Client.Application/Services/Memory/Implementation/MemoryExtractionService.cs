@@ -152,16 +152,19 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
             }
 
             var candidate = accepted[index];
-            var record = await _playbookActionStore.AddAsync(new PlaybookActionInput(run.AgentDefinitionId,
-                    PlaybookActionState.Suggested,
-                    PlaybookActionSource.Extracted,
-                    candidate.TriggerCondition,
-                    candidate.Behavior,
-                    candidate.Scope.ToString(),
-                    _options.CandidatePriority,
-                    sourceFeedbackIds,
-                    candidate.Confidence,
-                    MemoryScope: candidate.Scope),
+            var record = await _playbookActionStore.AddAsync(new PlaybookActionInput
+            {
+                AgentDefinitionId = run.AgentDefinitionId,
+                State = PlaybookActionState.Suggested,
+                Source = PlaybookActionSource.Extracted,
+                TriggerCondition = candidate.TriggerCondition,
+                Behavior = candidate.Behavior,
+                Scope = candidate.Scope.ToString(),
+                Priority = _options.CandidatePriority,
+                SourceFeedbackIds = sourceFeedbackIds,
+                Confidence = candidate.Confidence,
+                MemoryScope = candidate.Scope
+            },
                 cancellationToken);
 
             created.Add(record);

@@ -214,15 +214,34 @@ public sealed class BenchmarkCompareEndpointTests
         context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns([.. indexes.Select(index => TaskItem(index, !displayOnlyIndexes.Contains(index)))]);
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkCellPage(cells,
-                   new BenchmarkRankCohort(2, "cohort-key", 3, cells.Length, cells.Length),
-                   ScorableItemCount: indexes.Length - displayOnlyIndexes.Length));
+               .Returns(new BenchmarkCellPage
+               {
+                   Cells = cells,
+                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = cells.Length, TotalScored = cells.Length },
+                   ScorableItemCount = indexes.Length - displayOnlyIndexes.Length
+               });
         return context;
     }
 
     private static BenchmarkTaskItemRecord TaskItem(int index, bool countsTowardScore) =>
-        new(ItemId(index), ProjectId, ParentItemId: null, index, BenchmarkTaskItemKinds.Prompt, Revision: 1, "v1:hash",
-            countsTowardScore, Encoding.UTF8.GetBytes("\"ask\""), null, null, null, Version: 1, CreatedAtUtc: 10, UpdatedAtUtc: 20);
+        new()
+        {
+            Id = ItemId(index),
+            ProjectId = ProjectId,
+            ParentItemId = null,
+            Index = index,
+            Kind = BenchmarkTaskItemKinds.Prompt,
+            Revision = 1,
+            InputHash = "v1:hash",
+            CountsTowardScore = countsTowardScore,
+            PromptJson = Encoding.UTF8.GetBytes("\"ask\""),
+            ReferenceAnswerJson = null,
+            VerifierConfigJson = null,
+            GeneratorConfigJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20
+        };
 
     private static async Task<(HttpStatusCode Status, string Content)> GetAsync(Context context, string query)
     {
@@ -235,18 +254,30 @@ public sealed class BenchmarkCompareEndpointTests
     }
 
     private static BenchmarkCellRecord Cell(string key, int? quality, IReadOnlyList<BenchmarkCellItemRecord> items, string? exclusion = null) =>
-        new(key, "model.gguf", "v1:fp", "q8_0", null, null, quality, quality is null ? null : 1, exclusion, items);
+        new() { CellKey = key, PrimaryModelName = "model.gguf", ModelContentFingerprint = "v1:fp", KvCacheType = "q8_0", RepeatGroupId = null, RepeatIndex = null, Quality = quality, Rank = quality is null ? null : 1, RankExclusionReason = exclusion, Items = items };
 
     /// <summary>One item's answer. A null quality is what the ranking writes for a run it excluded.</summary>
     private static BenchmarkCellItemRecord Item(int index, int? quality, string? exclusion = null) =>
-        new(Guid.NewGuid(), ItemId(index), index, quality, "stop", exclusion);
+        new() { RunId = Guid.NewGuid(), TaskItemId = ItemId(index), TaskItemIndex = index, QualityScore = quality, PrimaryStopReason = "stop", RankExclusionReason = exclusion };
 
     private static Guid ItemId(int index) =>
         new(index, 0, 0, [0, 0, 0, 0, 0, 0, 0, 1]);
 
     private static BenchmarkProjectRecord Project() =>
-        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, IsFrozen: true, Version: 4, CreatedAtUtc: 10, UpdatedAtUtc: 20);
+        new()
+        {
+            Id = ProjectId,
+            Name = "Project",
+            CoreTaskJson = Encoding.UTF8.GetBytes("\"Answer exactly.\""),
+            ContextTokens = 4096,
+            AgentDefinitionId = AgentId,
+            JudgeEnabled = false,
+            CurrentJudgePolicyRevisionId = null,
+            IsFrozen = true,
+            Version = 4,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20
+        };
 
     private sealed class Context : IAsyncDisposable
     {

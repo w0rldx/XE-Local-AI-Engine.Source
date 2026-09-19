@@ -81,11 +81,11 @@ public sealed class GraphWorkflowStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
-        var updated = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed"));
+        var updated = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = created.Id, ExpectedVersion = created.Version, Name = "Renamed" });
         AssertEx.Equal(created.Version + 1, updated.Version, "An accepted edit bumps the version.");
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
-                              () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed again")),
+                              () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = created.Id, ExpectedVersion = created.Version, Name = "Renamed again" }),
                               "A writer holding the pre-edit version must lose.");
 
         var stillThere = await store.GetDefinitionAsync(created.Id);
@@ -122,10 +122,10 @@ public sealed class GraphWorkflowStoreTests
         _ = await winnerContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId);
         _ = await loserContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId);
 
-        _ = await winner.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Winner"));
+        _ = await winner.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = version, Name = "Winner" });
 
         var rejection = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
-                                          () => loser.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Loser")),
+                                          () => loser.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = version, Name = "Loser" }),
                                           "The second writer still holds version N, so the row's token must refuse it.");
         AssertEx.True(rejection.Message.Contains("changed by another writer", StringComparison.Ordinal),
             $"and it must be the TOKEN that refused it — the pre-save version check passes here, because this writer's view still says N: {rejection.Message}");
@@ -144,7 +144,7 @@ public sealed class GraphWorkflowStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
-        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed"));
+        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = created.Id, ExpectedVersion = created.Version, Name = "Renamed" });
 
         AssertEx.Equal(created.GraphJson, renamed.GraphJson, "A rename must not rewrite the graph.");
         AssertEx.Equal(created.GraphHash, renamed.GraphHash, "and it must not rewrite the hash that names the graph.");
@@ -168,9 +168,12 @@ public sealed class GraphWorkflowStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
-        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
-                                            created.Version,
-                                            GraphJson: ReplacementGraph)),
+        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = created.Id,
+            ExpectedVersion = created.Version,
+            GraphJson = ReplacementGraph
+        }),
                                         "A graph without its node count must be refused rather than written.");
 
         AssertEx.Equal(nameof(ArgumentException), refusal.GetType().Name, "and refused as an argument fault, not as a conflict or a not-found.");
@@ -182,10 +185,13 @@ public sealed class GraphWorkflowStoreTests
 
         // The same graph WITH its count is accepted, so the refusal above is about the missing count and not about the
         // graph being rejected for some other reason.
-        var replaced = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
-                                      created.Version,
-                                      GraphJson: ReplacementGraph,
-                                      NodeCount: 3));
+        var replaced = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = created.Id,
+            ExpectedVersion = created.Version,
+            GraphJson = ReplacementGraph,
+            NodeCount = 3
+        });
 
         AssertEx.Equal(expected: 3, replaced.NodeCount);
         AssertEx.Equal(ReplacementGraph, replaced.GraphJson);
@@ -206,9 +212,12 @@ public sealed class GraphWorkflowStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
-        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
-                                            created.Version,
-                                            NodeCount: 99)),
+        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = created.Id,
+            ExpectedVersion = created.Version,
+            NodeCount = 99
+        }),
                                         "A node count without the graph it counts must be refused rather than written.");
 
         AssertEx.Equal(nameof(ArgumentException), refusal.GetType().Name, "and refused as an argument fault, not as a conflict or a not-found.");
@@ -219,7 +228,7 @@ public sealed class GraphWorkflowStoreTests
 
         // The negative control: the SAME edit with neither member is an ordinary rename, so the refusal above is about
         // the orphaned count and not about the command being rejected for some other reason.
-        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, Name: "Renamed"));
+        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = created.Id, ExpectedVersion = created.Version, Name = "Renamed" });
 
         AssertEx.Equal("Renamed", renamed.Name);
         AssertEx.Equal(created.NodeCount, renamed.NodeCount, "and a rename leaves the count exactly where the graph put it.");
@@ -243,18 +252,24 @@ public sealed class GraphWorkflowStoreTests
         var definitionId = Guid.NewGuid();
 
         _ = await GraphWorkflowTestFixture.StoreFor(context)
-                                          .CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
-                                              "Triage",
-                                              GraphWorkflowTestFixture.SampleGraph,
-                                              NodeCount: 2));
+                                          .CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+                                          {
+                                              DefinitionId = definitionId,
+                                              Name = "Triage",
+                                              GraphJson = GraphWorkflowTestFixture.SampleGraph,
+                                              NodeCount = 2
+                                          });
 
         await using var second = fixture.CreateContext();
         var store = GraphWorkflowTestFixture.StoreFor(second);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
-                                  "Triage again",
-                                  GraphWorkflowTestFixture.SampleGraph,
-                                  NodeCount: 2)),
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = definitionId,
+            Name = "Triage again",
+            GraphJson = GraphWorkflowTestFixture.SampleGraph,
+            NodeCount = 2
+        }),
                               "A second definition under one id is the unique index refusing it, which is a conflict.");
 
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions"), "and the refused row must not have landed.");
@@ -263,10 +278,13 @@ public sealed class GraphWorkflowStoreTests
         // caller has to hear that rather than "it already exists".
         await fixture.RawExecuteAsync("DROP TABLE graph_workflow_definitions;");
 
-        var broken = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
-                                           "Nowhere to go",
-                                           GraphWorkflowTestFixture.SampleGraph,
-                                           NodeCount: 2)),
+        var broken = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "Nowhere to go",
+            GraphJson = GraphWorkflowTestFixture.SampleGraph,
+            NodeCount = 2
+        }),
                                        "A write that failed for anything but a unique violation must travel as itself.");
 
         _ = AssertEx.NotNull(broken.InnerException, "and it must still carry the SQLite fault that explains it.");

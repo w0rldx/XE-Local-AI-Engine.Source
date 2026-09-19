@@ -1108,15 +1108,18 @@ public sealed class DevWorkflowRunEndpointTests
         });
         store.ListRuleSetsAsync(Arg.Any<CancellationToken>())
              .Returns([
-                 new DevWorkflowRuleSetSummary(RuleSetId,
-                     "House rules, renamed",
-                     Description: null,
-                     """{"projectIds":[],"nodeTypes":[]}""",
-                     Enabled: true,
-                     "content-hash-v2",
-                     Version: 2,
-                     CreatedAtUtc: 1,
-                     UpdatedAtUtc: 3)
+                 new DevWorkflowRuleSetSummary
+                 {
+                     Id = RuleSetId,
+                     Name = "House rules, renamed",
+                     Description = null,
+                     ScopeJson = """{"projectIds":[],"nodeTypes":[]}""",
+                     Enabled = true,
+                     ContentSha256 = "content-hash-v2",
+                     Version = 2,
+                     CreatedAtUtc = 1,
+                     UpdatedAtUtc = 3
+                 }
              ]);
         await using var factory = EnabledFactory(store, RunService());
 
@@ -1404,17 +1407,20 @@ public sealed class DevWorkflowRunEndpointTests
     }
 
     private static DevWorkflowDecisionSnapshot Decision(Guid nodeRunId, int attempt, DevWorkflowDecisionKind decision) =>
-        new(Guid.NewGuid(),
-            RunId,
-            nodeRunId,
-            attempt,
-            decision,
-            Comment: null,
-            PayloadJson: null,
-            DecidedBySubject: "operator",
-            OperationId: Guid.NewGuid(),
-            Sequence: attempt,
-            DecidedAtUtc: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            NodeRunId = nodeRunId,
+            Attempt = attempt,
+            Decision = decision,
+            Comment = null,
+            PayloadJson = null,
+            DecidedBySubject = "operator",
+            OperationId = Guid.NewGuid(),
+            Sequence = attempt,
+            DecidedAtUtc = 1
+        };
 
     /// <summary>One work node run of the run under test, distinguished only by its key and status.</summary>
     private static DevWorkflowNodeRunSnapshot WorkNodeRun(int ordinal, string nodeKey, DevWorkflowNodeRunStatus status) =>
@@ -1446,17 +1452,20 @@ public sealed class DevWorkflowRunEndpointTests
                 Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(call => new DevWorkflowDecisionResult(composed,
-                new DevWorkflowDecisionSnapshot(Guid.NewGuid(),
-                    RunId,
-                    GateNodeRunId,
-                    Attempt: 1,
-                    call.ArgAt<DevWorkflowDecisionKind>(3),
-                    call.ArgAt<string?>(4),
-                    call.ArgAt<string?>(5),
-                    call.ArgAt<string?>(6),
-                    call.ArgAt<Guid>(2),
-                    Sequence: 21,
-                    DecidedAtUtc: 99)));
+                new DevWorkflowDecisionSnapshot
+                {
+                    Id = Guid.NewGuid(),
+                    RunId = RunId,
+                    NodeRunId = GateNodeRunId,
+                    Attempt = 1,
+                    Decision = call.ArgAt<DevWorkflowDecisionKind>(3),
+                    Comment = call.ArgAt<string?>(4),
+                    PayloadJson = call.ArgAt<string?>(5),
+                    DecidedBySubject = call.ArgAt<string?>(6),
+                    OperationId = call.ArgAt<Guid>(2),
+                    Sequence = 21,
+                    DecidedAtUtc = 99
+                }));
         return runs;
     }
 
@@ -1472,16 +1481,19 @@ public sealed class DevWorkflowRunEndpointTests
         store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
         store.ListDefinitionsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
              .Returns([
-                 new DevWorkflowDefinitionSummary(DefinitionId,
-                     "Research → Plan → Approval",
-                     "graph-hash",
-                     NodeCount: 2,
-                     DevWorkflowDefinitionSource.Seeded,
-                     "research-plan-approval",
-                     Archived: false,
-                     Version: 1,
-                     CreatedAtUtc: 1,
-                     UpdatedAtUtc: 2)
+                 new DevWorkflowDefinitionSummary
+                 {
+                     Id = DefinitionId,
+                     Name = "Research → Plan → Approval",
+                     GraphHash = "graph-hash",
+                     NodeCount = 2,
+                     Source = DevWorkflowDefinitionSource.Seeded,
+                     SeedSlug = "research-plan-approval",
+                     Archived = false,
+                     Version = 1,
+                     CreatedAtUtc = 1,
+                     UpdatedAtUtc = 2
+                 }
              ]);
         store.GetArtifactAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Artifact());
         return store;
@@ -1496,84 +1508,93 @@ public sealed class DevWorkflowRunEndpointTests
             Status = gateStatus,
             PendingDecisionKind = gateStatus == DevWorkflowNodeRunStatus.WaitingForApproval ? DevWorkflowDecisionKind.Approve : null
         };
-        var research = new DevWorkflowNodeRunSnapshot(ResearchNodeRunId,
-            RunId,
-            "research",
-            DevWorkflowNodeType.Agent,
-            Attempt: 1,
-            MaxAttempts: 3,
-            SessionResumes: 0,
-            researchStatus,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 2,
-            WorkSessionId: null,
-            WorkSessionAvailable: false,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: """{"workItemRequest":"Research and plan it."}""",
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: 12,
-            EndedAtUtc: 13,
-            CreatedAtUtc: 10);
+        var research = new DevWorkflowNodeRunSnapshot
+        {
+            Id = ResearchNodeRunId,
+            RunId = RunId,
+            NodeKey = "research",
+            NodeType = DevWorkflowNodeType.Agent,
+            Attempt = 1,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = researchStatus,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 2,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = """{"workItemRequest":"Research and plan it."}""",
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = 12,
+            EndedAtUtc = 13,
+            CreatedAtUtc = 10
+        };
 
         var waiting = gateStatus is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked;
         return new DevWorkflowRunDetail(RunSnapshot(), [research, gate], waiting ? 1 : 0, waiting ? GateNodeRunId : null);
     }
 
     private static DevWorkflowRunSnapshot RunSnapshot() =>
-        new(RunId,
-            WorkItemId,
-            DefinitionId,
-            DefinitionVersion: 4,
-            "graph-hash",
-            SampleGraph,
-            GraphRevision: 0,
-            DevWorkflowRunStatus.WaitingForApproval,
-            LastSequence: 14,
-            FailureClass: null,
-            TerminalReason: null,
-            StartedAtUtc: 11,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 20,
-            Version: 6);
+        new()
+        {
+            Id = RunId,
+            WorkItemId = WorkItemId,
+            DefinitionId = DefinitionId,
+            DefinitionVersion = 4,
+            DefinitionGraphHash = "graph-hash",
+            GraphJson = SampleGraph,
+            GraphRevision = 0,
+            Status = DevWorkflowRunStatus.WaitingForApproval,
+            LastSequence = 14,
+            FailureClass = null,
+            TerminalReason = null,
+            StartedAtUtc = 11,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            Version = 6
+        };
 
     private static DevWorkflowNodeRunSnapshot GateNodeRun(bool workSessionAvailable = true) =>
-        new(GateNodeRunId,
-            RunId,
-            "approval",
-            DevWorkflowNodeType.HumanGate,
-            Attempt: 1,
-            MaxAttempts: 1,
-            SessionResumes: 0,
-            DevWorkflowNodeRunStatus.WaitingForApproval,
-            QueueReason: null,
-            DevWorkflowDecisionKind.Approve,
-            Sequence: 5,
-            SessionId,
-            workSessionAvailable,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: 14,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10);
+        new()
+        {
+            Id = GateNodeRunId,
+            RunId = RunId,
+            NodeKey = "approval",
+            NodeType = DevWorkflowNodeType.HumanGate,
+            Attempt = 1,
+            MaxAttempts = 1,
+            SessionResumes = 0,
+            Status = DevWorkflowNodeRunStatus.WaitingForApproval,
+            QueueReason = null,
+            PendingDecisionKind = DevWorkflowDecisionKind.Approve,
+            Sequence = 5,
+            WorkSessionId = SessionId,
+            WorkSessionAvailable = workSessionAvailable,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = 14,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10
+        };
 
     /// <summary>
     ///     The agent node run, carrying the fifteen as a real settle would have written them. The route document is
@@ -1605,29 +1626,32 @@ public sealed class DevWorkflowRunEndpointTests
         };
 
     private static DevWorkflowArtifactSnapshot Artifact(string mediaType = "text/markdown", long sizeBytes = 10) =>
-        new(ArtifactId,
-            RunId,
-            LineageId: Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            "approval",
-            GateNodeRunId,
-            "plan.md",
-            Version: 1,
-            IsLatest: true,
-            DevWorkflowArtifactKind.Plan,
-            mediaType,
-            "sha",
-            sizeBytes,
-            IsValid: true,
-            IsStale: false,
-            StaleSinceSequence: null,
-            StaleBecauseArtifactId: null,
-            StaleReason: null,
-            "dev-workflows/33333333/55555555.bin",
-            Sequence: 6,
-            CreatedAtUtc: 15);
+        new()
+        {
+            Id = ArtifactId,
+            RunId = RunId,
+            LineageId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            ProducingNodeKey = "approval",
+            ProducedByNodeRunId = GateNodeRunId,
+            Name = "plan.md",
+            Version = 1,
+            IsLatest = true,
+            Kind = DevWorkflowArtifactKind.Plan,
+            MediaType = mediaType,
+            ContentSha256 = "sha",
+            SizeBytes = sizeBytes,
+            IsValid = true,
+            IsStale = false,
+            StaleSinceSequence = null,
+            StaleBecauseArtifactId = null,
+            StaleReason = null,
+            ManagedReference = "dev-workflows/33333333/55555555.bin",
+            Sequence = 6,
+            CreatedAtUtc = 15
+        };
 
     private static DevWorkflowRunEventSnapshot Event(long sequence) =>
-        new(Guid.NewGuid(), RunId, NodeRunId: null, sequence, "node.started", DetailJson: null, OperationId: null, Outcome: null, OccurredAtUtc: 100);
+        new() { Id = Guid.NewGuid(), RunId = RunId, NodeRunId = null, Sequence = sequence, EventType = "node.started", DetailJson = null, OperationId = null, Outcome = null, OccurredAtUtc = 100 };
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {
@@ -1665,21 +1689,24 @@ public sealed class DevWorkflowRunEndpointTests
 
         var sessionStore = sessions ?? Substitute.For<IAgentWorkSessionStore>();
         sessionStore.GetAsync(SessionId, Arg.Any<CancellationToken>())
-                    .Returns(new AgentWorkSessionSnapshot(SessionId,
-                        "Research",
-                        "objective",
-                        AgentWorkSessionKind.Workflow,
-                        AgentWorkSessionStatus.Completed,
-                        Guid.NewGuid(),
-                        ConversationId,
-                        CurrentTaskId: null,
-                        StepCount: 3,
-                        LastCheckpointId: null,
-                        LastSequence: 9,
-                        ConfigVersion: 1,
-                        CreatedAtUtc: 1,
-                        UpdatedAtUtc: 2,
-                        Version: 3));
+                    .Returns(new AgentWorkSessionSnapshot
+                    {
+                        Id = SessionId,
+                        Title = "Research",
+                        Objective = "objective",
+                        Kind = AgentWorkSessionKind.Workflow,
+                        Status = AgentWorkSessionStatus.Completed,
+                        AgentDefinitionId = Guid.NewGuid(),
+                        ConversationId = ConversationId,
+                        CurrentTaskId = null,
+                        StepCount = 3,
+                        LastCheckpointId = null,
+                        LastSequence = 9,
+                        ConfigVersion = 1,
+                        CreatedAtUtc = 1,
+                        UpdatedAtUtc = 2,
+                        Version = 3
+                    });
 
         return new TestServerWebAppFactory
         {

@@ -228,64 +228,71 @@ public sealed partial class BenchmarkStore
                               .ThenByDescending(entity => entity.Id)
                               .Skip(skip)
                               .Take(take)
-                              .Select(entity => new BenchmarkRunRecord(entity.Id,
-                                  entity.ProjectId,
-                                  noPayload,
-                                  entity.PrimaryModelName,
-                                  entity.PrimaryModelOrigin,
-                                  entity.ModelContentFingerprint,
-                                  entity.AgentName,
-                                  entity.AgentVersion,
-                                  entity.RequestedContextTokens,
-                                  entity.PrimaryStatus,
-                                  entity.EffectiveContextTokens,
-                                  entity.DurationMs,
-                                  entity.TotalTokens,
-                                  entity.TokensPerSecond,
-                                  null,
-                                  entity.LastStreamSequence,
-                                  entity.UserScore,
-                                  entity.PrimaryErrorMessage,
-                                  entity.Version,
-                                  entity.CreatedAtUtc,
-                                  entity.StartedAtUtc,
-                                  entity.PrimaryCompletedAtUtc,
-                                  entity.UpdatedAtUtc,
-                                  entity.PrimaryVariant == null
+                              .Select(entity => new BenchmarkRunRecord
+                              {
+                                  Id = entity.Id,
+                                  ProjectId = entity.ProjectId,
+                                  RuntimeSnapshotJson = noPayload,
+                                  PrimaryModelName = entity.PrimaryModelName,
+                                  PrimaryModelOrigin = entity.PrimaryModelOrigin,
+                                  ModelContentFingerprint = entity.ModelContentFingerprint,
+                                  AgentName = entity.AgentName,
+                                  AgentVersion = entity.AgentVersion,
+                                  RequestedContextTokens = entity.RequestedContextTokens,
+                                  PrimaryStatus = entity.PrimaryStatus,
+                                  EffectiveContextTokens = entity.EffectiveContextTokens,
+                                  DurationMs = entity.DurationMs,
+                                  TotalTokens = entity.TotalTokens,
+                                  TokensPerSecond = entity.TokensPerSecond,
+                                  OutputPartsJson = null,
+                                  LastStreamSequence = entity.LastStreamSequence,
+                                  UserScore = entity.UserScore,
+                                  PrimaryErrorMessage = entity.PrimaryErrorMessage,
+                                  Version = entity.Version,
+                                  CreatedAtUtc = entity.CreatedAtUtc,
+                                  StartedAtUtc = entity.StartedAtUtc,
+                                  PrimaryCompletedAtUtc = entity.PrimaryCompletedAtUtc,
+                                  UpdatedAtUtc = entity.UpdatedAtUtc,
+                                  PrimaryLaunchIntent = entity.PrimaryVariant == null
                                       ? null
-                                      : new BenchmarkRunLaunchIntent(entity.PrimaryVariant,
-                                          entity.PrimaryKvCacheType!,
-                                          entity.PrimaryKvCacheTypeSource!,
-                                          entity.PrimaryKvAutoReason,
-                                          entity.PrimaryFlashAttentionMode!,
-                                          entity.PrimaryIntendedLaunchIdentity!,
-                                          entity.PrimaryIntendedExecutableSha256),
-                                  entity.PrimaryEnvironmentFactsHash == null
+                                      : new BenchmarkRunLaunchIntent
+                                      {
+                                          Variant = entity.PrimaryVariant,
+                                          KvCacheType = entity.PrimaryKvCacheType!,
+                                          KvCacheTypeSource = entity.PrimaryKvCacheTypeSource!,
+                                          KvAutoReason = entity.PrimaryKvAutoReason,
+                                          FlashAttentionMode = entity.PrimaryFlashAttentionMode!,
+                                          IntendedLaunchIdentity = entity.PrimaryIntendedLaunchIdentity!,
+                                          IntendedExecutableSha256 = entity.PrimaryIntendedExecutableSha256
+                                      },
+                                  PrimaryLaunchEvidence = entity.PrimaryEnvironmentFactsHash == null
                                       ? null
-                                      : new BenchmarkRunLaunchEvidence(null,
-                                          null,
-                                          entity.PrimaryReceiptHash,
-                                          entity.PrimaryEnvironmentFactsHash,
-                                          entity.PrimaryEffectiveLaunchIdentity,
-                                          entity.PrimaryEffectiveBackend,
-                                          entity.PrimaryPlacementOffloaded,
-                                          entity.PrimaryPlacementTotal,
-                                          entity.PrimaryLaunchExecutableSha256,
-                                          entity.PrimaryLaunchHasAuxAssets,
-                                          entity.PrimaryLaunchKvCacheTypeSource),
-                                  entity.PrimaryStopReason,
-                                  null,
-                                  null,
-                                  null,
-                                  null,
-
+                                      : new BenchmarkRunLaunchEvidence
+                                      {
+                                          ReceiptJson = null,
+                                          EnvironmentFactsJson = null,
+                                          ReceiptHash = entity.PrimaryReceiptHash,
+                                          EnvironmentFactsHash = entity.PrimaryEnvironmentFactsHash,
+                                          EffectiveLaunchIdentity = entity.PrimaryEffectiveLaunchIdentity,
+                                          EffectiveBackend = entity.PrimaryEffectiveBackend,
+                                          PlacementOffloaded = entity.PrimaryPlacementOffloaded,
+                                          PlacementTotal = entity.PrimaryPlacementTotal,
+                                          ExecutableSha256 = entity.PrimaryLaunchExecutableSha256,
+                                          HasAuxAssets = entity.PrimaryLaunchHasAuxAssets,
+                                          KvCacheTypeSource = entity.PrimaryLaunchKvCacheTypeSource
+                                      },
+                                  PrimaryStopReason = entity.PrimaryStopReason,
+                                  Judge = null,
+                                  QualityScore = null,
+                                  QualityScoreSource = null,
+                                  Rank = null,
                                   // Inline rather than through ToThroughput: this is a server-side projection, and a
                                   // helper call would not translate. Absence is decided by all SEVEN columns being
                                   // NULL, and every one of them is projected — the same rule and the same members the
                                   // entity-materializing ToThroughput uses. Omitting one here empties that column in
                                   // the runs table, the CSV export and the repeat statistics, while a single-run read
                                   // keeps showing it.
-                                  entity.TtftMs == null
+                                  Throughput = entity.TtftMs == null
                                   && entity.PromptTokens == null
                                   && entity.PromptMs == null
                                   && entity.GenerationTokens == null
@@ -293,33 +300,36 @@ public sealed partial class BenchmarkStore
                                   && entity.CachedPromptTokens == null
                                   && entity.SegmentCount == null
                                       ? null
-                                      : new BenchmarkRunThroughput(entity.TtftMs,
-                                          entity.PromptTokens,
-                                          entity.PromptMs,
-                                          entity.GenerationTokens,
-                                          entity.GenerationMs,
-                                          entity.CachedPromptTokens,
-                                          entity.SegmentCount),
-                                  entity.RepeatGroupId,
-                                  entity.RepeatIndex,
-                                  entity.IsWarmup,
-
+                                      : new BenchmarkRunThroughput
+                                      {
+                                          TtftMs = entity.TtftMs,
+                                          PromptTokens = entity.PromptTokens,
+                                          PromptMs = entity.PromptMs,
+                                          GenerationTokens = entity.GenerationTokens,
+                                          GenerationMs = entity.GenerationMs,
+                                          CachedPromptTokens = entity.CachedPromptTokens,
+                                          SegmentCount = entity.SegmentCount
+                                      },
+                                  RepeatGroupId = entity.RepeatGroupId,
+                                  RepeatIndex = entity.RepeatIndex,
+                                  IsWarmup = entity.IsWarmup,
                                   // Positional, including the generation timeout the listing used to leave defaulted:
                                   // an expression tree cannot take an out-of-position named argument.
-                                  entity.InvocationTimeoutSeconds,
-                                  entity.RepeatMode,
-                                  entity.SamplingSeed,
-                                  entity.SamplingTemperature,
-                                  null,
-                                  entity.TaskItemId,
-                                  entity.TaskItemIndex,
-                                  entity.CellKey,
-                                  entity.TaskInputHash,
-                                  entity.TaskItemSetHash))
+                                  InvocationTimeoutSeconds = entity.InvocationTimeoutSeconds,
+                                  RepeatMode = entity.RepeatMode,
+                                  SamplingSeed = entity.SamplingSeed,
+                                  SamplingTemperature = entity.SamplingTemperature,
+                                  Fidelity = null,
+                                  TaskItemId = entity.TaskItemId,
+                                  TaskItemIndex = entity.TaskItemIndex,
+                                  CellKey = entity.CellKey,
+                                  TaskInputHash = entity.TaskInputHash,
+                                  TaskItemSetHash = entity.TaskItemSetHash
+                              })
                               .ToArrayAsync(cancellationToken);
 
         // One extra query for the page rather than a join inside the no-payload projection: the judge view is derived
         // from three more tables, and folding it in would make that projection unreadable.
-        return new BenchmarkRunPage([.. items.Select(item => WithRanking(item, ranking))], totalCount, ranking.Cohort);
+        return new BenchmarkRunPage { Items = [.. items.Select(item => WithRanking(item, ranking))], TotalCount = totalCount, RankCohort = ranking.Cohort };
     }
 }

@@ -48,7 +48,7 @@ public sealed class NodeSqliteOptions
     public NodeSqlitePragmaSettings ToSettings()
     {
         var busyTimeout = Math.Clamp(BusyTimeoutMilliseconds, min: 0, MaxBusyTimeoutMilliseconds);
-        return new NodeSqlitePragmaSettings(EnableWriteAheadLog, busyTimeout, Synchronous);
+        return new NodeSqlitePragmaSettings { EnableWriteAheadLog = EnableWriteAheadLog, BusyTimeoutMilliseconds = busyTimeout, Synchronous = Synchronous };
     }
 }
 
@@ -69,8 +69,14 @@ public enum NodeSqliteSynchronousMode
 ///     Immutable, effective pragma settings the applier executes. A reference type so a single instance can be swapped
 ///     atomically into the process-wide default used by the static raw-open helpers.
 /// </summary>
-public sealed record NodeSqlitePragmaSettings(bool EnableWriteAheadLog, int BusyTimeoutMilliseconds, NodeSqliteSynchronousMode Synchronous)
+public sealed class NodeSqlitePragmaSettings
 {
+    public required bool EnableWriteAheadLog { get; init; }
+
+    public required int BusyTimeoutMilliseconds { get; init; }
+
+    public required NodeSqliteSynchronousMode Synchronous { get; init; }
+
     /// <summary>The built-in defaults, used until the composition root supplies configured values.</summary>
-    public static NodeSqlitePragmaSettings Default { get; } = new(EnableWriteAheadLog: true, BusyTimeoutMilliseconds: 5000, NodeSqliteSynchronousMode.Normal);
+    public static NodeSqlitePragmaSettings Default { get; } = new() { EnableWriteAheadLog = true, BusyTimeoutMilliseconds = 5000, Synchronous = NodeSqliteSynchronousMode.Normal };
 }

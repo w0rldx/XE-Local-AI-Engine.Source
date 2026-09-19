@@ -689,18 +689,21 @@ public sealed class DevWorkflowRunServiceTests
 
         var store = Substitute.For<IDevWorkflowStore>();
         _ = store.GetWorkItemAsync(workItemId, Arg.Any<CancellationToken>())
-                 .Returns(new DevWorkflowWorkItemSnapshot(workItemId,
-                     "Ship the thing",
-                     "Please ship it",
-                     DevWorkflowWorkItemStatus.Completed,
-                     DevelopmentProjectId: null,
-                     LatestRunId: null,
-                     LatestRunStatus: null,
-                     LatestRunDefinitionName: null,
-                     DevWorkflowNodeCounters.Empty,
-                     CreatedAtUtc: 1,
-                     UpdatedAtUtc: 2,
-                     Version: 1));
+                 .Returns(new DevWorkflowWorkItemSnapshot
+                 {
+                     Id = workItemId,
+                     Title = "Ship the thing",
+                     Request = "Please ship it",
+                     Status = DevWorkflowWorkItemStatus.Completed,
+                     DevelopmentProjectId = null,
+                     LatestRunId = null,
+                     LatestRunStatus = null,
+                     LatestRunDefinitionName = null,
+                     LatestRunNodes = DevWorkflowNodeCounters.Empty,
+                     CreatedAtUtc = 1,
+                     UpdatedAtUtc = 2,
+                     Version = 1
+                 });
 
         // The caller walks away in the one instant the finding is about: the rows are committed and nothing external
         // has been released yet.
@@ -708,7 +711,7 @@ public sealed class DevWorkflowRunServiceTests
                  .Returns(_ =>
                  {
                      request.Cancel();
-                     return new DevWorkflowWorkItemDeletion(RemovedRows: 6, runIds, sessionIds);
+                     return new DevWorkflowWorkItemDeletion { RemovedRows = 6, RunIds = runIds, WorkSessionIds = sessionIds };
                  });
 
         // The middle session is refused as well, because one item's failure must cost only itself.
@@ -840,52 +843,58 @@ public sealed class DevWorkflowRunServiceTests
 
     /// <summary>A run the substituted store answers with, carrying only what <c>DecideAsync</c> reads off it.</summary>
     private static DevWorkflowRunSnapshot RunAt(Guid runId) =>
-        new(runId,
-            WorkItemId: Guid.NewGuid(),
-            DefinitionId: Guid.NewGuid(),
-            DefinitionVersion: 1,
-            DefinitionGraphHash: "hash",
-            GateOnly,
-            GraphRevision: 0,
-            DevWorkflowRunStatus.Running,
-            LastSequence: 3,
-            FailureClass: null,
-            TerminalReason: null,
-            StartedAtUtc: 1,
-            EndedAtUtc: null,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Version: 2);
+        new()
+        {
+            Id = runId,
+            WorkItemId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionGraphHash = "hash",
+            GraphJson = GateOnly,
+            GraphRevision = 0,
+            Status = DevWorkflowRunStatus.Running,
+            LastSequence = 3,
+            FailureClass = null,
+            TerminalReason = null,
+            StartedAtUtc = 1,
+            EndedAtUtc = null,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 2
+        };
 
     /// <summary>A node run standing where an operator Retry is legal: blocked, on an attempt that has been spent.</summary>
     private static DevWorkflowNodeRunSnapshot BlockedNodeRun(Guid runId, Guid nodeRunId) =>
-        new(nodeRunId,
-            runId,
-            "implement",
-            DevWorkflowNodeType.DevTask,
-            Attempt: 3,
-            MaxAttempts: 3,
-            SessionResumes: 0,
-            DevWorkflowNodeRunStatus.Blocked,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 2,
-            WorkSessionId: null,
-            WorkSessionAvailable: false,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: 1,
-            EndedAtUtc: null,
-            CreatedAtUtc: 1);
+        new()
+        {
+            Id = nodeRunId,
+            RunId = runId,
+            NodeKey = "implement",
+            NodeType = DevWorkflowNodeType.DevTask,
+            Attempt = 3,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = DevWorkflowNodeRunStatus.Blocked,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 2,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = 1,
+            EndedAtUtc = null,
+            CreatedAtUtc = 1
+        };
 
     private sealed class NoOpDispatcherSignal : IDevWorkflowDispatcherSignal
     {

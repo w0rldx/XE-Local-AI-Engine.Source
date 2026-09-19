@@ -567,30 +567,33 @@ public sealed class InferenceProfileServiceTests
 
     private static InferenceProfileRecord ExploredRecord()
     {
-        return new InferenceProfileRecord(Id: Guid.NewGuid(),
-            MachineKey: MachineKey,
-            ModelName: Model,
-            Role: (int)ModelRole.Chat,
-            Backend: "cuda",
-            LlamacppBuild: Build,
-            Quant: "Q4_K_M",
-            CtxSize: 8192,
-            NGpuLayers: 33,
-            TensorSplit: null,
-            OverrideTensor: null,
-            KvTypeK: null,
-            KvTypeV: null,
-            FlashAttn: false,
-            NParams: 7_000_000_000,
-            IsMoe: false,
-            ExpertCount: null,
-            GlobalFreeVramAtFreezeBytes: null,
-            Status: InferenceProfileStatus.Explored,
-            BenchmarkSnapshotId: null,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            LaunchPolicyFingerprintVersion: LaunchPolicyFingerprintProvider.CurrentVersion,
-            LaunchPolicyFingerprint: "fingerprint");
+        return new InferenceProfileRecord
+        {
+            Id = Guid.NewGuid(),
+            MachineKey = MachineKey,
+            ModelName = Model,
+            Role = (int)ModelRole.Chat,
+            Backend = "cuda",
+            LlamacppBuild = Build,
+            Quant = "Q4_K_M",
+            CtxSize = 8192,
+            NGpuLayers = 33,
+            TensorSplit = null,
+            OverrideTensor = null,
+            KvTypeK = null,
+            KvTypeV = null,
+            FlashAttn = false,
+            NParams = 7_000_000_000,
+            IsMoe = false,
+            ExpertCount = null,
+            GlobalFreeVramAtFreezeBytes = null,
+            Status = InferenceProfileStatus.Explored,
+            BenchmarkSnapshotId = null,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            LaunchPolicyFingerprintVersion = LaunchPolicyFingerprintProvider.CurrentVersion,
+            LaunchPolicyFingerprint = "fingerprint"
+        };
     }
 
     private static InferenceBenchmarkMetrics SuccessMetrics()
@@ -630,30 +633,33 @@ public sealed class InferenceProfileServiceTests
     // profile-scoped store read returns for a benchmark that justifies a freeze.
     private static ModelFitBenchmarkRecord BenchmarkRowFor(InferenceProfileRecord profile, Guid snapshotId)
     {
-        return new ModelFitBenchmarkRecord(Id: Guid.NewGuid(),
-            SnapshotId: snapshotId,
-            ModelName: profile.ModelName,
-            ProviderName: "llamacpp",
-            TokensPerSecond: 42d,
-            TtftMs: 50d,
-            TotalLatencyMs: 500d,
-            Runs: 1,
-            RawJson: null,
-            DiagnosticsJson: null,
-            LlamacppBuild: profile.LlamacppBuild,
-            Quant: profile.Quant,
-            CtxSize: profile.CtxSize,
-            KvType: profile.KvTypeK,
-            Backend: profile.Backend,
-            MachineKey: profile.MachineKey,
-            NGpuLayers: profile.NGpuLayers,
-            TensorSplit: profile.TensorSplit,
-            OverrideTensor: profile.OverrideTensor,
-            KvTypeV: profile.KvTypeV,
-            FlashAttn: profile.FlashAttn,
-            ProfileId: profile.Id,
-            LaunchPolicyFingerprintVersion: profile.LaunchPolicyFingerprintVersion,
-            LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
+        return new ModelFitBenchmarkRecord
+        {
+            Id = Guid.NewGuid(),
+            SnapshotId = snapshotId,
+            ModelName = profile.ModelName,
+            ProviderName = "llamacpp",
+            TokensPerSecond = 42d,
+            TtftMs = 50d,
+            TotalLatencyMs = 500d,
+            Runs = 1,
+            RawJson = null,
+            DiagnosticsJson = null,
+            LlamacppBuild = profile.LlamacppBuild,
+            Quant = profile.Quant,
+            CtxSize = profile.CtxSize,
+            KvType = profile.KvTypeK,
+            Backend = profile.Backend,
+            MachineKey = profile.MachineKey,
+            NGpuLayers = profile.NGpuLayers,
+            TensorSplit = profile.TensorSplit,
+            OverrideTensor = profile.OverrideTensor,
+            KvTypeV = profile.KvTypeV,
+            FlashAttn = profile.FlashAttn,
+            ProfileId = profile.Id,
+            LaunchPolicyFingerprintVersion = profile.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint = profile.LaunchPolicyFingerprint
+        };
     }
 
     [Test]
@@ -801,20 +807,23 @@ public sealed class InferenceProfileServiceTests
     {
         private static ModelFitSnapshotSummaryRecord Summary(Guid id, ModelFitRunStatus status)
         {
-            return new ModelFitSnapshotSummaryRecord(Id: id,
-                ApprovedImageId: Model,
-                Operation: ModelFitOperation.Benchmark,
-                UseCase: null,
-                ProviderName: "llamacpp",
-                ModelName: Model,
-                Status: status,
-                StartedAtUtc: 0,
-                CompletedAtUtc: 1,
-                DurationMs: 1,
-                ExitCode: 0,
-                IsLatestSuccessful: status == ModelFitRunStatus.Succeeded,
-                CreatedByRunId: null,
-                CreatedAtUtc: 0);
+            return new ModelFitSnapshotSummaryRecord
+            {
+                Id = id,
+                ApprovedImageId = Model,
+                Operation = ModelFitOperation.Benchmark,
+                UseCase = null,
+                ProviderName = "llamacpp",
+                ModelName = Model,
+                Status = status,
+                StartedAtUtc = 0,
+                CompletedAtUtc = 1,
+                DurationMs = 1,
+                ExitCode = 0,
+                IsLatestSuccessful = status == ModelFitRunStatus.Succeeded,
+                CreatedByRunId = null,
+                CreatedAtUtc = 0
+            };
         }
 
         public ILlamaServerProcessSupervisor Supervisor { get; } = Substitute.For<ILlamaServerProcessSupervisor>();
@@ -1023,30 +1032,33 @@ public sealed class InferenceProfileServiceTests
 
         private static InferenceProfileRecord RecordFromInput(InferenceProfileInput input)
         {
-            return new InferenceProfileRecord(Id: Guid.NewGuid(),
-                input.MachineKey,
-                input.ModelName,
-                input.Role,
-                input.Backend,
-                input.LlamacppBuild,
-                input.Quant,
-                input.CtxSize,
-                input.NGpuLayers,
-                input.TensorSplit,
-                input.OverrideTensor,
-                input.KvTypeK,
-                input.KvTypeV,
-                input.FlashAttn,
-                input.NParams,
-                input.IsMoe,
-                input.ExpertCount,
-                Status: InferenceProfileStatus.Explored,
-                BenchmarkSnapshotId: null,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                input.LaunchPolicyFingerprintVersion,
-                input.LaunchPolicyFingerprint,
-                GlobalFreeVramAtFreezeBytes: null);
+            return new InferenceProfileRecord
+            {
+                Id = Guid.NewGuid(),
+                MachineKey = input.MachineKey,
+                ModelName = input.ModelName,
+                Role = input.Role,
+                Backend = input.Backend,
+                LlamacppBuild = input.LlamacppBuild,
+                Quant = input.Quant,
+                CtxSize = input.CtxSize,
+                NGpuLayers = input.NGpuLayers,
+                TensorSplit = input.TensorSplit,
+                OverrideTensor = input.OverrideTensor,
+                KvTypeK = input.KvTypeK,
+                KvTypeV = input.KvTypeV,
+                FlashAttn = input.FlashAttn,
+                NParams = input.NParams,
+                IsMoe = input.IsMoe,
+                ExpertCount = input.ExpertCount,
+                Status = InferenceProfileStatus.Explored,
+                BenchmarkSnapshotId = null,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                LaunchPolicyFingerprintVersion = input.LaunchPolicyFingerprintVersion,
+                LaunchPolicyFingerprint = input.LaunchPolicyFingerprint,
+                GlobalFreeVramAtFreezeBytes = null
+            };
         }
     }
 }

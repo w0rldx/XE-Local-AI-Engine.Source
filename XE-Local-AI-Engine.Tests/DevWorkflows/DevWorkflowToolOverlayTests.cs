@@ -484,57 +484,66 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     }
 
     private static DevelopmentTaskSnapshot DevTask(DevelopmentTaskStatus status, string? approvedSubjectHash = ApprovedSubject) =>
-        new(TaskId,
-            ProjectId,
-            "Add Subtract",
-            "Add the missing operation.",
-            "[]",
-            status,
-            CurrentReviewRound: 1,
-            MaxReviewRounds: 2,
-            BlockedReason: null,
-            BlockedAtUtc: null,
-            status == DevelopmentTaskStatus.InProgress ? null : approvedSubjectHash,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2,
-            Version: 3);
+        new()
+        {
+            Id = TaskId,
+            ProjectId = ProjectId,
+            Title = "Add Subtract",
+            Requirements = "Add the missing operation.",
+            AcceptanceCriteriaJson = "[]",
+            Status = status,
+            CurrentReviewRound = 1,
+            MaxReviewRounds = 2,
+            BlockedReason = null,
+            BlockedAtUtc = null,
+            ApprovedSubjectHash = status == DevelopmentTaskStatus.InProgress ? null : approvedSubjectHash,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2,
+            Version = 3
+        };
 
     private static DevelopmentArtifactSnapshot Artifact(string subjectHash) =>
-        new(Guid.Parse("55555555-5555-5555-5555-555555555555"),
-            ProjectId,
-            TaskId,
-            AttemptId: Guid.NewGuid(),
-            DevelopmentArtifactKind.Patch,
-            SchemaVersion: 1,
-            $"{ProjectId:N}/55555555555555555555555555555555",
-            PatchHash,
-            Encoding.UTF8.GetByteCount(Patch),
-            CreatedAtUtc: 4,
-            "BASECOMMIT",
-            subjectHash,
-            "MANIFEST-HASH",
-            InputArtifactIdsJson: null,
-            "development-workspace-v1",
-            IsValid: true,
-            "PROFILE-DIGEST");
+        new()
+        {
+            Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+            ProjectId = ProjectId,
+            TaskId = TaskId,
+            AttemptId = Guid.NewGuid(),
+            Kind = DevelopmentArtifactKind.Patch,
+            SchemaVersion = 1,
+            ManagedReference = $"{ProjectId:N}/55555555555555555555555555555555",
+            ContentHash = PatchHash,
+            ByteCount = Encoding.UTF8.GetByteCount(Patch),
+            CreatedAtUtc = 4,
+            BaseCommit = "BASECOMMIT",
+            SubjectHash = subjectHash,
+            ChangedFilesManifestHash = "MANIFEST-HASH",
+            InputArtifactIdsJson = null,
+            CommandProfileVersion = "development-workspace-v1",
+            IsValid = true,
+            CommandProfileDigest = "PROFILE-DIGEST"
+        };
 
     private static DevWorkflowRunSnapshot Run(string graphJson = CloneGraph) =>
-        new(RunId,
-            WorkItemId: Guid.NewGuid(),
-            DefinitionId: Guid.NewGuid(),
-            DefinitionVersion: 1,
-            "graph-hash",
-            graphJson,
-            GraphRevision: 2,
-            DevWorkflowRunStatus.Running,
-            LastSequence: 9,
-            FailureClass: null,
-            TerminalReason: null,
-            StartedAtUtc: 1,
-            EndedAtUtc: null,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2,
-            Version: 3);
+        new()
+        {
+            Id = RunId,
+            WorkItemId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionGraphHash = "graph-hash",
+            GraphJson = graphJson,
+            GraphRevision = 2,
+            Status = DevWorkflowRunStatus.Running,
+            LastSequence = 9,
+            FailureClass = null,
+            TerminalReason = null,
+            StartedAtUtc = 1,
+            EndedAtUtc = null,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2,
+            Version = 3
+        };
 
     private static DevWorkflowNodeRunSnapshot ImplementRow() =>
         Row("implement#alpha", DevWorkflowNodeType.DevTask, TaskId);
@@ -551,33 +560,36 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         };
 
     private static DevWorkflowNodeRunSnapshot Row(string nodeKey, DevWorkflowNodeType nodeType, Guid? developmentTaskId) =>
-        new(Guid.NewGuid(),
-            RunId,
-            nodeKey,
-            nodeType,
-            Attempt: 1,
-            MaxAttempts: 3,
-            SessionResumes: 0,
-            DevWorkflowNodeRunStatus.Running,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 5,
-            WorkSessionId: null,
-            WorkSessionAvailable: false,
-            AgentDefinitionId: null,
-            ProjectId,
-            developmentTaskId,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            OriginNodeRunId,
-            MaterializationIndex: 1,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: 6,
-            EndedAtUtc: null,
-            CreatedAtUtc: 5);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            NodeKey = nodeKey,
+            NodeType = nodeType,
+            Attempt = 1,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = DevWorkflowNodeRunStatus.Running,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 5,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = ProjectId,
+            DevelopmentTaskId = developmentTaskId,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = OriginNodeRunId,
+            MaterializationIndex = 1,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = 6,
+            EndedAtUtc = null,
+            CreatedAtUtc = 5
+        };
 
     /// <summary>
     ///     The evidence service is internal, so it is stubbed by hand rather than proxied. Only the one method this

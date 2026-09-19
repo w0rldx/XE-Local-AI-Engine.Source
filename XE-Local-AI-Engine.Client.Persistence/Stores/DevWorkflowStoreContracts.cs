@@ -16,170 +16,304 @@ public static class DevWorkflowVersions
 ///     The node-status tallies a work-item or run summary carries, so a list page can draw progress without a per-row
 ///     query. <see cref="BlockingGateNodeRunId" /> is the first node-run waiting on a human, in sequence order.
 /// </summary>
-public sealed record DevWorkflowNodeCounters(
-    int Queued,
-    int Running,
-    int Completed,
-    int Total,
-    int PendingDecisionCount,
-    Guid? BlockingGateNodeRunId)
+public sealed class DevWorkflowNodeCounters
 {
-    public static DevWorkflowNodeCounters Empty { get; } = new(0, 0, 0, 0, 0, null);
+    public required int Queued { get; init; }
+
+    public required int Running { get; init; }
+
+    public required int Completed { get; init; }
+
+    public required int Total { get; init; }
+
+    public required int PendingDecisionCount { get; init; }
+
+    public required Guid? BlockingGateNodeRunId { get; init; }
+
+    public static DevWorkflowNodeCounters Empty { get; } = new() { Queued = 0, Running = 0, Completed = 0, Total = 0, PendingDecisionCount = 0, BlockingGateNodeRunId = null };
 }
 
-public sealed record DevWorkflowWorkItemSnapshot(
-    Guid Id,
-    string Title,
-    string Request,
-    DevWorkflowWorkItemStatus Status,
-    Guid? DevelopmentProjectId,
-    Guid? LatestRunId,
-    DevWorkflowRunStatus? LatestRunStatus,
-    string? LatestRunDefinitionName,
-    DevWorkflowNodeCounters LatestRunNodes,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version);
+public sealed class DevWorkflowWorkItemSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Request { get; init; }
+
+    public required DevWorkflowWorkItemStatus Status { get; init; }
+
+    public required Guid? DevelopmentProjectId { get; init; }
+
+    public required Guid? LatestRunId { get; init; }
+
+    public required DevWorkflowRunStatus? LatestRunStatus { get; init; }
+
+    public required string? LatestRunDefinitionName { get; init; }
+
+    public required DevWorkflowNodeCounters LatestRunNodes { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>What work-item detail embeds as its run list: a run without the graph blob, plus its node counters.</summary>
-public sealed record DevWorkflowRunSummary(
-    Guid Id,
-    Guid WorkItemId,
-    Guid DefinitionId,
-    string? DefinitionName,
-    DevWorkflowRunStatus Status,
-    DevWorkflowNodeCounters Nodes,
-    string? FailureClass,
-    long? StartedAtUtc,
-    long? EndedAtUtc,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class DevWorkflowRunSummary
+{
+    public required Guid Id { get; init; }
 
-public sealed record DevWorkflowRunSnapshot(
-    Guid Id,
-    Guid WorkItemId,
-    Guid DefinitionId,
-    int DefinitionVersion,
-    string DefinitionGraphHash,
-    string GraphJson,
-    int GraphRevision,
-    DevWorkflowRunStatus Status,
-    long LastSequence,
-    string? FailureClass,
-    string? TerminalReason,
-    long? StartedAtUtc,
-    long? EndedAtUtc,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version);
+    public required Guid WorkItemId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required string? DefinitionName { get; init; }
+
+    public required DevWorkflowRunStatus Status { get; init; }
+
+    public required DevWorkflowNodeCounters Nodes { get; init; }
+
+    public required string? FailureClass { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? EndedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed record DevWorkflowRunSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid WorkItemId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required int DefinitionVersion { get; init; }
+
+    public required string DefinitionGraphHash { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required int GraphRevision { get; init; }
+
+    public required DevWorkflowRunStatus Status { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required string? FailureClass { get; init; }
+
+    public required string? TerminalReason { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? EndedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>What the definition list returns: no graph blob, so listing never decrypts one.</summary>
-public sealed record DevWorkflowDefinitionSummary(
-    Guid Id,
-    string Name,
-    string GraphHash,
-    int NodeCount,
-    DevWorkflowDefinitionSource Source,
-    string? SeedSlug,
-    bool Archived,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class DevWorkflowDefinitionSummary
+{
+    public required Guid Id { get; init; }
 
-public sealed record DevWorkflowDefinitionSnapshot(
-    Guid Id,
-    string Name,
-    string GraphJson,
-    string GraphHash,
-    int NodeCount,
-    DevWorkflowDefinitionSource Source,
-    string? SeedSlug,
-    bool Archived,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+    public required string Name { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required DevWorkflowDefinitionSource Source { get; init; }
+
+    public required string? SeedSlug { get; init; }
+
+    public required bool Archived { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class DevWorkflowDefinitionSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required DevWorkflowDefinitionSource Source { get; init; }
+
+    public required string? SeedSlug { get; init; }
+
+    public required bool Archived { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One rule set in full, body included. <see cref="ContentSha256" /> is computed store-side alongside the body, so
 ///     the hash and the text can never describe different documents.
 /// </summary>
-public sealed record DevWorkflowRuleSetSnapshot(
-    Guid Id,
-    string Name,
-    string? Description,
-    string ScopeJson,
-    bool Enabled,
-    string Body,
-    string ContentSha256,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed record DevWorkflowRuleSetSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string ScopeJson { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required string Body { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     A rule set WITHOUT its body — everything the list page draws and everything the resolver matches on. The body is
 ///     the one encrypted column here, so a feed that never asks for it never decrypts one.
 /// </summary>
-public sealed record DevWorkflowRuleSetSummary(
-    Guid Id,
-    string Name,
-    string? Description,
-    string ScopeJson,
-    bool Enabled,
-    string ContentSha256,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class DevWorkflowRuleSetSummary
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string ScopeJson { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>The canonical node-run field set. <see cref="WorkSessionAvailable" /> is read from the other family, never stored.</summary>
-public sealed record DevWorkflowNodeRunSnapshot(
-    Guid Id,
-    Guid RunId,
-    string NodeKey,
-    DevWorkflowNodeType NodeType,
-    int Attempt,
-    int MaxAttempts,
-    int SessionResumes,
-    DevWorkflowNodeRunStatus Status,
-    string? QueueReason,
-    DevWorkflowDecisionKind? PendingDecisionKind,
-    long Sequence,
-    Guid? WorkSessionId,
-    bool WorkSessionAvailable,
-    Guid? AgentDefinitionId,
-    Guid? DevelopmentProjectId,
-    Guid? DevelopmentTaskId,
-    string? InputJson,
-    string? OutputJson,
-    string? PolicyResolutionJson,
-    Guid? MaterializedFromNodeRunId,
-    int? MaterializationIndex,
-    string? FailureClass,
-    string? TerminalReason,
-    long? QueuedAtUtc,
-    long? StartedAtUtc,
-    long? EndedAtUtc,
-    long CreatedAtUtc,
+public sealed record DevWorkflowNodeRunSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required DevWorkflowNodeType NodeType { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required int MaxAttempts { get; init; }
+
+    public required int SessionResumes { get; init; }
+
+    public required DevWorkflowNodeRunStatus Status { get; init; }
+
+    public required string? QueueReason { get; init; }
+
+    public required DevWorkflowDecisionKind? PendingDecisionKind { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required Guid? WorkSessionId { get; init; }
+
+    public required bool WorkSessionAvailable { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required Guid? DevelopmentProjectId { get; init; }
+
+    public required Guid? DevelopmentTaskId { get; init; }
+
+    public required string? InputJson { get; init; }
+
+    public required string? OutputJson { get; init; }
+
+    public required string? PolicyResolutionJson { get; init; }
+
+    public required Guid? MaterializedFromNodeRunId { get; init; }
+
+    public required int? MaterializationIndex { get; init; }
+
+    public required string? FailureClass { get; init; }
+
+    public required string? TerminalReason { get; init; }
+
+    public required long? QueuedAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? EndedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
 
     // The cost-telemetry columns, trailing and optional so a caller composing a node run by hand — a test, a fake
     // store — keeps compiling and reads back exactly what a row written before this slice reads back: nulls.
-    long? InputTokens = null,
-    long? OutputTokens = null,
-    long? ReasoningTokens = null,
-    long? EstimatedInputTokens = null,
-    int? ProviderCalls = null,
-    int? ToolCalls = null,
-    long? ToolSchemaTokens = null,
-    string? ToolNamesJson = null,
-    long? AgentTurnMs = null,
-    string? ServedModelName = null,
-    string? RouteJson = null,
-    int? WorkSessionSteps = null,
+    public long? InputTokens { get; init; }
+
+    public long? OutputTokens { get; init; }
+
+    public long? ReasoningTokens { get; init; }
+
+    public long? EstimatedInputTokens { get; init; }
+
+    public int? ProviderCalls { get; init; }
+
+    public int? ToolCalls { get; init; }
+
+    public long? ToolSchemaTokens { get; init; }
+
+    public string? ToolNamesJson { get; init; }
+
+    public long? AgentTurnMs { get; init; }
+
+    public string? ServedModelName { get; init; }
+
+    public string? RouteJson { get; init; }
+
+    public int? WorkSessionSteps { get; init; }
+
     // Trailing: the thirteenth cost column, how much of AgentTurnMs was a local runtime warming (see the entity).
-    long? ModelReadinessMs = null,
+    public long? ModelReadinessMs { get; init; }
+
     // Trailing: the fourteenth and fifteenth, what the box looked like when the serving model was last loaded. A warm
     // run reports the EARLIER load's figures; ModelReadinessMs tells the reader which it is (see the entity).
-    long? VramFreeAtLoadBytes = null,
-    long? VramAdmittedBytes = null);
+    public long? VramFreeAtLoadBytes { get; init; }
+
+    public long? VramAdmittedBytes { get; init; }
+}
 
 /// <summary>
 ///     What one node-run attempt spent and where it routed, collected at the terminal-or-blocked transition and applied
@@ -193,73 +327,132 @@ public sealed record DevWorkflowNodeRunSnapshot(
 ///         crosses into persistence, where neither the graph projection nor the collector's name set is visible.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowNodeTelemetry(
-    long? InputTokens = null,
-    long? OutputTokens = null,
-    long? ReasoningTokens = null,
-    long? EstimatedInputTokens = null,
-    int? ProviderCalls = null,
-    int? ToolCalls = null,
-    long? ToolSchemaTokens = null,
-    string? ToolNamesJson = null,
-    long? AgentTurnMs = null,
-    string? ServedModelName = null,
-    string? RouteJson = null,
-    int? WorkSessionSteps = null,
+public sealed record DevWorkflowNodeTelemetry
+{
+    public long? InputTokens { get; init; }
+
+    public long? OutputTokens { get; init; }
+
+    public long? ReasoningTokens { get; init; }
+
+    public long? EstimatedInputTokens { get; init; }
+
+    public int? ProviderCalls { get; init; }
+
+    public int? ToolCalls { get; init; }
+
+    public long? ToolSchemaTokens { get; init; }
+
+    public string? ToolNamesJson { get; init; }
+
+    public long? AgentTurnMs { get; init; }
+
+    public string? ServedModelName { get; init; }
+
+    public string? RouteJson { get; init; }
+
+    public int? WorkSessionSteps { get; init; }
+
     // How much of AgentTurnMs was a local runtime warming rather than generating; null when none of the attempt's
     // turns warmed one. Trailing for the same positional-record reason as the twelve above it.
-    long? ModelReadinessMs = null,
+    public long? ModelReadinessMs { get; init; }
+
     // The VRAM the box had free, and the VRAM admission reserved, at the most recent successful load of the model that
     // served this run. Observational only, and possibly an EARLIER load than this run (see the entity).
-    long? VramFreeAtLoadBytes = null,
-    long? VramAdmittedBytes = null);
+    public long? VramFreeAtLoadBytes { get; init; }
 
-public sealed record DevWorkflowRunEventSnapshot(
-    Guid Id,
-    Guid RunId,
-    Guid? NodeRunId,
-    long Sequence,
-    string EventType,
-    string? DetailJson,
-    Guid? OperationId,
-    string? Outcome,
-    long OccurredAtUtc);
+    public long? VramAdmittedBytes { get; init; }
+}
+
+public sealed class DevWorkflowRunEventSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required Guid? NodeRunId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required Guid? OperationId { get; init; }
+
+    public required string? Outcome { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary><see cref="IsLatest" /> is computed (max version per lineage) and ships on the wire, so no client derives it.</summary>
-public sealed record DevWorkflowArtifactSnapshot(
-    Guid Id,
-    Guid RunId,
-    Guid LineageId,
-    string ProducingNodeKey,
-    Guid ProducedByNodeRunId,
-    string Name,
-    int Version,
-    bool IsLatest,
-    DevWorkflowArtifactKind Kind,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    bool IsValid,
-    bool IsStale,
-    long? StaleSinceSequence,
-    Guid? StaleBecauseArtifactId,
-    string? StaleReason,
-    string ManagedReference,
-    long Sequence,
-    long CreatedAtUtc);
+public sealed record DevWorkflowArtifactSnapshot
+{
+    public required Guid Id { get; init; }
 
-public sealed record DevWorkflowDecisionSnapshot(
-    Guid Id,
-    Guid RunId,
-    Guid NodeRunId,
-    int Attempt,
-    DevWorkflowDecisionKind Decision,
-    string? Comment,
-    string? PayloadJson,
-    string? DecidedBySubject,
-    Guid OperationId,
-    long Sequence,
-    long DecidedAtUtc);
+    public required Guid RunId { get; init; }
+
+    public required Guid LineageId { get; init; }
+
+    public required string ProducingNodeKey { get; init; }
+
+    public required Guid ProducedByNodeRunId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required int Version { get; init; }
+
+    public required bool IsLatest { get; init; }
+
+    public required DevWorkflowArtifactKind Kind { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required bool IsValid { get; init; }
+
+    public required bool IsStale { get; init; }
+
+    public required long? StaleSinceSequence { get; init; }
+
+    public required Guid? StaleBecauseArtifactId { get; init; }
+
+    public required string? StaleReason { get; init; }
+
+    public required string ManagedReference { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
+
+public sealed class DevWorkflowDecisionSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required DevWorkflowDecisionKind Decision { get; init; }
+
+    public required string? Comment { get; init; }
+
+    public required string? PayloadJson { get; init; }
+
+    public required string? DecidedBySubject { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required long DecidedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One row per node-run the host left mid-flight, carrying enough detail for the runtime to rebuild its dispatch
@@ -267,22 +460,31 @@ public sealed record DevWorkflowDecisionSnapshot(
 ///     collapse — what it was doing is the useful fact; where it landed is always <c>Pending</c>, unless a repair moved
 ///     it further.
 /// </summary>
-/// <param name="MaxAttempts">
-///     The row's OWN per-node cap, projected here so restart recovery can refuse to increment a row past it. The live
-///     path already checks it before every automatic re-attempt; recovery bypassed that check entirely and reset an
-///     interrupted row at its cap to <c>Pending</c> with one more attempt than it declares (FU3-4). Defaulted to
-///     <see cref="int.MaxValue" /> — "no cap" — so a projection that forgets it admits, which is what recovery did
-///     before, rather than blocking every row it sees.
-/// </param>
-public sealed record DevWorkflowReconciledNodeRun(
-    Guid NodeRunId,
-    Guid RunId,
-    string NodeKey,
-    DevWorkflowNodeType NodeType,
-    DevWorkflowNodeRunStatus Status,
-    int Attempt,
-    Guid? WorkSessionId,
-    int MaxAttempts = int.MaxValue);
+public sealed class DevWorkflowReconciledNodeRun
+{
+    public required Guid NodeRunId { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required DevWorkflowNodeType NodeType { get; init; }
+
+    public required DevWorkflowNodeRunStatus Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required Guid? WorkSessionId { get; init; }
+
+    /// <summary>
+    ///     The row's OWN per-node cap, projected here so restart recovery can refuse to increment a row past it. The live
+    ///     path already checks it before every automatic re-attempt; recovery bypassed that check entirely and reset an
+    ///     interrupted row at its cap to <c>Pending</c> with one more attempt than it declares (FU3-4). Defaulted to
+    ///     <see cref="int.MaxValue" /> — "no cap" — so a projection that forgets it admits, which is what recovery did
+    ///     before, rather than blocking every row it sees.
+    /// </summary>
+    public int MaxAttempts { get; init; } = int.MaxValue;
+}
 
 /// <summary>
 ///     One judged node-run: the row as the caller observed it, and what to do with it once the collapse has confirmed
@@ -295,25 +497,36 @@ public sealed record DevWorkflowReconciledNodeRun(
 ///         stale evidence would spend an attempt on a state it is no longer in.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowNodeRunVerdict(
-    Guid NodeRunId,
-    DevWorkflowNodeRunStatus ObservedStatus,
-    int ObservedAttempt,
-    Guid? ObservedWorkSessionId,
-    IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Repairs);
+public sealed class DevWorkflowNodeRunVerdict
+{
+    public required Guid NodeRunId { get; init; }
+
+    public required DevWorkflowNodeRunStatus ObservedStatus { get; init; }
+
+    public required int ObservedAttempt { get; init; }
+
+    public required Guid? ObservedWorkSessionId { get; init; }
+
+    public required IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Repairs { get; init; }
+}
 
 /// <summary>
 ///     Turns a reconciliation into a SETTLING pass: every stranded node-run no verdict matched is blocked for a human
 ///     instead of being left as it is.
 ///     <para>
-///         The blocked state is this record's business rather than the caller's, because it is what the pass promises:
+///         The blocked state is this command's business rather than the caller's, because it is what the pass promises:
 ///         a settling pass leaves no node-run stranded, and a row that is neither dispatchable nor waiting on a person
 ///         is one nothing will ever pick up. So the row lands <c>Blocked</c> with an <c>Abandon</c> decision pending
 ///         and its work item blocked with it — costing no attempt, which is the only honest price for a row nobody
 ///         could judge.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowUnjudgedNodeRunBlock(string FailureClass, string SanitizedReason);
+public sealed class DevWorkflowUnjudgedNodeRunBlock
+{
+    public required string FailureClass { get; init; }
+
+    public required string SanitizedReason { get; init; }
+}
 
 /// <summary>
 ///     What one mutation committed: the watermark it allocated for its event, and the run row's post-commit version,
@@ -324,13 +537,20 @@ public sealed record DevWorkflowUnjudgedNodeRunBlock(string FailureClass, string
 ///         blob store deletes them after the commit, because the schema project cannot reach the blob layer.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowMutationResult(
-    Guid RunId,
-    long Sequence,
-    long Version,
-    DevWorkflowRunStatus Status,
-    int GraphRevision,
-    Guid? SupersededArtifactId = null);
+public sealed class DevWorkflowMutationResult
+{
+    public required Guid RunId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required long Version { get; init; }
+
+    public required DevWorkflowRunStatus Status { get; init; }
+
+    public required int GraphRevision { get; init; }
+
+    public Guid? SupersededArtifactId { get; init; }
+}
 
 /// <summary>
 ///     What a work-item delete removed, and what it could not: the work sessions its agent node runs owned and the runs
@@ -342,56 +562,102 @@ public sealed record DevWorkflowMutationResult(
 ///         everything past the page.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowWorkItemDeletion(int RemovedRows, IReadOnlyList<Guid> RunIds, IReadOnlyList<Guid> WorkSessionIds);
+public sealed class DevWorkflowWorkItemDeletion
+{
+    public required int RemovedRows { get; init; }
 
-public sealed record CreateDevWorkflowWorkItemCommand(
-    Guid WorkItemId,
-    string Title,
-    string Request,
-    Guid? DevelopmentProjectId = null);
+    public required IReadOnlyList<Guid> RunIds { get; init; }
 
-public sealed record UpdateDevWorkflowWorkItemCommand(
-    Guid WorkItemId,
-    long ExpectedVersion,
-    string? Title = null,
-    string? Request = null,
-    Guid? DevelopmentProjectId = null);
+    public required IReadOnlyList<Guid> WorkSessionIds { get; init; }
+}
 
-public sealed record CreateDevWorkflowDefinitionCommand(
-    Guid DefinitionId,
-    string Name,
-    string GraphJson,
-    int NodeCount,
-    DevWorkflowDefinitionSource Source = DevWorkflowDefinitionSource.Manual,
-    string? SeedSlug = null);
+public sealed class CreateDevWorkflowWorkItemCommand
+{
+    public required Guid WorkItemId { get; init; }
 
-public sealed record UpdateDevWorkflowDefinitionCommand(
-    Guid DefinitionId,
-    int ExpectedVersion,
-    string? Name = null,
-    string? GraphJson = null,
-    int? NodeCount = null);
+    public required string Title { get; init; }
 
-public sealed record CreateDevWorkflowRuleSetCommand(
-    Guid RuleSetId,
-    string Name,
-    string Body,
-    string ScopeJson,
-    string? Description = null,
-    bool Enabled = true);
+    public required string Request { get; init; }
+
+    public Guid? DevelopmentProjectId { get; init; }
+}
+
+public sealed class UpdateDevWorkflowWorkItemCommand
+{
+    public required Guid WorkItemId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public string? Title { get; init; }
+
+    public string? Request { get; init; }
+
+    public Guid? DevelopmentProjectId { get; init; }
+}
+
+public sealed class CreateDevWorkflowDefinitionCommand
+{
+    public required Guid DefinitionId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public DevWorkflowDefinitionSource Source { get; init; }
+
+    public string? SeedSlug { get; init; }
+}
+
+public sealed class UpdateDevWorkflowDefinitionCommand
+{
+    public required Guid DefinitionId { get; init; }
+
+    public required int ExpectedVersion { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? GraphJson { get; init; }
+
+    public int? NodeCount { get; init; }
+}
+
+public sealed class CreateDevWorkflowRuleSetCommand
+{
+    public required Guid RuleSetId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Body { get; init; }
+
+    public required string ScopeJson { get; init; }
+
+    public string? Description { get; init; }
+
+    public bool Enabled { get; init; } = true;
+}
 
 /// <summary>
 ///     A whole replacement, not a patch: the rule set is a document an operator edits as one, and a partial update
 ///     would have to invent a spelling for "clear the description" that a PUT body already has.
 /// </summary>
-public sealed record UpdateDevWorkflowRuleSetCommand(
-    Guid RuleSetId,
-    int ExpectedVersion,
-    string Name,
-    string Body,
-    string ScopeJson,
-    string? Description = null,
-    bool Enabled = true);
+public sealed class UpdateDevWorkflowRuleSetCommand
+{
+    public required Guid RuleSetId { get; init; }
+
+    public required int ExpectedVersion { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Body { get; init; }
+
+    public required string ScopeJson { get; init; }
+
+    public string? Description { get; init; }
+
+    public bool Enabled { get; init; } = true;
+}
 
 /// <summary>
 ///     Starts a run. <see cref="NodeRuns" /> is the run's whole initial node set, created in the SAME transaction as the
@@ -402,27 +668,43 @@ public sealed record UpdateDevWorkflowRuleSetCommand(
 ///         run with no node runs is one nothing will ever advance.
 ///     </para>
 /// </summary>
-public sealed record StartDevWorkflowRunCommand(
-    Guid RunId,
-    Guid WorkItemId,
-    Guid DefinitionId,
-    int DefinitionVersion,
-    string DefinitionGraphHash,
-    string GraphJson,
-    IReadOnlyList<DevWorkflowNodeRunSeed>? NodeRuns = null);
+public sealed class StartDevWorkflowRunCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid WorkItemId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required int DefinitionVersion { get; init; }
+
+    public required string DefinitionGraphHash { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public IReadOnlyList<DevWorkflowNodeRunSeed>? NodeRuns { get; init; }
+}
 
 /// <summary>
 ///     A run status move. <see cref="WorkItemStatus" /> lets the runtime write the work item's status inside the same
 ///     transaction that transitions the run, which is the only way the two can never disagree.
 /// </summary>
-public sealed record TransitionDevWorkflowRunCommand(
-    Guid RunId,
-    long ExpectedVersion,
-    DevWorkflowRunStatus TargetStatus,
-    Guid? OperationId = null,
-    string? FailureClass = null,
-    string? SanitizedReason = null,
-    DevWorkflowWorkItemStatus? WorkItemStatus = null);
+public sealed class TransitionDevWorkflowRunCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required DevWorkflowRunStatus TargetStatus { get; init; }
+
+    public Guid? OperationId { get; init; }
+
+    public string? FailureClass { get; init; }
+
+    public string? SanitizedReason { get; init; }
+
+    public DevWorkflowWorkItemStatus? WorkItemStatus { get; init; }
+}
 
 /// <summary>
 ///     One node-run to create. <see cref="InputJson" /> on an entry node is what carries the operator's request to the
@@ -440,19 +722,32 @@ public sealed record TransitionDevWorkflowRunCommand(
 ///         output document, because that document says what the row PRODUCED.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowNodeRunSeed(
-    Guid NodeRunId,
-    string NodeKey,
-    DevWorkflowNodeType NodeType,
-    int MaxAttempts = 1,
-    Guid? AgentDefinitionId = null,
-    Guid? DevelopmentProjectId = null,
-    string? InputJson = null,
-    string? PolicyResolutionJson = null,
-    Guid? MaterializedFromNodeRunId = null,
-    int? MaterializationIndex = null,
-    DevWorkflowNodeRunStatus Status = DevWorkflowNodeRunStatus.Pending,
-    string? OutputJson = null);
+public sealed class DevWorkflowNodeRunSeed
+{
+    public required Guid NodeRunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required DevWorkflowNodeType NodeType { get; init; }
+
+    public int MaxAttempts { get; init; } = 1;
+
+    public Guid? AgentDefinitionId { get; init; }
+
+    public Guid? DevelopmentProjectId { get; init; }
+
+    public string? InputJson { get; init; }
+
+    public string? PolicyResolutionJson { get; init; }
+
+    public Guid? MaterializedFromNodeRunId { get; init; }
+
+    public int? MaterializationIndex { get; init; }
+
+    public DevWorkflowNodeRunStatus Status { get; init; }
+
+    public string? OutputJson { get; init; }
+}
 
 /// <summary>
 ///     Creates node-runs on a run. A non-null <see cref="GraphJson" /> also rewrites the run's pinned graph and bumps
@@ -465,14 +760,22 @@ public sealed record DevWorkflowNodeRunSeed(
 ///         next tick actually admits. Both members are set together or not at all; a route needs a row to land on.
 ///     </para>
 /// </summary>
-public sealed record MaterializeDevWorkflowNodesCommand(
-    Guid RunId,
-    long ExpectedVersion,
-    Guid OperationId,
-    IReadOnlyList<DevWorkflowNodeRunSeed> NodeRuns,
-    string? GraphJson = null,
-    Guid? RouteNodeRunId = null,
-    string? RouteJson = null);
+public sealed class MaterializeDevWorkflowNodesCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required IReadOnlyList<DevWorkflowNodeRunSeed> NodeRuns { get; init; }
+
+    public string? GraphJson { get; init; }
+
+    public Guid? RouteNodeRunId { get; init; }
+
+    public string? RouteJson { get; init; }
+}
 
 /// <summary>
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated.
@@ -494,35 +797,54 @@ public sealed record MaterializeDevWorkflowNodesCommand(
 ///         because of, so its <c>node.retry.scheduled</c> event is the only place that failure survives.
 ///     </para>
 /// </summary>
-public sealed record TransitionDevWorkflowNodeRunCommand(
-    Guid RunId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    DevWorkflowNodeRunStatus TargetStatus,
-    Guid? OperationId = null,
-    string? QueueReason = null,
-    DevWorkflowDecisionKind? PendingDecisionKind = null,
-    string? OutputJson = null,
-    string? InputJson = null,
-    string? FailureClass = null,
-    string? TerminalReason = null,
-    string? DetailJson = null,
-    Guid? DevelopmentTaskId = null,
-    bool IncrementAttempt = false,
-    bool ClearWorkSession = false,
-    string? Outcome = null,
-    DevWorkflowWorkItemStatus? WorkItemStatus = null,
+public sealed record TransitionDevWorkflowNodeRunCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required DevWorkflowNodeRunStatus TargetStatus { get; init; }
+
+    public Guid? OperationId { get; init; }
+
+    public string? QueueReason { get; init; }
+
+    public DevWorkflowDecisionKind? PendingDecisionKind { get; init; }
+
+    public string? OutputJson { get; init; }
+
+    public string? InputJson { get; init; }
+
+    public string? FailureClass { get; init; }
+
+    public string? TerminalReason { get; init; }
+
+    public string? DetailJson { get; init; }
+
+    public Guid? DevelopmentTaskId { get; init; }
+
+    public bool IncrementAttempt { get; init; }
+
+    public bool ClearWorkSession { get; init; }
+
+    public string? Outcome { get; init; }
+
+    public DevWorkflowWorkItemStatus? WorkItemStatus { get; init; }
 
     // What the attempt this move settles cost. Set by the publishing decorator on a terminal, Blocked or
     // WaitingForApproval move and by nothing else, so no call site has to remember it.
-    DevWorkflowNodeTelemetry? Telemetry = null,
+    public DevWorkflowNodeTelemetry? Telemetry { get; init; }
+
     /// <summary>
     ///     Buys the node run exactly one more attempt, by raising the cap its own row carries. Set only by an
     ///     operator's <c>Retry</c>, which is allowed AT the cap and widens it by one each time it is used — so
     ///     <c>Attempt</c> never exceeds the row's own <c>MaxAttempts</c>, and the retry policy's cap check goes on
     ///     meaning what it says instead of the run reporting that it broke its own budget.
     /// </summary>
-    bool WidenMaxAttempts = false,
+    public bool WidenMaxAttempts { get; init; }
+
     /// <summary>
     ///     The run-wide re-attempt budget this move has to fit inside, admitted INSIDE the mutation's own transaction —
     ///     the same field, and the same reason, as <see cref="RecordDevWorkflowDecisionCommand.MaxTotalAttempts" />.
@@ -535,62 +857,97 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     ///         refuses the second.
     ///     </para>
     /// </summary>
-    int? MaxTotalAttempts = null);
+    public int? MaxTotalAttempts { get; init; }
+}
 
 /// <summary>
 ///     One cross-node retry route, as the single decision it is: the <c>node.retry.routed</c> event that records it and
 ///     every node-run reset that decision implies.
 /// </summary>
-/// <param name="Route">The routing event. Its run, expected version and operation id govern the whole command.</param>
-/// <param name="Resets">
-///     The node-run moves the route implies, applied IN ORDER after the event. Each must name <c>Route.RunId</c>.
-/// </param>
-/// <param name="MaxTotalAttempts">
-///     The run-wide re-attempt budget the WHOLE cascade has to fit inside, admitted inside this command's transaction.
-///     Top-level rather than per reset because a route's cost is <paramref name="Resets" />.Count — admitting a fan-out one
-///     attempt at a time is how a run overspends its budget by the width of its graph. <see langword="null" /> means no
-///     budget applies.
-/// </param>
-public sealed record RouteDevWorkflowRetryCommand(
-    AppendDevWorkflowEventCommand Route,
-    IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Resets,
-    int? MaxTotalAttempts = null);
+public sealed record RouteDevWorkflowRetryCommand
+{
+    /// <summary>The routing event. Its run, expected version and operation id govern the whole command.</summary>
+    public required AppendDevWorkflowEventCommand Route { get; init; }
 
-public sealed record AttachDevWorkflowWorkSessionCommand(
-    Guid RunId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    Guid WorkSessionId,
-    Guid? OperationId = null,
-    bool CountsAsResume = false);
+    /// <summary>The node-run moves the route implies, applied IN ORDER after the event. Each must name <c>Route.RunId</c>.</summary>
+    public required IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Resets { get; init; }
 
-public sealed record AppendDevWorkflowArtifactCommand(
-    Guid RunId,
-    Guid ArtifactId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    Guid OperationId,
-    DevWorkflowArtifactKind Kind,
-    string Name,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    string ManagedReference);
+    /// <summary>
+    ///     The run-wide re-attempt budget the WHOLE cascade has to fit inside, admitted inside this command's transaction.
+    ///     Top-level rather than per reset because a route's cost is <see cref="Resets" />.Count — admitting a fan-out one
+    ///     attempt at a time is how a run overspends its budget by the width of its graph. <see langword="null" /> means no
+    ///     budget applies.
+    /// </summary>
+    public int? MaxTotalAttempts { get; init; }
+}
 
-public sealed record RecordDevWorkflowArtifactUsesCommand(
-    Guid RunId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    Guid OperationId,
-    IReadOnlyList<Guid> ArtifactIds);
+public sealed class AttachDevWorkflowWorkSessionCommand
+{
+    public required Guid RunId { get; init; }
 
-public sealed record MarkDevWorkflowStaleCommand(
-    Guid RunId,
-    Guid SupersededArtifactId,
-    Guid SupersedingArtifactId,
-    long ExpectedVersion,
-    Guid? OperationId = null,
-    string StaleReason = DevWorkflowStaleReasons.SupersededInput);
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid WorkSessionId { get; init; }
+
+    public Guid? OperationId { get; init; }
+
+    public bool CountsAsResume { get; init; }
+}
+
+public sealed class AppendDevWorkflowArtifactCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid ArtifactId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required DevWorkflowArtifactKind Kind { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string ManagedReference { get; init; }
+}
+
+public sealed class RecordDevWorkflowArtifactUsesCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required IReadOnlyList<Guid> ArtifactIds { get; init; }
+}
+
+public sealed class MarkDevWorkflowStaleCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid SupersededArtifactId { get; init; }
+
+    public required Guid SupersedingArtifactId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public Guid? OperationId { get; init; }
+
+    public string StaleReason { get; init; } = DevWorkflowStaleReasons.SupersededInput;
+}
 
 /// <summary>
 ///     One human decision on one node-run attempt.
@@ -605,17 +962,28 @@ public sealed record MarkDevWorkflowStaleCommand(
 ///         the same unspent budget and each pass, and the run would then spend more re-attempts than it allows.
 ///     </para>
 /// </summary>
-public sealed record RecordDevWorkflowDecisionCommand(
-    Guid RunId,
-    Guid DecisionId,
-    Guid NodeRunId,
-    long ExpectedVersion,
-    Guid OperationId,
-    DevWorkflowDecisionKind Decision,
-    string? Comment = null,
-    string? PayloadJson = null,
-    string? DecidedBySubject = null,
-    int? MaxTotalAttempts = null,
+public sealed class RecordDevWorkflowDecisionCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid DecisionId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required DevWorkflowDecisionKind Decision { get; init; }
+
+    public string? Comment { get; init; }
+
+    public string? PayloadJson { get; init; }
+
+    public string? DecidedBySubject { get; init; }
+
+    public int? MaxTotalAttempts { get; init; }
+
     /// <summary>
     ///     The attempt the caller VALIDATED this decision against, re-checked inside the recording transaction.
     ///     <c>ExpectedVersion</c> is <c>Any</c> here — an answer is about a node run rather than about the run's
@@ -625,18 +993,28 @@ public sealed record RecordDevWorkflowDecisionCommand(
     ///     later counted by the run composer's <c>operatorRetries</c> for a widening that never happened.
     ///     <c>null</c> skips the check, for a caller with nothing to compare.
     /// </summary>
-    int? ExpectedAttempt = null,
-    /// <summary>The status the caller validated against, checked with <see cref="ExpectedAttempt" />.</summary>
-    DevWorkflowNodeRunStatus? ExpectedStatus = null);
+    public int? ExpectedAttempt { get; init; }
 
-public sealed record AppendDevWorkflowEventCommand(
-    Guid RunId,
-    long ExpectedVersion,
-    string EventType,
-    Guid? NodeRunId = null,
-    Guid? OperationId = null,
-    string? Outcome = null,
-    string? DetailJson = null);
+    /// <summary>The status the caller validated against, checked with <see cref="ExpectedAttempt" />.</summary>
+    public DevWorkflowNodeRunStatus? ExpectedStatus { get; init; }
+}
+
+public sealed record AppendDevWorkflowEventCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required string EventType { get; init; }
+
+    public Guid? NodeRunId { get; init; }
+
+    public Guid? OperationId { get; init; }
+
+    public string? Outcome { get; init; }
+
+    public string? DetailJson { get; init; }
+}
 
 /// <summary>The closed <c>stale_reason</c> token set. The <em>which</em> is <c>StaleBecauseArtifactId</c>, not this.</summary>
 public static class DevWorkflowStaleReasons

@@ -627,20 +627,26 @@ public sealed class ConversationStepContextBoundTests
     {
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionTaskOrigin.Agent,
-                           [
-                               new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Read the runtime wiki", Status: AgentWorkSessionTaskStatus.Active),
-                               new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Still open after folding", Status: AgentWorkSessionTaskStatus.Planned)
-                           ]));
-        _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                           Guid.NewGuid(),
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionFindingKind.Finding,
-                           "llama.cpp is the default runtime"));
+        _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [
+                               new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, Title = "Read the runtime wiki", Status = AgentWorkSessionTaskStatus.Active },
+                               new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, Title = "Still open after folding", Status = AgentWorkSessionTaskStatus.Planned }
+                           ]
+        });
+        _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = "llama.cpp is the default runtime"
+        });
     }
 
     private static NodeChatConversationDto Conversation(IReadOnlyList<NodeChatPersistedMessageDto> messages, string? summary = null, int? coversToSequence = null) =>

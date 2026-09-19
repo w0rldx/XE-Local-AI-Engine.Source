@@ -61,23 +61,40 @@ public interface IPlaybookActionStore
 ///     <see cref="TriggerCondition" /> are returned in plaintext (decrypted on materialization); the store converts to
 ///     and from this shape at the boundary so callers never touch the encrypted byte columns.
 /// </summary>
-public sealed record PlaybookActionRecord(
-    Guid Id,
-    Guid AgentDefinitionId,
-    PlaybookActionState State,
-    PlaybookActionSource Source,
-    string? TriggerCondition,
-    string Behavior,
-    string? Scope,
-    int Priority,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    IReadOnlyList<Guid>? SourceFeedbackIds = null,
-    double? Confidence = null,
-    string? EvalResult = null,
-    long? EnabledAtUtc = null,
-    MemoryScope? MemoryScope = null);
+public sealed record PlaybookActionRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required PlaybookActionState State { get; init; }
+
+    public required PlaybookActionSource Source { get; init; }
+
+    public required string? TriggerCondition { get; init; }
+
+    public required string Behavior { get; init; }
+
+    public required string? Scope { get; init; }
+
+    public required int Priority { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public IReadOnlyList<Guid>? SourceFeedbackIds { get; init; }
+
+    public double? Confidence { get; init; }
+
+    public string? EvalResult { get; init; }
+
+    public long? EnabledAtUtc { get; init; }
+
+    public MemoryScope? MemoryScope { get; init; }
+}
 
 /// <summary>Outcome of <see cref="IPlaybookActionStore.PromoteSuggestedIfCurrentAsync" />: the guard that blocked, or a committed promotion.</summary>
 public enum PlaybookPromotionCommitStatus
@@ -96,23 +113,41 @@ public enum PlaybookPromotionCommitStatus
 }
 
 /// <summary>Result of a CAS promotion: <see cref="Record" /> is non-null only when <see cref="Status" /> is <c>Committed</c>.</summary>
-public sealed record PlaybookPromotionCommit(PlaybookPromotionCommitStatus Status, PlaybookActionRecord? Record);
+public sealed class PlaybookPromotionCommit
+{
+    public required PlaybookPromotionCommitStatus Status { get; init; }
+
+    public required PlaybookActionRecord? Record { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a playbook action supplied on create/update. Free text is passed as plaintext strings; the
 ///     store encodes <see cref="Behavior" /> and <see cref="TriggerCondition" /> to UTF-8 bytes before the interceptors
 ///     encrypt them.
 /// </summary>
-public sealed record PlaybookActionInput(
-    Guid AgentDefinitionId,
-    PlaybookActionState State,
-    PlaybookActionSource Source,
-    string? TriggerCondition,
-    string Behavior,
-    string? Scope,
-    int Priority,
-    IReadOnlyList<Guid>? SourceFeedbackIds = null,
-    double? Confidence = null,
-    string? EvalResult = null,
-    long? EnabledAtUtc = null,
-    MemoryScope? MemoryScope = null);
+public sealed record PlaybookActionInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required PlaybookActionState State { get; init; }
+
+    public required PlaybookActionSource Source { get; init; }
+
+    public required string? TriggerCondition { get; init; }
+
+    public required string Behavior { get; init; }
+
+    public required string? Scope { get; init; }
+
+    public required int Priority { get; init; }
+
+    public IReadOnlyList<Guid>? SourceFeedbackIds { get; init; }
+
+    public double? Confidence { get; init; }
+
+    public string? EvalResult { get; init; }
+
+    public long? EnabledAtUtc { get; init; }
+
+    public MemoryScope? MemoryScope { get; init; }
+}

@@ -53,12 +53,15 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         // old one owned. It is deliberately not validated against an existing row — a principal is an opaque grouping
         // id, not an entity with a lifecycle, so a "principal not found" check would be a second table for no
         // behaviour.
-        var snapshot = await _store.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
-                                           principalId ?? Guid.NewGuid(),
-                                           prefix,
-                                           HashKey(key),
-                                           label.Trim(),
-                                           SerializeAllowList(allowedTriggerIds)),
+        var snapshot = await _store.CreateAsync(new IntegrationApiKeyCreateCommand
+        {
+            KeyId = Guid.NewGuid(),
+            PrincipalId = principalId ?? Guid.NewGuid(),
+            KeyPrefix = prefix,
+            KeyHash = HashKey(key),
+            Label = label.Trim(),
+            AllowedTriggerIdsJson = SerializeAllowList(allowedTriggerIds)
+        },
                                        cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.

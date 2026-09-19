@@ -677,15 +677,18 @@ public sealed class WorkSessionStepLoopTests
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId));
         _ = await store.UpdateAsync(agentDefinitionId,
-                           new AgentDefinitionInput(definition.Name,
-                               definition.Description,
-                               definition.Instructions,
-                               definition.ModelProfile,
-                               definition.ReasoningEffort,
-                               definition.Kind,
-                               toolNames,
-                               new Dictionary<string, bool>(StringComparer.Ordinal),
-                               definition.OrchestrationTopologyJson));
+                           new AgentDefinitionInput
+                           {
+                               Name = definition.Name,
+                               Description = definition.Description,
+                               Instructions = definition.Instructions,
+                               ModelProfile = definition.ModelProfile,
+                               ReasoningEffort = definition.ReasoningEffort,
+                               Kind = definition.Kind,
+                               AllowedToolNames = toolNames,
+                               ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                               OrchestrationTopologyJson = definition.OrchestrationTopologyJson
+                           });
     }
 
     /// <summary>The other edit: the binding is deleted, and the turn resolver keeps the default persona.</summary>
@@ -1010,15 +1013,18 @@ public sealed class WorkSessionStepLoopTests
     {
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           WorkSessionEventTypes.CompletionRequested,
-                           Guid.NewGuid(),
-                           Outcome: null,
-                           JsonSerializer.Serialize(new
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            EventType = WorkSessionEventTypes.CompletionRequested,
+            OperationId = Guid.NewGuid(),
+            Outcome = null,
+            DetailJson = JsonSerializer.Serialize(new
                            {
                                summary = "Every task is done and the findings tell the whole story."
-                           })));
+                           })
+        });
     }
 
     private static async Task RecordFindingsDuringTheTurnAsync(IServiceProvider services, Guid sessionId)
@@ -1028,12 +1034,15 @@ public sealed class WorkSessionStepLoopTests
         for (var index = 0; index < 3; index++)
         {
             var session = await store.GetAsync(sessionId);
-            _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                               Guid.NewGuid(),
-                               session.Version,
-                               Guid.NewGuid(),
-                               AgentWorkSessionFindingKind.Finding,
-                               $"Finding {index}."));
+            _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+            {
+                SessionId = sessionId,
+                FindingId = Guid.NewGuid(),
+                ExpectedVersion = session.Version,
+                OperationId = Guid.NewGuid(),
+                Kind = AgentWorkSessionFindingKind.Finding,
+                Text = $"Finding {index}."
+            });
         }
     }
 }

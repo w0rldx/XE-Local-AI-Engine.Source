@@ -191,8 +191,17 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
         for (var index = 0; index < runs.Count; index++)
         {
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-            var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
-                    Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120) with
+            var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+            {
+                RunId = claimed.RunId,
+                ExpectedWorkVersion = claimed.Run.Version,
+                OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""),
+                LastStreamSequence = 1,
+                EffectiveContextTokens = 4096,
+                DurationMs = 10,
+                TotalTokens = 12,
+                TokensPerSecond = 120
+            } with
                 {
                     PrimaryStopReason = "stop"
                 });
@@ -204,28 +213,45 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     }
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version, Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""), "model.gguf",
-            LocalModelOrigin.Imported, "v1:" + new string('a', count: 64), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('a', count: 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 
     private static BenchmarkTaskItemInput Item(string prompt) =>
-        new(Encoding.UTF8.GetBytes(prompt));
+        new() { PromptJson = Encoding.UTF8.GetBytes(prompt) };
 
     private static BenchmarkTaskItemInput Probe(Guid id, string prompt = "a long-context probe") =>
-        new(Encoding.UTF8.GetBytes(prompt),
-            BenchmarkTaskItemKinds.Niah,
-            GeneratorConfigJson: Encoding.UTF8.GetBytes("""{"contextTokens":[2048]}"""),
-            Id: id);
+        new()
+        {
+            PromptJson = Encoding.UTF8.GetBytes(prompt),
+            Kind = BenchmarkTaskItemKinds.Niah,
+            GeneratorConfigJson = Encoding.UTF8.GetBytes("""{"contextTokens":[2048]}"""),
+            Id = id
+        };
 
     private static BenchmarkTaskItemInput Case(Guid parentId, string prompt) =>
-        new(Encoding.UTF8.GetBytes(prompt),
-            BenchmarkTaskItemKinds.NiahCase,
-            VerifierConfigJson: Encoding.UTF8.GetBytes("""{"recall":{"expected":"ABC123"}}"""),
-            GeneratorConfigJson: Encoding.UTF8.GetBytes("""{"contextTokens":2048,"depthPercent":50}"""),
-            ParentItemId: parentId,
-            CountsTowardScore: false);
+        new()
+        {
+            PromptJson = Encoding.UTF8.GetBytes(prompt),
+            Kind = BenchmarkTaskItemKinds.NiahCase,
+            VerifierConfigJson = Encoding.UTF8.GetBytes("""{"recall":{"expected":"ABC123"}}"""),
+            GeneratorConfigJson = Encoding.UTF8.GetBytes("""{"contextTokens":2048,"depthPercent":50}"""),
+            ParentItemId = parentId,
+            CountsTowardScore = false
+        };
 
     private static BenchmarkProjectInput NewProject() =>
-        new(Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("""{"task":"answer"}"""), 4096, Guid.NewGuid());
+        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private async Task<(NodeChatDbContext Context, BenchmarkStore Store)> CreateStoreAsync(string fileName)
     {

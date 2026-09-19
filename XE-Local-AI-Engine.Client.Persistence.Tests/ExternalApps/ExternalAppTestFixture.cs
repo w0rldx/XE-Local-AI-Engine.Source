@@ -94,16 +94,19 @@ internal sealed class ExternalAppTestFixture : IDisposable
         ExternalAppInstanceStatus expectedStatus,
         ExternalAppInstanceEventKind eventKind = ExternalAppInstanceEventKind.Started,
         long occurredAtUtc = 2_000) =>
-        new(instanceId,
-            expectedVersion,
-            new HashSet<ExternalAppInstanceStatus>
+        new()
+        {
+            InstanceId = instanceId,
+            ExpectedVersion = expectedVersion,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
             {
                 expectedStatus
             },
-            newStatus,
-            eventKind,
-            EventDetailJson: null,
-            occurredAtUtc);
+            NewStatus = newStatus,
+            EventKind = eventKind,
+            EventDetailJson = null,
+            OccurredAtUtc = occurredAtUtc
+        };
 
     /// <summary>Runs a scalar query straight against the file, for assertions the entity model would false-pass.</summary>
     public async Task<object?> RawScalarAsync(string sql, Action<SqliteCommand>? configure = null)

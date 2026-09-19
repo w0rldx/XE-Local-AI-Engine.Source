@@ -106,7 +106,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         // the feed starting at sequence 2 with nothing recording the accepted permissions.
         await SaveOrClearAsync(cancellationToken);
 
-        return new ExternalAppStatusWriteResult(Applied: true, FirstSequence, Version: 0);
+        return new ExternalAppStatusWriteResult { Applied = true, Sequence = FirstSequence, Version = 0 };
     }
 
     public async Task<ExternalAppStatusWriteResult> UpdateStatusAsync(ExternalAppStatusUpdate command, CancellationToken cancellationToken = default)
@@ -222,7 +222,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
             throw;
         }
 
-        return new ExternalAppStatusWriteResult(Applied: true, sequence, version);
+        return new ExternalAppStatusWriteResult { Applied = true, Sequence = sequence, Version = version };
     }
 
     public async Task<bool> UpdateVariablesAsync(Guid instanceId,
@@ -293,7 +293,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         var version = entity.Version;
 
         return await SaveCasAsync(cancellationToken)
-            ? new ExternalAppStatusWriteResult(Applied: true, sequence, version)
+            ? new ExternalAppStatusWriteResult { Applied = true, Sequence = sequence, Version = version }
             : Lost;
     }
 
@@ -318,7 +318,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 
         return
         [
-            .. events.Select(static row => new ExternalAppInstanceEventSnapshot(row.Id, row.InstanceId, row.Sequence, row.Kind, row.DetailJson, row.OccurredAtUtc))
+            .. events.Select(static row => new ExternalAppInstanceEventSnapshot { Id = row.Id, InstanceId = row.InstanceId, Sequence = row.Sequence, Kind = row.Kind, DetailJson = row.DetailJson, OccurredAtUtc = row.OccurredAtUtc })
         ];
     }
 
@@ -358,7 +358,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
     }
 
     /// <summary>A lost compare-and-swap: nothing written, no sequence minted, no version to report.</summary>
-    private static ExternalAppStatusWriteResult Lost => new(Applied: false, Sequence: 0, Version: 0);
+    private static ExternalAppStatusWriteResult Lost => new() { Applied = false, Sequence = 0, Version = 0 };
 
     /// <summary>
     ///     SQLite result code 19 is <c>SQLITE_CONSTRAINT</c>; the only unique constraint any write here can reach is

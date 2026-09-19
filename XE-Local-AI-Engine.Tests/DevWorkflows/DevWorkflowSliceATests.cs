@@ -256,26 +256,32 @@ public sealed class DevWorkflowSliceATests
         var artifactId = Guid.NewGuid();
         var written = await scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>()
                                  .WriteAsync(session.Id, artifactId, Encoding.UTF8.GetBytes("# What this step found"));
-        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(session.Id,
-                           artifactId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionArtifactKind.Report,
-                           "notes.md",
-                           "text/markdown",
-                           written.ContentHash,
-                           written.ByteCount,
-                           written.OpaqueReference));
+        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+        {
+            SessionId = session.Id,
+            ArtifactId = artifactId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionArtifactKind.Report,
+            Name = "notes.md",
+            MediaType = "text/markdown",
+            ContentSha256 = written.ContentHash,
+            SizeBytes = written.ByteCount,
+            ManagedReference = written.OpaqueReference
+        });
 
-        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(session.Id,
-                           WorkSessionVersions.Any,
-                           WorkSessionEventTypes.CompletionRequested,
-                           Guid.NewGuid(),
-                           Outcome: null,
-                           JsonSerializer.Serialize(new
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = session.Id,
+            ExpectedVersion = WorkSessionVersions.Any,
+            EventType = WorkSessionEventTypes.CompletionRequested,
+            OperationId = Guid.NewGuid(),
+            Outcome = null,
+            DetailJson = JsonSerializer.Serialize(new
                            {
                                summary = "This step is done."
-                           })));
+                           })
+        });
     }
 
     /// <summary>
@@ -307,7 +313,7 @@ public sealed class DevWorkflowSliceATests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var workItem = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                                  .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Understand the inference path", request));
+                                  .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Understand the inference path", Request = request });
         return workItem.Id;
     }
 

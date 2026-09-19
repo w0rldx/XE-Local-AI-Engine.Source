@@ -531,20 +531,23 @@ public sealed class SandboxedMcpStdioTransportTests
 
     private static McpServerRecord StdioRecord(McpTrustTier tier)
     {
-        return new McpServerRecord(Guid.NewGuid(),
-            "Local",
-            Description: null,
-            McpTransportKind.Stdio,
-            "node",
-            ["server.js"],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            Url: null,
-            tier,
-            Enabled: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new McpServerRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "Local",
+            Description = null,
+            TransportKind = McpTransportKind.Stdio,
+            Command = "node",
+            Arguments = ["server.js"],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal),
+            Url = null,
+            TrustTier = tier,
+            Enabled = true,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     /// <summary>

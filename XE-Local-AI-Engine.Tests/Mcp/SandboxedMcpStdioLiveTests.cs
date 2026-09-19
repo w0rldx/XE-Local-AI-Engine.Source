@@ -367,20 +367,23 @@ public sealed class SandboxedMcpStdioLiveTests
         /// </summary>
         public McpServerRecord ToRecord(McpTrustTier tier)
         {
-            return new McpServerRecord(Guid.NewGuid(),
-                "Live fixture",
-                Description: null,
-                McpTransportKind.Stdio,
-                "/bin/sh",
-                [ScriptPath],
-                _directory.FullName,
-                new Dictionary<string, string>(StringComparer.Ordinal),
-                Url: null,
-                tier,
-                Enabled: true,
-                Version: 1,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0);
+            return new McpServerRecord
+            {
+                Id = Guid.NewGuid(),
+                Name = "Live fixture",
+                Description = null,
+                TransportKind = McpTransportKind.Stdio,
+                Command = "/bin/sh",
+                Arguments = [ScriptPath],
+                WorkingDirectory = _directory.FullName,
+                Environment = new Dictionary<string, string>(StringComparer.Ordinal),
+                Url = null,
+                TrustTier = tier,
+                Enabled = true,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
         }
     }
 }

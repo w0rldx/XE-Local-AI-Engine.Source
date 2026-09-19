@@ -391,7 +391,7 @@ public sealed class ExternalAppFeedEndpointTests
     private static ExternalAppInstanceEventSnapshot Event(long sequence,
         ExternalAppInstanceEventKind kind = ExternalAppInstanceEventKind.Started,
         string? detailJson = null) =>
-        new(Guid.NewGuid(), ExternalAppEndpointPayloads.InstanceId, sequence, kind, detailJson, 1_780_000_000_000L + sequence);
+        new() { Id = Guid.NewGuid(), InstanceId = ExternalAppEndpointPayloads.InstanceId, Sequence = sequence, Kind = kind, DetailJson = detailJson, OccurredAtUtc = 1_780_000_000_000L + sequence };
 
     private static ContainerLogSnapshot Snapshot(bool truncated = false, int lineCount = 1) =>
         new()

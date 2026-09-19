@@ -86,30 +86,36 @@ internal static class BenchmarkLaunchEvidence
         });
         if (receipt is null)
         {
-            return new BenchmarkLaunchReceiptCommand(ReceiptJson: null,
-                environmentJson,
-                environmentHash,
-                ReceiptHash: null,
-                EffectiveLaunchIdentity: null,
-                EffectiveBackend: null,
-                PlacementOffloaded: null,
-                PlacementTotal: null,
-                ExecutableSha256: null,
-                HasAuxAssets: null,
-                kvCacheTypeSource);
+            return new BenchmarkLaunchReceiptCommand
+            {
+                ReceiptJson = null,
+                EnvironmentFactsJson = environmentJson,
+                EnvironmentFactsHash = environmentHash,
+                ReceiptHash = null,
+                EffectiveLaunchIdentity = null,
+                EffectiveBackend = null,
+                PlacementOffloaded = null,
+                PlacementTotal = null,
+                ExecutableSha256 = null,
+                HasAuxAssets = null,
+                KvCacheTypeSource = kvCacheTypeSource
+            };
         }
 
         var receiptJson = BenchmarkCanonicalJson.Serialize(receipt);
-        return new BenchmarkLaunchReceiptCommand(receiptJson,
-            environmentJson,
-            environmentHash,
-            BenchmarkCanonicalJson.Hash(receiptJson),
-            receipt.LaunchProjection.ComputeIdentity(),
-            BenchmarkLaunchBackend.From(receipt),
-            receipt.Placement.OffloadedLayers,
-            receipt.Placement.TotalLayers,
-            receipt.ExecutableSha256,
-            receipt.AuxAssets.HasLora || receipt.AuxAssets.HasMmproj || receipt.AuxAssets.HasDraft,
-            kvCacheTypeSource);
+        return new BenchmarkLaunchReceiptCommand
+        {
+            ReceiptJson = receiptJson,
+            EnvironmentFactsJson = environmentJson,
+            EnvironmentFactsHash = environmentHash,
+            ReceiptHash = BenchmarkCanonicalJson.Hash(receiptJson),
+            EffectiveLaunchIdentity = receipt.LaunchProjection.ComputeIdentity(),
+            EffectiveBackend = BenchmarkLaunchBackend.From(receipt),
+            PlacementOffloaded = receipt.Placement.OffloadedLayers,
+            PlacementTotal = receipt.Placement.TotalLayers,
+            ExecutableSha256 = receipt.ExecutableSha256,
+            HasAuxAssets = receipt.AuxAssets.HasLora || receipt.AuxAssets.HasMmproj || receipt.AuxAssets.HasDraft,
+            KvCacheTypeSource = kvCacheTypeSource
+        };
     }
 }

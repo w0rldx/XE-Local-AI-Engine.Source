@@ -743,36 +743,42 @@ public sealed class OrchestrationResolverTests
         bool playbookEnabled = false,
         bool disableBaseScaffold = false)
     {
-        return new AgentDefinitionRecord(Guid.NewGuid(),
-            name,
-            "desc-" + name,
-            "Instructions for " + name,
-            modelProfile,
-            reasoningEffort,
-            kind,
-            allowedTools ?? [],
-            toolApprovals ?? new Dictionary<string, bool>(),
-            topologyJson,
-            version,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            playbookEnabled,
-            DisableBaseScaffold: disableBaseScaffold);
+        return new AgentDefinitionRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = "desc-" + name,
+            Instructions = "Instructions for " + name,
+            ModelProfile = modelProfile,
+            ReasoningEffort = reasoningEffort,
+            Kind = kind,
+            AllowedToolNames = allowedTools ?? [],
+            ToolApprovals = toolApprovals ?? new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = topologyJson,
+            Version = version,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            PlaybookEnabled = playbookEnabled,
+            DisableBaseScaffold = disableBaseScaffold
+        };
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            agentDefinitionId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            behavior,
-            Scope: null,
-            priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = behavior,
+            Scope = null,
+            Priority = priority,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     // Stand-in offered tools default to a concrete ReadLocal category (never Unknown) to mirror the production invariant

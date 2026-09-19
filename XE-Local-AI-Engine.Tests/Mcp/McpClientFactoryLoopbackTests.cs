@@ -141,38 +141,44 @@ public sealed class McpClientFactoryLoopbackTests
 
     private static McpServerRecord StdioRecord(Dictionary<string, string> environment)
     {
-        return new McpServerRecord(Guid.NewGuid(),
-            "Local",
-            Description: null,
-            McpTransportKind.Stdio,
-            "node",
-            ["server.js"],
-            WorkingDirectory: null,
-            environment,
-            Url: null,
-            McpTrustTier.PrivilegedHost,
-            Enabled: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new McpServerRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "Local",
+            Description = null,
+            TransportKind = McpTransportKind.Stdio,
+            Command = "node",
+            Arguments = ["server.js"],
+            WorkingDirectory = null,
+            Environment = environment,
+            Url = null,
+            TrustTier = McpTrustTier.PrivilegedHost,
+            Enabled = true,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     private static McpServerRecord HttpRecord(string url)
     {
-        return new McpServerRecord(Guid.NewGuid(),
-            "Remote",
-            Description: null,
-            McpTransportKind.Http,
-            Command: null,
-            [],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(),
-            url,
-            McpTrustTier.Sandboxed,
-            Enabled: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new McpServerRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "Remote",
+            Description = null,
+            TransportKind = McpTransportKind.Http,
+            Command = null,
+            Arguments = [],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(),
+            Url = url,
+            TrustTier = McpTrustTier.Sandboxed,
+            Enabled = true,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     /// <summary>

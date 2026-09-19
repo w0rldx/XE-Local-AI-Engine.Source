@@ -154,16 +154,19 @@ public sealed class LexicalPlaybookRetrievalRankerTests
 
     private static PlaybookActionRecord Action(string triggerCondition, int priority, long createdAtUtc)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            triggerCondition,
-            "behaviour text",
-            Scope: null,
-            priority,
-            Version: 1,
-            createdAtUtc,
-            createdAtUtc);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = triggerCondition,
+            Behavior = "behaviour text",
+            Scope = null,
+            Priority = priority,
+            Version = 1,
+            CreatedAtUtc = createdAtUtc,
+            UpdatedAtUtc = createdAtUtc
+        };
     }
 }

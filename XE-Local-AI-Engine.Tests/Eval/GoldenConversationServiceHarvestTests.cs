@@ -177,50 +177,59 @@ public sealed class GoldenConversationServiceHarvestTests
 
     private static GoldenConversationRecord Existing(Guid id, Guid agentId, GoldenConversationSource source, bool enabled)
     {
-        return new GoldenConversationRecord(id,
-            agentId,
-            "case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "Be consistent.",
-            enabled,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            source,
-            source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null,
-            source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null);
+        return new GoldenConversationRecord
+        {
+            Id = id,
+            AgentDefinitionId = agentId,
+            Title = "case",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "Be consistent.",
+            Enabled = enabled,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            Source = source,
+            SourceMessageId = source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null,
+            SourceConversationId = source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null
+        };
     }
 
     private static GoldenConversationRecord StoredRecord(GoldenConversationInput input)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            input.AgentDefinitionId,
-            input.Title,
-            input.InputTurns,
-            input.Assertion,
-            input.Rubric,
-            input.Enabled,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            input.Source,
-            input.SourceMessageId,
-            input.SourceConversationId);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = input.AgentDefinitionId,
+            Title = input.Title,
+            InputTurns = input.InputTurns,
+            Assertion = input.Assertion,
+            Rubric = input.Rubric,
+            Enabled = input.Enabled,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            Source = input.Source,
+            SourceMessageId = input.SourceMessageId,
+            SourceConversationId = input.SourceConversationId
+        };
     }
 
     private static AgentDefinitionRecord CreateAgent()
     {
-        return new AgentDefinitionRecord(AgentId,
-            "Builder",
-            Description: null,
-            "Base instructions.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = AgentId,
+            Name = "Builder",
+            Description = null,
+            Instructions = "Base instructions.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 }

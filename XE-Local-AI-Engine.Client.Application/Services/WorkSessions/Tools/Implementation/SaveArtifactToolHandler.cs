@@ -104,16 +104,19 @@ internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtif
 
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(session.Id, artifactId, content, cancellationToken);
-        var result = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(session.Id,
-                                        artifactId,
-                                        session.Version,
-                                        WorkSessionOperationId.For(session.Id, session.StepCount, $"artifact:{artifactId:N}"),
-                                        Enum.Parse<AgentWorkSessionArtifactKind>(request.Kind!),
-                                        request.Name!,
-                                        request.MediaType!,
-                                        written.ContentHash,
-                                        written.ByteCount,
-                                        written.OpaqueReference),
+        var result = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+        {
+            SessionId = session.Id,
+            ArtifactId = artifactId,
+            ExpectedVersion = session.Version,
+            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, $"artifact:{artifactId:N}"),
+            Kind = Enum.Parse<AgentWorkSessionArtifactKind>(request.Kind!),
+            Name = request.Name!,
+            MediaType = request.MediaType!,
+            ContentSha256 = written.ContentHash,
+            SizeBytes = written.ByteCount,
+            ManagedReference = written.OpaqueReference
+        },
                                     cancellationToken);
 
         if (result.SupersededArtifactId is { } supersededId)

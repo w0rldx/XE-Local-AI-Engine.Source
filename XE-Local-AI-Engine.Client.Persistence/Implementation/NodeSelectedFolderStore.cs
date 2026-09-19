@@ -84,11 +84,14 @@ public sealed class NodeSelectedFolderStore : INodeSelectedFolderStore
 
     private static SelectedFolderRecord ToRecord(NodeSelectedFolder entity)
     {
-        return new SelectedFolderRecord(entity.Id,
-            entity.Alias,
-            Encoding.UTF8.GetString(entity.HostPath),
-            entity.Mode,
-            entity.CreatedAtUtc,
-            entity.RevokedAtUtc);
+        return new SelectedFolderRecord
+        {
+            Id = entity.Id,
+            Alias = entity.Alias,
+            HostPath = Encoding.UTF8.GetString(entity.HostPath),
+            Mode = entity.Mode,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            RevokedAtUtc = entity.RevokedAtUtc
+        };
     }
 }

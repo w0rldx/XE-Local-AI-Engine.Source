@@ -22,12 +22,15 @@ internal sealed class McpAgenticApprovalAuditRecorder : IMcpAgenticApprovalAudit
         CancellationToken cancellationToken = default)
     {
         var categoryLabel = category.ToString();
-        await _store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput(requestId,
-                toolName,
-                categoryLabel,
-                ApprovalDecisions.Approve,
-                $"mcp-agentic:{keyPrefix}",
-                LatencyMs: 0),
+        await _store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput
+        {
+            InvocationId = requestId,
+            ToolName = toolName,
+            Category = categoryLabel,
+            Decision = ApprovalDecisions.Approve,
+            Source = $"mcp-agentic:{keyPrefix}",
+            LatencyMs = 0
+        },
             cancellationToken);
         NodeMetrics.ToolApprovalDecisionsTotal.Add(1,
             new KeyValuePair<string, object?>("category", categoryLabel),

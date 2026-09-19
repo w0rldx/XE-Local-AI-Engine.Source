@@ -1316,19 +1316,22 @@ public sealed class SubAgentSpawnServiceTests
     // in the model id AND in the instructions rather than in only one of them.
     private static AgentDefinitionRecord RacingDefinition(Guid id, string modelProfile, string instructions)
     {
-        return new AgentDefinitionRecord(id,
-            "racing-child",
-            Description: null,
-            instructions,
-            modelProfile,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new AgentDefinitionRecord
+        {
+            Id = id,
+            Name = "racing-child",
+            Description = null,
+            Instructions = instructions,
+            ModelProfile = modelProfile,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     private static string ProjectedPromptFor(AgentDefinitionRecord definition)
@@ -1449,19 +1452,22 @@ public sealed class SubAgentSpawnServiceTests
         public Guid RegisterProfilePinnedTo(string name, string modelProfile, params string[] allowedToolNames)
         {
             var id = Guid.NewGuid();
-            var definition = new AgentDefinitionRecord(id,
-                name,
-                Description: null,
-                Instructions: "child instructions",
-                ModelProfile: modelProfile,
-                ReasoningEffort: null,
-                Kind: AgentDefinitionKind.Single,
-                AllowedToolNames: allowedToolNames,
-                ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
-                OrchestrationTopologyJson: null,
-                Version: 1,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0);
+            var definition = new AgentDefinitionRecord
+            {
+                Id = id,
+                Name = name,
+                Description = null,
+                Instructions = "child instructions",
+                ModelProfile = modelProfile,
+                ReasoningEffort = null,
+                Kind = AgentDefinitionKind.Single,
+                AllowedToolNames = allowedToolNames,
+                ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
             _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(definition);
 
             var offered = allowedToolNames
@@ -1551,19 +1557,22 @@ public sealed class SubAgentSpawnServiceTests
             params string[] allowedToolNames)
         {
             var id = Guid.NewGuid();
-            var definition = new AgentDefinitionRecord(id,
-                name,
-                Description: null,
-                Instructions: rawInstructions,
-                ModelProfile: Model,
-                ReasoningEffort: "raw-definition-effort-should-not-be-read",
-                Kind: AgentDefinitionKind.Single,
-                AllowedToolNames: allowedToolNames,
-                ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
-                OrchestrationTopologyJson: null,
-                Version: 1,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0);
+            var definition = new AgentDefinitionRecord
+            {
+                Id = id,
+                Name = name,
+                Description = null,
+                Instructions = rawInstructions,
+                ModelProfile = Model,
+                ReasoningEffort = "raw-definition-effort-should-not-be-read",
+                Kind = AgentDefinitionKind.Single,
+                AllowedToolNames = allowedToolNames,
+                ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
             _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(definition);
 
             var offered = allowedToolNames
@@ -1594,19 +1603,22 @@ public sealed class SubAgentSpawnServiceTests
         public Guid RegisterProfileWithMixedApprovalTools(string name, string gatedTool, string ungatedTool)
         {
             var id = Guid.NewGuid();
-            var definition = new AgentDefinitionRecord(id,
-                name,
-                Description: null,
-                Instructions: "child instructions",
-                ModelProfile: Model,
-                ReasoningEffort: null,
-                Kind: AgentDefinitionKind.Single,
-                AllowedToolNames: [gatedTool, ungatedTool],
-                ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
-                OrchestrationTopologyJson: null,
-                Version: 1,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0);
+            var definition = new AgentDefinitionRecord
+            {
+                Id = id,
+                Name = name,
+                Description = null,
+                Instructions = "child instructions",
+                ModelProfile = Model,
+                ReasoningEffort = null,
+                Kind = AgentDefinitionKind.Single,
+                AllowedToolNames = [gatedTool, ungatedTool],
+                ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
             _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(definition);
 
             var offered = new[]

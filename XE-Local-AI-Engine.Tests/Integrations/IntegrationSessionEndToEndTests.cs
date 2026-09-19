@@ -340,26 +340,32 @@ public sealed class IntegrationSessionEndToEndTests
         {
             var executionId = Guid.NewGuid();
             AssertEx.True(await scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>()
-                                     .AcceptAsync(new IntegrationAcceptCommand(NewSession: null,
-                                             executionId,
-                                             seeded.TriggerId,
-                                             first.SessionId,
-                                             seeded.PrincipalId,
-                                             Guid.NewGuid(),
-                                             new byte[]
+                                     .AcceptAsync(new IntegrationAcceptCommand
+                                     {
+                                         NewSession = null,
+                                         ExecutionId = executionId,
+                                         TriggerId = seeded.TriggerId,
+                                         SessionId = first.SessionId,
+                                         PrincipalId = seeded.PrincipalId,
+                                         RequestId = Guid.NewGuid(),
+                                         RequestFingerprint = new byte[]
                                              {
                                                  9,
                                                  9,
                                                  9
                                              },
-                                             seeded.KeyPrefix,
-                                             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                                             new IntegrationEventAppend(Guid.NewGuid(),
-                                                 executionId,
-                                                 Sequence: 1,
-                                                 IntegrationStreamEventTypes.ExecutionAccepted,
-                                                 DetailJson: null,
-                                                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())),
+                                         KeyPrefix = seeded.KeyPrefix,
+                                         ReceivedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                         AcceptedEvent = new IntegrationEventAppend
+                                             {
+                                                 EventId = Guid.NewGuid(),
+                                                 ExecutionId = executionId,
+                                                 Sequence = 1,
+                                                 EventType = IntegrationStreamEventTypes.ExecutionAccepted,
+                                                 DetailJson = null,
+                                                 OccurredAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                                             }
+                                     },
                                          maxActive: 4096,
                                          maxActivePerPrincipal: 4096));
         }

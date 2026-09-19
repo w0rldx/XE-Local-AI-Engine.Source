@@ -348,12 +348,15 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         // abandoning the write would leave a visible event with no durable row behind it.
         await foreach (var streamEvent in _persist.Reader.ReadAllAsync(CancellationToken.None))
         {
-            await _executions.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
-                                     streamEvent.ExecutionId,
-                                     streamEvent.Sequence,
-                                     streamEvent.Type,
-                                     streamEvent.Payload?.GetRawText(),
-                                     streamEvent.OccurredAtUtc),
+            await _executions.AppendEventAsync(new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = streamEvent.ExecutionId,
+                Sequence = streamEvent.Sequence,
+                EventType = streamEvent.Type,
+                DetailJson = streamEvent.Payload?.GetRawText(),
+                OccurredAtUtc = streamEvent.OccurredAtUtc
+            },
                                  CancellationToken.None);
         }
     }

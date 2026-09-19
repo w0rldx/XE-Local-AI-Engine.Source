@@ -546,20 +546,23 @@ public sealed class McpServerEndpointTests
 
     private static McpServerRecord CreateRecord(string name, bool enabled)
     {
-        return new McpServerRecord(Guid.NewGuid(),
-            name,
-            "A server.",
-            McpTransportKind.Stdio,
-            "npx",
-            ["-y", "server"],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            Url: null,
-            McpTrustTier.Sandboxed,
-            enabled,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new McpServerRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = "A server.",
+            TransportKind = McpTransportKind.Stdio,
+            Command = "npx",
+            Arguments = ["-y", "server"],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal),
+            Url = null,
+            TrustTier = McpTrustTier.Sandboxed,
+            Enabled = enabled,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)

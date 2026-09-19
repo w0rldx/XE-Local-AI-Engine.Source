@@ -87,14 +87,17 @@ public sealed class PlaybookMonitorStore : IPlaybookMonitorStore
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
-            return new CohortComparison(BeforeTotal: 0, BeforeDown: 0, AfterTotal: 0, AfterDown: 0);
+            return new CohortComparison { BeforeTotal = 0, BeforeDown = 0, AfterTotal = 0, AfterDown = 0 };
         }
 
         // SUM over no rows yields SQL NULL; the aggregate-row read coalesces each column to 0.
-        return new CohortComparison(ReadCount(reader, ordinal: 0),
-            ReadCount(reader, ordinal: 1),
-            ReadCount(reader, ordinal: 2),
-            ReadCount(reader, ordinal: 3));
+        return new CohortComparison
+        {
+            BeforeTotal = ReadCount(reader, ordinal: 0),
+            BeforeDown = ReadCount(reader, ordinal: 1),
+            AfterTotal = ReadCount(reader, ordinal: 2),
+            AfterDown = ReadCount(reader, ordinal: 3)
+        };
     }
 
     private static int ReadCount(DbDataReader reader, int ordinal)

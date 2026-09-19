@@ -107,14 +107,17 @@ public sealed class IntegrationSessionStore : IIntegrationSessionStore
     }
 
     internal static IntegrationSessionSnapshot ToSnapshot(IntegrationSession entity) =>
-        new(entity.Id,
-            entity.TriggerId,
-            entity.PrincipalId,
-            entity.ConversationId,
-            entity.AgentDefinitionId,
-            entity.Status,
-            entity.CreatedAtUtc,
-            entity.LastActivityUtc,
-            entity.ExecutionCount,
-            entity.LastSequence);
+        new()
+        {
+            Id = entity.Id,
+            TriggerId = entity.TriggerId,
+            PrincipalId = entity.PrincipalId,
+            ConversationId = entity.ConversationId,
+            AgentDefinitionId = entity.AgentDefinitionId,
+            Status = entity.Status,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            LastActivityUtc = entity.LastActivityUtc,
+            ExecutionCount = entity.ExecutionCount,
+            LastSequence = entity.LastSequence
+        };
 }

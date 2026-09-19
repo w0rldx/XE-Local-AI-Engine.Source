@@ -158,15 +158,18 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            Description: null,
-            "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = name,
+            Description = null,
+            Instructions = "You are a careful engineering agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 
@@ -188,13 +191,16 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        _ = await service.CreateAsync(new PlaybookActionInput(agentDefinitionId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            "Always cite the tool you used.",
-            Scope: null,
-            Priority: 50));
+        _ = await service.CreateAsync(new PlaybookActionInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = "Always cite the tool you used.",
+            Scope = null,
+            Priority = 50
+        });
     }
 
     private static async Task RecordPassingEvalAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, Guid actionId)

@@ -18,25 +18,34 @@ public sealed class AgentWorkSessionSequenceTests
         var taskId = Guid.NewGuid();
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-        var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                                     created.Version,
-                                     Guid.NewGuid(),
-                                     AgentWorkSessionTaskOrigin.Agent,
-                                     [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Only task")]));
-        var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                   Guid.NewGuid(),
-                                   planned.Version,
-                                   Guid.NewGuid(),
-                                   AgentWorkSessionFindingKind.Evidence,
-                                   "Evidence."));
+        var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [new WorkPlanTaskChange { TaskId = taskId, Operation = WorkPlanTaskOperation.Add, Title = "Only task" }]
+        });
+        var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = planned.Version,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionFindingKind.Evidence,
+            Text = "Evidence."
+        });
         var stepped = await store.AdvanceStepAsync(sessionId, found.Version);
-        var checkpointed = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                                          Guid.NewGuid(),
-                                          stepped.Version,
-                                          Guid.NewGuid(),
-                                          stepped.Step,
-                                          "Summary.",
-                                          "{}"));
+        var checkpointed = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand
+        {
+            SessionId = sessionId,
+            CheckpointId = Guid.NewGuid(),
+            ExpectedVersion = stepped.Version,
+            OperationId = Guid.NewGuid(),
+            Step = stepped.Step,
+            Summary = "Summary.",
+            StateJson = "{}"
+        });
 
         AssertEx.True(created.LastSequence < planned.Sequence, "The plan event must follow the create event.");
         AssertEx.True(planned.Sequence < found.Sequence, "The finding event must follow the plan event.");
@@ -61,24 +70,30 @@ public sealed class AgentWorkSessionSequenceTests
         var secondTask = Guid.NewGuid();
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-        var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                                     created.Version,
-                                     Guid.NewGuid(),
-                                     AgentWorkSessionTaskOrigin.Agent,
-                                     [
-                                         new WorkPlanTaskChange(firstTask, WorkPlanTaskOperation.Add, Title: "First"),
-                                         new WorkPlanTaskChange(secondTask, WorkPlanTaskOperation.Add, Title: "Second")
-                                     ]));
+        var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [
+                                         new WorkPlanTaskChange { TaskId = firstTask, Operation = WorkPlanTaskOperation.Add, Title = "First" },
+                                         new WorkPlanTaskChange { TaskId = secondTask, Operation = WorkPlanTaskOperation.Add, Title = "Second" }
+                                     ]
+        });
 
         var beforeUpdate = await store.ListTasksAsync(sessionId);
         var displayOrder = beforeUpdate.Select(task => task.Id).ToArray();
         var watermark = planned.Sequence;
 
-        _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                           planned.Version,
-                           Guid.NewGuid(),
-                           AgentWorkSessionTaskOrigin.Agent,
-                           [new WorkPlanTaskChange(firstTask, WorkPlanTaskOperation.Update, Status: AgentWorkSessionTaskStatus.Active)]));
+        _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = planned.Version,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [new WorkPlanTaskChange { TaskId = firstTask, Operation = WorkPlanTaskOperation.Update, Status = AgentWorkSessionTaskStatus.Active }]
+        });
 
         // The re-stamp is what makes ?sinceSeq= replay updates, not only inserts.
         var changed = await store.ListTasksAsync(sessionId, watermark);
@@ -100,9 +115,9 @@ public sealed class AgentWorkSessionSequenceTests
         var sessionId = Guid.NewGuid();
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-        var first = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, created.Version, "First"));
-        var second = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, first.Version, "Second"));
-        var third = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, second.Version, "Third"));
+        var first = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = created.Version, EventType = "First" });
+        var second = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = first.Version, EventType = "Second" });
+        var third = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = second.Version, EventType = "Third" });
 
         var tail = await store.ListEventsAsync(sessionId, first.Sequence);
         AssertEx.True(tail.Select(entry => entry.EventType).SequenceEqual(["Second", "Third"]), "The tail must be exactly the events after the watermark.");
@@ -120,20 +135,26 @@ public sealed class AgentWorkSessionSequenceTests
         var operationId = Guid.NewGuid();
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-        var first = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                   Guid.NewGuid(),
-                                   created.Version,
-                                   operationId,
-                                   AgentWorkSessionFindingKind.Finding,
-                                   "Recorded once."));
+        var first = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = created.Version,
+            OperationId = operationId,
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = "Recorded once."
+        });
 
         // A replayed step re-derives the same operation id; the store must short-circuit it query-first.
-        var replay = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                    Guid.NewGuid(),
-                                    created.Version,
-                                    operationId,
-                                    AgentWorkSessionFindingKind.Finding,
-                                    "Recorded twice."));
+        var replay = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = created.Version,
+            OperationId = operationId,
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = "Recorded twice."
+        });
 
         AssertEx.Equal(first.Sequence, replay.Sequence);
         AssertEx.Equal(expected: 1, (await store.ListFindingsAsync(sessionId)).Count);
@@ -141,7 +162,7 @@ public sealed class AgentWorkSessionSequenceTests
 
         // Insert-then-catch would leave the rejected row Added in the tracker and break the next write in this scope.
         AssertEx.Empty(context.ChangeTracker.Entries().Where(entry => entry.State == EntityState.Added));
-        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, replay.Version, "StillUsable"));
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = replay.Version, EventType = "StillUsable" });
     }
 
     [Test]
@@ -158,18 +179,24 @@ public sealed class AgentWorkSessionSequenceTests
         var created = await WorkSessionTestFixture.SeedAsync(toolStore, sessionId);
 
         // A tool handler writes content with the version it read...
-        var finding = await toolStore.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                         Guid.NewGuid(),
-                                         created.Version,
-                                         Guid.NewGuid(),
-                                         AgentWorkSessionFindingKind.Finding,
-                                         "Written from the tool scope."));
+        var finding = await toolStore.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = created.Version,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = "Written from the tool scope."
+        });
 
         // ...while the supervisor moves the status from its own scope, holding a version that is already stale. The
         // sentinel is what keeps that legal: a status-only write has no lost update to protect against.
-        var transitioned = await supervisorStore.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId,
-                                                    WorkSessionVersions.Any,
-                                                    AgentWorkSessionStatus.Running));
+        var transitioned = await supervisorStore.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            TargetStatus = AgentWorkSessionStatus.Running
+        });
 
         AssertEx.Equal(AgentWorkSessionStatus.Running, transitioned.Status);
         AssertEx.True(transitioned.Version > finding.Version, "Each committed writer must advance the session version.");

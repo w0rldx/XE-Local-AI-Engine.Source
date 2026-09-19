@@ -47,7 +47,7 @@ public sealed class TrainingRunServiceTests : IDisposable
 
         AssertEx.True(rejection.Message.Contains("licensing", StringComparison.OrdinalIgnoreCase), "The refusal has to name the licensing gate.");
         var runStore = new TrainingRunStore(context, TimeProvider.System);
-        AssertEx.Equal(expected: 0, (await runStore.ListAsync(new TrainingRunQuery(Page: 1, PageSize: 50))).TotalCount,
+        AssertEx.Equal(expected: 0, (await runStore.ListAsync(new TrainingRunQuery { Page = 1, PageSize = 50 })).TotalCount,
             "A refused creation must leave no run behind.");
         AssertEx.Null(await runStore.ClaimNextAsync(), "A refused creation must queue nothing for the consumer to pick up.");
         AssertEx.False(Directory.Exists(Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen")),
@@ -95,7 +95,7 @@ public sealed class TrainingRunServiceTests : IDisposable
         // Reject a sample: an accepted review bumps the dataset revision and recomputes its content fingerprint.
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
         var sample = (await datasets.ListAllSamplesAsync(fixture.DatasetId))[0];
-        _ = await datasets.ReviewSampleAsync(new TrainingSampleReviewCommand(sample.Id, TrainingSampleReviewVerb.Reject, Label: null));
+        _ = await datasets.ReviewSampleAsync(new TrainingSampleReviewCommand { SampleId = sample.Id, Verb = TrainingSampleReviewVerb.Reject, Label = null });
         var moved = AssertEx.NotNull(await datasets.GetDatasetAsync(fixture.DatasetId), "The dataset still exists.");
 
         AssertEx.NotEqual(fixture.DatasetContentFingerprint, moved.ContentFingerprint!);
@@ -182,18 +182,21 @@ public sealed class TrainingRunServiceTests : IDisposable
             "The confirmation must decode.");
 
     private static TrainingSampleRecord Sample(int sequence, string kind) =>
-        new(Guid.NewGuid(),
-            Guid.Empty,
-            sequence,
-            kind,
-            TrainingSampleLabel.Good,
-            TrainingSampleReviewState.Approved,
-            ReadOnlyMemory<byte>.Empty,
-            ValidationJson: null,
-            TrainingSampleProvenance.Generated,
-            $"hash-{sequence}",
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            DatasetId = Guid.Empty,
+            Sequence = sequence,
+            Kind = kind,
+            Label = TrainingSampleLabel.Good,
+            ReviewState = TrainingSampleReviewState.Approved,
+            ContentJson = ReadOnlyMemory<byte>.Empty,
+            ValidationJson = null,
+            Provenance = TrainingSampleProvenance.Generated,
+            SourceHash = $"hash-{sequence}",
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private ITrainingRunService BuildService(NodeChatDbContext context)
     {
@@ -227,20 +230,26 @@ public sealed class TrainingRunServiceTests : IDisposable
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
     {
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling",
-            TrainingDatasetKind.ToolCalling,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")));
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = "tool calling",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")
+        });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
         _ = await datasets.ClaimNextAsync();
         for (var index = 0; index < 4; index++)
         {
-            _ = await datasets.AppendSampleAsync(new TrainingSampleInput(dataset.Id,
-                "tool-call",
-                TrainingSampleLabel.Good,
-                Encoding.UTF8.GetBytes($$"""{"schemaVersion":1,"parts":[{"kind":"user","sequence":0,"content":"q{{index}}"}]}"""),
-                ValidationJson: null,
-                TrainingSampleProvenance.Generated,
-                new string((char)('a' + index), count: 64)));
+            _ = await datasets.AppendSampleAsync(new TrainingSampleInput
+            {
+                DatasetId = dataset.Id,
+                Kind = "tool-call",
+                Label = TrainingSampleLabel.Good,
+                ContentJson = Encoding.UTF8.GetBytes($$"""{"schemaVersion":1,"parts":[{"kind":"user","sequence":0,"content":"q{{index}}"}]}"""),
+                ValidationJson = null,
+                Provenance = TrainingSampleProvenance.Generated,
+                SourceHash = new string((char)('a' + index), count: 64)
+            });
         }
 
         var ready = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null);

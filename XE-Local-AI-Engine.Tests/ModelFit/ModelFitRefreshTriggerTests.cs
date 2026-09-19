@@ -147,26 +147,29 @@ public sealed class ModelFitRefreshTriggerTests
 
     private static ScheduledJobDefinitionRecord JobWithTemplate(Guid id, string templateId)
     {
-        return new ScheduledJobDefinitionRecord(id,
-            templateId,
-            "Model recommendation check",
-            Description: null,
-            Enabled: true,
-            ScheduleKind.OneShot,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.SkipMissed,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: 600,
-            ParameterJson: null,
-            ScheduledJobCreator.User,
-            CreatedAtUtc: 1L,
-            UpdatedAtUtc: 1L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: null);
+        return new ScheduledJobDefinitionRecord
+        {
+            Id = id,
+            TemplateId = templateId,
+            DisplayName = "Model recommendation check",
+            Description = null,
+            Enabled = true,
+            ScheduleKind = ScheduleKind.OneShot,
+            CronExpression = null,
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = 600,
+            ParameterJson = null,
+            CreatedBy = ScheduledJobCreator.User,
+            CreatedAtUtc = 1L,
+            UpdatedAtUtc = 1L,
+            DisabledAtUtc = null,
+            DeletedAtUtc = null
+        };
     }
 }

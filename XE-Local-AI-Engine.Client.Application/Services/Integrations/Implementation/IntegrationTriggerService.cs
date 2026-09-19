@@ -53,15 +53,18 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
 
         try
         {
-            var created = await _triggers.CreateAsync(new IntegrationTriggerCreateCommand(Guid.NewGuid(),
-                                                 name,
-                                                 input.DisplayName.Trim(),
-                                                 NormalizeDescription(input.Description),
-                                                 input.Enabled,
-                                                 input.TargetKind,
-                                                 input.TargetAgentDefinitionId,
-                                                 input.SessionPolicy,
-                                                 input.AcceptedInputKinds),
+            var created = await _triggers.CreateAsync(new IntegrationTriggerCreateCommand
+            {
+                TriggerId = Guid.NewGuid(),
+                Name = name,
+                DisplayName = input.DisplayName.Trim(),
+                Description = NormalizeDescription(input.Description),
+                Enabled = input.Enabled,
+                TargetKind = input.TargetKind,
+                TargetAgentDefinitionId = input.TargetAgentDefinitionId,
+                SessionPolicy = input.SessionPolicy,
+                AcceptedInputKinds = input.AcceptedInputKinds
+            },
                                              cancellationToken);
 
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.Saved, created, Message: null);
@@ -90,14 +93,17 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
             return rejection;
         }
 
-        var updated = await _triggers.UpdateAsync(new IntegrationTriggerUpdateCommand(triggerId,
-                                             input.ExpectedVersion,
-                                             input.DisplayName.Trim(),
-                                             NormalizeDescription(input.Description),
-                                             input.Enabled,
-                                             input.TargetAgentDefinitionId,
-                                             input.SessionPolicy,
-                                             input.AcceptedInputKinds),
+        var updated = await _triggers.UpdateAsync(new IntegrationTriggerUpdateCommand
+        {
+            TriggerId = triggerId,
+            ExpectedVersion = input.ExpectedVersion,
+            DisplayName = input.DisplayName.Trim(),
+            Description = NormalizeDescription(input.Description),
+            Enabled = input.Enabled,
+            TargetAgentDefinitionId = input.TargetAgentDefinitionId,
+            SessionPolicy = input.SessionPolicy,
+            AcceptedInputKinds = input.AcceptedInputKinds
+        },
                                          cancellationToken);
         if (!updated)
         {

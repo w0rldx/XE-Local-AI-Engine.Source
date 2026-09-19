@@ -202,11 +202,14 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
         var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
 
         _projectId = Guid.NewGuid();
-        var project = await store.CreateProjectAsync(new BenchmarkProjectInput(_projectId,
-                                     ProjectName,
-                                     JsonSerializer.SerializeToUtf8Bytes("Summarise the release notes in three bullet points."),
-                                     4096,
-                                     Guid.NewGuid()));
+        var project = await store.CreateProjectAsync(new BenchmarkProjectInput
+        {
+            Id = _projectId,
+            Name = ProjectName,
+            CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes("Summarise the release notes in three bullet points."),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.NewGuid()
+        });
 
         var policy = BenchmarkE2ETestDoubles.Policy(BenchmarkJudgeRubricDefaults.Default(), ReferenceAnswer);
         var activation = await store.ActivateJudgePolicyAsync(_projectId,
@@ -232,31 +235,40 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
     {
         var project = await store.GetProjectAsync(_projectId)
                       ?? throw new InvalidOperationException("The seeded benchmark project disappeared.");
-        var run = await store.StartRunAsync(new BenchmarkStartRunCommand(Guid.NewGuid(),
-                                 _projectId,
-                                 project.Version,
-                                 """{"schemaVersion":1}"""u8.ToArray(),
-                                 modelName,
-                                 LocalModelOrigin.Imported,
-                                 "v1:" + new string(fingerprintFill, count: 64),
-                                 "E2E Agent",
-                                 1,
-                                 4096));
+        var run = await store.StartRunAsync(new BenchmarkStartRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = _projectId,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = """{"schemaVersion":1}"""u8.ToArray(),
+            PrimaryModelName = modelName,
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string(fingerprintFill, count: 64),
+            AgentName = "E2E Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        });
 
         var primary = await store.ClaimNextAsync()
                       ?? throw new InvalidOperationException("The seeded run enqueued no primary work.");
         var resolution = await new BenchmarkE2ETestDoubles.JudgeRuntimeResolver().ResolveAsync(policy, CancellationToken.None);
-        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id,
-                           primary.Version,
-                           """[{"type":"text","text":"Three bullet points about the release."}]"""u8.ToArray(),
-                           LastStreamSequence: 1,
-                           EffectiveContextTokens: 4096,
-                           DurationMs: 1200,
-                           TotalTokens: 128,
-                           TokensPerSecond: 32.5,
-                           JudgeAttempt: new BenchmarkJudgeAttemptSeed(revisionId,
-                               BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime),
-                               LaunchIntent: resolution.Intent)));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = primary.Version,
+            OutputPartsJson = """[{"type":"text","text":"Three bullet points about the release."}]"""u8.ToArray(),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 1200,
+            TotalTokens = 128,
+            TokensPerSecond = 32.5,
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed
+                           {
+                               ExpectedJudgePolicyRevisionId = revisionId,
+                               RuntimeJson = BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime),
+                               LaunchIntent = resolution.Intent
+                           }
+        });
         _criterionScores[run.Id] = criterionScore;
         return run.Id;
     }
@@ -299,27 +311,33 @@ public sealed class BenchmarkQualityScoreE2ETests : XESerialE2ETestBase
             _ = await store.MarkJudgeLaunchReadyAsync(attemptId,
                                work.QueueSequence,
                                work.Version,
-                               new BenchmarkLaunchReceiptCommand("{}",
-                                   "{}",
-                                   new string('e', count: 64),
-                                   new string('r', count: 64),
-                                   "e2e-effective-identity",
-                                   "cpu",
-                                   PlacementOffloaded: null,
-                                   PlacementTotal: null,
-                                   new string('x', count: 64),
-                                   HasAuxAssets: false,
-                                   "auto"),
+                               new BenchmarkLaunchReceiptCommand
+                               {
+                                   ReceiptJson = "{}",
+                                   EnvironmentFactsJson = "{}",
+                                   EnvironmentFactsHash = new string('e', count: 64),
+                                   ReceiptHash = new string('r', count: 64),
+                                   EffectiveLaunchIdentity = "e2e-effective-identity",
+                                   EffectiveBackend = "cpu",
+                                   PlacementOffloaded = null,
+                                   PlacementTotal = null,
+                                   ExecutableSha256 = new string('x', count: 64),
+                                   HasAuxAssets = false,
+                                   KvCacheTypeSource = "auto"
+                               },
                                ExecutionKey);
-            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
-                               work.Version,
-                               BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+            {
+                RunId = work.RunId,
+                ExpectedWorkVersion = work.Version,
+                JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                                    criteria,
                                    "The output covers the task at the expected depth.",
                                    score,
                                    BenchmarkE2ETestDoubles.ModelContentFingerprint)),
-                               LastStreamSequence: 5,
-                               score));
+                LastStreamSequence = 5,
+                Score = score
+            });
             scores[work.RunId] = score;
         }
 

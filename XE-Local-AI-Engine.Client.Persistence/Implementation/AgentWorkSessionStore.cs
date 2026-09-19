@@ -83,7 +83,7 @@ internal sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
             session.UpdatedAtUtc = Now();
             await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new WorkSessionMutationResult(sessionId, sequence, session.StepCount, session.Version, session.Status, session.CurrentTaskId, outcome.SupersededArtifactId);
+            return new WorkSessionMutationResult { SessionId = sessionId, Sequence = sequence, Step = session.StepCount, Version = session.Version, Status = session.Status, CurrentTaskId = session.CurrentTaskId, SupersededArtifactId = outcome.SupersededArtifactId };
         }
         catch (DbUpdateException exception)
         {
@@ -113,7 +113,7 @@ internal sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
         var session = await _dbContext.AgentWorkSessions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken);
         return session is null
             ? null
-            : new WorkSessionMutationResult(sessionId, recorded.Sequence, recorded.Step, session.Version, session.Status, session.CurrentTaskId);
+            : new WorkSessionMutationResult { SessionId = sessionId, Sequence = recorded.Sequence, Step = recorded.Step, Version = session.Version, Status = session.Status, CurrentTaskId = session.CurrentTaskId };
     }
 
     private long AddEvent(AgentWorkSession session, string eventType, string? outcome, Guid? operationId, byte[]? detailJson)
@@ -172,43 +172,52 @@ internal sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
     }
 
     private static AgentWorkSessionSnapshot Snapshot(AgentWorkSession session) =>
-        new(session.Id,
-            session.Title,
-            Text(session.Objective),
-            session.Kind,
-            session.Status,
-            session.AgentDefinitionId,
-            session.ConversationId,
-            session.CurrentTaskId,
-            session.StepCount,
-            session.LastCheckpointId,
-            session.LastSequence,
-            session.ConfigVersion,
-            session.CreatedAtUtc,
-            session.UpdatedAtUtc,
-            session.Version);
+        new()
+        {
+            Id = session.Id,
+            Title = session.Title,
+            Objective = Text(session.Objective),
+            Kind = session.Kind,
+            Status = session.Status,
+            AgentDefinitionId = session.AgentDefinitionId,
+            ConversationId = session.ConversationId,
+            CurrentTaskId = session.CurrentTaskId,
+            StepCount = session.StepCount,
+            LastCheckpointId = session.LastCheckpointId,
+            LastSequence = session.LastSequence,
+            ConfigVersion = session.ConfigVersion,
+            CreatedAtUtc = session.CreatedAtUtc,
+            UpdatedAtUtc = session.UpdatedAtUtc,
+            Version = session.Version
+        };
 
     private static WorkSessionArtifactSnapshot ArtifactSnapshot(AgentWorkSessionArtifact artifact) =>
-        new(artifact.Id,
-            artifact.SessionId,
-            artifact.Sequence,
-            artifact.Kind,
-            artifact.Name,
-            artifact.MediaType,
-            artifact.ContentSha256,
-            artifact.SizeBytes,
-            artifact.IsValid,
-            artifact.ManagedReference,
-            artifact.CreatedStep);
+        new()
+        {
+            Id = artifact.Id,
+            SessionId = artifact.SessionId,
+            Sequence = artifact.Sequence,
+            Kind = artifact.Kind,
+            Name = artifact.Name,
+            MediaType = artifact.MediaType,
+            ContentSha256 = artifact.ContentSha256,
+            SizeBytes = artifact.SizeBytes,
+            IsValid = artifact.IsValid,
+            ManagedReference = artifact.ManagedReference,
+            CreatedStep = artifact.CreatedStep
+        };
 
     private static WorkSessionCheckpointSnapshot CheckpointSnapshot(AgentWorkSessionCheckpoint checkpoint) =>
-        new(checkpoint.Id,
-            checkpoint.SessionId,
-            checkpoint.Sequence,
-            checkpoint.Step,
-            TextOrNull(checkpoint.Summary),
-            Text(checkpoint.StateJson),
-            checkpoint.CreatedAtUtc);
+        new()
+        {
+            Id = checkpoint.Id,
+            SessionId = checkpoint.SessionId,
+            Sequence = checkpoint.Sequence,
+            Step = checkpoint.Step,
+            Summary = TextOrNull(checkpoint.Summary),
+            StateJson = Text(checkpoint.StateJson),
+            CreatedAtUtc = checkpoint.CreatedAtUtc
+        };
 
     private static byte[]? ReasonDetail(string? sanitizedReason) =>
         string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason)));
@@ -236,7 +245,16 @@ internal sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
     private static string? TextOrNull(byte[]? value) =>
         value is null ? null : Encoding.UTF8.GetString(value);
 
-    private sealed record MutationOutcome(string EventType, string? Outcome, byte[]? DetailJson, Guid? SupersededArtifactId = null);
+    private sealed record MutationOutcome
+    {
+        public required string EventType { get; init; }
+
+        public required string? Outcome { get; init; }
+
+        public required byte[]? DetailJson { get; init; }
+
+        public Guid? SupersededArtifactId { get; init; }
+    }
 
     private sealed record ArtifactReplacementDetail(Guid SupersededArtifactId, string SupersededManagedReference);
 

@@ -50,32 +50,55 @@ public interface IGoldenConversationStore
 ///     <see cref="Assertion" /> and <see cref="Rubric" /> are returned in plaintext (decrypted on materialization); the
 ///     store converts to and from this shape at the boundary so callers never touch the encrypted byte columns.
 /// </summary>
-public sealed record GoldenConversationRecord(
-    Guid Id,
-    Guid AgentDefinitionId,
-    string Title,
-    string InputTurns,
-    string? Assertion,
-    string? Rubric,
-    bool Enabled,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    GoldenConversationSource Source = GoldenConversationSource.Manual,
-    Guid? SourceMessageId = null,
-    Guid? SourceConversationId = null);
+public sealed class GoldenConversationRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string InputTurns { get; init; }
+
+    public required string? Assertion { get; init; }
+
+    public required string? Rubric { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public GoldenConversationSource Source { get; init; }
+
+    public Guid? SourceMessageId { get; init; }
+
+    public Guid? SourceConversationId { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a golden conversation case supplied on create. Free text is passed as plaintext strings; the
 ///     store encodes <see cref="InputTurns" />, <see cref="Assertion" /> and <see cref="Rubric" /> to UTF-8 bytes before
 ///     the interceptors encrypt them.
 /// </summary>
-public sealed record GoldenConversationInput(
-    Guid AgentDefinitionId,
-    string Title,
-    string InputTurns,
-    string? Assertion,
-    string? Rubric,
-    bool Enabled,
-    GoldenConversationSource Source = GoldenConversationSource.Manual,
-    Guid? SourceMessageId = null,
-    Guid? SourceConversationId = null);
+public sealed record GoldenConversationInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string InputTurns { get; init; }
+
+    public required string? Assertion { get; init; }
+
+    public required string? Rubric { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public GoldenConversationSource Source { get; init; }
+
+    public Guid? SourceMessageId { get; init; }
+
+    public Guid? SourceConversationId { get; init; }
+}

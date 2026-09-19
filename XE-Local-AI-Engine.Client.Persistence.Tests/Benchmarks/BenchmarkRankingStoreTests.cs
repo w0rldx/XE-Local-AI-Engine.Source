@@ -395,7 +395,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
         {
             PrimaryStopReason = stopReason,
-            JudgeAttempt = new BenchmarkJudgeAttemptSeed(revision.Id, new ReadOnlyMemory<byte>(JudgeRuntime))
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = revision.Id, RuntimeJson = new ReadOnlyMemory<byte>(JudgeRuntime) }
         });
         var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         if (executionKey is not null)
@@ -403,12 +403,15 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
             _ = await store.MarkJudgeLaunchReadyAsync(judge.JudgeAttemptId!.Value, judge.QueueSequence, judge.Version, Receipt(), executionKey);
         }
 
-        _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id,
-                           judge.Version,
-                           Encoding.UTF8.GetBytes("{}"),
-                           5,
-                           score,
-                           verifiedExecutionKey));
+        _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = judge.Version,
+            JudgeResultJson = Encoding.UTF8.GetBytes("{}"),
+            LastStreamSequence = 5,
+            Score = score,
+            VerifiedExecutionKey = verifiedExecutionKey
+        });
         return run.Id;
     }
 
@@ -471,21 +474,44 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     }
 
     private static BenchmarkLaunchReceiptCommand Receipt() =>
-        new("{}", "{}", new string('e', count: 64), new string('r', count: 64), "identity", "cpu", null, null,
-            new string('x', count: 64), false, "auto");
+        new()
+        {
+            ReceiptJson = "{}",
+            EnvironmentFactsJson = "{}",
+            EnvironmentFactsHash = new string('e', count: 64),
+            ReceiptHash = new string('r', count: 64),
+            EffectiveLaunchIdentity = "identity",
+            EffectiveBackend = "cpu",
+            PlacementOffloaded = null,
+            PlacementTotal = null,
+            ExecutableSha256 = new string('x', count: 64),
+            HasAuxAssets = false,
+            KvCacheTypeSource = "auto"
+        };
 
     private static BenchmarkPrimarySuccessCommand PrimarySuccess(Guid runId, long expectedWorkVersion) =>
-        new(runId, expectedWorkVersion, Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120);
+        new() { RunId = runId, ExpectedWorkVersion = expectedWorkVersion, OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), LastStreamSequence = 1, EffectiveContextTokens = 4096, DurationMs = 10, TotalTokens = 12, TokensPerSecond = 120 };
 
     private static string Fingerprint(char value) =>
         "v1:" + new string(value, count: 64);
 
     private static BenchmarkProjectInput NewProject() =>
-        new(Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("""{"task":"answer"}"""), 4096, Guid.NewGuid());
+        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version, Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""), "model.gguf",
-            LocalModelOrigin.Imported, Fingerprint('a'), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = Fingerprint('a'),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileName)
     {

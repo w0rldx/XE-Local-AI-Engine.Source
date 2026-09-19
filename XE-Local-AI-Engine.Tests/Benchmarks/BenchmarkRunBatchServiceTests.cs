@@ -95,27 +95,30 @@ public sealed class BenchmarkRunBatchServiceTests
         new(ProjectId, modelName, expectedVersion, null, 1, false);
 
     private static BenchmarkRunRecord Run() =>
-        new(Guid.Parse("20000000-0000-0000-0000-000000000002"),
-            ProjectId,
-            Encoding.UTF8.GetBytes("{}"),
-            "model",
-            LocalModelOrigin.Imported,
-            "fingerprint",
-            "agent",
-            1,
-            4096,
-            BenchmarkPrimaryStatus.Queued,
-            null,
-            null,
-            null,
-            null,
-            null,
-            0,
-            null,
-            null,
-            1,
-            1,
-            null,
-            null,
-            1);
+        new()
+        {
+            Id = Guid.Parse("20000000-0000-0000-0000-000000000002"),
+            ProjectId = ProjectId,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{}"),
+            PrimaryModelName = "model",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "fingerprint",
+            AgentName = "agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = BenchmarkPrimaryStatus.Queued,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = null,
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            StartedAtUtc = null,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 1
+        };
 }

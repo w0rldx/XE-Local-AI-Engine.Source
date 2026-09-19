@@ -144,12 +144,18 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
     {
         await using var scope = Factory.Services.CreateAsyncScope();
         var datasets = scope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
-        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput($"E2E lifecycle {Guid.NewGuid():N}",
-            TrainingDatasetKind.ToolCalling,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")));
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id,
-            definition.Version,
-            $"E2E lifecycle {Guid.NewGuid():N}"));
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput
+        {
+            Name = $"E2E lifecycle {Guid.NewGuid():N}",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")
+        });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
+        {
+            DefinitionId = definition.Id,
+            ExpectedDefinitionVersion = definition.Version,
+            Name = $"E2E lifecycle {Guid.NewGuid():N}"
+        });
         _ = Check.NotNull(await datasets.ClaimNextAsync(), "Dataset generation must own a durable work item.");
         for (var index = 0; index < 10; index++)
         {
@@ -157,13 +163,16 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
             {
                 Parts = [new TrainingSamplePartV1("user", 0, Content: $"question-{index}")]
             }, TrainingJson.Options);
-            _ = await datasets.AppendSampleAsync(new TrainingSampleInput(dataset.Id,
-                                  "no-tool",
-                                  TrainingSampleLabel.Good,
-                                  content,
-                                  ValidationJson: null,
-                                  TrainingSampleProvenance.Generated,
-                                  new string((char)('a' + index), count: 64)));
+            _ = await datasets.AppendSampleAsync(new TrainingSampleInput
+            {
+                DatasetId = dataset.Id,
+                Kind = "no-tool",
+                Label = TrainingSampleLabel.Good,
+                ContentJson = content,
+                ValidationJson = null,
+                Provenance = TrainingSampleProvenance.Generated,
+                SourceHash = new string((char)('a' + index), count: 64)
+            });
         }
 
         var ready = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null);

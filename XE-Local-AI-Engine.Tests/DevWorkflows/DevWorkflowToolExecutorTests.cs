@@ -554,25 +554,28 @@ public sealed class DevWorkflowToolExecutorTests
     ///     identity fields matter to it; the rest are the shape the record demands.
     /// </summary>
     private static DevelopmentProjectSnapshot Project(Guid projectId) =>
-        new(projectId,
-            "Objective",
-            Guid.NewGuid(),
-            "identity-hash",
-            "main",
-            DevelopmentProjectStatus.Active,
-            DevelopmentEgressPolicy.LocalOnly,
-            CoderModelId: null,
-            ReviewerModelId: null,
-            MaxTokens: null,
-            MaxDurationSeconds: null,
-            ConfigurationVersion: 1,
-            TrustedRepositoryAcknowledged: true,
-            TrustedRepositoryPolicyVersion: 1,
-            TrustedRepositoryAcknowledgedAtUtc: 0,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            Version: 1,
-            CommandProfileJson: null);
+        new()
+        {
+            Id = projectId,
+            Objective = "Objective",
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = "identity-hash",
+            BaseBranch = "main",
+            Status = DevelopmentProjectStatus.Active,
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            CoderModelId = null,
+            ReviewerModelId = null,
+            MaxTokens = null,
+            MaxDurationSeconds = null,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = 1,
+            TrustedRepositoryAcknowledgedAtUtc = 0,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            Version = 1,
+            CommandProfileJson = null
+        };
 
     /// <summary>
     ///     Refuses its first write and then behaves. A decorator over the real store rather than a stub, so everything

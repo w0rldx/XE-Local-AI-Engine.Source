@@ -33,12 +33,15 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
     public async Task AddApprovalDecisionAsync_WritesApproveRow_ReusingColumns()
     {
         var row = await WriteAndReadSingleRowAsync("approve-row.sqlite",
-            new ApprovalDecisionAuditInput(InvocationId: Guid.NewGuid(),
-                ToolName: "spawn_subagent",
-                Category: "Orchestration",
-                Decision: ApprovalDecisions.Approve,
-                Source: ApprovalDecisionSources.Local,
-                LatencyMs: 4_200L));
+            new ApprovalDecisionAuditInput
+            {
+                InvocationId = Guid.NewGuid(),
+                ToolName = "spawn_subagent",
+                Category = "Orchestration",
+                Decision = ApprovalDecisions.Approve,
+                Source = ApprovalDecisionSources.Local,
+                LatencyMs = 4_200L
+            });
 
         // Discriminator + agentless retention bucket + no schema version for this kind.
         AssertEx.Equal((int)AgentExecutionLogRecordKind.ApprovalDecision, row.RecordKind);
@@ -62,12 +65,15 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
     public async Task AddApprovalDecisionAsync_WritesDenyRow_SuccessFalse()
     {
         var row = await WriteAndReadSingleRowAsync("deny-row.sqlite",
-            new ApprovalDecisionAuditInput(InvocationId: Guid.NewGuid(),
-                ToolName: "search_web",
-                Category: "Network",
-                Decision: ApprovalDecisions.Deny,
-                Source: ApprovalDecisionSources.Hub,
-                LatencyMs: 900L));
+            new ApprovalDecisionAuditInput
+            {
+                InvocationId = Guid.NewGuid(),
+                ToolName = "search_web",
+                Category = "Network",
+                Decision = ApprovalDecisions.Deny,
+                Source = ApprovalDecisionSources.Hub,
+                LatencyMs = 900L
+            });
 
         AssertEx.Equal(ApprovalDecisions.Deny, row.TerminalStatus);
         AssertEx.Equal(ApprovalDecisionSources.Hub, row.Provider);
@@ -79,12 +85,15 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
     public async Task AddApprovalDecisionAsync_WritesTimeoutRow_SuccessFalse()
     {
         var row = await WriteAndReadSingleRowAsync("timeout-row.sqlite",
-            new ApprovalDecisionAuditInput(InvocationId: Guid.NewGuid(),
-                ToolName: "run_in_agent_home",
-                Category: "WriteExecute",
-                Decision: ApprovalDecisions.Timeout,
-                Source: ApprovalDecisionSources.Local,
-                LatencyMs: 300_000L));
+            new ApprovalDecisionAuditInput
+            {
+                InvocationId = Guid.NewGuid(),
+                ToolName = "run_in_agent_home",
+                Category = "WriteExecute",
+                Decision = ApprovalDecisions.Timeout,
+                Source = ApprovalDecisionSources.Local,
+                LatencyMs = 300_000L
+            });
 
         AssertEx.Equal(ApprovalDecisions.Timeout, row.TerminalStatus);
         AssertEx.False(row.Success, "a timeout decision persists Success=false");
@@ -101,12 +110,15 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        await store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput(InvocationId: Guid.NewGuid(),
-            ToolName: "spawn_subagent",
-            Category: "Orchestration",
-            Decision: ApprovalDecisions.Approve,
-            Source: ApprovalDecisionSources.Local,
-            LatencyMs: 10L));
+        await store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput
+        {
+            InvocationId = Guid.NewGuid(),
+            ToolName = "spawn_subagent",
+            Category = "Orchestration",
+            Decision = ApprovalDecisions.Approve,
+            Source = ApprovalDecisionSources.Local,
+            LatencyMs = 10L
+        });
 
         // The diagnostics view filters kind 0 (and the row's agentless bucket), the run-envelope ledger filters kind 1,
         // and the usage summary aggregates kind 1 only — so a kind-2 approval row surfaces in none of them.

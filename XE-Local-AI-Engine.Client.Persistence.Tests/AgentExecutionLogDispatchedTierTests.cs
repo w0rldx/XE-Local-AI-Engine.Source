@@ -86,16 +86,19 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
         var agentId = Guid.NewGuid();
 
-        _ = await store.AddAsync(new AgentExecutionLogInput(agentId,
-                           ConversationId: null,
-                           MessageId: null,
-                           ModelName: "llama-3.1",
-                           ConfigHash: "hash",
-                           LatencyMs: 42L,
-                           PromptTokens: 10,
-                           CompletionTokens: 20,
-                           Success: true,
-                           ErrorClass: null));
+        _ = await store.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = null,
+            MessageId = null,
+            ModelName = "llama-3.1",
+            ConfigHash = "hash",
+            LatencyMs = 42L,
+            PromptTokens = 10,
+            CompletionTokens = 20,
+            Success = true,
+            ErrorClass = null
+        });
 
         var rows = await store.ListByAgentAsync(agentId, limit: 10);
 

@@ -75,8 +75,22 @@ public sealed class BenchmarkFidelityDisplayGateTests
     {
         AssertEx.Null(Run(fidelity: null).ToFidelity(Digest(chunks: 200)), "No measurement is no block, not a block of nulls.");
 
-        var perplexityOnly = AssertEx.NotNull(Run(new BenchmarkRunFidelity("succeeded", Guid.NewGuid(), 6.7983, 0.07405, 200, 512,
-                "wikitext2-raw-test@abc", null, null, null, null, null, null))
+        var perplexityOnly = AssertEx.NotNull(Run(new BenchmarkRunFidelity
+        {
+            Status = "succeeded",
+            AttemptId = Guid.NewGuid(),
+            PerplexityMean = 6.7983,
+            PerplexityStdErr = 0.07405,
+            PerplexityChunks = 200,
+            PerplexityContextTokens = 512,
+            PerplexityCorpusId = "wikitext2-raw-test@abc",
+            KldMean = null,
+            KldP99 = null,
+            TopTokenAgreement = null,
+            KldBaseFingerprint = null,
+            KldBaseLogitsDigest = null,
+            ErrorMessage = null
+        })
             .ToFidelity(Digest(chunks: 200)));
         AssertEx.Equal(BenchmarkFidelityKldStates.None, perplexityOnly.KldState, "A perplexity-only run measured no divergence — that is not staleness.");
     }
@@ -85,46 +99,52 @@ public sealed class BenchmarkFidelityDisplayGateTests
         BenchmarkKldCacheKey.Create(BaseFingerprint, CorpusSha, chunks).Digest;
 
     private static BenchmarkRunRecord RunWith(string measuredDigest) =>
-        Run(new BenchmarkRunFidelity("succeeded",
-            Guid.NewGuid(),
-            PerplexityMean: 6.7983,
-            PerplexityStdErr: 0.07405,
-            PerplexityChunks: 200,
-            PerplexityContextTokens: 512,
-            PerplexityCorpusId: "wikitext2-raw-test@abc",
-            KldMean: 0.030165,
-            KldP99: 0.388019,
-            TopTokenAgreement: 0.91529,
-            KldBaseFingerprint: BaseFingerprint,
-            KldBaseLogitsDigest: measuredDigest,
-            ErrorMessage: null));
+        Run(new BenchmarkRunFidelity
+        {
+            Status = "succeeded",
+            AttemptId = Guid.NewGuid(),
+            PerplexityMean = 6.7983,
+            PerplexityStdErr = 0.07405,
+            PerplexityChunks = 200,
+            PerplexityContextTokens = 512,
+            PerplexityCorpusId = "wikitext2-raw-test@abc",
+            KldMean = 0.030165,
+            KldP99 = 0.388019,
+            TopTokenAgreement = 0.91529,
+            KldBaseFingerprint = BaseFingerprint,
+            KldBaseLogitsDigest = measuredDigest,
+            ErrorMessage = null
+        });
 
     private static BenchmarkRunRecord Run(BenchmarkRunFidelity? fidelity) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            new byte[]
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = Guid.NewGuid(),
+            RuntimeSnapshotJson = new byte[]
             {
                 1
             },
-            "quant.gguf",
-            LocalModelOrigin.Imported,
-            "v1:" + new string('e', 64),
-            "Agent",
-            1,
-            4096,
-            BenchmarkPrimaryStatus.Succeeded,
-            4096,
-            10,
-            5,
-            500,
-            null,
-            1,
-            null,
-            null,
-            1,
-            1,
-            1,
-            1,
-            1,
-            Fidelity: fidelity);
+            PrimaryModelName = "quant.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('e', 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = 5,
+            TokensPerSecond = 500,
+            OutputPartsJson = null,
+            LastStreamSequence = 1,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            StartedAtUtc = 1,
+            PrimaryCompletedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Fidelity = fidelity
+        };
 }

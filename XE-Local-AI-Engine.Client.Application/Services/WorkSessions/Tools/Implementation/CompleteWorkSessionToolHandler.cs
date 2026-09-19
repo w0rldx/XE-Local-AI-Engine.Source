@@ -50,13 +50,16 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
         IAgentWorkSessionStore store,
         CancellationToken cancellationToken)
     {
-        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(session.Id,
-                               session.Version,
-                               WorkSessionEventTypes.CompletionRequested,
-                               // One completion per step: a model that calls this twice in one turn records it once.
-                               WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
-                               Outcome: null,
-                               JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))),
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+        {
+            SessionId = session.Id,
+            ExpectedVersion = session.Version,
+            EventType = WorkSessionEventTypes.CompletionRequested,
+            // One completion per step: a model that calls this twice in one turn records it once.
+            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
+            Outcome = null,
+            DetailJson = JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))
+        },
                            cancellationToken);
 
         // No sequence is published: the session is not finished until the supervisor closes it, and announcing a change

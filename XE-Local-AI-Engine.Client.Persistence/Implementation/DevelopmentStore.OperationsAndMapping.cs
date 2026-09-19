@@ -265,60 +265,69 @@ public sealed partial class DevelopmentStore
         Encoding.UTF8.GetBytes(value);
 
     private static DevelopmentProjectSnapshot ProjectSnapshot(DevelopmentProject entity) =>
-        new(entity.Id,
-            Encoding.UTF8.GetString(entity.Objective),
-            entity.SelectedFolderId,
-            entity.RepositoryIdentityHash,
-            entity.BaseBranch,
-            entity.Status,
-            entity.EgressPolicy,
-            entity.CoderModelId,
-            entity.ReviewerModelId,
-            entity.MaxTokens,
-            entity.MaxDurationSeconds,
-            entity.ConfigurationVersion,
-            entity.TrustedRepositoryAcknowledged,
-            entity.TrustedRepositoryPolicyVersion,
-            entity.TrustedRepositoryAcknowledgedAtUtc,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.Version,
-            entity.CommandProfileJson);
+        new()
+        {
+            Id = entity.Id,
+            Objective = Encoding.UTF8.GetString(entity.Objective),
+            SelectedFolderId = entity.SelectedFolderId,
+            RepositoryIdentityHash = entity.RepositoryIdentityHash,
+            BaseBranch = entity.BaseBranch,
+            Status = entity.Status,
+            EgressPolicy = entity.EgressPolicy,
+            CoderModelId = entity.CoderModelId,
+            ReviewerModelId = entity.ReviewerModelId,
+            MaxTokens = entity.MaxTokens,
+            MaxDurationSeconds = entity.MaxDurationSeconds,
+            ConfigurationVersion = entity.ConfigurationVersion,
+            TrustedRepositoryAcknowledged = entity.TrustedRepositoryAcknowledged,
+            TrustedRepositoryPolicyVersion = entity.TrustedRepositoryPolicyVersion,
+            TrustedRepositoryAcknowledgedAtUtc = entity.TrustedRepositoryAcknowledgedAtUtc,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            Version = entity.Version,
+            CommandProfileJson = entity.CommandProfileJson
+        };
 
     private static DevelopmentTaskSnapshot TaskSnapshot(DevelopmentTask entity) =>
-        new(entity.Id,
-            entity.ProjectId,
-            Encoding.UTF8.GetString(entity.Title),
-            Encoding.UTF8.GetString(entity.Requirements),
-            Encoding.UTF8.GetString(entity.AcceptanceCriteriaJson),
-            entity.Status,
-            entity.CurrentReviewRound,
-            entity.MaxReviewRounds,
-            entity.BlockedReason,
-            entity.BlockedAtUtc,
-            entity.ApprovedSubjectHash,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.Version);
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            Title = Encoding.UTF8.GetString(entity.Title),
+            Requirements = Encoding.UTF8.GetString(entity.Requirements),
+            AcceptanceCriteriaJson = Encoding.UTF8.GetString(entity.AcceptanceCriteriaJson),
+            Status = entity.Status,
+            CurrentReviewRound = entity.CurrentReviewRound,
+            MaxReviewRounds = entity.MaxReviewRounds,
+            BlockedReason = entity.BlockedReason,
+            BlockedAtUtc = entity.BlockedAtUtc,
+            ApprovedSubjectHash = entity.ApprovedSubjectHash,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            Version = entity.Version
+        };
 
     private static DevelopmentArtifactSnapshot ArtifactSnapshot(DevelopmentArtifact entity) =>
-        new(entity.Id,
-            entity.ProjectId,
-            entity.TaskId,
-            entity.AttemptId,
-            entity.Kind,
-            entity.SchemaVersion,
-            entity.ManagedReference,
-            entity.ContentHash,
-            entity.ByteCount,
-            entity.CreatedAtUtc,
-            entity.BaseCommit,
-            entity.SubjectHash,
-            entity.ChangedFilesManifestHash,
-            entity.InputArtifactIdsJson,
-            entity.CommandProfileVersion,
-            entity.IsValid,
-            entity.CommandProfileDigest);
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            TaskId = entity.TaskId,
+            AttemptId = entity.AttemptId,
+            Kind = entity.Kind,
+            SchemaVersion = entity.SchemaVersion,
+            ManagedReference = entity.ManagedReference,
+            ContentHash = entity.ContentHash,
+            ByteCount = entity.ByteCount,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            BaseCommit = entity.BaseCommit,
+            SubjectHash = entity.SubjectHash,
+            ChangedFilesManifestHash = entity.ChangedFilesManifestHash,
+            InputArtifactIdsJson = entity.InputArtifactIdsJson,
+            CommandProfileVersion = entity.CommandProfileVersion,
+            IsValid = entity.IsValid,
+            CommandProfileDigest = entity.CommandProfileDigest
+        };
 
     private static string ManagedReference(Guid projectId, Guid artifactId) =>
         string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));

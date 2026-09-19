@@ -82,16 +82,19 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
             var seed = DevelopmentTestFixture.CreateSeed();
             _ = await store.CreateProjectAsync(seed);
 
-            await AssertEx.ThrowsAsync<ArgumentException>(() => store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
-                              seed.ProjectId,
-                              seed.TaskId,
-                              AttemptId: null,
-                              Guid.NewGuid(),
-                              DevelopmentArtifactKind.Patch,
-                              SchemaVersion: 1,
-                              ContentHash: "hash",
-                              ByteCount: 1,
-                              ManagedReference: "../../caller/path")));
+            await AssertEx.ThrowsAsync<ArgumentException>(() => store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand
+            {
+                ArtifactId = Guid.NewGuid(),
+                ProjectId = seed.ProjectId,
+                TaskId = seed.TaskId,
+                AttemptId = null,
+                OperationId = Guid.NewGuid(),
+                Kind = DevelopmentArtifactKind.Patch,
+                SchemaVersion = 1,
+                ContentHash = "hash",
+                ByteCount = 1,
+                ManagedReference = "../../caller/path"
+            }));
         }
         finally
         {

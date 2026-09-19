@@ -25,16 +25,19 @@ public sealed class IntegrationApiKeyStoreTests
         await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = new IntegrationApiKeyStore(context, new FixedTimeProvider(FixedNow));
-            _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(), principalId, "xeint_aaaaaaaa", firstDigest, "Ingest", null));
+            _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand { KeyId = Guid.NewGuid(), PrincipalId = principalId, KeyPrefix = "xeint_aaaaaaaa", KeyHash = firstDigest, Label = "Ingest", AllowedTriggerIdsJson = null });
 
             // Rotating or adding a credential joins the existing principal rather than creating a new identity — which
             // is the whole reason the two ids are separate.
-            _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
-                               principalId,
-                               "xeint_bbbbbbbb",
-                               secondDigest,
-                               "Read",
-                               """["4b1f0f2a-6f2f-4c1f-9d3e-7a4c0b5e8d21"]"""));
+            _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand
+            {
+                KeyId = Guid.NewGuid(),
+                PrincipalId = principalId,
+                KeyPrefix = "xeint_bbbbbbbb",
+                KeyHash = secondDigest,
+                Label = "Read",
+                AllowedTriggerIdsJson = """["4b1f0f2a-6f2f-4c1f-9d3e-7a4c0b5e8d21"]"""
+            });
         }
 
         await using var readContext = fixture.CreateContext();
@@ -61,7 +64,7 @@ public sealed class IntegrationApiKeyStoreTests
 
         await using var context = await fixture.CreateSchemaAsync();
         var store = new IntegrationApiKeyStore(context, new FixedTimeProvider(FixedNow));
-        _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand(keyId, Guid.NewGuid(), "xeint_aaaaaaaa", digest, "Ingest", null));
+        _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand { KeyId = keyId, PrincipalId = Guid.NewGuid(), KeyPrefix = "xeint_aaaaaaaa", KeyHash = digest, Label = "Ingest", AllowedTriggerIdsJson = null });
 
         var sealedBefore = await ReadSealedHashAsync(fixture, keyId);
 
@@ -86,7 +89,7 @@ public sealed class IntegrationApiKeyStoreTests
 
         await using var context = await fixture.CreateSchemaAsync();
         var store = new IntegrationApiKeyStore(context, new FixedTimeProvider(FixedNow));
-        _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand(keyId, Guid.NewGuid(), "xeint_aaaaaaaa", SHA256.HashData("k"u8.ToArray()), "Ingest", null));
+        _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand { KeyId = keyId, PrincipalId = Guid.NewGuid(), KeyPrefix = "xeint_aaaaaaaa", KeyHash = SHA256.HashData("k"u8.ToArray()), Label = "Ingest", AllowedTriggerIdsJson = null });
 
         AssertEx.True(await store.RevokeAsync(keyId, atUtc: 8_000));
         AssertEx.False(await store.RevokeAsync(keyId, atUtc: 8_100), "A second revoke matches no live row, so the first stamp stands.");

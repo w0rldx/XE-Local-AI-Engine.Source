@@ -58,13 +58,16 @@ public sealed class DevWorkflowArtifactLineageTests
 
         var firstSibling = Guid.NewGuid();
         var secondSibling = Guid.NewGuid();
-        var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                          seed.RunVersion,
-                                          Guid.NewGuid(),
-                                          [
-                                              new DevWorkflowNodeRunSeed(firstSibling, "implement#1", DevWorkflowNodeType.DevTask, MaterializationIndex: 0),
-                                              new DevWorkflowNodeRunSeed(secondSibling, "implement#2", DevWorkflowNodeType.DevTask, MaterializationIndex: 1)
-                                          ]));
+        var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = seed.RunVersion,
+            OperationId = Guid.NewGuid(),
+            NodeRuns = [
+                                              new DevWorkflowNodeRunSeed { NodeRunId = firstSibling, NodeKey = "implement#1", NodeType = DevWorkflowNodeType.DevTask, MaterializationIndex = 0 },
+                                              new DevWorkflowNodeRunSeed { NodeRunId = secondSibling, NodeKey = "implement#2", NodeType = DevWorkflowNodeType.DevTask, MaterializationIndex = 1 }
+                                          ]
+        });
 
         var first = await AppendAsync(store, seed.RunId, Guid.NewGuid(), firstSibling, materialized.Version, "patch", "hash-a");
         var second = await AppendAsync(store, seed.RunId, Guid.NewGuid(), secondSibling, first.Version, "patch", "hash-b");
@@ -91,21 +94,24 @@ public sealed class DevWorkflowArtifactLineageTests
         var producerId = Guid.NewGuid();
         var consumerId = Guid.NewGuid();
         var bystanderId = Guid.NewGuid();
-        var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                     seed.RunVersion,
-                                     Guid.NewGuid(),
-                                     [
-                                         new DevWorkflowNodeRunSeed(producerId, "specify", DevWorkflowNodeType.Agent),
-                                         new DevWorkflowNodeRunSeed(consumerId, "plan", DevWorkflowNodeType.Agent),
-                                         new DevWorkflowNodeRunSeed(bystanderId, "research", DevWorkflowNodeType.Agent)
-                                     ]));
+        var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = seed.RunVersion,
+            OperationId = Guid.NewGuid(),
+            NodeRuns = [
+                                         new DevWorkflowNodeRunSeed { NodeRunId = producerId, NodeKey = "specify", NodeType = DevWorkflowNodeType.Agent },
+                                         new DevWorkflowNodeRunSeed { NodeRunId = consumerId, NodeKey = "plan", NodeType = DevWorkflowNodeType.Agent },
+                                         new DevWorkflowNodeRunSeed { NodeRunId = bystanderId, NodeKey = "research", NodeType = DevWorkflowNodeType.Agent }
+                                     ]
+        });
 
         var specificationV1 = Guid.NewGuid();
         var appended = await AppendAsync(store, seed.RunId, specificationV1, producerId, version.Version, "specification", "spec-1");
 
         // The consumer records what it read, then produces its own artifact from it. The bystander produces one too,
         // having consumed nothing.
-        var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, appended.Version, Guid.NewGuid(), [specificationV1]));
+        var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand { RunId = seed.RunId, NodeRunId = consumerId, ExpectedVersion = appended.Version, OperationId = Guid.NewGuid(), ArtifactIds = [specificationV1] });
         var derived = await AppendAsync(store, seed.RunId, Guid.NewGuid(), consumerId, used.Version, "plan", "plan-1");
         var untouched = await AppendAsync(store, seed.RunId, Guid.NewGuid(), bystanderId, derived.Version, "notes", "notes-1");
 
@@ -113,7 +119,7 @@ public sealed class DevWorkflowArtifactLineageTests
         var superseding = await AppendAsync(store, seed.RunId, specificationV2, producerId, untouched.Version, "specification", "spec-2");
         AssertEx.Equal(specificationV1, superseding.SupersededArtifactId);
 
-        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, specificationV1, specificationV2, superseding.Version));
+        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand { RunId = seed.RunId, SupersededArtifactId = specificationV1, SupersedingArtifactId = specificationV2, ExpectedVersion = superseding.Version });
 
         var artifacts = await store.ListArtifactsAsync(seed.RunId);
         var plan = artifacts.Single(artifact => artifact.Name == "plan");
@@ -154,17 +160,20 @@ public sealed class DevWorkflowArtifactLineageTests
         var first = await AppendAsync(store, seed.RunId, firstId, nodeRunId, version, "plan", "hash-1");
 
         var secondId = Guid.NewGuid();
-        var command = new AppendDevWorkflowArtifactCommand(seed.RunId,
-            secondId,
-            nodeRunId,
-            first.Version,
-            Guid.NewGuid(),
-            DevWorkflowArtifactKind.Plan,
-            "plan",
-            "text/markdown",
-            "hash-2",
-            SizeBytes: 16,
-            $"{seed.RunId:N}/{secondId:N}");
+        var command = new AppendDevWorkflowArtifactCommand
+        {
+            RunId = seed.RunId,
+            ArtifactId = secondId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = first.Version,
+            OperationId = Guid.NewGuid(),
+            Kind = DevWorkflowArtifactKind.Plan,
+            Name = "plan",
+            MediaType = "text/markdown",
+            ContentSha256 = "hash-2",
+            SizeBytes = 16,
+            ManagedReference = $"{seed.RunId:N}/{secondId:N}"
+        };
         _ = await store.AppendArtifactAsync(command);
 
         var recorded = context.DevWorkflowRunEvents.Single(entity => entity.EventType == DevWorkflowEventTypes.ArtifactSuperseded);
@@ -195,17 +204,20 @@ public sealed class DevWorkflowArtifactLineageTests
         var first = await AppendAsync(store, seed.RunId, firstId, nodeRunId, version, "plan", "hash-1");
 
         var secondId = Guid.NewGuid();
-        var command = new AppendDevWorkflowArtifactCommand(seed.RunId,
-            secondId,
-            nodeRunId,
-            first.Version,
-            Guid.NewGuid(),
-            DevWorkflowArtifactKind.Plan,
-            "plan",
-            "text/markdown",
-            "hash-2",
-            SizeBytes: 16,
-            $"{seed.RunId:N}/{secondId:N}");
+        var command = new AppendDevWorkflowArtifactCommand
+        {
+            RunId = seed.RunId,
+            ArtifactId = secondId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = first.Version,
+            OperationId = Guid.NewGuid(),
+            Kind = DevWorkflowArtifactKind.Plan,
+            Name = "plan",
+            MediaType = "text/markdown",
+            ContentSha256 = "hash-2",
+            SizeBytes = 16,
+            ManagedReference = $"{seed.RunId:N}/{secondId:N}"
+        };
 
         var written = await store.AppendArtifactAsync(command);
         AssertEx.Equal(firstId, written.SupersededArtifactId);
@@ -235,12 +247,12 @@ public sealed class DevWorkflowArtifactLineageTests
         var first = await AppendAsync(store, seed.RunId, planV1, nodeRunId, version, "plan", "plan-1");
 
         // The re-attempt reads its own previous plan, then supersedes it.
-        var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, nodeRunId, first.Version, Guid.NewGuid(), [planV1]));
+        var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand { RunId = seed.RunId, NodeRunId = nodeRunId, ExpectedVersion = first.Version, OperationId = Guid.NewGuid(), ArtifactIds = [planV1] });
         var planV2 = Guid.NewGuid();
         var second = await AppendAsync(store, seed.RunId, planV2, nodeRunId, used.Version, "plan", "plan-2");
         AssertEx.Equal(planV1, second.SupersededArtifactId);
 
-        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, planV1, planV2, second.Version));
+        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand { RunId = seed.RunId, SupersededArtifactId = planV1, SupersedingArtifactId = planV2, ExpectedVersion = second.Version });
 
         var artifacts = await store.ListArtifactsAsync(seed.RunId);
         AssertEx.False(artifacts.Single(artifact => artifact.Id == planV2).IsStale, "The version that caused the supersession cannot be stale because of itself.");
@@ -256,7 +268,7 @@ public sealed class DevWorkflowArtifactLineageTests
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(
-                              () => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, Guid.NewGuid(), Guid.NewGuid(), DevWorkflowVersions.Any)),
+                              () => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand { RunId = seed.RunId, SupersededArtifactId = Guid.NewGuid(), SupersedingArtifactId = Guid.NewGuid(), ExpectedVersion = DevWorkflowVersions.Any }),
                               "A superseded id that does not belong to the run must be rejected.");
     }
 
@@ -271,21 +283,24 @@ public sealed class DevWorkflowArtifactLineageTests
 
         var producerId = Guid.NewGuid();
         var consumerId = Guid.NewGuid();
-        var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                     seed.RunVersion,
-                                     Guid.NewGuid(),
-                                     [
-                                         new DevWorkflowNodeRunSeed(producerId, "specify", DevWorkflowNodeType.Agent),
-                                         new DevWorkflowNodeRunSeed(consumerId, "plan", DevWorkflowNodeType.Agent)
-                                     ]));
+        var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        {
+            RunId = seed.RunId,
+            ExpectedVersion = seed.RunVersion,
+            OperationId = Guid.NewGuid(),
+            NodeRuns = [
+                                         new DevWorkflowNodeRunSeed { NodeRunId = producerId, NodeKey = "specify", NodeType = DevWorkflowNodeType.Agent },
+                                         new DevWorkflowNodeRunSeed { NodeRunId = consumerId, NodeKey = "plan", NodeType = DevWorkflowNodeType.Agent }
+                                     ]
+        });
 
         var artifactId = Guid.NewGuid();
         var appended = await AppendAsync(store, seed.RunId, artifactId, producerId, version.Version, "specification", "spec-1");
 
-        var first = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, appended.Version, Guid.NewGuid(), [artifactId]));
+        var first = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand { RunId = seed.RunId, NodeRunId = consumerId, ExpectedVersion = appended.Version, OperationId = Guid.NewGuid(), ArtifactIds = [artifactId] });
 
         // A distinct operation id, so this is a genuine second call rather than an idempotent replay.
-        _ = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, first.Version, Guid.NewGuid(), [artifactId]));
+        _ = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand { RunId = seed.RunId, NodeRunId = consumerId, ExpectedVersion = first.Version, OperationId = Guid.NewGuid(), ArtifactIds = [artifactId] });
 
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_artifact_uses"),
             "A repeated capture must not duplicate the consumed-by edge.");
@@ -298,15 +313,18 @@ public sealed class DevWorkflowArtifactLineageTests
         long expectedVersion,
         string name,
         string hash) =>
-        store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(runId,
-            artifactId,
-            nodeRunId,
-            expectedVersion,
-            Guid.NewGuid(),
-            DevWorkflowArtifactKind.Plan,
-            name,
-            "text/markdown",
-            hash,
-            SizeBytes: 16,
-            $"{runId:N}/{artifactId:N}"));
+        store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
+        {
+            RunId = runId,
+            ArtifactId = artifactId,
+            NodeRunId = nodeRunId,
+            ExpectedVersion = expectedVersion,
+            OperationId = Guid.NewGuid(),
+            Kind = DevWorkflowArtifactKind.Plan,
+            Name = name,
+            MediaType = "text/markdown",
+            ContentSha256 = hash,
+            SizeBytes = 16,
+            ManagedReference = $"{runId:N}/{artifactId:N}"
+        });
 }

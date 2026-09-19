@@ -281,12 +281,15 @@ public sealed class LocalDefaultChatModelResolverTests
 
     private static ModelClassificationRecord Classification(string modelName, ModelKind detectedKind, ModelKind? overrideKind)
     {
-        return new ModelClassificationRecord(modelName,
-            Digest: null,
-            detectedKind,
-            DetectedCapabilitiesJson: null,
-            overrideKind,
-            DetectedAtUtc: null,
-            UpdatedAtUtc: 0L);
+        return new ModelClassificationRecord
+        {
+            ModelName = modelName,
+            Digest = null,
+            DetectedKind = detectedKind,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = overrideKind,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 0L
+        };
     }
 }

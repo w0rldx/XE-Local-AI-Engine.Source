@@ -328,8 +328,17 @@ public sealed class ModelFitStoreTests : IDisposable
 
             var inserted = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput("qwen", "ollama", TokensPerSecond: 42.0, TtftMs: 12.0, TotalLatencyMs: 200.0,
-                    Runs: 3, rawJson, DiagnosticsJson: """{"note":"ok"}""")
+                new ModelFitBenchmarkInput
+                {
+                    ModelName = "qwen",
+                    ProviderName = "ollama",
+                    TokensPerSecond = 42.0,
+                    TtftMs = 12.0,
+                    TotalLatencyMs = 200.0,
+                    Runs = 3,
+                    RawJson = rawJson,
+                    DiagnosticsJson = """{"note":"ok"}"""
+                }
             ]);
 
             AssertEx.Equal(expected: 1, inserted);
@@ -364,7 +373,7 @@ public sealed class ModelFitStoreTests : IDisposable
             var snapshot = await snapshotStore.CreateRunningAsync(CreateBenchmarkInput("qwen"));
             _ = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput("qwen", "ollama", TokensPerSecond: 1.0, TtftMs: 1.0, TotalLatencyMs: 1.0, Runs: 1, rawJson, DiagnosticsJson: null)
+                new ModelFitBenchmarkInput { ModelName = "qwen", ProviderName = "ollama", TokensPerSecond = 1.0, TtftMs = 1.0, TotalLatencyMs = 1.0, Runs = 1, RawJson = rawJson, DiagnosticsJson = null }
             ]);
         }
 
@@ -379,42 +388,51 @@ public sealed class ModelFitStoreTests : IDisposable
 
     private static ModelFitSnapshotInput CreateRecommendInput(string useCase)
     {
-        return new ModelFitSnapshotInput(ImageId,
-            ModelFitOperation.Recommend,
-            useCase,
-            "ollama",
-            ModelName: null,
-            ModelFitRunStatus.Queued,
-            StartedAtUtc: null);
+        return new ModelFitSnapshotInput
+        {
+            ApprovedImageId = ImageId,
+            Operation = ModelFitOperation.Recommend,
+            UseCase = useCase,
+            ProviderName = "ollama",
+            ModelName = null,
+            Status = ModelFitRunStatus.Queued,
+            StartedAtUtc = null
+        };
     }
 
     private static ModelFitSnapshotInput CreateBenchmarkInput(string modelName)
     {
-        return new ModelFitSnapshotInput(ImageId,
-            ModelFitOperation.Benchmark,
-            UseCase: null,
-            "ollama",
-            modelName,
-            ModelFitRunStatus.Queued,
-            StartedAtUtc: null);
+        return new ModelFitSnapshotInput
+        {
+            ApprovedImageId = ImageId,
+            Operation = ModelFitOperation.Benchmark,
+            UseCase = null,
+            ProviderName = "ollama",
+            ModelName = modelName,
+            Status = ModelFitRunStatus.Queued,
+            StartedAtUtc = null
+        };
     }
 
     private static ModelFitRecommendationInput CreateRecommendation(int rank, string modelName, double score)
     {
-        return new ModelFitRecommendationInput(rank,
-            modelName,
-            modelName,
-            score,
-            "Good",
-            "CPU",
-            "Q5_K_M",
-            EstimatedTokensPerSecond: 20.0,
-            RequiredRamMb: 4_096.0,
-            RequiredVramMb: null,
-            ContextTokens: 8_192,
-            IsInstalled: false,
-            modelName,
-            DiagnosticsJson: null);
+        return new ModelFitRecommendationInput
+        {
+            Rank = rank,
+            ModelName = modelName,
+            ProviderModelName = modelName,
+            Score = score,
+            FitLevel = "Good",
+            RunMode = "CPU",
+            Quantization = "Q5_K_M",
+            EstimatedTokensPerSecond = 20.0,
+            RequiredRamMb = 4_096.0,
+            RequiredVramMb = null,
+            ContextTokens = 8_192,
+            IsInstalled = false,
+            PullModelName = modelName,
+            DiagnosticsJson = null
+        };
     }
 
     private static async Task<int> CountLatestSuccessfulAsync(string databasePath,

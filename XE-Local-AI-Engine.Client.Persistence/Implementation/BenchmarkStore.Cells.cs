@@ -43,28 +43,33 @@ public sealed partial class BenchmarkStore
                 continue;
             }
 
-            var cell = ranking.Cells.TryGetValue(group.Key, out var entry) ? entry : new CellRanking(null, null, Countable: false);
-            cells.Add(new BenchmarkCellRecord(group.Key,
-                members[0].PrimaryModelName,
-                members[0].ModelContentFingerprint,
-                members[0].PrimaryKvCacheType,
-                members[0].RepeatGroupId,
-                members[0].RepeatIndex,
-                cell.Quality,
-
+            var cell = ranking.Cells.TryGetValue(group.Key, out var entry) ? entry : new CellRanking { Quality = null, Reason = null, Countable = false };
+            cells.Add(new BenchmarkCellRecord
+            {
+                CellKey = group.Key,
+                PrimaryModelName = members[0].PrimaryModelName,
+                ModelContentFingerprint = members[0].ModelContentFingerprint,
+                KvCacheType = members[0].PrimaryKvCacheType,
+                RepeatGroupId = members[0].RepeatGroupId,
+                RepeatIndex = members[0].RepeatIndex,
+                Quality = cell.Quality,
                 // Every run of a cell reports its cell's rank, so the first one carries it.
-                ranking.Runs[members[0].Id].Rank,
-                cell.Reason,
-                [
-                    .. members.Select(member => new BenchmarkCellItemRecord(member.Id,
-                        member.TaskItemId,
-                        member.TaskItemIndex,
-                        ranking.Runs[member.Id].QualityScore,
-                        member.PrimaryStopReason,
-                        ranking.Runs[member.Id].Judge.RankExclusionReason))
-                ]));
+                Rank = ranking.Runs[members[0].Id].Rank,
+                RankExclusionReason = cell.Reason,
+                Items = [
+                    .. members.Select(member => new BenchmarkCellItemRecord
+                    {
+                        RunId = member.Id,
+                        TaskItemId = member.TaskItemId,
+                        TaskItemIndex = member.TaskItemIndex,
+                        QualityScore = ranking.Runs[member.Id].QualityScore,
+                        PrimaryStopReason = member.PrimaryStopReason,
+                        RankExclusionReason = ranking.Runs[member.Id].Judge.RankExclusionReason
+                    })
+                ]
+            });
         }
 
-        return new BenchmarkCellPage(cells, ranking.Cohort, ranking.ScorableItemCount);
+        return new BenchmarkCellPage { Cells = cells, RankCohort = ranking.Cohort, ScorableItemCount = ranking.ScorableItemCount };
     }
 }

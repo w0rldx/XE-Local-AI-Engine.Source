@@ -10,75 +10,130 @@ public static class DevelopmentOperationPhases
     public const string ApplyBlocked = "ApplyBlocked";
 }
 
-public sealed record DevelopmentCreateProjectCommand(
-    Guid ProjectId,
-    Guid TaskId,
-    Guid OperationId,
-    string Objective,
-    Guid SelectedFolderId,
-    string RepositoryIdentityHash,
-    string BaseBranch,
-    string Title,
-    string Requirements,
-    string AcceptanceCriteriaJson,
-    DevelopmentEgressPolicy EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
-    string? CoderModelId = null,
-    string? ReviewerModelId = null,
-    int MaxReviewRounds = 3,
-    int ConfigurationVersion = 1,
-    bool TrustedRepositoryAcknowledged = false,
-    int? TrustedRepositoryPolicyVersion = null,
-    long? TrustedRepositoryAcknowledgedAtUtc = null,
-    int? MaxTokens = null,
-    int? MaxDurationSeconds = null,
-    string? CommandProfileJson = null);
+public sealed record DevelopmentCreateProjectCommand
+{
+    public required Guid ProjectId { get; init; }
+
+    public required Guid TaskId { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required string Objective { get; init; }
+
+    public required Guid SelectedFolderId { get; init; }
+
+    public required string RepositoryIdentityHash { get; init; }
+
+    public required string BaseBranch { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Requirements { get; init; }
+
+    public required string AcceptanceCriteriaJson { get; init; }
+
+    public DevelopmentEgressPolicy EgressPolicy { get; init; }
+
+    public string? CoderModelId { get; init; }
+
+    public string? ReviewerModelId { get; init; }
+
+    public int MaxReviewRounds { get; init; } = 3;
+
+    public int ConfigurationVersion { get; init; } = 1;
+
+    public bool TrustedRepositoryAcknowledged { get; init; }
+
+    public int? TrustedRepositoryPolicyVersion { get; init; }
+
+    public long? TrustedRepositoryAcknowledgedAtUtc { get; init; }
+
+    public int? MaxTokens { get; init; }
+
+    public int? MaxDurationSeconds { get; init; }
+
+    public string? CommandProfileJson { get; init; }
+}
 
 /// <summary>
 ///     One more task on a project that already exists — the task-shaped half of
 ///     <see cref="DevelopmentCreateProjectCommand" />, with everything the project owns (repository, trust
 ///     acknowledgement, models, egress policy, command profile) inherited by living in it.
 /// </summary>
-public sealed record DevelopmentCreateTaskCommand(
-    Guid ProjectId,
-    Guid TaskId,
-    Guid OperationId,
-    string Title,
-    string Requirements,
-    string AcceptanceCriteriaJson,
-    int MaxReviewRounds = 3);
+public sealed class DevelopmentCreateTaskCommand
+{
+    public required Guid ProjectId { get; init; }
 
-public sealed record DevelopmentStartAttemptCommand(
-    Guid TaskId,
-    Guid AttemptId,
-    Guid OperationId,
-    DevelopmentAttemptRole Role,
-    string ModelId,
-    string Provider,
-    long ExpectedTaskVersion,
-    Guid? PredecessorAttemptId = null);
+    public required Guid TaskId { get; init; }
 
-public sealed record DevelopmentTerminalizeAttemptCommand(
-    Guid AttemptId,
-    Guid OperationId,
-    DevelopmentAttemptStatus Status,
-    long ExpectedAttemptVersion,
-    string? TerminalReason = null,
-    long? InputTokens = null,
-    long? OutputTokens = null);
+    public required Guid OperationId { get; init; }
 
-public sealed record DevelopmentTransitionTaskCommand(
-    Guid TaskId,
-    Guid OperationId,
-    DevelopmentTaskStatus TargetStatus,
-    long ExpectedTaskVersion,
-    string? Reason = null,
-    string? ApprovedSubjectHash = null,
+    public required string Title { get; init; }
+
+    public required string Requirements { get; init; }
+
+    public required string AcceptanceCriteriaJson { get; init; }
+
+    public int MaxReviewRounds { get; init; } = 3;
+}
+
+public sealed class DevelopmentStartAttemptCommand
+{
+    public required Guid TaskId { get; init; }
+
+    public required Guid AttemptId { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required DevelopmentAttemptRole Role { get; init; }
+
+    public required string ModelId { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required long ExpectedTaskVersion { get; init; }
+
+    public Guid? PredecessorAttemptId { get; init; }
+}
+
+public sealed class DevelopmentTerminalizeAttemptCommand
+{
+    public required Guid AttemptId { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required DevelopmentAttemptStatus Status { get; init; }
+
+    public required long ExpectedAttemptVersion { get; init; }
+
+    public string? TerminalReason { get; init; }
+
+    public long? InputTokens { get; init; }
+
+    public long? OutputTokens { get; init; }
+}
+
+public sealed class DevelopmentTransitionTaskCommand
+{
+    public required Guid TaskId { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required DevelopmentTaskStatus TargetStatus { get; init; }
+
+    public required long ExpectedTaskVersion { get; init; }
+
+    public string? Reason { get; init; }
+
+    public string? ApprovedSubjectHash { get; init; }
+
     /// <summary>
     ///     That a PERSON wrote <see cref="Reason" />, rather than a reviewer, a gate or a workflow's own fix loop. It
     ///     is what lets the prompts rank it: an operator's sentence amends the task's immutable requirements, and a
     ///     reviewer's does not.
     /// </summary>
-    bool OperatorDirected = false,
+    public bool OperatorDirected { get; init; }
+
     /// <summary>
     ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the single edge out of
     ///     <c>Blocked</c>. A person who retries a workflow node stopped at "all N rounds used" is buying the task the
@@ -90,55 +145,99 @@ public sealed record DevelopmentTransitionTaskCommand(
     ///         gated on <c>DevWorkflowNodeInputs.IsOperatorRetry</c>. A new caller must be gated the same way.
     ///     </para>
     /// </summary>
-    bool WidenReviewRounds = false);
+    public bool WidenReviewRounds { get; init; }
+}
 
-public sealed record DevelopmentStartValidationCommand(
-    Guid TaskId,
-    Guid OperationId,
-    long ExpectedTaskVersion);
+public sealed class DevelopmentStartValidationCommand
+{
+    public required Guid TaskId { get; init; }
 
-public sealed record DevelopmentInvalidateEvidenceCommand(
-    Guid TaskId,
-    Guid OperationId,
-    long ExpectedTaskVersion,
-    string SanitizedReason);
+    public required Guid OperationId { get; init; }
 
-public sealed record DevelopmentFinalizeValidationCommand(
-    DevelopmentAttachArtifactCommand Artifact,
-    Guid OperationId,
-    long ExpectedTaskVersion,
-    DevelopmentTaskStatus TargetStatus,
-    string? SanitizedReason = null);
+    public required long ExpectedTaskVersion { get; init; }
+}
 
-public sealed record DevelopmentFinalizeReviewCommand(
-    DevelopmentAttachArtifactCommand Artifact,
-    Guid OperationId,
-    long ExpectedTaskVersion,
-    long ExpectedAttemptVersion,
-    DevelopmentTaskStatus TargetStatus,
-    string? ApprovedSubjectHash,
-    string? SanitizedReason,
-    long? InputTokens,
-    long? OutputTokens);
+public sealed class DevelopmentInvalidateEvidenceCommand
+{
+    public required Guid TaskId { get; init; }
 
-public sealed record DevelopmentAttachArtifactCommand(
-    Guid ArtifactId,
-    Guid ProjectId,
-    Guid TaskId,
-    Guid? AttemptId,
-    Guid OperationId,
-    DevelopmentArtifactKind Kind,
-    int SchemaVersion,
-    string ContentHash,
-    long ByteCount,
-    ReadOnlyMemory<byte>? ContentJson = null,
-    string? ManagedReference = null,
-    string? BaseCommit = null,
-    string? SubjectHash = null,
-    string? ChangedFilesManifestHash = null,
-    ReadOnlyMemory<byte>? InputArtifactIdsJson = null,
-    string? CommandProfileVersion = null,
-    string? CommandProfileDigest = null);
+    public required Guid OperationId { get; init; }
+
+    public required long ExpectedTaskVersion { get; init; }
+
+    public required string SanitizedReason { get; init; }
+}
+
+public sealed class DevelopmentFinalizeValidationCommand
+{
+    public required DevelopmentAttachArtifactCommand Artifact { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required long ExpectedTaskVersion { get; init; }
+
+    public required DevelopmentTaskStatus TargetStatus { get; init; }
+
+    public string? SanitizedReason { get; init; }
+}
+
+public sealed class DevelopmentFinalizeReviewCommand
+{
+    public required DevelopmentAttachArtifactCommand Artifact { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required long ExpectedTaskVersion { get; init; }
+
+    public required long ExpectedAttemptVersion { get; init; }
+
+    public required DevelopmentTaskStatus TargetStatus { get; init; }
+
+    public required string? ApprovedSubjectHash { get; init; }
+
+    public required string? SanitizedReason { get; init; }
+
+    public required long? InputTokens { get; init; }
+
+    public required long? OutputTokens { get; init; }
+}
+
+public sealed class DevelopmentAttachArtifactCommand
+{
+    public required Guid ArtifactId { get; init; }
+
+    public required Guid ProjectId { get; init; }
+
+    public required Guid TaskId { get; init; }
+
+    public required Guid? AttemptId { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required DevelopmentArtifactKind Kind { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required string ContentHash { get; init; }
+
+    public required long ByteCount { get; init; }
+
+    public ReadOnlyMemory<byte>? ContentJson { get; init; }
+
+    public string? ManagedReference { get; init; }
+
+    public string? BaseCommit { get; init; }
+
+    public string? SubjectHash { get; init; }
+
+    public string? ChangedFilesManifestHash { get; init; }
+
+    public ReadOnlyMemory<byte>? InputArtifactIdsJson { get; init; }
+
+    public string? CommandProfileVersion { get; init; }
+
+    public string? CommandProfileDigest { get; init; }
+}
 
 public sealed record DevelopmentApprovedApplySubject(
     Guid ProjectId,
@@ -170,56 +269,94 @@ public sealed record DevelopmentOperationResult(
     long Version,
     long Sequence);
 
-public sealed record DevelopmentEventSnapshot(
-    Guid Id,
-    Guid ProjectId,
-    Guid? TaskId,
-    Guid? AttemptId,
-    long Sequence,
-    string EventType,
-    long OccurredAtUtc,
-    Guid? OperationId,
-    string? OperationPhase,
-    string? Outcome,
+public sealed class DevelopmentEventSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid ProjectId { get; init; }
+
+    public required Guid? TaskId { get; init; }
+
+    public required Guid? AttemptId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public required Guid? OperationId { get; init; }
+
+    public required string? OperationPhase { get; init; }
+
+    public required string? Outcome { get; init; }
+
     /// <summary>
     ///     The sentence the event was written with, when it carries one — why a task was blocked, why validation
     ///     failed, why a workflow's fix loop sent an approved task back. The only member of the detail document that
     ///     leaves this store: it is authored or sanitized and bounded at every write site, which the rest of the
     ///     document is not.
     /// </summary>
-    string? Reason = null);
+    public string? Reason { get; init; }
+}
 
-public sealed record DevelopmentExecutionSnapshot(
-    Guid ProjectId,
-    Guid TaskId,
-    Guid AttemptId,
-    Guid? SelectedFolderId,
-    string RepositoryIdentityHash,
-    string BaseBranch,
-    DevelopmentEgressPolicy EgressPolicy,
-    int ConfigurationVersion,
-    bool TrustedRepositoryAcknowledged,
-    int? TrustedRepositoryPolicyVersion,
-    long? TrustedRepositoryAcknowledgedAtUtc,
-    int? MaxTokens,
-    int? MaxDurationSeconds,
-    string Title,
-    string Requirements,
-    string AcceptanceCriteriaJson,
-    DevelopmentTaskStatus TaskStatus,
-    long TaskVersion,
-    DevelopmentAttemptRole AttemptRole,
-    DevelopmentAttemptStatus AttemptStatus,
-    string ModelId,
-    string Provider,
-    long AttemptVersion,
-    string? CommandProfileJson,
+public sealed record DevelopmentExecutionSnapshot
+{
+    public required Guid ProjectId { get; init; }
+
+    public required Guid TaskId { get; init; }
+
+    public required Guid AttemptId { get; init; }
+
+    public required Guid? SelectedFolderId { get; init; }
+
+    public required string RepositoryIdentityHash { get; init; }
+
+    public required string BaseBranch { get; init; }
+
+    public required DevelopmentEgressPolicy EgressPolicy { get; init; }
+
+    public required int ConfigurationVersion { get; init; }
+
+    public required bool TrustedRepositoryAcknowledged { get; init; }
+
+    public required int? TrustedRepositoryPolicyVersion { get; init; }
+
+    public required long? TrustedRepositoryAcknowledgedAtUtc { get; init; }
+
+    public required int? MaxTokens { get; init; }
+
+    public required int? MaxDurationSeconds { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Requirements { get; init; }
+
+    public required string AcceptanceCriteriaJson { get; init; }
+
+    public required DevelopmentTaskStatus TaskStatus { get; init; }
+
+    public required long TaskVersion { get; init; }
+
+    public required DevelopmentAttemptRole AttemptRole { get; init; }
+
+    public required DevelopmentAttemptStatus AttemptStatus { get; init; }
+
+    public required string ModelId { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required long AttemptVersion { get; init; }
+
+    public required string? CommandProfileJson { get; init; }
+
     /// <summary>
     ///     What the last request for changes on this task said, or nothing when it has never been asked for rework.
     ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the same
     ///     sentence a reviewer wrote and a workflow's fix loop wrote.
     /// </summary>
-    string? PreviousRoundFeedback = null,
+    public string? PreviousRoundFeedback { get; init; }
+
     /// <summary>
     ///     The rule-set text a Development workflow injected onto this task, or nothing when no workflow drives it.
     ///     Resolved from the task's own event log rather than from a column, exactly as
@@ -232,7 +369,8 @@ public sealed record DevelopmentExecutionSnapshot(
     ///         both answer nothing rather than replaying a snapshot nothing is enforcing any more.
     ///     </para>
     /// </summary>
-    string? WorkflowPolicyText = null,
+    public string? WorkflowPolicyText { get; init; }
+
     /// <summary>
     ///     The last thing a PERSON told this task to do differently, or nothing. Read from the task's own event log
     ///     like the two above, and disjoint from <see cref="PreviousRoundFeedback" />: whichever of the two a row is,
@@ -251,7 +389,8 @@ public sealed record DevelopmentExecutionSnapshot(
     ///         that carried it stops driving the task. It does not follow the task into a second node run.
     ///     </para>
     /// </summary>
-    string? OperatorInstruction = null);
+    public string? OperatorInstruction { get; init; }
+}
 
 /// <summary>
 ///     One rule set as a workflow's policy event names it. The hash is what lets the Dev Mode audit and the workflow's
@@ -259,76 +398,143 @@ public sealed record DevelopmentExecutionSnapshot(
 /// </summary>
 public sealed record DevelopmentWorkflowRuleSetReference(Guid Id, string Name, string ContentSha256);
 
-public sealed record DevelopmentProjectSnapshot(
-    Guid Id,
-    string Objective,
-    Guid? SelectedFolderId,
-    string RepositoryIdentityHash,
-    string BaseBranch,
-    DevelopmentProjectStatus Status,
-    DevelopmentEgressPolicy EgressPolicy,
-    string? CoderModelId,
-    string? ReviewerModelId,
-    int? MaxTokens,
-    int? MaxDurationSeconds,
-    int ConfigurationVersion,
-    bool TrustedRepositoryAcknowledged,
-    int? TrustedRepositoryPolicyVersion,
-    long? TrustedRepositoryAcknowledgedAtUtc,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version,
-    string? CommandProfileJson);
+public sealed record DevelopmentProjectSnapshot
+{
+    public required Guid Id { get; init; }
 
-public sealed record DevelopmentTaskSnapshot(
-    Guid Id,
-    Guid ProjectId,
-    string Title,
-    string Requirements,
-    string AcceptanceCriteriaJson,
-    DevelopmentTaskStatus Status,
-    int CurrentReviewRound,
-    int MaxReviewRounds,
-    string? BlockedReason,
-    long? BlockedAtUtc,
-    string? ApprovedSubjectHash,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version);
+    public required string Objective { get; init; }
 
-public sealed record DevelopmentAttemptSnapshot(
-    Guid Id,
-    Guid TaskId,
-    Guid? PredecessorAttemptId,
-    DevelopmentAttemptRole Role,
-    string ModelId,
-    string Provider,
-    DevelopmentAttemptStatus Status,
-    long? StartedAtUtc,
-    long? EndedAtUtc,
-    string? TerminalReason,
-    long? InputTokens,
-    long? OutputTokens,
-    long Version);
+    public required Guid? SelectedFolderId { get; init; }
 
-public sealed record DevelopmentArtifactSnapshot(
-    Guid Id,
-    Guid ProjectId,
-    Guid TaskId,
-    Guid? AttemptId,
-    DevelopmentArtifactKind Kind,
-    int SchemaVersion,
-    string? ManagedReference,
-    string ContentHash,
-    long ByteCount,
-    long CreatedAtUtc,
-    string? BaseCommit,
-    string? SubjectHash,
-    string? ChangedFilesManifestHash,
-    ReadOnlyMemory<byte>? InputArtifactIdsJson,
-    string? CommandProfileVersion,
-    bool IsValid,
-    string? CommandProfileDigest);
+    public required string RepositoryIdentityHash { get; init; }
+
+    public required string BaseBranch { get; init; }
+
+    public required DevelopmentProjectStatus Status { get; init; }
+
+    public required DevelopmentEgressPolicy EgressPolicy { get; init; }
+
+    public required string? CoderModelId { get; init; }
+
+    public required string? ReviewerModelId { get; init; }
+
+    public required int? MaxTokens { get; init; }
+
+    public required int? MaxDurationSeconds { get; init; }
+
+    public required int ConfigurationVersion { get; init; }
+
+    public required bool TrustedRepositoryAcknowledged { get; init; }
+
+    public required int? TrustedRepositoryPolicyVersion { get; init; }
+
+    public required long? TrustedRepositoryAcknowledgedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+
+    public required string? CommandProfileJson { get; init; }
+}
+
+public sealed record DevelopmentTaskSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid ProjectId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Requirements { get; init; }
+
+    public required string AcceptanceCriteriaJson { get; init; }
+
+    public required DevelopmentTaskStatus Status { get; init; }
+
+    public required int CurrentReviewRound { get; init; }
+
+    public required int MaxReviewRounds { get; init; }
+
+    public required string? BlockedReason { get; init; }
+
+    public required long? BlockedAtUtc { get; init; }
+
+    public required string? ApprovedSubjectHash { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
+
+public sealed class DevelopmentAttemptSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid TaskId { get; init; }
+
+    public required Guid? PredecessorAttemptId { get; init; }
+
+    public required DevelopmentAttemptRole Role { get; init; }
+
+    public required string ModelId { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required DevelopmentAttemptStatus Status { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? EndedAtUtc { get; init; }
+
+    public required string? TerminalReason { get; init; }
+
+    public required long? InputTokens { get; init; }
+
+    public required long? OutputTokens { get; init; }
+
+    public required long Version { get; init; }
+}
+
+public sealed class DevelopmentArtifactSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid ProjectId { get; init; }
+
+    public required Guid TaskId { get; init; }
+
+    public required Guid? AttemptId { get; init; }
+
+    public required DevelopmentArtifactKind Kind { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required string? ManagedReference { get; init; }
+
+    public required string ContentHash { get; init; }
+
+    public required long ByteCount { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required string? BaseCommit { get; init; }
+
+    public required string? SubjectHash { get; init; }
+
+    public required string? ChangedFilesManifestHash { get; init; }
+
+    public required ReadOnlyMemory<byte>? InputArtifactIdsJson { get; init; }
+
+    public required string? CommandProfileVersion { get; init; }
+
+    public required bool IsValid { get; init; }
+
+    public required string? CommandProfileDigest { get; init; }
+}
 
 public interface IDevelopmentStore
 {

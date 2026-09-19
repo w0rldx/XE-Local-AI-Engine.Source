@@ -61,11 +61,14 @@ internal sealed class GraphWorkflowInlineExecutor
         var inputJson = GraphWorkflowDocuments.ComposeInput(run.InputJson, upstream);
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Running,
-                               InputJson: inputJson),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Running,
+            InputJson = inputJson
+        },
                            cancellationToken);
 
         string document;
@@ -82,21 +85,27 @@ internal sealed class GraphWorkflowInlineExecutor
         {
             // Not retryable, and deliberately: the same rows compose the same bytes next time. A pass-through chain is
             // where this earns its keep — every hop re-measures the document it is carrying forward.
-            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                                   nodeRun.Id,
-                                   GraphWorkflowVersions.Any,
-                                   GraphWorkflowNodeRunStatus.Failed,
-                                   FailureClass: GraphWorkflowFailureClass.OutputTooLarge,
-                                   TerminalReason: exception.Message),
+            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+                FailureClass = GraphWorkflowFailureClass.OutputTooLarge,
+                TerminalReason = exception.Message
+            },
                                cancellationToken);
             return 2;
         }
 
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Succeeded,
-                               OutputJson: document),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Succeeded,
+            OutputJson = document
+        },
                            cancellationToken);
         return 2;
     }

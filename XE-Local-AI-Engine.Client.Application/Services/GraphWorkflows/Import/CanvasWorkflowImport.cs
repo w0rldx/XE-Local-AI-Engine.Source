@@ -350,7 +350,7 @@ public static class CanvasWorkflowImport
 
         try
         {
-            var created = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(), name, graphJson, nodeCount, Description: description),
+            var created = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = name, GraphJson = graphJson, NodeCount = nodeCount, Description = description },
                                          cancellationToken);
 
             logger.LogWarning("Open Canvas workflow {CanvasWorkflowId} ('{CanvasWorkflowName}') was imported as graph workflow definition {DefinitionId} "

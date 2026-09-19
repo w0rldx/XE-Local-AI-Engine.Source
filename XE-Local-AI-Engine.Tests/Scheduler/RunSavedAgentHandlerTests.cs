@@ -310,19 +310,22 @@ public sealed class RunSavedAgentHandlerTests
 
     private static AgentDefinitionRecord BuildDefinition(string? modelProfile)
     {
-        return new AgentDefinitionRecord(AgentId,
-            "Log Summarizer",
-            Description: null,
-            Instructions: "raw instructions (must NOT be used directly)",
-            ModelProfile: modelProfile,
-            ReasoningEffort: null,
-            Kind: AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson: null,
-            Version: 7,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new AgentDefinitionRecord
+        {
+            Id = AgentId,
+            Name = "Log Summarizer",
+            Description = null,
+            Instructions = "raw instructions (must NOT be used directly)",
+            ModelProfile = modelProfile,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null,
+            Version = 7,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     private sealed class Harness : IDisposable

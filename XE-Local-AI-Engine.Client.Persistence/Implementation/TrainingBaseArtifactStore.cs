@@ -200,18 +200,21 @@ public sealed class TrainingBaseArtifactStore : ITrainingBaseArtifactStore
 
     private static TrainingBaseArtifactRecord ToRecord(TrainingBaseArtifact entity)
     {
-        return new TrainingBaseArtifactRecord(entity.Id,
-            entity.RepoId,
-            entity.Revision,
-            entity.Status,
-            entity.FilesJson,
-            entity.TotalBytes,
+        return new TrainingBaseArtifactRecord
+        {
+            Id = entity.Id,
+            RepoId = entity.RepoId,
+            Revision = entity.Revision,
+            Status = entity.Status,
+            FilesJson = entity.FilesJson,
+            TotalBytes = entity.TotalBytes,
             // Not `entity.LicenseJson` directly: the implicit byte[] conversion turns a NULL column into an EMPTY
             // memory with HasValue == true, and the license gate reads absence as "no license metadata found".
-            OptionalBlob.AsOptionalMemory(entity.LicenseJson),
-            entity.ErrorMessage,
-            entity.Version,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+            LicenseJson = OptionalBlob.AsOptionalMemory(entity.LicenseJson),
+            ErrorMessage = entity.ErrorMessage,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
     }
 }

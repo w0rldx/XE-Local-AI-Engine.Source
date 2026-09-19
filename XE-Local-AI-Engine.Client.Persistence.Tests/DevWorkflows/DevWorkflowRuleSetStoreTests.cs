@@ -19,11 +19,14 @@ public sealed class DevWorkflowRuleSetStoreTests
         await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = DevWorkflowTestFixture.StoreFor(context);
-            var created = await store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(),
-                                         "House rules",
-                                         "Always write the test first.",
-                                         ProjectScope,
-                                         "What every agent node on this project must follow."));
+            var created = await store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand
+            {
+                RuleSetId = Guid.NewGuid(),
+                Name = "House rules",
+                Body = "Always write the test first.",
+                ScopeJson = ProjectScope,
+                Description = "What every agent node on this project must follow."
+            });
             ruleSetId = created.Id;
 
             AssertEx.Equal(expected: 1, created.Version);
@@ -58,13 +61,16 @@ public sealed class DevWorkflowRuleSetStoreTests
         var store = DevWorkflowTestFixture.StoreFor(context);
         var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store);
 
-        var updated = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id,
-                                     created.Version,
-                                     "House rules v2",
-                                     "Never touch production.",
-                                     ProjectScope,
-                                     Description: null,
-                                     Enabled: false));
+        var updated = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
+        {
+            RuleSetId = created.Id,
+            ExpectedVersion = created.Version,
+            Name = "House rules v2",
+            Body = "Never touch production.",
+            ScopeJson = ProjectScope,
+            Description = null,
+            Enabled = false
+        });
 
         AssertEx.Equal(expected: 2, updated.Version);
         AssertEx.Equal("House rules v2", updated.Name);
@@ -83,13 +89,16 @@ public sealed class DevWorkflowRuleSetStoreTests
         await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
         var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store, body: "Original text.");
-        _ = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id, created.Version, "Renamed", "Second text.", DevWorkflowTestFixture.MatchAllScope));
+        _ = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand { RuleSetId = created.Id, ExpectedVersion = created.Version, Name = "Renamed", Body = "Second text.", ScopeJson = DevWorkflowTestFixture.MatchAllScope });
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id,
-                                  created.Version,
-                                  "Loser",
-                                  "Third text.",
-                                  DevWorkflowTestFixture.MatchAllScope)),
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
+        {
+            RuleSetId = created.Id,
+            ExpectedVersion = created.Version,
+            Name = "Loser",
+            Body = "Third text.",
+            ScopeJson = DevWorkflowTestFixture.MatchAllScope
+        }),
                               "A second edit made against version 1 must be refused rather than silently overwrite the one that landed.");
 
         var read = await store.GetRuleSetAsync(created.Id);

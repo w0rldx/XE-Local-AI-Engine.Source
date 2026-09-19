@@ -80,13 +80,13 @@ public sealed class NodeSqliteContentionTests : IDisposable
 
         await using var holder = new SqliteConnection($"Data Source={path}");
         await holder.OpenAsync();
-        await NodeSqlitePragmas.ApplyAsync(holder, new NodeSqlitePragmaSettings(EnableWriteAheadLog: true, BusyTimeoutMilliseconds: 5000, NodeSqliteSynchronousMode.Normal), logger: null,
+        await NodeSqlitePragmas.ApplyAsync(holder, new NodeSqlitePragmaSettings { EnableWriteAheadLog = true, BusyTimeoutMilliseconds = 5000, Synchronous = NodeSqliteSynchronousMode.Normal }, logger: null,
             CancellationToken.None);
         await ExecuteAsync(holder, "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);");
 
         await using var writer = new SqliteConnection($"Data Source={path}");
         await writer.OpenAsync();
-        await NodeSqlitePragmas.ApplyAsync(writer, new NodeSqlitePragmaSettings(EnableWriteAheadLog: true, BusyTimeoutMilliseconds: 0, NodeSqliteSynchronousMode.Normal), logger: null,
+        await NodeSqlitePragmas.ApplyAsync(writer, new NodeSqlitePragmaSettings { EnableWriteAheadLog = true, BusyTimeoutMilliseconds = 0, Synchronous = NodeSqliteSynchronousMode.Normal }, logger: null,
             CancellationToken.None);
 
         await using var holderTransaction = (SqliteTransaction)await holder.BeginTransactionAsync(CancellationToken.None);

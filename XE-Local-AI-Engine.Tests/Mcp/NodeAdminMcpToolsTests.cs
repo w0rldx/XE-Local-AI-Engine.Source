@@ -864,16 +864,19 @@ public sealed class NodeAdminMcpToolsTests
         harness.WorkflowRuns.GetAsync(detail.Run.Id, Arg.Any<CancellationToken>()).Returns(detail);
         harness.WorkflowStore.ListDefinitionsAsync(true, Arg.Any<CancellationToken>())
                .Returns([
-                   new DevWorkflowDefinitionSummary(detail.Run.DefinitionId,
-                       "seeded",
-                       "hash",
-                       2,
-                       DevWorkflowDefinitionSource.Seeded,
-                       "slug",
-                       false,
-                       1,
-                       10,
-                       10)
+                   new DevWorkflowDefinitionSummary
+                   {
+                       Id = detail.Run.DefinitionId,
+                       Name = "seeded",
+                       GraphHash = "hash",
+                       NodeCount = 2,
+                       Source = DevWorkflowDefinitionSource.Seeded,
+                       SeedSlug = "slug",
+                       Archived = false,
+                       Version = 1,
+                       CreatedAtUtc = 10,
+                       UpdatedAtUtc = 10
+                   }
                ]);
 
         var response = await harness.Tools.GetWorkflowRunAsync(detail.Run.Id.ToString("D"), CancellationToken.None);
@@ -961,36 +964,42 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     private static DevWorkflowWorkItemSnapshot WorkItem(string title, DevWorkflowRunStatus? latestRunStatus) =>
-        new(Guid.NewGuid(),
-            title,
-            "request",
-            DevWorkflowWorkItemStatus.Active,
-            null,
-            latestRunStatus is null ? null : Guid.NewGuid(),
-            latestRunStatus,
-            latestRunStatus is null ? null : "seeded",
-            latestRunStatus is null ? DevWorkflowNodeCounters.Empty : new DevWorkflowNodeCounters(1, 2, 3, 7, 1, null),
-            10,
-            10,
-            1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Title = title,
+            Request = "request",
+            Status = DevWorkflowWorkItemStatus.Active,
+            DevelopmentProjectId = null,
+            LatestRunId = latestRunStatus is null ? null : Guid.NewGuid(),
+            LatestRunStatus = latestRunStatus,
+            LatestRunDefinitionName = latestRunStatus is null ? null : "seeded",
+            LatestRunNodes = latestRunStatus is null ? DevWorkflowNodeCounters.Empty : new DevWorkflowNodeCounters { Queued = 1, Running = 2, Completed = 3, Total = 7, PendingDecisionCount = 1, BlockingGateNodeRunId = null },
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            Version = 1
+        };
 
     private static DevWorkflowRunDetail RunDetail() =>
-        new(new DevWorkflowRunSnapshot(Guid.NewGuid(),
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                1,
-                "hash",
-                """{"schemaVersion":1,"nodes":[],"edges":[]}""",
-                1,
-                DevWorkflowRunStatus.WaitingForApproval,
-                4,
-                "gate_rejected",
-                "a sanitized reason",
-                11,
-                12,
-                10,
-                10,
-                1),
+        new(new DevWorkflowRunSnapshot
+        {
+            Id = Guid.NewGuid(),
+            WorkItemId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionGraphHash = "hash",
+            GraphJson = """{"schemaVersion":1,"nodes":[],"edges":[]}""",
+            GraphRevision = 1,
+            Status = DevWorkflowRunStatus.WaitingForApproval,
+            LastSequence = 4,
+            FailureClass = "gate_rejected",
+            TerminalReason = "a sanitized reason",
+            StartedAtUtc = 11,
+            EndedAtUtc = 12,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            Version = 1
+        },
             [NodeRun("plan", DevWorkflowNodeRunStatus.Succeeded), NodeRun("build", DevWorkflowNodeRunStatus.Running)],
             1,
             null);
@@ -1008,33 +1017,36 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey, DevWorkflowNodeRunStatus status) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            nodeKey,
-            DevWorkflowNodeType.Agent,
-            1,
-            3,
-            0,
-            status,
-            null,
-            null,
-            1,
-            null,
-            false,
-            null,
-            null,
-            null,
-            """{"objective":"secret-input"}""",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            10);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
+            NodeKey = nodeKey,
+            NodeType = DevWorkflowNodeType.Agent,
+            Attempt = 1,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = status,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 1,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = """{"objective":"secret-input"}""",
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = null,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10
+        };
 
     private static void AssertSingleOutcome(Harness harness, string outcome)
     {
@@ -1045,19 +1057,22 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     private static AgentDefinitionRecord AgentRecord() =>
-        new(Guid.NewGuid(),
-            "Agent",
-            "Description",
-            "Instructions",
-            "model",
-            null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(StringComparer.Ordinal),
-            null,
-            1,
-            10,
-            10);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Agent",
+            Description = "Description",
+            Instructions = "Instructions",
+            ModelProfile = "model",
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
 
     private static NodeSettingsAgenticView SettingsView(string model) =>
         new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null, null);

@@ -198,10 +198,13 @@ public sealed partial class DevelopmentStore
         {
             try
             {
-                _ = await InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand(validation.Id,
-                            validation.Id,
-                            validation.Version,
-                            sanitizedReason),
+                _ = await InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand
+                {
+                    TaskId = validation.Id,
+                    OperationId = validation.Id,
+                    ExpectedTaskVersion = validation.Version,
+                    SanitizedReason = sanitizedReason
+                },
                         cancellationToken);
                 reconciled++;
             }

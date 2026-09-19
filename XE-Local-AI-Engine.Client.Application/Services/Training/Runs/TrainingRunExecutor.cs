@@ -410,7 +410,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
             return;
         }
 
-        _ = await _store.CreateArtifactAsync(new TrainingArtifactInput(runId, kind, full), CancellationToken.None);
+        _ = await _store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = kind, Path = full }, CancellationToken.None);
         _ = _events.Append(runId, TrainingRunEventKind.Artifact, new TrainingRunPayload(Message: kind.ToString()));
     }
 

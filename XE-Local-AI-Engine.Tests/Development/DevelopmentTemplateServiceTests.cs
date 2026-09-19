@@ -275,7 +275,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             Task.FromResult(Recorded);
 
         private DevelopmentTemplateSnapshot Snapshot() =>
-            new(_templateId, _templateAlias, _hostPath, CreatedAtUtc: 0, Version: 1);
+            new() { Id = _templateId, Alias = _templateAlias, HostPath = _hostPath, CreatedAtUtc = 0, Version = 1 };
     }
 
     private class RecordingRepositoryBindings : IDevelopmentRepositoryBindingService

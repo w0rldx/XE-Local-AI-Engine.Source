@@ -33,11 +33,14 @@ public sealed partial class McpAgentRunStore
             await transaction.CommitAsync(cancellationToken);
             if (!CryptographicOperations.FixedTimeEquals(fingerprint, existing.RequestFingerprint))
             {
-                return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.RequestIdConflict, ToRecord(existing));
+                return new McpAgentRunAdmissionResult { Kind = McpAgentRunAdmissionKind.RequestIdConflict, Run = ToRecord(existing) };
             }
 
-            return new McpAgentRunAdmissionResult(existing.TaskPayload is null ? McpAgentRunAdmissionKind.ResultExpired : McpAgentRunAdmissionKind.Existing,
-                ToRecord(existing));
+            return new McpAgentRunAdmissionResult
+            {
+                Kind = existing.TaskPayload is null ? McpAgentRunAdmissionKind.ResultExpired : McpAgentRunAdmissionKind.Existing,
+                Run = ToRecord(existing)
+            };
         }
 
         var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
@@ -45,7 +48,7 @@ public sealed partial class McpAgentRunStore
         if (capacityKind != McpAgentRunCapacityKind.None)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.CapacityExceeded, Run: null, CapacityKind: capacityKind);
+            return new McpAgentRunAdmissionResult { Kind = McpAgentRunAdmissionKind.CapacityExceeded, Run = null, CapacityKind = capacityKind };
         }
 
         var taskPayload = _protector.Protect(request.RequestId, "task", task);
@@ -101,33 +104,39 @@ public sealed partial class McpAgentRunStore
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted,
-            new McpAgentRunRecord(request.RequestId,
-                fingerprint.ToArray(),
-                McpAgentRunStatus.Queued,
-                Version: 0,
-                ClaimToken: null,
-                McpAgentRunStopReason.None,
-                StopRequestedAtUtc: null,
-                request.AgentDefinitionId,
-                request.AgentDefinitionVersion,
-                request.ModelId,
-                request.ModelOverrideId,
-                request.WorkspaceId,
-                request.BindingFingerprint.ToArray(),
-                request.Task,
-                request.Instructions,
-                Result: null,
-                DisplayMessage: null,
-                FailureCode: null,
-                request.CreatedAtUtc,
-                ClaimedAtUtc: null,
-                CompletedAtUtc: null,
-                PayloadExpiresAtUtc: null,
-                CompactedAtUtc: null,
-                PayloadExpired: false,
-                IsAgenticAutoApprove: request.IsAgenticAutoApprove,
-                RequestingKeyPrefix: request.RequestingKeyPrefix));
+        return new McpAgentRunAdmissionResult
+        {
+            Kind = McpAgentRunAdmissionKind.Accepted,
+            Run = new McpAgentRunRecord
+            {
+                RequestId = request.RequestId,
+                RequestFingerprint = fingerprint.ToArray(),
+                Status = McpAgentRunStatus.Queued,
+                Version = 0,
+                ClaimToken = null,
+                StopReason = McpAgentRunStopReason.None,
+                StopRequestedAtUtc = null,
+                AgentDefinitionId = request.AgentDefinitionId,
+                AgentDefinitionVersion = request.AgentDefinitionVersion,
+                ModelId = request.ModelId,
+                ModelOverrideId = request.ModelOverrideId,
+                WorkspaceId = request.WorkspaceId,
+                BindingFingerprint = request.BindingFingerprint.ToArray(),
+                Task = request.Task,
+                Instructions = request.Instructions,
+                Result = null,
+                DisplayMessage = null,
+                FailureCode = null,
+                CreatedAtUtc = request.CreatedAtUtc,
+                ClaimedAtUtc = null,
+                CompletedAtUtc = null,
+                PayloadExpiresAtUtc = null,
+                CompactedAtUtc = null,
+                PayloadExpired = false,
+                IsAgenticAutoApprove = request.IsAgenticAutoApprove,
+                RequestingKeyPrefix = request.RequestingKeyPrefix
+            }
+        };
     }
 
     public async Task<McpAgentRunRecord?> GetAsync(Guid requestId, CancellationToken cancellationToken = default)
@@ -177,19 +186,19 @@ public sealed partial class McpAgentRunStore
         if (row is null)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunClaimResult(McpAgentRunClaimKind.NotFound, Run: null);
+            return new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.NotFound, Run = null };
         }
 
         if (row.Version != expectedVersion)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunClaimResult(McpAgentRunClaimKind.VersionConflict, ToRecord(row));
+            return new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.VersionConflict, Run = ToRecord(row) };
         }
 
         if (row.Status != McpAgentRunStatus.Queued || row.StopReason != McpAgentRunStopReason.None)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunClaimResult(McpAgentRunClaimKind.NotQueued, ToRecord(row));
+            return new McpAgentRunClaimResult { Kind = McpAgentRunClaimKind.NotQueued, Run = ToRecord(row) };
         }
 
         var token = Guid.NewGuid();
@@ -221,14 +230,17 @@ public sealed partial class McpAgentRunStore
             },
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed,
-            ToRecord(row with
+        return new McpAgentRunClaimResult
+        {
+            Kind = McpAgentRunClaimKind.Claimed,
+            Run = ToRecord(row with
             {
                 Status = McpAgentRunStatus.Running,
                 Version = row.Version + 1,
                 ClaimToken = token,
                 ClaimedAtUtc = claimedAtUtc
-            }));
+            })
+        };
     }
 
     public async Task<McpAgentRunStopResult> RequestStopAsync(Guid requestId,
@@ -249,25 +261,25 @@ public sealed partial class McpAgentRunStore
         if (row is null)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult(McpAgentRunStopKind.NotFound, Run: null);
+            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.NotFound, Run = null };
         }
 
         if (IsTerminal(row.Status))
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyTerminal, ToRecord(row));
+            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyTerminal, Run = ToRecord(row) };
         }
 
         if (row.StopReason != McpAgentRunStopReason.None)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyRequested, ToRecord(row));
+            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyRequested, Run = ToRecord(row) };
         }
 
         if (row.Version != expectedVersion)
         {
             await transaction.CommitAsync(cancellationToken);
-            return new McpAgentRunStopResult(McpAgentRunStopKind.VersionConflict, ToRecord(row));
+            return new McpAgentRunStopResult { Kind = McpAgentRunStopKind.VersionConflict, Run = ToRecord(row) };
         }
 
         var queued = row.Status == McpAgentRunStatus.Queued;
@@ -315,8 +327,10 @@ public sealed partial class McpAgentRunStore
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return new McpAgentRunStopResult(McpAgentRunStopKind.Requested,
-            ToRecord(row with
+        return new McpAgentRunStopResult
+        {
+            Kind = McpAgentRunStopKind.Requested,
+            Run = ToRecord(row with
             {
                 Status = status,
                 Version = row.Version + 1,
@@ -326,7 +340,8 @@ public sealed partial class McpAgentRunStore
                 FailureCode = failureCode,
                 ActivePayloadBytes = activePayloadBytes,
                 PayloadExpiresAtUtc = payloadExpiresAtUtc
-            }));
+            })
+        };
     }
 
     public async Task<bool> TryFinalizeAsync(McpAgentRunFinalization finalization, CancellationToken cancellationToken = default)
@@ -555,7 +570,7 @@ public sealed partial class McpAgentRunStore
         var persisted = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
         var reconstructed = await ReconstructCountersAsync(connection, transaction, persisted.UpdatedAtUtc, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new McpAgentRunLedgerVerification(CountersEqual(persisted, reconstructed), persisted, reconstructed);
+        return new McpAgentRunLedgerVerification { IsConsistent = CountersEqual(persisted, reconstructed), Persisted = persisted, Reconstructed = reconstructed };
     }
 
     public async Task<McpAgentRunLedgerCounters> RebuildLedgerAsync(long updatedAtUtc, CancellationToken cancellationToken = default)
@@ -574,6 +589,6 @@ public sealed partial class McpAgentRunStore
         await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
         var counters = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new McpAgentRunLedgerSnapshot(counters.QueuedRunCount, counters.RunningRunCount, counters);
+        return new McpAgentRunLedgerSnapshot { QueueDepth = counters.QueuedRunCount, RunningCount = counters.RunningRunCount, Counters = counters };
     }
 }

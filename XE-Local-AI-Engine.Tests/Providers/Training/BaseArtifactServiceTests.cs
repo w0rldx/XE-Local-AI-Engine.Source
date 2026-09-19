@@ -168,16 +168,19 @@ public sealed class BaseArtifactServiceTests : IDisposable
 
     private static TrainingBaseArtifactRecord Record(TrainingBaseArtifactStatus status)
     {
-        return new TrainingBaseArtifactRecord(Guid.NewGuid(),
-            RepoId,
-            "main",
-            status,
-            ReadOnlyMemory<byte>.Empty,
-            TotalBytes: 0,
-            LicenseJson: null,
-            ErrorMessage: null,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new TrainingBaseArtifactRecord
+        {
+            Id = Guid.NewGuid(),
+            RepoId = RepoId,
+            Revision = "main",
+            Status = status,
+            FilesJson = ReadOnlyMemory<byte>.Empty,
+            TotalBytes = 0,
+            LicenseJson = null,
+            ErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 }

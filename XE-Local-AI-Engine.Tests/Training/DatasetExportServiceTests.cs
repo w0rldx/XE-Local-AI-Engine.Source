@@ -72,8 +72,27 @@ public sealed class DatasetExportServiceTests
     {
         var store = Substitute.For<ITrainingDatasetStore>();
         _ = store.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>())
-                 .Returns(new TrainingDatasetRecord(DatasetId, Guid.NewGuid(), 1, DefinitionJson, "dataset", TrainingDatasetStatus.Ready, 2, "v1:abc",
-                     samples.Length, samples.Length, 0, 0, 0, 1, 0, 0, DatasetGenerationWorkStatus.Succeeded, null));
+                 .Returns(new TrainingDatasetRecord
+                 {
+                     Id = DatasetId,
+                     DefinitionId = Guid.NewGuid(),
+                     DefinitionVersion = 1,
+                     DefinitionJson = DefinitionJson,
+                     Name = "dataset",
+                     Status = TrainingDatasetStatus.Ready,
+                     Revision = 2,
+                     ContentFingerprint = "v1:abc",
+                     TotalSampleCount = samples.Length,
+                     GoodSampleCount = samples.Length,
+                     BadSampleCount = 0,
+                     RejectedSampleCount = 0,
+                     DuplicateSampleCount = 0,
+                     Version = 1,
+                     CreatedAtUtc = 0,
+                     UpdatedAtUtc = 0,
+                     WorkStatus = DatasetGenerationWorkStatus.Succeeded,
+                     WorkErrorMessage = null
+                 });
         _ = store.ListAllSamplesAsync(DatasetId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<TrainingSampleRecord>>(samples);
         return new DatasetExportService(store);
     }
@@ -91,8 +110,20 @@ public sealed class DatasetExportServiceTests
                 new TrainingSamplePartV1("text", 2, "Here is the readme.")
             ]
         };
-        return new TrainingSampleRecord(Guid.NewGuid(), DatasetId, sequence, "tool-call", TrainingSampleLabel.Good, reviewState,
-            JsonSerializer.SerializeToUtf8Bytes(content, TrainingJson.Options), null, TrainingSampleProvenance.Generated,
-            $"hash-{sequence}", CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        return new TrainingSampleRecord
+        {
+            Id = Guid.NewGuid(),
+            DatasetId = DatasetId,
+            Sequence = sequence,
+            Kind = "tool-call",
+            Label = TrainingSampleLabel.Good,
+            ReviewState = reviewState,
+            ContentJson = JsonSerializer.SerializeToUtf8Bytes(content, TrainingJson.Options),
+            ValidationJson = null,
+            Provenance = TrainingSampleProvenance.Generated,
+            SourceHash = $"hash-{sequence}",
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 }

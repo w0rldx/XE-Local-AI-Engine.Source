@@ -621,19 +621,22 @@ public sealed class GraphWorkflowDefinitionEndpointTests
     }
 
     private static GraphWorkflowDefinitionSnapshot Snapshot(string? graphJson = null, int nodeCount = 3) =>
-        new(DefinitionId,
-            "Triage",
-            "The one that triages.",
-            graphJson ?? GraphWorkflowGraphs.StartAgentEnd,
-            "graph-hash",
-            nodeCount,
-            SchemaVersion: 1,
-            Version: 4,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = DefinitionId,
+            Name = "Triage",
+            Description = "The one that triages.",
+            GraphJson = graphJson ?? GraphWorkflowGraphs.StartAgentEnd,
+            GraphHash = "graph-hash",
+            NodeCount = nodeCount,
+            SchemaVersion = 1,
+            Version = 4,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static GraphWorkflowDefinitionSummary Summary() =>
-        new(DefinitionId, "Triage", "The one that triages.", "graph-hash", NodeCount: 3, SchemaVersion: 1, Version: 4, CreatedAtUtc: 1, UpdatedAtUtc: 2);
+        new() { Id = DefinitionId, Name = "Triage", Description = "The one that triages.", GraphHash = "graph-hash", NodeCount = 3, SchemaVersion = 1, Version = 4, CreatedAtUtc = 1, UpdatedAtUtc = 2 };
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {

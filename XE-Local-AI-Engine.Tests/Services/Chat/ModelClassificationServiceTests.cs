@@ -204,13 +204,16 @@ public sealed class ModelClassificationServiceTests
             CancellationToken cancellationToken = default)
         {
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
-            var record = new ModelClassificationRecord(modelName,
-                digest,
-                detectedKind,
-                capabilitiesJson,
-                existing?.OverrideKind,
-                DetectedAtUtc: 1,
-                UpdatedAtUtc: 1);
+            var record = new ModelClassificationRecord
+            {
+                ModelName = modelName,
+                Digest = digest,
+                DetectedKind = detectedKind,
+                DetectedCapabilitiesJson = capabilitiesJson,
+                OverrideKind = existing?.OverrideKind,
+                DetectedAtUtc = 1,
+                UpdatedAtUtc = 1
+            };
             _rows[modelName] = record;
             return Task.FromResult(record);
         }
@@ -219,7 +222,7 @@ public sealed class ModelClassificationServiceTests
         {
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
             var record = existing is null
-                ? new ModelClassificationRecord(modelName, Digest: null, ModelKind.Unknown, DetectedCapabilitiesJson: null, overrideKind, DetectedAtUtc: null, UpdatedAtUtc: 1)
+                ? new ModelClassificationRecord { ModelName = modelName, Digest = null, DetectedKind = ModelKind.Unknown, DetectedCapabilitiesJson = null, OverrideKind = overrideKind, DetectedAtUtc = null, UpdatedAtUtc = 1 }
                 : existing with
                 {
                     OverrideKind = overrideKind,

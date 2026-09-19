@@ -32,7 +32,7 @@ public sealed class SlashCommandStoreTests : IDisposable
         {
             await context.Database.EnsureCreatedAsync();
             var record = await new SlashCommandStore(context, TimeProvider.System)
-                .AddAsync(new SlashCommandInput("review", "secret description", SlashCommandActionType.SendPrompt, "secret prompt"));
+                .AddAsync(new SlashCommandInput { Name = "review", Description = "secret description", ActionType = SlashCommandActionType.SendPrompt, Prompt = "secret prompt" });
             id = record.Id;
             AssertEx.Equal("secret prompt", record.Prompt);
         }
@@ -69,11 +69,11 @@ public sealed class SlashCommandStoreTests : IDisposable
         var store = new SlashCommandStore(context, TimeProvider.System);
         for (var index = 0; index < 100; index++)
         {
-            _ = await store.AddAsync(new SlashCommandInput($"command-{index}", null, SlashCommandActionType.SendPrompt, "prompt"));
+            _ = await store.AddAsync(new SlashCommandInput { Name = $"command-{index}", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" });
         }
 
         await AssertEx.ThrowsAsync<SlashCommandCapacityException>(() =>
-            store.AddAsync(new SlashCommandInput("overflow", null, SlashCommandActionType.SendPrompt, "prompt")));
+            store.AddAsync(new SlashCommandInput { Name = "overflow", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" }));
         AssertEx.Equal(expected: 100, (await store.ListAsync()).Count);
     }
 
@@ -146,7 +146,7 @@ public sealed class SlashCommandStoreTests : IDisposable
             var seedStore = new SlashCommandStore(seedContext, TimeProvider.System);
             for (var index = 0; index < 99; index++)
             {
-                _ = await seedStore.AddAsync(new SlashCommandInput($"seed-{index}", null, SlashCommandActionType.SendPrompt, "prompt"));
+                _ = await seedStore.AddAsync(new SlashCommandInput { Name = $"seed-{index}", Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" });
             }
         }
 
@@ -173,7 +173,7 @@ public sealed class SlashCommandStoreTests : IDisposable
         {
             await context.Database.EnsureCreatedAsync();
             id = (await new SlashCommandStore(context, TimeProvider.System)
-                .AddAsync(new SlashCommandInput("review", "description", SlashCommandActionType.SendPrompt, "prompt"))).Id;
+                .AddAsync(new SlashCommandInput { Name = "review", Description = "description", ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" })).Id;
         }
 
         await using (var connection = new SqliteConnection($"Data Source={path}"))
@@ -221,7 +221,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     {
         try
         {
-            _ = await store.AddAsync(new SlashCommandInput(name, null, SlashCommandActionType.SendPrompt, "prompt"));
+            _ = await store.AddAsync(new SlashCommandInput { Name = name, Description = null, ActionType = SlashCommandActionType.SendPrompt, Prompt = "prompt" });
             return true;
         }
         catch (SlashCommandCapacityException)

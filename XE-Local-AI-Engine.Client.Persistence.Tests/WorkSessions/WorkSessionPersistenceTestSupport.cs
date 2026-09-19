@@ -54,7 +54,7 @@ internal sealed class WorkSessionTestFixture : IDisposable
         string title = "Seeded session",
         string objective = "Seeded objective",
         AgentWorkSessionKind kind = AgentWorkSessionKind.Research) =>
-        new(sessionId, Guid.NewGuid(), Guid.NewGuid(), kind, title, objective);
+        new() { SessionId = sessionId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid(), Kind = kind, Title = title, Objective = objective };
 
     /// <summary>Runs a scalar query straight against the file, for assertions the entity model would false-pass.</summary>
     public async Task<object?> RawScalarAsync(string sql, Action<SqliteCommand>? configure = null)

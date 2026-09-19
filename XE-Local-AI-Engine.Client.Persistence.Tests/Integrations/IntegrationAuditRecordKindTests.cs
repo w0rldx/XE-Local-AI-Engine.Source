@@ -39,14 +39,17 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         await using var context = await CreateSchemaAsync("integration-audit-row.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(invocationId,
-                       requestId,
-                       "sensor-ingest",
-                       "xeint_a1b2c3d4",
-                       agentDefinitionId,
-                       "completed",
-                       "trace-7",
-                       LatencyMs: 4_200L));
+        await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput
+        {
+            InvocationId = invocationId,
+            RequestId = requestId,
+            TriggerName = "sensor-ingest",
+            KeyPrefix = "xeint_a1b2c3d4",
+            TargetAgentDefinitionId = agentDefinitionId,
+            TerminalStatus = "completed",
+            TraceId = "trace-7",
+            LatencyMs = 4_200L
+        });
 
         var row = await context.AgentExecutionLogs.AsNoTracking().SingleAsync();
 
@@ -77,14 +80,17 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         await using var context = await CreateSchemaAsync($"integration-audit-{terminalStatus}.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(Guid.NewGuid(),
-                       Guid.NewGuid(),
-                       "sensor-ingest",
-                       "xeint_a1b2c3d4",
-                       Guid.NewGuid(),
-                       terminalStatus,
-                       TraceId: null,
-                       LatencyMs: 10L));
+        await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput
+        {
+            InvocationId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid(),
+            TriggerName = "sensor-ingest",
+            KeyPrefix = "xeint_a1b2c3d4",
+            TargetAgentDefinitionId = Guid.NewGuid(),
+            TerminalStatus = terminalStatus,
+            TraceId = null,
+            LatencyMs = 10L
+        });
 
         var row = await context.AgentExecutionLogs.AsNoTracking().SingleAsync();
         AssertEx.Equal(terminalStatus, row.TerminalStatus);
@@ -97,14 +103,17 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         await using var context = await CreateSchemaAsync("integration-audit-exclusion.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(Guid.NewGuid(),
-                       Guid.NewGuid(),
-                       "sensor-ingest",
-                       "xeint_a1b2c3d4",
-                       Guid.NewGuid(),
-                       "completed",
-                       TraceId: null,
-                       LatencyMs: 10L));
+        await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput
+        {
+            InvocationId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid(),
+            TriggerName = "sensor-ingest",
+            KeyPrefix = "xeint_a1b2c3d4",
+            TargetAgentDefinitionId = Guid.NewGuid(),
+            TerminalStatus = "completed",
+            TraceId = null,
+            LatencyMs = 10L
+        });
 
         // The diagnostics view filters kind 0, the run-envelope ledger kind 1, and the usage summary aggregates kind 1
         // only — so a kind-3 row surfaces in none of them, and every reader that forgets to filter is the bug this

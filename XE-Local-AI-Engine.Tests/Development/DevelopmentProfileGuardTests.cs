@@ -152,37 +152,39 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         new(snapshot.ProjectId, snapshot.SelectedFolderId ?? Guid.NewGuid(), "fixture", repositoryRoot, identity);
 
     private static DevelopmentExecutionSnapshot Snapshot(string identityHash) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            identityHash,
-            "main",
-            DevelopmentEgressPolicy.LocalOnly,
-            ConfigurationVersion: 1,
-            TrustedRepositoryAcknowledged: true,
-            DevelopmentTrustPolicy.CurrentVersion,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            MaxTokens: null,
-            MaxDurationSeconds: null,
-            "title",
-            "requirements",
-            "[]",
-            PersistenceDevelopmentTaskStatus.InProgress,
-            TaskVersion: 1,
-            DevelopmentAttemptRole.Coder,
-            PersistenceDevelopmentAttemptStatus.Running,
-            "model",
-            "local",
-            AttemptVersion: 1,
-
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = identityHash,
+            BaseBranch = "main",
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MaxTokens = null,
+            MaxDurationSeconds = null,
+            Title = "title",
+            Requirements = "requirements",
+            AcceptanceCriteriaJson = "[]",
+            TaskStatus = PersistenceDevelopmentTaskStatus.InProgress,
+            TaskVersion = 1,
+            AttemptRole = DevelopmentAttemptRole.Coder,
+            AttemptStatus = PersistenceDevelopmentAttemptStatus.Running,
+            ModelId = "model",
+            Provider = "local",
+            AttemptVersion = 1,
             // A real execution snapshot always carries the project's stored profile, and PrepareAsync now reads it to
             // decide whether the base commit needs a dependency warm restore. The generic profile declares no restore
             // command, so this fixture warms nothing — which is what keeps this test about the import tamper check.
             // The tools below deliberately bind a DIFFERENT profile object; see the comment at that call site.
-            CommandProfileJson: Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+            CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
                                                         .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
-                                                        .ToCanonicalUtf8()));
+                                                        .ToCanonicalUtf8())
+        };
 
     private async Task<string> CreateRepositoryAsync()
     {

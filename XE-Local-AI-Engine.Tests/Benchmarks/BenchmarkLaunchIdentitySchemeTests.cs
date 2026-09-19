@@ -58,5 +58,5 @@ public sealed class BenchmarkLaunchIdentitySchemeTests
     }
 
     private static BenchmarkRunLaunchIntent Intent(int? launchIdentityScheme) =>
-        new("cuda", "q8_0", "auto", null, LlamaServerLaunchProjection.FlashAttentionOn, new string('a', 64), null, launchIdentityScheme);
+        new() { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "auto", KvAutoReason = null, FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionOn, IntendedLaunchIdentity = new string('a', 64), IntendedExecutableSha256 = null, LaunchIdentityScheme = launchIdentityScheme };
 }

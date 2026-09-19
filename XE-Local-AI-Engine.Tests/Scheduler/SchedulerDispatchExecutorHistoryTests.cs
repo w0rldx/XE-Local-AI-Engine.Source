@@ -333,52 +333,58 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
     private static ScheduledJobDefinitionRecord DefinitionRecord()
     {
-        return new ScheduledJobDefinitionRecord(JobId,
-            ConfigurableHandler.Id,
-            "History Test Job",
-            Description: null,
-            Enabled: true,
-            ScheduleKind.OneShot,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            ParameterJson: null,
-            ScheduledJobCreator.User,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: null);
+        return new ScheduledJobDefinitionRecord
+        {
+            Id = JobId,
+            TemplateId = ConfigurableHandler.Id,
+            DisplayName = "History Test Job",
+            Description = null,
+            Enabled = true,
+            ScheduleKind = ScheduleKind.OneShot,
+            CronExpression = null,
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            ParameterJson = null,
+            CreatedBy = ScheduledJobCreator.User,
+            CreatedAtUtc = 0L,
+            UpdatedAtUtc = 0L,
+            DisabledAtUtc = null,
+            DeletedAtUtc = null
+        };
     }
 
     private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status, long? cancellationRequestedAtUtc = null)
     {
-        return new ScheduledJobRunRecord(RunId,
-            JobId,
-            ConfigurableHandler.Id,
-            "fire",
-            ScheduledRunTrigger.Schedule,
-            status,
-            ScheduledFireTimeUtc: null,
-            Now.ToUnixTimeMilliseconds(),
-            CompletedAtUtc: null,
-            DurationMs: null,
-            Summary: null,
-            DetailsJson: null,
-            ErrorMessage: null,
-            ErrorDetails: null,
-            cancellationRequestedAtUtc,
-            CreatedAtUtc: 1L);
+        return new ScheduledJobRunRecord
+        {
+            Id = RunId,
+            ScheduledJobId = JobId,
+            TemplateId = ConfigurableHandler.Id,
+            QuartzFireInstanceId = "fire",
+            TriggeredBy = ScheduledRunTrigger.Schedule,
+            Status = status,
+            ScheduledFireTimeUtc = null,
+            ActualFireTimeUtc = Now.ToUnixTimeMilliseconds(),
+            CompletedAtUtc = null,
+            DurationMs = null,
+            Summary = null,
+            DetailsJson = null,
+            ErrorMessage = null,
+            ErrorDetails = null,
+            CancellationRequestedAtUtc = cancellationRequestedAtUtc,
+            CreatedAtUtc = 1L
+        };
     }
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
     {
-        return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, OccurredAtUtc: 1L);
+        return new ScheduledJobRunEventRecord { Id = Guid.NewGuid(), RunId = input.RunId, Sequence = input.Sequence, Level = input.Level, Message = input.Message, DataJson = input.DataJson, OccurredAtUtc = 1L };
     }
 
     private sealed class ConfigurableHandler : IScheduledJobHandler

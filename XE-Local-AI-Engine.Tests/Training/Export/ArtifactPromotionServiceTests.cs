@@ -306,8 +306,23 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                 : null;
 
             var store = Substitute.For<ITrainingRunStore>();
-            var artifact = new TrainingArtifactRecord(ArtifactId, RunId, kind, stagedPath, sha256, SizeBytes: 4, smokeState,
-                SmokeReason: null, committedName, Version: 2, CreatedAtUtc: 0, UpdatedAtUtc: 0, comparisonId, qualityJson);
+            var artifact = new TrainingArtifactRecord
+            {
+                Id = ArtifactId,
+                RunId = RunId,
+                Kind = kind,
+                Path = stagedPath,
+                Sha256 = sha256,
+                SizeBytes = 4,
+                SmokeState = smokeState,
+                SmokeReason = null,
+                CommittedModelName = committedName,
+                Version = 2,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                QualityComparisonId = comparisonId,
+                QualityDecisionJson = qualityJson
+            };
             var run = Run(linkedModel);
             _ = store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(_ => artifact);
             _ = store.GetAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
@@ -324,9 +339,20 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
 
             var baseArtifacts = Substitute.For<ITrainingBaseArtifactStore>();
             _ = baseArtifacts.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                             .Returns(new TrainingBaseArtifactRecord(Guid.NewGuid(), "meta/base", "main", TrainingBaseArtifactStatus.Ready,
-                                 ReadOnlyMemory<byte>.Empty, TotalBytes: 0, LicenseJson: null, ErrorMessage: null, Version: 1,
-                                 CreatedAtUtc: 0, UpdatedAtUtc: 0));
+                             .Returns(new TrainingBaseArtifactRecord
+                             {
+                                 Id = Guid.NewGuid(),
+                                 RepoId = "meta/base",
+                                 Revision = "main",
+                                 Status = TrainingBaseArtifactStatus.Ready,
+                                 FilesJson = ReadOnlyMemory<byte>.Empty,
+                                 TotalBytes = 0,
+                                 LicenseJson = null,
+                                 ErrorMessage = null,
+                                 Version = 1,
+                                 CreatedAtUtc = 0,
+                                 UpdatedAtUtc = 0
+                             });
             var models = Substitute.For<IGgufModelStore>();
             _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<LocalModelDescriptor>>(installedModelName is null
                 ? []
@@ -435,9 +461,21 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                 EvaluationModelTargetKind.InstalledModel, sourceArtifactId: null);
             var tunedEvaluation = Evaluation("tuned.gguf", ArtifactSha256, membership, tunedProvenance,
                 EvaluationModelTargetKind.StagedTrainingArtifact, ArtifactId);
-            var comparison = new TrainingComparisonRecord(Guid.NewGuid(), "quality", baseEvaluation.Id, tunedEvaluation.Id, null, null, RunId,
-                JsonSerializer.SerializeToUtf8Bytes(ComparisonReportService.ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark: null, tunedBenchmark: null),
-                    TrainingJson.Options), 1, 0, 0);
+            var comparison = new TrainingComparisonRecord
+            {
+                Id = Guid.NewGuid(),
+                Name = "quality",
+                BaseEvaluationRunId = baseEvaluation.Id,
+                TunedEvaluationRunId = tunedEvaluation.Id,
+                BaseBenchmarkRunId = null,
+                TunedBenchmarkRunId = null,
+                TrainingRunId = RunId,
+                DeltasJson = JsonSerializer.SerializeToUtf8Bytes(ComparisonReportService.ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark: null, tunedBenchmark: null),
+                    TrainingJson.Options),
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
             var evaluations = Substitute.For<ITrainingEvaluationStore>();
             _ = evaluations.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
             _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
@@ -452,10 +490,31 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             ReadOnlyMemory<byte> provenance,
             EvaluationModelTargetKind targetKind,
             Guid? sourceArtifactId) =>
-            new(Guid.NewGuid(), RunId, Guid.NewGuid(), modelName, fingerprint, Guid.NewGuid(), "v1:dataset", membership,
-                TrainingEvaluationStatus.Succeeded,
-                TrainingEvaluationResults.Write([new TrainingEvaluationResultEntry(Guid.NewGuid(), "tool", true, "deterministic")]),
-                1, 1, 1, null, null, 2, 0, 0, TrainingWorkStatus.Succeeded, targetKind, sourceArtifactId, provenance);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                TrainingRunId = RunId,
+                ComparisonId = Guid.NewGuid(),
+                ModelName = modelName,
+                ModelContentFingerprint = fingerprint,
+                DatasetId = Guid.NewGuid(),
+                DatasetContentFingerprint = "v1:dataset",
+                MembershipJson = membership,
+                Status = TrainingEvaluationStatus.Succeeded,
+                ResultsJson = TrainingEvaluationResults.Write([new TrainingEvaluationResultEntry { SampleId = Guid.NewGuid(), Kind = "tool", Passed = true, ScoredBy = "deterministic" }]),
+                TotalCount = 1,
+                ScoredCount = 1,
+                PassedCount = 1,
+                PerKindJson = null,
+                ErrorMessage = null,
+                Version = 2,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                TargetKind = targetKind,
+                SourceArtifactId = sourceArtifactId,
+                ExecutionProvenanceJson = provenance
+            };
 
         public void ReturnPreparedIdentity(string sha256, long sizeBytes) =>
             _ = Importer.PrepareAsync(Arg.Any<GgufImportSource>(), Arg.Any<GgufImportDestination>(), Arg.Any<IProgress<GgufImportProgress>?>(),
@@ -531,25 +590,28 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             };
 
         private static TrainingRunRecord Run(string? linkedModel) =>
-            new(RunId,
-                Guid.NewGuid(),
-                "v1:abc",
-                DatasetRevision: 1,
-                FreezeJson: ReadOnlyMemory<byte>.Empty,
-                BaseArtifactId: Guid.NewGuid(),
-                linkedModel,
-                LinkedModelContentFingerprint: "v1:dataset",
-                OptionsJson: ReadOnlyMemory<byte>.Empty,
-                LicenseConfirmationJson: null,
-                TrainingRunStatus.Succeeded,
-                ProgressJson: null,
-                LogTail: null,
-                LaunchReceiptJson: null,
-                ErrorMessage: null,
-                Version: 4,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                TrainingWorkStatus.Succeeded,
-                WorkErrorMessage: null);
+            new()
+            {
+                Id = RunId,
+                DatasetId = Guid.NewGuid(),
+                DatasetContentFingerprint = "v1:abc",
+                DatasetRevision = 1,
+                FreezeJson = ReadOnlyMemory<byte>.Empty,
+                BaseArtifactId = Guid.NewGuid(),
+                LinkedInstalledModelName = linkedModel,
+                LinkedModelContentFingerprint = "v1:dataset",
+                OptionsJson = ReadOnlyMemory<byte>.Empty,
+                LicenseConfirmationJson = null,
+                Status = TrainingRunStatus.Succeeded,
+                ProgressJson = null,
+                LogTail = null,
+                LaunchReceiptJson = null,
+                ErrorMessage = null,
+                Version = 4,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                WorkErrorMessage = null
+            };
     }
 }

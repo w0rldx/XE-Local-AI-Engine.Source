@@ -209,7 +209,7 @@ public sealed class WorkSessionServiceTests
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running });
 
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
@@ -227,7 +227,7 @@ public sealed class WorkSessionServiceTests
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
+                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running });
 
         _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
                               scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ResumeAsync(sessionId));
@@ -241,7 +241,7 @@ public sealed class WorkSessionServiceTests
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
+                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running });
 
         var refusal = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
                                         scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId));
@@ -334,8 +334,8 @@ public sealed class WorkSessionServiceTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.WaitingForInput));
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running });
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = running.Version, TargetStatus = AgentWorkSessionStatus.WaitingForInput });
 
         _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().PostFollowUpAsync(sessionId, "One more thing.");
 
@@ -357,16 +357,19 @@ public sealed class WorkSessionServiceTests
         // vouch for rather than returning something plausible.
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var artifactId = Guid.NewGuid();
-        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                           artifactId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionArtifactKind.Note,
-                           "phantom.txt",
-                           "text/plain",
-                           new string('a', 64),
-                           SizeBytes: 4,
-                           "work-session-artifact:phantom"));
+        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+        {
+            SessionId = sessionId,
+            ArtifactId = artifactId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionArtifactKind.Note,
+            Name = "phantom.txt",
+            MediaType = "text/plain",
+            ContentSha256 = new string('a', 64),
+            SizeBytes = 4,
+            ManagedReference = "work-session-artifact:phantom"
+        });
 
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, artifactId));
     }
@@ -383,16 +386,19 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var artifactId = Guid.NewGuid();
-        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                           artifactId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionArtifactKind.Report,
-                           "report.md",
-                           "text/markdown",
-                           new string('b', 64),
-                           SizeBytes: 12,
-                           "work-session-artifact:report"));
+        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+        {
+            SessionId = sessionId,
+            ArtifactId = artifactId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionArtifactKind.Report,
+            Name = "report.md",
+            MediaType = "text/markdown",
+            ContentSha256 = new string('b', 64),
+            SizeBytes = 12,
+            ManagedReference = "work-session-artifact:report"
+        });
 
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
@@ -417,7 +423,7 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var operationId = Guid.NewGuid();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, WorkSessionVersions.Any, "tool.completed", operationId));
+                       .AppendEventAsync(new AppendWorkSessionEventCommand { SessionId = sessionId, ExpectedVersion = WorkSessionVersions.Any, EventType = "tool.completed", OperationId = operationId });
 
         var events = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListEventsAsync(sessionId, sinceSequence: 0, limit: 100_000);
 
@@ -475,15 +481,18 @@ public sealed class WorkSessionServiceTests
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         // GUID-suffixed: the classes that call this share one host, so a fixed name would make the definition table
         // unfilterable for a test that wants only its own agent.
-        var definition = await store.AddAsync(new AgentDefinitionInput($"Agent on {modelProfile} {Guid.NewGuid():N}",
-                                        Description: null,
-                                        "Work the objective.",
-                                        modelProfile,
-                                        ReasoningEffort: null,
-                                        AgentDefinitionKind.Single,
-                                        [],
-                                        new Dictionary<string, bool>(StringComparer.Ordinal),
-                                        OrchestrationTopologyJson: null));
+        var definition = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = $"Agent on {modelProfile} {Guid.NewGuid():N}",
+            Description = null,
+            Instructions = "Work the objective.",
+            ModelProfile = modelProfile,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null
+        });
         return definition.Id;
     }
 
@@ -492,8 +501,8 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var session = await store.GetAsync(sessionId);
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.Paused));
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running });
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = running.Version, TargetStatus = AgentWorkSessionStatus.Paused });
     }
 
     /// <summary>Tool-capable unless the model's name says otherwise; cloud only for the explicitly cloud-named ones.</summary>

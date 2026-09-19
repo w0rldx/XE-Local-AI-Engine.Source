@@ -18,10 +18,10 @@ public sealed class BenchmarkExportQueryTests
     public async Task GetJsonAsync_ReadsTheFullExportGraphAndOnlyResolvesFactsForMeasuredGroupRepresentatives()
     {
         var groupId = Guid.Parse("30000000-0000-0000-0000-000000000003");
-        var repeatOne = Run(1, repeatGroupId: groupId, repeatIndex: 1, throughput: new BenchmarkRunThroughput(PromptTokens: 10, PromptMs: 5));
-        var repeatZero = Run(2, repeatGroupId: groupId, repeatIndex: 0, throughput: new BenchmarkRunThroughput(PromptTokens: 10, PromptMs: 4));
-        var ungrouped = Run(3, throughput: new BenchmarkRunThroughput(GenerationTokens: 10, GenerationMs: 8));
-        var warmup = Run(4, isWarmup: true, throughput: new BenchmarkRunThroughput(PromptTokens: 10, PromptMs: 3));
+        var repeatOne = Run(1, repeatGroupId: groupId, repeatIndex: 1, throughput: new BenchmarkRunThroughput { PromptTokens = 10, PromptMs = 5 });
+        var repeatZero = Run(2, repeatGroupId: groupId, repeatIndex: 0, throughput: new BenchmarkRunThroughput { PromptTokens = 10, PromptMs = 4 });
+        var ungrouped = Run(3, throughput: new BenchmarkRunThroughput { GenerationTokens = 10, GenerationMs = 8 });
+        var warmup = Run(4, isWarmup: true, throughput: new BenchmarkRunThroughput { PromptTokens = 10, PromptMs = 3 });
         var unmeasured = Run(5);
         BenchmarkRunRecord[] summaries = [repeatOne, repeatZero, ungrouped, warmup, unmeasured];
         var store = Store(Project(), summaries);
@@ -119,24 +119,27 @@ public sealed class BenchmarkExportQueryTests
     {
         var store = Substitute.For<IBenchmarkStore>();
         store.GetProjectAsync(project.Id, Arg.Any<CancellationToken>()).Returns(project);
-        store.ListAllRunsAsync(project.Id, Arg.Any<CancellationToken>()).Returns(new BenchmarkRunPage(summaries, summaries.Count));
+        store.ListAllRunsAsync(project.Id, Arg.Any<CancellationToken>()).Returns(new BenchmarkRunPage { Items = summaries, TotalCount = summaries.Count });
         store.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(call => summaries.SingleOrDefault(run => run.Id == call.ArgAt<Guid>(0)));
         return store;
     }
 
     private static BenchmarkProjectRecord Project() =>
-        new(ProjectId,
-            "project",
-            Encoding.UTF8.GetBytes("\"task\""),
-            4096,
-            Guid.Parse("40000000-0000-0000-0000-000000000004"),
-            false,
-            null,
-            false,
-            1,
-            1,
-            1);
+        new()
+        {
+            Id = ProjectId,
+            Name = "project",
+            CoreTaskJson = Encoding.UTF8.GetBytes("\"task\""),
+            ContextTokens = 4096,
+            AgentDefinitionId = Guid.Parse("40000000-0000-0000-0000-000000000004"),
+            JudgeEnabled = false,
+            CurrentJudgePolicyRevisionId = null,
+            IsFrozen = false,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 
     private static BenchmarkRunRecord Run(int ordinal,
         Guid? repeatGroupId = null,
@@ -145,33 +148,36 @@ public sealed class BenchmarkExportQueryTests
         BenchmarkRunThroughput? throughput = null)
     {
         var id = Guid.Parse($"50000000-0000-0000-0000-{ordinal:D12}");
-        return new BenchmarkRunRecord(id,
-            ProjectId,
-            Encoding.UTF8.GetBytes("{}"),
-            $"model-{ordinal}",
-            LocalModelOrigin.Imported,
-            $"fingerprint-{ordinal}",
-            "agent",
-            1,
-            4096,
-            BenchmarkPrimaryStatus.Succeeded,
-            4096,
-            10,
-            10,
-            1,
-            Encoding.UTF8.GetBytes("[]"),
-            0,
-            null,
-            null,
-            1,
-            ordinal,
-            ordinal,
-            ordinal,
-            ordinal,
-            Judge: ordinal == 1 ? new BenchmarkRunJudgeView("succeeded", AttemptId, 80, 1, null, 1, 1, "key", null, true, true, null) : null,
-            Throughput: throughput,
-            RepeatGroupId: repeatGroupId,
-            RepeatIndex: repeatIndex,
-            IsWarmup: isWarmup);
+        return new BenchmarkRunRecord
+        {
+            Id = id,
+            ProjectId = ProjectId,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{}"),
+            PrimaryModelName = $"model-{ordinal}",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = $"fingerprint-{ordinal}",
+            AgentName = "agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = 10,
+            TokensPerSecond = 1,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = ordinal,
+            StartedAtUtc = ordinal,
+            PrimaryCompletedAtUtc = ordinal,
+            UpdatedAtUtc = ordinal,
+            Judge = ordinal == 1 ? new BenchmarkRunJudgeView { State = "succeeded", AttemptId = AttemptId, Score = 80, PolicyRevision = 1, PolicyRevisionId = null, AttemptSequence = 1, CohortGeneration = 1, ExecutionKey = "key", ErrorMessage = null, PolicyCurrent = true, ExecutionCurrent = true, RankExclusionReason = null } : null,
+            Throughput = throughput,
+            RepeatGroupId = repeatGroupId,
+            RepeatIndex = repeatIndex,
+            IsWarmup = isWarmup
+        };
     }
 }

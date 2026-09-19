@@ -88,14 +88,17 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
         // ONE call. The run row, one Pending node run per graph node and the run.created event commit together, and the
         // definition is re-read inside that same transaction so a delete racing this start cannot leave an orphan run.
-        var run = await _store.StartRunAsync(new StartGraphWorkflowRunCommand(Guid.NewGuid(),
-                                      requestId,
-                                      definitionId,
-                                      definition.Version,
-                                      definition.GraphHash,
-                                      definition.GraphJson,
-                                      inputJson,
-                                      [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), node.NodeKey, node.Kind))]),
+        var run = await _store.StartRunAsync(new StartGraphWorkflowRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            RequestId = requestId,
+            DefinitionId = definitionId,
+            DefinitionVersion = definition.Version,
+            GraphHash = definition.GraphHash,
+            GraphJson = definition.GraphJson,
+            InputJson = inputJson,
+            NodeRuns = [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = node.NodeKey, Kind = node.Kind })]
+        },
                                   cancellationToken);
 
         // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the
@@ -129,7 +132,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         //
         // Node runs are deliberately NOT settled here: the dispatcher drains them, asking each live lane to stop rather
         // than writing a terminal status over work that is still in flight.
-        _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, run.Version, GraphWorkflowRunStatus.Cancelling),
+        _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = run.Version, TargetStatus = GraphWorkflowRunStatus.Cancelling },
                             cancellationToken);
         return await SignalAndComposeAsync(runId, cancellationToken);
     }
@@ -226,13 +229,16 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         GraphWorkflowMutationResult? written;
         try
         {
-            written = await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
-                                          nodeRun.Id,
-                                          GraphWorkflowVersions.Any,
-                                          operationId,
-                                          decision,
-                                          decidedBySubject,
-                                          document),
+            written = await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand
+            {
+                RunId = runId,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                OperationId = operationId,
+                Decision = decision,
+                DecidedBySubject = decidedBySubject,
+                OutputJson = document
+            },
                                       cancellationToken);
         }
         catch (GraphWorkflowInvalidTransitionException)
@@ -415,7 +421,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
         try
         {
-            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, current.Version, outcome.Status), cancellationToken);
+            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = current.Version, TargetStatus = outcome.Status }, cancellationToken);
         }
         catch (GraphWorkflowInvalidTransitionException)
         {

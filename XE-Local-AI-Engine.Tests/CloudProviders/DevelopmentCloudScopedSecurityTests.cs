@@ -278,34 +278,37 @@ public sealed class DevelopmentCloudScopedSecurityTests
     }
 
     private static DevelopmentExecutionSnapshot CloudSnapshot(DevelopmentAttemptRole role, string? workflowPolicyText = null) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "repository-hash",
-            "main",
-            DevelopmentEgressPolicy.CloudScoped,
-            ConfigurationVersion: 1,
-            TrustedRepositoryAcknowledged: true,
-            TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
-            TrustedRepositoryAcknowledgedAtUtc: Now.ToUnixTimeMilliseconds(),
-            MaxTokens: 64,
-            MaxDurationSeconds: 60,
-            "Bounded task",
-            "Implement the bounded change",
-            "[\"semantic tests pass\"]",
-            DevelopmentTaskStatus.InProgress,
-            TaskVersion: 2,
-            role,
-            DevelopmentAttemptStatus.Running,
-            "cloud-model",
-            "fake-cloud",
-            AttemptVersion: 1,
-            Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = "repository-hash",
+            BaseBranch = "main",
+            EgressPolicy = DevelopmentEgressPolicy.CloudScoped,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = Now.ToUnixTimeMilliseconds(),
+            MaxTokens = 64,
+            MaxDurationSeconds = 60,
+            Title = "Bounded task",
+            Requirements = "Implement the bounded change",
+            AcceptanceCriteriaJson = "[\"semantic tests pass\"]",
+            TaskStatus = DevelopmentTaskStatus.InProgress,
+            TaskVersion = 2,
+            AttemptRole = role,
+            AttemptStatus = DevelopmentAttemptStatus.Running,
+            ModelId = "cloud-model",
+            Provider = "fake-cloud",
+            AttemptVersion = 1,
+            CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
                                     .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
                                     .ToCanonicalUtf8()),
-            PreviousRoundFeedback: null,
-            workflowPolicyText);
+            PreviousRoundFeedback = null,
+            WorkflowPolicyText = workflowPolicyText
+        };
 
     private sealed record CreatedContext(
         DevelopmentCloudAttemptContext Context,

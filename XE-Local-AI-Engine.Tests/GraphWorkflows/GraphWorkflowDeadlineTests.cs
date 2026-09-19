@@ -110,21 +110,24 @@ public sealed class GraphWorkflowDeadlineTests
         };
 
     private static GraphWorkflowNodeRunSnapshot Running(bool started = true) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "impatient",
-            GraphWorkflowNodeKind.Agent,
-            GraphWorkflowNodeRunStatus.Running,
-            Attempt: 1,
-            PendingDecisionKind: null,
-            DecisionOperationId: null,
-            DecidedBySubject: null,
-            GraphWorkflowFailureClass.None,
-            Error: null,
-            InputJson: null,
-            OutputJson: null,
-            InvocationId: null,
-            started ? StartedAt.ToUnixTimeMilliseconds() : null,
-            CompletedAtUtc: null,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
+            NodeKey = "impatient",
+            Kind = GraphWorkflowNodeKind.Agent,
+            Status = GraphWorkflowNodeRunStatus.Running,
+            Attempt = 1,
+            PendingDecisionKind = null,
+            DecisionOperationId = null,
+            DecidedBySubject = null,
+            FailureClass = GraphWorkflowFailureClass.None,
+            Error = null,
+            InputJson = null,
+            OutputJson = null,
+            InvocationId = null,
+            StartedAtUtc = started ? StartedAt.ToUnixTimeMilliseconds() : null,
+            CompletedAtUtc = null,
+            UpdatedAtUtc = 0
+        };
 }

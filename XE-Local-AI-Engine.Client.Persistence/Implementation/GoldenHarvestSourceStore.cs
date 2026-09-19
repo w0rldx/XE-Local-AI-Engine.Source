@@ -53,14 +53,17 @@ public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
                                                && string.Equals(message.Status, NodeMessageStatus.Completed, StringComparison.Ordinal)
                                                && (string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase)
                                                    || string.Equals(message.Role, AssistantRole, StringComparison.OrdinalIgnoreCase)))
-                             .Select(message => new HarvestTurn(message.Role, Encoding.UTF8.GetString(message.Content)))
+                             .Select(message => new HarvestTurn { Role = message.Role, Text = Encoding.UTF8.GetString(message.Content) })
                              .ToArray();
 
-            sources.Add(new HarvestCandidateSource(row.MessageId,
-                row.ConversationId,
-                row.Title,
-                priorTurns,
-                Encoding.UTF8.GetString(target.Content)));
+            sources.Add(new HarvestCandidateSource
+            {
+                MessageId = row.MessageId,
+                ConversationId = row.ConversationId,
+                ConversationTitle = row.Title,
+                PriorTurns = priorTurns,
+                ApprovedAnswerText = Encoding.UTF8.GetString(target.Content)
+            });
         }
 
         return sources;
@@ -92,7 +95,7 @@ public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
                 ? null
                 : (byte[])reader.GetValue(2);
             var titleText = _dbContext.DecryptConversationTitle(titleBytes, conversationId);
-            rows.Add(new ThumbsUpRow(Guid.Parse(reader.GetString(0)), conversationId, titleText));
+            rows.Add(new ThumbsUpRow { MessageId = Guid.Parse(reader.GetString(0)), ConversationId = conversationId, Title = titleText });
         }
 
         return rows;
@@ -112,5 +115,12 @@ public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
         command.Parameters.Add(parameter);
     }
 
-    private sealed record ThumbsUpRow(Guid MessageId, Guid ConversationId, string? Title);
+    private sealed record ThumbsUpRow
+    {
+        public required Guid MessageId { get; init; }
+
+        public required Guid ConversationId { get; init; }
+
+        public required string? Title { get; init; }
+    }
 }

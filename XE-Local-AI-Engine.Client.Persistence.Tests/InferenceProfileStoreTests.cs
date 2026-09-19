@@ -131,23 +131,45 @@ public sealed class InferenceProfileStoreTests : IDisposable
             var snapshotStore = new ModelFitSnapshotStore(writeContext, TimeProvider.System);
             var benchmarkStore = new ModelFitBenchmarkStore(writeContext);
 
-            var snapshot = await snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput("llmfit-recommender-0-9-30",
-                ModelFitOperation.Benchmark,
-                UseCase: null,
-                "llama-server",
-                ModelName,
-                ModelFitRunStatus.Queued,
-                StartedAtUtc: null));
+            var snapshot = await snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput
+            {
+                ApprovedImageId = "llmfit-recommender-0-9-30",
+                Operation = ModelFitOperation.Benchmark,
+                UseCase = null,
+                ProviderName = "llama-server",
+                ModelName = ModelName,
+                Status = ModelFitRunStatus.Queued,
+                StartedAtUtc = null
+            });
             snapshotId = snapshot.Id;
 
             var inserted = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput(ModelName, "llama-server", TokensPerSecond: 42.0, TtftMs: 12.0, TotalLatencyMs: 200.0,
-                    Runs: 3, RawJson: """{"tps":42.0}""", DiagnosticsJson: null,
-                    PpTokensPerSecond: 512.0, CacheHitRate: 0.83, ToolLoopMs: 95.0, VramLoadBytes: 6_100_000_000,
-                    VramAfterBytes: 6_050_000_000, LlamacppBuild: "b9692", Quant: "Q4_K_M", CtxSize: 8_192,
-                    KvType: "q8_0", Backend: Backend, MachineKey: MachineKey, NGpuLayers: 33,
-                    TensorSplit: "0.5,0.5", OverrideTensor: "exps=CPU")
+                new ModelFitBenchmarkInput
+                {
+                    ModelName = ModelName,
+                    ProviderName = "llama-server",
+                    TokensPerSecond = 42.0,
+                    TtftMs = 12.0,
+                    TotalLatencyMs = 200.0,
+                    Runs = 3,
+                    RawJson = """{"tps":42.0}""",
+                    DiagnosticsJson = null,
+                    PpTokensPerSecond = 512.0,
+                    CacheHitRate = 0.83,
+                    ToolLoopMs = 95.0,
+                    VramLoadBytes = 6_100_000_000,
+                    VramAfterBytes = 6_050_000_000,
+                    LlamacppBuild = "b9692",
+                    Quant = "Q4_K_M",
+                    CtxSize = 8_192,
+                    KvType = "q8_0",
+                    Backend = Backend,
+                    MachineKey = MachineKey,
+                    NGpuLayers = 33,
+                    TensorSplit = "0.5,0.5",
+                    OverrideTensor = "exps=CPU"
+                }
             ]);
 
             AssertEx.Equal(expected: 1, inserted);
@@ -178,24 +200,27 @@ public sealed class InferenceProfileStoreTests : IDisposable
 
     private static InferenceProfileInput CreateInput(int ctxSize)
     {
-        return new InferenceProfileInput(MachineKey,
-            ModelName,
-            ChatRole,
-            Backend,
-            LlamacppBuild: "b9692",
-            Quant: "Q4_K_M",
-            ctxSize,
-            NGpuLayers: 33,
-            TensorSplit: null,
-            OverrideTensor: "exps=CPU",
-            KvTypeK: null,
-            KvTypeV: null,
-            FlashAttn: false,
-            NParams: 7_600_000_000,
-            IsMoe: false,
-            ExpertCount: null,
-            LaunchPolicyFingerprintVersion: 1,
-            LaunchPolicyFingerprint: "c7047b7426098004d6b49f5df8f036404399578f2c962cd33549008708241281");
+        return new InferenceProfileInput
+        {
+            MachineKey = MachineKey,
+            ModelName = ModelName,
+            Role = ChatRole,
+            Backend = Backend,
+            LlamacppBuild = "b9692",
+            Quant = "Q4_K_M",
+            CtxSize = ctxSize,
+            NGpuLayers = 33,
+            TensorSplit = null,
+            OverrideTensor = "exps=CPU",
+            KvTypeK = null,
+            KvTypeV = null,
+            FlashAttn = false,
+            NParams = 7_600_000_000,
+            IsMoe = false,
+            ExpertCount = null,
+            LaunchPolicyFingerprintVersion = 1,
+            LaunchPolicyFingerprint = "c7047b7426098004d6b49f5df8f036404399578f2c962cd33549008708241281"
+        };
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)

@@ -307,7 +307,7 @@ public sealed class BenchmarkProjectServiceTests
         BenchmarkProjectFidelityInput? input = null;
         context.Store.UpdateProjectFidelityAsync(ProjectId, 1, Arg.Do<BenchmarkProjectFidelityInput>(value => input = value),
                    Arg.Any<bool>(), Arg.Any<CancellationToken>())
-               .Returns(call => new BenchmarkProjectFidelityChange(ServiceContext.CurrentProject(), call.ArgAt<bool>(3) ? [Guid.NewGuid()] : []));
+               .Returns(call => new BenchmarkProjectFidelityChange { Project = ServiceContext.CurrentProject(), EnqueuedRunIds = call.ArgAt<bool>(3) ? [Guid.NewGuid()] : [] });
 
         var quiet = await context.Service.UpdateFidelityAsync(ProjectId, 1,
             new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: 50, $"  {ServiceContext.BaseModelName}  "));
@@ -524,8 +524,24 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     private static BenchmarkTaskItemRecord TaskItem(int index, byte[]? verifierConfigJson) =>
-        new(Guid.NewGuid(), ProjectId, null, index, BenchmarkTaskItemKinds.Prompt, Revision: 1, "v1:hash", CountsTowardScore: true,
-            Encoding.UTF8.GetBytes("\"prompt\""), null, verifierConfigJson, null, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = ProjectId,
+            ParentItemId = null,
+            Index = index,
+            Kind = BenchmarkTaskItemKinds.Prompt,
+            Revision = 1,
+            InputHash = "v1:hash",
+            CountsTowardScore = true,
+            PromptJson = Encoding.UTF8.GetBytes("\"prompt\""),
+            ReferenceAnswerJson = null,
+            VerifierConfigJson = verifierConfigJson,
+            GeneratorConfigJson = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     [Test]
     public async Task UpdateJudgePolicy_WithADifferentHashOnAProjectWithRuns_RequiresConfirmation()
@@ -669,13 +685,13 @@ public sealed class BenchmarkProjectServiceTests
                      ActivatedPolicyJson = call.ArgAt<ReadOnlyMemory<byte>>(2);
                      ActivatedHash = call.ArgAt<string>(3);
                      ActivatedSeed = call.ArgAt<BenchmarkJudgeAttemptSeed?>(4);
-                     return new BenchmarkJudgePolicyActivation(Revision(ActivatedHash), WasCreated: true, succeededRunIds ?? []);
+                     return new BenchmarkJudgePolicyActivation { Revision = Revision(ActivatedHash), WasCreated = true, SucceededRunIds = succeededRunIds ?? [] };
                  });
             Store.BeginProjectRejudgeAsync(ProjectId, Arg.Any<long>(), Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>())
                  .Returns(call =>
                  {
                      RejudgeSeed = call.ArgAt<BenchmarkJudgeAttemptSeed?>(2);
-                     return new BenchmarkJudgePolicyActivation(Revision(_currentRevision?.PolicyHash), WasCreated: false, succeededRunIds ?? []);
+                     return new BenchmarkJudgePolicyActivation { Revision = Revision(_currentRevision?.PolicyHash), WasCreated = false, SucceededRunIds = succeededRunIds ?? [] };
                  });
             Store.EnqueueJudgeAttemptAsync(Arg.Do<BenchmarkEnqueueJudgeAttemptCommand>(command => Enqueued.Add(command)), Arg.Any<CancellationToken>())
                  .Returns(call => Attempt(call.Arg<BenchmarkEnqueueJudgeAttemptCommand>()));
@@ -744,14 +760,17 @@ public sealed class BenchmarkProjectServiceTests
         public async Task SetCurrentPolicyAsync(BenchmarkJudgePolicyDraft draft)
         {
             var policy = await BuildPolicyAsync(draft);
-            _currentRevision = new BenchmarkJudgePolicyRevisionRecord(RevisionId,
-                ProjectId,
-                1,
-                BenchmarkJudgeSerialization.SerializePolicy(policy),
-                BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy),
-                null,
-                1,
-                1);
+            _currentRevision = new BenchmarkJudgePolicyRevisionRecord
+            {
+                Id = RevisionId,
+                ProjectId = ProjectId,
+                Revision = 1,
+                PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(policy),
+                PolicyHash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy),
+                ReferenceExecutionKey = null,
+                CohortGeneration = 1,
+                CreatedAtUtc = 1
+            };
         }
 
         /// <summary>The hash the service computes for <paramref name="draft" />, built the same way it does.</summary>
@@ -775,10 +794,10 @@ public sealed class BenchmarkProjectServiceTests
         }
 
         internal static BenchmarkProjectRecord CurrentProject() =>
-            new(ProjectId, "Benchmark", Encoding.UTF8.GetBytes("\"task\""), 4096, Guid.NewGuid(), JudgeEnabled: true, RevisionId, IsFrozen: true, 1, 1, 1);
+            new() { Id = ProjectId, Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("\"task\""), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid(), JudgeEnabled = true, CurrentJudgePolicyRevisionId = RevisionId, IsFrozen = true, Version = 1, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
 
         private static BenchmarkJudgePolicyRevisionRecord Revision(string? policyHash) =>
-            new(RevisionId, ProjectId, 1, Encoding.UTF8.GetBytes("{}"), policyHash ?? new string('a', count: 64), null, 1, 1);
+            new() { Id = RevisionId, ProjectId = ProjectId, Revision = 1, PolicyJson = Encoding.UTF8.GetBytes("{}"), PolicyHash = policyHash ?? new string('a', count: 64), ReferenceExecutionKey = null, CohortGeneration = 1, CreatedAtUtc = 1 };
 
         private static BenchmarkJudgeRuntimeResolution Resolution(BenchmarkJudgePolicyV1 policy) =>
             new(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
@@ -787,26 +806,77 @@ public sealed class BenchmarkProjectServiceTests
                     new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, policy.RequestedContextTokens, null, null, null, null, null, false,
                         LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
                     BenchmarkFrozenPolicies.DeterministicSampling()),
-                new BenchmarkRunLaunchIntent("cpu", "f16", "auto", "cpu-variant", "auto", new string('c', count: 64), null));
+                new BenchmarkRunLaunchIntent { Variant = "cpu", KvCacheType = "f16", KvCacheTypeSource = "auto", KvAutoReason = "cpu-variant", FlashAttentionMode = "auto", IntendedLaunchIdentity = new string('c', count: 64), IntendedExecutableSha256 = null });
 
         private static BenchmarkRunRecord Run(Guid runId) =>
-            new(runId, ProjectId, new byte[]
+            new()
+            {
+                Id = runId,
+                ProjectId = ProjectId,
+                RuntimeSnapshotJson = new byte[]
                 {
                     1
-                }, "model.gguf", LocalModelOrigin.Imported, $"v1:{new string('a', count: 64)}", "Agent", 1, 4096,
-                BenchmarkPrimaryStatus.Succeeded, null, null, null, null, null, 0, null, null, 3, 1, 1, null, 1);
+                },
+                PrimaryModelName = "model.gguf",
+                PrimaryModelOrigin = LocalModelOrigin.Imported,
+                ModelContentFingerprint = $"v1:{new string('a', count: 64)}",
+                AgentName = "Agent",
+                AgentVersion = 1,
+                RequestedContextTokens = 4096,
+                PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                EffectiveContextTokens = null,
+                DurationMs = null,
+                TotalTokens = null,
+                TokensPerSecond = null,
+                OutputPartsJson = null,
+                LastStreamSequence = 0,
+                UserScore = null,
+                PrimaryErrorMessage = null,
+                Version = 3,
+                CreatedAtUtc = 1,
+                StartedAtUtc = 1,
+                PrimaryCompletedAtUtc = null,
+                UpdatedAtUtc = 1
+            };
 
         private static BenchmarkJudgeAttemptRecord Attempt(BenchmarkEnqueueJudgeAttemptCommand command) =>
-            new(Guid.NewGuid(), command.RunId, 1, command.PolicyRevisionId, 1, command.RuntimeJson, null,
-                command.RuntimeJson is null ? BenchmarkJudgeAttemptStatus.Failed : BenchmarkJudgeAttemptStatus.Queued,
-                null, null, command.RuntimeUnresolvedReason, 1, null, null, 1);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                RunId = command.RunId,
+                Sequence = 1,
+                PolicyRevisionId = command.PolicyRevisionId,
+                CohortGeneration = 1,
+                JudgeRuntimeJson = command.RuntimeJson,
+                JudgeExecutionKey = null,
+                Status = command.RuntimeJson is null ? BenchmarkJudgeAttemptStatus.Failed : BenchmarkJudgeAttemptStatus.Queued,
+                ResultJson = null,
+                Score = null,
+                ErrorMessage = command.RuntimeUnresolvedReason,
+                EnqueuedAtUtc = 1,
+                StartedAtUtc = null,
+                CompletedAtUtc = null,
+                Version = 1
+            };
 
         private static BenchmarkProjectRecord Project(BenchmarkProjectInput input) =>
-            new(input.Id, input.Name, input.CoreTaskJson, input.ContextTokens, input.AgentDefinitionId, JudgeEnabled: false,
-                CurrentJudgePolicyRevisionId: null, IsFrozen: false, 1, 1, 1);
+            new()
+            {
+                Id = input.Id,
+                Name = input.Name,
+                CoreTaskJson = input.CoreTaskJson,
+                ContextTokens = input.ContextTokens,
+                AgentDefinitionId = input.AgentDefinitionId,
+                JudgeEnabled = false,
+                CurrentJudgePolicyRevisionId = null,
+                IsFrozen = false,
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            };
 
         private static AgentDefinitionRecord Definition(Guid id, AgentDefinitionKind kind) =>
-            new(id, "Agent", null, "instructions", null, null, kind, [], new Dictionary<string, bool>(), null, 1, 1, 1);
+            new() { Id = id, Name = "Agent", Description = null, Instructions = "instructions", ModelProfile = null, ReasoningEffort = null, Kind = kind, AllowedToolNames = [], ToolApprovals = new Dictionary<string, bool>(), OrchestrationTopologyJson = null, Version = 1, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
 
         private static InstalledModelSnapshot Installed(string modelName, bool carriesProjector)
         {

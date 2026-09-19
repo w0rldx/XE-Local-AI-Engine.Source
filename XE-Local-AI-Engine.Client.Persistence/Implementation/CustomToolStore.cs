@@ -130,18 +130,21 @@ public sealed class CustomToolStore : ICustomToolStore
 
     private static CustomToolRecord ToRecord(CustomTool entity)
     {
-        return new CustomToolRecord(entity.Id,
-            entity.Name,
-            Decode(entity.Description),
-            (CustomToolKind)entity.Kind,
-            (CustomToolMode)entity.Mode,
-            entity.ParametersJson,
-            Decode(entity.ConfigJson),
-            entity.Enabled,
-            entity.Acknowledged,
-            entity.Version,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+        return new CustomToolRecord
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = Decode(entity.Description),
+            Kind = (CustomToolKind)entity.Kind,
+            Mode = (CustomToolMode)entity.Mode,
+            ParametersJson = entity.ParametersJson,
+            ConfigJson = Decode(entity.ConfigJson),
+            Enabled = entity.Enabled,
+            Acknowledged = entity.Acknowledged,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
     }
 
     private static string Decode(byte[] value)

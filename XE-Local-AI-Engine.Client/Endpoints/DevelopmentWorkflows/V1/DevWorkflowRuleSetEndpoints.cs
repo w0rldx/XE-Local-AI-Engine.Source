@@ -55,12 +55,15 @@ public sealed class CreateDevWorkflowRuleSetEndpoint : Endpoint<CreateDevWorkflo
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var created = await _authoring.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(),
-                                          req.Name,
-                                          req.Body,
-                                          DevWorkflowContractMapper.ToScopeJson(req.Scope),
-                                          req.Description,
-                                          req.Enabled),
+        var created = await _authoring.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand
+        {
+            RuleSetId = Guid.NewGuid(),
+            Name = req.Name,
+            Body = req.Body,
+            ScopeJson = DevWorkflowContractMapper.ToScopeJson(req.Scope),
+            Description = req.Description,
+            Enabled = req.Enabled
+        },
                                       ct);
         await Send.CreatedAtAsync<GetDevWorkflowRuleSetEndpoint>(new
             {
@@ -128,13 +131,16 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint : Endpoint<UpdateDevWorkflo
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var updated = await _authoring.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(req.RuleSetId,
-                                          req.Version,
-                                          req.Name,
-                                          req.Body,
-                                          DevWorkflowContractMapper.ToScopeJson(req.Scope),
-                                          req.Description,
-                                          req.Enabled),
+        var updated = await _authoring.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
+        {
+            RuleSetId = req.RuleSetId,
+            ExpectedVersion = req.Version,
+            Name = req.Name,
+            Body = req.Body,
+            ScopeJson = DevWorkflowContractMapper.ToScopeJson(req.Scope),
+            Description = req.Description,
+            Enabled = req.Enabled
+        },
                                       ct);
         await Send.OkAsync(updated.ToResponse(), ct);
     }

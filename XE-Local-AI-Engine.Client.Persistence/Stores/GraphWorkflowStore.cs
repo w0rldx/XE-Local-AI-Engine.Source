@@ -214,15 +214,18 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
         await _dbContext.GraphWorkflowDefinitions.AsNoTracking()
                         .OrderBy(entity => entity.Name)
                         .ThenBy(entity => entity.Id)
-                        .Select(entity => new GraphWorkflowDefinitionSummary(entity.Id,
-                            entity.Name,
-                            entity.Description,
-                            entity.GraphHash,
-                            entity.NodeCount,
-                            entity.SchemaVersion,
-                            entity.Version,
-                            entity.CreatedAtUtc,
-                            entity.UpdatedAtUtc))
+                        .Select(entity => new GraphWorkflowDefinitionSummary
+                        {
+                            Id = entity.Id,
+                            Name = entity.Name,
+                            Description = entity.Description,
+                            GraphHash = entity.GraphHash,
+                            NodeCount = entity.NodeCount,
+                            SchemaVersion = entity.SchemaVersion,
+                            Version = entity.Version,
+                            CreatedAtUtc = entity.CreatedAtUtc,
+                            UpdatedAtUtc = entity.UpdatedAtUtc
+                        })
                         .ToListAsync(cancellationToken);
 
     public async Task<GraphWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default)
@@ -444,7 +447,7 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
                     run.CompletedAtUtc = now;
                 }
 
-                return new MutationOutcome(EventTypeFor(previousStatus, command.TargetStatus), NodeKey: null, ReasonDetail(command.SanitizedReason));
+                return new MutationOutcome { EventType = EventTypeFor(previousStatus, command.TargetStatus), NodeKey = null, DetailJson = ReasonDetail(command.SanitizedReason) };
             },
             cancellationToken);
     }
@@ -523,9 +526,12 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
 
                         // gate.decided rather than the node.completed the status alone would derive: an answered pause
                         // is a human act, and a reader following the log has to be able to find it as one.
-                        return new MutationOutcome(GraphWorkflowEventTypes.GateDecided,
-                            nodeRun.NodeKey,
-                            Utf8(JsonSerializer.Serialize(new GateDecidedDetailPayload(nodeRun.NodeKey, command.Decision.ToString()), JsonOptions)));
+                        return new MutationOutcome
+                        {
+                            EventType = GraphWorkflowEventTypes.GateDecided,
+                            NodeKey = nodeRun.NodeKey,
+                            DetailJson = Utf8(JsonSerializer.Serialize(new GateDecidedDetailPayload(nodeRun.NodeKey, command.Decision.ToString()), JsonOptions))
+                        };
                     },
                     cancellationToken);
         }
@@ -555,7 +561,7 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
 
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
-            _ => new MutationOutcome(command.EventType, command.NodeKey, Utf8OrNull(command.DetailJson)),
+            _ => new MutationOutcome { EventType = command.EventType, NodeKey = command.NodeKey, DetailJson = Utf8OrNull(command.DetailJson) },
             cancellationToken);
     }
 
@@ -583,25 +589,31 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
                                      .ToListAsync(cancellationToken);
         return
         [
-            .. events.Select(entity => new GraphWorkflowRunEventSnapshot(entity.Id,
-                entity.RunId,
-                entity.Seq,
-                entity.EventType,
-                entity.NodeKey,
-                TextOrNull(entity.DetailJson),
-                entity.CreatedAtUtc))
+            .. events.Select(entity => new GraphWorkflowRunEventSnapshot
+            {
+                Id = entity.Id,
+                RunId = entity.RunId,
+                Seq = entity.Seq,
+                EventType = entity.EventType,
+                NodeKey = entity.NodeKey,
+                DetailJson = TextOrNull(entity.DetailJson),
+                CreatedAtUtc = entity.CreatedAtUtc
+            })
         ];
     }
 
     public async Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
     [
         .. await InterruptedNodeRuns().AsNoTracking()
-                                      .Select(entity => new GraphWorkflowReconciledNodeRun(entity.Id,
-                                          entity.RunId,
-                                          entity.NodeKey,
-                                          entity.Kind,
-                                          entity.Status,
-                                          entity.Attempt))
+                                      .Select(entity => new GraphWorkflowReconciledNodeRun
+                                      {
+                                          NodeRunId = entity.Id,
+                                          RunId = entity.RunId,
+                                          NodeKey = entity.NodeKey,
+                                          Kind = entity.Kind,
+                                          Status = entity.Status,
+                                          Attempt = entity.Attempt
+                                      })
                                       .ToListAsync(cancellationToken)
     ];
 
@@ -663,7 +675,7 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
 
                 // The status BEFORE the collapse is the informative one: it says whether the node run was merely
                 // admitted or actually mid-execution. Where it lands is always Pending.
-                reconciled.Add(new GraphWorkflowReconciledNodeRun(nodeRun.Id, nodeRun.RunId, nodeRun.NodeKey, nodeRun.Kind, nodeRun.Status, nodeRun.Attempt));
+                reconciled.Add(new GraphWorkflowReconciledNodeRun { NodeRunId = nodeRun.Id, RunId = nodeRun.RunId, NodeKey = nodeRun.NodeKey, Kind = nodeRun.Kind, Status = nodeRun.Status, Attempt = nodeRun.Attempt });
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or a reader
                 // takes "the engine restarted" for this attempt's outcome. The reason is on the node.interrupted event.
@@ -748,7 +760,7 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
             run.Version++;
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new GraphWorkflowMutationResult(runId, sequence);
+            return new GraphWorkflowMutationResult { RunId = runId, Sequence = sequence };
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -830,12 +842,14 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
         }
 
         nodeRun.UpdatedAtUtc = now;
-        return new MutationOutcome(command.EventType ?? EventTypeFor(command.TargetStatus),
-            nodeRun.NodeKey,
-
+        return new MutationOutcome
+        {
+            EventType = command.EventType ?? EventTypeFor(command.TargetStatus),
+            NodeKey = nodeRun.NodeKey,
             // The caller's detail wins: a re-attempt has cleared the failure it is re-attempting because of, so the
             // reason alone would leave its event saying nothing about what it is re-attempting.
-            command.DetailJson is { } detail ? Utf8(detail) : ReasonDetail(command.TerminalReason));
+            DetailJson = command.DetailJson is { } detail ? Utf8(detail) : ReasonDetail(command.TerminalReason)
+        };
     }
 
     /// <summary>
@@ -856,12 +870,15 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
 
     /// <summary>Where a settling pass puts a node run it could not judge: failed with the caller's class, costing no attempt.</summary>
     private static TransitionGraphWorkflowNodeRunCommand SettleUnjudged(GraphWorkflowNodeRun nodeRun, GraphWorkflowUnjudgedNodeRunSettlement unjudged) =>
-        new(nodeRun.RunId,
-            nodeRun.Id,
-            GraphWorkflowVersions.Any,
-            GraphWorkflowNodeRunStatus.Failed,
-            FailureClass: unjudged.FailureClass,
-            TerminalReason: unjudged.SanitizedReason);
+        new()
+        {
+            RunId = nodeRun.RunId,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+            FailureClass = unjudged.FailureClass,
+            TerminalReason = unjudged.SanitizedReason
+        };
 
     /// <summary>
     ///     The node runs a host death stranded. Only <c>Queued</c> and <c>Running</c> lost an executor: <c>Pending</c>
@@ -958,41 +975,47 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
         string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason), JsonOptions));
 
     private static GraphWorkflowRunSnapshot RunSnapshot(GraphWorkflowRun run) =>
-        new(run.Id,
-            run.RequestId,
-            run.DefinitionId,
-            run.DefinitionVersion,
-            run.GraphHash,
-            run.Status,
-            run.FailureClass,
-            Text(run.GraphJson),
-            TextOrNull(run.InputJson),
-            TextOrNull(run.OutputJson),
-            run.Seq,
-            run.Version,
-            run.CancelRequestedAtUtc,
-            run.StartedAtUtc,
-            run.CompletedAtUtc,
-            run.CreatedAtUtc);
+        new()
+        {
+            Id = run.Id,
+            RequestId = run.RequestId,
+            DefinitionId = run.DefinitionId,
+            DefinitionVersion = run.DefinitionVersion,
+            GraphHash = run.GraphHash,
+            Status = run.Status,
+            FailureClass = run.FailureClass,
+            GraphJson = Text(run.GraphJson),
+            InputJson = TextOrNull(run.InputJson),
+            OutputJson = TextOrNull(run.OutputJson),
+            Seq = run.Seq,
+            Version = run.Version,
+            CancelRequestedAtUtc = run.CancelRequestedAtUtc,
+            StartedAtUtc = run.StartedAtUtc,
+            CompletedAtUtc = run.CompletedAtUtc,
+            CreatedAtUtc = run.CreatedAtUtc
+        };
 
     private static GraphWorkflowNodeRunSnapshot NodeRunSnapshot(GraphWorkflowNodeRun nodeRun) =>
-        new(nodeRun.Id,
-            nodeRun.RunId,
-            nodeRun.NodeKey,
-            nodeRun.Kind,
-            nodeRun.Status,
-            nodeRun.Attempt,
-            nodeRun.PendingDecisionKind,
-            nodeRun.DecisionOperationId,
-            TextOrNull(nodeRun.DecidedBySubject),
-            nodeRun.FailureClass,
-            TextOrNull(nodeRun.Error),
-            TextOrNull(nodeRun.InputJson),
-            TextOrNull(nodeRun.OutputJson),
-            nodeRun.InvocationId,
-            nodeRun.StartedAtUtc,
-            nodeRun.CompletedAtUtc,
-            nodeRun.UpdatedAtUtc);
+        new()
+        {
+            Id = nodeRun.Id,
+            RunId = nodeRun.RunId,
+            NodeKey = nodeRun.NodeKey,
+            Kind = nodeRun.Kind,
+            Status = nodeRun.Status,
+            Attempt = nodeRun.Attempt,
+            PendingDecisionKind = nodeRun.PendingDecisionKind,
+            DecisionOperationId = nodeRun.DecisionOperationId,
+            DecidedBySubject = TextOrNull(nodeRun.DecidedBySubject),
+            FailureClass = nodeRun.FailureClass,
+            Error = TextOrNull(nodeRun.Error),
+            InputJson = TextOrNull(nodeRun.InputJson),
+            OutputJson = TextOrNull(nodeRun.OutputJson),
+            InvocationId = nodeRun.InvocationId,
+            StartedAtUtc = nodeRun.StartedAtUtc,
+            CompletedAtUtc = nodeRun.CompletedAtUtc,
+            UpdatedAtUtc = nodeRun.UpdatedAtUtc
+        };
 
     private async Task RollbackAsync(IDbContextTransaction transaction)
     {
@@ -1010,7 +1033,14 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
     ///     What one mutation decided. A null <see cref="EventType" /> is the deliberate "no event row": the move
     ///     happened, the run version bumps, and the watermark stays where the last event left it.
     /// </summary>
-    private sealed record MutationOutcome(string? EventType, string? NodeKey, byte[]? DetailJson);
+    private sealed record MutationOutcome
+    {
+        public required string? EventType { get; init; }
+
+        public required string? NodeKey { get; init; }
+
+        public required byte[]? DetailJson { get; init; }
+    }
 
     private sealed record ReasonDetailPayload(string Reason);
 
@@ -1022,16 +1052,19 @@ internal sealed class GraphWorkflowStore : IGraphWorkflowStore
         ?? throw new GraphWorkflowNotFoundException($"Graph workflow definition '{definitionId}' was not found.");
 
     private static GraphWorkflowDefinitionSnapshot Snapshot(GraphWorkflowDefinition definition) =>
-        new(definition.Id,
-            definition.Name,
-            definition.Description,
-            Text(definition.GraphJson),
-            definition.GraphHash,
-            definition.NodeCount,
-            definition.SchemaVersion,
-            definition.Version,
-            definition.CreatedAtUtc,
-            definition.UpdatedAtUtc);
+        new()
+        {
+            Id = definition.Id,
+            Name = definition.Name,
+            Description = definition.Description,
+            GraphJson = Text(definition.GraphJson),
+            GraphHash = definition.GraphHash,
+            NodeCount = definition.NodeCount,
+            SchemaVersion = definition.SchemaVersion,
+            Version = definition.Version,
+            CreatedAtUtc = definition.CreatedAtUtc,
+            UpdatedAtUtc = definition.UpdatedAtUtc
+        };
 
     /// <summary>
     ///     SHA-256 of the graph's bytes, lowercase hex, computed here — beside the blob it describes — so a hash and

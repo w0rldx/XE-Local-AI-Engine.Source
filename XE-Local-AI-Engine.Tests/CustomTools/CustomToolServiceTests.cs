@@ -241,18 +241,21 @@ public sealed class CustomToolServiceTests
 
     private static CustomToolRecord ToRecord(CustomToolInput input)
     {
-        return new CustomToolRecord(Guid.NewGuid(),
-            input.Name,
-            input.Description,
-            input.Kind,
-            input.Mode,
-            input.ParametersJson,
-            input.ConfigJson,
-            input.Enabled,
-            input.Acknowledged,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new CustomToolRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = input.Name,
+            Description = input.Description,
+            Kind = input.Kind,
+            Mode = input.Mode,
+            ParametersJson = input.ParametersJson,
+            ConfigJson = input.ConfigJson,
+            Enabled = input.Enabled,
+            Acknowledged = input.Acknowledged,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static CustomToolDefinition ValidHttpFetch()

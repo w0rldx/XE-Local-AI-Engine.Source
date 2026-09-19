@@ -34,15 +34,18 @@ internal sealed class IntegrationInvokeHarness
         PrincipalId = Guid.NewGuid();
         _keys =
         [
-            new IntegrationApiKeySnapshot(Guid.NewGuid(),
-                PrincipalId,
-                KeyPrefix,
-                ReadOnlyMemory<byte>.Empty,
-                "primary",
-                AllowedTriggerIdsJson: null,
-                CreatedAtUtc: 1,
-                LastUsedAtUtc: null,
-                RevokedAtUtc: null)
+            new IntegrationApiKeySnapshot
+            {
+                Id = Guid.NewGuid(),
+                PrincipalId = PrincipalId,
+                KeyPrefix = KeyPrefix,
+                KeyHash = ReadOnlyMemory<byte>.Empty,
+                Label = "primary",
+                AllowedTriggerIdsJson = null,
+                CreatedAtUtc = 1,
+                LastUsedAtUtc = null,
+                RevokedAtUtc = null
+            }
         ];
 
         _keyStore = Substitute.For<IIntegrationApiKeyStore>();

@@ -44,18 +44,20 @@ internal static class DevWorkflowRunSeeds
         var entryInput = JsonSerializer.Serialize(new EntryInput(workItem.Request, inputsJson), JsonOptions);
         var seeds = graph.Nodes.Values.Where(node => !graph.TemplateKeys.Contains(node.NodeKey))
                          .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
-                         .Select(node => new DevWorkflowNodeRunSeed(Guid.NewGuid(),
-                             node.NodeKey,
-                             node.NodeType,
-                             node.MaxAttempts,
-                             node.AgentDefinitionId,
-                             workItem.DevelopmentProjectId,
-                             entryKeys.Contains(node.NodeKey) ? entryInput : null,
-
+                         .Select(node => new DevWorkflowNodeRunSeed
+                         {
+                             NodeRunId = Guid.NewGuid(),
+                             NodeKey = node.NodeKey,
+                             NodeType = node.NodeType,
+                             MaxAttempts = node.MaxAttempts,
+                             AgentDefinitionId = node.AgentDefinitionId,
+                             DevelopmentProjectId = workItem.DevelopmentProjectId,
+                             InputJson = entryKeys.Contains(node.NodeKey) ? entryInput : null,
                              // Recorded on EVERY node run, not only the entry ones and not only the agent ones: the
                              // resolution is what the node-run detail answers "which rules applied" with, and a row
                              // that skipped it would read as "none did".
-                             DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, workItem.DevelopmentProjectId, node.NodeType)))
+                             PolicyResolutionJson = DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, workItem.DevelopmentProjectId, node.NodeType)
+                         })
                          .ToList();
 
         return seeds.Count > maxNodeRunsPerRun

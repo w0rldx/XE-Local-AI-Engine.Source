@@ -278,22 +278,25 @@ public sealed class MemoryExtractionServiceTests
              .Returns(callInfo =>
              {
                  var input = callInfo.Arg<PlaybookActionInput>();
-                 return Task.FromResult(new PlaybookActionRecord(Guid.NewGuid(),
-                     input.AgentDefinitionId,
-                     input.State,
-                     input.Source,
-                     input.TriggerCondition,
-                     input.Behavior,
-                     input.Scope,
-                     input.Priority,
-                     Version: 1,
-                     CreatedAtUtc: 10,
-                     UpdatedAtUtc: 10,
-                     input.SourceFeedbackIds,
-                     input.Confidence,
-                     input.EvalResult,
-                     input.EnabledAtUtc,
-                     input.MemoryScope));
+                 return Task.FromResult(new PlaybookActionRecord
+                 {
+                     Id = Guid.NewGuid(),
+                     AgentDefinitionId = input.AgentDefinitionId,
+                     State = input.State,
+                     Source = input.Source,
+                     TriggerCondition = input.TriggerCondition,
+                     Behavior = input.Behavior,
+                     Scope = input.Scope,
+                     Priority = input.Priority,
+                     Version = 1,
+                     CreatedAtUtc = 10,
+                     UpdatedAtUtc = 10,
+                     SourceFeedbackIds = input.SourceFeedbackIds,
+                     Confidence = input.Confidence,
+                     EvalResult = input.EvalResult,
+                     EnabledAtUtc = input.EnabledAtUtc,
+                     MemoryScope = input.MemoryScope
+                 });
              });
     }
 
@@ -325,22 +328,25 @@ public sealed class MemoryExtractionServiceTests
 
     private static PlaybookActionRecord EnabledAction(Guid agentId, string behavior, MemoryScope scope)
     {
-        return new PlaybookActionRecord(Guid.NewGuid(),
-            agentId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            behavior,
-            scope.ToString(),
-            Priority: 10,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            SourceFeedbackIds: null,
-            Confidence: null,
-            EvalResult: null,
-            EnabledAtUtc: 10,
-            scope);
+        return new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = behavior,
+            Scope = scope.ToString(),
+            Priority = 10,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            SourceFeedbackIds = null,
+            Confidence = null,
+            EvalResult = null,
+            EnabledAtUtc = 10,
+            MemoryScope = scope
+        };
     }
 
     // A controllable semantic-dedup stub: either NOT-applied (the lexical-only fallback the service must honour) or

@@ -554,17 +554,20 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         // Exactly what the cancel primitive's step 1 does to a Running row: a pure marker write under the row's
         // CURRENT version, which bumps it and leaves the coordinator's terminal CAS holding a stale one.
         var row = Executions.Rows.Single(candidate => candidate.Id == target);
-        _ = Executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(target,
-                          row.Version,
-                          new HashSet<IntegrationExecutionStatus>
+        _ = Executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
+        {
+            ExecutionId = target,
+            ExpectedVersion = row.Version,
+            ExpectedStatuses = new HashSet<IntegrationExecutionStatus>
                           {
                               row.Status
                           },
-                          row.Status,
-                          StartedAtUtc: null,
-                          EndedAtUtc: null,
-                          InvocationId: null,
-                          StopRequestedAtUtc: 4_242))
+            NewStatus = row.Status,
+            StartedAtUtc = null,
+            EndedAtUtc = null,
+            InvocationId = null,
+            StopRequestedAtUtc = 4_242
+        })
                       .GetAwaiter()
                       .GetResult();
     }
@@ -665,19 +668,22 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             MetadataJson: null);
 
     private AgentDefinitionRecord BuildDefinition() =>
-        new(_agentDefinitionId,
-            "Sensor agent",
-            Description: null,
-            Instructions: "raw instructions (must NOT be used directly)",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            DefinitionKind,
-            AllowedToolNames: [],
-            new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson: null,
-            Version: 7,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = _agentDefinitionId,
+            Name = "Sensor agent",
+            Description = null,
+            Instructions = "raw instructions (must NOT be used directly)",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = DefinitionKind,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null,
+            Version = 7,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     /// <summary>Reads the harness's mutable queue age, so a test can move the deadline after the lease is requested.</summary>
     private sealed class QueueAgeOptions : IOptions<IntegrationOptions>

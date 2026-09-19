@@ -32,7 +32,7 @@ public sealed partial class BenchmarkStore
         // the cohort, or a no-op save would drop every ranked run out of the ranking.
         if (current is not null && string.Equals(current.PolicyHash, policyHash, StringComparison.Ordinal))
         {
-            return new BenchmarkJudgePolicyActivation(ToRecord(current, includePayload: true), WasCreated: false, []);
+            return new BenchmarkJudgePolicyActivation { Revision = ToRecord(current, includePayload: true), WasCreated = false, SucceededRunIds = [] };
         }
 
         var now = Now();
@@ -42,7 +42,7 @@ public sealed partial class BenchmarkStore
         var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken);
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), wasCreated, runIds);
+        return new BenchmarkJudgePolicyActivation { Revision = ToRecord(revision, includePayload: true), WasCreated = wasCreated, SucceededRunIds = runIds };
     }
 
     public async Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default)
@@ -87,7 +87,7 @@ public sealed partial class BenchmarkStore
             : [];
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new BenchmarkProjectFidelityChange(ToRecord(project, frozen), enqueued);
+        return new BenchmarkProjectFidelityChange { Project = ToRecord(project, frozen), EnqueuedRunIds = enqueued };
     }
 
     /// <summary>
@@ -156,14 +156,17 @@ public sealed partial class BenchmarkStore
                         .OrderBy(entity => entity.Revision)
                         // Column projection, not entity materialization: a history list must not decrypt one policy
                         // blob per row to render revision numbers and hashes.
-                        .Select(entity => new BenchmarkJudgePolicyRevisionRecord(entity.Id,
-                            entity.ProjectId,
-                            entity.Revision,
-                            null,
-                            entity.PolicyHash,
-                            entity.ReferenceExecutionKey,
-                            entity.CohortGeneration,
-                            entity.CreatedAtUtc))
+                        .Select(entity => new BenchmarkJudgePolicyRevisionRecord
+                        {
+                            Id = entity.Id,
+                            ProjectId = entity.ProjectId,
+                            Revision = entity.Revision,
+                            PolicyJson = null,
+                            PolicyHash = entity.PolicyHash,
+                            ReferenceExecutionKey = entity.ReferenceExecutionKey,
+                            CohortGeneration = entity.CohortGeneration,
+                            CreatedAtUtc = entity.CreatedAtUtc
+                        })
                         .ToArrayAsync(cancellationToken);
 
     public async Task<BenchmarkJudgeAttemptRecord> EnqueueJudgeAttemptAsync(BenchmarkEnqueueJudgeAttemptCommand command, CancellationToken cancellationToken = default)
@@ -254,7 +257,7 @@ public sealed partial class BenchmarkStore
         var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken);
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), WasCreated: false, runIds);
+        return new BenchmarkJudgePolicyActivation { Revision = ToRecord(revision, includePayload: true), WasCreated = false, SucceededRunIds = runIds };
     }
 
     public async Task<bool> TryPromoteReferenceExecutionKeyAsync(Guid revisionId,

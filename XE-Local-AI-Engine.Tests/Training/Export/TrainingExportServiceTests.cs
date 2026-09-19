@@ -553,26 +553,29 @@ public sealed class TrainingExportServiceTests : IDisposable
             string adapterDirectory,
             Harness[] harnessBox)
         {
-            var run = new TrainingRunRecord(runId,
-                Guid.NewGuid(),
-                "v1:abc",
-                DatasetRevision: 1,
-                FreezeJson: ReadOnlyMemory<byte>.Empty,
-                BaseArtifactId: Guid.NewGuid(),
-                LinkedInstalledModelName: "base:Q4_K_M",
-                LinkedModelContentFingerprint: "v1:def",
-                OptionsJson: ReadOnlyMemory<byte>.Empty,
-                LicenseConfirmationJson: null,
-                runStatus,
-                ProgressJson: null,
-                LogTail: null,
-                LaunchReceiptJson: null,
-                ErrorMessage: null,
-                Version: 4,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                TrainingWorkStatus.Succeeded,
-                WorkErrorMessage: null);
+            var run = new TrainingRunRecord
+            {
+                Id = runId,
+                DatasetId = Guid.NewGuid(),
+                DatasetContentFingerprint = "v1:abc",
+                DatasetRevision = 1,
+                FreezeJson = ReadOnlyMemory<byte>.Empty,
+                BaseArtifactId = Guid.NewGuid(),
+                LinkedInstalledModelName = "base:Q4_K_M",
+                LinkedModelContentFingerprint = "v1:def",
+                OptionsJson = ReadOnlyMemory<byte>.Empty,
+                LicenseConfirmationJson = null,
+                Status = runStatus,
+                ProgressJson = null,
+                LogTail = null,
+                LaunchReceiptJson = null,
+                ErrorMessage = null,
+                Version = 4,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                WorkErrorMessage = null
+            };
             _ = store.GetAsync(runId, Arg.Any<CancellationToken>()).Returns(run);
             _ = store.ListArtifactsAsync(runId, Arg.Any<CancellationToken>())
                      .Returns<IReadOnlyList<TrainingArtifactRecord>>([
@@ -607,7 +610,20 @@ public sealed class TrainingExportServiceTests : IDisposable
         }
 
         private static TrainingArtifactRecord Artifact(Guid runId, TrainingArtifactKind kind, string path, TrainingArtifactSmokeState state) =>
-            new(Guid.NewGuid(), runId, kind, path, Sha256: null, SizeBytes: 0, state, SmokeReason: null, CommittedModelName: null,
-                Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                RunId = runId,
+                Kind = kind,
+                Path = path,
+                Sha256 = null,
+                SizeBytes = 0,
+                SmokeState = state,
+                SmokeReason = null,
+                CommittedModelName = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            };
     }
 }

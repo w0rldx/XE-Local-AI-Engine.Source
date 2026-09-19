@@ -70,7 +70,7 @@ public sealed class BenchmarkRunExecutorTests
             new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             NullLogger<BenchmarkRunExecutor>.Instance);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.NotNull(failed);
         AssertEx.Equal(0, capacity.DecisionCount);
@@ -107,7 +107,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(), runner,
             new BenchmarkCancellationRegistry());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Contains(AssertEx.NotNull(failureMessage), BenchmarkLaunchIdentityScheme.SupersededReason);
         AssertEx.Equal(0, capacity.DecisionCount);
@@ -145,7 +145,7 @@ public sealed class BenchmarkRunExecutorTests
             var executor = Executor(store, Snapshot(Installed("model.gguf", 'a')), lease, new RecordingCapacityService(),
                 Substitute.For<IWorkerEventDispatcher>(), Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry());
 
-            await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+            await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
             AssertEx.Contains(AssertEx.NotNull(failureMessage), "installed model changed");
             AssertEx.False(failureMessage!.Contains(BenchmarkLaunchIdentityScheme.SupersededReason, StringComparison.Ordinal),
@@ -198,7 +198,7 @@ public sealed class BenchmarkRunExecutorTests
         var supervisor = PassthroughSupervisor();
         var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, cancellationRegistry, supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal<int?>(8192, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
@@ -278,7 +278,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         var measured = AssertEx.NotNull(persisted.Throughput);
@@ -337,7 +337,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal("length", persisted.PrimaryStopReason);
@@ -381,7 +381,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal(BenchmarkPrimaryStopReasons.Incomplete, persisted.PrimaryStopReason,
@@ -434,7 +434,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var persisted = AssertEx.NotNull(command);
         AssertEx.Equal(BenchmarkPrimaryStopReasons.Incomplete, persisted.PrimaryStopReason,
@@ -482,7 +482,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal(expected: 1800, AssertEx.NotNull(assignedPackage).Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, assignedPackage!.Timeouts.ToolCallTimeoutSeconds, "Tool-call and stream-idle stay pinned: they bound a STALL.");
@@ -531,7 +531,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var package = AssertEx.NotNull(assignedPackage);
         AssertEx.Equal<int?>(2048, AssertEx.NotNull(package.SamplingOptions).ReasoningBudgetTokens);
@@ -571,7 +571,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal(BenchmarkPrimaryStopReasons.ReasoningLength, AssertEx.NotNull(command).PrimaryStopReason);
         AssertEx.True(BenchmarkPrimaryStopReasons.IsTruncated(BenchmarkPrimaryStopReasons.ReasoningLength),
@@ -613,7 +613,7 @@ public sealed class BenchmarkRunExecutorTests
             PassthroughSupervisor(),
             admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 5, TimeSpan.Zero));
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal(3, capacity.DecisionCount);
         await runner.ReceivedWithAnyArgs(1).RunAsync(default!, default);
@@ -657,7 +657,7 @@ public sealed class BenchmarkRunExecutorTests
             runner,
             cancellationRegistry);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, AssertEx.NotNull(cancelled).PrimaryStatus);
         AssertEx.True(cancelled!.LastStreamSequence > 0);
@@ -723,11 +723,11 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner, cancellations,
             pairwisePlanner: planner);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
         _ = await planner.Received(1).EnsurePairsAsync(run.ProjectId, Arg.Any<CancellationToken>());
 
         cancelNext = true;
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         _ = await planner.Received(1).EnsurePairsAsync(run.ProjectId, Arg.Any<CancellationToken>());
     }
@@ -758,7 +758,7 @@ public sealed class BenchmarkRunExecutorTests
         await stopping.CancelAsync();
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
-            executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), stopping.Token));
+            executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, stopping.Token));
 
         _ = store.DidNotReceive().MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>());
         _ = store.DidNotReceive().MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
@@ -772,9 +772,17 @@ public sealed class BenchmarkRunExecutorTests
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
         {
-            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto,
-                null, LlamaServerLaunchProjection.FlashAttentionOn, "intended", "manifest-sha",
-                LlamaServerLaunchProjection.IdentitySchemeVersion)
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent
+            {
+                Variant = "cuda",
+                KvCacheType = BenchmarkKvCacheType.Q8_0,
+                KvCacheTypeSource = BenchmarkKvCacheType.SourceAuto,
+                KvAutoReason = null,
+                FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionOn,
+                IntendedLaunchIdentity = "intended",
+                IntendedExecutableSha256 = "manifest-sha",
+                LaunchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion
+            }
         };
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
@@ -815,7 +823,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, runner, new BenchmarkCancellationRegistry(),
             PassthroughSupervisor(Receipt()), environmentFacts);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal(expected: 1, environmentFacts.Captures);
         AssertEx.Equal<GpuVariant?>(GpuVariant.Cpu, environmentFacts.Variant);
@@ -872,7 +880,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), PassthroughSupervisor(Receipt()));
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.NotNull(succeeded, "A checkpoint that loses a version race must not cost the run its measurement.");
         _ = store.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
@@ -900,7 +908,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed, frozenContextTokens: 12288), lease, capacity, dispatcher, runner,
             new BenchmarkCancellationRegistry());
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal<int?>(12288, AssertEx.NotNull(capacity.LastRequest).RequiredContextTokens);
     }
@@ -935,7 +943,7 @@ public sealed class BenchmarkRunExecutorTests
             new BenchmarkCancellationRegistry(),
             logger: logger);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal("q4_0", AssertEx.NotNull(capacity.LastRequest).KvCacheType);
         var admission = AssertEx.NotNull(logger.Entries.FirstOrDefault(entry =>
@@ -977,7 +985,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, capacity, dispatcher, Substitute.For<IInvocationRunner>(),
             new BenchmarkCancellationRegistry(), logger: logger);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Null(AssertEx.NotNull(capacity.LastRequest).KvCacheType, "Auto/f16 must reach capacity as the unchanged default.");
         AssertEx.True(logger.HasEntry(LogLevel.Information, "KV cache f16"),
@@ -1014,7 +1022,7 @@ public sealed class BenchmarkRunExecutorTests
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor);
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         var command = AssertEx.NotNull(checkpoint);
         AssertEx.Null(command.ReceiptJson, "A spawn that never reached readiness records no receipt.");
@@ -1056,7 +1064,7 @@ public sealed class BenchmarkRunExecutorTests
             new BenchmarkCancellationRegistry(), supervisor,
             admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         _ = supervisor.Received(2).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
             Arg.Any<ModelRole>(),
@@ -1089,7 +1097,7 @@ public sealed class BenchmarkRunExecutorTests
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
             admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         _ = supervisor.Received(3).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
             Arg.Any<ModelRole>(),
@@ -1127,7 +1135,7 @@ public sealed class BenchmarkRunExecutorTests
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
             admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 3, TimeSpan.Zero));
 
-        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
         AssertEx.Equal(expected: 3, capacity.DecisionCount, "Two of the phase's three retries went to capacity.");
         _ = supervisor.Received(2).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
@@ -1207,17 +1215,39 @@ public sealed class BenchmarkRunExecutorTests
             LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status, long version, int? invocationTimeoutSeconds = null) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = Guid.NewGuid(),
+            RuntimeSnapshotJson = new byte[]
             {
                 1
-            }, "model.gguf", LocalModelOrigin.Imported, V1('a'), "Agent", 1, 8192,
-            status, null, null, null, null, null, 0, null, null, version, 1, 1, null, 1)
-        {
+            },
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = V1('a'),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 8192,
+            PrimaryStatus = status,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = null,
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = version,
+            CreatedAtUtc = 1,
+            StartedAtUtc = 1,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 1,
             InvocationTimeoutSeconds = invocationTimeoutSeconds
         };
 
     private static BenchmarkRunLaunchIntent Intent(int? launchIdentityScheme) =>
-        new("cuda", "q8_0", "auto", null, LlamaServerLaunchProjection.FlashAttentionOn, new string('a', 64), null, launchIdentityScheme);
+        new() { Variant = "cuda", KvCacheType = "q8_0", KvCacheTypeSource = "auto", KvAutoReason = null, FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionOn, IntendedLaunchIdentity = new string('a', 64), IntendedExecutableSha256 = null, LaunchIdentityScheme = launchIdentityScheme };
 
     private static BenchmarkRunExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,

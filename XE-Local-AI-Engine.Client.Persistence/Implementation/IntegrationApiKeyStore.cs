@@ -77,13 +77,16 @@ public sealed class IntegrationApiKeyStore : IIntegrationApiKeyStore
     }
 
     private static IntegrationApiKeySnapshot ToSnapshot(IntegrationApiKey entity) =>
-        new(entity.Id,
-            entity.PrincipalId,
-            entity.KeyPrefix,
-            entity.KeyHash,
-            entity.Label,
-            entity.AllowedTriggerIdsJson,
-            entity.CreatedAtUtc,
-            entity.LastUsedAtUtc,
-            entity.RevokedAtUtc);
+        new()
+        {
+            Id = entity.Id,
+            PrincipalId = entity.PrincipalId,
+            KeyPrefix = entity.KeyPrefix,
+            KeyHash = entity.KeyHash,
+            Label = entity.Label,
+            AllowedTriggerIdsJson = entity.AllowedTriggerIdsJson,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            LastUsedAtUtc = entity.LastUsedAtUtc,
+            RevokedAtUtc = entity.RevokedAtUtc
+        };
 }

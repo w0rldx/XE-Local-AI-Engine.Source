@@ -331,22 +331,25 @@ public sealed class SchedulerDispatchExecutorTests
 
     private static ScheduledJobRunRecord ToRunningRecord(ScheduledJobRunInput input)
     {
-        return new ScheduledJobRunRecord(Guid.NewGuid(),
-            input.ScheduledJobId,
-            input.TemplateId,
-            input.QuartzFireInstanceId,
-            input.TriggeredBy,
-            ScheduledRunStatus.Running,
-            input.ScheduledFireTimeUtc,
-            input.ActualFireTimeUtc,
-            CompletedAtUtc: null,
-            DurationMs: null,
-            input.Summary,
-            input.DetailsJson,
-            input.ErrorMessage,
-            input.ErrorDetails,
-            CancellationRequestedAtUtc: null,
-            CreatedAtUtc: 1L);
+        return new ScheduledJobRunRecord
+        {
+            Id = Guid.NewGuid(),
+            ScheduledJobId = input.ScheduledJobId,
+            TemplateId = input.TemplateId,
+            QuartzFireInstanceId = input.QuartzFireInstanceId,
+            TriggeredBy = input.TriggeredBy,
+            Status = ScheduledRunStatus.Running,
+            ScheduledFireTimeUtc = input.ScheduledFireTimeUtc,
+            ActualFireTimeUtc = input.ActualFireTimeUtc,
+            CompletedAtUtc = null,
+            DurationMs = null,
+            Summary = input.Summary,
+            DetailsJson = input.DetailsJson,
+            ErrorMessage = input.ErrorMessage,
+            ErrorDetails = input.ErrorDetails,
+            CancellationRequestedAtUtc = null,
+            CreatedAtUtc = 1L
+        };
     }
 
     private static ScheduledJobDefinitionRecord BuildRecord(bool enabled,
@@ -354,26 +357,29 @@ public sealed class SchedulerDispatchExecutorTests
         string templateId = TestEchoScheduledJobHandler.Id,
         string? parameterJson = null)
     {
-        return new ScheduledJobDefinitionRecord(JobId,
-            templateId,
-            "Test Job",
-            Description: null,
-            enabled,
-            ScheduleKind.OneShot,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            parameterJson,
-            ScheduledJobCreator.User,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            deleted ? 1L : null);
+        return new ScheduledJobDefinitionRecord
+        {
+            Id = JobId,
+            TemplateId = templateId,
+            DisplayName = "Test Job",
+            Description = null,
+            Enabled = enabled,
+            ScheduleKind = ScheduleKind.OneShot,
+            CronExpression = null,
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            ParameterJson = parameterJson,
+            CreatedBy = ScheduledJobCreator.User,
+            CreatedAtUtc = 0L,
+            UpdatedAtUtc = 0L,
+            DisabledAtUtc = null,
+            DeletedAtUtc = deleted ? 1L : null
+        };
     }
 }

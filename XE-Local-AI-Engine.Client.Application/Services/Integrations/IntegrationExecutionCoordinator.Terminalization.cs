@@ -189,17 +189,20 @@ internal sealed partial class IntegrationExecutionCoordinator
         try
         {
             // Terminal writes never carry the run's cancellation token: a shutdown must still be able to close the row.
-            var won = await context.Store.TryTerminalizeAsync(new IntegrationTerminalizeCommand(context.ExecutionId,
-                                           context.Version,
-                                           expectedStatuses,
-                                           status,
-                                           sequence,
-                                           eventType,
-                                           endedAtUtc,
-                                           failureCategory,
-                                           failureSummary,
-                                           payload?.GetRawText(),
-                                           BuildAudit(context, status, endedAtUtc)),
+            var won = await context.Store.TryTerminalizeAsync(new IntegrationTerminalizeCommand
+            {
+                ExecutionId = context.ExecutionId,
+                ExpectedVersion = context.Version,
+                ExpectedStatuses = expectedStatuses,
+                NewStatus = status,
+                Sequence = sequence,
+                EventType = eventType,
+                EndedAtUtc = endedAtUtc,
+                FailureCategory = failureCategory,
+                FailureSummary = failureSummary,
+                EventDetailJson = payload?.GetRawText(),
+                Audit = BuildAudit(context, status, endedAtUtc)
+            },
                                        CancellationToken.None);
             if (!won)
             {
@@ -234,17 +237,20 @@ internal sealed partial class IntegrationExecutionCoordinator
     ///     name, a credential prefix and a terminal status.
     /// </summary>
     private static IntegrationInvocationAuditInput BuildAudit(ExecutionRunContext context, IntegrationExecutionStatus status, long endedAtUtc) =>
-        new(context.InvocationId,
-            context.RequestId,
-            context.TriggerName,
-            context.KeyPrefix,
-            context.TargetAgentDefinitionId,
-            status switch
+        new()
+        {
+            InvocationId = context.InvocationId,
+            RequestId = context.RequestId,
+            TriggerName = context.TriggerName,
+            KeyPrefix = context.KeyPrefix,
+            TargetAgentDefinitionId = context.TargetAgentDefinitionId,
+            TerminalStatus = status switch
             {
                 IntegrationExecutionStatus.Completed => NodeChatMessageStatusValues.Completed,
                 IntegrationExecutionStatus.Cancelled => NodeChatMessageStatusValues.Cancelled,
                 _ => NodeChatMessageStatusValues.Failed
             },
-            Activity.Current?.TraceId.ToString(),
-            Math.Max(val1: 0L, endedAtUtc - context.ReceivedAtUtc));
+            TraceId = Activity.Current?.TraceId.ToString(),
+            LatencyMs = Math.Max(val1: 0L, endedAtUtc - context.ReceivedAtUtc)
+        };
 }

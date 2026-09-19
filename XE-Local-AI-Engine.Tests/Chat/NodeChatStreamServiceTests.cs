@@ -3206,22 +3206,25 @@ public sealed class NodeChatStreamServiceTests
         // The real resolver over a store whose Default Assistant is the seeded, unedited embedded prompt (version 1,
         // empty allowed set → full offer per the default-slug branch).
         var store = Substitute.For<IAgentDefinitionStore>();
-        var defaultAssistant = new AgentDefinitionRecord(defaultAssistantId,
-            "Default Assistant",
-            Description: null,
-            embeddedPrompt,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            PlaybookEnabled: false,
-            AgentDefinitionSource.Seeded,
-            "default-assistant");
+        var defaultAssistant = new AgentDefinitionRecord
+        {
+            Id = defaultAssistantId,
+            Name = "Default Assistant",
+            Description = null,
+            Instructions = embeddedPrompt,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            PlaybookEnabled = false,
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = "default-assistant"
+        };
         store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
         var offerProvider = CreateOfferProvider(offeredTool);
         var resolver = new AgentDefinitionResolver(store,
@@ -3314,22 +3317,25 @@ public sealed class NodeChatStreamServiceTests
 
         var store = Substitute.For<IAgentDefinitionStore>();
         // An EDITED Default Assistant: a changed prompt and a bumped version (2).
-        var editedDefault = new AgentDefinitionRecord(defaultAssistantId,
-            "Default Assistant",
-            Description: null,
-            embeddedPrompt + "\n\nExtra operator guidance.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 2,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 20,
-            PlaybookEnabled: false,
-            AgentDefinitionSource.Seeded,
-            "default-assistant");
+        var editedDefault = new AgentDefinitionRecord
+        {
+            Id = defaultAssistantId,
+            Name = "Default Assistant",
+            Description = null,
+            Instructions = embeddedPrompt + "\n\nExtra operator guidance.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 2,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            PlaybookEnabled = false,
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = "default-assistant"
+        };
         store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(editedDefault);
         var offerProvider = CreateOfferProvider(offeredTool);
         var resolver = new AgentDefinitionResolver(store,
@@ -4124,19 +4130,22 @@ public sealed class NodeChatStreamServiceTests
         if (pinningDefinitionId is { } definitionId && pinnedModel is not null)
         {
             store.GetByIdAsync(definitionId, Arg.Any<CancellationToken>())
-                 .Returns(new AgentDefinitionRecord(definitionId,
-                     "Pinned Agent",
-                     Description: null,
-                     "Pinned persona.",
-                     pinnedModel,
-                     ReasoningEffort: null,
-                     AgentDefinitionKind.Single,
-                     [],
-                     new Dictionary<string, bool>(),
-                     OrchestrationTopologyJson: null,
-                     Version: 9,
-                     CreatedAtUtc: 10,
-                     UpdatedAtUtc: 10));
+                 .Returns(new AgentDefinitionRecord
+                 {
+                     Id = definitionId,
+                     Name = "Pinned Agent",
+                     Description = null,
+                     Instructions = "Pinned persona.",
+                     ModelProfile = pinnedModel,
+                     ReasoningEffort = null,
+                     Kind = AgentDefinitionKind.Single,
+                     AllowedToolNames = [],
+                     ToolApprovals = new Dictionary<string, bool>(),
+                     OrchestrationTopologyJson = null,
+                     Version = 9,
+                     CreatedAtUtc = 10,
+                     UpdatedAtUtc = 10
+                 });
         }
 
         return store;
@@ -4151,19 +4160,22 @@ public sealed class NodeChatStreamServiceTests
 
     private static AgentDefinitionRecord CreateOrchestratorRecord(Guid id)
     {
-        return new AgentDefinitionRecord(id,
-            "Orchestrator",
-            Description: null,
-            "Orchestrator prompt.",
-            "qwen3:8b",
-            ReasoningEffort: null,
-            AgentDefinitionKind.Orchestrator,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 4,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = id,
+            Name = "Orchestrator",
+            Description = null,
+            Instructions = "Orchestrator prompt.",
+            ModelProfile = "qwen3:8b",
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Orchestrator,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 4,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static OrchestrationSpec CreateSampleSpec()

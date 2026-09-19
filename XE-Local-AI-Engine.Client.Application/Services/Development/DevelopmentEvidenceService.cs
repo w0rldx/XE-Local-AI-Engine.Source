@@ -131,10 +131,13 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
 
         try
         {
-            _ = await _store.InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand(taskId,
-                                    Guid.NewGuid(),
-                                    task.Version,
-                                    sanitizedReason),
+            _ = await _store.InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand
+            {
+                TaskId = taskId,
+                OperationId = Guid.NewGuid(),
+                ExpectedTaskVersion = task.Version,
+                SanitizedReason = sanitizedReason
+            },
                                 cancellationToken);
         }
         catch (DevelopmentConcurrencyException)
@@ -177,22 +180,25 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
         return new DevelopmentPreparedArtifact(artifactId,
-            new DevelopmentAttachArtifactCommand(artifactId,
-                snapshot.ProjectId,
-                snapshot.TaskId,
-                snapshot.AttemptId,
-                Guid.NewGuid(),
-                kind,
-                SchemaVersion: 1,
-                written.ContentHash,
-                written.ByteCount,
-                ManagedReference: written.OpaqueReference,
-                BaseCommit: evidence.BaseCommit,
-                SubjectHash: evidence.SubjectHash,
-                ChangedFilesManifestHash: evidence.ManifestHash,
-                InputArtifactIdsJson: JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions),
-                CommandProfileVersion: commandProfileVersion,
-                CommandProfileDigest: commandProfileDigest));
+            new DevelopmentAttachArtifactCommand
+            {
+                ArtifactId = artifactId,
+                ProjectId = snapshot.ProjectId,
+                TaskId = snapshot.TaskId,
+                AttemptId = snapshot.AttemptId,
+                OperationId = Guid.NewGuid(),
+                Kind = kind,
+                SchemaVersion = 1,
+                ContentHash = written.ContentHash,
+                ByteCount = written.ByteCount,
+                ManagedReference = written.OpaqueReference,
+                BaseCommit = evidence.BaseCommit,
+                SubjectHash = evidence.SubjectHash,
+                ChangedFilesManifestHash = evidence.ManifestHash,
+                InputArtifactIdsJson = JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions),
+                CommandProfileVersion = commandProfileVersion,
+                CommandProfileDigest = commandProfileDigest
+            });
     }
 
     private async Task<ReadOnlyMemory<byte>> ReadRequiredAsync(DevelopmentArtifactSnapshot artifact, CancellationToken cancellationToken)

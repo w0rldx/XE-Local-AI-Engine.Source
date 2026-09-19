@@ -84,37 +84,66 @@ public interface IScheduledJobRunStore
 ///     (decrypted on materialization); the store converts to and from this shape at the boundary so callers never touch
 ///     the encrypted byte column.
 /// </summary>
-public sealed record ScheduledJobRunRecord(
-    Guid Id,
-    Guid ScheduledJobId,
-    string TemplateId,
-    string? QuartzFireInstanceId,
-    ScheduledRunTrigger TriggeredBy,
-    ScheduledRunStatus Status,
-    long? ScheduledFireTimeUtc,
-    long? ActualFireTimeUtc,
-    long? CompletedAtUtc,
-    long? DurationMs,
-    string? Summary,
-    string? DetailsJson,
-    string? ErrorMessage,
-    string? ErrorDetails,
-    long? CancellationRequestedAtUtc,
-    long CreatedAtUtc);
+public sealed class ScheduledJobRunRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid ScheduledJobId { get; init; }
+
+    public required string TemplateId { get; init; }
+
+    public required string? QuartzFireInstanceId { get; init; }
+
+    public required ScheduledRunTrigger TriggeredBy { get; init; }
+
+    public required ScheduledRunStatus Status { get; init; }
+
+    public required long? ScheduledFireTimeUtc { get; init; }
+
+    public required long? ActualFireTimeUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long? DurationMs { get; init; }
+
+    public required string? Summary { get; init; }
+
+    public required string? DetailsJson { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required string? ErrorDetails { get; init; }
+
+    public required long? CancellationRequestedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a scheduled job run supplied on create/upsert. <see cref="DetailsJson" /> is passed as a
 ///     plaintext string; the store encodes it to UTF-8 bytes before the interceptors encrypt it.
 /// </summary>
-public sealed record ScheduledJobRunInput(
-    Guid ScheduledJobId,
-    string TemplateId,
-    string? QuartzFireInstanceId,
-    ScheduledRunTrigger TriggeredBy,
-    ScheduledRunStatus Status,
-    long? ScheduledFireTimeUtc,
-    long? ActualFireTimeUtc,
-    string? Summary = null,
-    string? DetailsJson = null,
-    string? ErrorMessage = null,
-    string? ErrorDetails = null);
+public sealed record ScheduledJobRunInput
+{
+    public required Guid ScheduledJobId { get; init; }
+
+    public required string TemplateId { get; init; }
+
+    public required string? QuartzFireInstanceId { get; init; }
+
+    public required ScheduledRunTrigger TriggeredBy { get; init; }
+
+    public required ScheduledRunStatus Status { get; init; }
+
+    public required long? ScheduledFireTimeUtc { get; init; }
+
+    public required long? ActualFireTimeUtc { get; init; }
+
+    public string? Summary { get; init; }
+
+    public string? DetailsJson { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public string? ErrorDetails { get; init; }
+}

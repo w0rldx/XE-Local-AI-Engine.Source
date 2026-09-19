@@ -76,13 +76,16 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
         // them would be a durable workflow quietly running a different request from the one that was asked.
-        var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand(operationId,
-                                      workItemId,
-                                      definitionId,
-                                      definition.Version,
-                                      definition.GraphHash,
-                                      definition.GraphJson,
-                                      DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)),
+        var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand
+        {
+            RunId = operationId,
+            WorkItemId = workItemId,
+            DefinitionId = definitionId,
+            DefinitionVersion = definition.Version,
+            DefinitionGraphHash = definition.GraphHash,
+            GraphJson = definition.GraphJson,
+            NodeRuns = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)
+        },
                                   cancellationToken);
 
         return await SignalAndComposeAsync(run.Id, cancellationToken);
@@ -234,21 +237,23 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             }
         }
 
-        _ = await _store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(runId,
-                                Guid.NewGuid(),
-                                nodeRunId,
-                                DevWorkflowVersions.Any,
-                                operationId,
-                                decision,
-                                comment,
-                                payloadJson,
-                                decidedBySubject,
-                                decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null,
-
-                                // The row this answer was validated against. Everything above read `nodeRun` outside
-                                // the recording transaction, so the write re-checks the pair rather than trusting it.
-                                nodeRun.Attempt,
-                                nodeRun.Status),
+        _ = await _store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
+        {
+            RunId = runId,
+            DecisionId = Guid.NewGuid(),
+            NodeRunId = nodeRunId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            OperationId = operationId,
+            Decision = decision,
+            Comment = comment,
+            PayloadJson = payloadJson,
+            DecidedBySubject = decidedBySubject,
+            MaxTotalAttempts = decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null,
+            // The row this answer was validated against. Everything above read `nodeRun` outside
+            // the recording transaction, so the write re-checks the pair rather than trusting it.
+            ExpectedAttempt = nodeRun.Attempt,
+            ExpectedStatus = nodeRun.Status
+        },
                             cancellationToken);
 
         var detail = await SignalAndComposeAsync(runId, cancellationToken);
@@ -276,7 +281,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         var run = await _store.GetRunAsync(runId, cancellationToken);
         DevWorkflowStateMachine.EnsureLegal(run.Status, target);
 
-        _ = await _store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(runId, DevWorkflowVersions.Any, target, operationId), cancellationToken);
+        _ = await _store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = runId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = target, OperationId = operationId }, cancellationToken);
         return await SignalAndComposeAsync(runId, cancellationToken);
     }
 

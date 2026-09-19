@@ -64,43 +64,72 @@ public interface IModelFitSnapshotStore
 ///     Sanitized projection of a persisted model-fit snapshot. Deliberately omits the raw output, stderr excerpt and
 ///     diagnostics so default reads never surface sensitive utility output.
 /// </summary>
-public sealed record ModelFitSnapshotSummaryRecord(
-    Guid Id,
-    string ApprovedImageId,
-    ModelFitOperation Operation,
-    string? UseCase,
-    string ProviderName,
-    string? ModelName,
-    ModelFitRunStatus Status,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long? DurationMs,
-    int? ExitCode,
-    bool IsLatestSuccessful,
-    Guid? CreatedByRunId,
-    long CreatedAtUtc);
+public sealed class ModelFitSnapshotSummaryRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string ApprovedImageId { get; init; }
+
+    public required ModelFitOperation Operation { get; init; }
+
+    public required string? UseCase { get; init; }
+
+    public required string ProviderName { get; init; }
+
+    public required string? ModelName { get; init; }
+
+    public required ModelFitRunStatus Status { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long? DurationMs { get; init; }
+
+    public required int? ExitCode { get; init; }
+
+    public required bool IsLatestSuccessful { get; init; }
+
+    public required Guid? CreatedByRunId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Operator-only projection of a persisted model-fit snapshot's sensitive payload. The raw output, stderr excerpt
 ///     and diagnostics are returned decrypted (decrypted on materialization). Returned ONLY by
 ///     <see cref="IModelFitSnapshotStore.GetRawByIdAsync" />.
 /// </summary>
-public sealed record ModelFitSnapshotRawRecord(
-    Guid Id,
-    string? RawJson,
-    string? StderrExcerpt,
-    string? DiagnosticsJson);
+public sealed class ModelFitSnapshotRawRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string? RawJson { get; init; }
+
+    public required string? StderrExcerpt { get; init; }
+
+    public required string? DiagnosticsJson { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields supplied when a model-fit snapshot run is created. <see cref="UseCase" /> and
 ///     <see cref="ModelName" /> are part of the latest-successful key (both null for a recommendation run).
 /// </summary>
-public sealed record ModelFitSnapshotInput(
-    string ApprovedImageId,
-    ModelFitOperation Operation,
-    string? UseCase,
-    string ProviderName,
-    string? ModelName,
-    ModelFitRunStatus Status,
-    long? StartedAtUtc,
-    Guid? CreatedByRunId = null);
+public sealed class ModelFitSnapshotInput
+{
+    public required string ApprovedImageId { get; init; }
+
+    public required ModelFitOperation Operation { get; init; }
+
+    public required string? UseCase { get; init; }
+
+    public required string ProviderName { get; init; }
+
+    public required string? ModelName { get; init; }
+
+    public required ModelFitRunStatus Status { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public Guid? CreatedByRunId { get; init; }
+}

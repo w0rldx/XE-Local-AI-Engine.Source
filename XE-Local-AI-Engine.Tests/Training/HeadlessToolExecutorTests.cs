@@ -150,8 +150,18 @@ public sealed class HeadlessToolExecutorTests
         public void WithVerifiedMock(string body) =>
             _ = Store.ListUsableMocksAsync(ToolName, Arg.Any<CancellationToken>())
                      .Returns<IReadOnlyList<ToolMockRecord>>([
-                         new ToolMockRecord(Guid.NewGuid(), ToolName, Encoding.UTF8.GetBytes(body), null,
-                             ToolMockVerificationState.Verified, Enabled: true, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0)
+                         new ToolMockRecord
+                         {
+                             Id = Guid.NewGuid(),
+                             ToolName = ToolName,
+                             MockJson = Encoding.UTF8.GetBytes(body),
+                             VerificationJson = null,
+                             VerificationState = ToolMockVerificationState.Verified,
+                             Enabled = true,
+                             Version = 1,
+                             CreatedAtUtc = 0,
+                             UpdatedAtUtc = 0
+                         }
                      ]);
     }
 

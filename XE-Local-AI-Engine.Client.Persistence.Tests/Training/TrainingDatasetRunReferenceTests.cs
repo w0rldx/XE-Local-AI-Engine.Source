@@ -82,8 +82,8 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
     {
         await using var context = await CreateDatabaseAsync("cancel-queued-generation.sqlite");
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
-        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
         AssertEx.Equal(DatasetGenerationWorkStatus.Queued, dataset.WorkStatus);
 
         var cancelled = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.");
@@ -93,25 +93,31 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
     }
 
     private static TrainingRunEnqueueCommand Command(RunFixture fixture) =>
-        new(fixture.DatasetId,
-            fixture.DatasetVersion,
-            fixture.BaseArtifactId,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"repoId":"org/base-model"}"""));
+        new()
+        {
+            DatasetId = fixture.DatasetId,
+            ExpectedDatasetVersion = fixture.DatasetVersion,
+            BaseArtifactId = fixture.BaseArtifactId,
+            FreezeJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
+            OptionsJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
+            LicenseConfirmationJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"repoId":"org/base-model"}""")
+        };
 
     private static async Task<RunFixture> SeedAsync(NodeChatDbContext context, TrainingDatasetStore datasets)
     {
-        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput("tool calling", TrainingDatasetKind.ToolCalling, Encoding.UTF8.GetBytes("""{"schemaVersion":1}""")));
-        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id, definition.Version, "dataset"));
+        var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput { Name = "tool calling", Kind = TrainingDatasetKind.ToolCalling, DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}""") });
+        var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand { DefinitionId = definition.Id, ExpectedDefinitionVersion = definition.Version, Name = "dataset" });
         _ = await datasets.ClaimNextAsync();
-        _ = await datasets.AppendSampleAsync(new TrainingSampleInput(dataset.Id,
-            "tool-call",
-            TrainingSampleLabel.Good,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"parts":[]}"""),
-            ValidationJson: null,
-            TrainingSampleProvenance.Generated,
-            new string('c', count: 64)));
+        _ = await datasets.AppendSampleAsync(new TrainingSampleInput
+        {
+            DatasetId = dataset.Id,
+            Kind = "tool-call",
+            Label = TrainingSampleLabel.Good,
+            ContentJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"parts":[]}"""),
+            ValidationJson = null,
+            Provenance = TrainingSampleProvenance.Generated,
+            SourceHash = new string('c', count: 64)
+        });
         var ready = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null);
 
         var artifacts = new TrainingBaseArtifactStore(context, TimeProvider.System);

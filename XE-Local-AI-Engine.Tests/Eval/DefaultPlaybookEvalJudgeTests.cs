@@ -82,15 +82,18 @@ public sealed class DefaultPlaybookEvalJudgeTests
     public async Task ScoreAsync_WhenNeitherAssertionNorRubric_FailsClosed()
     {
         var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
-        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Invalid case",
-            "[]",
-            Assertion: null,
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        var goldenCase = new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Title = "Invalid case",
+            InputTurns = "[]",
+            Assertion = null,
+            Rubric = null,
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
 
         var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>());
 
@@ -119,15 +122,18 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // (create/update validation explicitly allows this). The judge must treat the empty assertion as ABSENT and
         // score via the rubric (model) path — not deterministically fail on the assertion path, which would make the
         // author-valid rubric case impossible to pass.
-        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Empty assertion with rubric",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
-            Rubric: "The answer must be helpful.",
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        var goldenCase = new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Title = "Empty assertion with rubric",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
+            Rubric = "The answer must be helpful.",
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
         using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
 
         var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient);
@@ -144,15 +150,18 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // A non-blank assertion string that is not valid JSON — a corrupt/legacy stored scoring constraint. A rubric is
         // present, but a malformed assertion must FAIL the case outright, never silently fall back to the rubric (which
         // would drop the intended deterministic gate). This differs from an empty-phrase assertion, which IS absent.
-        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Malformed assertion with rubric",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: "{ not valid json",
-            Rubric: "The answer must be helpful.",
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        var goldenCase = new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Title = "Malformed assertion with rubric",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = "{ not valid json",
+            Rubric = "The answer must be helpful.",
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
         // If the judge wrongly fell back to the rubric, this client would be invoked and pass the case.
         using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
 
@@ -171,15 +180,18 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // Without strict unmapped-member handling this parses into an all-empty assertion (ValidNoSignal) and silently
         // falls back to the rubric, dropping the author's intended deterministic gate. It must instead be treated as a
         // corrupt constraint (Malformed) and fail the case outright, exactly like non-JSON garbage.
-        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Unknown assertion member with rubric",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: """{"requiredPhrase":["must appear"]}""",
-            Rubric: "The answer must be helpful.",
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        var goldenCase = new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Title = "Unknown assertion member with rubric",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = """{"requiredPhrase":["must appear"]}""",
+            Rubric = "The answer must be helpful.",
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
         // If the judge wrongly fell back to the rubric, this client would be invoked and pass the case.
         using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
 
@@ -194,15 +206,18 @@ public sealed class DefaultPlaybookEvalJudgeTests
     public async Task ScoreAsync_WhenAssertionIsMalformedAndNoRubric_FailsClosed()
     {
         var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
-        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Malformed assertion, no rubric",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: "{ not valid json",
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        var goldenCase = new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Title = "Malformed assertion, no rubric",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = "{ not valid json",
+            Rubric = null,
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
 
         var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>());
 
@@ -217,15 +232,18 @@ public sealed class DefaultPlaybookEvalJudgeTests
             requiredPhrases = required,
             forbiddenPhrases = forbidden
         });
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Assertion case",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            assertion,
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            Title = "Assertion case",
+            InputTurns = """[{"role":"user","text":"hello"}]""",
+            Assertion = assertion,
+            Rubric = null,
+            Enabled = true,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     /// <summary>

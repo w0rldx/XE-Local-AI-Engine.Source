@@ -138,13 +138,16 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         // Open the Running snapshot row (sentinel image/provider — the approved-image concept is gone).
         var startedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(AdvisorSnapshotSource,
-                request.Operation,
-                request.UseCase,
-                AdvisorProviderName,
-                ModelName: null,
-                ModelFitRunStatus.Running,
-                startedAtUtc),
+        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput
+        {
+            ApprovedImageId = AdvisorSnapshotSource,
+            Operation = request.Operation,
+            UseCase = request.UseCase,
+            ProviderName = AdvisorProviderName,
+            ModelName = null,
+            Status = ModelFitRunStatus.Running,
+            StartedAtUtc = startedAtUtc
+        },
             cancellationToken);
 
         var snapshotId = snapshot.Id;

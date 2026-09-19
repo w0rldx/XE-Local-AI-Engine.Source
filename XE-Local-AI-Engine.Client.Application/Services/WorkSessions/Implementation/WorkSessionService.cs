@@ -102,12 +102,15 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         try
         {
-            var created = await _store.CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
-                                              conversation.ConversationId,
-                                              model.AgentDefinitionId,
-                                              model.Kind,
-                                              title,
-                                              objective),
+            var created = await _store.CreateAsync(new CreateWorkSessionCommand
+            {
+                SessionId = Guid.NewGuid(),
+                ConversationId = conversation.ConversationId,
+                AgentDefinitionId = model.AgentDefinitionId,
+                Kind = model.Kind,
+                Title = title,
+                Objective = objective
+            },
                                           cancellationToken);
             return ToDetail(created);
         }
@@ -140,7 +143,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             await EnsureNoCloudEgressAsync(session, effectiveModel, cancellationToken);
         }
 
-        var updated = await _store.UpdateAsync(new UpdateWorkSessionCommand(sessionId, session.Version, title, objective, model.AgentDefinitionId), cancellationToken);
+        var updated = await _store.UpdateAsync(new UpdateWorkSessionCommand { SessionId = sessionId, ExpectedVersion = session.Version, Title = title, Objective = objective, AgentDefinitionId = model.AgentDefinitionId }, cancellationToken);
         return ToDetail(updated);
     }
 
@@ -386,17 +389,20 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionInvalidTransitionException("The node is already running as many work sessions as it allows. Pause one first.");
         }
 
-        var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running), cancellationToken);
+        var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = AgentWorkSessionStatus.Running }, cancellationToken);
         if (_supervisor.TryStart(sessionId, runtime))
         {
             return ToDetail(running);
         }
 
-        var parked = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId,
-                                         WorkSessionVersions.Any,
-                                         AgentWorkSessionStatus.Paused,
-                                         CurrentTaskId: null,
-                                         "The node could not admit the work session."),
+        var parked = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = WorkSessionVersions.Any,
+            TargetStatus = AgentWorkSessionStatus.Paused,
+            CurrentTaskId = null,
+            SanitizedReason = "The node could not admit the work session."
+        },
                                      cancellationToken);
         _logger.LogWarning("Work session {SessionId} lost the admission race and was left Paused.", sessionId);
         _ = parked;
@@ -419,7 +425,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             return ToDetail(await _store.GetAsync(sessionId, cancellationToken));
         }
 
-        var settled = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, target, CurrentTaskId: null, sanitizedReason),
+        var settled = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = session.Version, TargetStatus = target, CurrentTaskId = null, SanitizedReason = sanitizedReason },
                                       cancellationToken);
         return ToDetail(settled);
     }

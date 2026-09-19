@@ -774,21 +774,24 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         bool enabled,
         ScheduledJobCreator createdBy)
     {
-        return new ScheduledJobDefinitionInput(input.TemplateId,
-            input.DisplayName,
-            input.Description,
-            enabled,
-            input.ScheduleKind,
-            input.CronExpression,
-            input.IntervalSeconds,
-            input.RepeatCount,
-            input.StartAtUtc,
-            input.EndAtUtc,
-            input.TimeZoneId,
-            input.MisfirePolicy,
-            input.PreventOverlap,
-            input.MaxRuntimeSeconds,
-            input.Parameters,
-            createdBy);
+        return new ScheduledJobDefinitionInput
+        {
+            TemplateId = input.TemplateId,
+            DisplayName = input.DisplayName,
+            Description = input.Description,
+            Enabled = enabled,
+            ScheduleKind = input.ScheduleKind,
+            CronExpression = input.CronExpression,
+            IntervalSeconds = input.IntervalSeconds,
+            RepeatCount = input.RepeatCount,
+            StartAtUtc = input.StartAtUtc,
+            EndAtUtc = input.EndAtUtc,
+            TimeZoneId = input.TimeZoneId,
+            MisfirePolicy = input.MisfirePolicy,
+            PreventOverlap = input.PreventOverlap,
+            MaxRuntimeSeconds = input.MaxRuntimeSeconds,
+            ParameterJson = input.Parameters,
+            CreatedBy = createdBy
+        };
     }
 }

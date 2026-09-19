@@ -87,7 +87,7 @@ public sealed class WorkSessionServiceRegistrationTests
     {
         var sessionId = Guid.NewGuid();
         var created = await store.CreateAsync(WorkSessionTestFixture.CreateSeed(sessionId));
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, created.Version, AgentWorkSessionStatus.Running));
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = created.Version, TargetStatus = AgentWorkSessionStatus.Running });
         return sessionId;
     }
 

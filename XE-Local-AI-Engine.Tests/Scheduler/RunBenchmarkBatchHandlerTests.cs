@@ -283,17 +283,20 @@ public sealed class RunBenchmarkBatchHandlerTests
         public Harness(TimeProvider? timeProvider = null)
         {
             Store.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                 .Returns(new BenchmarkProjectRecord(ProjectId,
-                     "Quant matrix",
-                     ReadOnlyMemory<byte>.Empty,
-                     ContextTokens: 4096,
-                     AgentDefinitionId: Guid.NewGuid(),
-                     JudgeEnabled: false,
-                     CurrentJudgePolicyRevisionId: null,
-                     IsFrozen: false,
-                     Version: 5,
-                     CreatedAtUtc: 0,
-                     UpdatedAtUtc: 0));
+                 .Returns(new BenchmarkProjectRecord
+                 {
+                     Id = ProjectId,
+                     Name = "Quant matrix",
+                     CoreTaskJson = ReadOnlyMemory<byte>.Empty,
+                     ContextTokens = 4096,
+                     AgentDefinitionId = Guid.NewGuid(),
+                     JudgeEnabled = false,
+                     CurrentJudgePolicyRevisionId = null,
+                     IsFrozen = false,
+                     Version = 5,
+                     CreatedAtUtc = 0,
+                     UpdatedAtUtc = 0
+                 });
             SetActiveWork();
 
             Freeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
@@ -359,29 +362,32 @@ public sealed class RunBenchmarkBatchHandlerTests
         }
 
         private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status) =>
-            new(Guid.NewGuid(),
-                ProjectId,
-                ReadOnlyMemory<byte>.Empty,
-                "model-a",
-                null,
-                "fingerprint",
-                "agent",
-                1,
-                4096,
-                status,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0,
-                null,
-                null,
-                1,
-                0,
-                null,
-                null,
-                0);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = ProjectId,
+                RuntimeSnapshotJson = ReadOnlyMemory<byte>.Empty,
+                PrimaryModelName = "model-a",
+                PrimaryModelOrigin = null,
+                ModelContentFingerprint = "fingerprint",
+                AgentName = "agent",
+                AgentVersion = 1,
+                RequestedContextTokens = 4096,
+                PrimaryStatus = status,
+                EffectiveContextTokens = null,
+                DurationMs = null,
+                TotalTokens = null,
+                TokensPerSecond = null,
+                OutputPartsJson = null,
+                LastStreamSequence = 0,
+                UserScore = null,
+                PrimaryErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                StartedAtUtc = null,
+                PrimaryCompletedAtUtc = null,
+                UpdatedAtUtc = 0
+            };
 
         public ScheduledJobExecutionContext Fire(string? parametersJson) =>
             Context(parametersJson, (summary, _, _) =>

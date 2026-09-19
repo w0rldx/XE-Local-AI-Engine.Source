@@ -170,50 +170,75 @@ public sealed class EvaluationRunServiceTests
         }
 
         private static TrainingRunRecord Run(TrainingRunFreezeV1 freeze) =>
-            new(RunId,
-                DatasetId,
-                FrozenFingerprint,
-                DatasetRevision: 1,
-                JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
-                BaseArtifactId: Guid.NewGuid(),
-                LinkedInstalledModelName: "base:Q4_K_M",
-                LinkedModelContentFingerprint: "v1:def",
-                OptionsJson: ReadOnlyMemory<byte>.Empty,
-                LicenseConfirmationJson: null,
-                TrainingRunStatus.Succeeded,
-                ProgressJson: null,
-                LogTail: null,
-                LaunchReceiptJson: null,
-                ErrorMessage: null,
-                Version: 4,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                TrainingWorkStatus.Succeeded,
-                WorkErrorMessage: null);
+            new()
+            {
+                Id = RunId,
+                DatasetId = DatasetId,
+                DatasetContentFingerprint = FrozenFingerprint,
+                DatasetRevision = 1,
+                FreezeJson = JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
+                BaseArtifactId = Guid.NewGuid(),
+                LinkedInstalledModelName = "base:Q4_K_M",
+                LinkedModelContentFingerprint = "v1:def",
+                OptionsJson = ReadOnlyMemory<byte>.Empty,
+                LicenseConfirmationJson = null,
+                Status = TrainingRunStatus.Succeeded,
+                ProgressJson = null,
+                LogTail = null,
+                LaunchReceiptJson = null,
+                ErrorMessage = null,
+                Version = 4,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                WorkErrorMessage = null
+            };
 
         private static TrainingDatasetRecord Dataset(string contentFingerprint) =>
-            new(DatasetId, Guid.NewGuid(), 1, DefinitionJson: null, "dataset", TrainingDatasetStatus.Ready, 1, contentFingerprint,
-                1, 1, 0, 0, 0, 1, 0, 0, DatasetGenerationWorkStatus.Succeeded, null);
+            new()
+            {
+                Id = DatasetId,
+                DefinitionId = Guid.NewGuid(),
+                DefinitionVersion = 1,
+                DefinitionJson = null,
+                Name = "dataset",
+                Status = TrainingDatasetStatus.Ready,
+                Revision = 1,
+                ContentFingerprint = contentFingerprint,
+                TotalSampleCount = 1,
+                GoodSampleCount = 1,
+                BadSampleCount = 0,
+                RejectedSampleCount = 0,
+                DuplicateSampleCount = 0,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = DatasetGenerationWorkStatus.Succeeded,
+                WorkErrorMessage = null
+            };
 
         private static TrainingEvaluationRecord Evaluation() =>
-            new(Guid.NewGuid(),
-                RunId,
-                ComparisonId: null,
-                "base:Q4_K_M",
-                ModelContentFingerprint: null,
-                DatasetId,
-                FrozenFingerprint,
-                MembershipJson: ReadOnlyMemory<byte>.Empty,
-                TrainingEvaluationStatus.Queued,
-                ResultsJson: null,
-                TotalCount: 1,
-                ScoredCount: 0,
-                PassedCount: 0,
-                PerKindJson: null,
-                ErrorMessage: null,
-                Version: 1,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                TrainingWorkStatus.Queued);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                TrainingRunId = RunId,
+                ComparisonId = null,
+                ModelName = "base:Q4_K_M",
+                ModelContentFingerprint = null,
+                DatasetId = DatasetId,
+                DatasetContentFingerprint = FrozenFingerprint,
+                MembershipJson = ReadOnlyMemory<byte>.Empty,
+                Status = TrainingEvaluationStatus.Queued,
+                ResultsJson = null,
+                TotalCount = 1,
+                ScoredCount = 0,
+                PassedCount = 0,
+                PerKindJson = null,
+                ErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Queued
+            };
     }
 }

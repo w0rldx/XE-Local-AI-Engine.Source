@@ -154,20 +154,23 @@ internal static class SkillMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new AgentSkillInput(request.Name ?? string.Empty,
-            request.Description ?? string.Empty,
-            request.Body ?? string.Empty,
+        return new AgentSkillInput
+        {
+            Name = request.Name ?? string.Empty,
+            Description = request.Description ?? string.Empty,
+            Body = request.Body ?? string.Empty,
             // AI-drafted content is disabled on arrival; anything else keeps the create default (a new skill is enabled).
-            Enabled: !request.Generated,
-            request.License,
-            request.Compatibility,
-            request.AllowedTools,
-            request.Metadata,
-            request.Generated ? AgentSkillOrigin.Imported : AgentSkillOrigin.Local,
-            request.Generated ? GeneratedSourceUri : null,
-            request.Generated ? now.ToUnixTimeMilliseconds() : null,
-            ContentSha256: null,
-            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Body, now));
+            Enabled = !request.Generated,
+            License = request.License,
+            Compatibility = request.Compatibility,
+            AllowedTools = request.AllowedTools,
+            Metadata = request.Metadata,
+            Origin = request.Generated ? AgentSkillOrigin.Imported : AgentSkillOrigin.Local,
+            SourceUri = request.Generated ? GeneratedSourceUri : null,
+            ImportedAtUtc = request.Generated ? now.ToUnixTimeMilliseconds() : null,
+            ContentSha256 = null,
+            GenerationMetadataJson = GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Body, now)
+        };
     }
 
     public static AgentSkillInput ToInput(this UpdateSkillRequest request, DateTimeOffset now)
@@ -180,18 +183,21 @@ internal static class SkillMapper
         // the tightening direction: model-revised content lands Imported+disabled from ANY prior state (a Local, enabled
         // skill included), overriding whatever Enabled the client sent, because an AI improve is exactly the case where
         // the operator has not reviewed the new body yet.
-        return new AgentSkillInput(request.Name ?? string.Empty,
-            request.Description ?? string.Empty,
-            request.Body ?? string.Empty,
-            !request.Generated && request.Enabled,
-            request.License,
-            request.Compatibility,
-            request.AllowedTools,
-            request.Metadata,
-            request.Generated ? AgentSkillOrigin.Imported : AgentSkillOrigin.Local,
-            request.Generated ? GeneratedSourceUri : null,
-            request.Generated ? now.ToUnixTimeMilliseconds() : null,
-            ContentSha256: null,
-            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Body, now));
+        return new AgentSkillInput
+        {
+            Name = request.Name ?? string.Empty,
+            Description = request.Description ?? string.Empty,
+            Body = request.Body ?? string.Empty,
+            Enabled = !request.Generated && request.Enabled,
+            License = request.License,
+            Compatibility = request.Compatibility,
+            AllowedTools = request.AllowedTools,
+            Metadata = request.Metadata,
+            Origin = request.Generated ? AgentSkillOrigin.Imported : AgentSkillOrigin.Local,
+            SourceUri = request.Generated ? GeneratedSourceUri : null,
+            ImportedAtUtc = request.Generated ? now.ToUnixTimeMilliseconds() : null,
+            ContentSha256 = null,
+            GenerationMetadataJson = GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Body, now)
+        };
     }
 }

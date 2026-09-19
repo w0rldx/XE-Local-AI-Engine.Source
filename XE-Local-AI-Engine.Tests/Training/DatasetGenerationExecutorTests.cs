@@ -34,7 +34,7 @@ public sealed class DatasetGenerationExecutorTests
         _ = store.GetDefinitionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                  .Returns(DefinitionRecord(Body("live-teacher.gguf", "LIVE INSTRUCTIONS", "live_tool")));
         _ = store.AppendSampleAsync(Arg.Any<TrainingSampleInput>(), Arg.Any<CancellationToken>())
-                 .Returns(new TrainingSampleAppendResult(Sample: null, Duplicate: false));
+                 .Returns(new TrainingSampleAppendResult { Sample = null, Duplicate = false });
 
         StructuredAgentRequest? request = null;
         var runner = Substitute.For<IStructuredAgentRunner>();
@@ -156,17 +156,44 @@ public sealed class DatasetGenerationExecutorTests
         ReadOnlyMemory<byte>? definitionJson = pinnedBody is null
             ? null
             : new ReadOnlyMemory<byte>(JsonSerializer.SerializeToUtf8Bytes(pinnedBody, TrainingJson.Options));
-        return new TrainingDatasetRecord(Guid.NewGuid(), Guid.NewGuid(), 1, definitionJson,
-            "dataset", TrainingDatasetStatus.Generating, 1, null, 0, 0, 0, 0, 0, 1, 0, 0,
-            DatasetGenerationWorkStatus.Running, null);
+        return new TrainingDatasetRecord
+        {
+            Id = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionJson = definitionJson,
+            Name = "dataset",
+            Status = TrainingDatasetStatus.Generating,
+            Revision = 1,
+            ContentFingerprint = null,
+            TotalSampleCount = 0,
+            GoodSampleCount = 0,
+            BadSampleCount = 0,
+            RejectedSampleCount = 0,
+            DuplicateSampleCount = 0,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            WorkStatus = DatasetGenerationWorkStatus.Running,
+            WorkErrorMessage = null
+        };
     }
 
     private static DatasetGenerationClaimedWork Work(TrainingDatasetRecord dataset) =>
-        new(QueueSequence: 1, dataset.Id, dataset.Version, dataset);
+        new() { QueueSequence = 1, DatasetId = dataset.Id, Version = dataset.Version, Dataset = dataset };
 
     private static TrainingDefinitionRecord DefinitionRecord(DatasetDefinitionBodyV1 body) =>
-        new(Guid.NewGuid(), "definition", TrainingDatasetKind.ToolCalling, JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options),
-            DefinitionVersion: 2, Version: 2, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "definition",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options),
+            DefinitionVersion = 2,
+            Version = 2,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private static SampleValidationOutcome Accepted() =>
         new(Accepted: true, RejectionReason: null, TrainingSampleLabel.Good,

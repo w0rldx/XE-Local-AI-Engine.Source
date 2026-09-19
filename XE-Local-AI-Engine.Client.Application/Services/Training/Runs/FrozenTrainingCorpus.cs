@@ -66,18 +66,21 @@ internal static class FrozenTrainingCorpus
             };
             var label = Enum.Parse<TrainingSampleLabel>(root.GetProperty("label").GetString()!, ignoreCase: true);
             var reviewState = Enum.Parse<TrainingSampleReviewState>(root.GetProperty("reviewState").GetString()!, ignoreCase: true);
-            records.Add(new TrainingSampleRecord(id,
-                Guid.Empty,
-                sequence,
-                root.GetProperty("kind").GetString() ?? string.Empty,
-                label,
-                reviewState,
-                JsonSerializer.SerializeToUtf8Bytes(content, TrainingJson.Options),
-                ValidationJson: null,
-                TrainingSampleProvenance.Generated,
-                SourceHash: string.Empty,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0));
+            records.Add(new TrainingSampleRecord
+            {
+                Id = id,
+                DatasetId = Guid.Empty,
+                Sequence = sequence,
+                Kind = root.GetProperty("kind").GetString() ?? string.Empty,
+                Label = label,
+                ReviewState = reviewState,
+                ContentJson = JsonSerializer.SerializeToUtf8Bytes(content, TrainingJson.Options),
+                ValidationJson = null,
+                Provenance = TrainingSampleProvenance.Generated,
+                SourceHash = string.Empty,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0
+            });
         }
 
         return records;

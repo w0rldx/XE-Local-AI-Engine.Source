@@ -87,7 +87,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         var afterInsert = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
 
         var first = await ClaimComparisonAsync(store);
-        await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(first.QueueSequence, first.Version, "a", null, false, false));
+        await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand { QueueSequence = first.QueueSequence, ExpectedWorkVersion = first.Version, Verdict = "a", ResultJson = null, AnswerATruncated = false, AnswerBTruncated = false });
         var second = await ClaimComparisonAsync(store);
         await store.MarkComparisonCancelledAsync(second.QueueSequence, second.Version);
 
@@ -105,7 +105,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         var claimed = await ClaimComparisonAsync(store);
         _ = await store.MarkComparisonLaunchReadyAsync(claimed.ComparisonId, claimed.QueueSequence, claimed.Version, Receipt(), ExecutionKey);
 
-        await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(claimed.QueueSequence, claimed.Version, "tie", null, false, false));
+        await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand { QueueSequence = claimed.QueueSequence, ExpectedWorkVersion = claimed.Version, Verdict = "tie", ResultJson = null, AnswerATruncated = false, AnswerBTruncated = false });
 
         // A pairwise cohort has no judge attempts to claim the reference key, so a comparison must do it — or every
         // fit over the cohort refuses as execution-identity-incomplete and nothing is ever rankable.
@@ -258,7 +258,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         for (var index = 0; index < 6; index++)
         {
             var claimed = await ClaimComparisonAsync(store);
-            await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(claimed.QueueSequence, claimed.Version, "a", null, false, false));
+            await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand { QueueSequence = claimed.QueueSequence, ExpectedWorkVersion = claimed.Version, Verdict = "a", ResultJson = null, AnswerATruncated = false, AnswerBTruncated = false });
         }
 
         var beforeVersion = (await store.GetPairwiseCohortAsync(project.Id)).ComparisonSetVersion;
@@ -340,8 +340,17 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
             var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
             var run = await store.StartRunAsync(CreateRun(current));
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
-            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-                               Encoding.UTF8.GetBytes("[{\"kind\":\"output\",\"content\":\"answer\"}]"), index + 1, 4096, 100, 12, 120));
+            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+            {
+                RunId = run.Id,
+                ExpectedWorkVersion = claimed.Run.Version,
+                OutputPartsJson = Encoding.UTF8.GetBytes("[{\"kind\":\"output\",\"content\":\"answer\"}]"),
+                LastStreamSequence = index + 1,
+                EffectiveContextTokens = 4096,
+                DurationMs = 100,
+                TotalTokens = 12,
+                TokensPerSecond = 120
+            });
             runs.Add(run.Id);
         }
 
@@ -360,7 +369,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
             for (var second = first + 1; second < runs.Count; second++)
             {
                 var (runA, runB) = runs[first].CompareTo(runs[second]) < 0 ? (runs[first], runs[second]) : (runs[second], runs[first]);
-                slots.Add(new BenchmarkPairwiseSlot(runA, runB, null, string.Empty));
+                slots.Add(new BenchmarkPairwiseSlot { RunAId = runA, RunBId = runB, TaskCaseId = null, TaskInputHash = string.Empty });
             }
         }
 
@@ -382,15 +391,17 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         int setVersion,
         IReadOnlyList<Guid> runs,
         IReadOnlyList<int>? scores = null) =>
-        new(project.Id,
-            revision.Id,
-            revision.CohortGeneration,
-            null,
-            fitKey,
-            string.Empty,
-            setVersion,
-            "[]",
-            JsonSerializer.Serialize(runs.Select((run, index) => new BenchmarkPairwiseScoreEntry(run,
+        new()
+        {
+            ProjectId = project.Id,
+            PolicyRevisionId = revision.Id,
+            CohortGeneration = revision.CohortGeneration,
+            TaskCaseId = null,
+            FitKey = fitKey,
+            JudgeExecutionKey = string.Empty,
+            ComparisonSetVersion = setVersion,
+            FittedSetJson = "[]",
+            ScoresJson = JsonSerializer.Serialize(runs.Select((run, index) => new BenchmarkPairwiseScoreEntry(run,
                     scores is null ? 50 : scores[index],
                     null,
                     null,
@@ -398,19 +409,31 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
                     1000,
                     null)),
                 ScoreOptions),
-            Iterations: 12,
-            BootstrapReplicates: 1000);
+            Iterations = 12,
+            BootstrapReplicates = 1000
+        };
 
     private static ReadOnlyMemory<byte> Runtime() =>
         Encoding.UTF8.GetBytes("{\"schemaVersion\":1}");
 
     private static BenchmarkLaunchReceiptCommand Receipt() =>
-        new("{\"receipt\":true}", "{\"facts\":true}", "facts-hash", "receipt-hash", "identity", "cuda", 32, 32, "sha", true, "auto");
+        new() { ReceiptJson = "{\"receipt\":true}", EnvironmentFactsJson = "{\"facts\":true}", EnvironmentFactsHash = "facts-hash", ReceiptHash = "receipt-hash", EffectiveLaunchIdentity = "identity", EffectiveBackend = "cuda", PlacementOffloaded = 32, PlacementTotal = 32, ExecutableSha256 = "sha", HasAuxAssets = true, KvCacheTypeSource = "auto" };
 
     private static BenchmarkProjectInput CreateProject() =>
-        new(Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), 4096, Guid.NewGuid());
+        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private static BenchmarkStartRunCommand CreateRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version,
-            Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"), "model.gguf", LocalModelOrigin.Imported, "v1:" + new string('a', 64), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('a', 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 }

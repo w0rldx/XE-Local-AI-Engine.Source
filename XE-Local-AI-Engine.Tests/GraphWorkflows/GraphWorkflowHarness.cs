@@ -267,14 +267,17 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
         await using var scope = Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         var definition = await store.GetDefinitionAsync(definitionId);
-        var run = await store.StartRunAsync(new StartGraphWorkflowRunCommand(Guid.NewGuid(),
-                                 Guid.NewGuid(),
-                                 definitionId,
-                                 definition.Version,
-                                 definition.GraphHash,
-                                 pinnedGraphJson,
-                                 InputJson: null,
-                                 [.. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), seed.NodeKey, seed.Kind))]));
+        var run = await store.StartRunAsync(new StartGraphWorkflowRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid(),
+            DefinitionId = definitionId,
+            DefinitionVersion = definition.Version,
+            GraphHash = definition.GraphHash,
+            GraphJson = pinnedGraphJson,
+            InputJson = null,
+            NodeRuns = [.. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = seed.NodeKey, Kind = seed.Kind })]
+        });
         return run.Id;
     }
 
@@ -341,13 +344,16 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
         var nodeRun = await ReadNodeRunAsync(runId, nodeKey);
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>()
-                       .TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(runId,
-                           nodeRun.Id,
-                           GraphWorkflowVersions.Any,
-                           target,
-                           FailureClass: failureClass,
-                           TerminalReason: terminalReason,
-                           IncrementAttempt: incrementAttempt));
+                       .TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+                       {
+                           RunId = runId,
+                           NodeRunId = nodeRun.Id,
+                           ExpectedVersion = GraphWorkflowVersions.Any,
+                           TargetStatus = target,
+                           FailureClass = failureClass,
+                           TerminalReason = terminalReason,
+                           IncrementAttempt = incrementAttempt
+                       });
     }
 }
 

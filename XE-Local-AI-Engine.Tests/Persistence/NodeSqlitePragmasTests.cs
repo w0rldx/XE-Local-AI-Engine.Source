@@ -121,7 +121,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     public async Task BusyTimeout_LetsSecondWriterWaitAndSucceed_RatherThanFailInstantly()
     {
         var path = Path.Combine(_dir, "contend.sqlite");
-        var settings = new NodeSqlitePragmaSettings(EnableWriteAheadLog: true, BusyTimeoutMilliseconds: 5000, NodeSqliteSynchronousMode.Normal);
+        var settings = new NodeSqlitePragmaSettings { EnableWriteAheadLog = true, BusyTimeoutMilliseconds = 5000, Synchronous = NodeSqliteSynchronousMode.Normal };
 
         await using var holder = await OpenConfiguredAsync(path, settings);
         await ExecuteAsync(holder, "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);");

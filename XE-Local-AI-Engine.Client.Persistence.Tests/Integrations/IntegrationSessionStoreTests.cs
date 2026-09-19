@@ -27,16 +27,19 @@ public sealed class IntegrationSessionStoreTests
         var sessionId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
         var executionId = Guid.NewGuid();
-        var accept = new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, seed.TriggerId, conversationId, seed.AgentDefinitionId),
-            executionId,
-            seed.TriggerId,
-            sessionId,
-            seed.PrincipalId,
-            Guid.NewGuid(),
-            new byte[32],
-            seed.KeyPrefix,
-            ReceivedAtUtc: 3_000,
-            new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, "execution.accepted", null, OccurredAtUtc: 3_000));
+        var accept = new IntegrationAcceptCommand
+        {
+            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = seed.TriggerId, ConversationId = conversationId, AgentDefinitionId = seed.AgentDefinitionId },
+            ExecutionId = executionId,
+            TriggerId = seed.TriggerId,
+            SessionId = sessionId,
+            PrincipalId = seed.PrincipalId,
+            RequestId = Guid.NewGuid(),
+            RequestFingerprint = new byte[32],
+            KeyPrefix = seed.KeyPrefix,
+            ReceivedAtUtc = 3_000,
+            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = "execution.accepted", DetailJson = null, OccurredAtUtc = 3_000 }
+        };
 
         AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
 
@@ -82,22 +85,25 @@ public sealed class IntegrationSessionStoreTests
         var (sessionId, executionId) = await AcceptWithIdsAsync(context, seed);
 
         // Writer one. There is no TouchAsync to test, and there never will be: this is the method that replaces it.
-        await executionStore.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 3, "tool.started", null, OccurredAtUtc: 5_000));
+        await executionStore.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 3, EventType = "tool.started", DetailJson = null, OccurredAtUtc = 5_000 });
         var afterAppend = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId));
         AssertEx.Equal(expected: 3L, afterAppend.LastSequence);
         AssertEx.Equal(expected: 5_000L, afterAppend.LastActivityUtc);
 
         // Writer two, which is why terminalisation can bypass AppendEventAsync without stranding the watermark the UI
         // renders.
-        AssertEx.True(await executionStore.TryTerminalizeAsync(new IntegrationTerminalizeCommand(executionId,
-                                              ExpectedVersion: 0,
-                                              Accepted,
-                                              IntegrationExecutionStatus.Completed,
-                                              Sequence: 4,
-                                              "execution.completed",
-                                              EndedAtUtc: 6_000,
-                                              FailureCategory: null,
-                                              FailureSummary: null)));
+        AssertEx.True(await executionStore.TryTerminalizeAsync(new IntegrationTerminalizeCommand
+        {
+            ExecutionId = executionId,
+            ExpectedVersion = 0,
+            ExpectedStatuses = Accepted,
+            NewStatus = IntegrationExecutionStatus.Completed,
+            Sequence = 4,
+            EventType = "execution.completed",
+            EndedAtUtc = 6_000,
+            FailureCategory = null,
+            FailureSummary = null
+        }));
 
         var afterTerminal = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId));
         AssertEx.Equal(expected: 4L, afterTerminal.LastSequence);
@@ -132,16 +138,19 @@ public sealed class IntegrationSessionStoreTests
         var sessionId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
         var executionId = Guid.NewGuid();
-        var accept = new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, seed.TriggerId, conversationId, seed.AgentDefinitionId),
-            executionId,
-            seed.TriggerId,
-            sessionId,
-            seed.PrincipalId,
-            Guid.NewGuid(),
-            new byte[32],
-            seed.KeyPrefix,
-            ReceivedAtUtc: 3_000,
-            new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, "execution.accepted", null, OccurredAtUtc: 3_000));
+        var accept = new IntegrationAcceptCommand
+        {
+            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = seed.TriggerId, ConversationId = conversationId, AgentDefinitionId = seed.AgentDefinitionId },
+            ExecutionId = executionId,
+            TriggerId = seed.TriggerId,
+            SessionId = sessionId,
+            PrincipalId = seed.PrincipalId,
+            RequestId = Guid.NewGuid(),
+            RequestFingerprint = new byte[32],
+            KeyPrefix = seed.KeyPrefix,
+            ReceivedAtUtc = 3_000,
+            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = "execution.accepted", DetailJson = null, OccurredAtUtc = 3_000 }
+        };
         AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
 
         var store = new IntegrationSessionStore(context);
@@ -220,16 +229,19 @@ public sealed class IntegrationSessionStoreTests
     {
         var sessionId = Guid.NewGuid();
         var executionId = Guid.NewGuid();
-        var accept = new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, seed.TriggerId, Guid.NewGuid(), seed.AgentDefinitionId),
-            executionId,
-            seed.TriggerId,
-            sessionId,
-            seed.PrincipalId,
-            Guid.NewGuid(),
-            new byte[32],
-            seed.KeyPrefix,
-            ReceivedAtUtc: 3_000,
-            new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, "execution.accepted", null, OccurredAtUtc: 3_000));
+        var accept = new IntegrationAcceptCommand
+        {
+            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = seed.TriggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = seed.AgentDefinitionId },
+            ExecutionId = executionId,
+            TriggerId = seed.TriggerId,
+            SessionId = sessionId,
+            PrincipalId = seed.PrincipalId,
+            RequestId = Guid.NewGuid(),
+            RequestFingerprint = new byte[32],
+            KeyPrefix = seed.KeyPrefix,
+            ReceivedAtUtc = 3_000,
+            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = "execution.accepted", DetailJson = null, OccurredAtUtc = 3_000 }
+        };
 
         AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
         return (sessionId, executionId);

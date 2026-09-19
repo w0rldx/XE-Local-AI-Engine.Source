@@ -87,14 +87,17 @@ public sealed class AgentWorkSessionArtifactReplaceTests
     }
 
     private static AppendWorkSessionArtifactCommand Command(Guid sessionId, Guid artifactId, long expectedVersion, string name, string hash, long size) =>
-        new(sessionId,
-            artifactId,
-            expectedVersion,
-            Guid.NewGuid(),
-            AgentWorkSessionArtifactKind.Report,
-            name,
-            "text/markdown",
-            hash,
-            size,
-            string.Concat(sessionId.ToString("N"), "/", artifactId.ToString("N")));
+        new()
+        {
+            SessionId = sessionId,
+            ArtifactId = artifactId,
+            ExpectedVersion = expectedVersion,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionArtifactKind.Report,
+            Name = name,
+            MediaType = "text/markdown",
+            ContentSha256 = hash,
+            SizeBytes = size,
+            ManagedReference = string.Concat(sessionId.ToString("N"), "/", artifactId.ToString("N"))
+        };
 }

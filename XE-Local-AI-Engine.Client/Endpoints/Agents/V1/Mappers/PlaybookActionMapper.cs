@@ -56,13 +56,16 @@ internal static class PlaybookActionMapper
         ArgumentNullException.ThrowIfNull(request);
 
         // Manual authoring pins Source = Manual: provenance is never client-supplied. Analysis-sourced actions use the dedicated review routes.
-        return new PlaybookActionInput(request.AgentDefinitionId,
-            request.State,
-            PlaybookActionSource.Manual,
-            request.TriggerCondition,
-            request.Behavior ?? string.Empty,
-            request.Scope,
-            request.Priority);
+        return new PlaybookActionInput
+        {
+            AgentDefinitionId = request.AgentDefinitionId,
+            State = request.State,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = request.TriggerCondition,
+            Behavior = request.Behavior ?? string.Empty,
+            Scope = request.Scope,
+            Priority = request.Priority
+        };
     }
 
     public static PlaybookActionInput ToInput(this UpdatePlaybookActionRequest request)
@@ -70,12 +73,15 @@ internal static class PlaybookActionMapper
         ArgumentNullException.ThrowIfNull(request);
 
         // Manual authoring pins Source = Manual: provenance is never client-supplied. Analysis-sourced actions use the dedicated review routes.
-        return new PlaybookActionInput(request.AgentDefinitionId,
-            request.State,
-            PlaybookActionSource.Manual,
-            request.TriggerCondition,
-            request.Behavior ?? string.Empty,
-            request.Scope,
-            request.Priority);
+        return new PlaybookActionInput
+        {
+            AgentDefinitionId = request.AgentDefinitionId,
+            State = request.State,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = request.TriggerCondition,
+            Behavior = request.Behavior ?? string.Empty,
+            Scope = request.Scope,
+            Priority = request.Priority
+        };
     }
 }

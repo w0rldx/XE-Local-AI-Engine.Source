@@ -146,7 +146,7 @@ public sealed class ListTrainingSamplesEndpoint : Endpoint<ListTrainingSamplesRe
             return;
         }
 
-        var page = await _datasets.ListSamplesAsync(new TrainingSampleQuery(req.DatasetId, req.Page, req.PageSize, req.Label, req.ReviewState, req.Kind), ct);
+        var page = await _datasets.ListSamplesAsync(new TrainingSampleQuery { DatasetId = req.DatasetId, Page = req.Page, PageSize = req.PageSize, Label = req.Label, ReviewState = req.ReviewState, Kind = req.Kind }, ct);
         await Send.OkAsync(new ListTrainingSamplesResponse
         {
             Items = page.Items.Select(item => item.ToResponse()).ToArray(),
@@ -176,7 +176,7 @@ public sealed class ReviewTrainingSampleEndpoint : Endpoint<ReviewTrainingSample
 
     public override async Task HandleAsync(ReviewTrainingSampleRequest req, CancellationToken ct)
     {
-        var record = await _datasets.ReviewSampleAsync(new TrainingSampleReviewCommand(req.SampleId, req.Verb, req.Label), ct);
+        var record = await _datasets.ReviewSampleAsync(new TrainingSampleReviewCommand { SampleId = req.SampleId, Verb = req.Verb, Label = req.Label }, ct);
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

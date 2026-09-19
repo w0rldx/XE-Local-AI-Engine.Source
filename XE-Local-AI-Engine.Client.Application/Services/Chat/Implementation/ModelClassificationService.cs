@@ -174,12 +174,15 @@ internal sealed class ModelClassificationService : IModelClassificationService
 
     private static ModelClassificationRecord UnknownRecord(string modelName, string? digest)
     {
-        return new ModelClassificationRecord(modelName,
-            digest,
-            ModelKind.Unknown,
-            DetectedCapabilitiesJson: null,
-            OverrideKind: null,
-            DetectedAtUtc: null,
-            UpdatedAtUtc: 0);
+        return new ModelClassificationRecord
+        {
+            ModelName = modelName,
+            Digest = digest,
+            DetectedKind = ModelKind.Unknown,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = null,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 0
+        };
     }
 }

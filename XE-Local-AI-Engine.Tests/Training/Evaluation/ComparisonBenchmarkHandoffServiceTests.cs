@@ -232,48 +232,57 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
         new(ComparisonId, CoreTask, ContextTokens: 8192, AgentDefinitionId, "Tuned vs base", "q8_0", RepeatCount: 2);
 
     private static BenchmarkProjectRecord Project(Guid id, string name, long version, string coreTask = CoreTask, int contextTokens = 8192) =>
-        new(id,
-            name,
-            JsonSerializer.SerializeToUtf8Bytes(coreTask),
-            contextTokens,
-            AgentDefinitionId,
-            JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null,
-            IsFrozen: false,
-            version,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = id,
+            Name = name,
+            CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes(coreTask),
+            ContextTokens = contextTokens,
+            AgentDefinitionId = AgentDefinitionId,
+            JudgeEnabled = false,
+            CurrentJudgePolicyRevisionId = null,
+            IsFrozen = false,
+            Version = version,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private static TrainingArtifactRecord Artifact(string? committedModelName) =>
-        new(ArtifactId,
-            Guid.NewGuid(),
-            TrainingArtifactKind.MergedGguf,
-            "/models/tuned.gguf",
-            "sha",
-            SizeBytes: 1,
-            TrainingArtifactSmokeState.Passed,
-            SmokeReason: null,
-            committedModelName,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = ArtifactId,
+            RunId = Guid.NewGuid(),
+            Kind = TrainingArtifactKind.MergedGguf,
+            Path = "/models/tuned.gguf",
+            Sha256 = "sha",
+            SizeBytes = 1,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            SmokeReason = null,
+            CommittedModelName = committedModelName,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private sealed class Harness
     {
         public Harness()
         {
             Evaluations.GetComparisonAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                       .Returns(new TrainingComparisonRecord(ComparisonId,
-                           "Nightly tune",
-                           BaseEvaluationId,
-                           TunedEvaluationId,
-                           BaseBenchmarkRunId: null,
-                           TunedBenchmarkRunId: null,
-                           TrainingRunId: Guid.NewGuid(),
-                           DeltasJson: ReadOnlyMemory<byte>.Empty,
-                           Version: 1,
-                           CreatedAtUtc: 0,
-                           UpdatedAtUtc: 0));
+                       .Returns(new TrainingComparisonRecord
+                       {
+                           Id = ComparisonId,
+                           Name = "Nightly tune",
+                           BaseEvaluationRunId = BaseEvaluationId,
+                           TunedEvaluationRunId = TunedEvaluationId,
+                           BaseBenchmarkRunId = null,
+                           TunedBenchmarkRunId = null,
+                           TrainingRunId = Guid.NewGuid(),
+                           DeltasJson = ReadOnlyMemory<byte>.Empty,
+                           Version = 1,
+                           CreatedAtUtc = 0,
+                           UpdatedAtUtc = 0
+                       });
             Evaluations.GetAsync(BaseEvaluationId, Arg.Any<CancellationToken>())
                        .Returns(EvaluationRecord(BaseEvaluationId, BaseModelName, EvaluationModelTargetKind.InstalledModel, sourceArtifactId: null));
             Evaluations.GetAsync(TunedEvaluationId, Arg.Any<CancellationToken>())
@@ -345,64 +354,73 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
             string modelName,
             EvaluationModelTargetKind targetKind,
             Guid? sourceArtifactId) =>
-            new(id,
-                TrainingRunId: Guid.NewGuid(),
-                ComparisonId: ComparisonId,
-                modelName,
-                ModelContentFingerprint: "v1:model",
-                DatasetId: Guid.NewGuid(),
-                DatasetContentFingerprint: "v1:dataset",
-                MembershipJson: ReadOnlyMemory<byte>.Empty,
-                TrainingEvaluationStatus.Succeeded,
-                ResultsJson: null,
-                TotalCount: 1,
-                ScoredCount: 1,
-                PassedCount: 1,
-                PerKindJson: null,
-                ErrorMessage: null,
-                Version: 1,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                TrainingWorkStatus.Succeeded,
-                targetKind,
-                sourceArtifactId);
+            new()
+            {
+                Id = id,
+                TrainingRunId = Guid.NewGuid(),
+                ComparisonId = ComparisonId,
+                ModelName = modelName,
+                ModelContentFingerprint = "v1:model",
+                DatasetId = Guid.NewGuid(),
+                DatasetContentFingerprint = "v1:dataset",
+                MembershipJson = ReadOnlyMemory<byte>.Empty,
+                Status = TrainingEvaluationStatus.Succeeded,
+                ResultsJson = null,
+                TotalCount = 1,
+                ScoredCount = 1,
+                PassedCount = 1,
+                PerKindJson = null,
+                ErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                WorkStatus = TrainingWorkStatus.Succeeded,
+                TargetKind = targetKind,
+                SourceArtifactId = sourceArtifactId
+            };
 
         /// <summary>A placeholder frozen command: only the COUNT is load-bearing in these tests.</summary>
         private static BenchmarkStartRunCommand FrozenCommand(BenchmarkRunStartRequest request) =>
-            new(Guid.NewGuid(),
-                request.ProjectId,
-                request.ExpectedProjectVersion,
-                ReadOnlyMemory<byte>.Empty,
-                request.PrimaryModelName,
-                null,
-                "fingerprint",
-                "agent",
-                1,
-                8192);
+            new()
+            {
+                RunId = Guid.NewGuid(),
+                ProjectId = request.ProjectId,
+                ExpectedProjectVersion = request.ExpectedProjectVersion,
+                RuntimeSnapshotJson = ReadOnlyMemory<byte>.Empty,
+                PrimaryModelName = request.PrimaryModelName,
+                PrimaryModelOrigin = null,
+                ModelContentFingerprint = "fingerprint",
+                AgentName = "agent",
+                AgentVersion = 1,
+                RequestedContextTokens = 8192
+            };
 
         private static BenchmarkRunRecord Run() =>
-            new(Guid.NewGuid(),
-                Guid.NewGuid(),
-                ReadOnlyMemory<byte>.Empty,
-                BaseModelName,
-                null,
-                "fingerprint",
-                "agent",
-                1,
-                8192,
-                BenchmarkPrimaryStatus.Queued,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0,
-                null,
-                null,
-                1,
-                0,
-                null,
-                null,
-                0);
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = Guid.NewGuid(),
+                RuntimeSnapshotJson = ReadOnlyMemory<byte>.Empty,
+                PrimaryModelName = BaseModelName,
+                PrimaryModelOrigin = null,
+                ModelContentFingerprint = "fingerprint",
+                AgentName = "agent",
+                AgentVersion = 1,
+                RequestedContextTokens = 8192,
+                PrimaryStatus = BenchmarkPrimaryStatus.Queued,
+                EffectiveContextTokens = null,
+                DurationMs = null,
+                TotalTokens = null,
+                TokensPerSecond = null,
+                OutputPartsJson = null,
+                LastStreamSequence = 0,
+                UserScore = null,
+                PrimaryErrorMessage = null,
+                Version = 1,
+                CreatedAtUtc = 0,
+                StartedAtUtc = null,
+                PrimaryCompletedAtUtc = null,
+                UpdatedAtUtc = 0
+            };
     }
 }

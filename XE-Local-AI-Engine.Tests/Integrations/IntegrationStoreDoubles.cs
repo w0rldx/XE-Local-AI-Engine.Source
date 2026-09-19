@@ -22,15 +22,18 @@ internal sealed class FakeIntegrationApiKeyStore : IIntegrationApiKeyStore
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var snapshot = new IntegrationApiKeySnapshot(command.KeyId,
-            command.PrincipalId,
-            command.KeyPrefix,
-            command.KeyHash,
-            command.Label,
-            command.AllowedTriggerIdsJson,
-            CreatedAtUtc: 1,
-            LastUsedAtUtc: null,
-            RevokedAtUtc: null);
+        var snapshot = new IntegrationApiKeySnapshot
+        {
+            Id = command.KeyId,
+            PrincipalId = command.PrincipalId,
+            KeyPrefix = command.KeyPrefix,
+            KeyHash = command.KeyHash,
+            Label = command.Label,
+            AllowedTriggerIdsJson = command.AllowedTriggerIdsJson,
+            CreatedAtUtc = 1,
+            LastUsedAtUtc = null,
+            RevokedAtUtc = null
+        };
         _rows.Add(snapshot);
         return Task.FromResult(snapshot);
     }
@@ -112,18 +115,21 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
             throw new DbUpdateException($"Duplicate trigger name '{command.Name}'.");
         }
 
-        var snapshot = new IntegrationTriggerSnapshot(command.TriggerId,
-            command.Name,
-            command.DisplayName,
-            command.Description,
-            command.Enabled,
-            command.TargetKind,
-            command.TargetAgentDefinitionId,
-            command.SessionPolicy,
-            command.AcceptedInputKinds,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Version: 1);
+        var snapshot = new IntegrationTriggerSnapshot
+        {
+            Id = command.TriggerId,
+            Name = command.Name,
+            DisplayName = command.DisplayName,
+            Description = command.Description,
+            Enabled = command.Enabled,
+            TargetKind = command.TargetKind,
+            TargetAgentDefinitionId = command.TargetAgentDefinitionId,
+            SessionPolicy = command.SessionPolicy,
+            AcceptedInputKinds = command.AcceptedInputKinds,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 1
+        };
         _rows.Add(snapshot);
         return Task.FromResult(snapshot);
     }
@@ -192,18 +198,21 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         IntegrationSessionPolicy sessionPolicy = IntegrationSessionPolicy.PerInvocation,
         IntegrationInputKinds acceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json)
     {
-        var snapshot = new IntegrationTriggerSnapshot(Guid.NewGuid(),
-            name,
-            name,
-            Description: null,
-            enabled,
-            IntegrationTargetKind.Agent,
-            agentDefinitionId,
-            sessionPolicy,
-            acceptedInputKinds,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Version: 1);
+        var snapshot = new IntegrationTriggerSnapshot
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            DisplayName = name,
+            Description = null,
+            Enabled = enabled,
+            TargetKind = IntegrationTargetKind.Agent,
+            TargetAgentDefinitionId = agentDefinitionId,
+            SessionPolicy = sessionPolicy,
+            AcceptedInputKinds = acceptedInputKinds,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 1
+        };
         _rows.Add(snapshot);
         return snapshot;
     }
@@ -327,25 +336,28 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
                 Sessions?.BumpForAccept(command.SessionId, command.PrincipalId, command.ReceivedAtUtc);
             }
 
-            _rows.Add(new IntegrationExecutionSnapshot(command.ExecutionId,
-                command.TriggerId,
-                command.SessionId,
-                command.PrincipalId,
-                command.RequestId,
-                command.RequestFingerprint,
-                command.KeyPrefix,
-                InvocationId: Guid.Empty,
-                IntegrationExecutionStatus.Accepted,
-                command.ReceivedAtUtc,
-                StartedAtUtc: null,
-                EndedAtUtc: null,
-                StopRequestedAtUtc: null,
-                FailureCategory: null,
-                FailureSummary: null,
-                OutputCount: 0,
-                OutputBytes: 0,
-                command.AcceptedEvent.Sequence,
-                Version: 0));
+            _rows.Add(new IntegrationExecutionSnapshot
+            {
+                Id = command.ExecutionId,
+                TriggerId = command.TriggerId,
+                SessionId = command.SessionId,
+                PrincipalId = command.PrincipalId,
+                RequestId = command.RequestId,
+                RequestFingerprint = command.RequestFingerprint,
+                KeyPrefix = command.KeyPrefix,
+                InvocationId = Guid.Empty,
+                Status = IntegrationExecutionStatus.Accepted,
+                ReceivedAtUtc = command.ReceivedAtUtc,
+                StartedAtUtc = null,
+                EndedAtUtc = null,
+                StopRequestedAtUtc = null,
+                FailureCategory = null,
+                FailureSummary = null,
+                OutputCount = 0,
+                OutputBytes = 0,
+                LastSequence = command.AcceptedEvent.Sequence,
+                Version = 0
+            });
             AddEvent(command.AcceptedEvent);
             return Task.FromResult(true);
         }
@@ -524,25 +536,28 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     {
         lock (_gate)
         {
-            var snapshot = new IntegrationExecutionSnapshot(executionId,
-                triggerId,
-                sessionId,
-                PrincipalId: Guid.NewGuid(),
-                RequestId: Guid.NewGuid(),
-                RequestFingerprint: ReadOnlyMemory<byte>.Empty,
-                keyPrefix,
-                InvocationId: Guid.Empty,
-                status,
-                receivedAtUtc,
-                StartedAtUtc: null,
-                EndedAtUtc: null,
-                stopRequestedAtUtc,
-                FailureCategory: null,
-                FailureSummary: null,
-                OutputCount: 0,
-                OutputBytes: 0,
-                lastSequence,
-                version);
+            var snapshot = new IntegrationExecutionSnapshot
+            {
+                Id = executionId,
+                TriggerId = triggerId,
+                SessionId = sessionId,
+                PrincipalId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid(),
+                RequestFingerprint = ReadOnlyMemory<byte>.Empty,
+                KeyPrefix = keyPrefix,
+                InvocationId = Guid.Empty,
+                Status = status,
+                ReceivedAtUtc = receivedAtUtc,
+                StartedAtUtc = null,
+                EndedAtUtc = null,
+                StopRequestedAtUtc = stopRequestedAtUtc,
+                FailureCategory = null,
+                FailureSummary = null,
+                OutputCount = 0,
+                OutputBytes = 0,
+                LastSequence = lastSequence,
+                Version = version
+            };
             _rows.Add(snapshot);
             return snapshot;
         }
@@ -746,7 +761,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
             // The real store writes the caller's payload onto the terminal row; a double that dropped it would hide a
             // stream and a poll answering differently.
-            AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, command.EventDetailJson, command.EndedAtUtc));
+            AddEvent(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = command.ExecutionId, Sequence = command.Sequence, EventType = command.EventType, DetailJson = command.EventDetailJson, OccurredAtUtc = command.EndedAtUtc });
             return Task.FromResult(true);
         }
     }
@@ -796,12 +811,15 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     private void AddEvent(IntegrationEventAppend command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        _events.Add(new IntegrationExecutionEventSnapshot(command.EventId,
-            command.ExecutionId,
-            command.Sequence,
-            command.EventType,
-            command.DetailJson,
-            command.OccurredAtUtc));
+        _events.Add(new IntegrationExecutionEventSnapshot
+        {
+            Id = command.EventId,
+            ExecutionId = command.ExecutionId,
+            Sequence = command.Sequence,
+            EventType = command.EventType,
+            DetailJson = command.DetailJson,
+            OccurredAtUtc = command.OccurredAtUtc
+        });
     }
 }
 
@@ -909,16 +927,19 @@ internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
         long lastActivityUtc = 0,
         int executionCount = 1)
     {
-        var snapshot = new IntegrationSessionSnapshot(sessionId,
-            triggerId,
-            principalId ?? Guid.NewGuid(),
-            conversationId,
-            agentDefinitionId,
-            status,
-            CreatedAtUtc: 0,
-            lastActivityUtc,
-            executionCount,
-            LastSequence: 1);
+        var snapshot = new IntegrationSessionSnapshot
+        {
+            Id = sessionId,
+            TriggerId = triggerId,
+            PrincipalId = principalId ?? Guid.NewGuid(),
+            ConversationId = conversationId,
+            AgentDefinitionId = agentDefinitionId,
+            Status = status,
+            CreatedAtUtc = 0,
+            LastActivityUtc = lastActivityUtc,
+            ExecutionCount = executionCount,
+            LastSequence = 1
+        };
         _rows.Add(snapshot);
         return snapshot;
     }

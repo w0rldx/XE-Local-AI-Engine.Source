@@ -1458,30 +1458,33 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         int? policyVersion = DevelopmentTrustPolicy.CurrentVersion,
         long? acknowledgedAt = null)
     {
-        return new DevelopmentExecutionSnapshot(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            identity,
-            "main",
-            DevelopmentEgressPolicy.LocalOnly,
-            ConfigurationVersion: 1,
-            acknowledged,
-            policyVersion,
-            acknowledgedAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            MaxTokens: 2048,
-            MaxDurationSeconds: 60,
-            "Implement feature",
-            "Add the bounded feature file.",
-            "[\"feature.txt exists\"]",
-            DevelopmentTaskStatus.InProgress,
-            TaskVersion: 3,
-            DevelopmentAttemptRole.Coder,
-            PersistenceDevelopmentAttemptStatus.Running,
-            "local-model",
-            "local",
-            AttemptVersion: 1,
-            Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8()));
+        return new DevelopmentExecutionSnapshot
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = identity,
+            BaseBranch = "main",
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = acknowledged,
+            TrustedRepositoryPolicyVersion = policyVersion,
+            TrustedRepositoryAcknowledgedAtUtc = acknowledgedAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MaxTokens = 2048,
+            MaxDurationSeconds = 60,
+            Title = "Implement feature",
+            Requirements = "Add the bounded feature file.",
+            AcceptanceCriteriaJson = "[\"feature.txt exists\"]",
+            TaskStatus = DevelopmentTaskStatus.InProgress,
+            TaskVersion = 3,
+            AttemptRole = DevelopmentAttemptRole.Coder,
+            AttemptStatus = PersistenceDevelopmentAttemptStatus.Running,
+            ModelId = "local-model",
+            Provider = "local",
+            AttemptVersion = 1,
+            CommandProfileJson = Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8())
+        };
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository) =>

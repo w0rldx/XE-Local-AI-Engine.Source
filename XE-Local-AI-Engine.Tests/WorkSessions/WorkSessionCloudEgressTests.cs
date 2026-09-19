@@ -90,11 +90,14 @@ public sealed class WorkSessionCloudEgressTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                           Guid.NewGuid(),
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionFindingKind.Finding,
-                           "The inference path runs on llama.cpp by default."));
+                       .AppendFindingAsync(new AppendWorkSessionFindingCommand
+                       {
+                           SessionId = sessionId,
+                           FindingId = Guid.NewGuid(),
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           OperationId = Guid.NewGuid(),
+                           Kind = AgentWorkSessionFindingKind.Finding,
+                           Text = "The inference path runs on llama.cpp by default."
+                       });
     }
 }

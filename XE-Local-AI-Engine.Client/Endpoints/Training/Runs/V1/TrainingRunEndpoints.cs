@@ -69,7 +69,7 @@ public sealed class ListTrainingRunsEndpoint : Endpoint<ListTrainingRunsRequest,
 
     public override async Task HandleAsync(ListTrainingRunsRequest req, CancellationToken ct)
     {
-        var page = await _runs.ListAsync(new TrainingRunQuery(req.Page, req.PageSize, req.DatasetId), ct);
+        var page = await _runs.ListAsync(new TrainingRunQuery { Page = req.Page, PageSize = req.PageSize, DatasetId = req.DatasetId }, ct);
         await Send.OkAsync(new ListTrainingRunsResponse
         {
             Items = page.Items.Select(item => item.ToResponse()).ToArray(),

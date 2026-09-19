@@ -101,7 +101,7 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
         {
             var verdicts = ComposeVerdicts(remaining);
             var unjudged = pass == RecoveryPasses
-                ? new GraphWorkflowUnjudgedNodeRunSettlement(GraphWorkflowFailureClass.Interrupted, UnjudgedReason)
+                ? new GraphWorkflowUnjudgedNodeRunSettlement { FailureClass = GraphWorkflowFailureClass.Interrupted, SanitizedReason = UnjudgedReason }
                 : null;
             var reconciled = await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken);
             recovered += reconciled.Count;
@@ -161,20 +161,26 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
                 nodeRun.Status,
                 nodeRun.RunId,
                 failed ? "Failed(Interrupted)" : "Pending");
-            verdicts.Add(new GraphWorkflowNodeRunVerdict(nodeRun.NodeRunId,
-                nodeRun.Status,
-                nodeRun.Attempt,
-                failed
+            verdicts.Add(new GraphWorkflowNodeRunVerdict
+            {
+                NodeRunId = nodeRun.NodeRunId,
+                ObservedStatus = nodeRun.Status,
+                ObservedAttempt = nodeRun.Attempt,
+                Repairs = failed
                     ?
                     [
-                        new TransitionGraphWorkflowNodeRunCommand(nodeRun.RunId,
-                            nodeRun.NodeRunId,
-                            GraphWorkflowVersions.Any,
-                            GraphWorkflowNodeRunStatus.Failed,
-                            FailureClass: GraphWorkflowFailureClass.Interrupted,
-                            TerminalReason: InterruptedReason)
+                        new TransitionGraphWorkflowNodeRunCommand
+                        {
+                            RunId = nodeRun.RunId,
+                            NodeRunId = nodeRun.NodeRunId,
+                            ExpectedVersion = GraphWorkflowVersions.Any,
+                            TargetStatus = GraphWorkflowNodeRunStatus.Failed,
+                            FailureClass = GraphWorkflowFailureClass.Interrupted,
+                            TerminalReason = InterruptedReason
+                        }
                     ]
-                    : []));
+                    : []
+            });
         }
 
         return verdicts;

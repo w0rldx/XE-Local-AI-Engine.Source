@@ -172,16 +172,19 @@ public sealed class DevWorkflowAgentExecutorTests
                                      0x0A
                                  });
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                           artifactId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionArtifactKind.Report,
-                           name,
-                           "application/octet-stream",
-                           written.ContentHash,
-                           written.ByteCount,
-                           written.OpaqueReference));
+                       .AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+                       {
+                           SessionId = sessionId,
+                           ArtifactId = artifactId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           OperationId = Guid.NewGuid(),
+                           Kind = AgentWorkSessionArtifactKind.Report,
+                           Name = name,
+                           MediaType = "application/octet-stream",
+                           ContentSha256 = written.ContentHash,
+                           SizeBytes = written.ByteCount,
+                           ManagedReference = written.OpaqueReference
+                       });
     }
 
     /// <summary>
@@ -1379,15 +1382,18 @@ public sealed class DevWorkflowAgentExecutorTests
         await using (var scope = harness.Services.CreateAsyncScope())
         {
             seeded = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
-                                .AddSeededAsync(new AgentDefinitionInput("Default Assistant",
-                                        Description: null,
-                                        "Be helpful.",
-                                        ModelProfile: null,
-                                        ReasoningEffort: null,
-                                        AgentDefinitionKind.Single,
-                                        AllowedToolNames: [],
-                                        new Dictionary<string, bool>(StringComparer.Ordinal),
-                                        OrchestrationTopologyJson: null),
+                                .AddSeededAsync(new AgentDefinitionInput
+                                {
+                                    Name = "Default Assistant",
+                                    Description = null,
+                                    Instructions = "Be helpful.",
+                                    ModelProfile = null,
+                                    ReasoningEffort = null,
+                                    Kind = AgentDefinitionKind.Single,
+                                    AllowedToolNames = [],
+                                    ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                                    OrchestrationTopologyJson = null
+                                },
                                     AgentDefaults.DefaultAgentSeedSlug);
         }
 
@@ -1605,15 +1611,18 @@ public sealed class DevWorkflowAgentExecutorTests
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId));
         _ = await store.UpdateAsync(agentDefinitionId,
-                           new AgentDefinitionInput(definition.Name,
-                               definition.Description,
-                               definition.Instructions,
-                               definition.ModelProfile,
-                               definition.ReasoningEffort,
-                               definition.Kind,
-                               toolNames,
-                               new Dictionary<string, bool>(StringComparer.Ordinal),
-                               definition.OrchestrationTopologyJson));
+                           new AgentDefinitionInput
+                           {
+                               Name = definition.Name,
+                               Description = definition.Description,
+                               Instructions = definition.Instructions,
+                               ModelProfile = definition.ModelProfile,
+                               ReasoningEffort = definition.ReasoningEffort,
+                               Kind = definition.Kind,
+                               AllowedToolNames = toolNames,
+                               ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                               OrchestrationTopologyJson = definition.OrchestrationTopologyJson
+                           });
     }
 
     /// <summary>One agent node bound to a definition this test created, which is what makes the resolver answer at all.</summary>
@@ -1645,15 +1654,18 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var created = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
-                                 .AddAsync(new AgentDefinitionInput("Workflow agent",
-                                     Description: null,
-                                     "Do the step.",
-                                     ModelProfile: null,
-                                     ReasoningEffort: null,
-                                     AgentDefinitionKind.Single,
-                                     toolNames,
-                                     new Dictionary<string, bool>(StringComparer.Ordinal),
-                                     OrchestrationTopologyJson: null));
+                                 .AddAsync(new AgentDefinitionInput
+                                 {
+                                     Name = "Workflow agent",
+                                     Description = null,
+                                     Instructions = "Do the step.",
+                                     ModelProfile = null,
+                                     ReasoningEffort = null,
+                                     Kind = AgentDefinitionKind.Single,
+                                     AllowedToolNames = toolNames,
+                                     ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                                     OrchestrationTopologyJson = null
+                                 });
         return created.Id;
     }
 

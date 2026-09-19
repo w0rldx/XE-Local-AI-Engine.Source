@@ -177,11 +177,29 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
-        new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
-            entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds,
-            entity.ReasoningBudgetTokens, entity.FidelityEnabled, entity.FidelityKldEnabled, entity.FidelityChunks,
-            entity.FidelityKldBaseModelName, entity.FidelityKldBaseFingerprint, entity.TaskItemSetHash);
+        new()
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            CoreTaskJson = entity.CoreTaskJson.ToArray(),
+            ContextTokens = entity.ContextTokens,
+            AgentDefinitionId = entity.AgentDefinitionId,
+            JudgeEnabled = entity.CurrentJudgePolicyRevisionId is not null,
+            CurrentJudgePolicyRevisionId = entity.CurrentJudgePolicyRevisionId,
+            IsFrozen = frozen,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            MaxOutputTokens = entity.MaxOutputTokens,
+            InvocationTimeoutSeconds = entity.InvocationTimeoutSeconds,
+            ReasoningBudgetTokens = entity.ReasoningBudgetTokens,
+            FidelityEnabled = entity.FidelityEnabled,
+            FidelityKldEnabled = entity.FidelityKldEnabled,
+            FidelityChunks = entity.FidelityChunks,
+            FidelityKldBaseModelName = entity.FidelityKldBaseModelName,
+            FidelityKldBaseFingerprint = entity.FidelityKldBaseFingerprint,
+            TaskItemSetHash = entity.TaskItemSetHash
+        };
 
     // One place writes the seven throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
@@ -205,37 +223,66 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
         && entity.CachedPromptTokens is null
         && entity.SegmentCount is null
             ? null
-            : new BenchmarkRunThroughput(entity.TtftMs, entity.PromptTokens, entity.PromptMs, entity.GenerationTokens,
-                entity.GenerationMs, entity.CachedPromptTokens, entity.SegmentCount);
+            : new BenchmarkRunThroughput
+            {
+                TtftMs = entity.TtftMs,
+                PromptTokens = entity.PromptTokens,
+                PromptMs = entity.PromptMs,
+                GenerationTokens = entity.GenerationTokens,
+                GenerationMs = entity.GenerationMs,
+                CachedPromptTokens = entity.CachedPromptTokens,
+                SegmentCount = entity.SegmentCount
+            };
 
     private static BenchmarkRunRecord ToRecord(BenchmarkRun entity) =>
-        new(entity.Id, entity.ProjectId, entity.RuntimeSnapshotJson.ToArray(), entity.PrimaryModelName, entity.PrimaryModelOrigin,
-            entity.ModelContentFingerprint, entity.AgentName, entity.AgentVersion, entity.RequestedContextTokens, entity.PrimaryStatus,
-            entity.EffectiveContextTokens, entity.DurationMs, entity.TotalTokens, entity.TokensPerSecond, CopyOptional(entity.OutputPartsJson),
-            entity.LastStreamSequence, entity.UserScore, entity.PrimaryErrorMessage, entity.Version, entity.CreatedAtUtc, entity.StartedAtUtc,
-            entity.PrimaryCompletedAtUtc, entity.UpdatedAtUtc,
-            ToIntent(entity.PrimaryVariant, entity.PrimaryKvCacheType, entity.PrimaryKvCacheTypeSource, entity.PrimaryKvAutoReason,
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            RuntimeSnapshotJson = entity.RuntimeSnapshotJson.ToArray(),
+            PrimaryModelName = entity.PrimaryModelName,
+            PrimaryModelOrigin = entity.PrimaryModelOrigin,
+            ModelContentFingerprint = entity.ModelContentFingerprint,
+            AgentName = entity.AgentName,
+            AgentVersion = entity.AgentVersion,
+            RequestedContextTokens = entity.RequestedContextTokens,
+            PrimaryStatus = entity.PrimaryStatus,
+            EffectiveContextTokens = entity.EffectiveContextTokens,
+            DurationMs = entity.DurationMs,
+            TotalTokens = entity.TotalTokens,
+            TokensPerSecond = entity.TokensPerSecond,
+            OutputPartsJson = CopyOptional(entity.OutputPartsJson),
+            LastStreamSequence = entity.LastStreamSequence,
+            UserScore = entity.UserScore,
+            PrimaryErrorMessage = entity.PrimaryErrorMessage,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            StartedAtUtc = entity.StartedAtUtc,
+            PrimaryCompletedAtUtc = entity.PrimaryCompletedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            PrimaryLaunchIntent = ToIntent(entity.PrimaryVariant, entity.PrimaryKvCacheType, entity.PrimaryKvCacheTypeSource, entity.PrimaryKvAutoReason,
                 entity.PrimaryFlashAttentionMode, entity.PrimaryIntendedLaunchIdentity, entity.PrimaryIntendedExecutableSha256,
                 entity.PrimaryLaunchIdentityScheme),
-            ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
+            PrimaryLaunchEvidence = ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
                 entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
                 entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
                 entity.PrimaryLaunchHasAuxAssets, entity.PrimaryLaunchKvCacheTypeSource),
-            entity.PrimaryStopReason,
-            Throughput: ToThroughput(entity),
-            RepeatGroupId: entity.RepeatGroupId,
-            RepeatIndex: entity.RepeatIndex,
-            IsWarmup: entity.IsWarmup,
-            InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds,
-            RepeatMode: entity.RepeatMode,
-            SamplingSeed: entity.SamplingSeed,
-            SamplingTemperature: entity.SamplingTemperature,
-            Fidelity: ToFidelity(entity),
-            TaskItemId: entity.TaskItemId,
-            TaskItemIndex: entity.TaskItemIndex,
-            CellKey: entity.CellKey,
-            TaskInputHash: entity.TaskInputHash,
-            TaskItemSetHash: entity.TaskItemSetHash);
+            PrimaryStopReason = entity.PrimaryStopReason,
+            Throughput = ToThroughput(entity),
+            RepeatGroupId = entity.RepeatGroupId,
+            RepeatIndex = entity.RepeatIndex,
+            IsWarmup = entity.IsWarmup,
+            InvocationTimeoutSeconds = entity.InvocationTimeoutSeconds,
+            RepeatMode = entity.RepeatMode,
+            SamplingSeed = entity.SamplingSeed,
+            SamplingTemperature = entity.SamplingTemperature,
+            Fidelity = ToFidelity(entity),
+            TaskItemId = entity.TaskItemId,
+            TaskItemIndex = entity.TaskItemIndex,
+            CellKey = entity.CellKey,
+            TaskInputHash = entity.TaskInputHash,
+            TaskItemSetHash = entity.TaskItemSetHash
+        };
 
     /// <summary>
     ///     Null when nothing has ever been measured, so the API says "no measurement" rather than a projection of
@@ -244,25 +291,47 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
     private static BenchmarkRunFidelity? ToFidelity(BenchmarkRun entity) =>
         entity.FidelityStatus is null
             ? null
-            : new BenchmarkRunFidelity(entity.FidelityStatus,
-                entity.FidelityAttemptId,
-                entity.PerplexityMean,
-                entity.PerplexityStdErr,
-                entity.PerplexityChunks,
-                entity.PerplexityContextTokens,
-                entity.PerplexityCorpusId,
-                entity.KldMean,
-                entity.KldP99,
-                entity.TopTokenAgreement,
-                entity.KldBaseFingerprint,
-                entity.KldBaseLogitsDigest,
-                entity.FidelityErrorMessage);
+            : new BenchmarkRunFidelity
+            {
+                Status = entity.FidelityStatus,
+                AttemptId = entity.FidelityAttemptId,
+                PerplexityMean = entity.PerplexityMean,
+                PerplexityStdErr = entity.PerplexityStdErr,
+                PerplexityChunks = entity.PerplexityChunks,
+                PerplexityContextTokens = entity.PerplexityContextTokens,
+                PerplexityCorpusId = entity.PerplexityCorpusId,
+                KldMean = entity.KldMean,
+                KldP99 = entity.KldP99,
+                TopTokenAgreement = entity.TopTokenAgreement,
+                KldBaseFingerprint = entity.KldBaseFingerprint,
+                KldBaseLogitsDigest = entity.KldBaseLogitsDigest,
+                ErrorMessage = entity.FidelityErrorMessage
+            };
 
     private static BenchmarkFidelityAttemptRecord ToRecord(BenchmarkFidelityAttempt entity) =>
-        new(entity.Id, entity.RunId, entity.Sequence, entity.Kind, entity.Status, entity.PerplexityMean, entity.PerplexityStdErr,
-            entity.PerplexityChunks, entity.PerplexityContextTokens, entity.CorpusId, entity.KldMean, entity.KldP99,
-            entity.TopTokenAgreement, entity.BaseModelName, entity.BaseModelContentFingerprint, entity.BaseLogitsDigest,
-            entity.ErrorMessage, entity.EnqueuedAtUtc, entity.StartedAtUtc, entity.CompletedAtUtc);
+        new()
+        {
+            Id = entity.Id,
+            RunId = entity.RunId,
+            Sequence = entity.Sequence,
+            Kind = entity.Kind,
+            Status = entity.Status,
+            PerplexityMean = entity.PerplexityMean,
+            PerplexityStdErr = entity.PerplexityStdErr,
+            PerplexityChunks = entity.PerplexityChunks,
+            PerplexityContextTokens = entity.PerplexityContextTokens,
+            CorpusId = entity.CorpusId,
+            KldMean = entity.KldMean,
+            KldP99 = entity.KldP99,
+            TopTokenAgreement = entity.TopTokenAgreement,
+            BaseModelName = entity.BaseModelName,
+            BaseModelContentFingerprint = entity.BaseModelContentFingerprint,
+            BaseLogitsDigest = entity.BaseLogitsDigest,
+            ErrorMessage = entity.ErrorMessage,
+            EnqueuedAtUtc = entity.EnqueuedAtUtc,
+            StartedAtUtc = entity.StartedAtUtc,
+            CompletedAtUtc = entity.CompletedAtUtc
+        };
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,
@@ -274,8 +343,17 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
         int? launchIdentityScheme) =>
         variant is null || kvCacheType is null || kvCacheTypeSource is null || flashAttentionMode is null || intendedLaunchIdentity is null
             ? null
-            : new BenchmarkRunLaunchIntent(variant, kvCacheType, kvCacheTypeSource, kvAutoReason, flashAttentionMode,
-                intendedLaunchIdentity, intendedExecutableSha256, launchIdentityScheme);
+            : new BenchmarkRunLaunchIntent
+            {
+                Variant = variant,
+                KvCacheType = kvCacheType,
+                KvCacheTypeSource = kvCacheTypeSource,
+                KvAutoReason = kvAutoReason,
+                FlashAttentionMode = flashAttentionMode,
+                IntendedLaunchIdentity = intendedLaunchIdentity,
+                IntendedExecutableSha256 = intendedExecutableSha256,
+                LaunchIdentityScheme = launchIdentityScheme
+            };
 
     private static BenchmarkRunLaunchEvidence? ToEvidence(byte[]? receiptJson,
         byte[]? environmentFactsJson,
@@ -290,23 +368,59 @@ public sealed partial class BenchmarkStore : IBenchmarkStore
         string? kvCacheTypeSource) =>
         receiptJson is null && environmentFactsJson is null
             ? null
-            : new BenchmarkRunLaunchEvidence(CopyOptional(receiptJson), CopyOptional(environmentFactsJson), receiptHash,
-                environmentFactsHash, effectiveLaunchIdentity, effectiveBackend, placementOffloaded, placementTotal,
-                executableSha256, hasAuxAssets, kvCacheTypeSource);
+            : new BenchmarkRunLaunchEvidence
+            {
+                ReceiptJson = CopyOptional(receiptJson),
+                EnvironmentFactsJson = CopyOptional(environmentFactsJson),
+                ReceiptHash = receiptHash,
+                EnvironmentFactsHash = environmentFactsHash,
+                EffectiveLaunchIdentity = effectiveLaunchIdentity,
+                EffectiveBackend = effectiveBackend,
+                PlacementOffloaded = placementOffloaded,
+                PlacementTotal = placementTotal,
+                ExecutableSha256 = executableSha256,
+                HasAuxAssets = hasAuxAssets,
+                KvCacheTypeSource = kvCacheTypeSource
+            };
 
     private static BenchmarkJudgePolicyRevisionRecord ToRecord(BenchmarkJudgePolicyRevision entity, bool includePayload) =>
-        new(entity.Id, entity.ProjectId, entity.Revision, includePayload ? CopyOptional(entity.PolicyJson) : null, entity.PolicyHash,
-            entity.ReferenceExecutionKey, entity.CohortGeneration, entity.CreatedAtUtc, entity.ComparisonSetVersion);
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            Revision = entity.Revision,
+            PolicyJson = includePayload ? CopyOptional(entity.PolicyJson) : null,
+            PolicyHash = entity.PolicyHash,
+            ReferenceExecutionKey = entity.ReferenceExecutionKey,
+            CohortGeneration = entity.CohortGeneration,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            ComparisonSetVersion = entity.ComparisonSetVersion
+        };
 
     private static BenchmarkJudgeAttemptRecord ToRecord(BenchmarkJudgeAttempt entity) =>
-        new(entity.Id, entity.RunId, entity.Sequence, entity.PolicyRevisionId, entity.CohortGeneration,
-            CopyOptional(entity.JudgeRuntimeJson), entity.JudgeExecutionKey, entity.Status, CopyOptional(entity.ResultJson),
-            entity.Score, entity.ErrorMessage, entity.EnqueuedAtUtc, entity.StartedAtUtc, entity.CompletedAtUtc, entity.Version,
-            ToIntent(entity.Variant, entity.KvCacheType, entity.KvCacheTypeSource, entity.KvAutoReason, entity.FlashAttentionMode,
+        new()
+        {
+            Id = entity.Id,
+            RunId = entity.RunId,
+            Sequence = entity.Sequence,
+            PolicyRevisionId = entity.PolicyRevisionId,
+            CohortGeneration = entity.CohortGeneration,
+            JudgeRuntimeJson = CopyOptional(entity.JudgeRuntimeJson),
+            JudgeExecutionKey = entity.JudgeExecutionKey,
+            Status = entity.Status,
+            ResultJson = CopyOptional(entity.ResultJson),
+            Score = entity.Score,
+            ErrorMessage = entity.ErrorMessage,
+            EnqueuedAtUtc = entity.EnqueuedAtUtc,
+            StartedAtUtc = entity.StartedAtUtc,
+            CompletedAtUtc = entity.CompletedAtUtc,
+            Version = entity.Version,
+            LaunchIntent = ToIntent(entity.Variant, entity.KvCacheType, entity.KvCacheTypeSource, entity.KvAutoReason, entity.FlashAttentionMode,
                 entity.IntendedLaunchIdentity, entity.IntendedExecutableSha256, entity.LaunchIdentityScheme),
-            ToEvidence(entity.LaunchReceiptJson, entity.EnvironmentFactsJson, entity.ReceiptHash, entity.EnvironmentFactsHash,
+            LaunchEvidence = ToEvidence(entity.LaunchReceiptJson, entity.EnvironmentFactsJson, entity.ReceiptHash, entity.EnvironmentFactsHash,
                 entity.EffectiveLaunchIdentity, entity.EffectiveBackend, entity.PlacementOffloaded, entity.PlacementTotal,
-                entity.LaunchExecutableSha256, entity.LaunchHasAuxAssets, entity.LaunchKvCacheTypeSource));
+                entity.LaunchExecutableSha256, entity.LaunchHasAuxAssets, entity.LaunchKvCacheTypeSource)
+        };
 
     private static ReadOnlyMemory<byte>? CopyOptional(byte[]? value)
     {

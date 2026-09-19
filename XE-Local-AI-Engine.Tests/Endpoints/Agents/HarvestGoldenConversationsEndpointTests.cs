@@ -212,15 +212,18 @@ public sealed class HarvestGoldenConversationsEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IGoldenConversationStore>();
-        var added = await store.AddAsync(new GoldenConversationInput(agentId,
-            "Seeded case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "Be consistent with the approved answer.",
-            enabled,
-            source,
-            source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null,
-            source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null));
+        var added = await store.AddAsync(new GoldenConversationInput
+        {
+            AgentDefinitionId = agentId,
+            Title = "Seeded case",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "Be consistent with the approved answer.",
+            Enabled = enabled,
+            Source = source,
+            SourceMessageId = source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null,
+            SourceConversationId = source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null
+        });
         return added.Id;
     }
 
@@ -228,15 +231,18 @@ public sealed class HarvestGoldenConversationsEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            Description: null,
-            "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = name,
+            Description = null,
+            Instructions = "You are a careful engineering agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 }

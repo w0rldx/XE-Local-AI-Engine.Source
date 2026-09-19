@@ -304,17 +304,28 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     }
 
     private static BenchmarkTaskItemInput Prompt(string prompt) =>
-        new(JsonSerializer.SerializeToUtf8Bytes(prompt));
+        new() { PromptJson = JsonSerializer.SerializeToUtf8Bytes(prompt) };
 
     private static BenchmarkPrimarySuccessCommand PrimarySuccess(Guid runId, long expectedWorkVersion) =>
-        new(runId, expectedWorkVersion, Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120);
+        new() { RunId = runId, ExpectedWorkVersion = expectedWorkVersion, OutputPartsJson = Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), LastStreamSequence = 1, EffectiveContextTokens = 4096, DurationMs = 10, TotalTokens = 12, TokensPerSecond = 120 };
 
     private static BenchmarkProjectInput NewProject() =>
-        new(Guid.NewGuid(), "Benchmark", JsonSerializer.SerializeToUtf8Bytes("answer the question"), 4096, Guid.NewGuid());
+        new() { Id = Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes("answer the question"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version, Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""), "model.gguf",
-            LocalModelOrigin.Imported, "v1:" + new string('a', count: 64), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('a', count: 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileName)
     {

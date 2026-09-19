@@ -111,7 +111,7 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
             return Task.FromResult<ModelFitSnapshotRawRecord?>(null);
         }
 
-        return Task.FromResult<ModelFitSnapshotRawRecord?>(new ModelFitSnapshotRawRecord(id, snapshot.RawJson, snapshot.StderrExcerpt, snapshot.DiagnosticsJson));
+        return Task.FromResult<ModelFitSnapshotRawRecord?>(new ModelFitSnapshotRawRecord { Id = id, RawJson = snapshot.RawJson, StderrExcerpt = snapshot.StderrExcerpt, DiagnosticsJson = snapshot.DiagnosticsJson });
     }
 
     private static bool SameKey(StoredSnapshot a, StoredSnapshot b)
@@ -141,8 +141,23 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
 
         public ModelFitSnapshotSummaryRecord ToSummary()
         {
-            return new ModelFitSnapshotSummaryRecord(Id, ApprovedImageId, Operation, UseCase, ProviderName, ModelName, Status, StartedAtUtc, CompletedAtUtc,
-                DurationMs, ExitCode, IsLatestSuccessful, CreatedByRunId, CreatedAtUtc);
+            return new ModelFitSnapshotSummaryRecord
+            {
+                Id = Id,
+                ApprovedImageId = ApprovedImageId,
+                Operation = Operation,
+                UseCase = UseCase,
+                ProviderName = ProviderName,
+                ModelName = ModelName,
+                Status = Status,
+                StartedAtUtc = StartedAtUtc,
+                CompletedAtUtc = CompletedAtUtc,
+                DurationMs = DurationMs,
+                ExitCode = ExitCode,
+                IsLatestSuccessful = IsLatestSuccessful,
+                CreatedByRunId = CreatedByRunId,
+                CreatedAtUtc = CreatedAtUtc
+            };
         }
     }
 }
@@ -155,9 +170,25 @@ internal sealed class InMemoryModelFitRecommendationStore : IModelFitRecommendat
     public Task<int> ReplaceForSnapshotAsync(Guid snapshotId, IReadOnlyList<ModelFitRecommendationInput> recommendations, CancellationToken cancellationToken = default)
     {
         var rows = recommendations
-                   .Select(input => new ModelFitRecommendationRecord(Guid.NewGuid(), snapshotId, input.Rank, input.ModelName, input.ProviderModelName, input.Score,
-                       input.FitLevel, input.RunMode, input.Quantization, input.EstimatedTokensPerSecond, input.RequiredRamMb,
-                       input.RequiredVramMb, input.ContextTokens, input.IsInstalled, input.PullModelName, input.DiagnosticsJson))
+                   .Select(input => new ModelFitRecommendationRecord
+                   {
+                       Id = Guid.NewGuid(),
+                       SnapshotId = snapshotId,
+                       Rank = input.Rank,
+                       ModelName = input.ModelName,
+                       ProviderModelName = input.ProviderModelName,
+                       Score = input.Score,
+                       FitLevel = input.FitLevel,
+                       RunMode = input.RunMode,
+                       Quantization = input.Quantization,
+                       EstimatedTokensPerSecond = input.EstimatedTokensPerSecond,
+                       RequiredRamMb = input.RequiredRamMb,
+                       RequiredVramMb = input.RequiredVramMb,
+                       ContextTokens = input.ContextTokens,
+                       IsInstalled = input.IsInstalled,
+                       PullModelName = input.PullModelName,
+                       DiagnosticsJson = input.DiagnosticsJson
+                   })
                    .ToList();
         _rows[snapshotId] = rows;
         return Task.FromResult(rows.Count);

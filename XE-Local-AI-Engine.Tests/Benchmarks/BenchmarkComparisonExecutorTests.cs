@@ -34,7 +34,7 @@ public sealed class BenchmarkComparisonExecutorTests
         store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
         var runner = Substitute.For<IInvocationRunner>();
-        var work = new BenchmarkClaimedWork(3, Guid.NewGuid(), BenchmarkWorkKind.Comparison, 1, 2, Run(), ComparisonId: ComparisonId);
+        var work = new BenchmarkClaimedWork { QueueSequence = 3, RunId = Guid.NewGuid(), Kind = BenchmarkWorkKind.Comparison, Attempt = 1, Version = 2, Run = Run(), ComparisonId = ComparisonId };
 
         await Executor(store, runner).ExecuteAsync(work, CancellationToken.None);
 
@@ -53,7 +53,7 @@ public sealed class BenchmarkComparisonExecutorTests
         string? failureMessage = null;
         store.MarkComparisonFailedAsync(Arg.Any<long>(), Arg.Any<long>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<CancellationToken>())
              .Returns(Task.CompletedTask);
-        var work = new BenchmarkClaimedWork(3, Guid.NewGuid(), BenchmarkWorkKind.Comparison, 1, 2, Run(), ComparisonId: ComparisonId);
+        var work = new BenchmarkClaimedWork { QueueSequence = 3, RunId = Guid.NewGuid(), Kind = BenchmarkWorkKind.Comparison, Attempt = 1, Version = 2, Run = Run(), ComparisonId = ComparisonId };
 
         await Executor(store, Substitute.For<IInvocationRunner>()).ExecuteAsync(work, CancellationToken.None);
 
@@ -81,35 +81,71 @@ public sealed class BenchmarkComparisonExecutorTests
             NullLogger<BenchmarkComparisonExecutor>.Instance);
 
     private static BenchmarkComparisonRecord Comparison(int? launchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion) =>
-        new(ComparisonId,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            CohortGeneration: 1,
-            TaskCaseId: null,
-            TaskInputHash: string.Empty,
-            RunAId: Guid.NewGuid(),
-            RunBId: Guid.NewGuid(),
-            Order: 0,
-            AttemptSequence: 1,
-            Sequence: 1,
-            BenchmarkJudgeAttemptStatus.Running,
-            Verdict: null,
-            AnswerATruncated: false,
-            AnswerBTruncated: false,
-            JudgeExecutionKey: null,
-            ErrorMessage: null,
-            JudgeRuntimeJson: null,
-            EnqueuedAtUtc: 1,
-            StartedAtUtc: null,
-            CompletedAtUtc: null,
-            Version: 1,
-            new BenchmarkRunLaunchIntent("cpu", "f16", "auto", null, LlamaServerLaunchProjection.FlashAttentionAuto,
-                "intended", null, launchIdentityScheme));
+        new()
+        {
+            Id = ComparisonId,
+            ProjectId = Guid.NewGuid(),
+            PolicyRevisionId = Guid.NewGuid(),
+            CohortGeneration = 1,
+            TaskCaseId = null,
+            TaskInputHash = string.Empty,
+            RunAId = Guid.NewGuid(),
+            RunBId = Guid.NewGuid(),
+            Order = 0,
+            AttemptSequence = 1,
+            Sequence = 1,
+            Status = BenchmarkJudgeAttemptStatus.Running,
+            Verdict = null,
+            AnswerATruncated = false,
+            AnswerBTruncated = false,
+            JudgeExecutionKey = null,
+            ErrorMessage = null,
+            JudgeRuntimeJson = null,
+            EnqueuedAtUtc = 1,
+            StartedAtUtc = null,
+            CompletedAtUtc = null,
+            Version = 1,
+            LaunchIntent = new BenchmarkRunLaunchIntent
+            {
+                Variant = "cpu",
+                KvCacheType = "f16",
+                KvCacheTypeSource = "auto",
+                KvAutoReason = null,
+                FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionAuto,
+                IntendedLaunchIdentity = "intended",
+                IntendedExecutableSha256 = null,
+                LaunchIdentityScheme = launchIdentityScheme
+            }
+        };
 
     private static BenchmarkRunRecord Run() =>
-        new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = Guid.NewGuid(),
+            RuntimeSnapshotJson = new byte[]
             {
                 1
-            }, "model.gguf", LocalModelOrigin.Imported, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
-            BenchmarkPrimaryStatus.Succeeded, null, null, null, null, null, 0, null, null, 1, 1, 1, null, 1);
+            },
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = $"v1:{new string('a', 64)}",
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 8192,
+            PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = null,
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            StartedAtUtc = 1,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 1
+        };
 }

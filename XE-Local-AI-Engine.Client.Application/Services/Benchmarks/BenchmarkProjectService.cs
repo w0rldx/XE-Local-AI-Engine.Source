@@ -86,7 +86,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         // project created from here therefore has its items already; the lazy backfill is left for older rows only.
         return await _benchmarkStore.CreateProjectAsync(input,
                                         ToPolicyChange(policy),
-                                        [new BenchmarkTaskItemInput(input.CoreTaskJson)],
+                                        [new BenchmarkTaskItemInput { PromptJson = input.CoreTaskJson }],
                                         cancellationToken);
     }
 
@@ -126,11 +126,14 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         var baseModelName = NormalizeModelName(settings.KldBaseModelName);
         var change = await _benchmarkStore.UpdateProjectFidelityAsync(projectId,
                                               expectedVersion,
-                                              new BenchmarkProjectFidelityInput(settings.Enabled,
-                                                  settings.KldEnabled,
-                                                  settings.Chunks,
-                                                  baseModelName,
-                                                  await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)),
+                                              new BenchmarkProjectFidelityInput
+                                              {
+                                                  FidelityEnabled = settings.Enabled,
+                                                  FidelityKldEnabled = settings.KldEnabled,
+                                                  FidelityChunks = settings.Chunks,
+                                                  FidelityKldBaseModelName = baseModelName,
+                                                  FidelityKldBaseFingerprint = await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
+                                              },
                                               measureExisting,
                                               cancellationToken);
         if (change.EnqueuedRunIds.Count > 0)
@@ -209,13 +212,16 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
                        ?? throw new BenchmarkConflictException("JudgeDisabled");
         var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
         var resolved = await TryResolveRuntimeAsync(policy, cancellationToken);
-        var attempt = await _benchmarkStore.EnqueueJudgeAttemptAsync(new BenchmarkEnqueueJudgeAttemptCommand(runId,
-                                               expectedRunVersion,
-                                               revision.Id,
-                                               resolved.RuntimeJson,
-                                               resolved.UnresolvedReason,
-                                               force,
-                                               resolved.Intent), cancellationToken);
+        var attempt = await _benchmarkStore.EnqueueJudgeAttemptAsync(new BenchmarkEnqueueJudgeAttemptCommand
+        {
+            RunId = runId,
+            ExpectedRunVersion = expectedRunVersion,
+            PolicyRevisionId = revision.Id,
+            RuntimeJson = resolved.RuntimeJson,
+            RuntimeUnresolvedReason = resolved.UnresolvedReason,
+            Force = force,
+            LaunchIntent = resolved.Intent
+        }, cancellationToken);
         _queueSignal?.Wake();
         return attempt;
     }
@@ -267,11 +273,11 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     {
         if (string.Equals(BenchmarkJudgePolicyModes.Normalize(policy.Mode), BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
         {
-            return new BenchmarkJudgeAttemptSeed(expectedRevisionId, SeedPointwiseAttempts: false);
+            return new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = expectedRevisionId, SeedPointwiseAttempts = false };
         }
 
         var resolved = await TryResolveRuntimeAsync(policy, cancellationToken);
-        return new BenchmarkJudgeAttemptSeed(expectedRevisionId, resolved.RuntimeJson, resolved.UnresolvedReason, resolved.Intent);
+        return new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = expectedRevisionId, RuntimeJson = resolved.RuntimeJson, RuntimeUnresolvedReason = resolved.UnresolvedReason, LaunchIntent = resolved.Intent };
     }
 
     /// <summary>Wakes the queue for the attempts the store just enqueued and reports them to the caller.</summary>
@@ -297,8 +303,11 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     private static BenchmarkJudgePolicyChangeInput? ToPolicyChange(BenchmarkJudgePolicyV1? policy) =>
         policy is null
             ? null
-            : new BenchmarkJudgePolicyChangeInput(new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializePolicy(policy)),
-                BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy));
+            : new BenchmarkJudgePolicyChangeInput
+            {
+                PolicyJson = new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializePolicy(policy)),
+                PolicyHash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy)
+            };
 
     /// <summary>
     ///     The judge runtime, or the sanitized reason it could not be resolved. A resolution failure becomes a failed
@@ -350,19 +359,22 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
                 NormalizeModelName(draft.FidelityKldBaseModelName),
                 cancellationToken);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken);
-        return (new BenchmarkProjectInput(draft.Id,
-                draft.Name.Trim(),
-                JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
-                draft.ContextTokens,
-                draft.AgentDefinitionId,
-                draft.MaxOutputTokens,
-                draft.InvocationTimeoutSeconds,
-                draft.ReasoningBudgetTokens,
-                draft.FidelityEnabled,
-                draft.FidelityKldEnabled,
-                draft.FidelityChunks,
-                NormalizeModelName(draft.FidelityKldBaseModelName),
-                baseFingerprint),
+        return (new BenchmarkProjectInput
+        {
+            Id = draft.Id,
+            Name = draft.Name.Trim(),
+            CoreTaskJson = JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
+            ContextTokens = draft.ContextTokens,
+            AgentDefinitionId = draft.AgentDefinitionId,
+            MaxOutputTokens = draft.MaxOutputTokens,
+            InvocationTimeoutSeconds = draft.InvocationTimeoutSeconds,
+            ReasoningBudgetTokens = draft.ReasoningBudgetTokens,
+            FidelityEnabled = draft.FidelityEnabled,
+            FidelityKldEnabled = draft.FidelityKldEnabled,
+            FidelityChunks = draft.FidelityChunks,
+            FidelityKldBaseModelName = NormalizeModelName(draft.FidelityKldBaseModelName),
+            FidelityKldBaseFingerprint = baseFingerprint
+        },
             policy);
     }
 

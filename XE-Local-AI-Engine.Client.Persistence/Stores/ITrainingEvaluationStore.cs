@@ -96,53 +96,97 @@ public interface ITrainingEvaluationStore
 }
 
 /// <summary>
-///     Everything an evaluation freezes at creation. <paramref name="TotalCount" /> is carried rather than derived from
+///     Everything an evaluation freezes at creation. <see cref="TotalCount" /> is carried rather than derived from
 ///     the membership blob so "how far along is it" stays a plaintext query.
 /// </summary>
-public sealed record TrainingEvaluationEnqueueCommand(
-    Guid? TrainingRunId,
-    string ModelName,
-    string? ModelContentFingerprint,
-    Guid DatasetId,
-    string DatasetContentFingerprint,
-    ReadOnlyMemory<byte> MembershipJson,
-    int TotalCount,
-    EvaluationModelTargetKind TargetKind = EvaluationModelTargetKind.InstalledModel,
-    Guid? SourceArtifactId = null);
+public sealed record TrainingEvaluationEnqueueCommand
+{
+    public required Guid? TrainingRunId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string? ModelContentFingerprint { get; init; }
+
+    public required Guid DatasetId { get; init; }
+
+    public required string DatasetContentFingerprint { get; init; }
+
+    public required ReadOnlyMemory<byte> MembershipJson { get; init; }
+
+    public required int TotalCount { get; init; }
+
+    public EvaluationModelTargetKind TargetKind { get; init; }
+
+    public Guid? SourceArtifactId { get; init; }
+}
 
 /// <summary>
 ///     An evaluation as the application layer sees it. The membership and the verdicts are carried as
 ///     <see cref="ReadOnlyMemory{T}" /> so the record cannot hand a caller a mutable reference to the decrypted column.
 /// </summary>
-public sealed record TrainingEvaluationRecord(
-    Guid Id,
-    Guid? TrainingRunId,
-    Guid? ComparisonId,
-    string ModelName,
-    string? ModelContentFingerprint,
-    Guid DatasetId,
-    string DatasetContentFingerprint,
-    ReadOnlyMemory<byte> MembershipJson,
-    TrainingEvaluationStatus Status,
-    ReadOnlyMemory<byte>? ResultsJson,
-    int TotalCount,
-    int ScoredCount,
-    int PassedCount,
-    string? PerKindJson,
-    string? ErrorMessage,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    TrainingWorkStatus? WorkStatus,
-    EvaluationModelTargetKind TargetKind = EvaluationModelTargetKind.InstalledModel,
-    Guid? SourceArtifactId = null,
-    ReadOnlyMemory<byte>? ExecutionProvenanceJson = null);
+public sealed record TrainingEvaluationRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid? TrainingRunId { get; init; }
+
+    public required Guid? ComparisonId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string? ModelContentFingerprint { get; init; }
+
+    public required Guid DatasetId { get; init; }
+
+    public required string DatasetContentFingerprint { get; init; }
+
+    public required ReadOnlyMemory<byte> MembershipJson { get; init; }
+
+    public required TrainingEvaluationStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte>? ResultsJson { get; init; }
+
+    public required int TotalCount { get; init; }
+
+    public required int ScoredCount { get; init; }
+
+    public required int PassedCount { get; init; }
+
+    public required string? PerKindJson { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required TrainingWorkStatus? WorkStatus { get; init; }
+
+    public EvaluationModelTargetKind TargetKind { get; init; }
+
+    public Guid? SourceArtifactId { get; init; }
+
+    public ReadOnlyMemory<byte>? ExecutionProvenanceJson { get; init; }
+}
 
 /// <summary>
-///     One sample's verdict. <paramref name="ScoredBy" /> carries provenance in the <c>DefaultPlaybookEvalJudge</c>
+///     One sample's verdict. <see cref="ScoredBy" /> carries provenance in the <c>DefaultPlaybookEvalJudge</c>
 ///     style. Version 1 writes <c>deterministic</c>; no current scorer writes the reserved <c>judge</c> value.
 /// </summary>
-public sealed record TrainingEvaluationResultEntry(Guid SampleId, string Kind, bool Passed, string ScoredBy, string? Reason = null);
+public sealed class TrainingEvaluationResultEntry
+{
+    public required Guid SampleId { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required bool Passed { get; init; }
+
+    public required string ScoredBy { get; init; }
+
+    public string? Reason { get; init; }
+}
 
 /// <summary>The persisted results document. One flat list — the merge is by <c>SampleId</c>, so no nesting buys anything.</summary>
 public sealed record TrainingEvaluationResultsV1
@@ -231,24 +275,44 @@ public static class TrainingEvaluationResults
     }
 }
 
-public sealed record TrainingComparisonInput(
-    string Name,
-    Guid BaseEvaluationRunId,
-    Guid TunedEvaluationRunId,
-    ReadOnlyMemory<byte> DeltasJson,
-    Guid? BaseBenchmarkRunId = null,
-    Guid? TunedBenchmarkRunId = null,
-    Guid? TrainingRunId = null);
+public sealed record TrainingComparisonInput
+{
+    public required string Name { get; init; }
 
-public sealed record TrainingComparisonRecord(
-    Guid Id,
-    string Name,
-    Guid BaseEvaluationRunId,
-    Guid TunedEvaluationRunId,
-    Guid? BaseBenchmarkRunId,
-    Guid? TunedBenchmarkRunId,
-    Guid? TrainingRunId,
-    ReadOnlyMemory<byte> DeltasJson,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+    public required Guid BaseEvaluationRunId { get; init; }
+
+    public required Guid TunedEvaluationRunId { get; init; }
+
+    public required ReadOnlyMemory<byte> DeltasJson { get; init; }
+
+    public Guid? BaseBenchmarkRunId { get; init; }
+
+    public Guid? TunedBenchmarkRunId { get; init; }
+
+    public Guid? TrainingRunId { get; init; }
+}
+
+public sealed record TrainingComparisonRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required Guid BaseEvaluationRunId { get; init; }
+
+    public required Guid TunedEvaluationRunId { get; init; }
+
+    public required Guid? BaseBenchmarkRunId { get; init; }
+
+    public required Guid? TunedBenchmarkRunId { get; init; }
+
+    public required Guid? TrainingRunId { get; init; }
+
+    public required ReadOnlyMemory<byte> DeltasJson { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}

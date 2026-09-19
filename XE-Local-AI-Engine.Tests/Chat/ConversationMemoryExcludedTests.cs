@@ -90,16 +90,19 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         // The agent_definitions table is created by EnsureCreatedAsync (it is an EF entity); the AgentDefinitionStore
         // owns the typed write, including the new DefaultTemporaryChat flag.
         var store = new AgentDefinitionStore(dbContext, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-                                   Description: null,
-                                   "You are a careful engineering agent.",
-                                   ModelProfile: null,
-                                   ReasoningEffort: null,
-                                   AgentDefinitionKind.Single,
-                                   [],
-                                   new Dictionary<string, bool>(),
-                                   OrchestrationTopologyJson: null,
-                                   DefaultTemporaryChat: defaultTemporaryChat));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = "Builder",
+            Description = null,
+            Instructions = "You are a careful engineering agent.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            DefaultTemporaryChat = defaultTemporaryChat
+        });
         return agent.Id;
     }
 

@@ -55,16 +55,19 @@ internal sealed class DevelopmentTestFixture : IDisposable
     }
 
     public static DevelopmentCreateProjectCommand CreateSeed() =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "objective",
-            SelectedFolderId,
-            "repository-hash",
-            "main",
-            "task",
-            "requirements",
-            "[\"acceptance\"]");
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Objective = "objective",
+            SelectedFolderId = SelectedFolderId,
+            RepositoryIdentityHash = "repository-hash",
+            BaseBranch = "main",
+            Title = "task",
+            Requirements = "requirements",
+            AcceptanceCriteriaJson = "[\"acceptance\"]"
+        };
 
     /// <summary>
     ///     A project whose single task the review chain has taken to <c>AwaitingApply</c> — the status a Dev Mode task
@@ -85,11 +88,14 @@ internal sealed class DevelopmentTestFixture : IDisposable
                      DevelopmentTaskStatus.AwaitingApply
                  })
         {
-            var result = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                        Guid.NewGuid(),
-                                        status,
-                                        version,
-                                        ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply ? "subject" : null));
+            var result = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = status,
+                ExpectedTaskVersion = version,
+                ApprovedSubjectHash = status == DevelopmentTaskStatus.AwaitingApply ? "subject" : null
+            });
             version = result.Version;
         }
 

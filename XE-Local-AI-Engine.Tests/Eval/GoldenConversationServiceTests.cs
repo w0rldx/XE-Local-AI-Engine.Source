@@ -177,31 +177,37 @@ public sealed class GoldenConversationServiceTests
 
     private static GoldenConversationRecord StoredRecord(GoldenConversationInput input)
     {
-        return new GoldenConversationRecord(Guid.NewGuid(),
-            input.AgentDefinitionId,
-            input.Title,
-            input.InputTurns,
-            input.Assertion,
-            input.Rubric,
-            input.Enabled,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new GoldenConversationRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = input.AgentDefinitionId,
+            Title = input.Title,
+            InputTurns = input.InputTurns,
+            Assertion = input.Assertion,
+            Rubric = input.Rubric,
+            Enabled = input.Enabled,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static AgentDefinitionRecord CreateAgent()
     {
-        return new AgentDefinitionRecord(AgentId,
-            "Builder",
-            Description: null,
-            "Base instructions.",
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = AgentId,
+            Name = "Builder",
+            Description = null,
+            Instructions = "Base instructions.",
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 }

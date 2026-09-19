@@ -86,15 +86,18 @@ public sealed class DefaultAgentSeeder : IHostedService
     /// </summary>
     private async Task<AgentDefinitionInput> BuildSeedInputAsync(CancellationToken cancellationToken)
     {
-        return new AgentDefinitionInput(AgentDefaults.DefaultAgentName,
-            Description: null,
-            await LoadEmbeddedInstructionsAsync(cancellationToken),
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = AgentDefaults.DefaultAgentName,
+            Description = null,
+            Instructions = await LoadEmbeddedInstructionsAsync(cancellationToken),
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null
+        };
     }
 
     /// <summary>

@@ -65,20 +65,37 @@ public interface IAgentDefinitionStore
 ///         cannot erase the record of how the definition was drafted.
 ///     </para>
 /// </summary>
-public sealed record AgentDefinitionInput(
-    string Name,
-    string? Description,
-    string Instructions,
-    string? ModelProfile,
-    string? ReasoningEffort,
-    AgentDefinitionKind Kind,
-    IReadOnlyList<string> AllowedToolNames,
-    IReadOnlyDictionary<string, bool> ToolApprovals,
-    string? OrchestrationTopologyJson,
-    bool PlaybookEnabled = false,
-    IReadOnlyList<Guid>? AllowedSkillIds = null,
-    bool DefaultTemporaryChat = false,
-    bool MemoryExtractionEnabled = true,
-    bool DisableBaseScaffold = false,
-    string? GenerationMetadataJson = null,
-    bool DisableToolRelevanceFilter = false);
+public sealed record AgentDefinitionInput
+{
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string Instructions { get; init; }
+
+    public required string? ModelProfile { get; init; }
+
+    public required string? ReasoningEffort { get; init; }
+
+    public required AgentDefinitionKind Kind { get; init; }
+
+    public required IReadOnlyList<string> AllowedToolNames { get; init; }
+
+    public required IReadOnlyDictionary<string, bool> ToolApprovals { get; init; }
+
+    public required string? OrchestrationTopologyJson { get; init; }
+
+    public bool PlaybookEnabled { get; init; }
+
+    public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
+
+    public bool DefaultTemporaryChat { get; init; }
+
+    public bool MemoryExtractionEnabled { get; init; } = true;
+
+    public bool DisableBaseScaffold { get; init; }
+
+    public string? GenerationMetadataJson { get; init; }
+
+    public bool DisableToolRelevanceFilter { get; init; }
+}

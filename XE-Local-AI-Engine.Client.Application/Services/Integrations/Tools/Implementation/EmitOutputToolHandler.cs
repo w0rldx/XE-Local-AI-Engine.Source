@@ -221,12 +221,15 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         bool recorded;
         try
         {
-            recorded = await executionStore.AppendOutputEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
-                                                   execution.Id,
-                                                   sequence,
-                                                   IntegrationStreamEventTypes.ExternalOutput,
-                                                   detailJson,
-                                                   occurredAtUtc),
+            recorded = await executionStore.AppendOutputEventAsync(new IntegrationEventAppend
+            {
+                EventId = Guid.NewGuid(),
+                ExecutionId = execution.Id,
+                Sequence = sequence,
+                EventType = IntegrationStreamEventTypes.ExternalOutput,
+                DetailJson = detailJson,
+                OccurredAtUtc = occurredAtUtc
+            },
                                                _options.MaxOutputBytesPerExecution,
                                                cancellationToken);
         }

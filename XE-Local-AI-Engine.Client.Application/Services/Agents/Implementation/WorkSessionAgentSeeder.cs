@@ -100,15 +100,18 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             ClockToolName
         ];
 
-        return new AgentDefinitionInput(AgentDefaults.WorkSessionGeneralAgentName,
-            Description: "Runs a work session on any objective: keeps a plan, records findings, and saves artifacts.",
-            SharedInstructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            allowedToolNames,
-            BuildApprovals(allowedToolNames),
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = AgentDefaults.WorkSessionGeneralAgentName,
+            Description = "Runs a work session on any objective: keeps a plan, records findings, and saves artifacts.",
+            Instructions = SharedInstructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowedToolNames,
+            ToolApprovals = BuildApprovals(allowedToolNames),
+            OrchestrationTopologyJson = null
+        };
     }
 
     internal static AgentDefinitionInput BuildResearchSeedInput()
@@ -123,15 +126,18 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             ReadSurroundingChunksToolDefinition.ToolName
         ];
 
-        return new AgentDefinitionInput(AgentDefaults.WorkSessionResearchAgentName,
-            Description: "Runs a work session grounded in the node's knowledge base, citing what it retrieves.",
-            SharedInstructions + ResearchInstructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            allowedToolNames,
-            BuildApprovals(allowedToolNames),
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = AgentDefaults.WorkSessionResearchAgentName,
+            Description = "Runs a work session grounded in the node's knowledge base, citing what it retrieves.",
+            Instructions = SharedInstructions + ResearchInstructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowedToolNames,
+            ToolApprovals = BuildApprovals(allowedToolNames),
+            OrchestrationTopologyJson = null
+        };
     }
 
     /// <summary>
@@ -176,22 +182,25 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             _ = approvals.TryAdd(ClockToolName, legacyApproval);
         }
 
-        var repaired = new AgentDefinitionInput(existing.Name,
-            existing.Description,
-            existing.Instructions,
-            existing.ModelProfile,
-            existing.ReasoningEffort,
-            existing.Kind,
-            [.. existing.AllowedToolNames.Select(Rename).Distinct(StringComparer.Ordinal)],
-            approvals,
-            existing.OrchestrationTopologyJson,
-            existing.PlaybookEnabled,
-            existing.AllowedSkillIds,
-            existing.DefaultTemporaryChat,
-            existing.MemoryExtractionEnabled,
-            existing.DisableBaseScaffold,
-            existing.GenerationMetadataJson,
-            existing.DisableToolRelevanceFilter);
+        var repaired = new AgentDefinitionInput
+        {
+            Name = existing.Name,
+            Description = existing.Description,
+            Instructions = existing.Instructions,
+            ModelProfile = existing.ModelProfile,
+            ReasoningEffort = existing.ReasoningEffort,
+            Kind = existing.Kind,
+            AllowedToolNames = [.. existing.AllowedToolNames.Select(Rename).Distinct(StringComparer.Ordinal)],
+            ToolApprovals = approvals,
+            OrchestrationTopologyJson = existing.OrchestrationTopologyJson,
+            PlaybookEnabled = existing.PlaybookEnabled,
+            AllowedSkillIds = existing.AllowedSkillIds,
+            DefaultTemporaryChat = existing.DefaultTemporaryChat,
+            MemoryExtractionEnabled = existing.MemoryExtractionEnabled,
+            DisableBaseScaffold = existing.DisableBaseScaffold,
+            GenerationMetadataJson = existing.GenerationMetadataJson,
+            DisableToolRelevanceFilter = existing.DisableToolRelevanceFilter
+        };
 
         _ = await store.UpdateAsync(existing.Id, repaired, cancellationToken);
         _logger.LogInformation("Repaired the clock tool name on the seeded agent definition {AgentDefinitionId} (slug {SeedSlug}).", existing.Id, slug);

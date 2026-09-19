@@ -289,7 +289,7 @@ public sealed class McpServerApiKeyServiceTests
             int scope,
             CancellationToken cancellationToken = default)
         {
-            _record = new McpServerApiKeyRecord(prefix, keyHash, scope, Guid.NewGuid(), CreatedAtUtc: 1, LastUsedAtUtc: null);
+            _record = new McpServerApiKeyRecord { Prefix = prefix, KeyHash = keyHash, Scope = scope, GenerationId = Guid.NewGuid(), CreatedAtUtc = 1, LastUsedAtUtc = null };
             return Task.FromResult(_record);
         }
 
@@ -305,12 +305,15 @@ public sealed class McpServerApiKeyServiceTests
             if (_rotateBeforeTouch)
             {
                 _rotateBeforeTouch = false;
-                _record = new McpServerApiKeyRecord("xemcp_replacement",
-                    SHA256.HashData(Encoding.UTF8.GetBytes("xemcp_replacement-key")),
-                    (int)McpServerApiKeyScope.Delegate,
-                    Guid.NewGuid(),
-                    CreatedAtUtc: 2,
-                    LastUsedAtUtc: null);
+                _record = new McpServerApiKeyRecord
+                {
+                    Prefix = "xemcp_replacement",
+                    KeyHash = SHA256.HashData(Encoding.UTF8.GetBytes("xemcp_replacement-key")),
+                    Scope = (int)McpServerApiKeyScope.Delegate,
+                    GenerationId = Guid.NewGuid(),
+                    CreatedAtUtc = 2,
+                    LastUsedAtUtc = null
+                };
             }
 
             if (_record is null || _record.GenerationId != generationId)

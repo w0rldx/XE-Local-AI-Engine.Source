@@ -124,18 +124,21 @@ public sealed class GoldenConversationStore : IGoldenConversationStore
 
     private static GoldenConversationRecord ToRecord(GoldenConversation entity)
     {
-        return new GoldenConversationRecord(entity.Id,
-            entity.AgentDefinitionId,
-            entity.Title,
-            Decode(entity.InputTurns),
-            entity.Assertion is null ? null : Decode(entity.Assertion),
-            entity.Rubric is null ? null : Decode(entity.Rubric),
-            entity.Enabled,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            entity.Source,
-            entity.SourceMessageId,
-            entity.SourceConversationId);
+        return new GoldenConversationRecord
+        {
+            Id = entity.Id,
+            AgentDefinitionId = entity.AgentDefinitionId,
+            Title = entity.Title,
+            InputTurns = Decode(entity.InputTurns),
+            Assertion = entity.Assertion is null ? null : Decode(entity.Assertion),
+            Rubric = entity.Rubric is null ? null : Decode(entity.Rubric),
+            Enabled = entity.Enabled,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            Source = entity.Source,
+            SourceMessageId = entity.SourceMessageId,
+            SourceConversationId = entity.SourceConversationId
+        };
     }
 
     private static byte[]? EncodeOptional(string? value)

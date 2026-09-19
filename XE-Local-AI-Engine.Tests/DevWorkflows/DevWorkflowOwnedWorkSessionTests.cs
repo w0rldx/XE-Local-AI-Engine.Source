@@ -121,14 +121,17 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     {
         await using var scope = services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           WorkSessionEventTypes.CompletionRequested,
-                           Guid.NewGuid(),
-                           Outcome: null,
-                           JsonSerializer.Serialize(new
+                       .AppendEventAsync(new AppendWorkSessionEventCommand
+                       {
+                           SessionId = sessionId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           EventType = WorkSessionEventTypes.CompletionRequested,
+                           OperationId = Guid.NewGuid(),
+                           Outcome = null,
+                           DetailJson = JsonSerializer.Serialize(new
                            {
                                summary = "The node's objective is answered."
-                           })));
+                           })
+                       });
     }
 }

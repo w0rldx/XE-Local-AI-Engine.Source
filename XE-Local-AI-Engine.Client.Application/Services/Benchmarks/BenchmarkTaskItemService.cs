@@ -172,15 +172,18 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
             throw new BenchmarkValidationException($"A task item is either '{BenchmarkTaskItemKinds.Prompt}' or '{BenchmarkTaskItemKinds.Niah}'.");
         }
 
-        var input = new BenchmarkTaskItemInput(JsonSerializer.SerializeToUtf8Bytes(draft.Prompt),
-            kind,
-            string.IsNullOrWhiteSpace(draft.ReferenceAnswer)
+        var input = new BenchmarkTaskItemInput
+        {
+            PromptJson = JsonSerializer.SerializeToUtf8Bytes(draft.Prompt),
+            Kind = kind,
+            ReferenceAnswerJson = string.IsNullOrWhiteSpace(draft.ReferenceAnswer)
                 ? null
                 : (ReadOnlyMemory<byte>?)JsonSerializer.SerializeToUtf8Bytes(draft.ReferenceAnswer.Trim()),
-            Encode(draft.VerifierConfig),
-            Encode(draft.GeneratorConfig),
-            Id: itemId,
-            CountsTowardScore: draft.CountsTowardScore);
+            VerifierConfigJson = Encode(draft.VerifierConfig),
+            GeneratorConfigJson = Encode(draft.GeneratorConfig),
+            Id = itemId,
+            CountsTowardScore = draft.CountsTowardScore
+        };
 
         var children = string.Equals(kind, BenchmarkTaskItemKinds.Niah, StringComparison.Ordinal)
             ? await ExpandAsync(projectId, itemId, draft.GeneratorConfig, cancellationToken)
@@ -322,16 +325,18 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         return
         [
             .. BenchmarkNiahGenerator.Expand(itemId, config, project.ContextTokens)
-                                     .Select(generated => new BenchmarkTaskItemInput(JsonSerializer.SerializeToUtf8Bytes(generated.Prompt),
-                                         BenchmarkTaskItemKinds.NiahCase,
-                                         ReferenceAnswerJson: JsonSerializer.SerializeToUtf8Bytes(generated.ExpectedAnswer),
-                                         VerifierConfigJson: Encoding.UTF8.GetBytes(BenchmarkNiahGenerator.VerifierConfigJson(criterionId, generated.ExpectedAnswer)),
-                                         GeneratorConfigJson: JsonSerializer.SerializeToUtf8Bytes(generated.Case, BenchmarkNiahGenerator.SerializerOptions),
-                                         ParentItemId: itemId,
-
+                                     .Select(generated => new BenchmarkTaskItemInput
+                                     {
+                                         PromptJson = JsonSerializer.SerializeToUtf8Bytes(generated.Prompt),
+                                         Kind = BenchmarkTaskItemKinds.NiahCase,
+                                         ReferenceAnswerJson = JsonSerializer.SerializeToUtf8Bytes(generated.ExpectedAnswer),
+                                         VerifierConfigJson = Encoding.UTF8.GetBytes(BenchmarkNiahGenerator.VerifierConfigJson(criterionId, generated.ExpectedAnswer)),
+                                         GeneratorConfigJson = JsonSerializer.SerializeToUtf8Bytes(generated.Case, BenchmarkNiahGenerator.SerializerOptions),
+                                         ParentItemId = itemId,
                                          // Recall is a capability, not quality. The default keeps a 0-or-10 needle
                                          // score out of the project's rubric mean and leaves it on its own axis.
-                                         CountsTowardScore: config.CountsTowardScore))
+                                         CountsTowardScore = config.CountsTowardScore
+                                     })
         ];
     }
 

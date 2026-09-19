@@ -162,113 +162,131 @@ public sealed class DevWorkflowRunComposerTests
         new(Run(), nodeRuns, PendingDecisionCount: 0, BlockingGateNodeRunId: null);
 
     private static DevWorkflowRunSnapshot Run() =>
-        new(RunId,
-            WorkItemId: Guid.NewGuid(),
-            DefinitionId,
-            DefinitionVersion: 1,
-            "graph-hash",
-            GraphJson,
-            GraphRevision: 0,
-            DevWorkflowRunStatus.Running,
-            LastSequence: 14,
-            FailureClass: null,
-            TerminalReason: null,
-            StartedAtUtc: 11,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 20,
-            Version: 6);
+        new()
+        {
+            Id = RunId,
+            WorkItemId = Guid.NewGuid(),
+            DefinitionId = DefinitionId,
+            DefinitionVersion = 1,
+            DefinitionGraphHash = "graph-hash",
+            GraphJson = GraphJson,
+            GraphRevision = 0,
+            Status = DevWorkflowRunStatus.Running,
+            LastSequence = 14,
+            FailureClass = null,
+            TerminalReason = null,
+            StartedAtUtc = 11,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            Version = 6
+        };
 
     private static DevWorkflowNodeRunSnapshot NodeRun(Guid id, string nodeKey, DevWorkflowNodeType nodeType, DevWorkflowNodeRunStatus status) =>
-        new(id,
-            RunId,
-            nodeKey,
-            nodeType,
-            Attempt: 1,
-            MaxAttempts: 1,
-            SessionResumes: 0,
-            status,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 5,
-            WorkSessionId: null,
-            WorkSessionAvailable: false,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: null,
-            EndedAtUtc: null,
-            CreatedAtUtc: 10);
+        new()
+        {
+            Id = id,
+            RunId = RunId,
+            NodeKey = nodeKey,
+            NodeType = nodeType,
+            Attempt = 1,
+            MaxAttempts = 1,
+            SessionResumes = 0,
+            Status = status,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 5,
+            WorkSessionId = null,
+            WorkSessionAvailable = false,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = null,
+            EndedAtUtc = null,
+            CreatedAtUtc = 10
+        };
 
     private static DevWorkflowDefinitionSummary Definition(Guid id, string name) =>
-        new(id,
-            name,
-            "graph-hash",
-            NodeCount: 2,
-            DevWorkflowDefinitionSource.Manual,
-            SeedSlug: null,
-            Archived: false,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = id,
+            Name = name,
+            GraphHash = "graph-hash",
+            NodeCount = 2,
+            Source = DevWorkflowDefinitionSource.Manual,
+            SeedSlug = null,
+            Archived = false,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static DevWorkflowArtifactSnapshot Artifact(Guid id, bool isStale) =>
-        new(id,
-            RunId,
-            LineageId: Guid.NewGuid(),
-            "research",
-            ResearchNodeRunId,
-            "report.md",
-            Version: 1,
-            IsLatest: true,
-            DevWorkflowArtifactKind.Report,
-            "text/markdown",
-            "content-hash",
-            SizeBytes: 12,
-            IsValid: true,
-            isStale,
-            StaleSinceSequence: null,
-            StaleBecauseArtifactId: null,
-            StaleReason: null,
-            "managed://report.md",
-            Sequence: 3,
-            CreatedAtUtc: 5);
+        new()
+        {
+            Id = id,
+            RunId = RunId,
+            LineageId = Guid.NewGuid(),
+            ProducingNodeKey = "research",
+            ProducedByNodeRunId = ResearchNodeRunId,
+            Name = "report.md",
+            Version = 1,
+            IsLatest = true,
+            Kind = DevWorkflowArtifactKind.Report,
+            MediaType = "text/markdown",
+            ContentSha256 = "content-hash",
+            SizeBytes = 12,
+            IsValid = true,
+            IsStale = isStale,
+            StaleSinceSequence = null,
+            StaleBecauseArtifactId = null,
+            StaleReason = null,
+            ManagedReference = "managed://report.md",
+            Sequence = 3,
+            CreatedAtUtc = 5
+        };
 
     private static DevWorkflowDecisionSnapshot Decision(Guid nodeRunId, long sequence) =>
-        new(Guid.NewGuid(),
-            RunId,
-            nodeRunId,
-            Attempt: 1,
-            DevWorkflowDecisionKind.Approve,
-            Comment: null,
-            PayloadJson: null,
-            DecidedBySubject: null,
-            OperationId: Guid.NewGuid(),
-            sequence,
-            DecidedAtUtc: 6);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = RunId,
+            NodeRunId = nodeRunId,
+            Attempt = 1,
+            Decision = DevWorkflowDecisionKind.Approve,
+            Comment = null,
+            PayloadJson = null,
+            DecidedBySubject = null,
+            OperationId = Guid.NewGuid(),
+            Sequence = sequence,
+            DecidedAtUtc = 6
+        };
 
     private static AgentDefinitionRecord Agent() =>
-        new(AgentId,
-            "Researcher",
-            Description: null,
-            "Do the research.",
-            ModelProfile: "qwen",
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        new()
+        {
+            Id = AgentId,
+            Name = "Researcher",
+            Description = null,
+            Instructions = "Do the research.",
+            ModelProfile = "qwen",
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
 
     private static WorkSessionDetail Session() =>
         new(SessionId,

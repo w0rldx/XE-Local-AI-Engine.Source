@@ -138,14 +138,17 @@ public sealed class MathematicianAgentSeeder : IHostedService
             [ComputeToolDefinition.ToolName] = true
         };
 
-        return new AgentDefinitionInput(AgentDefaults.MathematicianAgentName,
-            Description: "Verifies mathematical claims by running them in a sandboxed Python interpreter before asserting them.",
-            Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            allowedToolNames,
-            toolApprovals,
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = AgentDefaults.MathematicianAgentName,
+            Description = "Verifies mathematical claims by running them in a sandboxed Python interpreter before asserting them.",
+            Instructions = Instructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = allowedToolNames,
+            ToolApprovals = toolApprovals,
+            OrchestrationTopologyJson = null
+        };
     }
 }

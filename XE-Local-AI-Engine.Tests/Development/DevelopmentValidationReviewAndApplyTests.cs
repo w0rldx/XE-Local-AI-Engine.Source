@@ -189,18 +189,24 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
              .Returns(repositoryBinding);
 
         _ = await coordinator.CreateProjectAsync(seed);
-        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                         Guid.NewGuid(),
-                                         DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1));
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var coderAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 coderAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 ready.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
         _ = await coder.RunAsync(coderAttemptId, repositoryBinding);
 
         var validation = await validator.RunAsync(seed.TaskId, repositoryBinding);
@@ -208,13 +214,16 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
         var inReview = await store.GetTaskAsync(seed.TaskId);
         var reviewerAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 reviewerAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Reviewer,
-                                 "reviewer-local",
-                                 "local",
-                                 inReview.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = reviewerAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Reviewer,
+            ModelId = "reviewer-local",
+            Provider = "local",
+            ExpectedTaskVersion = inReview.Version
+        });
         var review = await reviewer.RunAsync(reviewerAttemptId, repositoryBinding);
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, review.Disposition);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, review.TaskStatus);
@@ -247,18 +256,24 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed);
-        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                         Guid.NewGuid(),
-                                         DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1));
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var coderAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 coderAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 ready.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
         _ = await coder.RunAsync(coderAttemptId, repositoryBinding);
         var validation = await validator.RunAsync(seed.TaskId, repositoryBinding);
 
@@ -269,13 +284,16 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             "a failed gate hands the failure to the coder; leaving it InProgress asked for the same validation again.");
         AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and it spends a round, which is what bounds the rework loop.");
         AssertEx.Contains(AssertEx.NotNull(task.BlockedReason), "Deterministic validation failed", StringComparison.Ordinal);
-        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                          Guid.NewGuid(),
-                          Guid.NewGuid(),
-                          DevelopmentAttemptRole.Reviewer,
-                          "reviewer-local",
-                          "local",
-                          task.Version)));
+        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Reviewer,
+            ModelId = "reviewer-local",
+            Provider = "local",
+            ExpectedTaskVersion = task.Version
+        }));
     }
 
     /// <summary>
@@ -298,18 +316,24 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed);
-        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                         Guid.NewGuid(),
-                                         DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1));
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var coderAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 coderAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 ready.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
 
         // The coder attempt itself succeeds: writing a manifest is not a security violation, so it produces evidence
         // and the gate is what refuses it.
@@ -344,28 +368,37 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed);
-        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                         Guid.NewGuid(),
-                                         DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1));
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var completedCoderAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 completedCoderAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 ready.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = completedCoderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
                        .RunAsync(completedCoderAttemptId, repositoryBinding);
         var task = await store.GetTaskAsync(seed.TaskId);
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 Guid.NewGuid(),
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 task.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = task.Version
+        });
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
                                                                                      .RunAsync(seed.TaskId, repositoryBinding));
@@ -563,42 +596,66 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var seed = Seed(repository);
 
         _ = await coordinator.CreateProjectAsync(seed);
-        var current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                           Guid.NewGuid(),
-                                           DevelopmentTaskStatus.Ready,
-                                           ExpectedTaskVersion: 1));
-        current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                       Guid.NewGuid(),
-                                       DevelopmentTaskStatus.InProgress,
-                                       current.Version));
+        var current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
+        current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.InProgress,
+            ExpectedTaskVersion = current.Version
+        });
         for (var round = 0; round < 3; round++)
         {
-            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                           Guid.NewGuid(),
-                                           DevelopmentTaskStatus.Validation,
-                                           current.Version));
-            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                           Guid.NewGuid(),
-                                           DevelopmentTaskStatus.InReview,
-                                           current.Version));
-            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                           Guid.NewGuid(),
-                                           DevelopmentTaskStatus.ChangesRequested,
-                                           current.Version));
-            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                           Guid.NewGuid(),
-                                           DevelopmentTaskStatus.InProgress,
-                                           current.Version));
+            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.Validation,
+                ExpectedTaskVersion = current.Version
+            });
+            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.InReview,
+                ExpectedTaskVersion = current.Version
+            });
+            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+                ExpectedTaskVersion = current.Version
+            });
+            current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = seed.TaskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = DevelopmentTaskStatus.InProgress,
+                ExpectedTaskVersion = current.Version
+            });
         }
 
-        current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                       Guid.NewGuid(),
-                                       DevelopmentTaskStatus.Validation,
-                                       current.Version));
-        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                          Guid.NewGuid(),
-                          DevelopmentTaskStatus.InReview,
-                          current.Version)));
+        current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Validation,
+            ExpectedTaskVersion = current.Version
+        });
+        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.InReview,
+            ExpectedTaskVersion = current.Version
+        }));
         var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.Validation, task.Status);
         AssertEx.Equal(expected: 3, task.CurrentReviewRound);
@@ -1121,13 +1178,16 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
         // A genuinely new implementation, which nothing has tried to validate yet.
         var second = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 second,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 (await store.GetTaskAsync(seed.TaskId)).Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = second,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = (await store.GetTaskAsync(seed.TaskId)).Version
+        });
         _ = await coder.RunAsync(second, repositoryBinding);
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding));
 
@@ -1205,18 +1265,24 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed);
-        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                         Guid.NewGuid(),
-                                         DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1));
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var coderAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 coderAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 ready.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
                        .RunAsync(coderAttemptId, repositoryBinding);
 
@@ -1299,18 +1365,24 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
         _ = await coordinator.CreateProjectAsync(seed);
-        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                         Guid.NewGuid(),
-                                         DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1));
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Ready,
+            ExpectedTaskVersion = 1
+        });
         var coderAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 coderAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "coder-local",
-                                 "local",
-                                 ready.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = coderAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "coder-local",
+            Provider = "local",
+            ExpectedTaskVersion = ready.Version
+        });
         _ = await services.GetRequiredService<IDevelopmentCoderAttemptRunner>()
                           .RunAsync(coderAttemptId, repositoryBinding);
         var validation = await services.GetRequiredService<IDevelopmentValidationRunner>()
@@ -1318,13 +1390,16 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.True(validation.Passed);
         var inReview = await store.GetTaskAsync(seed.TaskId);
         var reviewerAttemptId = Guid.NewGuid();
-        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                 reviewerAttemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Reviewer,
-                                 "reviewer-local",
-                                 "local",
-                                 inReview.Version));
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = reviewerAttemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Reviewer,
+            ModelId = "reviewer-local",
+            Provider = "local",
+            ExpectedTaskVersion = inReview.Version
+        });
         var review = await services.GetRequiredService<IDevelopmentReviewerAttemptRunner>()
                                    .RunAsync(reviewerAttemptId, repositoryBinding);
         return (seed, reviewerAttemptId, review);
@@ -1420,25 +1495,28 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var resolved = profile
                        ?? DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit,
                            buildTarget: null);
-        return new DevelopmentCreateProjectCommand(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Implement a bounded feature.",
-            SelectedFolderId,
-            DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical),
-            "main",
-            "Add feature file",
-            "Create feature.txt.",
-            "[\"feature.txt exists\"]",
-            DevelopmentEgressPolicy.LocalOnly,
-            CoderModelId: "coder-local",
-            ReviewerModelId: "reviewer-local",
-            TrustedRepositoryAcknowledged: true,
-            TrustedRepositoryPolicyVersion: DevelopmentTrustPolicy.CurrentVersion,
-            TrustedRepositoryAcknowledgedAtUtc: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            MaxTokens: 2048,
-            MaxDurationSeconds: maxDurationSeconds,
-            CommandProfileJson: Encoding.UTF8.GetString(resolved.ToCanonicalUtf8()));
+        return new DevelopmentCreateProjectCommand
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Objective = "Implement a bounded feature.",
+            SelectedFolderId = SelectedFolderId,
+            RepositoryIdentityHash = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical),
+            BaseBranch = "main",
+            Title = "Add feature file",
+            Requirements = "Create feature.txt.",
+            AcceptanceCriteriaJson = "[\"feature.txt exists\"]",
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            CoderModelId = "coder-local",
+            ReviewerModelId = "reviewer-local",
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MaxTokens = 2048,
+            MaxDurationSeconds = maxDurationSeconds,
+            CommandProfileJson = Encoding.UTF8.GetString(resolved.ToCanonicalUtf8())
+        };
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentCreateProjectCommand seed, string repository) =>

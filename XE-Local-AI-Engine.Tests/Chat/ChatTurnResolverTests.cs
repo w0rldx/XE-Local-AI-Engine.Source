@@ -289,19 +289,22 @@ public sealed class ChatTurnResolverTests
 
     private static AgentDefinitionRecord CreatePinningDefinition(Guid id, string pinnedModel)
     {
-        return new AgentDefinitionRecord(id,
-            "Agent",
-            Description: null,
-            "Persona.",
-            pinnedModel,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = id,
+            Name = "Agent",
+            Description = null,
+            Instructions = "Persona.",
+            ModelProfile = pinnedModel,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static ChatTurnResolver CreateSut(IAgentDefinitionResolver resolver,

@@ -101,7 +101,7 @@ internal sealed partial class AgentWorkSessionStore
                     }
 
                     updated = session;
-                    return Task.FromResult(new MutationOutcome("SessionUpdated", session.Status.ToString(), DetailJson: null));
+                    return Task.FromResult(new MutationOutcome { EventType = "SessionUpdated", Outcome = session.Status.ToString(), DetailJson = null });
                 },
                 cancellationToken);
         return Snapshot(updated!);
@@ -125,7 +125,7 @@ internal sealed partial class AgentWorkSessionStore
 
                     ApplyStatus(session, command.TargetStatus, command.CurrentTaskId);
                     updated = session;
-                    return Task.FromResult(new MutationOutcome("SessionStatusChanged", command.TargetStatus.ToString(), ReasonDetail(command.SanitizedReason)));
+                    return Task.FromResult(new MutationOutcome { EventType = "SessionStatusChanged", Outcome = command.TargetStatus.ToString(), DetailJson = ReasonDetail(command.SanitizedReason) });
                 },
                 cancellationToken);
         return Snapshot(updated!);

@@ -122,12 +122,15 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
                                       .CreateConversationAsync(new NodeChatCreateConversationRequest(title, UserId: null, CreatedAtUtc: 0), cancellationToken);
         var created = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                                 .CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
-                                         conversation.ConversationId,
-                                         agentDefinitionId,
-                                         AgentWorkSessionKind.Workflow,
-                                         title,
-                                         objective),
+                                 .CreateAsync(new CreateWorkSessionCommand
+                                 {
+                                     SessionId = Guid.NewGuid(),
+                                     ConversationId = conversation.ConversationId,
+                                     AgentDefinitionId = agentDefinitionId,
+                                     Kind = AgentWorkSessionKind.Workflow,
+                                     Title = title,
+                                     Objective = objective
+                                 },
                                      cancellationToken);
         lock (_gate)
         {
@@ -193,7 +196,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target), cancellationToken);
+        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand { SessionId = sessionId, ExpectedVersion = WorkSessionVersions.Any, TargetStatus = target }, cancellationToken);
         return ToDetail(moved);
     }
 

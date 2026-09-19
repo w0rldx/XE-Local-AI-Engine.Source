@@ -58,7 +58,7 @@ internal sealed partial class DevWorkflowStore
                                    .Where(entity => entity.DevelopmentTaskId != null && developmentTaskIds.Contains(entity.DevelopmentTaskId.Value))
                                    .OrderByDescending(entity => entity.CreatedAtUtc)
                                    .ThenByDescending(entity => entity.Id)
-                                   .Select(entity => new DevelopmentTaskRunRow(entity.DevelopmentTaskId!.Value, entity.RunId))
+                                   .Select(entity => new DevelopmentTaskRunRow { DevelopmentTaskId = entity.DevelopmentTaskId!.Value, RunId = entity.RunId })
                                    .ToListAsync(cancellationToken);
 
         return rows.GroupBy(static row => row.DevelopmentTaskId)
@@ -152,15 +152,18 @@ internal sealed partial class DevWorkflowStore
                                      .ToListAsync(cancellationToken);
         return
         [
-            .. events.Select(entity => new DevWorkflowRunEventSnapshot(entity.Id,
-                entity.RunId,
-                entity.NodeRunId,
-                entity.Sequence,
-                entity.EventType,
-                TextOrNull(entity.DetailJson),
-                entity.OperationId,
-                entity.Outcome,
-                entity.OccurredAtUtc))
+            .. events.Select(entity => new DevWorkflowRunEventSnapshot
+            {
+                Id = entity.Id,
+                RunId = entity.RunId,
+                NodeRunId = entity.NodeRunId,
+                Sequence = entity.Sequence,
+                EventType = entity.EventType,
+                DetailJson = TextOrNull(entity.DetailJson),
+                OperationId = entity.OperationId,
+                Outcome = entity.Outcome,
+                OccurredAtUtc = entity.OccurredAtUtc
+            })
         ];
     }
 
@@ -196,83 +199,97 @@ internal sealed partial class DevWorkflowStore
         artifacts.GroupBy(entity => entity.LineageId).ToDictionary(group => group.Key, group => group.Max(entity => entity.Version));
 
     private static DevWorkflowNodeRunSnapshot NodeRunSnapshot(DevWorkflowNodeRun nodeRun, IReadOnlySet<Guid> availableWorkSessions) =>
-        new(nodeRun.Id,
-            nodeRun.RunId,
-            nodeRun.NodeKey,
-            nodeRun.NodeType,
-            nodeRun.Attempt,
-            nodeRun.MaxAttempts,
-            nodeRun.SessionResumes,
-            nodeRun.Status,
-            nodeRun.QueueReason,
-            nodeRun.PendingDecisionKind,
-            nodeRun.Sequence,
-            nodeRun.WorkSessionId,
-            nodeRun.WorkSessionId is { } sessionId && availableWorkSessions.Contains(sessionId),
-            nodeRun.AgentDefinitionId,
-            nodeRun.DevelopmentProjectId,
-            nodeRun.DevelopmentTaskId,
-            TextOrNull(nodeRun.InputJson),
-            TextOrNull(nodeRun.OutputJson),
-            TextOrNull(nodeRun.PolicyResolutionJson),
-            nodeRun.MaterializedFromNodeRunId,
-            nodeRun.MaterializationIndex,
-            nodeRun.FailureClass,
-            nodeRun.TerminalReason,
-            nodeRun.QueuedAtUtc,
-            nodeRun.StartedAtUtc,
-            nodeRun.EndedAtUtc,
-            nodeRun.CreatedAtUtc,
-            nodeRun.InputTokens,
-            nodeRun.OutputTokens,
-            nodeRun.ReasoningTokens,
-            nodeRun.EstimatedInputTokens,
-            nodeRun.ProviderCalls,
-            nodeRun.ToolCalls,
-            nodeRun.ToolSchemaTokens,
-            nodeRun.ToolNamesJson,
-            nodeRun.AgentTurnMs,
-            nodeRun.ServedModelName,
-            nodeRun.RouteJson,
-            nodeRun.WorkSessionSteps,
-            nodeRun.ModelReadinessMs,
-            nodeRun.VramFreeAtLoadBytes,
-            nodeRun.VramAdmittedBytes);
+        new()
+        {
+            Id = nodeRun.Id,
+            RunId = nodeRun.RunId,
+            NodeKey = nodeRun.NodeKey,
+            NodeType = nodeRun.NodeType,
+            Attempt = nodeRun.Attempt,
+            MaxAttempts = nodeRun.MaxAttempts,
+            SessionResumes = nodeRun.SessionResumes,
+            Status = nodeRun.Status,
+            QueueReason = nodeRun.QueueReason,
+            PendingDecisionKind = nodeRun.PendingDecisionKind,
+            Sequence = nodeRun.Sequence,
+            WorkSessionId = nodeRun.WorkSessionId,
+            WorkSessionAvailable = nodeRun.WorkSessionId is { } sessionId && availableWorkSessions.Contains(sessionId),
+            AgentDefinitionId = nodeRun.AgentDefinitionId,
+            DevelopmentProjectId = nodeRun.DevelopmentProjectId,
+            DevelopmentTaskId = nodeRun.DevelopmentTaskId,
+            InputJson = TextOrNull(nodeRun.InputJson),
+            OutputJson = TextOrNull(nodeRun.OutputJson),
+            PolicyResolutionJson = TextOrNull(nodeRun.PolicyResolutionJson),
+            MaterializedFromNodeRunId = nodeRun.MaterializedFromNodeRunId,
+            MaterializationIndex = nodeRun.MaterializationIndex,
+            FailureClass = nodeRun.FailureClass,
+            TerminalReason = nodeRun.TerminalReason,
+            QueuedAtUtc = nodeRun.QueuedAtUtc,
+            StartedAtUtc = nodeRun.StartedAtUtc,
+            EndedAtUtc = nodeRun.EndedAtUtc,
+            CreatedAtUtc = nodeRun.CreatedAtUtc,
+            InputTokens = nodeRun.InputTokens,
+            OutputTokens = nodeRun.OutputTokens,
+            ReasoningTokens = nodeRun.ReasoningTokens,
+            EstimatedInputTokens = nodeRun.EstimatedInputTokens,
+            ProviderCalls = nodeRun.ProviderCalls,
+            ToolCalls = nodeRun.ToolCalls,
+            ToolSchemaTokens = nodeRun.ToolSchemaTokens,
+            ToolNamesJson = nodeRun.ToolNamesJson,
+            AgentTurnMs = nodeRun.AgentTurnMs,
+            ServedModelName = nodeRun.ServedModelName,
+            RouteJson = nodeRun.RouteJson,
+            WorkSessionSteps = nodeRun.WorkSessionSteps,
+            ModelReadinessMs = nodeRun.ModelReadinessMs,
+            VramFreeAtLoadBytes = nodeRun.VramFreeAtLoadBytes,
+            VramAdmittedBytes = nodeRun.VramAdmittedBytes
+        };
 
     private static DevWorkflowArtifactSnapshot ArtifactSnapshot(DevWorkflowArtifact artifact, IReadOnlyDictionary<Guid, int> latestVersions) =>
-        new(artifact.Id,
-            artifact.RunId,
-            artifact.LineageId,
-            artifact.ProducingNodeKey,
-            artifact.ProducedByNodeRunId,
-            artifact.Name,
-            artifact.Version,
-            latestVersions.TryGetValue(artifact.LineageId, out var latest) && latest == artifact.Version,
-            artifact.Kind,
-            artifact.MediaType,
-            artifact.ContentSha256,
-            artifact.SizeBytes,
-            artifact.IsValid,
-            artifact.IsStale,
-            artifact.StaleSinceSequence,
-            artifact.StaleBecauseArtifactId,
-            artifact.StaleReason,
-            artifact.ManagedReference,
-            artifact.Sequence,
-            artifact.CreatedAtUtc);
+        new()
+        {
+            Id = artifact.Id,
+            RunId = artifact.RunId,
+            LineageId = artifact.LineageId,
+            ProducingNodeKey = artifact.ProducingNodeKey,
+            ProducedByNodeRunId = artifact.ProducedByNodeRunId,
+            Name = artifact.Name,
+            Version = artifact.Version,
+            IsLatest = latestVersions.TryGetValue(artifact.LineageId, out var latest) && latest == artifact.Version,
+            Kind = artifact.Kind,
+            MediaType = artifact.MediaType,
+            ContentSha256 = artifact.ContentSha256,
+            SizeBytes = artifact.SizeBytes,
+            IsValid = artifact.IsValid,
+            IsStale = artifact.IsStale,
+            StaleSinceSequence = artifact.StaleSinceSequence,
+            StaleBecauseArtifactId = artifact.StaleBecauseArtifactId,
+            StaleReason = artifact.StaleReason,
+            ManagedReference = artifact.ManagedReference,
+            Sequence = artifact.Sequence,
+            CreatedAtUtc = artifact.CreatedAtUtc
+        };
 
     private static DevWorkflowDecisionSnapshot DecisionSnapshot(DevWorkflowDecision decision) =>
-        new(decision.Id,
-            decision.RunId,
-            decision.NodeRunId,
-            decision.Attempt,
-            decision.Decision,
-            TextOrNull(decision.Comment),
-            TextOrNull(decision.PayloadJson),
-            decision.DecidedBySubject,
-            decision.OperationId,
-            decision.Sequence,
-            decision.DecidedAtUtc);
+        new()
+        {
+            Id = decision.Id,
+            RunId = decision.RunId,
+            NodeRunId = decision.NodeRunId,
+            Attempt = decision.Attempt,
+            Decision = decision.Decision,
+            Comment = TextOrNull(decision.Comment),
+            PayloadJson = TextOrNull(decision.PayloadJson),
+            DecidedBySubject = decision.DecidedBySubject,
+            OperationId = decision.OperationId,
+            Sequence = decision.Sequence,
+            DecidedAtUtc = decision.DecidedAtUtc
+        };
 
-    private sealed record DevelopmentTaskRunRow(Guid DevelopmentTaskId, Guid RunId);
+    private sealed record DevelopmentTaskRunRow
+    {
+        public required Guid DevelopmentTaskId { get; init; }
+
+        public required Guid RunId { get; init; }
+    }
 }

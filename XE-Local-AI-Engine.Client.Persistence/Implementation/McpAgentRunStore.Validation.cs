@@ -167,34 +167,64 @@ public sealed partial class McpAgentRunStore
     private static byte[]? GetNullableBytes(SqliteDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : (byte[])reader.GetValue(ordinal);
 
-    private sealed record McpAgentRunRow(
-        Guid RequestId,
-        byte[] RequestFingerprint,
-        int StoredAccountingVersion,
-        McpAgentRunStatus Status,
-        long Version,
-        Guid? ClaimToken,
-        McpAgentRunStopReason StopReason,
-        long? StopRequestedAtUtc,
-        Guid? AgentDefinitionId,
-        long? AgentDefinitionVersion,
-        string? ModelId,
-        string? ModelOverrideId,
-        Guid? WorkspaceId,
-        bool IsAgenticAutoApprove,
-        string? RequestingKeyPrefix,
-        byte[]? BindingFingerprint,
-        byte[]? TaskPayload,
-        byte[]? InstructionsPayload,
-        byte[]? ResultPayload,
-        byte[]? DisplayPayload,
-        string? FailureCode,
-        long ReservedActivePayloadBytes,
-        long ActivePayloadBytes,
-        long TombstoneLogicalBytes,
-        long CreatedAtUtc,
-        long? ClaimedAtUtc,
-        long? CompletedAtUtc,
-        long? PayloadExpiresAtUtc,
-        long? CompactedAtUtc);
+    private sealed record McpAgentRunRow
+    {
+        public required Guid RequestId { get; init; }
+
+        public required byte[] RequestFingerprint { get; init; }
+
+        public required int StoredAccountingVersion { get; init; }
+
+        public required McpAgentRunStatus Status { get; init; }
+
+        public required long Version { get; init; }
+
+        public required Guid? ClaimToken { get; init; }
+
+        public required McpAgentRunStopReason StopReason { get; init; }
+
+        public required long? StopRequestedAtUtc { get; init; }
+
+        public required Guid? AgentDefinitionId { get; init; }
+
+        public required long? AgentDefinitionVersion { get; init; }
+
+        public required string? ModelId { get; init; }
+
+        public required string? ModelOverrideId { get; init; }
+
+        public required Guid? WorkspaceId { get; init; }
+
+        public required bool IsAgenticAutoApprove { get; init; }
+
+        public required string? RequestingKeyPrefix { get; init; }
+
+        public required byte[]? BindingFingerprint { get; init; }
+
+        public required byte[]? TaskPayload { get; init; }
+
+        public required byte[]? InstructionsPayload { get; init; }
+
+        public required byte[]? ResultPayload { get; init; }
+
+        public required byte[]? DisplayPayload { get; init; }
+
+        public required string? FailureCode { get; init; }
+
+        public required long ReservedActivePayloadBytes { get; init; }
+
+        public required long ActivePayloadBytes { get; init; }
+
+        public required long TombstoneLogicalBytes { get; init; }
+
+        public required long CreatedAtUtc { get; init; }
+
+        public required long? ClaimedAtUtc { get; init; }
+
+        public required long? CompletedAtUtc { get; init; }
+
+        public required long? PayloadExpiresAtUtc { get; init; }
+
+        public required long? CompactedAtUtc { get; init; }
+    }
 }

@@ -222,13 +222,16 @@ public sealed class InferenceProfileService : IInferenceProfileService
         }
 
         var startedAtUtc = NowUnixMs();
-        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId: profile.ModelName,
-                Operation: ModelFitOperation.Benchmark,
-                UseCase: null,
-                ProviderName: ProviderName,
-                ModelName: profile.ModelName,
-                Status: ModelFitRunStatus.Running,
-                StartedAtUtc: startedAtUtc),
+        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput
+        {
+            ApprovedImageId = profile.ModelName,
+            Operation = ModelFitOperation.Benchmark,
+            UseCase = null,
+            ProviderName = ProviderName,
+            ModelName = profile.ModelName,
+            Status = ModelFitRunStatus.Running,
+            StartedAtUtc = startedAtUtc
+        },
             ct);
 
         var spec = InferenceBenchmarkSpec.Golden(profile.Backend, profile.CtxSize, _benchmarkVramAdmission) with
@@ -433,24 +436,27 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 draft?.FlashAttn ?? false),
             ct);
 
-        return new InferenceProfileInput(MachineKey: machineKey,
-            ModelName: modelName,
-            Role: (int)role,
-            Backend: backend,
-            LlamacppBuild: build,
-            Quant: quant,
-            CtxSize: ctxSize,
-            NGpuLayers: draft?.NGpuLayers,
-            TensorSplit: draft?.TensorSplit,
-            OverrideTensor: draft?.OverrideTensor,
-            KvTypeK: draft?.KvTypeK,
-            KvTypeV: draft?.KvTypeV,
-            FlashAttn: draft?.FlashAttn ?? false,
-            NParams: metadata.ParamCount,
-            IsMoe: metadata.IsMoe,
-            ExpertCount: metadata.ExpertCount,
-            LaunchPolicyFingerprintVersion: fingerprint.Version,
-            LaunchPolicyFingerprint: fingerprint.Value);
+        return new InferenceProfileInput
+        {
+            MachineKey = machineKey,
+            ModelName = modelName,
+            Role = (int)role,
+            Backend = backend,
+            LlamacppBuild = build,
+            Quant = quant,
+            CtxSize = ctxSize,
+            NGpuLayers = draft?.NGpuLayers,
+            TensorSplit = draft?.TensorSplit,
+            OverrideTensor = draft?.OverrideTensor,
+            KvTypeK = draft?.KvTypeK,
+            KvTypeV = draft?.KvTypeV,
+            FlashAttn = draft?.FlashAttn ?? false,
+            NParams = metadata.ParamCount,
+            IsMoe = metadata.IsMoe,
+            ExpertCount = metadata.ExpertCount,
+            LaunchPolicyFingerprintVersion = fingerprint.Version,
+            LaunchPolicyFingerprint = fingerprint.Value
+        };
     }
 
     private static ResolvedLaunchArguments BuildReplay(InferenceProfileRecord profile)
@@ -466,41 +472,44 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
     private static ModelFitBenchmarkInput MapBenchmarkInput(InferenceProfileRecord profile, InferenceBenchmarkMetrics metrics)
     {
-        return new ModelFitBenchmarkInput(ModelName: profile.ModelName,
-            ProviderName: ProviderName,
-            TokensPerSecond: metrics.TokensPerSecond,
-            TtftMs: metrics.TtftMs,
-            TotalLatencyMs: metrics.TotalLatencyMs,
-            Runs: metrics.Runs,
-            RawJson: metrics.RawJson,
-            DiagnosticsJson: metrics.DiagnosticsJson,
-            PpTokensPerSecond: metrics.PpTokensPerSecond,
-            CacheHitRate: metrics.CacheHitRate,
-            ToolLoopMs: metrics.ToolLoopMs,
-            VramLoadBytes: metrics.VramLoadBytes,
-            VramAfterBytes: metrics.VramAfterBytes,
-            GlobalFreeVramLoadBytes: metrics.GlobalFreeVramLoadBytes,
-            GlobalFreeVramAfterBytes: metrics.GlobalFreeVramAfterBytes,
-            ProcessBudgetVramLoadBytes: metrics.ProcessBudgetVramLoadBytes,
-            ProcessBudgetVramAfterBytes: metrics.ProcessBudgetVramAfterBytes,
-            MinimumGlobalFreeVramBytes: metrics.MinimumGlobalFreeVramBytes,
-            MinimumProcessBudgetVramBytes: metrics.MinimumProcessBudgetVramBytes,
-            PeakProcessRamBytes: metrics.PeakProcessRamBytes,
-            ExternalPressureDetected: metrics.ExternalPressureDetected,
-            LlamacppBuild: profile.LlamacppBuild,
-            Quant: profile.Quant,
-            CtxSize: profile.CtxSize,
-            KvType: profile.KvTypeK,
-            Backend: profile.Backend,
-            MachineKey: profile.MachineKey,
-            NGpuLayers: profile.NGpuLayers,
-            TensorSplit: profile.TensorSplit,
-            OverrideTensor: profile.OverrideTensor,
-            KvTypeV: profile.KvTypeV,
-            FlashAttn: profile.FlashAttn,
-            ProfileId: profile.Id,
-            LaunchPolicyFingerprintVersion: profile.LaunchPolicyFingerprintVersion,
-            LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
+        return new ModelFitBenchmarkInput
+        {
+            ModelName = profile.ModelName,
+            ProviderName = ProviderName,
+            TokensPerSecond = metrics.TokensPerSecond,
+            TtftMs = metrics.TtftMs,
+            TotalLatencyMs = metrics.TotalLatencyMs,
+            Runs = metrics.Runs,
+            RawJson = metrics.RawJson,
+            DiagnosticsJson = metrics.DiagnosticsJson,
+            PpTokensPerSecond = metrics.PpTokensPerSecond,
+            CacheHitRate = metrics.CacheHitRate,
+            ToolLoopMs = metrics.ToolLoopMs,
+            VramLoadBytes = metrics.VramLoadBytes,
+            VramAfterBytes = metrics.VramAfterBytes,
+            GlobalFreeVramLoadBytes = metrics.GlobalFreeVramLoadBytes,
+            GlobalFreeVramAfterBytes = metrics.GlobalFreeVramAfterBytes,
+            ProcessBudgetVramLoadBytes = metrics.ProcessBudgetVramLoadBytes,
+            ProcessBudgetVramAfterBytes = metrics.ProcessBudgetVramAfterBytes,
+            MinimumGlobalFreeVramBytes = metrics.MinimumGlobalFreeVramBytes,
+            MinimumProcessBudgetVramBytes = metrics.MinimumProcessBudgetVramBytes,
+            PeakProcessRamBytes = metrics.PeakProcessRamBytes,
+            ExternalPressureDetected = metrics.ExternalPressureDetected,
+            LlamacppBuild = profile.LlamacppBuild,
+            Quant = profile.Quant,
+            CtxSize = profile.CtxSize,
+            KvType = profile.KvTypeK,
+            Backend = profile.Backend,
+            MachineKey = profile.MachineKey,
+            NGpuLayers = profile.NGpuLayers,
+            TensorSplit = profile.TensorSplit,
+            OverrideTensor = profile.OverrideTensor,
+            KvTypeV = profile.KvTypeV,
+            FlashAttn = profile.FlashAttn,
+            ProfileId = profile.Id,
+            LaunchPolicyFingerprintVersion = profile.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint = profile.LaunchPolicyFingerprint
+        };
     }
 
     // A benchmark justifies a freeze only when every launch-affecting arg it recorded still matches the profile's

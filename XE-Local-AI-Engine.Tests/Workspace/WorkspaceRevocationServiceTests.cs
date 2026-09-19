@@ -18,7 +18,7 @@ public sealed class WorkspaceRevocationServiceTests
         var preparation = Substitute.For<IWorkspaceRevocationPreparation>();
         var session = Substitute.For<IWorkspaceRevocationSession>();
         var id = Guid.NewGuid();
-        var record = new SelectedFolderRecord(id, "repo", "/trusted/repo", SelectedFolderMode.ReadOnlyMount, CreatedAtUtc: 1);
+        var record = new SelectedFolderRecord { Id = id, Alias = "repo", HostPath = "/trusted/repo", Mode = SelectedFolderMode.ReadOnlyMount, CreatedAtUtc = 1 };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(record);
         store.RevokeAsync(id, Arg.Any<CancellationToken>()).Returns(true);
         preparation.PrepareAsync(Arg.Any<ResolvedSelectedFolder>(), Arg.Any<CancellationToken>()).Returns(session);
@@ -44,7 +44,7 @@ public sealed class WorkspaceRevocationServiceTests
         var preparation = Substitute.For<IWorkspaceRevocationPreparation>();
         var id = Guid.NewGuid();
         store.GetByIdAsync(id, Arg.Any<CancellationToken>())
-             .Returns(new SelectedFolderRecord(id, "repo", "/trusted/repo", SelectedFolderMode.ReadOnlyMount, CreatedAtUtc: 1));
+             .Returns(new SelectedFolderRecord { Id = id, Alias = "repo", HostPath = "/trusted/repo", Mode = SelectedFolderMode.ReadOnlyMount, CreatedAtUtc = 1 });
         preparation.PrepareAsync(Arg.Any<ResolvedSelectedFolder>(), Arg.Any<CancellationToken>())
                    .Returns(Task.FromException<IWorkspaceRevocationSession>(new InvalidOperationException("workspace clear failed")));
         var service = new WorkspaceRevocationService(store, preparation, NullLogger<WorkspaceRevocationService>.Instance);
@@ -64,7 +64,7 @@ public sealed class WorkspaceRevocationServiceTests
         var commit = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var id = Guid.NewGuid();
         store.GetByIdAsync(id, Arg.Any<CancellationToken>())
-             .Returns(new SelectedFolderRecord(id, "repo", "/trusted/repo", SelectedFolderMode.ReadOnlyMount, CreatedAtUtc: 1));
+             .Returns(new SelectedFolderRecord { Id = id, Alias = "repo", HostPath = "/trusted/repo", Mode = SelectedFolderMode.ReadOnlyMount, CreatedAtUtc = 1 });
         store.RevokeAsync(id, Arg.Any<CancellationToken>()).Returns(commit.Task);
         preparation.PrepareAsync(Arg.Any<ResolvedSelectedFolder>(), Arg.Any<CancellationToken>()).Returns(session);
         var service = new WorkspaceRevocationService(store, preparation, NullLogger<WorkspaceRevocationService>.Instance);
@@ -86,7 +86,7 @@ public sealed class WorkspaceRevocationServiceTests
         var session = Substitute.For<IWorkspaceRevocationSession>();
         var id = Guid.NewGuid();
         store.GetByIdAsync(id, Arg.Any<CancellationToken>())
-             .Returns(new SelectedFolderRecord(id, "repo", "/trusted/repo", SelectedFolderMode.ReadOnlyMount, CreatedAtUtc: 1));
+             .Returns(new SelectedFolderRecord { Id = id, Alias = "repo", HostPath = "/trusted/repo", Mode = SelectedFolderMode.ReadOnlyMount, CreatedAtUtc = 1 });
         store.RevokeAsync(id, Arg.Any<CancellationToken>())
              .Returns(Task.FromException<bool>(new InvalidOperationException("commit failed")));
         preparation.PrepareAsync(Arg.Any<ResolvedSelectedFolder>(), Arg.Any<CancellationToken>()).Returns(session);
@@ -102,7 +102,7 @@ public sealed class WorkspaceRevocationServiceTests
     public async Task RevokeAsync_CompetingRevocationRemainsBusyUntilFirstCommitAndSessionDisposal()
     {
         var id = Guid.NewGuid();
-        var record = new SelectedFolderRecord(id, "repo", "/trusted/repo", SelectedFolderMode.ReadOnlyMount, CreatedAtUtc: 1);
+        var record = new SelectedFolderRecord { Id = id, Alias = "repo", HostPath = "/trusted/repo", Mode = SelectedFolderMode.ReadOnlyMount, CreatedAtUtc = 1 };
         var store = new BlockingSelectedFolderStore(record);
         var preparation = new ExclusivePreparation();
         var service = new WorkspaceRevocationService(store, preparation, NullLogger<WorkspaceRevocationService>.Instance);

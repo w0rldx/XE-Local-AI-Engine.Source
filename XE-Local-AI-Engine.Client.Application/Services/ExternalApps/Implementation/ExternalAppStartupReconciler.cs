@@ -683,22 +683,25 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         string? failureSummary,
         CancellationToken cancellationToken)
     {
-        var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(row.Id,
-                                        row.Version,
-                                        new HashSet<ExternalAppInstanceStatus>
+        var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
+        {
+            InstanceId = row.Id,
+            ExpectedVersion = row.Version,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
                                         {
                                             row.Status
                                         },
-                                        newStatus,
-                                        kind,
-                                        EventDetailJson: null,
-                                        _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                                        StoppedAtUtc: newStatus == ExternalAppInstanceStatus.Stopped
+            NewStatus = newStatus,
+            EventKind = kind,
+            EventDetailJson = null,
+            OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            StoppedAtUtc = newStatus == ExternalAppInstanceStatus.Stopped
                                             ? _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
                                             : null,
-                                        FailureCategory: failureCategory,
-                                        FailureSummary: failureSummary,
-                                        ClearFailure: failureCategory is null),
+            FailureCategory = failureCategory,
+            FailureSummary = failureSummary,
+            ClearFailure = failureCategory is null
+        },
                                     cancellationToken);
 
         if (!result.Applied)

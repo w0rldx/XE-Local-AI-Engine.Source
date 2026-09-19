@@ -77,20 +77,23 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         }
 
         var updated = await store.UpdateAsync(agent.Id,
-            new AgentDefinitionInput(agent.Name,
-                agent.Description,
-                agent.Instructions,
-                FakeChatModel,
-                agent.ReasoningEffort,
-                agent.Kind,
-                agent.AllowedToolNames,
-                agent.ToolApprovals,
-                agent.OrchestrationTopologyJson,
-                agent.PlaybookEnabled,
-                agent.AllowedSkillIds,
-                agent.DefaultTemporaryChat,
-                agent.MemoryExtractionEnabled,
-                agent.DisableBaseScaffold));
+            new AgentDefinitionInput
+            {
+                Name = agent.Name,
+                Description = agent.Description,
+                Instructions = agent.Instructions,
+                ModelProfile = FakeChatModel,
+                ReasoningEffort = agent.ReasoningEffort,
+                Kind = agent.Kind,
+                AllowedToolNames = agent.AllowedToolNames,
+                ToolApprovals = agent.ToolApprovals,
+                OrchestrationTopologyJson = agent.OrchestrationTopologyJson,
+                PlaybookEnabled = agent.PlaybookEnabled,
+                AllowedSkillIds = agent.AllowedSkillIds,
+                DefaultTemporaryChat = agent.DefaultTemporaryChat,
+                MemoryExtractionEnabled = agent.MemoryExtractionEnabled,
+                DisableBaseScaffold = agent.DisableBaseScaffold
+            });
 
         await Assert.That(updated?.ModelProfile).IsEqualTo(FakeChatModel);
     }

@@ -124,12 +124,15 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             // git-top-level check every registered repository passes — so a materialization that produced something
             // that is not a canonical repository root fails here rather than at the first attempt.
             var repository = await _repositoryBindings.RegisterAsync(repositoryAlias, destination, cancellationToken);
-            await _templateStore.RecordMaterializationAsync(new DevelopmentTemplateMaterializationSnapshot(Guid.Parse(repository.Id),
-                    template.Id,
-                    template.Alias,
-                    templateRoot,
-                    templateCommit,
-                    _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+            await _templateStore.RecordMaterializationAsync(new DevelopmentTemplateMaterializationSnapshot
+            {
+                SelectedFolderId = Guid.Parse(repository.Id),
+                TemplateId = template.Id,
+                TemplateAlias = template.Alias,
+                TemplatePath = templateRoot,
+                TemplateCommit = templateCommit,
+                CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
                 cancellationToken);
             return new DevelopmentTemplateMaterializationResult(repository, template.Alias, templateCommit);
         }

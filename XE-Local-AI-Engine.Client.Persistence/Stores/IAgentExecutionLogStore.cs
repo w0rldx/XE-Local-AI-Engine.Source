@@ -192,13 +192,20 @@ public enum AgentExecutionLogRecordKind
 ///     one of <see cref="ApprovalDecisions" />, and <see cref="Source" /> one of <see cref="ApprovalDecisionSources" /> —
 ///     all non-sensitive category labels. <see cref="LatencyMs" /> is the request→decision wall-clock in milliseconds.
 /// </summary>
-public sealed record ApprovalDecisionAuditInput(
-    Guid? InvocationId,
-    string ToolName,
-    string Category,
-    string Decision,
-    string Source,
-    long LatencyMs);
+public sealed class ApprovalDecisionAuditInput
+{
+    public required Guid? InvocationId { get; init; }
+
+    public required string ToolName { get; init; }
+
+    public required string Category { get; init; }
+
+    public required string Decision { get; init; }
+
+    public required string Source { get; init; }
+
+    public required long LatencyMs { get; init; }
+}
 
 /// <summary>
 ///     Fields supplied when appending an integration-invocation audit row. Metadata only — every value is a trigger
@@ -207,15 +214,24 @@ public sealed record ApprovalDecisionAuditInput(
 ///     metadata naming which of a principal's credentials sent the request, and answers no ownership question.
 ///     <see cref="LatencyMs" /> is the accept-to-terminal wall clock in milliseconds.
 /// </summary>
-public sealed record IntegrationInvocationAuditInput(
-    Guid InvocationId,
-    Guid RequestId,
-    string TriggerName,
-    string KeyPrefix,
-    Guid TargetAgentDefinitionId,
-    string TerminalStatus,
-    string? TraceId,
-    long LatencyMs);
+public sealed class IntegrationInvocationAuditInput
+{
+    public required Guid InvocationId { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required string TriggerName { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required Guid TargetAgentDefinitionId { get; init; }
+
+    public required string TerminalStatus { get; init; }
+
+    public required string? TraceId { get; init; }
+
+    public required long LatencyMs { get; init; }
+}
 
 /// <summary>
 ///     Versioned read projection of a durable run-envelope row (always
@@ -223,100 +239,161 @@ public sealed record IntegrationInvocationAuditInput(
 ///     <see cref="FailureCategory" /> is a category enum name only. <see cref="SchemaVersion" /> lets a reader tell
 ///     envelope shapes apart as the field set evolves.
 /// </summary>
-public sealed record AgentRunEnvelopeRecord(
-    Guid Id,
-    int SchemaVersion,
-    Guid AgentDefinitionId,
-    Guid? ConversationId,
-    Guid? MessageId,
-    Guid? InvocationId,
-    Guid? RequestId,
-    string ModelName,
-    string Provider,
-    string TerminalStatus,
-    bool Success,
-    string? FailureCategory,
-    long DurationMs,
-    int? PromptTokens,
-    int? CompletionTokens,
-    int? ReasoningTokens,
-    int? TotalTokens,
-    int? ContentChunkCount,
-    int? ReasoningChunkCount,
-    string? TraceId,
-    long? StartedAtUtc,
-    long CreatedAtUtc,
+public sealed class AgentRunEnvelopeRecord
+{
+    public required Guid Id { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid? ConversationId { get; init; }
+
+    public required Guid? MessageId { get; init; }
+
+    public required Guid? InvocationId { get; init; }
+
+    public required Guid? RequestId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required string TerminalStatus { get; init; }
+
+    public required bool Success { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required long DurationMs { get; init; }
+
+    public required int? PromptTokens { get; init; }
+
+    public required int? CompletionTokens { get; init; }
+
+    public required int? ReasoningTokens { get; init; }
+
+    public required int? TotalTokens { get; init; }
+
+    public required int? ContentChunkCount { get; init; }
+
+    public required int? ReasoningChunkCount { get; init; }
+
+    public required string? TraceId { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
     // TRAILING rather than beside TotalTokens, unlike AgentRunEnvelopeResponse which does group them with the other
     // token fields: this is a POSITIONAL record, so a member with a default can only be added at the end — inserting
     // mid-list would either be a breaking positional change for every construction site or not compile at all.
     // Tool-schema token estimate for the turn. DELIBERATELY wider than the int? token members above: the cumulative
     // counter is a long at its source and P-C1 sums this column across a whole session, so narrowing it here would
     // truncate silently. The per-round maximum stays an int, matching its own source.
-    long? ToolSchemaTokens = null,
-    int? MaxToolSchemaTokens = null,
+    public long? ToolSchemaTokens { get; init; }
+
+    public int? MaxToolSchemaTokens { get; init; }
+
     // What reasoning effort `auto` resolved to for this turn: the tier label and the authored effort that asked for
     // it. Both null on every turn that authored a concrete effort, which is what makes `authored_effort IS NULL` the
     // before-population of the measurement in P-C2 section 8.
-    string? DispatchedTier = null,
-    string? AuthoredEffort = null,
+    public string? DispatchedTier { get; init; }
+
+    public string? AuthoredEffort { get; init; }
+
     // How much of DurationMs was the LOCAL runtime warm (llama-server launch + model load) rather than generation.
     // Null when nothing warmed locally and on every pre-migration row; DurationMs minus this is the warm-equivalent
     // turn time, which is the only way an arm measured cold compares with one measured warm.
-    long? ModelReadinessMs = null);
+    public long? ModelReadinessMs { get; init; }
+}
 
 /// <summary>
 ///     Typed projection of a persisted execution-log row. Metadata only — no message content. <see cref="ErrorClass" />
 ///     is an exception type name only (never the message text).
 /// </summary>
-public sealed record AgentExecutionLogRecord(
-    Guid Id,
-    Guid AgentDefinitionId,
-    Guid? ConversationId,
-    Guid? MessageId,
-    string ModelName,
-    string ConfigHash,
-    long LatencyMs,
-    int? PromptTokens,
-    int? CompletionTokens,
-    bool Success,
-    string? ErrorClass,
-    long CreatedAtUtc);
+public sealed class AgentExecutionLogRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid? ConversationId { get; init; }
+
+    public required Guid? MessageId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string ConfigHash { get; init; }
+
+    public required long LatencyMs { get; init; }
+
+    public required int? PromptTokens { get; init; }
+
+    public required int? CompletionTokens { get; init; }
+
+    public required bool Success { get; init; }
+
+    public required string? ErrorClass { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Fields supplied when appending an execution-log row. Metadata only — supply NO message content here.
 ///     <see cref="ErrorClass" /> must be an exception type name only, never the exception message or transcript text.
 /// </summary>
-public sealed record AgentExecutionLogInput(
-    Guid AgentDefinitionId,
-    Guid? ConversationId,
-    Guid? MessageId,
-    string ModelName,
-    string ConfigHash,
-    long LatencyMs,
-    bool Success,
-    int? PromptTokens = null,
-    int? CompletionTokens = null,
-    string? ErrorClass = null);
+public sealed class AgentExecutionLogInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid? ConversationId { get; init; }
+
+    public required Guid? MessageId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string ConfigHash { get; init; }
+
+    public required long LatencyMs { get; init; }
+
+    public required bool Success { get; init; }
+
+    public int? PromptTokens { get; init; }
+
+    public int? CompletionTokens { get; init; }
+
+    public string? ErrorClass { get; init; }
+}
 
 /// <summary>
 ///     One aggregation bucket of run-envelope token usage for a single (model, <see cref="AgentUsageProviders">provider</see>,
 ///     UTC day) triple. Token sums are <c>long</c> because a busy day can exceed <see cref="int" />; a run reporting no
 ///     usage for a field contributes 0. Metadata only — no message content.
 /// </summary>
-/// <param name="ModelName">Model the runs executed on (part of the group key; may be empty for an envelope written without one).</param>
-/// <param name="Provider">Fine-grained runtime provider that served the runs (part of the group key; see <see cref="AgentUsageProviders" />).</param>
-/// <param name="DayStartUtcMs">Unix-ms timestamp of UTC midnight opening the day bucket (the group key, day-truncated).</param>
-/// <param name="RunCount">Number of run-envelope rows in the bucket.</param>
-/// <param name="PromptTokens">Summed prompt/input tokens (missing values counted as 0).</param>
-/// <param name="CompletionTokens">Summed completion/output tokens (missing values counted as 0).</param>
-/// <param name="ReasoningTokens">Summed reasoning tokens (missing values counted as 0).</param>
-/// <param name="TotalTokens">Summed total tokens reported by the model (missing values counted as 0).</param>
-public sealed record TokenUsageAggregateRecord(
-    string ModelName,
-    string Provider,
-    long DayStartUtcMs,
-    int RunCount,
-    long PromptTokens,
-    long CompletionTokens,
-    long ReasoningTokens,
-    long TotalTokens);
+public sealed class TokenUsageAggregateRecord
+{
+    /// <summary>Model the runs executed on (part of the group key; may be empty for an envelope written without one).</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>Fine-grained runtime provider that served the runs (part of the group key; see <see cref="AgentUsageProviders" />).</summary>
+    public required string Provider { get; init; }
+
+    /// <summary>Unix-ms timestamp of UTC midnight opening the day bucket (the group key, day-truncated).</summary>
+    public required long DayStartUtcMs { get; init; }
+
+    /// <summary>Number of run-envelope rows in the bucket.</summary>
+    public required int RunCount { get; init; }
+
+    /// <summary>Summed prompt/input tokens (missing values counted as 0).</summary>
+    public required long PromptTokens { get; init; }
+
+    /// <summary>Summed completion/output tokens (missing values counted as 0).</summary>
+    public required long CompletionTokens { get; init; }
+
+    /// <summary>Summed reasoning tokens (missing values counted as 0).</summary>
+    public required long ReasoningTokens { get; init; }
+
+    /// <summary>Summed total tokens reported by the model (missing values counted as 0).</summary>
+    public required long TotalTokens { get; init; }
+}

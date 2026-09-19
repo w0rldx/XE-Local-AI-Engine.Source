@@ -130,21 +130,24 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
             ? _localModelLoads?.TryGetLastReadyLoad(servedModel, ModelRole.Chat)
             : null;
 
-        return new DevWorkflowNodeTelemetry(envelopes.InputTokens,
-            envelopes.OutputTokens,
-            envelopes.ReasoningTokens,
-            steps.EstimatedInputTokens,
-            steps.ProviderCalls,
-            steps.ToolCalls,
-            steps.ToolSchemaTokens,
-            ToolNamesJson(steps.ToolNames),
-            envelopes.AgentTurnMs,
-            envelopes.ServedModelName,
-            RouteJson: null,
-            session.StepCount,
-            envelopes.ModelReadinessMs,
-            vram?.GlobalFreeVramBytesAtLoad,
-            vram?.AdmittedVramBytes);
+        return new DevWorkflowNodeTelemetry
+        {
+            InputTokens = envelopes.InputTokens,
+            OutputTokens = envelopes.OutputTokens,
+            ReasoningTokens = envelopes.ReasoningTokens,
+            EstimatedInputTokens = steps.EstimatedInputTokens,
+            ProviderCalls = steps.ProviderCalls,
+            ToolCalls = steps.ToolCalls,
+            ToolSchemaTokens = steps.ToolSchemaTokens,
+            ToolNamesJson = ToolNamesJson(steps.ToolNames),
+            AgentTurnMs = envelopes.AgentTurnMs,
+            ServedModelName = envelopes.ServedModelName,
+            RouteJson = null,
+            WorkSessionSteps = session.StepCount,
+            ModelReadinessMs = envelopes.ModelReadinessMs,
+            VramFreeAtLoadBytes = vram?.GlobalFreeVramBytesAtLoad,
+            VramAdmittedBytes = vram?.AdmittedVramBytes
+        };
     }
 
     /// <summary>
@@ -175,7 +178,7 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
             outputTokens = Add(outputTokens, attempt.OutputTokens);
         }
 
-        return new DevWorkflowNodeTelemetry(inputTokens, outputTokens);
+        return new DevWorkflowNodeTelemetry { InputTokens = inputTokens, OutputTokens = outputTokens };
     }
 
     /// <summary>

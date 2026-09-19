@@ -79,15 +79,18 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
         }
 
         var findingId = Guid.NewGuid();
-        var result = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(session.Id,
-                                        findingId,
-                                        session.Version,
-                                        WorkSessionOperationId.For(session.Id, session.StepCount, $"finding:{findingId:N}"),
-                                        Enum.Parse<AgentWorkSessionFindingKind>(request.Kind!),
-                                        request.Text!,
-                                        taskId,
-                                        string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
-                                        supersedesId),
+        var result = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = session.Id,
+            FindingId = findingId,
+            ExpectedVersion = session.Version,
+            OperationId = WorkSessionOperationId.For(session.Id, session.StepCount, $"finding:{findingId:N}"),
+            Kind = Enum.Parse<AgentWorkSessionFindingKind>(request.Kind!),
+            Text = request.Text!,
+            TaskId = taskId,
+            SourceRef = string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
+            SupersedesFindingId = supersedesId
+        },
                                     cancellationToken);
 
         return new WorkSessionToolOutcome($"Recorded a {request.Kind} on this work session.", result.Sequence, WorkSessionChangeKind.Finding);

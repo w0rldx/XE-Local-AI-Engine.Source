@@ -144,30 +144,33 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
     ///     slots, and the objective fields carrying the node rather than a Development task.
     /// </summary>
     private static DevelopmentExecutionSnapshot NodeRunSnapshot(Guid projectId, Guid nodeRunId, string identity) =>
-        new(projectId,
-            nodeRunId,
-            nodeRunId,
-            Guid.NewGuid(),
-            identity,
-            "main",
-            DevelopmentEgressPolicy.LocalOnly,
-            ConfigurationVersion: 1,
-            TrustedRepositoryAcknowledged: true,
-            DevelopmentTrustPolicy.CurrentVersion,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            MaxTokens: 2048,
-            MaxDurationSeconds: 60,
-            "validate",
-            "Run the project's validation commands.",
-            "[]",
-            DevelopmentTaskStatus.InProgress,
-            TaskVersion: 1,
-            DevelopmentAttemptRole.Coder,
-            PersistenceDevelopmentAttemptStatus.Running,
-            "local-model",
-            "local",
-            AttemptVersion: 1,
-            Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8()));
+        new()
+        {
+            ProjectId = projectId,
+            TaskId = nodeRunId,
+            AttemptId = nodeRunId,
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = identity,
+            BaseBranch = "main",
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MaxTokens = 2048,
+            MaxDurationSeconds = 60,
+            Title = "validate",
+            Requirements = "Run the project's validation commands.",
+            AcceptanceCriteriaJson = "[]",
+            TaskStatus = DevelopmentTaskStatus.InProgress,
+            TaskVersion = 1,
+            AttemptRole = DevelopmentAttemptRole.Coder,
+            AttemptStatus = PersistenceDevelopmentAttemptStatus.Running,
+            ModelId = "local-model",
+            Provider = "local",
+            AttemptVersion = 1,
+            CommandProfileJson = Encoding.UTF8.GetString(GenericProfile.ToCanonicalUtf8())
+        };
 
     private async Task<string> CreateRepositoryAsync()
     {

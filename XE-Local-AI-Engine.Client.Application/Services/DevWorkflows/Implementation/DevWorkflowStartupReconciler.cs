@@ -94,7 +94,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             // settlement is decided against the live row inside that transaction, so the drift that caused this cannot
             // reach it.
             var unjudged = pass == RecoveryPasses
-                ? new DevWorkflowUnjudgedNodeRunBlock(DevWorkflowFailureClasses.Interrupted, UnjudgedReason)
+                ? new DevWorkflowUnjudgedNodeRunBlock { FailureClass = DevWorkflowFailureClasses.Interrupted, SanitizedReason = UnjudgedReason }
                 : null;
             try
             {
@@ -267,18 +267,20 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                 // checkpoint it wrote itself.
                 Repair(repairs,
                     nodeRun,
-                    new TransitionDevWorkflowNodeRunCommand(nodeRun.RunId,
-                        nodeRun.NodeRunId,
-                        DevWorkflowVersions.Any,
-                        DevWorkflowNodeRunStatus.Pending,
-                        IncrementAttempt: true,
-                        Outcome: DevWorkflowOutcomes.Interrupted,
-
+                    new TransitionDevWorkflowNodeRunCommand
+                    {
+                        RunId = nodeRun.RunId,
+                        NodeRunId = nodeRun.NodeRunId,
+                        ExpectedVersion = DevWorkflowVersions.Any,
+                        TargetStatus = DevWorkflowNodeRunStatus.Pending,
+                        IncrementAttempt = true,
+                        Outcome = DevWorkflowOutcomes.Interrupted,
                         // `affordable` above is a check-then-write like every other one this pass replaced: the run
                         // service can be recording a human Retry while these verdicts are being composed. The budget
                         // rides on the command so the collapse admits it under the writer lock, and a refusal rolls
                         // the whole pass back for StartAsync to re-judge from the decision it did not see.
-                        MaxTotalAttempts: _options.MaxTotalAttempts));
+                        MaxTotalAttempts = _options.MaxTotalAttempts
+                    });
             }
 
             foreach (var nodeRun in sandboxed.Skip(admitted))
@@ -303,11 +305,14 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 
         return
         [
-            .. interrupted.Select(nodeRun => new DevWorkflowNodeRunVerdict(nodeRun.NodeRunId,
-                nodeRun.Status,
-                nodeRun.Attempt,
-                nodeRun.WorkSessionId,
-                repairs.TryGetValue(nodeRun.NodeRunId, out var composed) ? composed : []))
+            .. interrupted.Select(nodeRun => new DevWorkflowNodeRunVerdict
+            {
+                NodeRunId = nodeRun.NodeRunId,
+                ObservedStatus = nodeRun.Status,
+                ObservedAttempt = nodeRun.Attempt,
+                ObservedWorkSessionId = nodeRun.WorkSessionId,
+                Repairs = repairs.TryGetValue(nodeRun.NodeRunId, out var composed) ? composed : []
+            })
         ];
     }
 
@@ -377,12 +382,15 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
     }
 
     private static TransitionDevWorkflowNodeRunCommand Block(DevWorkflowReconciledNodeRun nodeRun, string failureClass, string sanitizedReason) =>
-        new(nodeRun.RunId,
-            nodeRun.NodeRunId,
-            DevWorkflowVersions.Any,
-            DevWorkflowNodeRunStatus.Blocked,
-            PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
-            FailureClass: failureClass,
-            TerminalReason: sanitizedReason,
-            WorkItemStatus: DevWorkflowWorkItemStatus.Blocked);
+        new()
+        {
+            RunId = nodeRun.RunId,
+            NodeRunId = nodeRun.NodeRunId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind = DevWorkflowDecisionKind.Abandon,
+            FailureClass = failureClass,
+            TerminalReason = sanitizedReason,
+            WorkItemStatus = DevWorkflowWorkItemStatus.Blocked
+        };
 }

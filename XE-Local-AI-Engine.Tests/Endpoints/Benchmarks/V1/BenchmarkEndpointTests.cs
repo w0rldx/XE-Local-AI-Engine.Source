@@ -66,12 +66,26 @@ public sealed class BenchmarkEndpointTests
         var runId = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
         var itemId = Guid.Parse("00000000-0000-0000-0000-0000000000bb");
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkCellPage([
-                       new BenchmarkCellRecord("cell:c:1", "model.gguf", "v1:fp", "q8_0", null, null, 72, 1, null,
-                           [new BenchmarkCellItemRecord(runId, itemId, 0, 72, "stop", null)])
+               .Returns(new BenchmarkCellPage
+               {
+                   Cells = [
+                       new BenchmarkCellRecord
+                       {
+                           CellKey = "cell:c:1",
+                           PrimaryModelName = "model.gguf",
+                           ModelContentFingerprint = "v1:fp",
+                           KvCacheType = "q8_0",
+                           RepeatGroupId = null,
+                           RepeatIndex = null,
+                           Quality = 72,
+                           Rank = 1,
+                           RankExclusionReason = null,
+                           Items = [new BenchmarkCellItemRecord { RunId = runId, TaskItemId = itemId, TaskItemIndex = 0, QualityScore = 72, PrimaryStopReason = "stop", RankExclusionReason = null }]
+                       }
                    ],
-                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1),
-                   ScorableItemCount: 3));
+                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 1 },
+                   ScorableItemCount = 3
+               });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/cells");
         using var response = await client.SendAsync(request);
@@ -141,8 +155,16 @@ public sealed class BenchmarkEndpointTests
         await using var context = CreateContext();
         context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded,
-                   throughput: new BenchmarkRunThroughput(TtftMs: 180.25, PromptTokens: 123, PromptMs: 456.5,
-                       GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 2)));
+                   throughput: new BenchmarkRunThroughput
+                   {
+                       TtftMs = 180.25,
+                       PromptTokens = 123,
+                       PromptMs = 456.5,
+                       GenerationTokens = 89,
+                       GenerationMs = 1011.5,
+                       CachedPromptTokens = 7,
+                       SegmentCount = 2
+                   }));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
         using var response = await client.SendAsync(request);
@@ -205,8 +227,24 @@ public sealed class BenchmarkEndpointTests
         context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
         context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
-                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
+               .Returns(new BenchmarkJudgeAttemptRecord
+               {
+                   Id = attemptId,
+                   RunId = RunId,
+                   Sequence = 1,
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 1,
+                   JudgeRuntimeJson = null,
+                   JudgeExecutionKey = null,
+                   Status = BenchmarkJudgeAttemptStatus.Succeeded,
+                   ResultJson = stored,
+                   Score = 80,
+                   ErrorMessage = null,
+                   EnqueuedAtUtc = 0,
+                   StartedAtUtc = null,
+                   CompletedAtUtc = null,
+                   Version = 1
+               });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
         using var response = await client.SendAsync(request);
@@ -746,19 +784,30 @@ public sealed class BenchmarkEndpointTests
         await using var context = CreateContext();
         var receipt = "{\"executableSha256\":\"exe-sha\",\"auxAssets\":{\"hasLora\":true,\"hasMmproj\":false,\"hasDraft\":false}}";
         context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>())
-               .Returns(Run(intent: new BenchmarkRunLaunchIntent("cuda", BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto,
-                       null, "on", "intended-identity", "manifest-sha"),
-                   evidence: new BenchmarkRunLaunchEvidence(Encoding.UTF8.GetBytes(receipt),
-                       Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"),
-                       "receipt-hash",
-                       "environment-hash",
-                       "effective-identity",
-                       "cuda",
-                       33,
-                       33,
-                       "exe-sha",
-                       true,
-                       BenchmarkKvCacheType.SourceAuto)));
+               .Returns(Run(intent: new BenchmarkRunLaunchIntent
+               {
+                   Variant = "cuda",
+                   KvCacheType = BenchmarkKvCacheType.Q8_0,
+                   KvCacheTypeSource = BenchmarkKvCacheType.SourceAuto,
+                   KvAutoReason = null,
+                   FlashAttentionMode = "on",
+                   IntendedLaunchIdentity = "intended-identity",
+                   IntendedExecutableSha256 = "manifest-sha"
+               },
+                   evidence: new BenchmarkRunLaunchEvidence
+                   {
+                       ReceiptJson = Encoding.UTF8.GetBytes(receipt),
+                       EnvironmentFactsJson = Encoding.UTF8.GetBytes("{\"schemaVersion\":1}"),
+                       ReceiptHash = "receipt-hash",
+                       EnvironmentFactsHash = "environment-hash",
+                       EffectiveLaunchIdentity = "effective-identity",
+                       EffectiveBackend = "cuda",
+                       PlacementOffloaded = 33,
+                       PlacementTotal = 33,
+                       ExecutableSha256 = "exe-sha",
+                       HasAuxAssets = true,
+                       KvCacheTypeSource = BenchmarkKvCacheType.SourceAuto
+                   }));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
         using var response = await client.SendAsync(request);
@@ -988,8 +1037,17 @@ public sealed class BenchmarkEndpointTests
             ReferenceAnswer: null);
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
         context.Store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 2,
-                   BenchmarkJudgeSerialization.SerializePolicy(policy), new string('h', 64), "cohort-key", 3, 10));
+               .Returns(new BenchmarkJudgePolicyRevisionRecord
+               {
+                   Id = Guid.NewGuid(),
+                   ProjectId = ProjectId,
+                   Revision = 2,
+                   PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(policy),
+                   PolicyHash = new string('h', 64),
+                   ReferenceExecutionKey = "cohort-key",
+                   CohortGeneration = 3,
+                   CreatedAtUtc = 10
+               });
     }
 
     [Test]
@@ -1064,7 +1122,7 @@ public sealed class BenchmarkEndpointTests
         var measureExisting = false;
         context.Projects.UpdateFidelityAsync(ProjectId, 4, Arg.Do<BenchmarkProjectFidelitySettings>(value => settings = value),
                    Arg.Do<bool>(value => measureExisting = value), Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkProjectFidelityChange(Project(isFrozen: true, fidelity: true), [queued]));
+               .Returns(new BenchmarkProjectFidelityChange { Project = Project(isFrozen: true, fidelity: true), EnqueuedRunIds = [queued] });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Patch, Api + $"/projects/{ProjectId}/fidelity",
             new
@@ -1171,10 +1229,28 @@ public sealed class BenchmarkEndpointTests
         int? maxOutputTokens = null,
         int? invocationTimeoutSeconds = null,
         bool fidelity = false) =>
-        new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens, invocationTimeoutSeconds,
-            ReasoningBudgetTokens: null, fidelity, fidelity, FidelityChunks: null,
-            fidelity ? BaseModelName : null, fidelity ? BaseFingerprint : null);
+        new()
+        {
+            Id = ProjectId,
+            Name = "Project",
+            CoreTaskJson = Encoding.UTF8.GetBytes("\"Answer exactly.\""),
+            ContextTokens = 4096,
+            AgentDefinitionId = AgentId,
+            JudgeEnabled = false,
+            CurrentJudgePolicyRevisionId = null,
+            IsFrozen = isFrozen,
+            Version = 4,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            MaxOutputTokens = maxOutputTokens,
+            InvocationTimeoutSeconds = invocationTimeoutSeconds,
+            ReasoningBudgetTokens = null,
+            FidelityEnabled = fidelity,
+            FidelityKldEnabled = fidelity,
+            FidelityChunks = null,
+            FidelityKldBaseModelName = fidelity ? BaseModelName : null,
+            FidelityKldBaseFingerprint = fidelity ? BaseFingerprint : null
+        };
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
         string judgeState = BenchmarkRunJudgeStates.None,
@@ -1185,35 +1261,51 @@ public sealed class BenchmarkEndpointTests
         string? primaryStopReason = null,
         string? rankExclusionReason = null,
         BenchmarkRunThroughput? throughput = null) =>
-        new(RunId,
-            ProjectId,
-            Encoding.UTF8.GetBytes("secret-runtime"),
-            "model",
-            LocalModelOrigin.Imported,
-            "v1:aggregate",
-            "Agent",
-            2,
-            4096,
-            primary,
-            null,
-            null,
-            null,
-            null,
-            output is null ? null : Encoding.UTF8.GetBytes(output),
-            0,
-            null,
-            null,
-            3,
-            10,
-            null,
-            null,
-            20,
-            intent,
-            evidence,
-            PrimaryStopReason: primaryStopReason,
-            Judge: new BenchmarkRunJudgeView(judgeState, judgeAttemptId, null, null, null, null, null, null, null, PolicyCurrent: false,
-                ExecutionCurrent: false, rankExclusionReason),
-            Throughput: throughput);
+        new()
+        {
+            Id = RunId,
+            ProjectId = ProjectId,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("secret-runtime"),
+            PrimaryModelName = "model",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:aggregate",
+            AgentName = "Agent",
+            AgentVersion = 2,
+            RequestedContextTokens = 4096,
+            PrimaryStatus = primary,
+            EffectiveContextTokens = null,
+            DurationMs = null,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            OutputPartsJson = output is null ? null : Encoding.UTF8.GetBytes(output),
+            LastStreamSequence = 0,
+            UserScore = null,
+            PrimaryErrorMessage = null,
+            Version = 3,
+            CreatedAtUtc = 10,
+            StartedAtUtc = null,
+            PrimaryCompletedAtUtc = null,
+            UpdatedAtUtc = 20,
+            PrimaryLaunchIntent = intent,
+            PrimaryLaunchEvidence = evidence,
+            PrimaryStopReason = primaryStopReason,
+            Judge = new BenchmarkRunJudgeView
+            {
+                State = judgeState,
+                AttemptId = judgeAttemptId,
+                Score = null,
+                PolicyRevision = null,
+                PolicyRevisionId = null,
+                AttemptSequence = null,
+                CohortGeneration = null,
+                ExecutionKey = null,
+                ErrorMessage = null,
+                PolicyCurrent = false,
+                ExecutionCurrent = false,
+                RankExclusionReason = rankExclusionReason
+            },
+            Throughput = throughput
+        };
 
     /// <summary>What the freeze service returns now: a group of runs, one for a plain single start.</summary>
     private static IReadOnlyList<BenchmarkRunRecord> Runs(params BenchmarkRunRecord[] runs) =>
@@ -1299,8 +1391,24 @@ public sealed class BenchmarkEndpointTests
         context.Store.SetUserScoreAsync(RunId, Arg.Any<int?>(), 3, Arg.Any<CancellationToken>())
                .Returns(Run(BenchmarkPrimaryStatus.Succeeded, BenchmarkRunJudgeStates.Succeeded, judgeAttemptId: attemptId));
         context.Store.GetJudgeAttemptAsync(attemptId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkJudgeAttemptRecord(attemptId, RunId, 1, Guid.NewGuid(), 1, null, null,
-                   BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
+               .Returns(new BenchmarkJudgeAttemptRecord
+               {
+                   Id = attemptId,
+                   RunId = RunId,
+                   Sequence = 1,
+                   PolicyRevisionId = Guid.NewGuid(),
+                   CohortGeneration = 1,
+                   JudgeRuntimeJson = null,
+                   JudgeExecutionKey = null,
+                   Status = BenchmarkJudgeAttemptStatus.Succeeded,
+                   ResultJson = stored,
+                   Score = 80,
+                   ErrorMessage = null,
+                   EnqueuedAtUtc = 0,
+                   StartedAtUtc = null,
+                   CompletedAtUtc = null,
+                   Version = 1
+               });
         using var client = context.Factory.CreateClient();
         using var scoreRequest = Authorized(context.Factory, HttpMethod.Put, Api + $"/runs/{RunId}/score", new
         {
@@ -1475,7 +1583,9 @@ public sealed class BenchmarkEndpointTests
         await using var context = CreateContext();
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
         context.Store.ListRunsAsync(ProjectId, 0, 50, null, true, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkRunPage([
+               .Returns(new BenchmarkRunPage
+               {
+                   Items = [
                        Run() with
                        {
                            QualityScore = 73,
@@ -1483,8 +1593,9 @@ public sealed class BenchmarkEndpointTests
                            Rank = 1
                        }
                    ],
-                   TotalCount: 1,
-                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 2)));
+                   TotalCount = 1,
+                   RankCohort = new BenchmarkRankCohort { PolicyRevision = 2, ExecutionKey = "cohort-key", CohortGeneration = 3, RankedCount = 1, TotalScored = 2 }
+               });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/runs?page=1&pageSize=50");
         using var response = await client.SendAsync(request);

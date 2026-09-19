@@ -135,15 +135,18 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
 
     private static AgentDefinitionInput CreateInput()
     {
-        return new AgentDefinitionInput("Backend Architect",
-            Description: null,
-            Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null);
+        return new AgentDefinitionInput
+        {
+            Name = "Backend Architect",
+            Description = null,
+            Instructions = Instructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        };
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)

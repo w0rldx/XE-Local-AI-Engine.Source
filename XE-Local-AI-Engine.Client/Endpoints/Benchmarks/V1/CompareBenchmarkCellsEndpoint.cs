@@ -81,7 +81,7 @@ public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCel
             selected.Add(cell);
         }
 
-        var listed = new BenchmarkCellPage(selected, page.RankCohort, page.ScorableItemCount).ToResponse();
+        var listed = new BenchmarkCellPage { Cells = selected, RankCohort = page.RankCohort, ScorableItemCount = page.ScorableItemCount }.ToResponse();
         await Send.OkAsync(new CompareBenchmarkCellsResponse
         {
             Cells = listed.Cells,

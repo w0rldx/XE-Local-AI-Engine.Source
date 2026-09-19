@@ -766,15 +766,18 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var definition = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
-                                    .AddAsync(new AgentDefinitionInput($"Graph agent {Guid.NewGuid():N}",
-                                        Description: null,
-                                        "raw instructions",
-                                        modelProfile,
-                                        ReasoningEffort: null,
-                                        AgentDefinitionKind.Single,
-                                        [],
-                                        new Dictionary<string, bool>(StringComparer.Ordinal),
-                                        OrchestrationTopologyJson: null));
+                                    .AddAsync(new AgentDefinitionInput
+                                    {
+                                        Name = $"Graph agent {Guid.NewGuid():N}",
+                                        Description = null,
+                                        Instructions = "raw instructions",
+                                        ModelProfile = modelProfile,
+                                        ReasoningEffort = null,
+                                        Kind = AgentDefinitionKind.Single,
+                                        AllowedToolNames = [],
+                                        ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+                                        OrchestrationTopologyJson = null
+                                    });
         return definition.Id;
     }
 

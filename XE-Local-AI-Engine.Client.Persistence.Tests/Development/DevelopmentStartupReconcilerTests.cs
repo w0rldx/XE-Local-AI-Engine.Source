@@ -21,15 +21,18 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
         _ = await store.CreateProjectAsync(seed);
-        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1));
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = DevelopmentTaskStatus.Ready, ExpectedTaskVersion = 1 });
         var attemptId = Guid.NewGuid();
-        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                           attemptId,
-                           Guid.NewGuid(),
-                           DevelopmentAttemptRole.Coder,
-                           "local-model",
-                           "local",
-                           ExpectedTaskVersion: 2));
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = seed.TaskId,
+            AttemptId = attemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "local-model",
+            Provider = "local",
+            ExpectedTaskVersion = 2
+        });
 
         AssertEx.Equal(expected: 1, await store.ReconcileRunningAttemptsAsync("restart"));
         AssertEx.Equal(expected: 0, await store.ReconcileRunningAttemptsAsync("restart"));
@@ -48,14 +51,17 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
             var seedStore = seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
             var seed = DevelopmentTestFixture.CreateSeed();
             _ = await seedStore.CreateProjectAsync(seed);
-            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1));
-            _ = await seedStore.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                   Guid.NewGuid(),
-                                   Guid.NewGuid(),
-                                   DevelopmentAttemptRole.Coder,
-                                   "local-model",
-                                   "local",
-                                   ExpectedTaskVersion: 2));
+            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand { TaskId = seed.TaskId, OperationId = Guid.NewGuid(), TargetStatus = DevelopmentTaskStatus.Ready, ExpectedTaskVersion = 1 });
+            _ = await seedStore.StartAttemptAsync(new DevelopmentStartAttemptCommand
+            {
+                TaskId = seed.TaskId,
+                AttemptId = Guid.NewGuid(),
+                OperationId = Guid.NewGuid(),
+                Role = DevelopmentAttemptRole.Coder,
+                ModelId = "local-model",
+                Provider = "local",
+                ExpectedTaskVersion = 2
+            });
 
             await using var firstScope = provider.CreateAsyncScope();
             await using var secondScope = provider.CreateAsyncScope();

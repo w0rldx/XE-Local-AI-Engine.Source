@@ -189,27 +189,33 @@ public sealed class IntegrationExternalAccessTests
             TriggerA = Guid.NewGuid();
             TriggerB = Guid.NewGuid();
 
-            _ = _keys.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
-                PrincipalId,
-                BroadPrefix,
-                new byte[]
+            _ = _keys.CreateAsync(new IntegrationApiKeyCreateCommand
+            {
+                KeyId = Guid.NewGuid(),
+                PrincipalId = PrincipalId,
+                KeyPrefix = BroadPrefix,
+                KeyHash = new byte[]
                 {
                     1
                 },
-                "broad",
-                AllowedTriggerIdsJson: null)).GetAwaiter().GetResult();
-            _ = _keys.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
-                PrincipalId,
-                NarrowPrefix,
-                new byte[]
+                Label = "broad",
+                AllowedTriggerIdsJson = null
+            }).GetAwaiter().GetResult();
+            _ = _keys.CreateAsync(new IntegrationApiKeyCreateCommand
+            {
+                KeyId = Guid.NewGuid(),
+                PrincipalId = PrincipalId,
+                KeyPrefix = NarrowPrefix,
+                KeyHash = new byte[]
                 {
                     2
                 },
-                "narrow",
-                JsonSerializer.Serialize(new[]
+                Label = "narrow",
+                AllowedTriggerIdsJson = JsonSerializer.Serialize(new[]
                 {
                     TriggerA
-                }))).GetAwaiter().GetResult();
+                })
+            }).GetAwaiter().GetResult();
 
             Access = new IntegrationExternalAccess(_executions, _sessions, _keys);
         }
@@ -246,16 +252,19 @@ public sealed class IntegrationExternalAccessTests
         {
             var executionId = Guid.NewGuid();
             var sessionId = Guid.NewGuid();
-            _ = _executions.AcceptAsync(new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, triggerId, Guid.NewGuid(), Guid.NewGuid()),
-                    executionId,
-                    triggerId,
-                    sessionId,
-                    principalId,
-                    Guid.NewGuid(),
-                    ReadOnlyMemory<byte>.Empty,
-                    BroadPrefix,
-                    ReceivedAtUtc: 1,
-                    new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, OccurredAtUtc: 1)),
+            _ = _executions.AcceptAsync(new IntegrationAcceptCommand
+            {
+                NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
+                ExecutionId = executionId,
+                TriggerId = triggerId,
+                SessionId = sessionId,
+                PrincipalId = principalId,
+                RequestId = Guid.NewGuid(),
+                RequestFingerprint = ReadOnlyMemory<byte>.Empty,
+                KeyPrefix = BroadPrefix,
+                ReceivedAtUtc = 1,
+                AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = IntegrationStreamEventTypes.ExecutionAccepted, DetailJson = null, OccurredAtUtc = 1 }
+            },
                 maxActive: 1024,
                 maxActivePerPrincipal: 1024).GetAwaiter().GetResult();
             return executionId;

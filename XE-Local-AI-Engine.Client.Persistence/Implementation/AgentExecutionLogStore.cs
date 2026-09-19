@@ -229,14 +229,17 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
                             .ToListAsync(cancellationToken);
 
         return buckets
-               .Select(bucket => new TokenUsageAggregateRecord(bucket.ModelName,
-                   bucket.Provider,
-                   bucket.Day * MillisecondsPerDay,
-                   bucket.RunCount,
-                   bucket.PromptTokens,
-                   bucket.CompletionTokens,
-                   bucket.ReasoningTokens,
-                   bucket.TotalTokens))
+               .Select(bucket => new TokenUsageAggregateRecord
+               {
+                   ModelName = bucket.ModelName,
+                   Provider = bucket.Provider,
+                   DayStartUtcMs = bucket.Day * MillisecondsPerDay,
+                   RunCount = bucket.RunCount,
+                   PromptTokens = bucket.PromptTokens,
+                   CompletionTokens = bucket.CompletionTokens,
+                   ReasoningTokens = bucket.ReasoningTokens,
+                   TotalTokens = bucket.TotalTokens
+               })
                .ToArray();
     }
 
@@ -261,48 +264,54 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
 
     private static AgentExecutionLogRecord ToRecord(AgentExecutionLog entity)
     {
-        return new AgentExecutionLogRecord(entity.Id,
-            entity.AgentDefinitionId,
-            entity.ConversationId,
-            entity.MessageId,
-            entity.ModelName,
-            entity.ConfigHash,
-            entity.LatencyMs,
-            entity.PromptTokens,
-            entity.CompletionTokens,
-            entity.Success,
-            entity.ErrorClass,
-            entity.CreatedAtUtc);
+        return new AgentExecutionLogRecord
+        {
+            Id = entity.Id,
+            AgentDefinitionId = entity.AgentDefinitionId,
+            ConversationId = entity.ConversationId,
+            MessageId = entity.MessageId,
+            ModelName = entity.ModelName,
+            ConfigHash = entity.ConfigHash,
+            LatencyMs = entity.LatencyMs,
+            PromptTokens = entity.PromptTokens,
+            CompletionTokens = entity.CompletionTokens,
+            Success = entity.Success,
+            ErrorClass = entity.ErrorClass,
+            CreatedAtUtc = entity.CreatedAtUtc
+        };
     }
 
     private static AgentRunEnvelopeRecord ToEnvelopeRecord(AgentExecutionLog entity)
     {
-        return new AgentRunEnvelopeRecord(entity.Id,
-            entity.SchemaVersion,
-            entity.AgentDefinitionId,
-            entity.ConversationId,
-            entity.MessageId,
-            entity.InvocationId,
-            entity.RequestId,
-            entity.ModelName,
-            entity.Provider,
-            entity.TerminalStatus ?? string.Empty,
-            entity.Success,
-            entity.ErrorClass,
-            entity.LatencyMs,
-            entity.PromptTokens,
-            entity.CompletionTokens,
-            entity.ReasoningTokens,
-            entity.TotalTokens,
-            entity.ContentChunkCount,
-            entity.ReasoningChunkCount,
-            entity.TraceId,
-            entity.StartedAtUtc,
-            entity.CreatedAtUtc,
-            entity.ToolSchemaTokens,
-            entity.MaxToolSchemaTokens,
-            entity.DispatchedTier,
-            entity.AuthoredEffort,
-            entity.ModelReadinessMs);
+        return new AgentRunEnvelopeRecord
+        {
+            Id = entity.Id,
+            SchemaVersion = entity.SchemaVersion,
+            AgentDefinitionId = entity.AgentDefinitionId,
+            ConversationId = entity.ConversationId,
+            MessageId = entity.MessageId,
+            InvocationId = entity.InvocationId,
+            RequestId = entity.RequestId,
+            ModelName = entity.ModelName,
+            Provider = entity.Provider,
+            TerminalStatus = entity.TerminalStatus ?? string.Empty,
+            Success = entity.Success,
+            FailureCategory = entity.ErrorClass,
+            DurationMs = entity.LatencyMs,
+            PromptTokens = entity.PromptTokens,
+            CompletionTokens = entity.CompletionTokens,
+            ReasoningTokens = entity.ReasoningTokens,
+            TotalTokens = entity.TotalTokens,
+            ContentChunkCount = entity.ContentChunkCount,
+            ReasoningChunkCount = entity.ReasoningChunkCount,
+            TraceId = entity.TraceId,
+            StartedAtUtc = entity.StartedAtUtc,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            ToolSchemaTokens = entity.ToolSchemaTokens,
+            MaxToolSchemaTokens = entity.MaxToolSchemaTokens,
+            DispatchedTier = entity.DispatchedTier,
+            AuthoredEffort = entity.AuthoredEffort,
+            ModelReadinessMs = entity.ModelReadinessMs
+        };
     }
 }

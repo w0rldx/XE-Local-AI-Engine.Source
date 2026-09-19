@@ -40,4 +40,13 @@ public interface ILocalModelProxyApiKeyStore
 ///     nothing on this record can be presented to the proxy endpoint, so no field here needs "reveal the key" handling.
 ///     The plaintext key exists only in the return value of the generate call that minted it.
 /// </summary>
-public sealed record LocalModelProxyApiKeyRecord(string Prefix, ReadOnlyMemory<byte> KeyHash, long CreatedAtUtc, long? LastUsedAtUtc);
+public sealed record LocalModelProxyApiKeyRecord
+{
+    public required string Prefix { get; init; }
+
+    public required ReadOnlyMemory<byte> KeyHash { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long? LastUsedAtUtc { get; init; }
+}

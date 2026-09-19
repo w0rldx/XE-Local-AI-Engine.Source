@@ -243,8 +243,21 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             TargetKind = EvaluationModelTargetKind.StagedTrainingArtifact,
             SourceArtifactId = artifactId
         };
-        var artifact = new TrainingArtifactRecord(artifactId, evaluation.TrainingRunId!.Value, TrainingArtifactKind.MergedGguf,
-            path, sha, 4, TrainingArtifactSmokeState.Passed, null, null, 2, 0, 0);
+        var artifact = new TrainingArtifactRecord
+        {
+            Id = artifactId,
+            RunId = evaluation.TrainingRunId!.Value,
+            Kind = TrainingArtifactKind.MergedGguf,
+            Path = path,
+            Sha256 = sha,
+            SizeBytes = 4,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            SmokeReason = null,
+            CommittedModelName = null,
+            Version = 2,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
         var datasets = Substitute.For<ITrainingDatasetStore>();
         _ = datasets.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(Dataset(Body("PINNED", "pinned_tool")));
         var store = Substitute.For<ITrainingEvaluationStore>();
@@ -289,8 +302,21 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             TargetKind = EvaluationModelTargetKind.StagedTrainingArtifact,
             SourceArtifactId = artifactId
         };
-        var artifact = new TrainingArtifactRecord(artifactId, tunedEvaluation.TrainingRunId!.Value, TrainingArtifactKind.MergedGguf,
-            tunedPath, tunedSha, 5, TrainingArtifactSmokeState.Passed, null, null, 2, 0, 0);
+        var artifact = new TrainingArtifactRecord
+        {
+            Id = artifactId,
+            RunId = tunedEvaluation.TrainingRunId!.Value,
+            Kind = TrainingArtifactKind.MergedGguf,
+            Path = tunedPath,
+            Sha256 = tunedSha,
+            SizeBytes = 5,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            SmokeReason = null,
+            CommittedModelName = null,
+            Version = 2,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
         var datasets = Substitute.For<ITrainingDatasetStore>();
         _ = datasets.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(Dataset(Body("PINNED", "pinned_tool")));
         var requests = new List<TransientLlamaServerEvaluationRequest>();
@@ -348,8 +374,21 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             TargetKind = EvaluationModelTargetKind.StagedTrainingArtifact,
             SourceArtifactId = artifactId
         };
-        var artifact = new TrainingArtifactRecord(artifactId, evaluation.TrainingRunId!.Value, TrainingArtifactKind.AdapterGguf,
-            path, sha, 7, TrainingArtifactSmokeState.Passed, null, null, 2, 0, 0);
+        var artifact = new TrainingArtifactRecord
+        {
+            Id = artifactId,
+            RunId = evaluation.TrainingRunId!.Value,
+            Kind = TrainingArtifactKind.AdapterGguf,
+            Path = path,
+            Sha256 = sha,
+            SizeBytes = 7,
+            SmokeState = TrainingArtifactSmokeState.Passed,
+            SmokeReason = null,
+            CommittedModelName = null,
+            Version = 2,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
         var datasets = Substitute.For<ITrainingDatasetStore>();
         _ = datasets.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(Dataset(Body("PINNED", "pinned_tool")));
         var store = StoreFor(evaluation);
@@ -527,9 +566,29 @@ public sealed class EvaluationRunExecutorTests : IDisposable
     }
 
     private static TrainingRunRecord Run(Guid runId, TrainingRunFreezeV1 freeze) =>
-        new(runId, DatasetId, FrozenFingerprint, 1, JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options), Guid.NewGuid(), "tuned-model",
-            "v1:base",
-            ReadOnlyMemory<byte>.Empty, null, TrainingRunStatus.Succeeded, null, null, null, null, 1, 0, 0, TrainingWorkStatus.Succeeded, null);
+        new()
+        {
+            Id = runId,
+            DatasetId = DatasetId,
+            DatasetContentFingerprint = FrozenFingerprint,
+            DatasetRevision = 1,
+            FreezeJson = JsonSerializer.SerializeToUtf8Bytes(freeze, TrainingJson.Options),
+            BaseArtifactId = Guid.NewGuid(),
+            LinkedInstalledModelName = "tuned-model",
+            LinkedModelContentFingerprint = "v1:base",
+            OptionsJson = ReadOnlyMemory<byte>.Empty,
+            LicenseConfirmationJson = null,
+            Status = TrainingRunStatus.Succeeded,
+            ProgressJson = null,
+            LogTail = null,
+            LaunchReceiptJson = null,
+            ErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            WorkStatus = TrainingWorkStatus.Succeeded,
+            WorkErrorMessage = null
+        };
 
     private static DatasetDefinitionBodyV1 Body(string instructions, string toolName) =>
         new()
@@ -546,13 +605,41 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         ReadOnlyMemory<byte>? definitionJson = pinnedBody is null
             ? null
             : new ReadOnlyMemory<byte>(JsonSerializer.SerializeToUtf8Bytes(pinnedBody, TrainingJson.Options));
-        return new TrainingDatasetRecord(DatasetId, Guid.NewGuid(), 1, definitionJson, "dataset", TrainingDatasetStatus.Ready, 1,
-            contentFingerprint ?? FrozenFingerprint, 1, 1, 0, 0, 0, 1, 0, 0, DatasetGenerationWorkStatus.Succeeded, null);
+        return new TrainingDatasetRecord
+        {
+            Id = DatasetId,
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            DefinitionJson = definitionJson,
+            Name = "dataset",
+            Status = TrainingDatasetStatus.Ready,
+            Revision = 1,
+            ContentFingerprint = contentFingerprint ?? FrozenFingerprint,
+            TotalSampleCount = 1,
+            GoodSampleCount = 1,
+            BadSampleCount = 0,
+            RejectedSampleCount = 0,
+            DuplicateSampleCount = 0,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            WorkStatus = DatasetGenerationWorkStatus.Succeeded,
+            WorkErrorMessage = null
+        };
     }
 
     private static TrainingDefinitionRecord DefinitionRecord(DatasetDefinitionBodyV1 body) =>
-        new(Guid.NewGuid(), "definition", TrainingDatasetKind.ToolCalling, JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options),
-            DefinitionVersion: 2, Version: 2, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "definition",
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options),
+            DefinitionVersion = 2,
+            Version = 2,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
 
     private static TrainingSampleRecord Sample(Guid? sampleId = null)
     {
@@ -564,9 +651,21 @@ public sealed class EvaluationRunExecutorTests : IDisposable
                 new TrainingSamplePartV1("tool", 1, ToolName: "pinned_tool", Arguments: "{}")
             ]
         };
-        return new TrainingSampleRecord(sampleId ?? SampleId, DatasetId, 0, "tool-call", TrainingSampleLabel.Good, TrainingSampleReviewState.Approved,
-            JsonSerializer.SerializeToUtf8Bytes(content, TrainingJson.Options), ValidationJson: null, TrainingSampleProvenance.Generated,
-            new string('a', count: 64), CreatedAtUtc: 0, UpdatedAtUtc: 0);
+        return new TrainingSampleRecord
+        {
+            Id = sampleId ?? SampleId,
+            DatasetId = DatasetId,
+            Sequence = 0,
+            Kind = "tool-call",
+            Label = TrainingSampleLabel.Good,
+            ReviewState = TrainingSampleReviewState.Approved,
+            ContentJson = JsonSerializer.SerializeToUtf8Bytes(content, TrainingJson.Options),
+            ValidationJson = null,
+            Provenance = TrainingSampleProvenance.Generated,
+            SourceHash = new string('a', count: 64),
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     private static TrainingEvaluationRecord Evaluation()
@@ -579,30 +678,33 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             DatasetContentFingerprint = FrozenFingerprint,
             HoldoutSampleIds = [SampleId]
         };
-        return new TrainingEvaluationRecord(Guid.NewGuid(),
-            membership.TrainingRunId,
-            ComparisonId: null,
-            "tuned-model",
-            ModelContentFingerprint: "v1:base",
-            DatasetId,
-            membership.DatasetContentFingerprint,
-            JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
+        return new TrainingEvaluationRecord
+        {
+            Id = Guid.NewGuid(),
+            TrainingRunId = membership.TrainingRunId,
+            ComparisonId = null,
+            ModelName = "tuned-model",
+            ModelContentFingerprint = "v1:base",
+            DatasetId = DatasetId,
+            DatasetContentFingerprint = membership.DatasetContentFingerprint,
+            MembershipJson = JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
             // Already Running, so the executor scores without a transition the fake store would have to model.
-            TrainingEvaluationStatus.Running,
-            ResultsJson: null,
-            TotalCount: 1,
-            ScoredCount: 0,
-            PassedCount: 0,
-            PerKindJson: null,
-            ErrorMessage: null,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            TrainingWorkStatus.Running);
+            Status = TrainingEvaluationStatus.Running,
+            ResultsJson = null,
+            TotalCount = 1,
+            ScoredCount = 0,
+            PassedCount = 0,
+            PerKindJson = null,
+            ErrorMessage = null,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            WorkStatus = TrainingWorkStatus.Running
+        };
     }
 
     private static TrainingWorkClaim Claim(Guid evaluationId) =>
-        new(QueueSequence: 1, TrainingWorkKind.EvaluationRun, evaluationId, Version: 1, Run: null);
+        new() { QueueSequence = 1, Kind = TrainingWorkKind.EvaluationRun, TargetId = evaluationId, Version = 1, Run = null };
 
     private static ITransientLlamaServerEvaluationHarness EvaluationHarness(Exception? failure = null,
         ICollection<TransientLlamaServerEvaluationRequest>? requests = null,

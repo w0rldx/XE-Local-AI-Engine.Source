@@ -146,7 +146,7 @@ public sealed class SlashCommandStore : ISlashCommandStore
             throw new InvalidDataException("Invalid slash command description.");
         }
 
-        return new SlashCommandRecord(entity.Id, entity.Name, description, SlashCommandActionType.SendPrompt, prompt, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+        return new SlashCommandRecord { Id = entity.Id, Name = entity.Name, Description = description, ActionType = SlashCommandActionType.SendPrompt, Prompt = prompt, CreatedAtUtc = entity.CreatedAtUtc, UpdatedAtUtc = entity.UpdatedAtUtc };
     }
 
     private static void ValidatePersistedName(string name)

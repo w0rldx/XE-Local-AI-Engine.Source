@@ -74,21 +74,24 @@ public sealed class ModelFitRecommendationStore : IModelFitRecommendationStore
 
     private static ModelFitRecommendationRecord ToRecord(ModelFitRecommendation entity)
     {
-        return new ModelFitRecommendationRecord(entity.Id,
-            entity.SnapshotId,
-            entity.Rank,
-            entity.ModelName,
-            entity.ProviderModelName,
-            entity.Score,
-            entity.FitLevel,
-            entity.RunMode,
-            entity.Quantization,
-            entity.EstimatedTokensPerSecond,
-            entity.RequiredRamMb,
-            entity.RequiredVramMb,
-            entity.ContextTokens,
-            entity.IsInstalled,
-            entity.PullModelName,
-            entity.DiagnosticsJson);
+        return new ModelFitRecommendationRecord
+        {
+            Id = entity.Id,
+            SnapshotId = entity.SnapshotId,
+            Rank = entity.Rank,
+            ModelName = entity.ModelName,
+            ProviderModelName = entity.ProviderModelName,
+            Score = entity.Score,
+            FitLevel = entity.FitLevel,
+            RunMode = entity.RunMode,
+            Quantization = entity.Quantization,
+            EstimatedTokensPerSecond = entity.EstimatedTokensPerSecond,
+            RequiredRamMb = entity.RequiredRamMb,
+            RequiredVramMb = entity.RequiredVramMb,
+            ContextTokens = entity.ContextTokens,
+            IsInstalled = entity.IsInstalled,
+            PullModelName = entity.PullModelName,
+            DiagnosticsJson = entity.DiagnosticsJson
+        };
     }
 }

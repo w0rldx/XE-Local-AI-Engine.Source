@@ -550,12 +550,15 @@ public sealed class DevWorkflowIntegrationApplyTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
-                                     Guid.NewGuid(),
-                                     Guid.NewGuid(),
-                                     title,
-                                     "It has to do the thing.",
-                                     "[\"it does the thing\"]"));
+        var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand
+        {
+            ProjectId = projectId,
+            TaskId = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Title = title,
+            Requirements = "It has to do the thing.",
+            AcceptanceCriteriaJson = "[\"it does the thing\"]"
+        });
         var taskId = created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.");
         while ((await store.GetTaskAsync(taskId)).Status != DevelopmentTaskStatus.AwaitingApply)
         {
@@ -571,11 +574,14 @@ public sealed class DevWorkflowIntegrationApplyTests
         var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
-                           nodeRun.Id,
-                           DevWorkflowVersions.Any,
-                           DevWorkflowNodeRunStatus.Succeeded,
-                           DevelopmentTaskId: taskId));
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+                       {
+                           RunId = runId,
+                           NodeRunId = nodeRun.Id,
+                           ExpectedVersion = DevWorkflowVersions.Any,
+                           TargetStatus = DevWorkflowNodeRunStatus.Succeeded,
+                           DevelopmentTaskId = taskId
+                       });
     }
 
     /// <summary>
@@ -718,7 +724,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         await using (var renaming = harness.Services.CreateAsyncScope())
         {
             _ = await renaming.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                              .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "The team's feature flow"));
+                              .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = 1, Name = "The team's feature flow" });
         }
 
         await SeedAsync(harness);
@@ -761,7 +767,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         {
             var store = rewinding.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
             var current = await store.GetDefinitionAsync(definitionId);
-            _ = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, current.Version, GraphJson: OldSeedGraph, NodeCount: 11));
+            _ = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = current.Version, GraphJson = OldSeedGraph, NodeCount = 11 });
         }
 
         await SeedAsync(harness);
@@ -797,7 +803,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         await using (var editing = harness.Services.CreateAsyncScope())
         {
             _ = await editing.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "The operator's own", Edited, NodeCount: 1));
+                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = 1, Name = "The operator's own", GraphJson = Edited, NodeCount = 1 });
         }
 
         await SeedAsync(harness);
@@ -822,21 +828,27 @@ public sealed class DevWorkflowIntegrationApplyTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(),
-                                        "An older Feature Development v1",
-                                        OldSeedGraph,
-                                        NodeCount: 11,
-                                        DevWorkflowDefinitionSource.Seeded,
-                                        seedSlug));
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "An older Feature Development v1",
+            GraphJson = OldSeedGraph,
+            NodeCount = 11,
+            Source = DevWorkflowDefinitionSource.Seeded,
+            SeedSlug = seedSlug
+        });
         AssertEx.Equal(expected: 1, definition.Version, "the signal this whole path reads: a create writes version 1.");
 
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", "Explain the inference path."));
-        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
-                                 workItem.Id,
-                                 definition.Id,
-                                 definition.Version,
-                                 definition.GraphHash,
-                                 definition.GraphJson));
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Seeded work item", Request = "Explain the inference path." });
+        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            WorkItemId = workItem.Id,
+            DefinitionId = definition.Id,
+            DefinitionVersion = definition.Version,
+            DefinitionGraphHash = definition.GraphHash,
+            GraphJson = definition.GraphJson
+        });
         return (definition.Id, run.Id);
     }
 

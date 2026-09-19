@@ -104,13 +104,16 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
     {
         var nowMs = time.GetUtcNow().ToUnixTimeMilliseconds();
 
-        var running = await snapshots.CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId: Model,
-                Operation: ModelFitOperation.Benchmark,
-                UseCase: null,
-                ProviderName: Provider,
-                ModelName: Model,
-                Status: ModelFitRunStatus.Running,
-                StartedAtUtc: nowMs),
+        var running = await snapshots.CreateRunningAsync(new ModelFitSnapshotInput
+        {
+            ApprovedImageId = Model,
+            Operation = ModelFitOperation.Benchmark,
+            UseCase = null,
+            ProviderName = Provider,
+            ModelName = Model,
+            Status = ModelFitRunStatus.Running,
+            StartedAtUtc = nowMs
+        },
             CancellationToken.None);
 
         _ = await snapshots.MarkTerminalAsync(running.Id,
@@ -126,16 +129,19 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         _ = await benchmarks.ReplaceForSnapshotAsync(running.Id,
             new[]
             {
-                new ModelFitBenchmarkInput(ModelName: Model,
-                    ProviderName: Provider,
-                    TokensPerSecond: 42d,
-                    TtftMs: null,
-                    TotalLatencyMs: null,
-                    Runs: 1,
-                    RawJson: null,
-                    DiagnosticsJson: null,
-                    CtxSize: ctxSize,
-                    ProfileId: profileId)
+                new ModelFitBenchmarkInput
+                {
+                    ModelName = Model,
+                    ProviderName = Provider,
+                    TokensPerSecond = 42d,
+                    TtftMs = null,
+                    TotalLatencyMs = null,
+                    Runs = 1,
+                    RawJson = null,
+                    DiagnosticsJson = null,
+                    CtxSize = ctxSize,
+                    ProfileId = profileId
+                }
             },
             CancellationToken.None);
 

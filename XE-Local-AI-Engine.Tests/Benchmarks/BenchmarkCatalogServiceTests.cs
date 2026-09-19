@@ -218,7 +218,7 @@ public sealed class BenchmarkCatalogServiceTests
         };
 
     private static AgentDefinitionRecord Definition(Guid id, string name, AgentDefinitionKind kind) =>
-        new(id, name, null, "instructions", null, null, kind, [], new Dictionary<string, bool>(), null, 7, 1, 1);
+        new() { Id = id, Name = name, Description = null, Instructions = "instructions", ModelProfile = null, ReasoningEffort = null, Kind = kind, AllowedToolNames = [], ToolApprovals = new Dictionary<string, bool>(), OrchestrationTopologyJson = null, Version = 7, CreatedAtUtc = 1, UpdatedAtUtc = 1 };
 
     private static InstalledModelSnapshot CreateSnapshot(string name,
         LocalModelOrigin? origin,

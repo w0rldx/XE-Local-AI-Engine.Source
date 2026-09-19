@@ -175,13 +175,16 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             }
 
             var contentJson = JsonSerializer.SerializeToUtf8Bytes(outcome.Content, TrainingJson.Options);
-            var append = await _store.AppendSampleAsync(new TrainingSampleInput(work.DatasetId,
-                                             target.Kind,
-                                             outcome.Label,
-                                             contentJson,
-                                             JsonSerializer.SerializeToUtf8Bytes(outcome.Validation, TrainingJson.Options),
-                                             TrainingSampleProvenance.Generated,
-                                             SourceHash(contentJson)),
+            var append = await _store.AppendSampleAsync(new TrainingSampleInput
+            {
+                DatasetId = work.DatasetId,
+                Kind = target.Kind,
+                Label = outcome.Label,
+                ContentJson = contentJson,
+                ValidationJson = JsonSerializer.SerializeToUtf8Bytes(outcome.Validation, TrainingJson.Options),
+                Provenance = TrainingSampleProvenance.Generated,
+                SourceHash = SourceHash(contentJson)
+            },
                                          cancellationToken);
 
             _ = _events.Append(work.DatasetId,

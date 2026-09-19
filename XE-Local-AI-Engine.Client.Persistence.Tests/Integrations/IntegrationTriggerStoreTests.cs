@@ -19,15 +19,18 @@ public sealed class IntegrationTriggerStoreTests
         var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
 
         var agentId = Guid.NewGuid();
-        var created = await store.CreateAsync(new IntegrationTriggerCreateCommand(Guid.NewGuid(),
-                                     "sensor-ingest",
-                                     "Sensor ingest",
-                                     "Accepts a reading.",
-                                     Enabled: true,
-                                     IntegrationTargetKind.Agent,
-                                     agentId,
-                                     IntegrationSessionPolicy.CallerManaged,
-                                     IntegrationInputKinds.Text | IntegrationInputKinds.Json));
+        var created = await store.CreateAsync(new IntegrationTriggerCreateCommand
+        {
+            TriggerId = Guid.NewGuid(),
+            Name = "sensor-ingest",
+            DisplayName = "Sensor ingest",
+            Description = "Accepts a reading.",
+            Enabled = true,
+            TargetKind = IntegrationTargetKind.Agent,
+            TargetAgentDefinitionId = agentId,
+            SessionPolicy = IntegrationSessionPolicy.CallerManaged,
+            AcceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json
+        });
 
         AssertEx.Equal(expected: 1L, created.Version);
         AssertEx.Equal(FixedNow.ToUnixTimeMilliseconds(), created.CreatedAtUtc);
@@ -53,14 +56,17 @@ public sealed class IntegrationTriggerStoreTests
         var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
         var created = await CreateAsync(store, "sensor-ingest");
 
-        var update = new IntegrationTriggerUpdateCommand(created.Id,
-            created.Version,
-            "Renamed label",
-            Description: null,
-            Enabled: false,
-            created.TargetAgentDefinitionId,
-            IntegrationSessionPolicy.CallerManaged,
-            IntegrationInputKinds.Text);
+        var update = new IntegrationTriggerUpdateCommand
+        {
+            TriggerId = created.Id,
+            ExpectedVersion = created.Version,
+            DisplayName = "Renamed label",
+            Description = null,
+            Enabled = false,
+            TargetAgentDefinitionId = created.TargetAgentDefinitionId,
+            SessionPolicy = IntegrationSessionPolicy.CallerManaged,
+            AcceptedInputKinds = IntegrationInputKinds.Text
+        };
 
         AssertEx.True(await store.UpdateAsync(update));
 
@@ -100,15 +106,18 @@ public sealed class IntegrationTriggerStoreTests
     }
 
     private static Task<IntegrationTriggerSnapshot> CreateAsync(IIntegrationTriggerStore store, string name) =>
-        store.CreateAsync(new IntegrationTriggerCreateCommand(Guid.NewGuid(),
-            name,
-            name,
-            Description: null,
-            Enabled: true,
-            IntegrationTargetKind.Agent,
-            Guid.NewGuid(),
-            IntegrationSessionPolicy.PerInvocation,
-            IntegrationInputKinds.Text));
+        store.CreateAsync(new IntegrationTriggerCreateCommand
+        {
+            TriggerId = Guid.NewGuid(),
+            Name = name,
+            DisplayName = name,
+            Description = null,
+            Enabled = true,
+            TargetKind = IntegrationTargetKind.Agent,
+            TargetAgentDefinitionId = Guid.NewGuid(),
+            SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+            AcceptedInputKinds = IntegrationInputKinds.Text
+        });
 
     private sealed class FixedTimeProvider : TimeProvider
     {

@@ -53,18 +53,24 @@ internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
         ArgumentNullException.ThrowIfNull(nodeRun);
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.Running),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.Running
+        },
                            cancellationToken);
 
         GraphWorkflowStateMachine.EnsureLegal(GraphWorkflowNodeRunStatus.Running, GraphWorkflowNodeRunStatus.WaitingForApproval, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               GraphWorkflowNodeRunStatus.WaitingForApproval,
-                               PendingDecisionKind: GraphWorkflowDecisionKind.Approve),
+        _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+        {
+            RunId = run.Id,
+            NodeRunId = nodeRun.Id,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            TargetStatus = GraphWorkflowNodeRunStatus.WaitingForApproval,
+            PendingDecisionKind = GraphWorkflowDecisionKind.Approve
+        },
                            cancellationToken);
         return 2;
     }

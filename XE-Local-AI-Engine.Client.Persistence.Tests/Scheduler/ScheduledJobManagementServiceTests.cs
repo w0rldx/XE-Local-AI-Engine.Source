@@ -634,22 +634,25 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
         await scheduler.Start(CancellationToken.None);
 
-        var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
-                                    "Orphaned template job",
-                                    Description: null,
-                                    Enabled: false,
-                                    ScheduleKind.Cron,
-                                    "0 0 * * * ?",
-                                    IntervalSeconds: null,
-                                    RepeatCount: null,
-                                    StartAtUtc: null,
-                                    EndAtUtc: null,
-                                    "UTC",
-                                    SchedulerMisfirePolicy.Smart,
-                                    PreventOverlap: false,
-                                    MaxRuntimeSeconds: null,
-                                    ParameterJson: null,
-                                    ScheduledJobCreator.User));
+        var stored = await store.AddAsync(new ScheduledJobDefinitionInput
+        {
+            TemplateId = "does-not-exist",
+            DisplayName = "Orphaned template job",
+            Description = null,
+            Enabled = false,
+            ScheduleKind = ScheduleKind.Cron,
+            CronExpression = "0 0 * * * ?",
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            ParameterJson = null,
+            CreatedBy = ScheduledJobCreator.User
+        });
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.SetEnabledAsync(stored.Id, enabled: true));
 
@@ -921,13 +924,16 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var runStore = provider.GetRequiredService<IScheduledJobRunStore>();
 
-        var run = await runStore.AddAsync(new ScheduledJobRunInput(Guid.NewGuid(),
-            TestEchoScheduledJobHandler.Id,
-            "fire-terminal",
-            ScheduledRunTrigger.Schedule,
-            ScheduledRunStatus.Succeeded,
-            ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: null));
+        var run = await runStore.AddAsync(new ScheduledJobRunInput
+        {
+            ScheduledJobId = Guid.NewGuid(),
+            TemplateId = TestEchoScheduledJobHandler.Id,
+            QuartzFireInstanceId = "fire-terminal",
+            TriggeredBy = ScheduledRunTrigger.Schedule,
+            Status = ScheduledRunStatus.Succeeded,
+            ScheduledFireTimeUtc = null,
+            ActualFireTimeUtc = null
+        });
 
         var outcome = await service.CancelRunAsync(run.Id);
 
@@ -948,13 +954,16 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None);
 
         // A Running row whose fire instance is not actually executing — Quartz.Interrupt finds nothing to interrupt.
-        var run = await runStore.AddAsync(new ScheduledJobRunInput(Guid.NewGuid(),
-            TestEchoScheduledJobHandler.Id,
-            "fire-not-active",
-            ScheduledRunTrigger.Schedule,
-            ScheduledRunStatus.Running,
-            ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: null));
+        var run = await runStore.AddAsync(new ScheduledJobRunInput
+        {
+            ScheduledJobId = Guid.NewGuid(),
+            TemplateId = TestEchoScheduledJobHandler.Id,
+            QuartzFireInstanceId = "fire-not-active",
+            TriggeredBy = ScheduledRunTrigger.Schedule,
+            Status = ScheduledRunStatus.Running,
+            ScheduledFireTimeUtc = null,
+            ActualFireTimeUtc = null
+        });
 
         var outcome = await service.CancelRunAsync(run.Id);
 

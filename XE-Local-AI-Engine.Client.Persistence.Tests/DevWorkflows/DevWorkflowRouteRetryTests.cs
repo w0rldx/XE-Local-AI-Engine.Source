@@ -164,35 +164,50 @@ public sealed class DevWorkflowRouteRetryTests
                      IntegrateId
                  })
         {
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                               nodeRunId,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Succeeded));
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+            {
+                RunId = seed.RunId,
+                NodeRunId = nodeRunId,
+                ExpectedVersion = DevWorkflowVersions.Any,
+                TargetStatus = DevWorkflowNodeRunStatus.Succeeded
+            });
         }
 
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                           FullValidateId,
-                           DevWorkflowVersions.Any,
-                           DevWorkflowNodeRunStatus.Failed,
-                           FailureClass: "ToolCommandFailed",
-                           TerminalReason: "the integrated result does not build"));
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+        {
+            RunId = seed.RunId,
+            NodeRunId = FullValidateId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            TargetStatus = DevWorkflowNodeRunStatus.Failed,
+            FailureClass = "ToolCommandFailed",
+            TerminalReason = "the integrated result does not build"
+        });
         return seed;
     }
 
     private static RouteDevWorkflowRetryCommand RouteFrom(Guid runId, Guid operationId, IReadOnlyList<Guid> resetIds) =>
-        new(new AppendDevWorkflowEventCommand(runId,
-                DevWorkflowVersions.Any,
-                DevWorkflowEventTypes.NodeRetryRouted,
-                FullValidateId,
-                operationId,
-                "failed",
-                """{"from":"fullvalidate","to":"verify"}"""),
-            [
-                .. resetIds.Select(nodeRunId => new TransitionDevWorkflowNodeRunCommand(runId,
-                    nodeRunId,
-                    DevWorkflowVersions.Any,
-                    DevWorkflowNodeRunStatus.Pending,
-                    IncrementAttempt: true,
-                    ClearWorkSession: true))
-            ]);
+        new()
+        {
+            Route = new AppendDevWorkflowEventCommand
+        {
+            RunId = runId,
+            ExpectedVersion = DevWorkflowVersions.Any,
+            EventType = DevWorkflowEventTypes.NodeRetryRouted,
+            NodeRunId = FullValidateId,
+            OperationId = operationId,
+            Outcome = "failed",
+            DetailJson = """{"from":"fullvalidate","to":"verify"}"""
+        },
+            Resets = [
+                .. resetIds.Select(nodeRunId => new TransitionDevWorkflowNodeRunCommand
+                {
+                    RunId = runId,
+                    NodeRunId = nodeRunId,
+                    ExpectedVersion = DevWorkflowVersions.Any,
+                    TargetStatus = DevWorkflowNodeRunStatus.Pending,
+                    IncrementAttempt = true,
+                    ClearWorkSession = true
+                })
+            ]
+        };
 }

@@ -770,30 +770,33 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
     private static InferenceProfileRecord Profile(InferenceProfileFingerprintInput input,
         LaunchPolicyFingerprint fingerprint)
     {
-        return new InferenceProfileRecord(Guid.NewGuid(),
-            MachineKey: "machine",
-            input.ModelName,
-            input.Role,
-            input.Backend,
-            LlamacppBuild: "b9999",
-            Quant: "Q4_K_M",
-            input.CtxSize,
-            input.NGpuLayers,
-            input.TensorSplit,
-            input.OverrideTensor,
-            input.KvTypeK,
-            input.KvTypeV,
-            input.FlashAttn,
-            NParams: 1,
-            IsMoe: false,
-            ExpertCount: null,
-            GlobalFreeVramAtFreezeBytes: null,
-            Status: InferenceProfileStatus.Frozen,
-            BenchmarkSnapshotId: Guid.NewGuid(),
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            LaunchPolicyFingerprintVersion: fingerprint.Version,
-            LaunchPolicyFingerprint: fingerprint.Value);
+        return new InferenceProfileRecord
+        {
+            Id = Guid.NewGuid(),
+            MachineKey = "machine",
+            ModelName = input.ModelName,
+            Role = input.Role,
+            Backend = input.Backend,
+            LlamacppBuild = "b9999",
+            Quant = "Q4_K_M",
+            CtxSize = input.CtxSize,
+            NGpuLayers = input.NGpuLayers,
+            TensorSplit = input.TensorSplit,
+            OverrideTensor = input.OverrideTensor,
+            KvTypeK = input.KvTypeK,
+            KvTypeV = input.KvTypeV,
+            FlashAttn = input.FlashAttn,
+            NParams = 1,
+            IsMoe = false,
+            ExpertCount = null,
+            GlobalFreeVramAtFreezeBytes = null,
+            Status = InferenceProfileStatus.Frozen,
+            BenchmarkSnapshotId = Guid.NewGuid(),
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            LaunchPolicyFingerprintVersion = fingerprint.Version,
+            LaunchPolicyFingerprint = fingerprint.Value
+        };
     }
 
     private static async Task<string> CreateModelFileAsync()

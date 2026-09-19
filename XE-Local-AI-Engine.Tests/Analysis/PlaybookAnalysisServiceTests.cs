@@ -166,17 +166,20 @@ public sealed class PlaybookAnalysisServiceTests
         var insightsResult = BuildInsights(agentId, meetsThreshold: true, [exemplar]);
 
         // An existing Enabled action whose (scope, behavior) the proposal normalizes to (case/whitespace-insensitive).
-        var existing = new PlaybookActionRecord(Guid.NewGuid(),
-            agentId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition: null,
-            "Cite sources before answering.",
-            "search",
-            Priority: 10,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        var existing = new PlaybookActionRecord
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = agentId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = null,
+            Behavior = "Cite sources before answering.",
+            Scope = "search",
+            Priority = 10,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
 
         var agent = new FakeAnalysisAgent(_ =>
         [
@@ -222,19 +225,22 @@ public sealed class PlaybookAnalysisServiceTests
                      .Returns(callInfo =>
                      {
                          var input = callInfo.Arg<PlaybookAnalysisSuggestionInput>();
-                         return Task.FromResult(new PlaybookActionRecord(Guid.NewGuid(),
-                             input.AgentDefinitionId,
-                             PlaybookActionState.Suggested,
-                             PlaybookActionSource.Analysis,
-                             input.TriggerCondition,
-                             input.Behavior,
-                             input.Scope,
-                             input.Priority,
-                             Version: 1,
-                             CreatedAtUtc: 10,
-                             UpdatedAtUtc: 10,
-                             input.SourceFeedbackIds,
-                             input.Confidence));
+                         return Task.FromResult(new PlaybookActionRecord
+                         {
+                             Id = Guid.NewGuid(),
+                             AgentDefinitionId = input.AgentDefinitionId,
+                             State = PlaybookActionState.Suggested,
+                             Source = PlaybookActionSource.Analysis,
+                             TriggerCondition = input.TriggerCondition,
+                             Behavior = input.Behavior,
+                             Scope = input.Scope,
+                             Priority = input.Priority,
+                             Version = 1,
+                             CreatedAtUtc = 10,
+                             UpdatedAtUtc = 10,
+                             SourceFeedbackIds = input.SourceFeedbackIds,
+                             Confidence = input.Confidence
+                         });
                      });
     }
 

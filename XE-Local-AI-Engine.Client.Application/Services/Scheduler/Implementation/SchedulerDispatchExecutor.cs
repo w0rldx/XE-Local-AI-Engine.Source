@@ -128,13 +128,16 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 
         // Idempotent open: a refire / recovery callback with the same fire-instance id returns the existing row instead
         // of inserting a duplicate. If that row is already terminal the work has run before — skip re-execution.
-        var run = await _runStore.UpsertByFireInstanceAsync(new ScheduledJobRunInput(definition.Id,
-                definition.TemplateId,
-                fireInstanceId,
-                triggeredBy,
-                ScheduledRunStatus.Running,
-                scheduledFireTimeUtc?.ToUnixTimeMilliseconds(),
-                actualFireMs),
+        var run = await _runStore.UpsertByFireInstanceAsync(new ScheduledJobRunInput
+        {
+            ScheduledJobId = definition.Id,
+            TemplateId = definition.TemplateId,
+            QuartzFireInstanceId = fireInstanceId,
+            TriggeredBy = triggeredBy,
+            Status = ScheduledRunStatus.Running,
+            ScheduledFireTimeUtc = scheduledFireTimeUtc?.ToUnixTimeMilliseconds(),
+            ActualFireTimeUtc = actualFireMs
+        },
             cancellationToken);
 
         if (IsTerminal(run.Status))
@@ -364,7 +367,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
             // Persist the progress event with CancellationToken.None — same policy as the terminal writes. A handler
             // reporting progress on its way out of a cancelled run forwards its (already-cancelled) token; honoring it
             // here would throw a second OperationCanceledException from SaveChanges that masks the real cancellation.
-            _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput(runId, nextSequence, ScheduledRunEventLevel.Progress, message, dataJson),
+            _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput { RunId = runId, Sequence = nextSequence, Level = ScheduledRunEventLevel.Progress, Message = message, DataJson = dataJson },
                 CancellationToken.None);
 
             await SafePublishProgressAsync(runId, scheduledJobId, message, percent);

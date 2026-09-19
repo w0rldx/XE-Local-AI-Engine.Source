@@ -753,27 +753,33 @@ public sealed class PlaybookActionStoreTests : IDisposable
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-            Description: null,
-            Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
-            AgentDefinitionKind.Single,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+        var agent = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = "Builder",
+            Description = null,
+            Instructions = Instructions,
+            ModelProfile = null,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null
+        });
         return agent.Id;
     }
 
     private static PlaybookActionInput CreateInput(Guid agentDefinitionId)
     {
-        return new PlaybookActionInput(agentDefinitionId,
-            PlaybookActionState.Enabled,
-            PlaybookActionSource.Manual,
-            TriggerCondition,
-            Behavior,
-            "testing",
-            Priority: 10);
+        return new PlaybookActionInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            State = PlaybookActionState.Enabled,
+            Source = PlaybookActionSource.Manual,
+            TriggerCondition = TriggerCondition,
+            Behavior = Behavior,
+            Scope = "testing",
+            Priority = 10
+        };
     }
 
     private static async Task TamperBehaviorAsync(string databasePath)

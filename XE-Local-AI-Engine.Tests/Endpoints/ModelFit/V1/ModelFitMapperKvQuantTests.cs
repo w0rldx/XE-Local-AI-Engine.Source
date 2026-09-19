@@ -17,22 +17,25 @@ public sealed class ModelFitMapperKvQuantTests
 {
     private static ModelFitRecommendationRecord CreateRecord(string? diagnosticsJson)
     {
-        return new ModelFitRecommendationRecord(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Rank: 1,
-            ModelName: "repo/model:Q4_K_M",
-            ProviderModelName: null,
-            Score: 90d,
-            FitLevel: "gpu",
-            RunMode: null,
-            Quantization: "Q4_K_M",
-            EstimatedTokensPerSecond: null,
-            RequiredRamMb: 12000d,
-            RequiredVramMb: 12000d,
-            ContextTokens: 8192,
-            IsInstalled: false,
-            PullModelName: null,
-            DiagnosticsJson: diagnosticsJson);
+        return new ModelFitRecommendationRecord
+        {
+            Id = Guid.NewGuid(),
+            SnapshotId = Guid.NewGuid(),
+            Rank = 1,
+            ModelName = "repo/model:Q4_K_M",
+            ProviderModelName = null,
+            Score = 90d,
+            FitLevel = "gpu",
+            RunMode = null,
+            Quantization = "Q4_K_M",
+            EstimatedTokensPerSecond = null,
+            RequiredRamMb = 12000d,
+            RequiredVramMb = 12000d,
+            ContextTokens = 8192,
+            IsInstalled = false,
+            PullModelName = null,
+            DiagnosticsJson = diagnosticsJson
+        };
     }
 
     private static ModelFitLatestRecommendationsView CreateView(ModelFitRecommendationRecord record)

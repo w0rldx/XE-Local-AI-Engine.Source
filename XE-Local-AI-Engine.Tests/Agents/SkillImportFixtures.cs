@@ -161,8 +161,17 @@ internal sealed class SkillImportHarness : IDisposable
     {
         Store.ListAsync(Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(names
-                                                                       .Select(static name => new AgentSkillRecord(Guid.NewGuid(), name, "old", "old body", Enabled: true, Version: 3, CreatedAtUtc: 1,
-                                                                           UpdatedAtUtc: 1))
+                                                                       .Select(static name => new AgentSkillRecord
+                                                                       {
+                                                                           Id = Guid.NewGuid(),
+                                                                           Name = name,
+                                                                           Description = "old",
+                                                                           Body = "old body",
+                                                                           Enabled = true,
+                                                                           Version = 3,
+                                                                           CreatedAtUtc = 1,
+                                                                           UpdatedAtUtc = 1
+                                                                       })
                                                                        .ToList()));
     }
 
@@ -186,22 +195,25 @@ internal sealed class SkillImportHarness : IDisposable
 
     private static AgentSkillRecord Record(AgentSkillInput input, Guid id)
     {
-        return new AgentSkillRecord(id,
-            input.Name,
-            input.Description,
-            input.Body,
-            input.Enabled,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
-            input.License,
-            input.Compatibility,
-            input.AllowedTools,
-            input.Metadata,
-            input.Origin,
-            input.SourceUri,
-            input.ImportedAtUtc,
-            input.ContentSha256);
+        return new AgentSkillRecord
+        {
+            Id = id,
+            Name = input.Name,
+            Description = input.Description,
+            Body = input.Body,
+            Enabled = input.Enabled,
+            Version = 1,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10,
+            License = input.License,
+            Compatibility = input.Compatibility,
+            AllowedTools = input.AllowedTools,
+            Metadata = input.Metadata,
+            Origin = input.Origin,
+            SourceUri = input.SourceUri,
+            ImportedAtUtc = input.ImportedAtUtc,
+            ContentSha256 = input.ContentSha256
+        };
     }
 }
 

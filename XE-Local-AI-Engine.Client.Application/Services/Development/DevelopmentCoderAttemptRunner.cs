@@ -118,12 +118,15 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 profile,
                 timeout.Token);
 
-            _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
-                                    Guid.NewGuid(),
-                                    DevelopmentAttemptStatus.Succeeded,
-                                    snapshot.AttemptVersion,
-                                    InputTokens: model.InputTokens,
-                                    OutputTokens: model.OutputTokens),
+            _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
+            {
+                AttemptId = snapshot.AttemptId,
+                OperationId = Guid.NewGuid(),
+                Status = DevelopmentAttemptStatus.Succeeded,
+                ExpectedAttemptVersion = snapshot.AttemptVersion,
+                InputTokens = model.InputTokens,
+                OutputTokens = model.OutputTokens
+            },
                                 CancellationToken.None);
             return new DevelopmentCoderAttemptResult(snapshot.AttemptId,
                 evidence.BaseCommit,
@@ -137,11 +140,14 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             var status = exception is OperationCanceledException ? DevelopmentAttemptStatus.Cancelled : DevelopmentAttemptStatus.Failed;
             try
             {
-                _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
-                                        Guid.NewGuid(),
-                                        status,
-                                        snapshot.AttemptVersion,
-                                        SanitizedReason(exception)),
+                _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
+                {
+                    AttemptId = snapshot.AttemptId,
+                    OperationId = Guid.NewGuid(),
+                    Status = status,
+                    ExpectedAttemptVersion = snapshot.AttemptVersion,
+                    TerminalReason = SanitizedReason(exception)
+                },
                                     CancellationToken.None);
             }
             catch (DevelopmentInvalidTransitionException)
@@ -298,22 +304,25 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     {
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
-        _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
-                                snapshot.ProjectId,
-                                snapshot.TaskId,
-                                snapshot.AttemptId,
-                                Guid.NewGuid(),
-                                kind,
-                                SchemaVersion: 1,
-                                written.ContentHash,
-                                written.ByteCount,
-                                ManagedReference: written.OpaqueReference,
-                                BaseCommit: baseCommit,
-                                SubjectHash: subjectHash,
-                                ChangedFilesManifestHash: manifestHash,
-                                InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
-                                CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion,
-                                CommandProfileDigest: profileDigest),
+        _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand
+        {
+            ArtifactId = artifactId,
+            ProjectId = snapshot.ProjectId,
+            TaskId = snapshot.TaskId,
+            AttemptId = snapshot.AttemptId,
+            OperationId = Guid.NewGuid(),
+            Kind = kind,
+            SchemaVersion = 1,
+            ContentHash = written.ContentHash,
+            ByteCount = written.ByteCount,
+            ManagedReference = written.OpaqueReference,
+            BaseCommit = baseCommit,
+            SubjectHash = subjectHash,
+            ChangedFilesManifestHash = manifestHash,
+            InputArtifactIdsJson = inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
+            CommandProfileVersion = DevelopmentWorkspaceTools.ProfileVersion,
+            CommandProfileDigest = profileDigest
+        },
                             cancellationToken);
         return artifactId;
     }

@@ -127,12 +127,15 @@ public sealed class ModelClassificationStore : IModelClassificationStore
 
     private static ModelClassificationRecord ToRecord(ModelClassification entity)
     {
-        return new ModelClassificationRecord(entity.ModelName,
-            entity.Digest,
-            entity.DetectedKind,
-            entity.DetectedCapabilitiesJson,
-            entity.OverrideKind,
-            entity.DetectedAtUtc,
-            entity.UpdatedAtUtc);
+        return new ModelClassificationRecord
+        {
+            ModelName = entity.ModelName,
+            Digest = entity.Digest,
+            DetectedKind = entity.DetectedKind,
+            DetectedCapabilitiesJson = entity.DetectedCapabilitiesJson,
+            OverrideKind = entity.OverrideKind,
+            DetectedAtUtc = entity.DetectedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
     }
 }

@@ -3,17 +3,28 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>A session as a reader sees it. Every value is plaintext structural; the transcript lives in the owned conversation.</summary>
-public sealed record IntegrationSessionSnapshot(
-    Guid Id,
-    Guid TriggerId,
-    Guid PrincipalId,
-    Guid ConversationId,
-    Guid AgentDefinitionId,
-    IntegrationSessionStatus Status,
-    long CreatedAtUtc,
-    long LastActivityUtc,
-    int ExecutionCount,
-    long LastSequence);
+public sealed record IntegrationSessionSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required IntegrationSessionStatus Status { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long LastActivityUtc { get; init; }
+
+    public required int ExecutionCount { get; init; }
+
+    public required long LastSequence { get; init; }
+}
 
 /// <summary>
 ///     The new session an accept creates, or <see langword="null" /> on the command when the accept continues an
@@ -22,11 +33,16 @@ public sealed record IntegrationSessionSnapshot(
 ///     commits. The session row therefore carries a conversation id with no conversation row behind it for the width of
 ///     that gap, on purpose — which is what makes an orphan conversation impossible.
 /// </summary>
-public sealed record IntegrationSessionCreate(
-    Guid SessionId,
-    Guid TriggerId,
-    Guid ConversationId,
-    Guid AgentDefinitionId);
+public sealed record IntegrationSessionCreate
+{
+    public required Guid SessionId { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+}
 
 /// <summary>
 ///     Persistence boundary for integration sessions.

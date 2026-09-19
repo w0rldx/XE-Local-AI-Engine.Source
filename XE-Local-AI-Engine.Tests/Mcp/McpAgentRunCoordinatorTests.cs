@@ -197,14 +197,17 @@ public sealed class McpAgentRunCoordinatorTests
                .Returns(callInfo =>
                {
                    captured = callInfo.Arg<McpAgentRunAdmissionRequest>();
-                   return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted,
-                       CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
+                   return new McpAgentRunAdmissionResult
+                   {
+                       Kind = McpAgentRunAdmissionKind.Accepted,
+                       Run = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
                        {
                            RequestId = captured.RequestId,
                            WorkspaceId = captured.WorkspaceId,
                            ClaimedAtUtc = null,
                            PayloadExpiresAtUtc = null
-                       });
+                       }
+                   };
                });
 
         var result = await harness.Coordinator.StartAsync(WorkspaceRequest(workspaceId), CancellationToken.None);
@@ -248,7 +251,7 @@ public sealed class McpAgentRunCoordinatorTests
                            ClaimedAtUtc = null,
                            PayloadExpiresAtUtc = null
                        };
-                   return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted, queued);
+                   return new McpAgentRunAdmissionResult { Kind = McpAgentRunAdmissionKind.Accepted, Run = queued };
                });
         harness.Store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>())
                .Returns(EmptySnapshot());
@@ -286,8 +289,8 @@ public sealed class McpAgentRunCoordinatorTests
                    Arg.Any<long>(),
                    Arg.Any<CancellationToken>())
                .Returns(_ => Interlocked.Increment(ref stops) == 1
-                   ? new McpAgentRunStopResult(McpAgentRunStopKind.Requested, stopped)
-                   : new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyRequested, stopped));
+                   ? new McpAgentRunStopResult { Kind = McpAgentRunStopKind.Requested, Run = stopped }
+                   : new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyRequested, Run = stopped });
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(running.RequestId, claimToken, running.Version, out var executionToken));
 
@@ -317,7 +320,7 @@ public sealed class McpAgentRunCoordinatorTests
                    McpAgentRunStopReason.UserCancellation,
                    Arg.Any<long>(),
                    Arg.Any<CancellationToken>())
-               .Returns(new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyTerminal, completed));
+               .Returns(new McpAgentRunStopResult { Kind = McpAgentRunStopKind.AlreadyTerminal, Run = completed });
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(completed.RequestId, claimToken, version: 1, out var executionToken));
 
@@ -332,42 +335,51 @@ public sealed class McpAgentRunCoordinatorTests
         long version,
         Guid? claimToken,
         McpAgentRunStopReason stopReason) =>
-        new(Guid.Parse("74134b4f-a62c-4398-a01a-17d939600335"),
-            SHA256.HashData("request"u8),
-            status,
-            version,
-            claimToken,
-            stopReason,
-            StopRequestedAtUtc: null,
-            AgentDefinitionId: null,
-            AgentDefinitionVersion: null,
-            ModelId: "local-model",
-            ModelOverrideId: null,
-            WorkspaceId: null,
-            BindingFingerprint: SHA256.HashData("binding"u8),
-            Task: "task",
-            Instructions: "read only",
-            Result: null,
-            DisplayMessage: null,
-            FailureCode: null,
-            CreatedAtUtc: 1,
-            ClaimedAtUtc: 2,
-            CompletedAtUtc: null,
-            PayloadExpiresAtUtc: 86_400_001,
-            CompactedAtUtc: null,
-            PayloadExpired: false);
+        new()
+        {
+            RequestId = Guid.Parse("74134b4f-a62c-4398-a01a-17d939600335"),
+            RequestFingerprint = SHA256.HashData("request"u8),
+            Status = status,
+            Version = version,
+            ClaimToken = claimToken,
+            StopReason = stopReason,
+            StopRequestedAtUtc = null,
+            AgentDefinitionId = null,
+            AgentDefinitionVersion = null,
+            ModelId = "local-model",
+            ModelOverrideId = null,
+            WorkspaceId = null,
+            BindingFingerprint = SHA256.HashData("binding"u8),
+            Task = "task",
+            Instructions = "read only",
+            Result = null,
+            DisplayMessage = null,
+            FailureCode = null,
+            CreatedAtUtc = 1,
+            ClaimedAtUtc = 2,
+            CompletedAtUtc = null,
+            PayloadExpiresAtUtc = 86_400_001,
+            CompactedAtUtc = null,
+            PayloadExpired = false
+        };
 
     private static McpAgentRunLedgerSnapshot EmptySnapshot() =>
-        new(QueueDepth: 0,
-            RunningCount: 0,
-            new McpAgentRunLedgerCounters(AccountingVersion: 1,
-                NonterminalRunCount: 0,
-                QueuedRunCount: 0,
-                RunningRunCount: 0,
-                IdentityCount: 0,
-                ActivePayloadBytes: 0,
-                TombstoneLogicalBytes: 0,
-                UpdatedAtUtc: 0));
+        new()
+        {
+            QueueDepth = 0,
+            RunningCount = 0,
+            Counters = new McpAgentRunLedgerCounters
+            {
+                AccountingVersion = 1,
+                NonterminalRunCount = 0,
+                QueuedRunCount = 0,
+                RunningRunCount = 0,
+                IdentityCount = 0,
+                ActivePayloadBytes = 0,
+                TombstoneLogicalBytes = 0,
+                UpdatedAtUtc = 0
+            }
+        };
 
     private static McpAgentRunStartRequest WorkspaceRequest(Guid workspaceId) =>
         new(Guid.NewGuid(),

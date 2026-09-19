@@ -8,48 +8,82 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     never a message. <see cref="OutputBytes" /> counts <b>plaintext</b> UTF-8 bytes of the persisted
 ///     <c>external.output</c> payloads.
 /// </summary>
-public sealed record IntegrationExecutionSnapshot(
-    Guid Id,
-    Guid TriggerId,
-    Guid SessionId,
-    Guid PrincipalId,
-    Guid RequestId,
-    ReadOnlyMemory<byte> RequestFingerprint,
-    string KeyPrefix,
-    Guid InvocationId,
-    IntegrationExecutionStatus Status,
-    long ReceivedAtUtc,
-    long? StartedAtUtc,
-    long? EndedAtUtc,
-    long? StopRequestedAtUtc,
-    string? FailureCategory,
-    string? FailureSummary,
-    int OutputCount,
-    long OutputBytes,
-    long LastSequence,
-    long Version);
+public sealed record IntegrationExecutionSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required ReadOnlyMemory<byte> RequestFingerprint { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required Guid InvocationId { get; init; }
+
+    public required IntegrationExecutionStatus Status { get; init; }
+
+    public required long ReceivedAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? EndedAtUtc { get; init; }
+
+    public required long? StopRequestedAtUtc { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required string? FailureSummary { get; init; }
+
+    public required int OutputCount { get; init; }
+
+    public required long OutputBytes { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary><c>DetailJson</c> is DECRYPTED text, not the stored <c>byte[]</c> — every consumer reads text.</summary>
-public sealed record IntegrationExecutionEventSnapshot(
-    Guid Id,
-    Guid ExecutionId,
-    long Sequence,
-    string EventType,
-    string? DetailJson,
-    long OccurredAtUtc);
+public sealed class IntegrationExecutionEventSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid ExecutionId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One event to append. <see cref="DetailJson" /> is PLAINTEXT text; the store encodes it to UTF-8 and the save
 ///     interceptor seals it. <see cref="Sequence" /> is minted by the coordinator's event buffer and never by the
 ///     store.
 /// </summary>
-public sealed record IntegrationEventAppend(
-    Guid EventId,
-    Guid ExecutionId,
-    long Sequence,
-    string EventType,
-    string? DetailJson,
-    long OccurredAtUtc);
+public sealed record IntegrationEventAppend
+{
+    public required Guid EventId { get; init; }
+
+    public required Guid ExecutionId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Everything one admission writes.
@@ -71,17 +105,28 @@ public sealed record IntegrationEventAppend(
 ///         terminal transition.
 ///     </para>
 /// </summary>
-public sealed record IntegrationAcceptCommand(
-    IntegrationSessionCreate? NewSession,
-    Guid ExecutionId,
-    Guid TriggerId,
-    Guid SessionId,
-    Guid PrincipalId,
-    Guid RequestId,
-    ReadOnlyMemory<byte> RequestFingerprint,
-    string KeyPrefix,
-    long ReceivedAtUtc,
-    IntegrationEventAppend AcceptedEvent);
+public sealed record IntegrationAcceptCommand
+{
+    public required IntegrationSessionCreate? NewSession { get; init; }
+
+    public required Guid ExecutionId { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required ReadOnlyMemory<byte> RequestFingerprint { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required long ReceivedAtUtc { get; init; }
+
+    public required IntegrationEventAppend AcceptedEvent { get; init; }
+}
 
 /// <summary>
 ///     One NON-TERMINAL status compare-and-swap. Every optional field is "leave it alone" when null — never "clear it".
@@ -90,17 +135,28 @@ public sealed record IntegrationAcceptCommand(
 ///     deliberate and is why there is no second marker-only method — the cancel marker and the status CAS contend on the
 ///     same <c>Version</c>.
 /// </summary>
-public sealed record IntegrationExecutionStatusUpdate(
-    Guid ExecutionId,
-    long ExpectedVersion,
-    IReadOnlySet<IntegrationExecutionStatus> ExpectedStatuses,
-    IntegrationExecutionStatus NewStatus,
-    long? StartedAtUtc = null,
-    long? EndedAtUtc = null,
-    Guid? InvocationId = null,
-    long? StopRequestedAtUtc = null,
-    string? FailureCategory = null,
-    string? FailureSummary = null);
+public sealed class IntegrationExecutionStatusUpdate
+{
+    public required Guid ExecutionId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required IReadOnlySet<IntegrationExecutionStatus> ExpectedStatuses { get; init; }
+
+    public required IntegrationExecutionStatus NewStatus { get; init; }
+
+    public long? StartedAtUtc { get; init; }
+
+    public long? EndedAtUtc { get; init; }
+
+    public Guid? InvocationId { get; init; }
+
+    public long? StopRequestedAtUtc { get; init; }
+
+    public string? FailureCategory { get; init; }
+
+    public string? FailureSummary { get; init; }
+}
 
 /// <summary>
 ///     The one TERMINAL transition. Carries the status CAS, the sequence already RESERVED on the coordinator's buffer
@@ -108,21 +164,32 @@ public sealed record IntegrationExecutionStatusUpdate(
 ///     <c>OccurredAtUtc = EndedAtUtc</c>, and derives the event's small <c>DetailJson</c> from the two failure fields;
 ///     it still mints no sequence. <see cref="EventType" /> is one of the three terminal stream-event types.
 /// </summary>
-public sealed record IntegrationTerminalizeCommand(
-    Guid ExecutionId,
-    long ExpectedVersion,
-    IReadOnlySet<IntegrationExecutionStatus> ExpectedStatuses,
-    IntegrationExecutionStatus NewStatus,
-    long Sequence,
-    string EventType,
-    long EndedAtUtc,
-    string? FailureCategory,
-    string? FailureSummary,
+public sealed record IntegrationTerminalizeCommand
+{
+    public required Guid ExecutionId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required IReadOnlySet<IntegrationExecutionStatus> ExpectedStatuses { get; init; }
+
+    public required IntegrationExecutionStatus NewStatus { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required long EndedAtUtc { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required string? FailureSummary { get; init; }
+
     /// <summary>
     ///     The terminal EVENT's detail, when the caller built one. The same JSON it publishes on the stream event, so
     ///     the poll route and the stream hand a caller the same envelope. Null falls back to the failure columns.
     /// </summary>
-    string? EventDetailJson = null,
+    public string? EventDetailJson { get; init; }
+
     /// <summary>
     ///     The ONE kind-3 audit row this execution owes, written by whoever wins the terminal compare-and-swap and in
     ///     the SAME transaction as the status and the terminal event. It used to be a separate <c>SaveChanges</c> after
@@ -130,7 +197,8 @@ public sealed record IntegrationTerminalizeCommand(
     ///     later terminalization rejects an already-terminal row, so nothing could ever write it. A null means the
     ///     caller audits nothing (the queue-full accept path, which never had an invocation to audit).
     /// </summary>
-    IntegrationInvocationAuditInput? Audit = null);
+    public IntegrationInvocationAuditInput? Audit { get; init; }
+}
 
 /// <summary>
 ///     Paged filter for the admin executions list. The paging fields are <see cref="Limit" /> and <see cref="Offset" />
@@ -141,12 +209,18 @@ public sealed record IntegrationTerminalizeCommand(
 ///         constrain" — because an empty set can only ever match nothing, which no caller means by it.
 ///     </para>
 /// </summary>
-public sealed record IntegrationExecutionFilter(
-    Guid? TriggerId,
-    Guid? SessionId,
-    IReadOnlySet<IntegrationExecutionStatus>? Status,
-    int Limit,
-    int Offset);
+public sealed class IntegrationExecutionFilter
+{
+    public required Guid? TriggerId { get; init; }
+
+    public required Guid? SessionId { get; init; }
+
+    public required IReadOnlySet<IntegrationExecutionStatus>? Status { get; init; }
+
+    public required int Limit { get; init; }
+
+    public required int Offset { get; init; }
+}
 
 /// <summary>
 ///     Admission refused because the node-wide or the per-principal active cap was already full. Both caps throw this

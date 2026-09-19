@@ -72,7 +72,7 @@ public sealed class BenchmarkTaskItemServiceTests
     {
         var store = Substitute.For<IBenchmarkStore>();
         _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
-                 .Returns(Enumerable.Range(0, BenchmarkTaskItemService.MaxTaskItems).Select(index => Record(new BenchmarkTaskItemInput(Encoding.UTF8.GetBytes("x")), index))
+                 .Returns(Enumerable.Range(0, BenchmarkTaskItemService.MaxTaskItems).Select(index => Record(new BenchmarkTaskItemInput { PromptJson = Encoding.UTF8.GetBytes("x") }, index))
                                     .ToArray());
         var service = new BenchmarkTaskItemService(store);
 
@@ -196,8 +196,17 @@ public sealed class BenchmarkTaskItemServiceTests
             new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, criteria),
             ReferenceAnswer: null);
         _ = store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
-                 .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 1,
-                     BenchmarkJudgeSerialization.SerializePolicy(policy), new string('0', count: 64), null, 1, 0));
+                 .Returns(new BenchmarkJudgePolicyRevisionRecord
+                 {
+                     Id = Guid.NewGuid(),
+                     ProjectId = ProjectId,
+                     Revision = 1,
+                     PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(policy),
+                     PolicyHash = new string('0', count: 64),
+                     ReferenceExecutionKey = null,
+                     CohortGeneration = 1,
+                     CreatedAtUtc = 0
+                 });
         return store;
     }
 
@@ -212,7 +221,22 @@ public sealed class BenchmarkTaskItemServiceTests
     }
 
     private static BenchmarkTaskItemRecord Record(BenchmarkTaskItemInput input, int index = 0) =>
-        new(Guid.NewGuid(), ProjectId, input.ParentItemId, index, input.Kind, Revision: 1, "v1:" + new string('a', count: 64),
-            input.CountsTowardScore, input.PromptJson, input.ReferenceAnswerJson, input.VerifierConfigJson, input.GeneratorConfigJson,
-            Version: 1, CreatedAtUtc: 1, UpdatedAtUtc: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = ProjectId,
+            ParentItemId = input.ParentItemId,
+            Index = index,
+            Kind = input.Kind,
+            Revision = 1,
+            InputHash = "v1:" + new string('a', count: 64),
+            CountsTowardScore = input.CountsTowardScore,
+            PromptJson = input.PromptJson,
+            ReferenceAnswerJson = input.ReferenceAnswerJson,
+            VerifierConfigJson = input.VerifierConfigJson,
+            GeneratorConfigJson = input.GeneratorConfigJson,
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
 }

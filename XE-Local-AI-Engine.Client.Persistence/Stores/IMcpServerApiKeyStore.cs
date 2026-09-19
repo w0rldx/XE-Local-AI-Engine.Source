@@ -43,10 +43,17 @@ public interface IMcpServerApiKeyStore
 ///     this record can be presented to the MCP endpoint, so no field here needs "reveal the key" handling. The
 ///     plaintext key exists only in the return value of the generate call that minted it.
 /// </summary>
-public sealed record McpServerApiKeyRecord(
-    string Prefix,
-    ReadOnlyMemory<byte> KeyHash,
-    int Scope,
-    Guid GenerationId,
-    long CreatedAtUtc,
-    long? LastUsedAtUtc);
+public sealed record McpServerApiKeyRecord
+{
+    public required string Prefix { get; init; }
+
+    public required ReadOnlyMemory<byte> KeyHash { get; init; }
+
+    public required int Scope { get; init; }
+
+    public required Guid GenerationId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long? LastUsedAtUtc { get; init; }
+}

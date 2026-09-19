@@ -84,34 +84,46 @@ public sealed class AgentWorkSessionDeleteTests
     private static async Task PopulateAsync(AgentWorkSessionStore store, Guid sessionId)
     {
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
-        var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                                     created.Version,
-                                     Guid.NewGuid(),
-                                     AgentWorkSessionTaskOrigin.Agent,
-                                     [new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Task")]));
-        var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                   Guid.NewGuid(),
-                                   planned.Version,
-                                   Guid.NewGuid(),
-                                   AgentWorkSessionFindingKind.Finding,
-                                   "Finding."));
+        var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
+        {
+            SessionId = sessionId,
+            ExpectedVersion = created.Version,
+            OperationId = Guid.NewGuid(),
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            Changes = [new WorkPlanTaskChange { TaskId = Guid.NewGuid(), Operation = WorkPlanTaskOperation.Add, Title = "Task" }]
+        });
+        var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand
+        {
+            SessionId = sessionId,
+            FindingId = Guid.NewGuid(),
+            ExpectedVersion = planned.Version,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionFindingKind.Finding,
+            Text = "Finding."
+        });
         var artifactId = Guid.NewGuid();
-        var saved = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                                   artifactId,
-                                   found.Version,
-                                   Guid.NewGuid(),
-                                   AgentWorkSessionArtifactKind.Report,
-                                   "report.md",
-                                   "text/markdown",
-                                   "HASH",
-                                   SizeBytes: 4,
-                                   string.Concat(sessionId.ToString("N"), "/", artifactId.ToString("N"))));
-        _ = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                           Guid.NewGuid(),
-                           saved.Version,
-                           Guid.NewGuid(),
-                           Step: 0,
-                           "Summary.",
-                           "{}"));
+        var saved = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+        {
+            SessionId = sessionId,
+            ArtifactId = artifactId,
+            ExpectedVersion = found.Version,
+            OperationId = Guid.NewGuid(),
+            Kind = AgentWorkSessionArtifactKind.Report,
+            Name = "report.md",
+            MediaType = "text/markdown",
+            ContentSha256 = "HASH",
+            SizeBytes = 4,
+            ManagedReference = string.Concat(sessionId.ToString("N"), "/", artifactId.ToString("N"))
+        });
+        _ = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand
+        {
+            SessionId = sessionId,
+            CheckpointId = Guid.NewGuid(),
+            ExpectedVersion = saved.Version,
+            OperationId = Guid.NewGuid(),
+            Step = 0,
+            Summary = "Summary.",
+            StateJson = "{}"
+        });
     }
 }

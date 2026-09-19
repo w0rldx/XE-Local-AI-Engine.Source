@@ -146,16 +146,19 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
                 applied.KvTypeV,
                 applied.FlashAttn,
                 policy),
-            new BenchmarkRunLaunchIntent(BenchmarkLaunchBackend.VariantName(variant),
-                effective,
-                source,
-                reason,
-                BenchmarkKvCacheType.IsQuantized(effective) ? LlamaServerLaunchProjection.FlashAttentionOn : LlamaServerLaunchProjection.FlashAttentionAuto,
-                intendedIdentity,
-                capabilities?.ManifestSha256,
+            new BenchmarkRunLaunchIntent
+            {
+                Variant = BenchmarkLaunchBackend.VariantName(variant),
+                KvCacheType = effective,
+                KvCacheTypeSource = source,
+                KvAutoReason = reason,
+                FlashAttentionMode = BenchmarkKvCacheType.IsQuantized(effective) ? LlamaServerLaunchProjection.FlashAttentionOn : LlamaServerLaunchProjection.FlashAttentionAuto,
+                IntendedLaunchIdentity = intendedIdentity,
+                IntendedExecutableSha256 = capabilities?.ManifestSha256,
                 // Stamped once, here, at freeze. Never recomputed at execution: the snapshot carries no CPU thread
                 // inputs, so re-projecting would adopt the executing box's conditions as historical intent.
-                LlamaServerLaunchProjection.IdentitySchemeVersion));
+                LaunchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion
+            });
     }
 
     /// <summary>

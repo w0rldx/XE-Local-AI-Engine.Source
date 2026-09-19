@@ -80,7 +80,7 @@ public sealed partial class BenchmarkStore
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
         {
-            return new BenchmarkPairwiseCohortState(null, 0, 0, null, project.Version, [], []);
+            return new BenchmarkPairwiseCohortState { PolicyRevisionId = null, CohortGeneration = 0, ComparisonSetVersion = 0, ReferenceExecutionKey = null, ProjectVersion = project.Version, Candidates = [], Comparisons = [] };
         }
 
         var revision = await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking()
@@ -110,20 +110,23 @@ public sealed partial class BenchmarkStore
                                    .ToArrayAsync(cancellationToken);
         var candidates = runs.Where(static run => !BenchmarkPrimaryStopReasons.IsTruncated(run.PrimaryStopReason)
                                                   && !BenchmarkPrimaryStopReasons.IsIncomplete(run.PrimaryStopReason))
-                             .Select(static run => new BenchmarkPairwiseCandidate(run.Id, TaskCaseId: null, TaskInputHash: string.Empty))
+                             .Select(static run => new BenchmarkPairwiseCandidate { RunId = run.Id, TaskCaseId = null, TaskInputHash = string.Empty })
                              .ToArray();
         var comparisons = await ProjectComparisons(_dbContext.BenchmarkComparisons.AsNoTracking()
                                                              .Where(entity => entity.PolicyRevisionId == revisionId
                                                                               && entity.CohortGeneration == revision.CohortGeneration)
                                                              .OrderBy(entity => entity.Sequence))
                                 .ToArrayAsync(cancellationToken);
-        return new BenchmarkPairwiseCohortState(revision.Id,
-            revision.CohortGeneration,
-            revision.ComparisonSetVersion,
-            revision.ReferenceExecutionKey,
-            project.Version,
-            candidates,
-            comparisons);
+        return new BenchmarkPairwiseCohortState
+        {
+            PolicyRevisionId = revision.Id,
+            CohortGeneration = revision.CohortGeneration,
+            ComparisonSetVersion = revision.ComparisonSetVersion,
+            ReferenceExecutionKey = revision.ReferenceExecutionKey,
+            ProjectVersion = project.Version,
+            Candidates = candidates,
+            Comparisons = comparisons
+        };
     }
 
     public async Task<int> EnsureComparisonsAsync(Guid projectId,
@@ -382,19 +385,22 @@ public sealed partial class BenchmarkStore
         var fit = Array.Find(fits, static entity => entity.TaskCaseId is null);
         return fit is null
             ? null
-            : new BenchmarkPairwiseFitRecord(fit.Id,
-                fit.ProjectId,
-                fit.PolicyRevisionId,
-                fit.CohortGeneration,
-                fit.TaskCaseId,
-                fit.FitKey,
-                fit.JudgeExecutionKey,
-                fit.ComparisonSetVersion,
-                fit.FittedSetJson,
-                fit.ScoresJson,
-                fit.Iterations,
-                fit.BootstrapReplicates,
-                fit.CreatedAtUtc);
+            : new BenchmarkPairwiseFitRecord
+            {
+                Id = fit.Id,
+                ProjectId = fit.ProjectId,
+                PolicyRevisionId = fit.PolicyRevisionId,
+                CohortGeneration = fit.CohortGeneration,
+                TaskCaseId = fit.TaskCaseId,
+                FitKey = fit.FitKey,
+                JudgeExecutionKey = fit.JudgeExecutionKey,
+                ComparisonSetVersion = fit.ComparisonSetVersion,
+                FittedSetJson = fit.FittedSetJson,
+                ScoresJson = fit.ScoresJson,
+                Iterations = fit.Iterations,
+                BootstrapReplicates = fit.BootstrapReplicates,
+                CreatedAtUtc = fit.CreatedAtUtc
+            };
     }
 
     public async Task<double?> GetMedianJudgeDurationSecondsAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -428,55 +434,61 @@ public sealed partial class BenchmarkStore
     ///     The single-comparison read adds it back for the executor.
     /// </summary>
     private static IQueryable<BenchmarkComparisonRecord> ProjectComparisons(IQueryable<BenchmarkJudgeComparison> query) =>
-        query.Select(entity => new BenchmarkComparisonRecord(entity.Id,
-            entity.ProjectId,
-            entity.PolicyRevisionId,
-            entity.CohortGeneration,
-            entity.TaskCaseId,
-            entity.TaskInputHash,
-            entity.RunAId,
-            entity.RunBId,
-            entity.Order,
-            entity.AttemptSequence,
-            entity.Sequence,
-            entity.Status,
-            entity.Verdict,
-            entity.AnswerATruncated,
-            entity.AnswerBTruncated,
-            entity.JudgeExecutionKey,
-            entity.ErrorMessage,
-            null,
-            entity.EnqueuedAtUtc,
-            entity.StartedAtUtc,
-            entity.CompletedAtUtc,
-            entity.Version));
+        query.Select(entity => new BenchmarkComparisonRecord
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            PolicyRevisionId = entity.PolicyRevisionId,
+            CohortGeneration = entity.CohortGeneration,
+            TaskCaseId = entity.TaskCaseId,
+            TaskInputHash = entity.TaskInputHash,
+            RunAId = entity.RunAId,
+            RunBId = entity.RunBId,
+            Order = entity.Order,
+            AttemptSequence = entity.AttemptSequence,
+            Sequence = entity.Sequence,
+            Status = entity.Status,
+            Verdict = entity.Verdict,
+            AnswerATruncated = entity.AnswerATruncated,
+            AnswerBTruncated = entity.AnswerBTruncated,
+            JudgeExecutionKey = entity.JudgeExecutionKey,
+            ErrorMessage = entity.ErrorMessage,
+            JudgeRuntimeJson = null,
+            EnqueuedAtUtc = entity.EnqueuedAtUtc,
+            StartedAtUtc = entity.StartedAtUtc,
+            CompletedAtUtc = entity.CompletedAtUtc,
+            Version = entity.Version
+        });
 
     private static BenchmarkComparisonRecord ToRecord(BenchmarkJudgeComparison entity, ReadOnlyMemory<byte>? judgeRuntimeJson) =>
-        new(entity.Id,
-            entity.ProjectId,
-            entity.PolicyRevisionId,
-            entity.CohortGeneration,
-            entity.TaskCaseId,
-            entity.TaskInputHash,
-            entity.RunAId,
-            entity.RunBId,
-            entity.Order,
-            entity.AttemptSequence,
-            entity.Sequence,
-            entity.Status,
-            entity.Verdict,
-            entity.AnswerATruncated,
-            entity.AnswerBTruncated,
-            entity.JudgeExecutionKey,
-            entity.ErrorMessage,
-            judgeRuntimeJson,
-            entity.EnqueuedAtUtc,
-            entity.StartedAtUtc,
-            entity.CompletedAtUtc,
-            entity.Version,
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            PolicyRevisionId = entity.PolicyRevisionId,
+            CohortGeneration = entity.CohortGeneration,
+            TaskCaseId = entity.TaskCaseId,
+            TaskInputHash = entity.TaskInputHash,
+            RunAId = entity.RunAId,
+            RunBId = entity.RunBId,
+            Order = entity.Order,
+            AttemptSequence = entity.AttemptSequence,
+            Sequence = entity.Sequence,
+            Status = entity.Status,
+            Verdict = entity.Verdict,
+            AnswerATruncated = entity.AnswerATruncated,
+            AnswerBTruncated = entity.AnswerBTruncated,
+            JudgeExecutionKey = entity.JudgeExecutionKey,
+            ErrorMessage = entity.ErrorMessage,
+            JudgeRuntimeJson = judgeRuntimeJson,
+            EnqueuedAtUtc = entity.EnqueuedAtUtc,
+            StartedAtUtc = entity.StartedAtUtc,
+            CompletedAtUtc = entity.CompletedAtUtc,
+            Version = entity.Version,
             // Only the single-comparison read carries the intent: it is what the executor needs, and the verdict
             // matrix must not pay for a value no row in it reads.
-            ToIntent(entity.Variant, entity.KvCacheType, entity.KvCacheTypeSource, entity.KvAutoReason,
+            LaunchIntent = ToIntent(entity.Variant, entity.KvCacheType, entity.KvCacheTypeSource, entity.KvAutoReason,
                 entity.FlashAttentionMode, entity.IntendedLaunchIdentity, entity.IntendedExecutableSha256,
-                entity.LaunchIdentityScheme));
+                entity.LaunchIdentityScheme)
+        };
 }

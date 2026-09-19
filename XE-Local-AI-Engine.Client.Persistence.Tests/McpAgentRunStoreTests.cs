@@ -236,26 +236,32 @@ public sealed class McpAgentRunStoreTests : IDisposable
 
         AssertEx.Equal(McpAgentRunClaimKind.Claimed, claimed.Kind);
         AssertEx.Equal(McpAgentRunStopKind.Requested, stopped.Kind);
-        AssertEx.False(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-                claimed.Run.Version,
-                claimed.Run.ClaimToken!.Value,
-                McpAgentRunStatus.Succeeded,
-                McpAgentRunStopReason.None,
-                FailureCode: null,
-                Result: "late success",
-                DisplayMessage: null,
-                CompletedAtUtc: 31)),
+        AssertEx.False(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = "late success",
+            DisplayMessage = null,
+            CompletedAtUtc = 31
+        }),
             "A stale normal completion must lose after the stop marker bumps the version.");
 
-        AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
-                stopped.Run!.Version,
-                claimed.Run.ClaimToken.Value,
-                McpAgentRunStatus.Failed,
-                McpAgentRunStopReason.WatchdogExpired,
-                "watchdog_expired",
-                Result: null,
-                DisplayMessage: "Run exceeded its time limit.",
-                CompletedAtUtc: 32)),
+        AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = stopped.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken.Value,
+            Status = McpAgentRunStatus.Failed,
+            ExpectedStopReason = McpAgentRunStopReason.WatchdogExpired,
+            FailureCode = "watchdog_expired",
+            Result = null,
+            DisplayMessage = "Run exceeded its time limit.",
+            CompletedAtUtc = 32
+        }),
             "The marker-matched worker finalization should commit exactly once.");
 
         var beforeCompact = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
@@ -317,17 +323,20 @@ public sealed class McpAgentRunStoreTests : IDisposable
 
     private static McpAgentRunAdmissionRequest CreateAdmission(McpAgentRunPayloadProtector protector, Guid requestId, string task)
     {
-        return new McpAgentRunAdmissionRequest(requestId,
-            protector.ComputeRequestFingerprint(Encoding.UTF8.GetBytes($"canonical:{task}")),
-            task,
-            Instructions: "read only",
-            AgentDefinitionId: Guid.Parse("61f97d46-14bb-47c0-8a58-ac66f2940e76"),
-            AgentDefinitionVersion: 7,
-            ModelId: "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M",
-            ModelOverrideId: null,
-            WorkspaceId: null,
-            BindingFingerprint: SHA256.HashData(Encoding.UTF8.GetBytes("binding")),
-            CreatedAtUtc: 1);
+        return new McpAgentRunAdmissionRequest
+        {
+            RequestId = requestId,
+            CanonicalRequest = protector.ComputeRequestFingerprint(Encoding.UTF8.GetBytes($"canonical:{task}")),
+            Task = task,
+            Instructions = "read only",
+            AgentDefinitionId = Guid.Parse("61f97d46-14bb-47c0-8a58-ac66f2940e76"),
+            AgentDefinitionVersion = 7,
+            ModelId = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M",
+            ModelOverrideId = null,
+            WorkspaceId = null,
+            BindingFingerprint = SHA256.HashData(Encoding.UTF8.GetBytes("binding")),
+            CreatedAtUtc = 1
+        };
     }
 
     private string GetDatabasePath(string fileName)

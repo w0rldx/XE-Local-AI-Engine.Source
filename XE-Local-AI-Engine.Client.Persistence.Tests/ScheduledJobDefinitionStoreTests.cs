@@ -402,22 +402,25 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
     private static ScheduledJobDefinitionInput CreateCronInput(string templateId, string displayName)
     {
-        return new ScheduledJobDefinitionInput(templateId,
-            displayName,
-            "Runs every hour",
-            Enabled: true,
-            ScheduleKind.Cron,
-            "0 * * * *",
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            ParameterJson: null,
-            ScheduledJobCreator.User);
+        return new ScheduledJobDefinitionInput
+        {
+            TemplateId = templateId,
+            DisplayName = displayName,
+            Description = "Runs every hour",
+            Enabled = true,
+            ScheduleKind = ScheduleKind.Cron,
+            CronExpression = "0 * * * *",
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            ParameterJson = null,
+            CreatedBy = ScheduledJobCreator.User
+        };
     }
 
     private sealed class MutableTimeProvider : TimeProvider

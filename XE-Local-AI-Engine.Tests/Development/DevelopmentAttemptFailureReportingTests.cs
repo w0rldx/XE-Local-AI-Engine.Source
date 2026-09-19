@@ -133,30 +133,33 @@ public sealed class DevelopmentAttemptFailureReportingTests
         new(ChatRole.Assistant, [new TextReasoningContent(reasoning)]);
 
     private static DevelopmentExecutionSnapshot Snapshot() =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "identity",
-            "main",
-            DevelopmentEgressPolicy.LocalOnly,
-            ConfigurationVersion: 1,
-            TrustedRepositoryAcknowledged: true,
-            DevelopmentTrustPolicy.CurrentVersion,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            MaxTokens: 2048,
-            MaxDurationSeconds: 60,
-            "Title",
-            "Requirements",
-            "[]",
-            DevelopmentTaskStatus.InProgress,
-            TaskVersion: 1,
-            DevelopmentAttemptRole.Coder,
-            PersistenceDevelopmentAttemptStatus.Running,
-            "local-model",
-            "local",
-            AttemptVersion: 1,
-            CommandProfileJson: null);
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            SelectedFolderId = Guid.NewGuid(),
+            RepositoryIdentityHash = "identity",
+            BaseBranch = "main",
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            MaxTokens = 2048,
+            MaxDurationSeconds = 60,
+            Title = "Title",
+            Requirements = "Requirements",
+            AcceptanceCriteriaJson = "[]",
+            TaskStatus = DevelopmentTaskStatus.InProgress,
+            TaskVersion = 1,
+            AttemptRole = DevelopmentAttemptRole.Coder,
+            AttemptStatus = PersistenceDevelopmentAttemptStatus.Running,
+            ModelId = "local-model",
+            Provider = "local",
+            AttemptVersion = 1,
+            CommandProfileJson = null
+        };
 
     private sealed class AdjustableTimeProvider : TimeProvider
     {

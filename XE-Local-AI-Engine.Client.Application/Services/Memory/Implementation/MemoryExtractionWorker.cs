@@ -202,16 +202,19 @@ public sealed class MemoryExtractionWorker : BackgroundService
     {
         var executionLogStore = serviceProvider.GetRequiredService<IAgentExecutionLogStore>();
 
-        _ = await executionLogStore.AddAsync(new AgentExecutionLogInput(telemetry.AgentDefinitionId,
-                telemetry.ConversationId,
-                telemetry.MessageId,
-                telemetry.ModelName,
-                telemetry.ConfigHash,
-                telemetry.LatencyMs,
-                telemetry.Success,
-                telemetry.PromptTokens,
-                telemetry.CompletionTokens,
-                telemetry.ErrorClass),
+        _ = await executionLogStore.AddAsync(new AgentExecutionLogInput
+        {
+            AgentDefinitionId = telemetry.AgentDefinitionId,
+            ConversationId = telemetry.ConversationId,
+            MessageId = telemetry.MessageId,
+            ModelName = telemetry.ModelName,
+            ConfigHash = telemetry.ConfigHash,
+            LatencyMs = telemetry.LatencyMs,
+            Success = telemetry.Success,
+            PromptTokens = telemetry.PromptTokens,
+            CompletionTokens = telemetry.CompletionTokens,
+            ErrorClass = telemetry.ErrorClass
+        },
             cancellationToken);
     }
 

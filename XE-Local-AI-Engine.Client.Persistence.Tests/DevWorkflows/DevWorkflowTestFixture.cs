@@ -69,14 +69,17 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string graphJson = SampleGraph,
         Guid? developmentProjectId = null)
     {
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), title, request, developmentProjectId));
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1));
-        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
-                                 workItem.Id,
-                                 definition.Id,
-                                 definition.Version,
-                                 definition.GraphHash,
-                                 graphJson));
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = title, Request = request, DevelopmentProjectId = developmentProjectId });
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Seeded definition", GraphJson = graphJson, NodeCount = 1 });
+        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            WorkItemId = workItem.Id,
+            DefinitionId = definition.Id,
+            DefinitionVersion = definition.Version,
+            DefinitionGraphHash = definition.GraphHash,
+            GraphJson = graphJson
+        });
         return new DevWorkflowSeed(workItem.Id, definition.Id, run.Id, run.Version);
     }
 
@@ -86,7 +89,7 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string body = "Always write the test first.",
         string scopeJson = MatchAllScope,
         bool enabled = true) =>
-        store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(), name, body, scopeJson, Enabled: enabled));
+        store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand { RuleSetId = Guid.NewGuid(), Name = name, Body = body, ScopeJson = scopeJson, Enabled = enabled });
 
     /// <summary>Adds one node run to a seeded run and answers the run's post-commit version.</summary>
     public static async Task<long> AddNodeRunAsync(DevWorkflowStore store,
@@ -99,17 +102,23 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string? inputJson = null,
         Guid? developmentProjectId = null)
     {
-        var result = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
-                                    expectedVersion,
-                                    Guid.NewGuid(),
-                                    [
-                                        new DevWorkflowNodeRunSeed(nodeRunId,
-                                            nodeKey,
-                                            nodeType,
-                                            maxAttempts,
-                                            DevelopmentProjectId: developmentProjectId,
-                                            InputJson: inputJson)
-                                    ]));
+        var result = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        {
+            RunId = runId,
+            ExpectedVersion = expectedVersion,
+            OperationId = Guid.NewGuid(),
+            NodeRuns = [
+                                        new DevWorkflowNodeRunSeed
+                                        {
+                                            NodeRunId = nodeRunId,
+                                            NodeKey = nodeKey,
+                                            NodeType = nodeType,
+                                            MaxAttempts = maxAttempts,
+                                            DevelopmentProjectId = developmentProjectId,
+                                            InputJson = inputJson
+                                        }
+                                    ]
+        });
         return result.Version;
     }
 

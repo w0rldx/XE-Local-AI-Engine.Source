@@ -880,12 +880,15 @@ public sealed class IntegrationExecutionCoordinatorTests
         using var harness = new Harness();
         var executionId = harness.SeedAccepted(lastSequence: 2);
         harness.Buffer.Remove(executionId);
-        await harness.Executions.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
-            executionId,
-            Sequence: 4,
-            IntegrationStreamEventTypes.ToolCompleted,
-            DetailJson: null,
-            OccurredAtUtc: 1));
+        await harness.Executions.AppendEventAsync(new IntegrationEventAppend
+        {
+            EventId = Guid.NewGuid(),
+            ExecutionId = executionId,
+            Sequence = 4,
+            EventType = IntegrationStreamEventTypes.ToolCompleted,
+            DetailJson = null,
+            OccurredAtUtc = 1
+        });
 
         await harness.Coordinator.StartAsync(CancellationToken.None);
         try

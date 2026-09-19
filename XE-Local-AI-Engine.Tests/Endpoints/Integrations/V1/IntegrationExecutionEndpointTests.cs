@@ -344,19 +344,22 @@ public sealed class IntegrationExecutionEndpointTests
     {
         var executionId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
-        var admitted = await store.AcceptAsync(new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, triggerId, Guid.NewGuid(), Guid.NewGuid()),
-                executionId,
-                triggerId,
-                sessionId,
-                principalId,
-                Guid.NewGuid(),
-                new byte[]
+        var admitted = await store.AcceptAsync(new IntegrationAcceptCommand
+        {
+            NewSession = new IntegrationSessionCreate { SessionId = sessionId, TriggerId = triggerId, ConversationId = Guid.NewGuid(), AgentDefinitionId = Guid.NewGuid() },
+            ExecutionId = executionId,
+            TriggerId = triggerId,
+            SessionId = sessionId,
+            PrincipalId = principalId,
+            RequestId = Guid.NewGuid(),
+            RequestFingerprint = new byte[]
                 {
                     7
                 },
-                keyPrefix,
-                receivedAtUtc,
-                new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, receivedAtUtc)),
+            KeyPrefix = keyPrefix,
+            ReceivedAtUtc = receivedAtUtc,
+            AcceptedEvent = new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = 1, EventType = IntegrationStreamEventTypes.ExecutionAccepted, DetailJson = null, OccurredAtUtc = receivedAtUtc }
+        },
             maxActive: 4096,
             maxActivePerPrincipal: 4096);
         AssertEx.True(admitted, "Seeding the execution row must be admitted.");

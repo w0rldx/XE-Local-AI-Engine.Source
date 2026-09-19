@@ -119,8 +119,12 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
             SchemaVersion = 1,
             Tools = snapshot
         };
-        return new TrainingDefinitionInput(draft.Name, TrainingDatasetKind.ToolCalling,
-            JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options));
+        return new TrainingDefinitionInput
+        {
+            Name = draft.Name,
+            Kind = TrainingDatasetKind.ToolCalling,
+            DefinitionJson = JsonSerializer.SerializeToUtf8Bytes(body, TrainingJson.Options)
+        };
     }
 
     private static void Validate(DatasetDefinitionBodyV1 body)

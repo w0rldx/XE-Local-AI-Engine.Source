@@ -223,21 +223,24 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             throw new BenchmarkExecutionException($"{UnparseableOutputMessage} {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
         }
 
-        return new BenchmarkFidelitySuccessCommand(work.RunId,
-            work.Version,
-            attempt.Id,
-            reading.Mean,
-            reading.StandardError,
-            chunks,
-            BenchmarkFidelityPolicy.ContextTokens,
-            corpus.CorpusId,
-            divergence?.Mean,
-            divergence?.P99,
-            divergence?.TopTokenAgreement,
-            kld?.BaseModelName,
-            kld?.BaseFingerprint,
-            kld?.Key.Digest,
-            await BuildReceiptAsync(executable, snapshot, arguments, corpus, chunks, environment));
+        return new BenchmarkFidelitySuccessCommand
+        {
+            RunId = work.RunId,
+            ExpectedWorkVersion = work.Version,
+            FidelityAttemptId = attempt.Id,
+            PerplexityMean = reading.Mean,
+            PerplexityStdErr = reading.StandardError,
+            PerplexityChunks = chunks,
+            PerplexityContextTokens = BenchmarkFidelityPolicy.ContextTokens,
+            CorpusId = corpus.CorpusId,
+            KldMean = divergence?.Mean,
+            KldP99 = divergence?.P99,
+            TopTokenAgreement = divergence?.TopTokenAgreement,
+            BaseModelName = kld?.BaseModelName,
+            BaseModelContentFingerprint = kld?.BaseFingerprint,
+            BaseLogitsDigest = kld?.Key.Digest,
+            ReceiptJson = await BuildReceiptAsync(executable, snapshot, arguments, corpus, chunks, environment)
+        };
     }
 
     /// <summary>

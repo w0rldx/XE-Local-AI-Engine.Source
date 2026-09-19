@@ -20,7 +20,7 @@ public sealed partial class BenchmarkStore
         var project = await RequireProjectAsync(projectId, cancellationToken);
         var now = Now();
         var item = NewTaskItem(projectId,
-            new BenchmarkTaskItemInput(project.CoreTaskJson),
+            new BenchmarkTaskItemInput { PromptJson = project.CoreTaskJson },
             index: 0,
             now);
 
@@ -350,8 +350,22 @@ public sealed partial class BenchmarkStore
     }
 
     private static BenchmarkTaskItemRecord ToRecord(BenchmarkTaskItem entity) =>
-        new(entity.Id, entity.ProjectId, entity.ParentItemId, entity.Index, entity.Kind, entity.Revision, entity.InputHash,
-            entity.CountsTowardScore, entity.PromptJson.ToArray(), entity.ReferenceAnswerJson?.ToArray(),
-            entity.VerifierConfigJson?.ToArray(), entity.GeneratorConfigJson?.ToArray(),
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+        new()
+        {
+            Id = entity.Id,
+            ProjectId = entity.ProjectId,
+            ParentItemId = entity.ParentItemId,
+            Index = entity.Index,
+            Kind = entity.Kind,
+            Revision = entity.Revision,
+            InputHash = entity.InputHash,
+            CountsTowardScore = entity.CountsTowardScore,
+            PromptJson = entity.PromptJson.ToArray(),
+            ReferenceAnswerJson = entity.ReferenceAnswerJson?.ToArray(),
+            VerifierConfigJson = entity.VerifierConfigJson?.ToArray(),
+            GeneratorConfigJson = entity.GeneratorConfigJson?.ToArray(),
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc
+        };
 }

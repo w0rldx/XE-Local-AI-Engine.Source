@@ -856,21 +856,24 @@ public sealed class GraphWorkflowStateMachineTests
         GraphWorkflowNodeKind kind = GraphWorkflowNodeKind.Agent,
         GraphWorkflowFailureClass failureClass = GraphWorkflowFailureClass.None,
         string? error = null) =>
-        new(Id: Guid.NewGuid(),
-            RunId: Guid.NewGuid(),
-            NodeKey: nodeKey,
-            Kind: kind,
-            Status: status,
-            Attempt: 1,
-            PendingDecisionKind: null,
-            DecisionOperationId: null,
-            DecidedBySubject: null,
-            FailureClass: failureClass,
-            Error: error,
-            InputJson: null,
-            OutputJson: outputJson,
-            InvocationId: null,
-            StartedAtUtc: null,
-            CompletedAtUtc: null,
-            UpdatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
+            NodeKey = nodeKey,
+            Kind = kind,
+            Status = status,
+            Attempt = 1,
+            PendingDecisionKind = null,
+            DecisionOperationId = null,
+            DecidedBySubject = null,
+            FailureClass = failureClass,
+            Error = error,
+            InputJson = null,
+            OutputJson = outputJson,
+            InvocationId = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null,
+            UpdatedAtUtc = 0
+        };
 }

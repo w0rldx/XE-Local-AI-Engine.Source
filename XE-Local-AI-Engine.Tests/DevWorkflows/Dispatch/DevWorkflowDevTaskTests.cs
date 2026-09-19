@@ -1084,22 +1084,31 @@ public sealed class DevWorkflowDevTaskTests
         // The manual round an operator starts on the task the workflow left behind, driven through the store directly
         // because no workflow is asking for it any more. It is the round the stale policy used to govern.
         var awaiting = await development.GetTaskAsync(taskId);
-        var reworking = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                             Guid.NewGuid(),
-                                             DevelopmentTaskStatus.ChangesRequested,
-                                             awaiting.Version));
-        var inProgress = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                              Guid.NewGuid(),
-                                              DevelopmentTaskStatus.InProgress,
-                                              reworking.Version));
+        var reworking = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = taskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.ChangesRequested,
+            ExpectedTaskVersion = awaiting.Version
+        });
+        var inProgress = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = taskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.InProgress,
+            ExpectedTaskVersion = reworking.Version
+        });
         var attemptId = Guid.NewGuid();
-        _ = await development.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
-                                 attemptId,
-                                 Guid.NewGuid(),
-                                 DevelopmentAttemptRole.Coder,
-                                 "local-model",
-                                 "local",
-                                 inProgress.Version));
+        _ = await development.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = taskId,
+            AttemptId = attemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "local-model",
+            Provider = "local",
+            ExpectedTaskVersion = inProgress.Version
+        });
 
         AssertEx.Null((await development.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText,
             "a round started after the workflow settled is governed by nothing the workflow injected.");
@@ -1293,28 +1302,37 @@ public sealed class DevWorkflowDevTaskTests
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
 
         async Task MoveAsync(DevelopmentTaskStatus target, string? reason = null) =>
-            _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                               Guid.NewGuid(),
-                               target,
-                               (await store.GetTaskAsync(taskId)).Version,
-                               reason));
+            _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+            {
+                TaskId = taskId,
+                OperationId = Guid.NewGuid(),
+                TargetStatus = target,
+                ExpectedTaskVersion = (await store.GetTaskAsync(taskId)).Version,
+                Reason = reason
+            });
 
         await MoveAsync(DevelopmentTaskStatus.Ready);
         await MoveAsync(DevelopmentTaskStatus.InProgress);
 
         // A real attempt row, because the brief the retry's round is composed from is read through one.
         var attemptId = Guid.NewGuid();
-        var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
-                                     attemptId,
-                                     Guid.NewGuid(),
-                                     DevelopmentAttemptRole.Coder,
-                                     "scripted-model",
-                                     "local",
-                                     (await store.GetTaskAsync(taskId)).Version));
-        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
-                           Guid.NewGuid(),
-                           DevelopmentAttemptStatus.Succeeded,
-                           attempt.Version));
+        var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand
+        {
+            TaskId = taskId,
+            AttemptId = attemptId,
+            OperationId = Guid.NewGuid(),
+            Role = DevelopmentAttemptRole.Coder,
+            ModelId = "scripted-model",
+            Provider = "local",
+            ExpectedTaskVersion = (await store.GetTaskAsync(taskId)).Version
+        });
+        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
+        {
+            AttemptId = attemptId,
+            OperationId = Guid.NewGuid(),
+            Status = DevelopmentAttemptStatus.Succeeded,
+            ExpectedAttemptVersion = attempt.Version
+        });
 
         await MoveAsync(DevelopmentTaskStatus.Validation);
         await MoveAsync(DevelopmentTaskStatus.InReview);
@@ -1385,13 +1403,16 @@ public sealed class DevWorkflowDevTaskTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var created = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
-                                 .CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
-                                     Guid.NewGuid(),
-                                     Guid.NewGuid(),
-                                     title,
-                                     "It has to do the other thing.",
-                                     "[\"it does the other thing\"]",
-                                     maxReviewRounds));
+                                 .CreateTaskAsync(new DevelopmentCreateTaskCommand
+                                 {
+                                     ProjectId = projectId,
+                                     TaskId = Guid.NewGuid(),
+                                     OperationId = Guid.NewGuid(),
+                                     Title = title,
+                                     Requirements = "It has to do the other thing.",
+                                     AcceptanceCriteriaJson = "[\"it does the other thing\"]",
+                                     MaxReviewRounds = maxReviewRounds
+                                 });
         return created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.");
     }
 
@@ -1404,11 +1425,14 @@ public sealed class DevWorkflowDevTaskTests
         var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
-                           nodeRun.Id,
-                           DevWorkflowVersions.Any,
-                           DevWorkflowNodeRunStatus.Pending,
-                           DevelopmentTaskId: taskId));
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+                       {
+                           RunId = runId,
+                           NodeRunId = nodeRun.Id,
+                           ExpectedVersion = DevWorkflowVersions.Any,
+                           TargetStatus = DevWorkflowNodeRunStatus.Pending,
+                           DevelopmentTaskId = taskId
+                       });
     }
 
     /// <summary>
@@ -1425,27 +1449,33 @@ public sealed class DevWorkflowDevTaskTests
         var template = await harness.ReadNodeRunAsync(runId, templateNodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
-                           DevWorkflowVersions.Any,
-                           Guid.NewGuid(),
-                           [
-                               new DevWorkflowNodeRunSeed(Guid.NewGuid(),
-                                   childNodeKey,
-                                   DevWorkflowNodeType.DevTask,
-                                   MaxAttempts: 1,
-                                   DevelopmentProjectId: projectId,
-                                   InputJson: inputJson,
-                                   MaterializedFromNodeRunId: template.Id,
-                                   MaterializationIndex: 1)
+                       .MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+                       {
+                           RunId = runId,
+                           ExpectedVersion = DevWorkflowVersions.Any,
+                           OperationId = Guid.NewGuid(),
+                           NodeRuns = [
+                               new DevWorkflowNodeRunSeed
+                               {
+                                   NodeRunId = Guid.NewGuid(),
+                                   NodeKey = childNodeKey,
+                                   NodeType = DevWorkflowNodeType.DevTask,
+                                   MaxAttempts = 1,
+                                   DevelopmentProjectId = projectId,
+                                   InputJson = inputJson,
+                                   MaterializedFromNodeRunId = template.Id,
+                                   MaterializationIndex = 1
+                               }
                            ],
-                           $$"""
+                           GraphJson = $$"""
                              {
                                "schemaVersion": 1,
                                "nodes": [{ "nodeKey": "{{templateNodeKey}}", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 2 },
                                          { "nodeKey": "{{childNodeKey}}", "nodeType": "DevTask", "label": "Implement (1)", "maxAttempts": 1 }],
                                "edges": [{ "from": "{{templateNodeKey}}", "to": "{{childNodeKey}}" }]
                              }
-                             """));
+                             """
+                       });
     }
 
     /// <summary>Walks the task to <c>AwaitingApply</c> out of band, which is where a routed re-attempt finds it.</summary>
@@ -1526,9 +1556,12 @@ public sealed class DevWorkflowDevTaskTests
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var attempts = await store.ListAttemptsAsync(taskId);
         var attempt = attempts[^1];
-        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attempt.Id,
-                           Guid.NewGuid(),
-                           DevelopmentAttemptStatus.Succeeded,
-                           attempt.Version));
+        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand
+        {
+            AttemptId = attempt.Id,
+            OperationId = Guid.NewGuid(),
+            Status = DevelopmentAttemptStatus.Succeeded,
+            ExpectedAttemptVersion = attempt.Version
+        });
     }
 }

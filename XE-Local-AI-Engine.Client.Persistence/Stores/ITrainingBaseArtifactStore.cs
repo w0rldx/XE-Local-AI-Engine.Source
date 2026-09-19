@@ -4,21 +4,33 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     A downloaded (or downloading) base checkpoint as the application layer sees it. The two JSON documents are
-///     carried as <see cref="ReadOnlyMemory{T}" /> rather than arrays so the record cannot hand a caller a mutable
+///     carried as <see cref="ReadOnlyMemory{T}" /> rather than arrays so the type cannot hand a caller a mutable
 ///     reference to the decrypted column contents.
 /// </summary>
-public sealed record TrainingBaseArtifactRecord(
-    Guid Id,
-    string RepoId,
-    string Revision,
-    TrainingBaseArtifactStatus Status,
-    ReadOnlyMemory<byte> FilesJson,
-    long TotalBytes,
-    ReadOnlyMemory<byte>? LicenseJson,
-    string? ErrorMessage,
-    long Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class TrainingBaseArtifactRecord
+{
+    public required Guid Id { get; init; }
+
+    public required string RepoId { get; init; }
+
+    public required string Revision { get; init; }
+
+    public required TrainingBaseArtifactStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte> FilesJson { get; init; }
+
+    public required long TotalBytes { get; init; }
+
+    public required ReadOnlyMemory<byte>? LicenseJson { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>Raised when a mutation's expected version does not match the row's current one.</summary>
 public sealed class TrainingBaseArtifactConcurrencyException : Exception

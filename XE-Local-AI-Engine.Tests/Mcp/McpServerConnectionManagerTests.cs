@@ -332,20 +332,23 @@ public sealed class McpServerConnectionManagerTests
 
     private static McpServerRecord StdioRecord(string name)
     {
-        return new McpServerRecord(Guid.NewGuid(),
-            name,
-            Description: null,
-            McpTransportKind.Stdio,
-            "noop",
-            [],
-            WorkingDirectory: null,
-            new Dictionary<string, string>(),
-            Url: null,
-            McpTrustTier.PrivilegedHost,
-            Enabled: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new McpServerRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = null,
+            TransportKind = McpTransportKind.Stdio,
+            Command = "noop",
+            Arguments = [],
+            WorkingDirectory = null,
+            Environment = new Dictionary<string, string>(),
+            Url = null,
+            TrustTier = McpTrustTier.PrivilegedHost,
+            Enabled = true,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, params McpServerRecord[] enabled)

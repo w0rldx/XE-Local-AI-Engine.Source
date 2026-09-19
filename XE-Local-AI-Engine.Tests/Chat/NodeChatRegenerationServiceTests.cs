@@ -2137,19 +2137,22 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
     private static AgentDefinitionRecord CreateOrchestratorRecord(Guid id)
     {
-        return new AgentDefinitionRecord(id,
-            "Orchestrator",
-            Description: null,
-            "Orchestrator prompt.",
-            "qwen3:8b",
-            ReasoningEffort: null,
-            AgentDefinitionKind.Orchestrator,
-            [],
-            new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 4,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+        return new AgentDefinitionRecord
+        {
+            Id = id,
+            Name = "Orchestrator",
+            Description = null,
+            Instructions = "Orchestrator prompt.",
+            ModelProfile = "qwen3:8b",
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Orchestrator,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(),
+            OrchestrationTopologyJson = null,
+            Version = 4,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 10
+        };
     }
 
     private static OrchestrationSpec CreateSampleSpec()

@@ -405,32 +405,35 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         // conflict and no ids while the runs already inserted stayed queued and ran anyway.
         var commands = repeatIndexes
                        .Select(repeatIndex => SamplingFor(primarySampling, request.RepeatMode, temperature, repeatIndex))
-                       .SelectMany(sampling => frozenItems.Select(item => new BenchmarkStartRunCommand(Guid.NewGuid(),
-                           project.Id,
-                           expectedProjectVersion,
-                           SnapshotFor(item, sampling.Sampling),
-                           primary.ModelName,
-                           primary.Origin,
-                           primary.ModelContentFingerprint,
-                           item.Eligible.AgentName,
-                           item.Eligible.AgentDefinitionVersion,
-                           project.ContextTokens,
-                           item.Guard,
-                           primaryLaunch.Intent,
-                           repeatGroupId,
-                           isGroup ? sampling.RepeatIndex : null,
-                           warmup && sampling.RepeatIndex == 0,
+                       .SelectMany(sampling => frozenItems.Select(item => new BenchmarkStartRunCommand
+                       {
+                           RunId = Guid.NewGuid(),
+                           ProjectId = project.Id,
+                           ExpectedProjectVersion = expectedProjectVersion,
+                           RuntimeSnapshotJson = SnapshotFor(item, sampling.Sampling),
+                           PrimaryModelName = primary.ModelName,
+                           PrimaryModelOrigin = primary.Origin,
+                           ModelContentFingerprint = primary.ModelContentFingerprint,
+                           AgentName = item.Eligible.AgentName,
+                           AgentVersion = item.Eligible.AgentDefinitionVersion,
+                           RequestedContextTokens = project.ContextTokens,
+                           FreezeCommitGuard = item.Guard,
+                           PrimaryLaunchIntent = primaryLaunch.Intent,
+                           RepeatGroupId = repeatGroupId,
+                           RepeatIndex = isGroup ? sampling.RepeatIndex : null,
+                           IsWarmup = warmup && sampling.RepeatIndex == 0,
                            // Copied onto the run, not read from the project at execution: a run replays with the
                            // budget it was started under, exactly like its context and its output budget.
-                           project.InvocationTimeoutSeconds,
-                           request.RepeatMode,
-                           sampling.Sampling.SeedValue,
-                           sampling.Sampling.Temperature,
-                           item.Item.Id,
-                           item.Item.Index,
-                           CellKeyFor(isGroup ? sampling.RepeatIndex : 1),
-                           item.Item.InputHash,
-                           project.TaskItemSetHash)))
+                           InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
+                           RepeatMode = request.RepeatMode,
+                           SamplingSeed = sampling.Sampling.SeedValue,
+                           SamplingTemperature = sampling.Sampling.Temperature,
+                           TaskItemId = item.Item.Id,
+                           TaskItemIndex = item.Item.Index,
+                           CellKey = CellKeyFor(isGroup ? sampling.RepeatIndex : 1),
+                           TaskInputHash = item.Item.InputHash,
+                           TaskItemSetHash = project.TaskItemSetHash
+                       }))
                        .ToArray();
         return new BenchmarkFrozenRunPlan(project.Id, expectedProjectVersion, commands);
     }

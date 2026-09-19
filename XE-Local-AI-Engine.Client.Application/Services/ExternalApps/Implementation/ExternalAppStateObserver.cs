@@ -239,19 +239,22 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(row.Id,
-                                        row.Version,
-                                        new HashSet<ExternalAppInstanceStatus>
+        var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate
+        {
+            InstanceId = row.Id,
+            ExpectedVersion = row.Version,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
                                         {
                                             row.Status
                                         },
-                                        ExternalAppInstanceStatus.StoppedUnexpectedly,
-                                        ExternalAppInstanceEventKind.StoppedUnexpectedly,
-                                        EventDetailJson: null,
-                                        now,
-                                        StoppedAtUtc: now,
-                                        FailureCategory: ExternalAppFailureCategory.StoppedUnexpectedly,
-                                        FailureSummary: summary),
+            NewStatus = ExternalAppInstanceStatus.StoppedUnexpectedly,
+            EventKind = ExternalAppInstanceEventKind.StoppedUnexpectedly,
+            EventDetailJson = null,
+            OccurredAtUtc = now,
+            StoppedAtUtc = now,
+            FailureCategory = ExternalAppFailureCategory.StoppedUnexpectedly,
+            FailureSummary = summary
+        },
                                     cancellationToken);
 
         if (!result.Applied)

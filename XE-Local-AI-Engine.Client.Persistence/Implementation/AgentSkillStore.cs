@@ -327,35 +327,41 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
     {
         var frontmatter = DeserializeFrontmatter(entity.FrontmatterJson);
 
-        return new AgentSkillRecord(entity.Id,
-            entity.Name,
-            Decode(entity.Description),
-            Decode(entity.Body),
-            entity.Enabled,
-            entity.Version,
-            entity.CreatedAtUtc,
-            entity.UpdatedAtUtc,
-            frontmatter?.License,
-            frontmatter?.Compatibility,
-            frontmatter?.AllowedTools,
-            frontmatter?.Metadata,
-            (AgentSkillOrigin)entity.Origin,
-            entity.SourceUri,
-            entity.ImportedAtUtc,
-            entity.ContentSha256,
-            resources,
-            DecodeIfPresent(entity.GenerationMetadataJson));
+        return new AgentSkillRecord
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = Decode(entity.Description),
+            Body = Decode(entity.Body),
+            Enabled = entity.Enabled,
+            Version = entity.Version,
+            CreatedAtUtc = entity.CreatedAtUtc,
+            UpdatedAtUtc = entity.UpdatedAtUtc,
+            License = frontmatter?.License,
+            Compatibility = frontmatter?.Compatibility,
+            AllowedTools = frontmatter?.AllowedTools,
+            Metadata = frontmatter?.Metadata,
+            Origin = (AgentSkillOrigin)entity.Origin,
+            SourceUri = entity.SourceUri,
+            ImportedAtUtc = entity.ImportedAtUtc,
+            ContentSha256 = entity.ContentSha256,
+            Resources = resources,
+            GenerationMetadataJson = DecodeIfPresent(entity.GenerationMetadataJson)
+        };
     }
 
     private static AgentSkillResourceRecord ToRecord(AgentSkillResource entity)
     {
-        return new AgentSkillResourceRecord(entity.Id,
-            entity.SkillId,
-            entity.Name,
-            entity.Description,
-            entity.MediaType,
-            Decode(entity.Content),
-            entity.SizeBytes);
+        return new AgentSkillResourceRecord
+        {
+            Id = entity.Id,
+            SkillId = entity.SkillId,
+            Name = entity.Name,
+            Description = entity.Description,
+            MediaType = entity.MediaType,
+            Content = Decode(entity.Content),
+            SizeBytes = entity.SizeBytes
+        };
     }
 
     // The four optional frontmatter fields share one encrypted column, so they are serialized and compared as a unit.

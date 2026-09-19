@@ -130,7 +130,7 @@ public sealed class TrainingRunStartupReaperTests
     {
         const int count = 250;
         var runIds = Enumerable.Range(0, count).Select(static _ => Guid.NewGuid()).ToArray();
-        var store = StoreWith([.. runIds.Select(static id => new TrainingRunLaunchReceipt(id, Serialize(Receipt)))]);
+        var store = StoreWith([.. runIds.Select(static id => new TrainingRunLaunchReceipt { RunId = id, LaunchReceiptJson = Serialize(Receipt) })]);
         var inspector = new FakeTrainingProcessInspector(LiveFacts());
 
         await Reaper(store, inspector).StartAsync(CancellationToken.None);
@@ -150,18 +150,30 @@ public sealed class TrainingRunStartupReaperTests
     {
         var (firstId, secondId, thirdId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var store = StoreWith([
-            new TrainingRunLaunchReceipt(firstId, Serialize(Receipt with
+            new TrainingRunLaunchReceipt
+            {
+                RunId = firstId,
+                LaunchReceiptJson = Serialize(Receipt with
             {
                 Pid = 1
-            })),
-            new TrainingRunLaunchReceipt(secondId, Serialize(Receipt with
+            })
+            },
+            new TrainingRunLaunchReceipt
+            {
+                RunId = secondId,
+                LaunchReceiptJson = Serialize(Receipt with
             {
                 Pid = 2
-            })),
-            new TrainingRunLaunchReceipt(thirdId, Serialize(Receipt with
+            })
+            },
+            new TrainingRunLaunchReceipt
+            {
+                RunId = thirdId,
+                LaunchReceiptJson = Serialize(Receipt with
             {
                 Pid = 3
-            }))
+            })
+            }
         ]);
 
         var inspector = Substitute.For<ITrainingProcessInspector>();
@@ -232,7 +244,7 @@ public sealed class TrainingRunStartupReaperTests
     private static (TrainingRunStartupReaper Reaper, FakeTrainingProcessInspector Inspector, ITrainingRunStore Store, Guid RunId) Build(TrainingProcessFacts? facts)
     {
         var runId = Guid.NewGuid();
-        var store = StoreWith([new TrainingRunLaunchReceipt(runId, Serialize(Receipt))]);
+        var store = StoreWith([new TrainingRunLaunchReceipt { RunId = runId, LaunchReceiptJson = Serialize(Receipt) }]);
         var inspector = new FakeTrainingProcessInspector(facts);
         return (Reaper(store, inspector), inspector, store, runId);
     }

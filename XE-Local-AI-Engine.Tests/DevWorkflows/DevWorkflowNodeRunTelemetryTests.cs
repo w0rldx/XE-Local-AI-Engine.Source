@@ -642,75 +642,84 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             admitted);
 
     private static AgentWorkSessionSnapshot Session(Guid sessionId, Guid conversationId) =>
-        new(sessionId,
-            "Research",
-            "Objective",
-            AgentWorkSessionKind.Research,
-            AgentWorkSessionStatus.Completed,
-            Guid.NewGuid(),
-            conversationId,
-            CurrentTaskId: null,
-            StepCount: 1,
-            LastCheckpointId: null,
-            LastSequence: 1,
-            ConfigVersion: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            Version: 1);
+        new()
+        {
+            Id = sessionId,
+            Title = "Research",
+            Objective = "Objective",
+            Kind = AgentWorkSessionKind.Research,
+            Status = AgentWorkSessionStatus.Completed,
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            CurrentTaskId = null,
+            StepCount = 1,
+            LastCheckpointId = null,
+            LastSequence = 1,
+            ConfigVersion = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            Version = 1
+        };
 
     private static AgentRunEnvelopeRecord Envelope(Guid conversationId, string modelName, long durationMs = 10, long? modelReadinessMs = null) =>
-        new(Guid.NewGuid(),
-            SchemaVersion: 1,
-            Guid.NewGuid(),
-            conversationId,
-            MessageId: null,
-            InvocationId: null,
-            RequestId: null,
-            modelName,
-            "local",
-            "Completed",
-            Success: true,
-            FailureCategory: null,
-            durationMs,
-            PromptTokens: 1,
-            CompletionTokens: 2,
-            ReasoningTokens: null,
-            TotalTokens: 3,
-            ContentChunkCount: null,
-            ReasoningChunkCount: null,
-            TraceId: null,
-            StartedAtUtc: null,
-            CreatedAtUtc: 0,
-            ModelReadinessMs: modelReadinessMs);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            SchemaVersion = 1,
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            MessageId = null,
+            InvocationId = null,
+            RequestId = null,
+            ModelName = modelName,
+            Provider = "local",
+            TerminalStatus = "Completed",
+            Success = true,
+            FailureCategory = null,
+            DurationMs = durationMs,
+            PromptTokens = 1,
+            CompletionTokens = 2,
+            ReasoningTokens = null,
+            TotalTokens = 3,
+            ContentChunkCount = null,
+            ReasoningChunkCount = null,
+            TraceId = null,
+            StartedAtUtc = null,
+            CreatedAtUtc = 0,
+            ModelReadinessMs = modelReadinessMs
+        };
 
     private static DevWorkflowNodeRunSnapshot NodeRunWithSession(Guid sessionId) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "research",
-            DevWorkflowNodeType.Agent,
-            Attempt: 1,
-            MaxAttempts: 3,
-            SessionResumes: 0,
-            DevWorkflowNodeRunStatus.Running,
-            QueueReason: null,
-            PendingDecisionKind: null,
-            Sequence: 1,
-            sessionId,
-            WorkSessionAvailable: true,
-            AgentDefinitionId: null,
-            DevelopmentProjectId: null,
-            DevelopmentTaskId: null,
-            InputJson: null,
-            OutputJson: null,
-            PolicyResolutionJson: null,
-            MaterializedFromNodeRunId: null,
-            MaterializationIndex: null,
-            FailureClass: null,
-            TerminalReason: null,
-            QueuedAtUtc: null,
-            StartedAtUtc: null,
-            EndedAtUtc: null,
-            CreatedAtUtc: 0);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            RunId = Guid.NewGuid(),
+            NodeKey = "research",
+            NodeType = DevWorkflowNodeType.Agent,
+            Attempt = 1,
+            MaxAttempts = 3,
+            SessionResumes = 0,
+            Status = DevWorkflowNodeRunStatus.Running,
+            QueueReason = null,
+            PendingDecisionKind = null,
+            Sequence = 1,
+            WorkSessionId = sessionId,
+            WorkSessionAvailable = true,
+            AgentDefinitionId = null,
+            DevelopmentProjectId = null,
+            DevelopmentTaskId = null,
+            InputJson = null,
+            OutputJson = null,
+            PolicyResolutionJson = null,
+            MaterializedFromNodeRunId = null,
+            MaterializationIndex = null,
+            FailureClass = null,
+            TerminalReason = null,
+            QueuedAtUtc = null,
+            StartedAtUtc = null,
+            EndedAtUtc = null,
+            CreatedAtUtc = 0
+        };
 
     /// <summary>Every observable the two arms of T1 compare: the events, the rows and the work item.</summary>
     private static async Task<string> DriveBothGraphsAsync(StubDevWorkflowNodeTelemetrySource? stub)
@@ -822,12 +831,15 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         var sessionId = await harness.ReadSessionIdAsync(runId, nodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           WorkSessionEventTypes.StepEnded,
-                           Guid.NewGuid(),
-                           "Completed",
-                           detailJson));
+                       .AppendEventAsync(new AppendWorkSessionEventCommand
+                       {
+                           SessionId = sessionId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           EventType = WorkSessionEventTypes.StepEnded,
+                           OperationId = Guid.NewGuid(),
+                           Outcome = "Completed",
+                           DetailJson = detailJson
+                       });
     }
 
     private static string SerializeConsumption(ProviderCallConsumption consumption) =>

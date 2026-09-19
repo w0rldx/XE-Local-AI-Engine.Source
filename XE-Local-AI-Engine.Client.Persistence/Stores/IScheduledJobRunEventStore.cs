@@ -25,22 +25,36 @@ public interface IScheduledJobRunEventStore
 ///     plaintext (decrypted on materialization); the store converts to and from this shape at the boundary so callers
 ///     never touch the encrypted byte column.
 /// </summary>
-public sealed record ScheduledJobRunEventRecord(
-    Guid Id,
-    Guid RunId,
-    int Sequence,
-    ScheduledRunEventLevel Level,
-    string? Message,
-    string? DataJson,
-    long OccurredAtUtc);
+public sealed class ScheduledJobRunEventRecord
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required int Sequence { get; init; }
+
+    public required ScheduledRunEventLevel Level { get; init; }
+
+    public required string? Message { get; init; }
+
+    public required string? DataJson { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Mutable fields of a scheduled job run event supplied on create. <see cref="DataJson" /> is passed as a plaintext
 ///     string; the store encodes it to UTF-8 bytes before the interceptors encrypt it.
 /// </summary>
-public sealed record ScheduledJobRunEventInput(
-    Guid RunId,
-    int Sequence,
-    ScheduledRunEventLevel Level,
-    string? Message,
-    string? DataJson = null);
+public sealed class ScheduledJobRunEventInput
+{
+    public required Guid RunId { get; init; }
+
+    public required int Sequence { get; init; }
+
+    public required ScheduledRunEventLevel Level { get; init; }
+
+    public required string? Message { get; init; }
+
+    public string? DataJson { get; init; }
+}

@@ -50,19 +50,22 @@ public sealed class DevelopmentManagementServiceTests
              .Returns((DevelopmentOperationResult?)null);
         store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>())
              .Returns([
-                 new DevelopmentAttemptSnapshot(Guid.NewGuid(),
-                     taskId,
-                     null,
-                     DevelopmentAttemptRole.Coder,
-                     "coder-model",
-                     "local",
-                     PersistenceAttemptStatus.Succeeded,
-                     1,
-                     2,
-                     null,
-                     10,
-                     10,
-                     1)
+                 new DevelopmentAttemptSnapshot
+                 {
+                     Id = Guid.NewGuid(),
+                     TaskId = taskId,
+                     PredecessorAttemptId = null,
+                     Role = DevelopmentAttemptRole.Coder,
+                     ModelId = "coder-model",
+                     Provider = "local",
+                     Status = PersistenceAttemptStatus.Succeeded,
+                     StartedAtUtc = 1,
+                     EndedAtUtc = 2,
+                     TerminalReason = null,
+                     InputTokens = 10,
+                     OutputTokens = 10,
+                     Version = 1
+                 }
              ]);
         var coordinator = Substitute.For<IDevelopmentCoordinator>();
         var transitions = new List<DevelopmentTransitionTaskCommand>();
@@ -376,43 +379,49 @@ public sealed class DevelopmentManagementServiceTests
     private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId,
         Guid? selectedFolderId = null,
         string repositoryIdentityHash = "repository-hash") =>
-        new(projectId,
-            "objective",
-            selectedFolderId,
-            repositoryIdentityHash,
-            "main",
-            DevelopmentProjectStatus.Active,
-            DevelopmentEgressPolicy.LocalOnly,
-            "coder-model",
-            "reviewer-model",
-            null,
-            null,
-            1,
-            true,
-            DevelopmentTrustPolicy.CurrentVersion,
-            1,
-            1,
-            1,
-            1,
-            Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+        new()
+        {
+            Id = projectId,
+            Objective = "objective",
+            SelectedFolderId = selectedFolderId,
+            RepositoryIdentityHash = repositoryIdentityHash,
+            BaseBranch = "main",
+            Status = DevelopmentProjectStatus.Active,
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            CoderModelId = "coder-model",
+            ReviewerModelId = "reviewer-model",
+            MaxTokens = null,
+            MaxDurationSeconds = null,
+            ConfigurationVersion = 1,
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion,
+            TrustedRepositoryAcknowledgedAtUtc = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 1,
+            CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
                                     .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
-                                    .ToCanonicalUtf8()));
+                                    .ToCanonicalUtf8())
+        };
 
     private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId) =>
-        new(taskId,
-            projectId,
-            "task",
-            "requirements",
-            "[]",
-            DevelopmentTaskStatus.InProgress,
-            CurrentReviewRound: 3,
-            MaxReviewRounds: 3,
-            BlockedReason: null,
-            BlockedAtUtc: null,
-            ApprovedSubjectHash: null,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Version: 7);
+        new()
+        {
+            Id = taskId,
+            ProjectId = projectId,
+            Title = "task",
+            Requirements = "requirements",
+            AcceptanceCriteriaJson = "[]",
+            Status = DevelopmentTaskStatus.InProgress,
+            CurrentReviewRound = 3,
+            MaxReviewRounds = 3,
+            BlockedReason = null,
+            BlockedAtUtc = null,
+            ApprovedSubjectHash = null,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Version = 7
+        };
 
     /// <summary>
     ///     Detection is stubbed rather than run for real: these tests bind the test host's own working directory as

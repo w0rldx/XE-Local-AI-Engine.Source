@@ -425,13 +425,16 @@ public sealed class DefaultConfigDraftServiceTests
 
     private static ModelClassificationRecord Classification(ModelKind kind)
     {
-        return new ModelClassificationRecord(LlamaModel,
-            Digest: null,
-            kind,
-            DetectedCapabilitiesJson: null,
-            OverrideKind: null,
-            DetectedAtUtc: null,
-            UpdatedAtUtc: 0);
+        return new ModelClassificationRecord
+        {
+            ModelName = LlamaModel,
+            Digest = null,
+            DetectedKind = kind,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = null,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 0
+        };
     }
 
     /// <summary>

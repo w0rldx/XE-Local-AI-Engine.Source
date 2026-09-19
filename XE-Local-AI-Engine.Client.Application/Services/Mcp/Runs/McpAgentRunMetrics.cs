@@ -10,16 +10,22 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 internal sealed class McpAgentRunMetrics : IDisposable
 {
-    private static readonly McpAgentRunLedgerSnapshot EmptySnapshot = new(QueueDepth: 0,
-        RunningCount: 0,
-        new McpAgentRunLedgerCounters(AccountingVersion: 0,
-            NonterminalRunCount: 0,
-            QueuedRunCount: 0,
-            RunningRunCount: 0,
-            IdentityCount: 0,
-            ActivePayloadBytes: 0,
-            TombstoneLogicalBytes: 0,
-            UpdatedAtUtc: 0));
+    private static readonly McpAgentRunLedgerSnapshot EmptySnapshot = new()
+    {
+        QueueDepth = 0,
+        RunningCount = 0,
+        Counters = new McpAgentRunLedgerCounters
+        {
+            AccountingVersion = 0,
+            NonterminalRunCount = 0,
+            QueuedRunCount = 0,
+            RunningRunCount = 0,
+            IdentityCount = 0,
+            ActivePayloadBytes = 0,
+            TombstoneLogicalBytes = 0,
+            UpdatedAtUtc = 0
+        }
+    };
 
     private readonly Histogram<double> _claimAge;
     private readonly Counter<long> _lifecycle;

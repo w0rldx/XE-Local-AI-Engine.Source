@@ -102,18 +102,24 @@ public sealed class DevelopmentTemplateStore : IDevelopmentTemplateStore
                                               .SingleOrDefaultAsync(entity => entity.SelectedFolderId == selectedFolderId, cancellationToken);
         return materialization is null
             ? null
-            : new DevelopmentTemplateMaterializationSnapshot(materialization.SelectedFolderId,
-                materialization.TemplateId,
-                materialization.TemplateAlias,
-                Encoding.UTF8.GetString(materialization.TemplatePath),
-                materialization.TemplateCommit,
-                materialization.CreatedAtUtc);
+            : new DevelopmentTemplateMaterializationSnapshot
+            {
+                SelectedFolderId = materialization.SelectedFolderId,
+                TemplateId = materialization.TemplateId,
+                TemplateAlias = materialization.TemplateAlias,
+                TemplatePath = Encoding.UTF8.GetString(materialization.TemplatePath),
+                TemplateCommit = materialization.TemplateCommit,
+                CreatedAtUtc = materialization.CreatedAtUtc
+            };
     }
 
     private static DevelopmentTemplateSnapshot Snapshot(DevelopmentTemplate template) =>
-        new(template.Id,
-            template.Alias,
-            Encoding.UTF8.GetString(template.HostPath),
-            template.CreatedAtUtc,
-            template.Version);
+        new()
+        {
+            Id = template.Id,
+            Alias = template.Alias,
+            HostPath = Encoding.UTF8.GetString(template.HostPath),
+            CreatedAtUtc = template.CreatedAtUtc,
+            Version = template.Version
+        };
 }

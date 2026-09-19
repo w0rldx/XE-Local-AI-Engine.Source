@@ -40,7 +40,7 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         await using var scope = context;
 
         var project = await store.CreateProjectAsync(NewProject(),
-                                     new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
+                                     new BenchmarkJudgePolicyChangeInput { PolicyJson = PolicyBytes, PolicyHash = PolicyHash },
                                      [Item("first"), Item("second")]);
 
         var items = await store.ListTaskItemsAsync(project.Id);
@@ -221,7 +221,7 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var (context, store) = await CreateStoreAsync("cohort-reset.sqlite");
         await using var scope = context;
         var project = await store.CreateProjectAsync(NewProject(),
-                                     new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
+                                     new BenchmarkJudgePolicyChangeInput { PolicyJson = PolicyBytes, PolicyHash = PolicyHash },
                                      [Item("first"), Item("second")]);
         var generation = AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id)).CohortGeneration;
 
@@ -327,7 +327,7 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]);
         var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, new BenchmarkTaskItemInput(ReadOnlyMemory<byte>.Empty)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, new BenchmarkTaskItemInput { PromptJson = ReadOnlyMemory<byte>.Empty }));
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with
                           {
                               Kind = "invented"
@@ -351,7 +351,7 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var (context, store) = await CreateStoreAsync("delete-project-orphans.sqlite");
         await using var scope = context;
         var project = await store.CreateProjectAsync(NewProject(),
-                                     new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
+                                     new BenchmarkJudgePolicyChangeInput { PolicyJson = PolicyBytes, PolicyHash = PolicyHash },
                                      [Item("first"), Item("second")]);
         _ = context.BenchmarkPairwiseFits.Add(new BenchmarkPairwiseFit
         {
@@ -411,14 +411,25 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     }
 
     private static BenchmarkTaskItemInput Item(string prompt) =>
-        new(Encoding.UTF8.GetBytes(prompt));
+        new() { PromptJson = Encoding.UTF8.GetBytes(prompt) };
 
     private static BenchmarkProjectInput NewProject(Guid? id = null) =>
-        new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("""{"task":"answer"}"""), 4096, Guid.NewGuid());
+        new() { Id = id ?? Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("""{"task":"answer"}"""), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 
     private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
-        new(Guid.NewGuid(), project.Id, project.Version, Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""), "model.gguf",
-            LocalModelOrigin.Imported, "v1:" + new string('a', count: 64), "Agent", 1, 4096);
+        new()
+        {
+            RunId = Guid.NewGuid(),
+            ProjectId = project.Id,
+            ExpectedProjectVersion = project.Version,
+            RuntimeSnapshotJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""),
+            PrimaryModelName = "model.gguf",
+            PrimaryModelOrigin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:" + new string('a', count: 64),
+            AgentName = "Agent",
+            AgentVersion = 1,
+            RequestedContextTokens = 4096
+        };
 
     private async Task<(NodeChatDbContext Context, BenchmarkStore Store)> CreateStoreAsync(string fileName)
     {

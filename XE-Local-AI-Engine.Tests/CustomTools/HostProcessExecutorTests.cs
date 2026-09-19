@@ -102,18 +102,21 @@ public sealed class HostProcessExecutorTests : IDisposable
         var script = await CreateScriptAsync("#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
         var config = $$"""{"executable":"{{script}}","argsTemplate":["--output","{path}"],"timeoutSeconds":10,"env":[]}""";
         const string parametersJson = """[{"name":"path","type":"string","description":"","required":true}]""";
-        var tool = new CustomToolRecord(Guid.NewGuid(),
-            "custom__test_tool",
-            "A test tool.",
-            CustomToolKind.Command,
-            CustomToolMode.Parameterized,
-            parametersJson,
-            config,
-            Enabled: true,
-            Acknowledged: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        var tool = new CustomToolRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "custom__test_tool",
+            Description = "A test tool.",
+            Kind = CustomToolKind.Command,
+            Mode = CustomToolMode.Parameterized,
+            ParametersJson = parametersJson,
+            ConfigJson = config,
+            Enabled = true,
+            Acknowledged = true,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
         var executor = CreateExecutor();
 
         var result = await executor.ExecuteAsync(tool, """{"path":"VALUE_a1b2"}""", CancellationToken.None);
@@ -145,17 +148,20 @@ public sealed class HostProcessExecutorTests : IDisposable
 
     private static CustomToolRecord MakeTool(CustomToolKind kind, string configJson)
     {
-        return new CustomToolRecord(Guid.NewGuid(),
-            "custom__test_tool",
-            "A test tool.",
-            kind,
-            CustomToolMode.Fixed,
-            "[]",
-            configJson,
-            Enabled: true,
-            Acknowledged: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+        return new CustomToolRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = "custom__test_tool",
+            Description = "A test tool.",
+            Kind = kind,
+            Mode = CustomToolMode.Fixed,
+            ParametersJson = "[]",
+            ConfigJson = configJson,
+            Enabled = true,
+            Acknowledged = true,
+            Version = 1,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0
+        };
     }
 }

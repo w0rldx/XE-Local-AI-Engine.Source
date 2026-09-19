@@ -96,15 +96,18 @@ public sealed class EvaluationRunService : IEvaluationRunService
             DatasetContentFingerprint = run.DatasetContentFingerprint,
             HoldoutSampleIds = freeze.HoldoutSampleIds
         };
-        var created = await _evaluations.CreateAndEnqueueAsync(new TrainingEvaluationEnqueueCommand(run.Id,
-                                                target.ModelName,
-                                                target.Fingerprint,
-                                                run.DatasetId,
-                                                run.DatasetContentFingerprint,
-                                                JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
-                                                freeze.HoldoutSampleIds.Count,
-                                                target.Kind,
-                                                target.ArtifactId),
+        var created = await _evaluations.CreateAndEnqueueAsync(new TrainingEvaluationEnqueueCommand
+        {
+            TrainingRunId = run.Id,
+            ModelName = target.ModelName,
+            ModelContentFingerprint = target.Fingerprint,
+            DatasetId = run.DatasetId,
+            DatasetContentFingerprint = run.DatasetContentFingerprint,
+            MembershipJson = JsonSerializer.SerializeToUtf8Bytes(membership, TrainingJson.Options),
+            TotalCount = freeze.HoldoutSampleIds.Count,
+            TargetKind = target.Kind,
+            SourceArtifactId = target.ArtifactId
+        },
                                             cancellationToken);
         _signal.Wake();
         return created;

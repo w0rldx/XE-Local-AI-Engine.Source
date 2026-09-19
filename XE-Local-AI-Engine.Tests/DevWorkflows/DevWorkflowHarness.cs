@@ -274,17 +274,20 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", request, developmentProjectId));
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1));
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Seeded work item", Request = request, DevelopmentProjectId = developmentProjectId });
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Seeded definition", GraphJson = graphJson, NodeCount = 1 });
         // The seeds travel with the start, exactly as the run service composes them: a run and its node runs are one
         // commit, so there is no half-started run for a test to accidentally depend on.
-        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
-                                 workItem.Id,
-                                 definition.Id,
-                                 definition.Version,
-                                 definition.GraphHash,
-                                 graphJson,
-                                 await SeedsAsync(store, graphJson, workItem)));
+        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            WorkItemId = workItem.Id,
+            DefinitionId = definition.Id,
+            DefinitionVersion = definition.Version,
+            DefinitionGraphHash = definition.GraphHash,
+            GraphJson = graphJson,
+            NodeRuns = await SeedsAsync(store, graphJson, workItem)
+        });
         return run.Id;
     }
 
@@ -321,8 +324,8 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", request, developmentProjectId));
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1));
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Seeded work item", Request = request, DevelopmentProjectId = developmentProjectId });
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Seeded definition", GraphJson = graphJson, NodeCount = 1 });
         return (workItem.Id, definition.Id);
     }
 
@@ -337,7 +340,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                          .CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(), name, body, scopeJson, Enabled: enabled));
+                          .CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand { RuleSetId = Guid.NewGuid(), Name = name, Body = body, ScopeJson = scopeJson, Enabled = enabled });
     }
 
     /// <summary>Rewrites a rule set the way the PUT endpoint does — whole document, at the version it was read from.</summary>
@@ -345,11 +348,14 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                          .UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(ruleSetId,
-                              expectedVersion,
-                              name,
-                              body,
-                              scopeJson ?? """{"projectIds":[],"nodeTypes":[]}"""));
+                          .UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand
+                          {
+                              RuleSetId = ruleSetId,
+                              ExpectedVersion = expectedVersion,
+                              Name = name,
+                              Body = body,
+                              ScopeJson = scopeJson ?? """{"projectIds":[],"nodeTypes":[]}"""
+                          });
     }
 
     public async Task DeleteRuleSetAsync(Guid ruleSetId)
@@ -397,14 +403,17 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", "Seeded request"));
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1));
-        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
-                                 workItem.Id,
-                                 definition.Id,
-                                 definition.Version,
-                                 definition.GraphHash,
-                                 graphJson));
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand { WorkItemId = Guid.NewGuid(), Title = "Seeded work item", Request = "Seeded request" });
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "Seeded definition", GraphJson = graphJson, NodeCount = 1 });
+        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand
+        {
+            RunId = Guid.NewGuid(),
+            WorkItemId = workItem.Id,
+            DefinitionId = definition.Id,
+            DefinitionVersion = definition.Version,
+            DefinitionGraphHash = definition.GraphHash,
+            GraphJson = graphJson
+        });
         return run.Id;
     }
 
@@ -536,14 +545,17 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var nodeRun = await ReadNodeRunAsync(runId, nodeKey);
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(runId,
-                           Guid.NewGuid(),
-                           nodeRun.Id,
-                           DevWorkflowVersions.Any,
-                           Guid.NewGuid(),
-                           decision,
-                           Comment: comment,
-                           DecidedBySubject: subject));
+                       .RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
+                       {
+                           RunId = runId,
+                           DecisionId = Guid.NewGuid(),
+                           NodeRunId = nodeRun.Id,
+                           ExpectedVersion = DevWorkflowVersions.Any,
+                           OperationId = Guid.NewGuid(),
+                           Decision = decision,
+                           Comment = comment,
+                           DecidedBySubject = subject
+                       });
     }
 
     /// <summary>Runs one sweep of every live run, the way the sweep pump does, and answers which runs it advanced.</summary>
@@ -568,7 +580,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var nodeRun = await ReadNodeRunAsync(runId, nodeKey);
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId, nodeRun.Id, DevWorkflowVersions.Any, target));
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand { RunId = runId, NodeRunId = nodeRun.Id, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = target });
     }
 
     /// <summary>
@@ -644,12 +656,15 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         await using (var scope = Services.CreateAsyncScope())
         {
             _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                           .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                               WorkSessionVersions.Any,
-                               WorkSessionEventTypes.StepEnded,
-                               Guid.NewGuid(),
-                               WorkSessionEventTypes.WriteGateOutcome,
-                               WorkSessionEventTypes.WriteGateDetail(refusal)));
+                           .AppendEventAsync(new AppendWorkSessionEventCommand
+                           {
+                               SessionId = sessionId,
+                               ExpectedVersion = WorkSessionVersions.Any,
+                               EventType = WorkSessionEventTypes.StepEnded,
+                               OperationId = Guid.NewGuid(),
+                               Outcome = WorkSessionEventTypes.WriteGateOutcome,
+                               DetailJson = WorkSessionEventTypes.WriteGateDetail(refusal)
+                           });
         }
 
         _ = await Agent.SettleAsync(sessionId, AgentWorkSessionStatus.Failed);
@@ -664,16 +679,19 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var written = await scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>()
                                  .WriteAsync(sessionId, artifactId, Encoding.UTF8.GetBytes(content));
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                           artifactId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionArtifactKind.Report,
-                           name,
-                           "text/markdown",
-                           written.ContentHash,
-                           written.ByteCount,
-                           written.OpaqueReference));
+                       .AppendArtifactAsync(new AppendWorkSessionArtifactCommand
+                       {
+                           SessionId = sessionId,
+                           ArtifactId = artifactId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           OperationId = Guid.NewGuid(),
+                           Kind = AgentWorkSessionArtifactKind.Report,
+                           Name = name,
+                           MediaType = "text/markdown",
+                           ContentSha256 = written.ContentHash,
+                           SizeBytes = written.ByteCount,
+                           ManagedReference = written.OpaqueReference
+                       });
         return artifactId;
     }
 
@@ -688,11 +706,14 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var taskId = Guid.NewGuid();
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           Guid.NewGuid(),
-                           AgentWorkSessionTaskOrigin.Agent,
-                           [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: title, Status: status, BlockedReason: blockedReason)]));
+                       .ApplyPlanAsync(new ApplyWorkPlanCommand
+                       {
+                           SessionId = sessionId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           OperationId = Guid.NewGuid(),
+                           Origin = AgentWorkSessionTaskOrigin.Agent,
+                           Changes = [new WorkPlanTaskChange { TaskId = taskId, Operation = WorkPlanTaskOperation.Add, Title = title, Status = status, BlockedReason = blockedReason }]
+                       });
         return taskId;
     }
 
@@ -705,12 +726,15 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var sessionId = await ReadSessionIdAsync(runId, nodeKey);
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                           WorkSessionVersions.Any,
-                           WorkSessionEventTypes.CompletionRequested,
-                           Guid.NewGuid(),
-                           Outcome: null,
-                           detailJson));
+                       .AppendEventAsync(new AppendWorkSessionEventCommand
+                       {
+                           SessionId = sessionId,
+                           ExpectedVersion = WorkSessionVersions.Any,
+                           EventType = WorkSessionEventTypes.CompletionRequested,
+                           OperationId = Guid.NewGuid(),
+                           Outcome = null,
+                           DetailJson = detailJson
+                       });
     }
 
     public async Task<IReadOnlyList<DevWorkflowArtifactSnapshot>> ReadArtifactsAsync(Guid runId)
@@ -785,16 +809,22 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
                           [
-                              .. interrupted.Select(row => new DevWorkflowNodeRunVerdict(row.NodeRunId,
-                                  row.Status,
-                                  row.Attempt,
-                                  row.WorkSessionId,
-                                  [
-                                      new TransitionDevWorkflowNodeRunCommand(row.RunId,
-                                          row.NodeRunId,
-                                          long.MaxValue,
-                                          DevWorkflowNodeRunStatus.Pending)
-                                  ]))
+                              .. interrupted.Select(row => new DevWorkflowNodeRunVerdict
+                              {
+                                  NodeRunId = row.NodeRunId,
+                                  ObservedStatus = row.Status,
+                                  ObservedAttempt = row.Attempt,
+                                  ObservedWorkSessionId = row.WorkSessionId,
+                                  Repairs = [
+                                      new TransitionDevWorkflowNodeRunCommand
+                                      {
+                                          RunId = row.RunId,
+                                          NodeRunId = row.NodeRunId,
+                                          ExpectedVersion = long.MaxValue,
+                                          TargetStatus = DevWorkflowNodeRunStatus.Pending
+                                      }
+                                  ]
+                              })
                           ]));
     }
 
@@ -823,16 +853,19 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
-                       .CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
-                           taskId,
-                           Guid.NewGuid(),
-                           "Keep the product working.",
-                           Guid.Parse(folder.Id),
-                           "repository-identity-hash",
-                           "main",
-                           "Add the feature",
-                           "It has to do the thing.",
-                           "[\"it does the thing\"]"));
+                       .CreateProjectAsync(new DevelopmentCreateProjectCommand
+                       {
+                           ProjectId = projectId,
+                           TaskId = taskId,
+                           OperationId = Guid.NewGuid(),
+                           Objective = "Keep the product working.",
+                           SelectedFolderId = Guid.Parse(folder.Id),
+                           RepositoryIdentityHash = "repository-identity-hash",
+                           BaseBranch = "main",
+                           Title = "Add the feature",
+                           Requirements = "It has to do the thing.",
+                           AcceptanceCriteriaJson = "[\"it does the thing\"]"
+                       });
         return (projectId, taskId);
     }
 
@@ -853,7 +886,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .TransitionRunAsync(new TransitionDevWorkflowRunCommand(runId, DevWorkflowVersions.Any, target));
+                       .TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = runId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = target });
     }
 }
 
@@ -900,11 +933,14 @@ internal sealed class DriftingWorkSessions : IWorkflowOwnedWorkSessionLifecycle
 
         await using var scope = _scopes.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(target.RunId,
-                               target.NodeRunId,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Running,
-                               IncrementAttempt: true),
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
+                       {
+                           RunId = target.RunId,
+                           NodeRunId = target.NodeRunId,
+                           ExpectedVersion = DevWorkflowVersions.Any,
+                           TargetStatus = DevWorkflowNodeRunStatus.Running,
+                           IncrementAttempt = true
+                       },
                            cancellationToken);
         return detail;
     }

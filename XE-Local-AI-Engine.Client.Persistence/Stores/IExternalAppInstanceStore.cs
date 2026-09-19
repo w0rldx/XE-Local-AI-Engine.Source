@@ -54,13 +54,20 @@ public sealed record ExternalAppInstanceSnapshot(
 ///     One event on an instance's history. <see cref="DetailJson" /> is plaintext at rest by design: content-free by
 ///     contract and bounded at 4 KiB by the store, which is what lets the hub replay it as it stands.
 /// </summary>
-public sealed record ExternalAppInstanceEventSnapshot(
-    Guid Id,
-    Guid InstanceId,
-    long Sequence,
-    ExternalAppInstanceEventKind Kind,
-    string? DetailJson,
-    long OccurredAtUtc);
+public sealed class ExternalAppInstanceEventSnapshot
+{
+    public required Guid Id { get; init; }
+
+    public required Guid InstanceId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required ExternalAppInstanceEventKind Kind { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One status compare-and-swap plus the event it mints. Every optional field is "leave it alone" when null, with
@@ -69,25 +76,44 @@ public sealed record ExternalAppInstanceEventSnapshot(
 ///     <c>IntegrationExecutionStore.TryTerminalizeAsync</c> applies to a terminal write, and for the same reason.
 ///     <see cref="ClearFailure" /> is the explicit spelling of that clear; it wins over any values passed beside it.
 /// </summary>
-public sealed record ExternalAppStatusUpdate(
-    Guid InstanceId,
-    long ExpectedVersion,
-    IReadOnlySet<ExternalAppInstanceStatus> ExpectedStatuses,
-    ExternalAppInstanceStatus NewStatus,
-    ExternalAppInstanceEventKind EventKind,
-    string? EventDetailJson,
-    long OccurredAtUtc,
-    ExternalAppDesiredState? DesiredState = null,
-    string? PublishedPortsJson = null,
-    string? ManifestSnapshotJson = null,
-    int? ManifestVersion = null,
-    string? RuntimeProvider = null,
-    long? StartedAtUtc = null,
-    long? StoppedAtUtc = null,
-    bool? NeedsRecreate = null,
-    ExternalAppFailureCategory? FailureCategory = null,
-    string? FailureSummary = null,
-    bool ClearFailure = false);
+public sealed record ExternalAppStatusUpdate
+{
+    public required Guid InstanceId { get; init; }
+
+    public required long ExpectedVersion { get; init; }
+
+    public required IReadOnlySet<ExternalAppInstanceStatus> ExpectedStatuses { get; init; }
+
+    public required ExternalAppInstanceStatus NewStatus { get; init; }
+
+    public required ExternalAppInstanceEventKind EventKind { get; init; }
+
+    public required string? EventDetailJson { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public ExternalAppDesiredState? DesiredState { get; init; }
+
+    public string? PublishedPortsJson { get; init; }
+
+    public string? ManifestSnapshotJson { get; init; }
+
+    public int? ManifestVersion { get; init; }
+
+    public string? RuntimeProvider { get; init; }
+
+    public long? StartedAtUtc { get; init; }
+
+    public long? StoppedAtUtc { get; init; }
+
+    public bool? NeedsRecreate { get; init; }
+
+    public ExternalAppFailureCategory? FailureCategory { get; init; }
+
+    public string? FailureSummary { get; init; }
+
+    public bool ClearFailure { get; init; }
+}
 
 /// <summary>
 ///     Everything an install admission writes: the row, at status <c>Installing</c> with
@@ -130,7 +156,14 @@ public sealed record ExternalAppInstanceCreate(
 ///     answering 409 on a user-initiated transition and ignoring it inside the reconciler, where the other writer's
 ///     verdict is the newer one.
 /// </summary>
-public sealed record ExternalAppStatusWriteResult(bool Applied, long Sequence, long Version);
+public sealed class ExternalAppStatusWriteResult
+{
+    public required bool Applied { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>
 ///     Persistence boundary for installed external applications and their event feed.

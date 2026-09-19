@@ -126,7 +126,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         publisher.PublishAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<GraphWorkflowChangeKind>(), Arg.Any<CancellationToken>())
                  .ThrowsAsyncForAnyArgs(new InvalidOperationException("the hub is gone"));
 
-        var result = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Running));
+        var result = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Running });
 
         AssertEx.Equal(Sequence, result.Sequence, "the commit's own watermark still reaches the caller.");
         await inner.Received(1).TransitionRunAsync(Arg.Any<TransitionGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());
@@ -137,10 +137,10 @@ public sealed class PublishingGraphWorkflowStoreTests
     [
         new(nameof(IGraphWorkflowStore.TransitionRunAsync),
             GraphWorkflowChangeKind.Run,
-            store => store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Running))),
+            store => store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Running })),
         new(nameof(IGraphWorkflowStore.AppendEventAsync),
             GraphWorkflowChangeKind.Run,
-            store => store.AppendEventAsync(new AppendGraphWorkflowEventCommand(RunId, GraphWorkflowVersions.Any, GraphWorkflowEventTypes.NodeInterrupted))),
+            store => store.AppendEventAsync(new AppendGraphWorkflowEventCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, EventType = GraphWorkflowEventTypes.NodeInterrupted })),
         new(nameof(IGraphWorkflowStore.TransitionNodeRunAsync),
             GraphWorkflowChangeKind.Node,
             store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.Running))),
@@ -170,36 +170,42 @@ public sealed class PublishingGraphWorkflowStoreTests
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> SilentWrites() =>
     [
-        store => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(), "graph", "{}", NodeCount: 3)),
-        store => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(Guid.NewGuid(), ExpectedVersion: 1, "renamed")),
+        store => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = "graph", GraphJson = "{}", NodeCount = 3 }),
+        store => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), ExpectedVersion = 1, Name = "renamed" }),
         store => store.DeleteDefinitionAsync(Guid.NewGuid()),
-        store => store.StartRunAsync(new StartGraphWorkflowRunCommand(RunId,
-            RequestId: Guid.NewGuid(),
-            DefinitionId: Guid.NewGuid(),
-            DefinitionVersion: 1,
-            "graph-hash",
-            "{}",
-            InputJson: null,
-            [new GraphWorkflowNodeRunSeed(NodeRunId, "draft", GraphWorkflowNodeKind.Agent)])),
+        store => store.StartRunAsync(new StartGraphWorkflowRunCommand
+        {
+            RunId = RunId,
+            RequestId = Guid.NewGuid(),
+            DefinitionId = Guid.NewGuid(),
+            DefinitionVersion = 1,
+            GraphHash = "graph-hash",
+            GraphJson = "{}",
+            InputJson = null,
+            NodeRuns = [new GraphWorkflowNodeRunSeed { NodeRunId = NodeRunId, NodeKey = "draft", Kind = GraphWorkflowNodeKind.Agent }]
+        }),
         store => store.ReconcileNonTerminalNodeRunsAsync("the node restarted", [])
     ];
 
     private static TransitionGraphWorkflowNodeRunCommand NodeRunTransition(GraphWorkflowNodeRunStatus target) =>
-        new(RunId, NodeRunId, GraphWorkflowVersions.Any, target);
+        new() { RunId = RunId, NodeRunId = NodeRunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = target };
 
     private static DecideGraphWorkflowNodeRunCommand Decision() =>
-        new(RunId,
-            NodeRunId,
-            GraphWorkflowVersions.Any,
-            Guid.NewGuid(),
-            GraphWorkflowDecisionKind.Approve,
-            "operator@localhost",
-            """{"status":"succeeded","output":{"decision":"Approve"}}""");
+        new()
+        {
+            RunId = RunId,
+            NodeRunId = NodeRunId,
+            ExpectedVersion = GraphWorkflowVersions.Any,
+            OperationId = Guid.NewGuid(),
+            Decision = GraphWorkflowDecisionKind.Approve,
+            DecidedBySubject = "operator@localhost",
+            OutputJson = """{"status":"succeeded","output":{"decision":"Approve"}}"""
+        };
 
     private static (IGraphWorkflowStore Store, IGraphWorkflowEventPublisher Publisher, IGraphWorkflowStore Inner) Create()
     {
         var inner = Substitute.For<IGraphWorkflowStore>();
-        var result = new GraphWorkflowMutationResult(RunId, Sequence);
+        var result = new GraphWorkflowMutationResult { RunId = RunId, Sequence = Sequence };
         inner.TransitionRunAsync(Arg.Any<TransitionGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.TransitionNodeRunAsync(Arg.Any<TransitionGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AppendEventAsync(Arg.Any<AppendGraphWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);

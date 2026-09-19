@@ -147,6 +147,6 @@ public sealed class DatasetDefinitionServiceTests
             JsonSerializer.Deserialize<DatasetDefinitionBodyV1>(AssertEx.NotNull(_captured, "The service should have reached the store.").DefinitionJson.Span, TrainingJson.Options)!;
 
         private static TrainingDefinitionRecord Record(TrainingDefinitionInput input) =>
-            new(Guid.NewGuid(), input.Name, input.Kind, input.DefinitionJson, DefinitionVersion: 1, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+            new() { Id = Guid.NewGuid(), Name = input.Name, Kind = input.Kind, DefinitionJson = input.DefinitionJson, DefinitionVersion = 1, Version = 1, CreatedAtUtc = 0, UpdatedAtUtc = 0 };
     }
 }

@@ -217,19 +217,22 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
             var persisted = await MarkPrimarySucceededAsync(work,
-                    new BenchmarkPrimarySuccessCommand(work.RunId,
-                        work.Version,
-                        BenchmarkExecutionSerialization.SerializeParts(parts),
-                        terminalEvent.Sequence,
-                        effectiveContext,
-                        durationMs,
-                        terminal.TotalTokens,
-                        tokensPerSecond,
+                    new BenchmarkPrimarySuccessCommand
+                    {
+                        RunId = work.RunId,
+                        ExpectedWorkVersion = work.Version,
+                        OutputPartsJson = BenchmarkExecutionSerialization.SerializeParts(parts),
+                        LastStreamSequence = terminalEvent.Sequence,
+                        EffectiveContextTokens = effectiveContext,
+                        DurationMs = durationMs,
+                        TotalTokens = terminal.TotalTokens,
+                        TokensPerSecond = tokensPerSecond,
                         // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
                         // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
                         // if it were a finished one.
-                        stopReason,
-                        Throughput: throughput));
+                        PrimaryStopReason = stopReason,
+                        Throughput = throughput
+                    });
             _events.PublishReserved(metricsEvent);
             _events.PublishReserved(terminalEvent with
             {
@@ -295,13 +298,16 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     private static BenchmarkRunThroughput? ToThroughput(InvocationThroughput? throughput) =>
         throughput is null
             ? null
-            : new BenchmarkRunThroughput(throughput.TimeToFirstTokenMs,
-                throughput.PromptTokens,
-                throughput.PromptMs,
-                throughput.GenerationTokens,
-                throughput.GenerationMs,
-                throughput.CachedPromptTokens,
-                throughput.SegmentCount);
+            : new BenchmarkRunThroughput
+            {
+                TtftMs = throughput.TimeToFirstTokenMs,
+                PromptTokens = throughput.PromptTokens,
+                PromptMs = throughput.PromptMs,
+                GenerationTokens = throughput.GenerationTokens,
+                GenerationMs = throughput.GenerationMs,
+                CachedPromptTokens = throughput.CachedPromptTokens,
+                SegmentCount = throughput.SegmentCount
+            };
 
     /// <summary>
     ///     Commits primary success together with the run's first judging, in the store's single transaction. The judge
@@ -337,7 +343,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
         // attempt the operator can re-judge, rather than losing the measurement to a judge-configuration race.
         return await _store.MarkPrimarySucceededAsync(command with
         {
-            JudgeAttempt = new BenchmarkJudgeAttemptSeed(ExpectedJudgePolicyRevisionId: null, RuntimeJson: null, JudgePolicyChangedMessage)
+            JudgeAttempt = new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = null, RuntimeJson = null, RuntimeUnresolvedReason = JudgePolicyChangedMessage }
         }, CancellationToken.None);
     }
 
@@ -351,15 +357,18 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
         {
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
             var resolution = await _judgeRuntimeResolver.ResolveAsync(policy, CancellationToken.None);
-            return new BenchmarkJudgeAttemptSeed(revision.Id,
-                new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
-                RuntimeUnresolvedReason: null,
-                resolution.Intent);
+            return new BenchmarkJudgeAttemptSeed
+            {
+                ExpectedJudgePolicyRevisionId = revision.Id,
+                RuntimeJson = new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
+                RuntimeUnresolvedReason = null,
+                LaunchIntent = resolution.Intent
+            };
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogWarning(exception, "Benchmark judge runtime could not be resolved for policy revision {RevisionId}.", revision.Id);
-            return new BenchmarkJudgeAttemptSeed(revision.Id, RuntimeJson: null, exception.Message);
+            return new BenchmarkJudgeAttemptSeed { ExpectedJudgePolicyRevisionId = revision.Id, RuntimeJson = null, RuntimeUnresolvedReason = exception.Message };
         }
     }
 

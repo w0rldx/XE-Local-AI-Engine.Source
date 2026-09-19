@@ -128,15 +128,18 @@ internal sealed partial class DevWorkflowStore
     private static async Task<IReadOnlyList<DevWorkflowRuleSetSummary>> SummariesAsync(IQueryable<DevWorkflowRuleSet> query, CancellationToken cancellationToken) =>
         await query.OrderBy(entity => entity.Name)
                    .ThenBy(entity => entity.Id)
-                   .Select(entity => new DevWorkflowRuleSetSummary(entity.Id,
-                       entity.Name,
-                       entity.Description,
-                       entity.ScopeJson,
-                       entity.Enabled,
-                       entity.ContentSha256,
-                       entity.Version,
-                       entity.CreatedAtUtc,
-                       entity.UpdatedAtUtc))
+                   .Select(entity => new DevWorkflowRuleSetSummary
+                   {
+                       Id = entity.Id,
+                       Name = entity.Name,
+                       Description = entity.Description,
+                       ScopeJson = entity.ScopeJson,
+                       Enabled = entity.Enabled,
+                       ContentSha256 = entity.ContentSha256,
+                       Version = entity.Version,
+                       CreatedAtUtc = entity.CreatedAtUtc,
+                       UpdatedAtUtc = entity.UpdatedAtUtc
+                   })
                    .ToListAsync(cancellationToken);
 
     private async Task<DevWorkflowRuleSet> LoadRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken) =>
@@ -144,14 +147,17 @@ internal sealed partial class DevWorkflowStore
         ?? throw new DevWorkflowNotFoundException($"Development workflow rule set '{ruleSetId}' was not found.");
 
     private static DevWorkflowRuleSetSnapshot RuleSetSnapshot(DevWorkflowRuleSet ruleSet) =>
-        new(ruleSet.Id,
-            ruleSet.Name,
-            ruleSet.Description,
-            ruleSet.ScopeJson,
-            ruleSet.Enabled,
-            Text(ruleSet.Body),
-            ruleSet.ContentSha256,
-            ruleSet.Version,
-            ruleSet.CreatedAtUtc,
-            ruleSet.UpdatedAtUtc);
+        new()
+        {
+            Id = ruleSet.Id,
+            Name = ruleSet.Name,
+            Description = ruleSet.Description,
+            ScopeJson = ruleSet.ScopeJson,
+            Enabled = ruleSet.Enabled,
+            Body = Text(ruleSet.Body),
+            ContentSha256 = ruleSet.ContentSha256,
+            Version = ruleSet.Version,
+            CreatedAtUtc = ruleSet.CreatedAtUtc,
+            UpdatedAtUtc = ruleSet.UpdatedAtUtc
+        };
 }

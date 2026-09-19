@@ -857,16 +857,19 @@ internal sealed partial class ExternalAppService
         ExternalAppInstanceStatus newStatus,
         ExternalAppInstanceEventKind kind)
     {
-        return new ExternalAppStatusUpdate(cursor.InstanceId,
-            cursor.Version,
-            new HashSet<ExternalAppInstanceStatus>
+        return new ExternalAppStatusUpdate
+        {
+            InstanceId = cursor.InstanceId,
+            ExpectedVersion = cursor.Version,
+            ExpectedStatuses = new HashSet<ExternalAppInstanceStatus>
             {
                 cursor.Status
             },
-            newStatus,
-            kind,
-            EventDetailJson: null,
-            Now());
+            NewStatus = newStatus,
+            EventKind = kind,
+            EventDetailJson = null,
+            OccurredAtUtc = Now()
+        };
     }
 
     /// <summary>

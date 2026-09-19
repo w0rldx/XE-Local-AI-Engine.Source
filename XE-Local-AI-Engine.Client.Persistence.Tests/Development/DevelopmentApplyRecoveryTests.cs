@@ -128,10 +128,13 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
-        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                          Guid.NewGuid(),
-                          DevelopmentTaskStatus.Completed,
-                          version)));
+        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
+        {
+            TaskId = seed.TaskId,
+            OperationId = Guid.NewGuid(),
+            TargetStatus = DevelopmentTaskStatus.Completed,
+            ExpectedTaskVersion = version
+        }));
     }
 
     private static DevelopmentApprovedApplySubject CreateSubject(DevelopmentCreateProjectCommand seed, long version) =>
