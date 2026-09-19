@@ -80,7 +80,9 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         // runtime's. A CPU build needs nothing beyond the rows above.
         if (backend == WhisperBackend.Cuda)
         {
-            items.Insert(1, await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ProbeIsolationRoot, ct).ConfigureAwait(false));
+            items.Insert(1,
+                await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ProbeIsolationRoot, ct, CudaToolkitLocator.FindNvccOutsidePath())
+                    .ConfigureAwait(false));
             items.Insert(2,
                 await ProbeToolAsync("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], "NVIDIA driver probe", ProbeIsolationRoot, ct)
                     .ConfigureAwait(false));
@@ -145,11 +147,14 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         }
     }
 
+    // `executablePath`, when given, is the absolute program to spawn instead of resolving `fileName` on PATH — the
+    // checklist key and the operator-facing detail stay the bare tool name, so no absolute path is ever surfaced.
     private static async Task<WhisperCppSourceBuildPrerequisiteItem> ProbeToolAsync(string fileName,
         IReadOnlyList<string> arguments,
         string displayName,
         string isolationRoot,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? executablePath = null)
     {
         try
         {
@@ -157,7 +162,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = fileName,
+                    FileName = executablePath ?? fileName,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,

@@ -53,6 +53,14 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
+
+        // An empty CUDA root, not an unset one: the probe now falls back to /usr/local/cuda/bin when neither
+        // CUDA_HOME nor CUDA_PATH is set, and a gate machine with a real CUDA install would otherwise satisfy the
+        // row this test is about. BOTH variables are pinned — the locator consults CUDA_PATH as well, so a box that
+        // exports it (NVIDIA's own installers do) would find a real compiler through the one left unpinned. Pinning
+        // both is how "no nvcc anywhere" stays a property of the test, not of the box.
+        using var cudaHome = new EnvironmentScope("CUDA_HOME", temp.Path);
+        using var cudaPath = new EnvironmentScope("CUDA_PATH", value: null);
         var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), temp.Path, requiredFreeDiskBytes: 0);
 
         var report = await probe.ProbeAsync(LlamaCppSourceBackend.Cuda, CancellationToken.None);
@@ -60,6 +68,39 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         AssertEx.False(report.CanBuild);
         AssertEx.True(report.Items.Any(static item => item.Key == "nvcc" && !item.Satisfied));
         AssertEx.True(report.Items.Any(static item => item.Key == "nvidia-smi" && !item.Satisfied));
+    }
+
+    /// <summary>
+    ///     The reported defect: <c>nvcc</c> installed where NVIDIA's Linux installer puts it, with that directory not on
+    ///     the host PATH, was reported "Missing" — while the build it gates would have found the same toolkit through
+    ///     CMake. The row must be satisfied from the conventional root, and its key must stay the bare tool name so no
+    ///     absolute path reaches the operator-facing checklist.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Probe_Cuda_FindsNvccUnderTheConfiguredCudaRootWhenItIsNotOnPath()
+    {
+        using var temp = new TempDirectory();
+        WriteCommonTools(temp.Path);
+        using var path = new PathScope(temp.Path);
+
+        var cudaBin = Path.Combine(temp.Path, "cuda", "bin");
+        Directory.CreateDirectory(cudaBin);
+        WriteTool(cudaBin, "nvcc");
+
+        // Both pinned for the reason the sibling test above documents: the answer must come from this temp root,
+        // never from whatever the box exports or has installed under /usr/local/cuda.
+        using var cudaHome = new EnvironmentScope("CUDA_HOME", Path.Combine(temp.Path, "cuda"));
+        using var cudaPath = new EnvironmentScope("CUDA_PATH", value: null);
+
+        var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), temp.Path, requiredFreeDiskBytes: 0);
+
+        var report = await probe.ProbeAsync(LlamaCppSourceBackend.Cuda, CancellationToken.None);
+
+        var nvcc = report.Items.Single(static item => item.Key == "nvcc");
+        AssertEx.True(nvcc.Satisfied, "nvcc under the configured CUDA root must satisfy the row even when PATH has no nvcc.");
+        AssertEx.False(nvcc.Detail.Contains(temp.Path, StringComparison.Ordinal), "The checklist detail must never surface an absolute host path.");
     }
 
     /// <summary>
@@ -96,10 +137,32 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
                      "git"
                  })
         {
-            var path = Path.Combine(directory, tool);
-            File.WriteAllText(path, $"#!/bin/sh\necho '{tool} 1.0'\n");
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            WriteTool(directory, tool);
         }
+    }
+
+    [UnsupportedOSPlatform("windows")]
+    private static void WriteTool(string directory, string tool)
+    {
+        var path = Path.Combine(directory, tool);
+        File.WriteAllText(path, $"#!/bin/sh\necho '{tool} 1.0'\n");
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private sealed class EnvironmentScope : IDisposable
+    {
+        private readonly string _name;
+        private readonly string? _original;
+
+        public EnvironmentScope(string name, string? value)
+        {
+            _name = name;
+            _original = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, value);
+        }
+
+        public void Dispose() =>
+            Environment.SetEnvironmentVariable(_name, _original);
     }
 
     private sealed class VendorProbe : IGpuVendorProbe

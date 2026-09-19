@@ -83,7 +83,8 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
                 Satisfied = nvidiaPresent,
                 Detail = nvidiaPresent ? "NVIDIA GPU/driver detected." : "No NVIDIA GPU or driver detected."
             });
-            items.Insert(2, await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ct).ConfigureAwait(false));
+            items.Insert(2,
+                await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ct, CudaToolkitLocator.FindNvccOutsidePath()).ConfigureAwait(false));
             items.Insert(3, await ProbeToolAsync("nvidia-smi", ["--query-gpu=compute_cap", "--format=csv,noheader"], "NVIDIA driver probe", ct).ConfigureAwait(false));
         }
         else if (backend == LlamaCppSourceBackend.Vulkan)
@@ -132,9 +133,15 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = false, Detail = "Neither make nor ninja was found." };
     }
 
-    private static async Task<LlamaCppSourceBuildPrerequisiteItem> ProbeToolAsync(string fileName, IReadOnlyList<string> args, string displayName, CancellationToken ct)
+    // `executablePath`, when given, is the absolute program to spawn instead of resolving `fileName` on PATH — the
+    // checklist key and the operator-facing detail stay the bare tool name, so no absolute path is ever surfaced.
+    private static async Task<LlamaCppSourceBuildPrerequisiteItem> ProbeToolAsync(string fileName,
+        IReadOnlyList<string> args,
+        string displayName,
+        CancellationToken ct,
+        string? executablePath = null)
     {
-        var banner = await TryProbeAsync(fileName, args, ct).ConfigureAwait(false);
+        var banner = await TryProbeAsync(executablePath ?? fileName, args, ct).ConfigureAwait(false);
         return banner is { Length: > 0 }
             ? new LlamaCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = true, Detail = $"{displayName} detected: {banner}" }
             : new LlamaCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = false, Detail = $"{displayName} was not found on PATH." };

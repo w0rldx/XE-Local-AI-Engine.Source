@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Diagnostics;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>Applies the non-interactive, secret-free environment shared by source-build child processes.</summary>
 internal static class StableDiffusionSourceProcessHardening
@@ -26,6 +27,14 @@ internal static class StableDiffusionSourceProcessHardening
         startInfo.Environment["LC_ALL"] = string.IsNullOrWhiteSpace(preserved["LC_ALL"]) ? "C" : preserved["LC_ALL"];
         CopyIfPresent(startInfo, preserved, "CUDA_HOME");
         CopyIfPresent(startInfo, preserved, "CUDA_PATH");
+        // The checklist answers "CUDA compiler" from a conventional install that is not on PATH (see
+        // CudaToolkitLocator); pin CMake to that same nvcc so a green prerequisite can never be followed by a build
+        // that looks for the toolkit somewhere else. Child environment only — the host's is never touched.
+        if (CudaToolkitLocator.FindNvccOutsidePath() is { } nvcc)
+        {
+            startInfo.Environment["CUDACXX"] = nvcc;
+        }
+
         startInfo.Environment["HOME"] = home;
         startInfo.Environment["TMPDIR"] = temp;
         startInfo.Environment["TERM"] = "dumb";

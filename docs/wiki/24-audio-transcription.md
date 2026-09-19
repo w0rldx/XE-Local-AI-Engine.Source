@@ -780,7 +780,9 @@ points at it when the resolved backend is `cpu` and no managed build exists — 
 GPU, only the backend the daemon reported, so the pointer names the Linux + NVIDIA condition rather than asserting it.
 
 Each card's prerequisite probe really runs the toolchain (`cmake --version`, `gcc`, `g++`, `ninja`/`make`, `git`, plus
-`readelf` here and `nvcc`/`nvidia-smi` or `glslc`/`vulkaninfo` for an accelerated backend), so the three of them
+`readelf` here and `nvcc`/`nvidia-smi` or `glslc`/`vulkaninfo` for an accelerated backend; `nvcc` is the one tool not
+looked up on PATH alone — see `CudaToolkitLocator` in
+[Local Runtime & Providers](03-local-runtime-and-providers.md)), so the three of them
 together spawn roughly twenty short-lived child processes per probe round. Ungated, that would have been the cost of
 every operator's every visit to Node Settings, so **the build form sits behind a disclosure and the probe is `enabled`
 only while it is open** — `SourceBuildFormDisclosure` plus `useSourceBuildFormDisclosure`, shared by all three cards.

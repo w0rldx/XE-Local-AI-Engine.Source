@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -1047,6 +1048,14 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 scrubbed[key] = value;
             }
+        }
+
+        // The checklist answers "CUDA compiler" from a conventional install that is not on PATH (see
+        // CudaToolkitLocator); pin CMake to that same nvcc so a green prerequisite can never be followed by a build
+        // that looks for the toolkit somewhere else. Child environment only — the host's is never touched.
+        if (CudaToolkitLocator.FindNvccOutsidePath() is { } nvcc)
+        {
+            scrubbed["CUDACXX"] = nvcc;
         }
 
         scrubbed["HOME"] = isolatedHome;
