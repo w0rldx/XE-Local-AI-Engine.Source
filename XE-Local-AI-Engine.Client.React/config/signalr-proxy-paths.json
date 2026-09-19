@@ -2,7 +2,6 @@
 	"/api/local/v1/chat/hub",
 	"/api/local/v1/scheduler/hub",
 	"/api/local/v1/model-fit/gguf/downloads/hub",
-	"/api/local/v1/model-fit/llamacpp/cuda-build/hub",
 	"/api/local/v1/model-fit/llamacpp/source-build/hub",
 	"/api/local/v1/model-fit/llamacpp/acquisition/hub",
 	"/api/local/v1/knowledge-base/hub",

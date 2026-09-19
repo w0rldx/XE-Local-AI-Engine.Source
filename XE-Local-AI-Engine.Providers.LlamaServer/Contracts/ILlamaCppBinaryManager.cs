@@ -84,14 +84,6 @@ public interface ILlamaCppBinaryManager
     /// <exception cref="LlamaRuntimeException">Validation failed (path-chain, smoke, or GPU presence) — sanitized for display.</exception>
     Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct);
 
-    /// <summary>
-    ///     Removes a managed CUDA source build: deletes the on-disk build tree (ONLY after asserting the recorded
-    ///     <see cref="InstalledRuntimeState.SourceBuildPath" /> is a normalized child of
-    ///     <c>{cacheRoot}/llama.cpp/source-cuda/</c> — never deleting outside it), clears the installed-runtime record, and
-    ///     clears the managed-CUDA cached signal. Idempotent: a no-op when no source build is recorded. <c>[secMED-3]</c>
-    /// </summary>
-    Task RemoveCudaSourceBuildAsync(CancellationToken ct);
-
     /// <summary>Adopts a generalized source-built runtime with exact provenance.</summary>
     Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir,
         string tag,
@@ -119,9 +111,13 @@ public interface ILlamaCppBinaryManager
         return AdoptSourceBuildAsync(buildBinDir, tag, variant, sourceRepository, sourceCommit, revisionMode, requestedCommit, ct);
     }
 
-    /// <summary>Removes the active generalized source-built runtime.</summary>
-    Task RemoveSourceBuildAsync(CancellationToken ct)
-    {
-        return RemoveCudaSourceBuildAsync(ct);
-    }
+    /// <summary>
+    ///     Removes the recorded managed source-built runtime: deletes the on-disk build tree ONLY when the recorded
+    ///     <see cref="InstalledRuntimeState.SourceBuildPath" /> is byte-for-byte the bin directory of a location this
+    ///     manager computes itself under the cache root — either the generalized <c>source-build/active</c> tree or the
+    ///     pre-generalization <c>source-cuda/{PinnedTag}</c> one. Any other recorded path is NEVER deleted; the record
+    ///     and the cached signal are cleared regardless, so no caller reports a successful removal while stale source
+    ///     state stays active. Idempotent: a no-op when no source build is recorded. <c>[secMED-3]</c>
+    /// </summary>
+    Task RemoveSourceBuildAsync(CancellationToken ct);
 }

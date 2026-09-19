@@ -164,7 +164,7 @@ public sealed class OpenApiDocumentTests
     }
 
     [Test]
-    public async Task LocalOpenApiDocument_DescribesGeneralizedAndLegacySourceBuildSurfaces()
+    public async Task LocalOpenApiDocument_DescribesTheGeneralizedSourceBuildSurface()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
@@ -181,12 +181,15 @@ public sealed class OpenApiDocumentTests
                      "/api/local/v1/model-fit/llamacpp/source-build/prerequisites",
                      "/api/local/v1/model-fit/llamacpp/source-build/status",
                      "/api/local/v1/model-fit/llamacpp/source-build/cancel",
-                     "/api/local/v1/model-fit/llamacpp/source-build/remove",
-                     "/api/local/v1/model-fit/llamacpp/cuda-build"
+                     "/api/local/v1/model-fit/llamacpp/source-build/remove"
                  })
         {
             AssertEx.True(paths.TryGetProperty(path, out _), $"Expected source-build path '{path}'.");
         }
+
+        // The superseded CUDA-only twin of this family was removed; nothing may re-publish it.
+        AssertEx.False(paths.TryGetProperty("/api/local/v1/model-fit/llamacpp/cuda-build", out _),
+            "The legacy cuda-build route family must stay off the local OpenAPI document.");
 
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
         AssertSchemaEnum(schemas, "LlamaCppSourceBackendDto", ["cpu", "vulkan", "cuda"]);

@@ -4,15 +4,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Shared mapping of a <see cref="LlamaCppSourceBuildStartOutcome" /> to the stable machine reason code + user-safe
-///     message the two start endpoints (generic source build and the CUDA-specific legacy route) return as a 409. Only
-///     the build-kind noun differs between them, so both endpoints pass their own label and every message stays byte-for-byte
-///     what it was before the two copies were folded together.
+///     message the source-build start endpoint returns as a 409. The build-kind noun is a parameter so the wording stays
+///     byte-for-byte what it was, and a second start surface could reuse it without duplicating the outcome switch.
 /// </summary>
 internal static class LlamaCppSourceBuildStartEndpointSupport
 {
-    /// <summary>Build-kind label used by the CUDA-specific start endpoint ("A CUDA build...", "...the CUDA runtime").</summary>
-    internal const string CudaBuildKind = "CUDA";
-
     /// <summary>Build-kind label used by the generic source-build start endpoint ("A source build...", "...the source runtime").</summary>
     internal const string SourceBuildKind = "source";
 

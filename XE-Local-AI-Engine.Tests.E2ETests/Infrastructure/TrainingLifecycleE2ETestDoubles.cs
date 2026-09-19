@@ -234,7 +234,7 @@ public static class TrainingLifecycleE2ETestDoubles
         public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string directory, string tag, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task RemoveCudaSourceBuildAsync(CancellationToken ct) =>
+        public Task RemoveSourceBuildAsync(CancellationToken ct) =>
             Task.CompletedTask;
     }
 

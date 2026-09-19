@@ -100,12 +100,9 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ICudaManagedBuildSignal>(),
                 sp.GetRequiredService<IRuntimeAcquisitionStatusRegistry>()));
 
-        // In-app Linux CUDA source build (no upstream prebuilt exists): the prerequisite probe, the no-op build-event
-        // publisher (the Client host swaps in a hub-backed one), and the single-flight build service. The startup service
-        // cleans a stale work dir + seeds the managed-CUDA signal from the installed-runtime record.
-        services.TryAddSingleton<ICudaBuildPrerequisiteProbe>(static sp =>
-            new CudaBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
-        services.TryAddSingleton<ICudaBuildEventPublisher, NullCudaBuildEventPublisher>();
+        // In-app Linux source build (no upstream prebuilt CUDA asset exists): the per-backend prerequisite probe, the
+        // no-op build-event publisher (the Client host swaps in a hub-backed one), and the single-flight build service.
+        // The startup service cleans a stale work dir + seeds the managed-CUDA signal from the installed-runtime record.
         services.TryAddSingleton<ILlamaCppSourceBuildPrerequisiteProbe>(static sp =>
             new LlamaCppSourceBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
         services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
@@ -249,7 +246,6 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaCppSourceBuildEventPublisher>(),
                 sp.GetRequiredService<ILogger<LlamaCppSourceBuildService>>(),
                 sp.GetRequiredService<TimeProvider>()));
-        services.TryAddSingleton<ICudaBuildService, LegacyCudaBuildServiceAdapter>();
         services.AddHostedService(static sp => new CudaBuildStartupService(sp.GetRequiredService<ILlamaCppSourceBuildService>(),
             sp.GetRequiredService<IInstalledRuntimeStore>(),
             sp.GetRequiredService<ICudaManagedBuildSignal>(),

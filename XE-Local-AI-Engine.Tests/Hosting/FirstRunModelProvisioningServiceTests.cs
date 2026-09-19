@@ -494,7 +494,7 @@ public sealed class FirstRunModelProvisioningServiceTests
             return Task.FromResult(new InstalledRuntimeState(tag, "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, buildBinDir));
         }
 
-        public Task RemoveCudaSourceBuildAsync(CancellationToken ct)
+        public Task RemoveSourceBuildAsync(CancellationToken ct)
         {
             return Task.CompletedTask;
         }

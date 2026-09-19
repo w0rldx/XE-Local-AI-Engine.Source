@@ -2353,15 +2353,6 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResp
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = z.object({
-	phase: z.string(),
-	isRunning: z.boolean(),
-	terminal: z.boolean(),
-	logLines: z.array(z.string()),
-	sanitizedError: z.string().nullish(),
-	tag: z.string().nullish(),
-});
-
 export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = z.object({
 	modelName: z.string(),
 	cancelled: z.boolean(),
@@ -2467,17 +2458,6 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileReq
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = z.object({
 	profileId: z.guid(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = z.object({
-	key: z.string(),
-	satisfied: z.boolean(),
-	detail: z.string(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse),
-	canBuild: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = z.object({
@@ -2756,16 +2736,6 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequ
 		.nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = z.object({
-	reason: z.string(),
-	message: z.string(),
-	runningProcessCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-});
-
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = z.object({
 	reason: z.string(),
 	message: z.string(),
@@ -2778,11 +2748,6 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlocked
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = z.object({
 	token: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = z.object({
-	started: z.boolean(),
-	status: zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse,
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = z.object({
@@ -9017,11 +8982,6 @@ export const zBrowseGgufRepositoriesQuery = z.object({
  */
 export const zBrowseGgufRepositoriesResponse = zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
 
-/**
- * Success
- */
-export const zCancelCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
-
 export const zCancelGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
 
 /**
@@ -9070,16 +9030,6 @@ export const zFreezeInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelF
  * Success
  */
 export const zFreezeInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
-
-/**
- * Success
- */
-export const zGetCudaBuildPrerequisitesResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
-
-/**
- * Success
- */
-export const zGetCudaBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
 
 export const zGetGgufDownloadOperationStatusPath = z.object({
 	operationId: z.guid(),
@@ -9235,17 +9185,7 @@ export const zRefreshRecommendationsResponse = zXeLocalAiEngineClientEndpointsMo
 /**
  * Success
  */
-export const zRemoveCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-
-/**
- * Success
- */
 export const zRemoveLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
-
-/**
- * Success
- */
-export const zStartCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
 
 export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
 

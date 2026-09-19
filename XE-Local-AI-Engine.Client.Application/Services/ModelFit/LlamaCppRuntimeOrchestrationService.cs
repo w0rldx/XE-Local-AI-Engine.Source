@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The host's only door onto the <c>Providers.LlamaServer</c> contracts: the prerequisite checklists, the start /
-///     cancel / status / remove verbs of the managed source build and its CUDA-only legacy twin, the running-process
+///     The host's only door onto the <c>Providers.LlamaServer</c> contracts: the prerequisite checklist, the start /
+///     cancel / status / remove verbs of the managed source build, the running-process
 ///     count and health snapshot, the eject boundary, the installed-runtime record plus update snapshot a
 ///     runtime-status response is built from, and the provision-then-lease pair the inbound model proxy forwards
 ///     through. A host type may not take a concrete provider's contract itself (the host-dependency rule), so each call
@@ -27,8 +27,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     </para>
 ///     <para>
 ///         Deliberately off this surface, because nothing in the host asks for them: the binary manager's install and
-///         adopt verbs, the build services' <c>RecoverAsync</c> / <c>ShutdownAsync</c> / <c>CancelLegacyPinnedCuda</c> /
-///         <c>RecoverStaleWorkDirectoryAsync</c>, the installed-runtime store's lock / write / delete, the update
+///         adopt verbs, the build service's <c>RecoverAsync</c> / <c>ShutdownAsync</c>, the binary manager's
+///         legacy-only source-build removal, the installed-runtime store's lock / write / delete, the update
 ///         state's <c>Store</c>, the activity reservation's <c>TryReserve</c> / <c>TryRelease</c>, and the supervisor's
 ///         evict, profiling and benchmark surface.
 ///     </para>
@@ -40,8 +40,6 @@ public sealed class LlamaCppRuntimeOrchestrationService
 
     private readonly ILlamaCppSourceBuildActivity _buildActivity;
 
-    private readonly ICudaBuildService _cudaBuildService;
-    private readonly ICudaBuildPrerequisiteProbe _cudaPrerequisiteProbe;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILlamaCppSourceBuildPrerequisiteProbe _sourceBuildPrerequisiteProbe;
     private readonly ILlamaCppSourceBuildService _sourceBuildService;
@@ -52,8 +50,6 @@ public sealed class LlamaCppRuntimeOrchestrationService
     private readonly IGpuVariantSelector _variantSelector;
 
     public LlamaCppRuntimeOrchestrationService(
-        ICudaBuildPrerequisiteProbe cudaPrerequisiteProbe,
-        ICudaBuildService cudaBuildService,
         IGpuVariantSelector variantSelector,
         IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppBinaryManager binaryManager,
@@ -67,8 +63,6 @@ public sealed class LlamaCppRuntimeOrchestrationService
         ArgumentNullException.ThrowIfNull(acquisitionStatus);
         ArgumentNullException.ThrowIfNull(binaryManager);
         ArgumentNullException.ThrowIfNull(buildActivity);
-        ArgumentNullException.ThrowIfNull(cudaBuildService);
-        ArgumentNullException.ThrowIfNull(cudaPrerequisiteProbe);
         ArgumentNullException.ThrowIfNull(installedRuntimeStore);
         ArgumentNullException.ThrowIfNull(sourceBuildPrerequisiteProbe);
         ArgumentNullException.ThrowIfNull(sourceBuildService);
@@ -78,8 +72,6 @@ public sealed class LlamaCppRuntimeOrchestrationService
         _acquisitionStatus = acquisitionStatus;
         _binaryManager = binaryManager;
         _buildActivity = buildActivity;
-        _cudaBuildService = cudaBuildService;
-        _cudaPrerequisiteProbe = cudaPrerequisiteProbe;
         _installedRuntimeStore = installedRuntimeStore;
         _sourceBuildPrerequisiteProbe = sourceBuildPrerequisiteProbe;
         _sourceBuildService = sourceBuildService;
@@ -91,28 +83,10 @@ public sealed class LlamaCppRuntimeOrchestrationService
     /// <summary>The last observed llama.cpp update/runtime snapshot, which a runtime-status response is rendered from.</summary>
     public LlamaCppUpdateSnapshot CurrentUpdateSnapshot => _updateState.Current;
 
-    /// <summary>The CUDA build toolchain checklist, so the UI can enable the build only when every item is satisfied.</summary>
-    public Task<CudaBuildPrerequisiteReport> ProbeCudaBuildPrerequisitesAsync(CancellationToken ct)
-    {
-        return _cudaPrerequisiteProbe.ProbeAsync(ct);
-    }
-
     /// <summary>The source-build toolchain checklist for one backend, so a refusal can name which prerequisite is missing.</summary>
     public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeSourceBuildPrerequisitesAsync(LlamaCppSourceBackend backend, CancellationToken ct)
     {
         return _sourceBuildPrerequisiteProbe.ProbeAsync(backend, ct);
-    }
-
-    /// <summary>The legacy CUDA build's current status; never blocks on the build.</summary>
-    public CudaBuildStatus GetCudaBuildStatus()
-    {
-        return _cudaBuildService.GetStatus();
-    }
-
-    /// <summary>Requests cancellation of a running CUDA build. False when there is nothing to cancel.</summary>
-    public bool CancelCudaBuild()
-    {
-        return _cudaBuildService.Cancel();
     }
 
     /// <summary>Validates the request, checks prerequisites, and detaches the build. Returns as soon as it starts.</summary>
@@ -214,19 +188,13 @@ public sealed class LlamaCppRuntimeOrchestrationService
         return TryRemoveAsync(_supervisor, _buildActivity, _binaryManager.RemoveSourceBuildAsync, ct);
     }
 
-    /// <summary>Runs the shared remove gate over the legacy CUDA source build's removal.</summary>
-    public Task<LlamaCppRuntimeRemovalOutcome> TryRemoveCudaBuildAsync(CancellationToken ct)
-    {
-        return TryRemoveAsync(_supervisor, _buildActivity, _binaryManager.RemoveCudaSourceBuildAsync, ct);
-    }
-
     private static bool IsSourceBuildActive(ILlamaCppSourceBuildActivity sourceBuildActivity)
     {
         return sourceBuildActivity.ActiveBuildId is not null;
     }
 
     /// <summary>
-    ///     Shared remove gate for the managed source-build runtimes (generic + CUDA). Refuses while a source build is
+    ///     Shared remove gate for the managed source-build runtime. Refuses while a source build is
     ///     active — re-checked AFTER the mutation lease is taken so a build that starts during acquisition still blocks —
     ///     refuses when the lease cannot be taken or any llama-server process is still running (eject-first), and only
     ///     then runs <paramref name="removeAsync" /> while holding the lease. The lease is disposed on every path.

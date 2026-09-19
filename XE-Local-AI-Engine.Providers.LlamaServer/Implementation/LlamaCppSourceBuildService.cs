@@ -310,12 +310,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         return CancelUnderLock(static _ => true);
     }
 
-    /// <inheritdoc />
-    public bool CancelLegacyPinnedCuda()
-    {
-        return CancelUnderLock(static descriptor => descriptor.IsLegacyPinnedCuda());
-    }
-
     private bool CancelUnderLock(Func<LlamaCppSourceBuildDescriptor?, bool> predicate)
     {
         lock (_stateLock)

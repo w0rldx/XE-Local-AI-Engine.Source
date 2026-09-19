@@ -21,9 +21,7 @@ internal static class SubstitutedRuntimeOrchestration
         ILlamaCppBinaryManager? binaryManager = null,
         IGpuVariantSelector? variantSelector = null,
         IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null) =>
-        new(Substitute.For<ICudaBuildPrerequisiteProbe>(),
-            Substitute.For<ICudaBuildService>(),
-            variantSelector ?? Substitute.For<IGpuVariantSelector>(),
+        new(variantSelector ?? Substitute.For<IGpuVariantSelector>(),
             Substitute.For<IInstalledRuntimeStore>(),
             binaryManager ?? Substitute.For<ILlamaCppBinaryManager>(),
             Substitute.For<ILlamaCppSourceBuildActivity>(),

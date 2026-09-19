@@ -7,28 +7,17 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 internal sealed class LlamaCppSourceBuildEventPublisher : ILlamaCppSourceBuildEventPublisher
 {
     private readonly IHubContext<LlamaCppSourceBuildHub> _sourceHubContext;
-    private readonly IHubContext<CudaBuildHub> _cudaHubContext;
 
-    public LlamaCppSourceBuildEventPublisher(
-        IHubContext<LlamaCppSourceBuildHub> sourceHubContext,
-        IHubContext<CudaBuildHub> cudaHubContext)
+    public LlamaCppSourceBuildEventPublisher(IHubContext<LlamaCppSourceBuildHub> sourceHubContext)
     {
         _sourceHubContext = sourceHubContext;
-        _cudaHubContext = cudaHubContext;
     }
 
-    public async Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+    public Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
-        await _sourceHubContext.Clients.All.SendAsync(LlamaCppSourceBuildHubEvents.StatusChanged,
+        return _sourceHubContext.Clients.All.SendAsync(LlamaCppSourceBuildHubEvents.StatusChanged,
             LlamaCppSourceBuildStatusHubMessage.FromContract(statusEvent), cancellationToken);
-
-        if (statusEvent.CurrentBuild.IsLegacyPinnedCuda())
-        {
-            await _cudaHubContext.Clients.All.SendAsync(CudaBuildHubEvents.StatusChanged,
-                new CudaBuildStatusHubEvent(statusEvent.Phase, statusEvent.AppendedLogLines, statusEvent.Terminal, statusEvent.SanitizedError),
-                cancellationToken);
-        }
     }
 }
 

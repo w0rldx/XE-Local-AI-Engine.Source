@@ -187,9 +187,9 @@ public static class ConfigureServices
         // per-second downloads poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.
         builder.Services.AddSingleton<IGgufDownloadEventPublisher, GgufDownloadEventPublisher>();
 
-        // Hub-backed in-app CUDA build event publisher — supersedes the no-op default the provider registers so build
-        // phase + log lines push live to operator clients (CudaBuildHub mapped in Program). IHubContext is singleton-safe.
-        builder.Services.AddSingleton<ICudaBuildEventPublisher, CudaBuildEventPublisher>();
+        // Hub-backed in-app source-build event publisher — supersedes the no-op default the provider registers so build
+        // phase + log lines push live to operator clients (LlamaCppSourceBuildHub mapped in Program). IHubContext is
+        // singleton-safe.
         builder.Services.AddSingleton<ILlamaCppSourceBuildEventPublisher, LlamaCppSourceBuildEventPublisher>();
 
         // Hub-backed first-run runtime-acquisition event publisher — supersedes the no-op default the provider registers

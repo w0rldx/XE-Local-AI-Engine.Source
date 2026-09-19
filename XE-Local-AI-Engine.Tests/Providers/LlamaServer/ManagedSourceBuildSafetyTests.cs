@@ -188,21 +188,23 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
-    public async Task RemoveLegacyCuda_CustomActiveRuntime_IsUntouched()
+    public async Task RemoveSourceBuild_CustomCudaActiveRuntime_IsRemovedLikeAnyOther()
     {
+        // Removal keys off WHERE the record points, never off its provenance: a custom-repository CUDA build in the
+        // active tree is the operator's recorded runtime just as much as an official CPU one, and Remove must clear it.
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         using var store = new InstalledRuntimeStore(temp.Path);
         await store.WriteAsync(State(bin, GpuVariant.Cuda, "https://github.com/example/custom"), CancellationToken.None);
 
-        await CreateManager(temp.Path, store).RemoveCudaSourceBuildAsync(CancellationToken.None);
+        await CreateManager(temp.Path, store).RemoveSourceBuildAsync(CancellationToken.None);
 
-        AssertEx.True(Directory.Exists(Path.Combine(temp.Path, "llama.cpp", "source-build", "active")));
-        AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "llama.cpp", "source-build", "active")));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
     }
 
     [Test]
-    public async Task RemoveLegacyCuda_PreProvenance_DeletesOnlyExactPinnedTree()
+    public async Task RemoveSourceBuild_PreProvenanceLegacyTree_DeletesOnlyTheExactPinnedTree()
     {
         using var temp = new SecureTempDirectory();
         var legacyTree = Path.Combine(temp.Path, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag);
@@ -218,11 +220,65 @@ public sealed class ManagedSourceBuildSafetyTests
             Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server))), GpuVariant.Cuda,
             DateTimeOffset.UtcNow, bin), CancellationToken.None);
 
-        await CreateManager(temp.Path, store).RemoveCudaSourceBuildAsync(CancellationToken.None);
+        await CreateManager(temp.Path, store).RemoveSourceBuildAsync(CancellationToken.None);
 
         AssertEx.False(Directory.Exists(legacyTree));
         AssertEx.True(File.Exists(Path.Combine(sibling, "sentinel")));
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+    }
+
+    /// <summary>
+    ///     A recorded path that merely RESEMBLES the legacy location must never be deleted. The manager compares the
+    ///     canonicalized record for exact Ordinal equality against a path it computes itself, so a traversal that lands
+    ///     elsewhere, a sibling sharing the pinned tag's leaf spelling, and a directory nested below the real bin
+    ///     directory all miss — and take the unrecognised-path branch (record and signal cleared, nothing deleted).
+    /// </summary>
+    [Test]
+    [Arguments("traversal-escapes-the-pinned-tree")]
+    [Arguments("sibling-shares-the-pinned-tag-spelling")]
+    [Arguments("nested-below-the-pinned-bin-directory")]
+    public async Task RemoveSourceBuild_RecordedPathOnlyResemblesTheLegacyTree_DeletesNothing(string deception)
+    {
+        using var temp = new SecureTempDirectory();
+        var sourceCuda = Path.Combine(temp.Path, "llama.cpp", "source-cuda");
+        var legacyTree = Path.Combine(sourceCuda, LlamaCppReleasePins.PinnedTag);
+        var legacyBin = Path.Combine(legacyTree, "build", "bin");
+        Directory.CreateDirectory(legacyBin);
+        await File.WriteAllTextAsync(Path.Combine(legacyBin, "llama-server"), "real");
+
+        // The decoy is a REAL directory holding a sentinel, so "nothing was deleted" cannot pass vacuously.
+        var (recordedPath, survivingSentinel) = deception switch
+        {
+            "traversal-escapes-the-pinned-tree" => (Path.Combine(legacyBin, "..", "..", "..", "decoy", "build", "bin"),
+                Path.Combine(sourceCuda, "decoy", "build", "bin", "sentinel")),
+            "sibling-shares-the-pinned-tag-spelling" => (Path.Combine(sourceCuda, LlamaCppReleasePins.PinnedTag + "-decoy", "build", "bin"),
+                Path.Combine(sourceCuda, LlamaCppReleasePins.PinnedTag + "-decoy", "build", "bin", "sentinel")),
+            "nested-below-the-pinned-bin-directory" => (Path.Combine(legacyBin, "nested"),
+                Path.Combine(legacyBin, "nested", "sentinel")),
+            _ => throw new ArgumentOutOfRangeException(nameof(deception), deception, "Unknown deception case.")
+        };
+
+        Directory.CreateDirectory(Path.GetFullPath(recordedPath));
+        await File.WriteAllTextAsync(survivingSentinel, "keep");
+        using var store = new InstalledRuntimeStore(temp.Path);
+        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "(source-build:cuda)",
+            new string('a', 64),
+            GpuVariant.Cuda,
+            DateTimeOffset.UtcNow,
+            recordedPath), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cuda);
+        var before = signal.Version;
+
+        await CreateManager(temp.Path, store, signal).RemoveSourceBuildAsync(CancellationToken.None);
+
+        AssertEx.True(File.Exists(survivingSentinel), "The decoy the record pointed at was deleted.");
+        AssertEx.True(Directory.Exists(legacyTree), "The real pinned tree was deleted although the record never named it.");
+        // Unrecognised-path behaviour, unchanged: the record and the cached signal go even though no tree does.
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+        AssertEx.True(signal.Version > before);
     }
 
     [Test]

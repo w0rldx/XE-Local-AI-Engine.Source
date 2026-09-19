@@ -164,7 +164,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         // The llama.cpp runtime / source-build / running-model endpoints' door onto the provider contracts, so no
         // endpoint takes one itself (the endpoint-dependency rule). Every contract it wraps —
-        // ICudaBuildPrerequisiteProbe, ICudaBuildService, IInstalledRuntimeStore, ILlamaCppBinaryManager,
+        // IInstalledRuntimeStore, ILlamaCppBinaryManager,
         // ILlamaCppSourceBuildActivity, ILlamaCppSourceBuildPrerequisiteProbe, ILlamaCppSourceBuildService,
         // ILlamaCppUpdateState and ILlamaServerProcessSupervisor — is a TryAddSingleton of
         // AddLlamaServerLocalModelProvider above, so this wrapper is a Singleton too.

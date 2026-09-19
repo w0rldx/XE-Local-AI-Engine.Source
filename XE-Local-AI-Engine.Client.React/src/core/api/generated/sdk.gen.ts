@@ -51,9 +51,6 @@ import type {
 	CancelBenchmarkRunData,
 	CancelBenchmarkRunErrors,
 	CancelBenchmarkRunResponses,
-	CancelCudaBuildData,
-	CancelCudaBuildErrors,
-	CancelCudaBuildResponses,
 	CancelDevelopmentAttemptData,
 	CancelDevelopmentAttemptErrors,
 	CancelDevelopmentAttemptResponses,
@@ -480,12 +477,6 @@ import type {
 	GetConnectionStatusData,
 	GetConnectionStatusErrors,
 	GetConnectionStatusResponses,
-	GetCudaBuildPrerequisitesData,
-	GetCudaBuildPrerequisitesErrors,
-	GetCudaBuildPrerequisitesResponses,
-	GetCudaBuildStatusData,
-	GetCudaBuildStatusErrors,
-	GetCudaBuildStatusResponses,
 	GetCustomToolData,
 	GetCustomToolErrors,
 	GetCustomToolResponses,
@@ -1071,9 +1062,6 @@ import type {
 	RejudgeBenchmarkRunData,
 	RejudgeBenchmarkRunErrors,
 	RejudgeBenchmarkRunResponses,
-	RemoveCudaBuildData,
-	RemoveCudaBuildErrors,
-	RemoveCudaBuildResponses,
 	RemoveDevelopmentTemplateData,
 	RemoveDevelopmentTemplateErrors,
 	RemoveDevelopmentTemplateResponses,
@@ -1185,9 +1173,6 @@ import type {
 	StartBenchmarkRunFidelityErrors,
 	StartBenchmarkRunFidelityResponses,
 	StartBenchmarkRunResponses,
-	StartCudaBuildData,
-	StartCudaBuildErrors,
-	StartCudaBuildResponses,
 	StartDevelopmentNextActionData,
 	StartDevelopmentNextActionErrors,
 	StartDevelopmentNextActionResponses,
@@ -1382,7 +1367,6 @@ import {
 	zCancelBenchmarkRunBody,
 	zCancelBenchmarkRunPath,
 	zCancelBenchmarkRunResponse,
-	zCancelCudaBuildResponse,
 	zCancelDevelopmentAttemptPath,
 	zCancelDevelopmentAttemptResponse,
 	zCancelDevWorkflowRunBody,
@@ -1671,8 +1655,6 @@ import {
 	zGetComparisonPath,
 	zGetComparisonResponse,
 	zGetConnectionStatusResponse,
-	zGetCudaBuildPrerequisitesResponse,
-	zGetCudaBuildStatusResponse,
 	zGetCustomToolPath,
 	zGetCustomToolResponse,
 	zGetDevelopmentArtifactPath,
@@ -2022,7 +2004,6 @@ import {
 	zRejudgeBenchmarkRunBody,
 	zRejudgeBenchmarkRunPath,
 	zRejudgeBenchmarkRunResponse,
-	zRemoveCudaBuildResponse,
 	zRemoveDevelopmentTemplatePath,
 	zRemoveDevelopmentTemplateResponse,
 	zRemoveLlamaCppSourceBuildResponse,
@@ -2107,7 +2088,6 @@ import {
 	zStartBenchmarkRunFidelityResponse,
 	zStartBenchmarkRunPath,
 	zStartBenchmarkRunResponse,
-	zStartCudaBuildResponse,
 	zStartDevelopmentNextActionBody,
 	zStartDevelopmentNextActionPath,
 	zStartDevelopmentNextActionResponse,
@@ -6386,36 +6366,6 @@ export const browseGgufRepositories = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const cancelCudaBuild = <ThrowOnError extends boolean = false>(
-	options?: Options<CancelCudaBuildData, ThrowOnError>,
-): RequestResult<CancelCudaBuildResponses, CancelCudaBuildErrors, ThrowOnError> =>
-	(options?.client ?? client).post<CancelCudaBuildResponses, CancelCudaBuildErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCancelCudaBuildResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/model-fit/llamacpp/cuda-build/cancel",
-		...options,
-	});
-
 export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 	options: Options<CancelGgufDownloadData, ThrowOnError>,
 ): RequestResult<CancelGgufDownloadResponses, CancelGgufDownloadErrors, ThrowOnError> =>
@@ -6644,66 +6594,6 @@ export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const getCudaBuildPrerequisites = <ThrowOnError extends boolean = false>(
-	options?: Options<GetCudaBuildPrerequisitesData, ThrowOnError>,
-): RequestResult<GetCudaBuildPrerequisitesResponses, GetCudaBuildPrerequisitesErrors, ThrowOnError> =>
-	(options?.client ?? client).get<GetCudaBuildPrerequisitesResponses, GetCudaBuildPrerequisitesErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetCudaBuildPrerequisitesResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites",
-		...options,
-	});
-
-export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
-	options?: Options<GetCudaBuildStatusData, ThrowOnError>,
-): RequestResult<GetCudaBuildStatusResponses, GetCudaBuildStatusErrors, ThrowOnError> =>
-	(options?.client ?? client).get<GetCudaBuildStatusResponses, GetCudaBuildStatusErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetCudaBuildStatusResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/model-fit/llamacpp/cuda-build/status",
-		...options,
 	});
 
 export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = false>(
@@ -7386,36 +7276,6 @@ export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const removeCudaBuild = <ThrowOnError extends boolean = false>(
-	options?: Options<RemoveCudaBuildData, ThrowOnError>,
-): RequestResult<RemoveCudaBuildResponses, RemoveCudaBuildErrors, ThrowOnError> =>
-	(options?.client ?? client).post<RemoveCudaBuildResponses, RemoveCudaBuildErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zRemoveCudaBuildResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove",
-		...options,
-	});
-
 export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options?: Options<RemoveLlamaCppSourceBuildData, ThrowOnError>,
 ): RequestResult<RemoveLlamaCppSourceBuildResponses, RemoveLlamaCppSourceBuildErrors, ThrowOnError> =>
@@ -7443,36 +7303,6 @@ export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/source-build/remove",
-		...options,
-	});
-
-export const startCudaBuild = <ThrowOnError extends boolean = false>(
-	options?: Options<StartCudaBuildData, ThrowOnError>,
-): RequestResult<StartCudaBuildResponses, StartCudaBuildErrors, ThrowOnError> =>
-	(options?.client ?? client).post<StartCudaBuildResponses, StartCudaBuildErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zStartCudaBuildResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/model-fit/llamacpp/cuda-build",
 		...options,
 	});
 

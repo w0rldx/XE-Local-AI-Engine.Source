@@ -346,7 +346,6 @@ app.MapHub<DatasetGenerationHub>(...);
 app.MapHub<TrainingRuntimeHub>(...);
 app.MapHub<TrainingRunHub>(...);
 app.MapHub<GgufDownloadHub>(...);
-app.MapHub<CudaBuildHub>(...);
 app.MapHub<LlamaCppSourceBuildHub>(...);
 app.MapHub<RuntimeAcquisitionHub>(...);
 app.MapHub<KnowledgeBaseHub>(...);

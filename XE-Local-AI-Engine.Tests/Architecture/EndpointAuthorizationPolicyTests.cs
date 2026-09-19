@@ -37,8 +37,8 @@ public sealed class EndpointAuthorizationPolicyTests
     /// </summary>
     private const int EndpointFloor = 400;
 
-    /// <summary>Every SignalR hub type in the host assembly. An exact count, so a twentieth hub fails here.</summary>
-    private const int HubTypeCount = 19;
+    /// <summary>Every SignalR hub type in the host assembly. An exact count, so a nineteenth hub fails here.</summary>
+    private const int HubTypeCount = 18;
 
     /// <summary>The eight hand-mapped minimal-API routes plus <c>MapMcp</c>'s single stateless POST.</summary>
     private const int MinimalApiRouteCount = 9;
@@ -143,7 +143,7 @@ public sealed class EndpointAuthorizationPolicyTests
                                            .ToList();
 
         AssertEx.Equal(expected: HubTypeCount, hubTypes.Count,
-            "The host assembly no longer declares exactly nineteen hub types. This is an inventory check: a new hub "
+            "The host assembly no longer declares exactly eighteen hub types. This is an inventory check: a new hub "
             + "type must be added to this suite's coverage deliberately, because a hub's mapping and its "
             + "authorization are separate decisions.");
 

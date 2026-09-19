@@ -296,7 +296,7 @@ public sealed class CudaManagedRuntimeTests
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
 
-        await manager.RemoveCudaSourceBuildAsync(CancellationToken.None);
+        await manager.RemoveSourceBuildAsync(CancellationToken.None);
 
         AssertEx.True(File.Exists(sentinel), "Remove must not delete the source-cuda tree when the recorded path is outside it.");
     }

@@ -450,7 +450,7 @@ public sealed class SourceBuildRecoveryTests
         public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task RemoveCudaSourceBuildAsync(CancellationToken ct) =>
+        public Task RemoveSourceBuildAsync(CancellationToken ct) =>
             Task.CompletedTask;
     }
 
@@ -507,9 +507,6 @@ public sealed class SourceBuildRecoveryTests
             throw new NotSupportedException();
 
         public bool Cancel() =>
-            false;
-
-        public bool CancelLegacyPinnedCuda() =>
             false;
 
         public Task RecoverAsync(CancellationToken ct) =>

@@ -420,42 +420,6 @@ internal static class ModelFitMapper
         };
     }
 
-    /// <summary>Projects the prerequisite report to its wire DTO.</summary>
-    public static CudaBuildPrerequisitesResponse ToResponse(this CudaBuildPrerequisiteReport report)
-    {
-        ArgumentNullException.ThrowIfNull(report);
-
-        return new CudaBuildPrerequisitesResponse
-        {
-            CanBuild = report.CanBuild,
-            Items =
-            [
-                .. report.Items.Select(static item => new CudaBuildPrerequisiteItemResponse
-                {
-                    Key = item.Key,
-                    Satisfied = item.Satisfied,
-                    Detail = item.Detail
-                })
-            ]
-        };
-    }
-
-    /// <summary>Projects the build status to its wire DTO.</summary>
-    public static CudaBuildStatusResponse ToResponse(this CudaBuildStatus status)
-    {
-        ArgumentNullException.ThrowIfNull(status);
-
-        return new CudaBuildStatusResponse
-        {
-            Phase = status.Phase.ToString(),
-            IsRunning = status.IsRunning,
-            Terminal = status.Terminal,
-            LogLines = status.LogLines,
-            SanitizedError = status.SanitizedError,
-            Tag = status.Tag
-        };
-    }
-
     /// <summary>
     ///     Projects an application-layer <see cref="InferenceProfileView" /> to its wire DTO. The view already omits the
     ///     local-only machine key; this projection only normalizes the numeric role to its lowercase wire token.

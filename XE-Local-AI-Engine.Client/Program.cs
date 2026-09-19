@@ -815,8 +815,6 @@ namespace XE_Local_AI_Engine.Client
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<CudaBuildHub>(LocalApiRoutes.ModelFit.CudaBuildHub)
-               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<LlamaCppSourceBuildHub>(LocalApiRoutes.ModelFit.SourceBuildHub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<RuntimeAcquisitionHub>(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub)

@@ -252,7 +252,7 @@ public sealed class LlamaCppSourceBuildServiceTests
     [Test]
     [RunOn(OS.Linux)]
     [UnsupportedOSPlatform("windows")]
-    public async Task Cancel_CustomCpu_IsRejectedByLegacyPredicateAndGenericCancelRetainsActiveRuntime()
+    public async Task Cancel_CustomCpu_RetainsTheActiveRuntimeAndAllowsAFreshStart()
     {
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -271,7 +271,6 @@ public sealed class LlamaCppSourceBuildServiceTests
             "https://github.com/example/fork", AcknowledgeCustomSourceRisk: true), CancellationToken.None);
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, start.Outcome);
         var firstBuildId = service.GetStatus().CurrentBuild!.BuildId;
-        AssertEx.False(service.CancelLegacyPinnedCuda());
         AssertEx.True(service.Cancel());
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
 
@@ -692,7 +691,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task RemoveCudaSourceBuildAsync(CancellationToken ct) =>
+        public Task RemoveSourceBuildAsync(CancellationToken ct) =>
             Task.CompletedTask;
 
         public async Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir, string tag, GpuVariant variant, string sourceRepository,

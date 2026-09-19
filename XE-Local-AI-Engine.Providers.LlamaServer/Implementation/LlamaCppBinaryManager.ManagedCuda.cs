@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Managed source-built CUDA runtime branch of <see cref="LlamaCppBinaryManager" />. Upstream ships no prebuilt Linux
-///     CUDA asset, so an in-app build (<see cref="Contracts.ICudaBuildService" />) produces a <c>llama-server</c> the
+///     CUDA asset, so an in-app build (<see cref="Contracts.ILlamaCppSourceBuildService" />) produces a <c>llama-server</c> the
 ///     engine adopts as a managed runtime. This partial owns the runtime-record side of that: adoption validation +
 ///     recording (<see cref="AdoptCudaSourceBuildAsync" />) and the every-serve re-validation
 ///     (<see cref="TryServeManagedCudaBinaryAsync" />).
@@ -211,18 +211,7 @@ public sealed partial class LlamaCppBinaryManager
     }
 
     /// <inheritdoc />
-    public async Task RemoveCudaSourceBuildAsync(CancellationToken ct)
-    {
-        await RemoveSourceBuildCoreAsync(legacyOnly: true, ct).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc />
     public async Task RemoveSourceBuildAsync(CancellationToken ct)
-    {
-        await RemoveSourceBuildCoreAsync(legacyOnly: false, ct).ConfigureAwait(false);
-    }
-
-    private async Task RemoveSourceBuildCoreAsync(bool legacyOnly, CancellationToken ct)
     {
         await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -230,12 +219,16 @@ public sealed partial class LlamaCppBinaryManager
             var installed = _installedRuntimeStore is null
                 ? null
                 : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
-            if (installed?.SourceBuildPath is not { Length: > 0 } sourceBuildPath
-                || legacyOnly && !installed.IsLegacyPinnedCuda(_cacheRoot))
+            if (installed?.SourceBuildPath is not { Length: > 0 } sourceBuildPath)
             {
                 return;
             }
 
+            // Both managed source-build layouts are recognized here. `active` is where every build since the
+            // generalized source-build service lands; the `source-cuda/{PinnedTag}` tree is what the original
+            // CUDA-only adopt path wrote, and a node upgraded across that change still has one on disk. Recognizing
+            // only `active` left such a tree orphaned — record cleared, hundreds of MB to GBs stranded with nothing
+            // left to sweep them once the CUDA-only remove route was retired.
             var fullRecordedPath = Path.GetFullPath(sourceBuildPath);
             var activeTree = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-build", "active"));
             var activeBin = Path.Combine(activeTree, "build", "bin");
@@ -246,7 +239,7 @@ public sealed partial class LlamaCppBinaryManager
             {
                 treeToDelete = activeTree;
             }
-            else if (legacyOnly && string.Equals(fullRecordedPath, legacyBin, StringComparison.Ordinal))
+            else if (string.Equals(fullRecordedPath, legacyBin, StringComparison.Ordinal))
             {
                 treeToDelete = legacyTree;
             }
