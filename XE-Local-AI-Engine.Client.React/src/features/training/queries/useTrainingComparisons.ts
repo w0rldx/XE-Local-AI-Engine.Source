@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import {
+	cancelEvaluationMutation,
 	createComparisonMutation,
 	createEvaluationMutation,
 	deleteComparisonMutation,
+	deleteEvaluationMutation,
 	listComparisonsOptions,
 	listEvaluationsOptions,
 	resumeEvaluationMutation,
@@ -77,6 +79,36 @@ export function useResumeEvaluation() {
 	return useMutation({
 		...resumeEvaluationMutation(),
 		onSuccess: async () => {
+			await invalidate(queryClient, comparisonQueryIds.evaluations);
+		},
+	});
+}
+
+/**
+ * Cancels a queued or running evaluation. A QUEUED one is terminalized to `Cancelled` by the request itself; a RUNNING
+ * one is only signalled — the executor owns the terminal write — so the list keeps reporting `Running` until it settles
+ * and the invalidation below is the floor under the hub push that reports the settle.
+ */
+export function useCancelEvaluation() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...cancelEvaluationMutation(),
+		// Settled, not succeeded: the node answers 404 for an evaluation that is already terminal, which is the answer
+		// a stale row gets when the executor settled a moment earlier. That is not a failure to report — it means the
+		// list is out of date, and refetching it is the whole remedy. A refetch after a 409 is harmless and hands the
+		// row a fresh version, so the same rule covers every outcome.
+		onSettled: async () => {
+			await invalidate(queryClient, comparisonQueryIds.evaluations);
+		},
+	});
+}
+
+export function useDeleteEvaluation() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...deleteEvaluationMutation(),
+		// Same rule as the cancel above: deleting a row the node no longer has is a 404 that the refetch resolves.
+		onSettled: async () => {
 			await invalidate(queryClient, comparisonQueryIds.evaluations);
 		},
 	});

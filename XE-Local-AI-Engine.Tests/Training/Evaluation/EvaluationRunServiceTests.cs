@@ -63,18 +63,65 @@ public sealed class EvaluationRunServiceTests
                          .CreateAndEnqueueAsync(default!, CancellationToken.None);
     }
 
+    /// <summary>
+    ///     The three ways a cancel can land, which is what the operator surface offers and refuses the control on. A
+    ///     QUEUED evaluation is terminalized by the request itself; a RUNNING one is only signalled, because the
+    ///     executor owns the terminal write and cancelling from two places would race the work item; anything already
+    ///     terminal answers false, which the endpoint turns into the 404 that keeps the control off a finished row.
+    /// </summary>
+    [Test]
+    public async Task Cancel_TerminalizesAQueuedEvaluation_SignalsARunningOne_AndRefusesATerminalOne()
+    {
+        var harness = Harness.Create(datasetFingerprint: FrozenFingerprint);
+        var queuedId = Guid.NewGuid();
+        var runningId = Guid.NewGuid();
+        var doneId = Guid.NewGuid();
+        harness.Existing(queuedId, TrainingEvaluationStatus.Queued);
+        harness.Existing(runningId, TrainingEvaluationStatus.Running);
+        harness.Existing(doneId, TrainingEvaluationStatus.Succeeded);
+
+        AssertEx.True(await harness.Service.CancelAsync(queuedId), "A queued evaluation is cancellable.");
+        _ = await harness.Evaluations.Received(1)
+                         .CompleteAsync(queuedId, TrainingWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        using var running = new CancellationTokenSource();
+        using (harness.Cancellations.Register(runningId, running))
+        {
+            AssertEx.True(await harness.Service.CancelAsync(runningId), "A running evaluation is cancellable.");
+        }
+
+        AssertEx.True(running.IsCancellationRequested, "A running evaluation is signalled through the registry.");
+        _ = await harness.Evaluations.DidNotReceive()
+                         .CompleteAsync(runningId, Arg.Any<TrainingWorkStatus>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        AssertEx.False(await harness.Service.CancelAsync(doneId), "A finished evaluation has nothing to cancel.");
+        AssertEx.False(await harness.Service.CancelAsync(Guid.NewGuid()), "An unknown evaluation has nothing to cancel.");
+    }
+
     /// <summary>One service over substituted stores; only the irrelevant live dataset fingerprint varies.</summary>
     private sealed class Harness
     {
-        private Harness(EvaluationRunService service, ITrainingEvaluationStore evaluations)
+        private Harness(EvaluationRunService service, ITrainingEvaluationStore evaluations, TrainingRunCancellationRegistry cancellations)
         {
             Service = service;
             Evaluations = evaluations;
+            Cancellations = cancellations;
         }
 
         public EvaluationRunService Service { get; }
 
         public ITrainingEvaluationStore Evaluations { get; }
+
+        public TrainingRunCancellationRegistry Cancellations { get; }
+
+        /// <summary>Makes the store answer with one evaluation in <paramref name="status" /> for that id.</summary>
+        public void Existing(Guid evaluationId, TrainingEvaluationStatus status) =>
+            _ = Evaluations.GetAsync(evaluationId, Arg.Any<CancellationToken>())
+                           .Returns(Evaluation() with
+                           {
+                               Id = evaluationId,
+                               Status = status
+                           });
 
         public TrainingEvaluationEnqueueCommand? Enqueued { get; private set; }
 
@@ -110,8 +157,9 @@ public sealed class EvaluationRunServiceTests
                       ]);
 
             var evaluations = Substitute.For<ITrainingEvaluationStore>();
+            var cancellations = new TrainingRunCancellationRegistry();
             var harness = new Harness(new EvaluationRunService(evaluations, runs, datasets, models,
-                new TrainingRunCancellationRegistry(), Substitute.For<ITrainingRunQueueSignal>()), evaluations);
+                cancellations, Substitute.For<ITrainingRunQueueSignal>()), evaluations, cancellations);
             _ = evaluations.CreateAndEnqueueAsync(Arg.Any<TrainingEvaluationEnqueueCommand>(), Arg.Any<CancellationToken>())
                            .Returns(callInfo =>
                            {

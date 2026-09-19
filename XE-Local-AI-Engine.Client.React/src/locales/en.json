@@ -7777,7 +7777,17 @@
 				},
 				"resume": "Resume",
 				"resumeFailed": "Could not resume the evaluation.",
-				"progress": "{{scored}} of {{total}} scored, {{passed}} passed"
+				"progress": "{{scored}} of {{total}} scored, {{passed}} passed",
+				"cancel": "Cancel evaluation",
+				"cancelling": "Cancelling…",
+				"cancelRequested": "Cancelling the evaluation.",
+				"cancelFailed": "Could not cancel the evaluation.",
+				"delete": "Delete evaluation",
+				"deleteConfirmTitle": "Delete this evaluation?",
+				"deleteConfirmBody": "Its frozen hold-out membership and every per-sample verdict it scored are removed, and it can no longer be used in a comparison report. The training run, its dataset and the model are untouched.",
+				"deleteBound": "This evaluation is part of a comparison report. Delete the report first.",
+				"deleted": "The evaluation was deleted.",
+				"deleteFailed": "Could not delete the evaluation."
 			}
 		},
 		"drift": {

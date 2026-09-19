@@ -41,8 +41,13 @@ vi.mock("@/features/training/queries/useTrainingComparisons", () => ({
 	useRefreshEvaluations: () => mocks.noop,
 	useCreateEvaluation: () => ({ isPending: false, mutate: mocks.createEvaluation }),
 	useResumeEvaluation: () => ({ isPending: false, mutate: mocks.noop }),
+	useCancelEvaluation: () => ({ isPending: false, isSuccess: false, mutate: mocks.noop }),
+	useDeleteEvaluation: () => ({ isPending: false, mutate: mocks.noop }),
 	useCreateComparison: () => ({ isPending: false, mutate: mocks.createComparison }),
 }));
+// This file renders the dialog outside the app shell, so there is no ConfirmProvider above it. The delete prompt is
+// not what this test is about — it is covered by ComparisonCreateDialog.lifecycle.test.tsx against the real provider.
+vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: mocks.noop }) }));
 
 function evaluation(id: string, targetKind: string, sourceArtifactId: string | null, comparisonId: string | null): EvaluationRun {
 	return {

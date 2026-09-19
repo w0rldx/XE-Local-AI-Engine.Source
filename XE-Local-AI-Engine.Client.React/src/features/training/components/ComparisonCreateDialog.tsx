@@ -1,18 +1,22 @@
-import { Alert, Button, Group, Select, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useBenchmarkProjects, useBenchmarkRuns } from "@/features/benchmarks/queries/useBenchmarks";
 import { useTrainingRunHub } from "@/features/training/hooks/useTrainingRunHub";
 import { type EvaluationRun, isEvaluationActive, isEvaluationUsable } from "@/features/training/models/ComparisonModels";
 import {
+	useCancelEvaluation,
 	useComparisonSuggestion,
 	useCreateComparison,
 	useCreateEvaluation,
+	useDeleteEvaluation,
 	useRefreshEvaluations,
 	useResumeEvaluation,
 	useTrainingEvaluations,
@@ -292,6 +296,16 @@ export function ComparisonCreateDialog({
 	);
 }
 
+/**
+ * A 404 from a lifecycle command means the node has already moved past the row the operator clicked: a cancel whose
+ * evaluation reached a terminal status first, or a delete of something that is already gone. Both endpoints answer 404
+ * for that, and in both cases the command's intent is already satisfied — reporting it as a failure would blame the
+ * operator for a stale list. The mutations refetch on settle, so the row corrects itself and nothing needs to be said.
+ */
+function alreadySettled(error: unknown): boolean {
+	return error instanceof ApiError && error.statusCode === 404;
+}
+
 interface EvaluationSideProps {
 	label: string;
 	modelName: string | null;
@@ -301,8 +315,58 @@ interface EvaluationSideProps {
 	onResume: (evaluationId: string) => void;
 }
 
+/**
+ * One side of the comparison. The lifecycle controls own their mutations here rather than taking them as props the way
+ * resume does: each side is a separate row of the same queue, and a per-row hook is what lets one side report
+ * "Cancelling" or a pending delete without the other side's button moving.
+ */
 function EvaluationSide({ label, modelName, evaluation, pending, onEvaluate, onResume }: EvaluationSideProps) {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
+	const cancelEvaluation = useCancelEvaluation();
+	const deleteEvaluation = useDeleteEvaluation();
+
+	// The server refuses a cancel outside Queued/Running with a 404, and a delete of anything still queued or running
+	// with a 409, so the two controls partition the state machine exactly rather than overlapping on a guess.
+	const active = evaluation != null && isEvaluationActive(evaluation.status);
+	// There is no `Cancelling` status on the wire: cancelling a RUNNING evaluation only signals the executor, which
+	// owns the terminal write, so the row keeps reporting `Running` until it settles. The accepted command is local
+	// knowledge, and saying so beats showing an unchanged "Scoring" for the seconds it takes to wind down.
+	const cancelling = active && cancelEvaluation.isSuccess;
+	// A bound evaluation is what a comparison report's deltas are reproduced from, so the server refuses to delete it.
+	const bound = evaluation?.comparisonId != null;
+
+	const requestDelete = async (): Promise<void> => {
+		if (evaluation == null) {
+			return;
+		}
+		const confirmed = await confirm({
+			title: t("training.comparisons.evaluation.deleteConfirmTitle", "Delete this evaluation?"),
+			description: t(
+				"training.comparisons.evaluation.deleteConfirmBody",
+				"Its frozen hold-out membership and every per-sample verdict it scored are removed, and it can no longer be used in a comparison report. The training run, its dataset and the model are untouched.",
+			),
+			confirmationText: t("training.comparisons.evaluation.delete", "Delete evaluation"),
+			cancellationText: t("common.close", "Close"),
+		});
+		if (!confirmed) {
+			return;
+		}
+		deleteEvaluation.mutate(
+			{ path: { evaluationId: evaluation.id }, body: { expectedVersion: evaluation.version } },
+			{
+				onSuccess: () => toast.success(t("training.comparisons.evaluation.deleted", "The evaluation was deleted.")),
+				onError: (error) => {
+					if (alreadySettled(error)) {
+						return;
+					}
+					toast.error(
+						apiErrorMessage(error, t("training.comparisons.evaluation.deleteFailed", "Could not delete the evaluation.")),
+					);
+				},
+			},
+		);
+	};
 
 	return (
 		<Group gap="sm" justify="space-between">
@@ -326,13 +390,70 @@ function EvaluationSide({ label, modelName, evaluation, pending, onEvaluate, onR
 						})}
 					</Text>
 					<Text c="dimmed" size="xs">
-						{t(`training.comparisons.evaluation.status.${evaluation.status}`, evaluation.status)}
+						{cancelling
+							? t("training.comparisons.evaluation.cancelling", "Cancelling…")
+							: t(`training.comparisons.evaluation.status.${evaluation.status}`, evaluation.status)}
 					</Text>
 					{evaluation.status === "Failed" && evaluation.scoredCount < evaluation.totalCount ? (
 						<Button onClick={() => onResume(evaluation.id)} size="compact-xs" variant="subtle">
 							{t("training.comparisons.evaluation.resume", "Resume")}
 						</Button>
 					) : null}
+					{active ? (
+						<Button
+							color="red"
+							disabled={cancelEvaluation.isPending || cancelling}
+							loading={cancelEvaluation.isPending}
+							onClick={() =>
+								cancelEvaluation.mutate(
+									{ path: { evaluationId: evaluation.id } },
+									{
+										onSuccess: () =>
+											toast.success(t("training.comparisons.evaluation.cancelRequested", "Cancelling the evaluation.")),
+										onError: (error) => {
+											if (alreadySettled(error)) {
+												return;
+											}
+											toast.error(
+												apiErrorMessage(
+													error,
+													t("training.comparisons.evaluation.cancelFailed", "Could not cancel the evaluation."),
+												),
+											);
+										},
+									},
+								)
+							}
+							size="compact-xs"
+							variant="subtle"
+						>
+							{t("training.comparisons.evaluation.cancel", "Cancel evaluation")}
+						</Button>
+					) : (
+						<Tooltip
+							disabled={!bound}
+							label={t(
+								"training.comparisons.evaluation.deleteBound",
+								"This evaluation is part of a comparison report. Delete the report first.",
+							)}
+						>
+							{/* Mantine forwards the tooltip's events to this span, so the disabled button still explains itself. */}
+							<span>
+								<Button
+									color="red"
+									disabled={bound || deleteEvaluation.isPending}
+									loading={deleteEvaluation.isPending}
+									onClick={() => {
+										requestDelete().catch(() => undefined);
+									}}
+									size="compact-xs"
+									variant="subtle"
+								>
+									{t("training.comparisons.evaluation.delete", "Delete evaluation")}
+								</Button>
+							</span>
+						</Tooltip>
+					)}
 				</Group>
 			)}
 		</Group>

@@ -7777,7 +7777,17 @@
 				},
 				"resume": "Fortsetzen",
 				"resumeFailed": "Die Auswertung konnte nicht fortgesetzt werden.",
-				"progress": "{{scored}} von {{total}} bewertet, {{passed}} bestanden"
+				"progress": "{{scored}} von {{total}} bewertet, {{passed}} bestanden",
+				"cancel": "Auswertung abbrechen",
+				"cancelling": "Wird abgebrochen …",
+				"cancelRequested": "Die Auswertung wird abgebrochen.",
+				"cancelFailed": "Die Auswertung konnte nicht abgebrochen werden.",
+				"delete": "Auswertung löschen",
+				"deleteConfirmTitle": "Diese Auswertung löschen?",
+				"deleteConfirmBody": "Ihre eingefrorene Holdout-Auswahl und jedes von ihr bewertete Einzelergebnis werden entfernt, und sie kann nicht mehr in einem Vergleichsbericht verwendet werden. Der Trainingslauf, sein Datensatz und das Modell bleiben unverändert.",
+				"deleteBound": "Diese Auswertung gehört zu einem Vergleichsbericht. Löschen Sie zuerst den Bericht.",
+				"deleted": "Die Auswertung wurde gelöscht.",
+				"deleteFailed": "Die Auswertung konnte nicht gelöscht werden."
 			}
 		},
 		"drift": {
