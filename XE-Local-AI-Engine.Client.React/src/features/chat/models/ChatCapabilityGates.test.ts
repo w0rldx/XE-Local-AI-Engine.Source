@@ -4,12 +4,10 @@ import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/features/chat/models/ChatCapabilityGates";
 
 describe("chat capability gates", () => {
-	it("hides node-irrelevant chat surfaces", () => {
+	it("surfaces the node's local chat controls", () => {
 		const capabilities = buildChatUiCapabilities(nodeCapabilities.chat);
 
 		expect(capabilities).toMatchObject({
-			showEncryptedConversationControls: false,
-			showClientNodeRoutingControls: false,
 			// The local tool-approval responder ships, so the approval controls are surfaced by default.
 			showToolApprovalControls: true,
 			showConversationFeedbackControls: true,
@@ -22,9 +20,11 @@ describe("chat capability gates", () => {
 	});
 
 	it("explains the hidden capability surfaces for the chat notice", () => {
-		const hiddenSurfaces = hiddenChatSurfaceLabels(buildChatUiCapabilities(nodeCapabilities.chat));
+		// Every surface the notice can name ships on in the default node profile, so nothing is listed.
+		expect(hiddenChatSurfaceLabels(buildChatUiCapabilities(nodeCapabilities.chat))).toEqual([]);
 
-		// Tool-approval controls are no longer hidden; only the encrypted/client-node surfaces stay off.
-		expect(hiddenSurfaces).toEqual(["encrypted chat controls", "client-node routing controls"]);
+		// It still names a surface that is genuinely off — otherwise the assertion above would pass on an empty list.
+		const withApprovalsOff = buildChatUiCapabilities({ ...nodeCapabilities.chat, toolApprovals: false });
+		expect(hiddenChatSurfaceLabels(withApprovalsOff)).toEqual(["tool approval controls"]);
 	});
 });

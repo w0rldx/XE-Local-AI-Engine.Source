@@ -4,14 +4,12 @@ import {
 	IconBinaryTree2,
 	IconChartHistogram,
 	IconCpu,
-	IconDashboard,
 	IconDatabase,
 	IconFlask,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
 	IconPlug,
-	IconPlugConnected,
 	IconRobot,
 	IconSchool,
 	IconSettings,
@@ -34,8 +32,6 @@ type NavigationCapabilityKey =
 	| "development"
 	| "cloudSettings"
 	| "externalProviders"
-	| "dashboard"
-	| "binding"
 	| "benchmarks"
 	| "training"
 	| "workSessions"
@@ -70,14 +66,6 @@ export interface INavigationLink {
 const allNavigationLinks: INavigationLink[] = [
 	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home },
 	{
-		id: "dashboard",
-		icon: IconDashboard,
-		translationKey: "navigation.dashboard",
-		to: nodeRoutePaths.dashboard,
-		// Central-Platform surface — hidden in local-only builds (see nodeCapabilities.dashboard).
-		capability: "dashboard",
-	},
-	{
 		id: "chat",
 		icon: IconMessageCircle,
 		translationKey: "navigation.chat",
@@ -89,14 +77,6 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.knowledgeBase",
 		to: nodeRoutePaths.knowledgeBase,
 		capability: "knowledgeBase",
-	},
-	{
-		id: "binding",
-		icon: IconPlugConnected,
-		translationKey: "navigation.binding",
-		to: nodeRoutePaths.binding,
-		// Central-Platform surface — hidden in local-only builds (see nodeCapabilities.binding).
-		capability: "binding",
 	},
 	// Models group: installed models (always) plus the model-fit recommendations page, which is gated on the
 	// static modelFit capability. With modelFit off the group keeps just Installed.

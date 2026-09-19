@@ -23,8 +23,6 @@ describe("navigationLinks", () => {
 	});
 
 	it("groups the related node pages under Models / Settings / Automation with flat entries around them", () => {
-		// dashboard + binding are Central-Platform surfaces gated off in the default (local-only) profile, so they are
-		// filtered out of the top-level entries here — see the dedicated test below for when their capabilities are on.
 		expect(navigationLinks.map((link) => link.id)).toEqual([
 			"home",
 			"chat",
@@ -47,29 +45,6 @@ describe("navigationLinks", () => {
 		expect(navigationLinks.some((link) => link.id === "development")).toBe(false);
 	});
 
-	it("shows Dashboard and Node Binding as top-level entries when their Central-Platform capabilities are on", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ dashboard: true, binding: true });
-
-		expect(gatedLinks.map((link) => link.id)).toEqual([
-			"home",
-			"dashboard",
-			"chat",
-			"knowledgeBase",
-			"binding",
-			"models",
-			"settings",
-			"automation",
-			"integrations",
-			"externalApps",
-			"preview",
-			"graphWorkflows",
-			"benchmarks",
-			"training",
-			"invocations",
-			"usage",
-		]);
-	});
-
 	it("ships the Training group on by default and hides it whole when the capability is compiled off", async () => {
 		// The group was dark-shipped until the feature was live-verified (2026-08-15); it is on by default now, and the
 		// compile-time capability still removes the whole group rather than leaving an empty one.
@@ -84,13 +59,6 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.training,
 			nodeRoutePaths.trainingComparisons,
 		]);
-	});
-
-	it("hides Dashboard and Node Binding in the local-only profile (capabilities off)", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ dashboard: false, binding: false });
-
-		expect(gatedLinks.some((link) => link.id === "dashboard")).toBe(false);
-		expect(gatedLinks.some((link) => link.id === "binding")).toBe(false);
 	});
 
 	it("carries Development Mode as a Preview child and hides it when its capability is off", async () => {

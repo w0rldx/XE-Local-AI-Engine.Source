@@ -11,8 +11,6 @@ function makeCapabilities(overrides: Partial<ChatCapabilities> = {}): ChatCapabi
 		toolApprovals: false,
 		conversationFeedback: true,
 		offlineFirst: false,
-		encryptedConversations: false,
-		clientNodeRouting: false,
 		fileAttachments: true,
 		imageAttachments: false,
 		agentManagement: true,

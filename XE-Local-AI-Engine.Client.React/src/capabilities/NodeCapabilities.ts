@@ -5,8 +5,6 @@ export interface ChatCapabilities {
 	readonly toolApprovals: boolean;
 	readonly conversationFeedback: boolean;
 	readonly offlineFirst: boolean;
-	readonly encryptedConversations: boolean;
-	readonly clientNodeRouting: boolean;
 	readonly fileAttachments: boolean;
 	readonly imageAttachments: boolean;
 	// When true the chat composer shows the agent-mode toggle + agent picker. Derives from the node's
@@ -25,16 +23,14 @@ export interface ChatCapabilities {
 
 export interface NodeCapabilityConfig {
 	readonly chat: ChatCapabilities;
-	readonly binding: boolean;
-	readonly dashboard: boolean;
 	readonly nodeSettings: boolean;
 	// When false the Cloud Settings nav entry is hidden and the /cloud-settings route is inaccessible.
 	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth + Azure Foundry credentials, stored
-	// encrypted on this node) — it does NOT require a Central Platform pairing, so it is on by default.
+	// encrypted on this node), so it is on by default.
 	readonly cloudSettings: boolean;
 	// When false the External Providers nav entry is hidden and the /external-providers route is inaccessible.
 	// Like Cloud Settings this is a LOCAL surface — operator-declared OpenAI-compatible endpoints and their models,
-	// stored encrypted on this node — so it needs no Central Platform pairing and is on by default.
+	// stored encrypted on this node — so it is on by default.
 	readonly externalProviders: boolean;
 	readonly modelManagement: boolean;
 	// Invocation monitor: the node's record of agent and tool invocations. This flag alone gates both the nav entry
@@ -110,8 +106,6 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		conversationFeedback: true,
 		// server-side SQLite is the source of truth; node has no client Dexie/offline queue (offline-first is N/A for the local node)
 		offlineFirst: false,
-		encryptedConversations: false,
-		clientNodeRouting: false,
 		// File attachments are live: a user can attach documents (txt/md/csv/json/code/pdf/docx) to a
 		// conversation; extracted text grounds plain chat and stages into AgentHome for agent mode. Images
 		// route to vision-capable models via the local mmproj projector path (gated per-model on
@@ -129,17 +123,12 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		// Drives the composer "Use Knowledge Base" toggle via buildChatUiCapabilities.showKnowledgeBaseControls.
 		knowledgeBase: true,
 	},
-	// Central-Platform surfaces (Node Binding + Dashboard) only make sense once the node is paired to a Central
-	// Platform. In the local-only (LocalTester) profile — no CentralPlatform:BaseUrl configured — they are hidden
-	// so the menu does not show dead "disconnected / not paired" pages. Flip both to true when paired.
-	binding: false,
-	dashboard: false,
 	nodeSettings: true,
 	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth sign-in + Azure Foundry connection/models,
-	// stored encrypted on this node). It needs no Central Platform pairing, so it is on by default.
+	// stored encrypted on this node), so it is on by default.
 	cloudSettings: true,
 	// External Providers hosts the node-local OpenAI-compatible connections (base URL, optional key, declared
-	// Local/Cloud trust, and the operator-registered models). Node-local encrypted storage, no pairing — on by default.
+	// Local/Cloud trust, and the operator-registered models). Node-local encrypted storage — on by default.
 	externalProviders: true,
 	modelManagement: true,
 	invocationMonitor: true,
@@ -190,8 +179,6 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 export const nodeRoutePaths = {
 	home: "/",
 	chat: "/chat",
-	dashboard: "/dashboard",
-	binding: "/node-binding",
 	nodeSettings: "/node-settings",
 	cloudSettings: "/cloud-settings",
 	externalProviders: "/external-providers",

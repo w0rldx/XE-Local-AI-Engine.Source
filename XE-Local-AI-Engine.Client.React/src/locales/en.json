@@ -107,8 +107,6 @@
 		"chat": "Chat",
 		"development": "Development",
 		"knowledgeBase": "Knowledge Base",
-		"dashboard": "Dashboard",
-		"binding": "Node Binding",
 		"nodeSettings": "Node Settings",
 		"cloudSettings": "Cloud Settings",
 		"externalProviders": "External Providers",
@@ -1479,96 +1477,6 @@
 			},
 			"goToModels": "Install a model",
 			"goToChat": "Start chatting"
-		},
-		"dashboard": {
-			"placeholder": {
-				"title": "Dashboard",
-				"description": "Remote connection state and node health controls will be added here."
-			},
-			"title": "Dashboard",
-			"subtitle": "Monitor the local worker connection and control startup connection behavior.",
-			"loadingStatus": "Loading connection status…",
-			"unexpectedError": "Unexpected connection action error",
-			"notPairedHint": "Bind this node before connecting to the Central Platform.",
-			"platformConnection": {
-				"title": "Platform connection",
-				"connect": "Connect",
-				"disconnect": "Disconnect",
-				"refresh": "Refresh"
-			},
-			"startupConnection": {
-				"title": "Startup connection",
-				"enabled": "Enabled",
-				"disabled": "Disabled",
-				"hint": "Auto-connect stays disabled by default after binding until you explicitly enable it.",
-				"enableAutoConnect": "Enable auto-connect",
-				"disableAutoConnect": "Disable auto-connect"
-			},
-			"nodeCredentials": {
-				"title": "Node credentials",
-				"binding": "Binding",
-				"paired": "Paired",
-				"notPaired": "Not paired",
-				"bindingMethod": "Binding method",
-				"nodeName": "Node name",
-				"tokenExpires": "Token expires",
-				"notAvailable": "Not available",
-				"tokenExpiredBadge": "Expired"
-			},
-			"lastUpdate": {
-				"title": "Last update",
-				"privacyNote": "Connection controls never return access or refresh tokens to the browser."
-			},
-			"connectionStatus": {
-				"reconnecting": "Reconnecting",
-				"connecting": "Connecting",
-				"connected": "Connected",
-				"disconnected": "Disconnected",
-				"pairing": "Pairing",
-				"error": "Error",
-				"unknown": "Unknown"
-			},
-			"connectionHint": {
-				"reconnecting": "Disable auto-connect to stop reconnect attempts, or wait for the worker to recover.",
-				"autoConnectEnabled": "Auto-connect is enabled. The worker will connect on startup after prerequisites are ready.",
-				"autoConnectDisabled": "Auto-connect is disabled. Use Connect for a manual session or enable startup connection."
-			}
-		},
-		"nodeBinding": {
-			"placeholder": {
-				"title": "Node binding",
-				"description": "Pairing and binding workflows will be ported from the current node UI."
-			},
-			"title": "Bind this node to your Central Platform account",
-			"subtitle": "Start binding here, then approve the request in the Central Platform using the displayed user code.",
-			"device": {
-				"title": "Device binding",
-				"status": "Status",
-				"userCode": "User code",
-				"verificationUrl": "Verification URL",
-				"expires": "Expires",
-				"empty": "No binding request is active on this worker.",
-				"start": "Start binding",
-				"cancel": "Cancel polling",
-				"cancelling": "Cancelling…",
-				"openApproval": "Open approval link"
-			},
-			"how": {
-				"title": "How binding works",
-				"step1": "Click Start binding to request a one-time user code.",
-				"step2": "Open the approval link and sign in to the Central Platform.",
-				"step3": "The worker polls at the server-provided interval and stores credentials only after approval."
-			},
-			"status": {
-				"started": "Binding started. Approve this worker in the Central Platform.",
-				"approved": "Binding approved. Worker credentials were stored securely.",
-				"ended": "Binding ended with status '{{status}}'.",
-				"cancelled": "Binding polling was cancelled locally."
-			},
-			"errors": {
-				"unexpected": "Unexpected binding error",
-				"emptyPoll": "Node binding poll returned an empty response."
-			}
 		},
 		"nodeSettings": {
 			"placeholder": {
@@ -4038,71 +3946,10 @@
 			"subtitleNotFound": "Unfortunately, this is only a 404 page. You may have mistyped the address, or the page has been moved to another URL.",
 			"backToHomeText": "Take me back to home page"
 		},
-		"deviceBinding": {
-			"title": "Approve device",
-			"description": "Review the device code from your worker node before approving access to your account.",
-			"userCodeLabel": "Device code",
-			"userCodePlaceholder": "Enter the code shown on your device",
-			"approve": "Approve device",
-			"deny": "Deny",
-			"completeTitle": "Request complete",
-			"approvedMessage": "Device '{{nodeName}}' has been approved.",
-			"deniedMessage": "The device request has been denied.",
-			"approvedToast": "Device approved.",
-			"deniedToast": "Device denied.",
-			"errorToast": "Device request could not be completed. Check the code and try again."
-		},
 		"userSettings": {
 			"title": "User Settings",
 			"changePassword": "Change Password",
 			"accountInformation": "Account Information",
-			"myNodes": {
-				"title": "My nodes",
-				"supportText": "Review bound local workers, connection health, active model use, and revoke a node when it should no longer access your account.",
-				"emptyTitle": "No nodes bound",
-				"emptyText": "Bind a local worker to see it here.",
-				"errorTitle": "Unable to load nodes",
-				"errorText": "Refresh the list or try again later.",
-				"disconnected": "Disconnect request sent.",
-				"deleted": "Node unbound successfully.",
-				"disconnectDialogTitle": "Disconnect node",
-				"disconnectDialogText": "Disconnect '{{name}}' from the active session? The node remains bound and can reconnect.",
-				"deleteDialogTitle": "Unbind node",
-				"deleteDialogText": "Unbind '{{name}}' and revoke its worker credentials? Rebinding will be required.",
-				"actions": {
-					"settings": "Settings",
-					"disconnect": "Disconnect",
-					"unbind": "Unbind"
-				},
-				"settings": {
-					"title": "Node settings",
-					"description": "Configure request handling for '{{name}}'. More node settings will appear here later.",
-					"maxTimeoutLabel": "Maximum message request timeout",
-					"maxTimeoutDescription": "Stops hung message requests after the configured number of seconds.",
-					"maxTimeoutError": "Enter a value between 5 and 3600 seconds.",
-					"saved": "Node settings saved."
-				},
-				"columns": {
-					"name": "Name",
-					"status": "Status",
-					"systemScore": "System score",
-					"lastSeen": "Last seen",
-					"activeModel": "Active model",
-					"keyStatus": "Key status",
-					"actions": "Actions"
-				},
-				"status": {
-					"offline": "Offline",
-					"online": "Online",
-					"disconnecting": "Disconnecting",
-					"error": "Error"
-				},
-				"keyStatus": {
-					"active": "Active key",
-					"missing": "Key missing",
-					"unbound": "Unbound"
-				}
-			},
 			"themeConfigurator": {
 				"title": "Theme Configurator",
 				"description": "Temporarily change the active theme, test it in the app, and export the result as JSON.",

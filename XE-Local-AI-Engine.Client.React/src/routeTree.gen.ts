@@ -20,7 +20,6 @@ import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
 import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-tools'
-import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
 import { Route as LayoutExternalProvidersRouteImport } from './routes/_layout/external-providers'
@@ -32,7 +31,6 @@ import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-
 import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
 import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
-import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
 import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
 import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
 import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
@@ -111,11 +109,6 @@ const LayoutCustomToolsRoute = LayoutCustomToolsRouteImport.update({
   path: '/custom-tools',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => LayoutRoute,
-} as any)
 const LayoutDevelopmentRoute = LayoutDevelopmentRouteImport.update({
   id: '/development',
   path: '/development',
@@ -170,11 +163,6 @@ const LayoutModelRecommendationsRoute =
 const LayoutModelsRoute = LayoutModelsRouteImport.update({
   id: '/models',
   path: '/models',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutNodeBindingRoute = LayoutNodeBindingRouteImport.update({
-  id: '/node-binding',
-  path: '/node-binding',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutNodeSettingsRoute = LayoutNodeSettingsRouteImport.update({
@@ -316,7 +304,6 @@ export interface FileRoutesByFullPath {
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
   '/custom-tools': typeof LayoutCustomToolsRoute
-  '/dashboard': typeof LayoutDashboardRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/external-providers': typeof LayoutExternalProvidersRoute
@@ -328,7 +315,6 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof LayoutMcpRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
-  '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
@@ -363,7 +349,6 @@ export interface FileRoutesByTo {
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/commands': typeof LayoutCommandsRoute
   '/custom-tools': typeof LayoutCustomToolsRoute
-  '/dashboard': typeof LayoutDashboardRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/external-providers': typeof LayoutExternalProvidersRoute
@@ -375,7 +360,6 @@ export interface FileRoutesByTo {
   '/mcp': typeof LayoutMcpRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
-  '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
@@ -413,7 +397,6 @@ export interface FileRoutesById {
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/commands': typeof LayoutCommandsRoute
   '/_layout/custom-tools': typeof LayoutCustomToolsRoute
-  '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/development': typeof LayoutDevelopmentRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
   '/_layout/external-providers': typeof LayoutExternalProvidersRoute
@@ -425,7 +408,6 @@ export interface FileRoutesById {
   '/_layout/mcp': typeof LayoutMcpRoute
   '/_layout/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/_layout/models': typeof LayoutModelsRoute
-  '/_layout/node-binding': typeof LayoutNodeBindingRoute
   '/_layout/node-settings': typeof LayoutNodeSettingsRoute
   '/_layout/scheduler': typeof LayoutSchedulerRoute
   '/_layout/skills': typeof LayoutSkillsRoute
@@ -464,7 +446,6 @@ export interface FileRouteTypes {
     | '/cloud-settings'
     | '/commands'
     | '/custom-tools'
-    | '/dashboard'
     | '/development'
     | '/diagnostics'
     | '/external-providers'
@@ -476,7 +457,6 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/model-recommendations'
     | '/models'
-    | '/node-binding'
     | '/node-settings'
     | '/scheduler'
     | '/skills'
@@ -511,7 +491,6 @@ export interface FileRouteTypes {
     | '/cloud-settings'
     | '/commands'
     | '/custom-tools'
-    | '/dashboard'
     | '/development'
     | '/diagnostics'
     | '/external-providers'
@@ -523,7 +502,6 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/model-recommendations'
     | '/models'
-    | '/node-binding'
     | '/node-settings'
     | '/scheduler'
     | '/skills'
@@ -560,7 +538,6 @@ export interface FileRouteTypes {
     | '/_layout/cloud-settings'
     | '/_layout/commands'
     | '/_layout/custom-tools'
-    | '/_layout/dashboard'
     | '/_layout/development'
     | '/_layout/diagnostics'
     | '/_layout/external-providers'
@@ -572,7 +549,6 @@ export interface FileRouteTypes {
     | '/_layout/mcp'
     | '/_layout/model-recommendations'
     | '/_layout/models'
-    | '/_layout/node-binding'
     | '/_layout/node-settings'
     | '/_layout/scheduler'
     | '/_layout/skills'
@@ -685,13 +661,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutCustomToolsRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/dashboard': {
-      id: '/_layout/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof LayoutDashboardRouteImport
-      parentRoute: typeof LayoutRoute
-    }
     '/_layout/development': {
       id: '/_layout/development'
       path: '/development'
@@ -767,13 +736,6 @@ declare module '@tanstack/react-router' {
       path: '/models'
       fullPath: '/models'
       preLoaderRoute: typeof LayoutModelsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/node-binding': {
-      id: '/_layout/node-binding'
-      path: '/node-binding'
-      fullPath: '/node-binding'
-      preLoaderRoute: typeof LayoutNodeBindingRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/node-settings': {
@@ -947,7 +909,6 @@ interface LayoutRouteChildren {
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutCommandsRoute: typeof LayoutCommandsRoute
   LayoutCustomToolsRoute: typeof LayoutCustomToolsRoute
-  LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutDevelopmentRoute: typeof LayoutDevelopmentRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
   LayoutExternalProvidersRoute: typeof LayoutExternalProvidersRoute
@@ -959,7 +920,6 @@ interface LayoutRouteChildren {
   LayoutMcpRoute: typeof LayoutMcpRoute
   LayoutModelRecommendationsRoute: typeof LayoutModelRecommendationsRoute
   LayoutModelsRoute: typeof LayoutModelsRoute
-  LayoutNodeBindingRoute: typeof LayoutNodeBindingRoute
   LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
   LayoutSchedulerRoute: typeof LayoutSchedulerRoute
   LayoutSkillsRoute: typeof LayoutSkillsRoute
@@ -993,7 +953,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutCommandsRoute: LayoutCommandsRoute,
   LayoutCustomToolsRoute: LayoutCustomToolsRoute,
-  LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutDevelopmentRoute: LayoutDevelopmentRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
   LayoutExternalProvidersRoute: LayoutExternalProvidersRoute,
@@ -1005,7 +964,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutMcpRoute: LayoutMcpRoute,
   LayoutModelRecommendationsRoute: LayoutModelRecommendationsRoute,
   LayoutModelsRoute: LayoutModelsRoute,
-  LayoutNodeBindingRoute: LayoutNodeBindingRoute,
   LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,
   LayoutSchedulerRoute: LayoutSchedulerRoute,
   LayoutSkillsRoute: LayoutSkillsRoute,

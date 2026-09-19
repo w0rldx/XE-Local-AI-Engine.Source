@@ -409,8 +409,6 @@ export interface ChatUiCapabilities {
 	readonly showLocalToolControls: boolean;
 	readonly showToolApprovalControls: boolean;
 	readonly showConversationFeedbackControls: boolean;
-	readonly showEncryptedConversationControls: boolean;
-	readonly showClientNodeRoutingControls: boolean;
 	readonly showFileAttachmentControls: boolean;
 	readonly showImageAttachmentControls: boolean;
 	// When true the chat composer renders the agent-mode toggle + agent picker. Derived from the node's

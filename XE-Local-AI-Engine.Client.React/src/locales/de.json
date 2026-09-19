@@ -107,8 +107,6 @@
 		"chat": "Chat",
 		"development": "Entwicklung",
 		"knowledgeBase": "Wissensdatenbank",
-		"dashboard": "Dashboard",
-		"binding": "Node-Bindung",
 		"nodeSettings": "Node-Einstellungen",
 		"cloudSettings": "Cloud-Einstellungen",
 		"externalProviders": "Externe Anbieter",
@@ -1479,96 +1477,6 @@
 			},
 			"goToModels": "Modell installieren",
 			"goToChat": "Chat starten"
-		},
-		"dashboard": {
-			"placeholder": {
-				"title": "Dashboard",
-				"description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
-			},
-			"title": "Dashboard",
-			"subtitle": "Lokale Worker-Verbindung überwachen und Verbindungsverhalten beim Start steuern.",
-			"loadingStatus": "Verbindungsstatus wird geladen…",
-			"unexpectedError": "Unerwarteter Fehler bei der Verbindungsaktion",
-			"notPairedHint": "Binde diesen Node, bevor du dich mit der zentralen Plattform verbindest.",
-			"platformConnection": {
-				"title": "Plattformverbindung",
-				"connect": "Verbinden",
-				"disconnect": "Trennen",
-				"refresh": "Aktualisieren"
-			},
-			"startupConnection": {
-				"title": "Startverbindung",
-				"enabled": "Aktiviert",
-				"disabled": "Deaktiviert",
-				"hint": "Auto-Verbindung bleibt nach dem Binden standardmäßig deaktiviert, bis du sie explizit aktivierst.",
-				"enableAutoConnect": "Auto-Verbindung aktivieren",
-				"disableAutoConnect": "Auto-Verbindung deaktivieren"
-			},
-			"nodeCredentials": {
-				"title": "Node-Anmeldedaten",
-				"binding": "Bindung",
-				"paired": "Gebunden",
-				"notPaired": "Nicht gebunden",
-				"bindingMethod": "Bindungsmethode",
-				"nodeName": "Node-Name",
-				"tokenExpires": "Token läuft ab",
-				"notAvailable": "Nicht verfügbar",
-				"tokenExpiredBadge": "Abgelaufen"
-			},
-			"lastUpdate": {
-				"title": "Letzte Aktualisierung",
-				"privacyNote": "Verbindungssteuerung gibt keine Zugriffs- oder Refresh-Tokens an den Browser zurück."
-			},
-			"connectionStatus": {
-				"reconnecting": "Verbindet erneut",
-				"connecting": "Verbindet",
-				"connected": "Verbunden",
-				"disconnected": "Getrennt",
-				"pairing": "Koppelt",
-				"error": "Fehler",
-				"unknown": "Unbekannt"
-			},
-			"connectionHint": {
-				"reconnecting": "Deaktiviere Auto-Verbindung, um Wiederverbindungsversuche zu stoppen, oder warte, bis der Worker sich erholt.",
-				"autoConnectEnabled": "Auto-Verbindung ist aktiviert. Der Worker verbindet sich beim Start, sobald die Voraussetzungen erfüllt sind.",
-				"autoConnectDisabled": "Auto-Verbindung ist deaktiviert. Nutze Verbinden für eine manuelle Sitzung oder aktiviere die Startverbindung."
-			}
-		},
-		"nodeBinding": {
-			"placeholder": {
-				"title": "Node-Bindung",
-				"description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
-			},
-			"title": "Diesen Node mit Ihrem Central-Platform-Konto verbinden",
-			"subtitle": "Starten Sie die Bindung hier und bestätigen Sie die Anfrage anschließend in der Central Platform mit dem angezeigten Benutzercode.",
-			"device": {
-				"title": "Geräte-Bindung",
-				"status": "Status",
-				"userCode": "Benutzercode",
-				"verificationUrl": "Verifizierungs-URL",
-				"expires": "Läuft ab",
-				"empty": "Auf diesem Worker ist keine Bindungsanfrage aktiv.",
-				"start": "Bindung starten",
-				"cancel": "Abfrage abbrechen",
-				"cancelling": "Wird abgebrochen …",
-				"openApproval": "Freigabe-Link öffnen"
-			},
-			"how": {
-				"title": "So funktioniert die Bindung",
-				"step1": "Klicken Sie auf „Bindung starten“, um einen einmaligen Benutzercode anzufordern.",
-				"step2": "Öffnen Sie den Freigabe-Link und melden Sie sich in der Central Platform an.",
-				"step3": "Der Worker fragt im vom Server vorgegebenen Intervall ab und speichert die Zugangsdaten erst nach der Freigabe."
-			},
-			"status": {
-				"started": "Bindung gestartet. Bestätigen Sie diesen Worker in der Central Platform.",
-				"approved": "Bindung bestätigt. Die Worker-Zugangsdaten wurden sicher gespeichert.",
-				"ended": "Bindung mit Status „{{status}}“ beendet.",
-				"cancelled": "Die Bindungsabfrage wurde lokal abgebrochen."
-			},
-			"errors": {
-				"unexpected": "Unerwarteter Fehler bei der Bindung",
-				"emptyPoll": "Die Abfrage der Node-Bindung lieferte eine leere Antwort."
-			}
 		},
 		"nodeSettings": {
 			"placeholder": {
@@ -4038,71 +3946,10 @@
 			"subtitleNotFound": "Die Seite, die sie suchen, existiert nicht.",
 			"backToHomeText": "Zurück zur Startseite"
 		},
-		"deviceBinding": {
-			"title": "Gerät freigeben",
-			"description": "Prüfe den Gerätecode deines Worker-Nodes, bevor du den Zugriff auf dein Konto freigibst.",
-			"userCodeLabel": "Gerätecode",
-			"userCodePlaceholder": "Gib den auf deinem Gerät angezeigten Code ein",
-			"approve": "Gerät freigeben",
-			"deny": "Ablehnen",
-			"completeTitle": "Anfrage abgeschlossen",
-			"approvedMessage": "Gerät '{{nodeName}}' wurde freigegeben.",
-			"deniedMessage": "Die Geräteanfrage wurde abgelehnt.",
-			"approvedToast": "Gerät freigegeben.",
-			"deniedToast": "Gerät abgelehnt.",
-			"errorToast": "Geräteanfrage konnte nicht abgeschlossen werden. Prüfe den Code und versuche es erneut."
-		},
 		"userSettings": {
 			"title": "Benutzereinstellungen",
 			"changePassword": "Passwort ändern",
 			"accountInformation": "Account Informationen",
-			"myNodes": {
-				"title": "Meine Nodes",
-				"supportText": "Prüfe gebundene lokale Worker, Verbindungsstatus, aktive Modellnutzung und widerrufe eine Node, wenn sie keinen Kontozugriff mehr haben soll.",
-				"emptyTitle": "Keine Nodes gebunden",
-				"emptyText": "Binde einen lokalen Worker, damit er hier angezeigt wird.",
-				"errorTitle": "Nodes konnten nicht geladen werden",
-				"errorText": "Aktualisiere die Liste oder versuche es später erneut.",
-				"disconnected": "Trennungsanfrage gesendet.",
-				"deleted": "Node erfolgreich entbunden.",
-				"disconnectDialogTitle": "Node trennen",
-				"disconnectDialogText": "'{{name}}' von der aktiven Sitzung trennen? Die Node bleibt gebunden und kann sich erneut verbinden.",
-				"deleteDialogTitle": "Node entbinden",
-				"deleteDialogText": "'{{name}}' entbinden und Worker-Anmeldedaten widerrufen? Danach ist erneutes Binden erforderlich.",
-				"actions": {
-					"settings": "Einstellungen",
-					"disconnect": "Trennen",
-					"unbind": "Entbinden"
-				},
-				"settings": {
-					"title": "Node-Einstellungen",
-					"description": "Konfiguriere die Anfrageverarbeitung für '{{name}}'. Weitere Node-Einstellungen erscheinen später hier.",
-					"maxTimeoutLabel": "Maximales Timeout für Nachrichtenanfragen",
-					"maxTimeoutDescription": "Beendet hängende Nachrichtenanfragen nach der konfigurierten Anzahl von Sekunden.",
-					"maxTimeoutError": "Gib einen Wert zwischen 5 und 3600 Sekunden ein.",
-					"saved": "Node-Einstellungen gespeichert."
-				},
-				"columns": {
-					"name": "Name",
-					"status": "Status",
-					"systemScore": "System-Score",
-					"lastSeen": "Zuletzt gesehen",
-					"activeModel": "Aktives Modell",
-					"keyStatus": "Schlüsselstatus",
-					"actions": "Aktionen"
-				},
-				"status": {
-					"offline": "Offline",
-					"online": "Online",
-					"disconnecting": "Wird getrennt",
-					"error": "Fehler"
-				},
-				"keyStatus": {
-					"active": "Aktiver Schlüssel",
-					"missing": "Schlüssel fehlt",
-					"unbound": "Nicht gebunden"
-				}
-			},
 			"themeConfigurator": {
 				"title": "Theme Konfigurator",
 				"description": "Aktives Theme temporär anpassen, direkt in der Anwendung testen und als JSON exportieren.",
