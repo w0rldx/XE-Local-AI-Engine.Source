@@ -1,18 +1,19 @@
-import { Badge, Button, Group, Loader, Progress, Stack, Text } from "@mantine/core";
+import { Badge, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
+import { TranscriptionModelManager } from "@/features/transcription/components/TranscriptionModelManager";
 import {
 	useEjectTranscriptionRuntime,
-	useTranscriptionModels,
 	useTranscriptionRuntimeStatus,
 } from "@/features/transcription/queries/useTranscriptionQueries";
 
 /**
- * The whisper runtime at a glance: process state, the effective model, VAD and the managed build, with an eject.
+ * The whisper runtime at a glance: process state, the effective model, VAD and the managed build, with an eject —
+ * and, below it, the weight catalogue that is the only way to get a model onto this node in the first place.
  *
  * `backend`, `binarySource` and `binaryVersion` are null until a daemon has actually spawned, so a null renders as
  * "not started" — reading one as "not installed" would tell an operator to reinstall a runtime that is fine.
@@ -21,7 +22,6 @@ export function TranscriptionRuntimeCard() {
 	const { t } = useTranslation();
 	const runtimeQuery = useTranscriptionRuntimeStatus();
 	const runtime = runtimeQuery.data;
-	const modelsQuery = useTranscriptionModels();
 	const ejectMutation = useEjectTranscriptionRuntime();
 
 	if (runtimeQuery.isError) {
@@ -35,8 +35,6 @@ export function TranscriptionRuntimeCard() {
 			</SectionCard>
 		);
 	}
-
-	const download = modelsQuery.data?.models.find((model) => model.downloadPhase === "running") ?? null;
 
 	// Every line below states a FACT about the runtime, so none of them may render before the status has loaded:
 	// an undefined `runtime` would otherwise report "voice-activity detection is not installed" and an empty model
@@ -84,12 +82,7 @@ export function TranscriptionRuntimeCard() {
 					</Text>
 				)}
 			</Stack>
-			{download === null ? null : (
-				<Stack gap={4} data-testid="transcription-runtime-download">
-					<Text size="xs">{t("pages.transcription.runtime.downloading", { model: download.id })}</Text>
-					<Progress value={download.downloadPercent ?? 0} />
-				</Stack>
-			)}
+			<TranscriptionModelManager />
 			<Group justify="flex-end">
 				<Button
 					size="xs"

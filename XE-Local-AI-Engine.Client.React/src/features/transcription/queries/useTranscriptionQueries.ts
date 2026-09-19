@@ -1,17 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	cancelTranscriptionModelDownloadMutation,
 	cancelTranscriptionSessionMutation,
 	createTranscriptionSessionMutation,
 	deleteTranscriptionSessionMutation,
 	ejectTranscriptionRuntimeMutation,
+	getTranscriptionRecommendationOptions,
 	getTranscriptionRuntimeStatusOptions,
 	getTranscriptionSessionOptions,
 	listCaptureProcessesOptions,
 	listTranscriptionModelsOptions,
 	listTranscriptionSessionsOptions,
+	selectTranscriptionModelMutation,
 	startLiveTranscriptionSessionMutation,
 	startProcessCaptureMutation,
+	startTranscriptionModelDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest as CreateTranscriptionSessionRequest } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -188,6 +192,78 @@ export function useTranscriptionModels() {
 		// `query.state.data` is the RAW response (select runs per observer), so the phase is read off the wire shape.
 		refetchInterval: (query) =>
 			query.state.data?.models.some((model) => model.download?.phase === "running") === true ? 5_000 : false,
+	});
+}
+
+// Which model this box's hardware should run, and the footprint figures behind the answer. Separate from the model
+// list — which carries only the recommended ID — because the reasoning (the backend it was sized for and the
+// resident footprint) is what turns "recommended" from an unexplained pick into an operator-readable one. The
+// answer follows the hardware, not a session, so it is cached for the page's lifetime.
+export function useTranscriptionRecommendation() {
+	return useQuery({
+		...withResponseValidation(getTranscriptionRecommendationOptions()),
+		staleTime: 60_000,
+	});
+}
+
+// Begins a weight transfer (the pinned VAD file plus the model's weights). The endpoint answers 202 the moment the
+// transfer is queued and never reports its outcome, so the model list is invalidated on success: the refetch is what
+// makes the row read "running", and the running row is what arms `useTranscriptionModels`'s 5-second poll. Without
+// this invalidation the operator would press Download and watch nothing happen until some unrelated refetch landed.
+//
+// The runtime status goes with it. It is NOT what makes the VAD line correct — the file has not been fetched yet at
+// this point, and the transfer's END is what changes that fact (the model list's poll is the only observer of it).
+// It is re-read here because a start that was accepted may have found the weights already resident, and a stale
+// "Model:" line beside a row the operator just acted on is the cheapest kind of wrong to rule out.
+export function useStartTranscriptionModelDownload() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (modelId: string) => {
+			const options = withResponseValidation(startTranscriptionModelDownloadMutation());
+			return await options.mutationFn?.({ body: { modelId } }, undefined as never);
+		},
+		onSuccess: async () => {
+			await invalidate(queryClient, transcriptionQueryIds.models);
+			await invalidate(queryClient, transcriptionQueryIds.runtime);
+		},
+	});
+}
+
+// Stops an in-flight transfer. Idempotent server-side — cancelling one that just finished reports no change rather
+// than failing, which is precisely the case that leaves the node holding a VAD file and a weight it did not have a
+// moment ago. Both the catalogue and the runtime status are therefore re-read; the row states itself from the first.
+export function useCancelTranscriptionModelDownload() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (modelId: string) => {
+			const options = withResponseValidation(cancelTranscriptionModelDownloadMutation());
+			return await options.mutationFn?.({ body: { modelId } }, undefined as never);
+		},
+		onSuccess: async () => {
+			await invalidate(queryClient, transcriptionQueryIds.models);
+			await invalidate(queryClient, transcriptionQueryIds.runtime);
+		},
+	});
+}
+
+// Pins the operator's model choice, or clears it with a null so the node falls back to the hardware recommendation.
+// The node persists the id and answers 400 for one outside the catalogue; it never refuses because the runtime is
+// busy — the pick takes effect the next time the server spawns, so both the catalogue AND the runtime card's
+// "Model:" line are invalidated.
+export function useSelectTranscriptionModel() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (modelId: string | null) => {
+			const options = withResponseValidation(selectTranscriptionModelMutation());
+			return await options.mutationFn?.({ body: { modelId } }, undefined as never);
+		},
+		onSuccess: async () => {
+			await invalidate(queryClient, transcriptionQueryIds.models);
+			await invalidate(queryClient, transcriptionQueryIds.runtime);
+		},
 	});
 }
 

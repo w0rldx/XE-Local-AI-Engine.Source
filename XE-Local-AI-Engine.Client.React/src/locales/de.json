@@ -6838,7 +6838,8 @@
 				"processPlaceholder": "Anwendung auswählen",
 				"processDescription": "Nimmt diese Anwendung und ihre untergeordneten Prozesse auf.",
 				"processEmpty": "Zurzeit gibt keine Anwendung Audio wieder.",
-				"processRefresh": "Anwendungsliste aktualisieren"
+				"processRefresh": "Anwendungsliste aktualisieren",
+				"noModelInstalled": "Auf diesem Knoten ist noch kein Transkriptionsmodell installiert. Laden Sie eines über die Karte „Whisper-Laufzeit“ auf der Transkriptionsseite herunter — bis dahin kann diese Sitzung nicht transkribiert werden."
 			},
 			"runtime": {
 				"title": "Whisper-Laufzeit",
@@ -6858,9 +6859,37 @@
 					"active": "Verwalteter Build installiert.",
 					"invalid": "Der verwaltete Build ist ungültig und wird neu gebaut."
 				},
-				"downloading": "{{model}} wird heruntergeladen…",
 				"eject": "Entladen",
-				"ejectFailed": "Die Laufzeit konnte nicht entladen werden."
+				"ejectFailed": "Die Laufzeit konnte nicht entladen werden.",
+				"models": {
+					"title": "Modelle",
+					"loadFailed": "Der Modellkatalog für die Transkription konnte nicht geladen werden.",
+					"empty": "Für die Transkription wird auf diesem Knoten ein Modell benötigt, und es ist noch keines installiert. {{model}} passt zu diesem Computer ({{size}}).",
+					"emptyNoRecommendation": "Für die Transkription wird auf diesem Knoten ein Modell benötigt, und es ist noch keines installiert. Laden Sie unten eines herunter, um zu beginnen.",
+					"downloadRecommended": "{{model}} herunterladen",
+					"recommendationHint": "Empfohlen für diesen Computer: {{model}} — ausgelegt auf das {{backend}}-Backend, etwa {{footprint}} im Speicher, solange es geladen ist.",
+					"backend": {
+						"cpu": "CPU",
+						"cuda": "CUDA"
+					},
+					"selected": "Aktiv",
+					"recommended": "Empfohlen",
+					"installed": "Installiert",
+					"download": "Herunterladen",
+					"retry": "Erneut versuchen",
+					"cancel": "Abbrechen",
+					"select": "Dieses Modell verwenden",
+					"clearSelection": "Wieder der Empfehlung folgen",
+					"starting": "Wird gestartet…",
+					"progress": "Wird heruntergeladen… {{percent}} %",
+					"progressLabel": "Download-Fortschritt",
+					"cancelled": "Der Download wurde abgebrochen.",
+					"downloadFailed": "Der Download ist fehlgeschlagen.",
+					"downloadFailedReason": "Der Download ist fehlgeschlagen: {{reason}}",
+					"downloadStartFailed": "Der Download konnte nicht gestartet werden.",
+					"cancelFailed": "Der Download konnte nicht abgebrochen werden.",
+					"selectFailed": "Das Transkriptionsmodell konnte nicht geändert werden."
+				}
 			},
 			"session": {
 				"untitled": "Aufnahme ohne Titel",

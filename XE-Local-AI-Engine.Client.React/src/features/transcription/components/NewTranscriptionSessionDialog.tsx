@@ -1,5 +1,6 @@
 import {
 	ActionIcon,
+	Alert,
 	Button,
 	FileInput,
 	Group,
@@ -24,7 +25,11 @@ import {
 	transcriptionDialogSourceKinds,
 	transcriptionLanguageCodes,
 } from "@/features/transcription/models/TranscriptionModels";
-import { useCaptureProcesses, useTranscriptionRuntimeStatus } from "@/features/transcription/queries/useTranscriptionQueries";
+import {
+	useCaptureProcesses,
+	useTranscriptionModels,
+	useTranscriptionRuntimeStatus,
+} from "@/features/transcription/queries/useTranscriptionQueries";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 
 export interface NewTranscriptionSessionValues {
@@ -120,6 +125,13 @@ export function NewTranscriptionSessionDialog({
 	// than present and refused. Windows 10 build 20348 and later is the whole of the support policy.
 	const runtimeQuery = useTranscriptionRuntimeStatus();
 	const processCaptureSupported = runtimeQuery.data?.processCaptureSupported === true;
+	// A node ships with no weights, and the runtime only reports that on the first spawn — as a raw
+	// "The selected transcription model is not installed." after the operator has already picked a file and waited
+	// for the upload. The same cached catalogue the runtime card reads answers it before any of that, so the dialog
+	// says it up front and names where to fix it. The submit stays enabled: the model can be fetched in another tab
+	// while this session is being described, and a disabled button that explains nothing is what this replaces.
+	const modelsQuery = useTranscriptionModels();
+	const noModelInstalled = modelsQuery.data?.models.every((model) => !model.installed) === true;
 	// The remembered kind is persisted; the option list is not. A box that stopped reporting support — and every
 	// render before the runtime status has answered — would otherwise leave the SegmentedControl holding a value that
 	// is not in its own `data`: nothing highlighted, an empty picker below it, and Create disabled with nothing on
@@ -238,6 +250,11 @@ export function NewTranscriptionSessionDialog({
 			<Stack gap="md">
 				{errorMessage ? (
 					<InlineErrorAlert message={errorMessage} variant="light" data-testid="new-transcription-session-error" />
+				) : null}
+				{noModelInstalled ? (
+					<Alert color="yellow" variant="light" data-testid="new-transcription-session-no-model">
+						{t("pages.transcription.dialog.noModelInstalled")}
+					</Alert>
 				) : null}
 				<Stack gap={4}>
 					<Text size="sm" fw={500}>

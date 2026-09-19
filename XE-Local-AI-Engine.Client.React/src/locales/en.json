@@ -6838,7 +6838,8 @@
 				"processPlaceholder": "Choose an application",
 				"processDescription": "Captures this application and its child processes.",
 				"processEmpty": "No applications are currently playing audio.",
-				"processRefresh": "Refresh the application list"
+				"processRefresh": "Refresh the application list",
+				"noModelInstalled": "No transcription model is installed on this node yet. Download one from the Whisper runtime card on the transcription page — this session cannot be transcribed until then."
 			},
 			"runtime": {
 				"title": "Whisper runtime",
@@ -6858,9 +6859,37 @@
 					"active": "Managed build installed.",
 					"invalid": "The managed build is invalid and will be rebuilt."
 				},
-				"downloading": "Downloading {{model}}…",
 				"eject": "Eject",
-				"ejectFailed": "Could not eject the runtime."
+				"ejectFailed": "Could not eject the runtime.",
+				"models": {
+					"title": "Models",
+					"loadFailed": "Could not load the transcription model catalogue.",
+					"empty": "Transcription needs a model on this node, and none is installed yet. {{model}} suits this computer ({{size}}).",
+					"emptyNoRecommendation": "Transcription needs a model on this node, and none is installed yet. Download one below to get started.",
+					"downloadRecommended": "Download {{model}}",
+					"recommendationHint": "Recommended for this computer: {{model}} — sized for the {{backend}} backend, about {{footprint}} resident while loaded.",
+					"backend": {
+						"cpu": "CPU",
+						"cuda": "CUDA"
+					},
+					"selected": "In use",
+					"recommended": "Recommended",
+					"installed": "Installed",
+					"download": "Download",
+					"retry": "Retry",
+					"cancel": "Cancel",
+					"select": "Use this model",
+					"clearSelection": "Follow the recommendation again",
+					"starting": "Starting…",
+					"progress": "Downloading… {{percent}}%",
+					"progressLabel": "Download progress",
+					"cancelled": "The download was cancelled.",
+					"downloadFailed": "The download failed.",
+					"downloadFailedReason": "The download failed: {{reason}}",
+					"downloadStartFailed": "Could not start the download.",
+					"cancelFailed": "Could not cancel the download.",
+					"selectFailed": "Could not change the transcription model."
+				}
 			},
 			"session": {
 				"untitled": "Untitled recording",

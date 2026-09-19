@@ -50,7 +50,31 @@ function runtimeRoutes() {
 				isBusy: false,
 			},
 		}),
-		jsonRoute("get", "transcription/models", { models: [], selectedModelId: "base", recommendedModelId: "base" }),
+		jsonRoute("get", "transcription/models", {
+			models: [
+				{
+					id: "base",
+					tier: "Base",
+					sizeBytes: 147_951_465,
+					approximateVramBytes: 838_860_800,
+					approximateRamBytes: 576_716_800,
+					englishOnly: false,
+					installed: true,
+					download: null,
+				},
+			],
+			selectedModelId: "base",
+			recommendedModelId: "base",
+		}),
+		// The runtime card's model controls size the recommendation against this node's hardware; without this route
+		// the card renders but every test in the file fires an unhandled request for it.
+		jsonRoute("get", "transcription/runtime/recommendation", {
+			recommendedModelId: "base",
+			tier: "Base",
+			approximateVramBytes: 838_860_800,
+			approximateRamBytes: 576_716_800,
+			backend: "cuda",
+		}),
 	];
 }
 

@@ -51,6 +51,27 @@ function processesRoute(processes: readonly { pid: number; name: string; hasAudi
 	return jsonRoute("get", "transcription/capture/processes", { supported: true, processes });
 }
 
+// The dialog also reads the weight catalogue, to say up front when this node has no model at all rather than letting
+// the operator pick a file and discover it from the runtime's own exception after the upload.
+function modelsRoute(installed: boolean) {
+	return jsonRoute("get", "transcription/models", {
+		models: [
+			{
+				id: "base",
+				tier: "Base",
+				sizeBytes: 147_951_465,
+				approximateVramBytes: 838_860_800,
+				approximateRamBytes: 576_716_800,
+				englishOnly: false,
+				installed,
+				download: null,
+			},
+		],
+		selectedModelId: null,
+		recommendedModelId: "base",
+	});
+}
+
 const applicationSource = "Application audio (Windows)";
 
 function renderDialog(onSubmit = vi.fn()) {
@@ -73,7 +94,7 @@ describe("NewTranscriptionSessionDialog", () => {
 		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {}, processIdBySession: {} });
 		// Unsupported by default, so the tests that predate the Windows source keep the four-option dialog they assert
 		// against; the two that need the fifth option register their own route over this one.
-		server.use(runtimeRoute(false), processesRoute([]));
+		server.use(runtimeRoute(false), processesRoute([]), modelsRoute(true));
 	});
 
 	afterEach(() => {
@@ -384,5 +405,25 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(values.sourceKind).toBe("ApplicationProcess");
 		expect(values.processId).toBe(4242);
 		expect(values.file).toBeNull();
+	});
+
+	// A fresh node has no weights, and the runtime only says so as a raw exception once the recording has already
+	// been uploaded. The catalogue answers it before any of that, so the dialog names it and points at the fix.
+	it("warns that no transcription model is installed and names where to get one", async () => {
+		server.use(modelsRoute(false));
+		renderDialog();
+
+		const warning = await screen.findByTestId("new-transcription-session-no-model");
+		expect(warning.textContent).toContain("No transcription model is installed on this node yet");
+		expect(warning.textContent).toContain("Whisper runtime");
+	});
+
+	it("says nothing about models once one is installed", async () => {
+		renderDialog();
+
+		await screen.findByTestId("new-transcription-session-source");
+		await waitFor(() => {
+			expect(screen.queryByTestId("new-transcription-session-no-model")).toBeNull();
+		});
 	});
 });

@@ -145,28 +145,42 @@ export function toTranscriptionSessionDetailView(dto: TranscriptionSessionDetail
 	};
 }
 
+/**
+ * The four phases a coordinated weight transfer reports. Anything outside them is treated as no download at all: a
+ * row that cannot be explained must not claim to be running, because the operator would then wait for a transfer
+ * that no longer exists.
+ */
+const transcriptionDownloadPhases = ["running", "completed", "cancelled", "failed"] as const;
+export type TranscriptionDownloadPhase = (typeof transcriptionDownloadPhases)[number];
+
 export interface TranscriptionModelView {
 	id: string;
 	tier: string;
 	sizeBytes: number;
 	englishOnly: boolean;
 	installed: boolean;
-	downloadPhase: string | null;
+	downloadPhase: TranscriptionDownloadPhase | null;
 	downloadPercent: number | null;
+	/** The coordinator's operator-safe failure reason; never a path, a URL or a token. */
+	downloadError: string | null;
 }
 
 export function toTranscriptionModelView(dto: TranscriptionModelResponse): TranscriptionModelView {
 	const download = dto.download ?? null;
 	const completed = download?.completedBytes ?? null;
 	const total = download?.totalBytes ?? null;
+	const phase = download?.phase ?? null;
 	return {
 		id: dto.id,
 		tier: dto.tier,
 		sizeBytes: dto.sizeBytes,
 		englishOnly: dto.englishOnly,
 		installed: dto.installed,
-		downloadPhase: download?.phase ?? null,
+		downloadPhase: (transcriptionDownloadPhases as readonly string[]).includes(phase ?? "")
+			? (phase as TranscriptionDownloadPhase)
+			: null,
 		downloadPercent: completed !== null && total !== null && total > 0 ? (completed / total) * 100 : null,
+		downloadError: download?.sanitizedError ?? null,
 	};
 }
 
