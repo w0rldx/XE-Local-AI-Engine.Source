@@ -89,6 +89,13 @@ namespace XE_Local_AI_Engine.Client
         }
 
         /// <summary>
+        ///     Marks the SPA shell fallback endpoint so the middleware just after <c>UseRouting</c> can recognise it
+        ///     and detach it from requests under the local API prefix. A marker rather than a second routed fallback:
+        ///     see the comment at that middleware.
+        /// </summary>
+        private sealed class SpaFallbackMarker;
+
+        /// <summary>
         ///     True once the real Serilog sink (console + rolling file) is installed; the top-level catch falls back to
         ///     <see cref="StartupCrashLog" /> while it is still false.
         /// </summary>
@@ -685,6 +692,31 @@ namespace XE_Local_AI_Engine.Client
 
             app.UseMiddleware<LocalApiSecurityMiddleware>();
             app.UseRouting();
+
+            // The SPA shell must not answer for the local API. MapFallbackToFile's {*path:nonfile} pattern matches
+            // every unmatched extensionless path, so a mistyped or removed /api/local/v1/... route was answered with
+            // 200 text/html — a JSON client (the generated hey-api client included) reads that as success for a route
+            // that does not exist. Detaching the selected endpoint here, rather than mapping a second fallback over
+            // the prefix, is deliberate: a routed catch-all under /api/local/v1 joins the candidate set of every real
+            // route below it and suppresses routing's own 405, turning every wrong-verb request on a real API route
+            // into a 404 (measured against ValidateExecutableEndpointTests). With no endpoint selected the request
+            // takes exactly the path an unmatched DOTTED path already takes: UseAuthorization's FallbackPolicy
+            // challenges an anonymous caller (401, so it still learns nothing about which paths exist) and an
+            // operator token falls through to the pipeline's bare 404. Only the SPA fallback is detached, so real
+            // endpoints under the prefix — the hubs and their negotiate, MapMcp, the model proxy, the integration
+            // API — and routing's 405 are untouched, and the feature-switch gates still answer 404 above, before
+            // routing runs at all.
+            var localApiPrefixPath = new PathString($"/{LocalApiRoutes.Prefix}");
+            app.Use(async (context, next) =>
+            {
+                if (context.GetEndpoint()?.Metadata.GetMetadata<SpaFallbackMarker>() is not null
+                    && context.Request.Path.StartsWithSegments(localApiPrefixPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.SetEndpoint(endpoint: null);
+                }
+
+                await next(context);
+            });
             // Skipped in the Testing environment, where the permit limits are relaxed to non-limits anyway (see
             // ConfigureServices): RateLimitingMiddleware never disposes its PartitionedRateLimiter (verified against
             // Microsoft.AspNetCore.RateLimiting 10.0), so its 100ms replenishment RunTimer outlives host disposal and
@@ -910,8 +942,9 @@ namespace XE_Local_AI_Engine.Client
 
             // The login page has to load before anyone can hold a token, so the SPA shell opts out of the
             // FallbackPolicy explicitly. Static assets are served by UseStaticFiles middleware ahead of routing and
-            // are unaffected either way.
-            app.MapFallbackToFile("index.html").AllowAnonymous();
+            // are unaffected either way. The marker is what the middleware just after UseRouting matches on to keep
+            // the shell off the local API prefix — see SpaFallbackMarker.
+            app.MapFallbackToFile("index.html").AllowAnonymous().WithMetadata(new SpaFallbackMarker());
 
             // Desktop mode only: install console-close → graceful-stop triggers and the on-started browser launch. Off-flag this
             // is never reached, so no signal handler / P/Invoke is installed. The lifecycle is rooted for the

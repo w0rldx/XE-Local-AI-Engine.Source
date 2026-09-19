@@ -305,6 +305,10 @@ The diagnostics canary probe (`diagnostics/configurator-canary-probe`) is regist
 
 `MapFallbackToFile` carries an explicit `.AllowAnonymous()`: the login page has to load before anyone can hold a token, and the fallback policy would otherwise challenge the SPA shell. Static assets are served by the `UseStaticFiles` middleware ahead of routing and are unaffected either way. A file-like path that no asset matches is a different story. The fallback route's `{*path:nonfile}` constraint keeps dotted paths out of the SPA shell, so such a request matches nothing and an anonymous caller now sees 401 rather than 404.
 
+The shell is also kept off the API. An extensionless path satisfies `{*path:nonfile}`, so a mistyped or removed `/api/local/v1/...` route used to be answered with a 200 `text/html` shell — success, to a JSON client, for a route that does not exist. A small middleware immediately after `UseRouting` fixes that: the SPA fallback is mapped with a marker (`SpaFallbackMarker`), and when that endpoint is selected for a path under `LocalApiRoutes.Prefix` the middleware calls `SetEndpoint(null)`. The request then takes exactly the route an unmatched *dotted* path already takes — anonymous 401 from the fallback policy, operator token a bare 404 — and only the SPA fallback is detached, so real endpoints under the prefix (the hubs and their `negotiate`, `MapMcp`, the OpenAI-compatible proxy, the integration API) are untouched.
+
+Detaching rather than mapping a second catch-all over the prefix is deliberate. `MapFallbackToFile` registers a **GET/HEAD-only** endpoint, which is why routing's own 405 still answers a wrong-verb request on a real API route; a routed all-verb catch-all under `/api/local/v1` would join the candidate set of every route below it and replace that 405 with 404 across the whole API. `RouteCoexistenceTests` pins both halves.
+
 ---
 
 ## 5. OpenAPI → hey-api: the single source of truth for React REST

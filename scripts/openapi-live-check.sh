@@ -111,10 +111,12 @@ env -u MISE_TRUSTED_CONFIG_PATHS -u MISE_DATA_DIR "${host_env[@]}" \
   >"${backend_log}" 2>&1 &
 backend_pid=$!
 
-# DesktopBootstrap uses Environment.SpecialFolder.LocalApplicationData. On Linux
-# that resolves from HOME (not XDG_DATA_HOME on the current runtime), so isolate
-# HOME and consume DesktopPortStore's explicit file contract.
-port_file="${temp_root}/home/.local/share/XE-Local-AI-Engine/desktop-port.txt"
+# DesktopBootstrap uses Environment.SpecialFolder.LocalApplicationData, which on Linux resolves from
+# XDG_DATA_HOME and only falls back to ${HOME}/.local/share when it is unset. The isolated XDG_DATA_HOME
+# above is therefore where DesktopPortStore's explicit file contract lands; the HOME isolation is a separate
+# concern (see the comment above it). Pointing this at the HOME path made it dead code and left the log-grep
+# fallback below as the only way the port was ever found.
+port_file="${temp_root}/data/XE-Local-AI-Engine/desktop-port.txt"
 base_url=""
 for _ in $(seq 1 "$((TIMEOUT_SECONDS * 4))"); do
   if ! kill -0 "${backend_pid}" 2>/dev/null; then

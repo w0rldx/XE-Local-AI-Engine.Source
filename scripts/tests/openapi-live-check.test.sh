@@ -23,7 +23,13 @@ if [[ -n "${FAKE_MUTATE_ASSEMBLY:-}" ]]; then
   printf 'changed\n' >>"${FAKE_MUTATE_ASSEMBLY}"
 fi
 port="$((32000 + RANDOM % 10000))"
-printf '[test INF] Opened the default browser at http://127.0.0.1:%s/.\n' "${port}"
+# Where the real host writes it: DesktopBootstrap resolves LocalApplicationData from XDG_DATA_HOME on Linux, and
+# DesktopPortStore.Persist appends XE-Local-AI-Engine/desktop-port.txt.
+mkdir -p "${XDG_DATA_HOME}/XE-Local-AI-Engine"
+printf '%s\n' "${port}" >"${XDG_DATA_HOME}/XE-Local-AI-Engine/desktop-port.txt"
+if [[ -z "${FAKE_SUPPRESS_BROWSER_LOG:-}" ]]; then
+  printf '[test INF] Opened the default browser at http://127.0.0.1:%s/.\n' "${port}"
+fi
 exec python3 - "${port}" <<'PY'
 import http.server, json, socketserver, sys
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -77,6 +83,15 @@ output="$(MISE_DATA_DIR="${TEMP_ROOT}/mise-data" "${SCRIPT_DIR}/openapi-live-che
 rm -f "${FAKE_MISE_RECORD}"
 HOME="${TEMP_ROOT}/no-such-home" MISE_DATA_DIR='' "${SCRIPT_DIR}/openapi-live-check.sh" >/dev/null 2>&1 || true
 [[ "$(cat "${FAKE_MISE_RECORD}")" == "<unset>" ]]
+
+# The port file is the checker's PRIMARY discovery path, and the log-grep below it is only a fallback. With the
+# browser log suppressed the fallback has nothing to match, so this case passes only if port_file points where the
+# host actually writes — under the isolated XDG_DATA_HOME, not under the isolated HOME. It failed (timed out) while
+# the path was wrong, which is how the primary path stayed dead and unnoticed.
+rm -f "${FAKE_PNPM_RECORD}"
+port_file_output="$(FAKE_SUPPRESS_BROWSER_LOG=1 "${SCRIPT_DIR}/openapi-live-check.sh" 2>&1)"
+[[ "${port_file_output}" == *"PASS: live backend contract matches committed frontend artifacts."* ]]
+[[ -s "${FAKE_PNPM_RECORD}" ]]
 
 printf 'stable\n' >"${TEMP_ROOT}/release/fake.dll"
 export FAKE_MUTATE_ASSEMBLY="${TEMP_ROOT}/release/fake.dll"

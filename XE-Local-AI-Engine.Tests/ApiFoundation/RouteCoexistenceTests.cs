@@ -102,6 +102,92 @@ public sealed class RouteCoexistenceTests
     }
 
     [Test]
+    public async Task UnknownApiRoute_WhenOperatorAuthenticated_Returns404InsteadOfSpaShell()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/definitely-not-a-route");
+        AddNodeAuthHeaders(factory, request);
+
+        using var response = await client.SendAsync(request);
+
+        // 404, not the 200 HTML shell: {*path:nonfile} still selects the SPA fallback, but the middleware after
+        // UseRouting recognises it by its marker on a path under the API prefix and detaches it, so no endpoint is
+        // selected and the request ends in the pipeline's bare 404. Same pair as the dotted-asset case above.
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
+                "text/html",
+                StringComparison.OrdinalIgnoreCase),
+            "An unmatched API route must not be rewritten to the SPA shell.");
+    }
+
+    [Test]
+    public async Task UnknownApiRoute_WhenAnonymous_Returns401NotSpaShell()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/definitely-not-a-route");
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request);
+
+        // Detaching the SPA fallback leaves routing with no endpoint selected, which is precisely the case the
+        // existing FallbackPolicy answers with a challenge — so an anonymous caller learns nothing about which API
+        // paths exist. The shell's own AllowAnonymous is what used to hand it a 200 instead.
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
+                "text/html",
+                StringComparison.OrdinalIgnoreCase),
+            "An unmatched API route must not be rewritten to the SPA shell for an anonymous caller either.");
+    }
+
+    [Test]
+    public async Task UnknownApiRoute_WhenPosted_IsNeverTheSpaShell()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/definitely-not-a-route")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "route-coexistence"
+            })
+        };
+        AddNodeAuthHeaders(factory, request);
+
+        using var response = await client.SendAsync(request);
+
+        // 405, and that is the point: MapFallbackToFile registers a GET/HEAD-only catch-all, so a POST to an unmatched
+        // API path never reached the SPA shell in the first place and routing answers it itself. Pinned here because
+        // the obvious alternative fix — a second routed catch-all over the prefix accepting every verb — joins the
+        // candidate set of every real route below it and replaces routing's 405 with 404 across the whole API.
+        AssertEx.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
+                "text/html",
+                StringComparison.OrdinalIgnoreCase),
+            "An unmatched API route must not be rewritten to the SPA shell for a non-GET verb.");
+    }
+
+    [Test]
+    public async Task UnknownNonApiRoute_WhenExtensionless_StillServesSpaShell()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/definitely-not-a-react-route");
+        var body = await response.Content.ReadAsStringAsync();
+
+        // The detach must not widen past the API prefix: everything outside it keeps being served the SPA shell, so
+        // client-side routing still resolves a deep link the server knows nothing about.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(response.Content.Headers.ContentType?.MediaType, "html", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Contains(body, "<div id=\"root\"></div>", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
     public async Task LocalChatHubPath_AfterCutover_IsNotSwallowedBySpaFallback()
     {
         var factory = Factory;

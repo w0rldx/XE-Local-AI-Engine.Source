@@ -6,9 +6,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The app-update endpoints are desktop-mode only. The default test host runs in non-desktop mode, so
 ///     both routes must be ABSENT (the FastEndpoints filter excludes <c>IDesktopOnlyEndpoint</c> off the
-///     desktop flag) — the route is never mapped, so a POST to an unmapped path is rejected by routing
-///     (404 / 405, since the SPA fallback only handles GET) and a GET falls through to the SPA fallback (HTML, NOT a JSON
-///     endpoint response). Either way the request never reaches an app-update endpoint.
+///     desktop flag) — the route is never mapped, so a POST to an unmapped path is rejected by routing (404 / 405,
+///     since the SPA fallback only handles GET) and a GET answers a bare 404: the SPA shell no longer serves the API
+///     prefix, because the middleware after <c>UseRouting</c> detaches it there (see <c>SpaFallbackMarker</c> in
+///     <c>Program.cs</c>). Either way the request never reaches an app-update endpoint, and never gets a JSON
+///     endpoint response.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AppUpdateEndpointDesktopGateTests
@@ -48,7 +50,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
     }
 
     [Test]
-    public async Task GetUpdateEndpoints_WhenNotDesktop_FallThroughToSpa_NotJsonEndpoint()
+    public async Task GetUpdateEndpoints_WhenNotDesktop_Answer404_NotJsonEndpoint()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
@@ -61,9 +63,11 @@ public sealed class AppUpdateEndpointDesktopGateTests
 
             using var response = await client.SendAsync(request);
 
-            // The GET route is unmapped, so it falls through to the SPA fallback (HTML) rather than producing a JSON
-            // endpoint response. The decisive check: the body is NOT a JSON app-update payload.
+            // The GET route is unmapped, so the SPA fallback is selected and then detached on the API prefix, leaving
+            // the pipeline's bare 404 rather than a JSON endpoint response — and rather than the SPA shell it used to
+            // serve. The decisive check stays: the body is NOT a JSON app-update payload.
             var contentType = response.Content.Headers.ContentType?.MediaType;
+            AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
             AssertEx.False(string.Equals(contentType, "application/json", StringComparison.OrdinalIgnoreCase),
                 $"{route} must not be served by a JSON endpoint off desktop, but content-type was {contentType}");
         }
