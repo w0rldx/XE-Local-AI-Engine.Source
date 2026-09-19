@@ -2,10 +2,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.Shutdown;
-using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
@@ -18,8 +15,6 @@ internal static class AddNodeWorkerInfrastructureExtensions
 
         // workspace copy sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
-        builder.Services.AddSingleton<DeadLetterFlushService>();
-        builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         // IOllamaModelService is registered by AddOllamaRuntime, NOT here: OllamaModelService takes an IOllamaApiClient
         // that only exists when the Ollama gate is on, so an unconditional registration here made a gate-off node
         // unbuildable under ValidateOnBuild and threw at every consumer's first resolve otherwise. Both gate branches

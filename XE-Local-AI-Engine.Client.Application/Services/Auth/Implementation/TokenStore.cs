@@ -3,26 +3,20 @@ namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Persistence boundary for token data.
+///     Reads the DataProtection-encrypted worker credentials an earlier build could leave in the node data
+///     directory. Read-only: the pairing flow that wrote <c>worker-credentials.enc</c> is gone, so the file is
+///     never created, updated or deleted here. The load is best-effort — a missing, unreadable or
+///     wrong-key file is the unpaired case, not an error.
 /// </summary>
-public sealed class TokenStore : ITokenStore, IDisposable
+public sealed class TokenStore : ITokenStore
 {
     private const string CredentialsFileName = "worker-credentials.enc";
-    private const bool DefaultAutoConnectOnStart = false;
-    private static readonly TimeSpan ExpiringSoonThreshold = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly string _credentialsPath;
-    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
-    private readonly ILogger<TokenStore> _logger;
-
-    private readonly IDataProtector _protector;
+    private readonly StoredWorkerCredentials? _credentials;
     private readonly TimeProvider _timeProvider;
-
-    private StoredWorkerCredentials? _credentials;
 
     public TokenStore(IDataProtectionProvider dataProtectionProvider,
         INodeDataDirectory dataDirectory,
@@ -34,320 +28,51 @@ public sealed class TokenStore : ITokenStore, IDisposable
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        _protector = dataProtectionProvider.CreateProtector("WorkerNode.TokenStore.v1");
-        _logger = logger;
         _timeProvider = timeProvider;
-        _credentialsPath = Path.Combine(dataDirectory.Root, CredentialsFileName);
 
-        _credentials = LoadCredentialsFromDisk();
+        var protector = dataProtectionProvider.CreateProtector("WorkerNode.TokenStore.v1");
+        _credentials = LoadCredentialsFromDisk(Path.Combine(dataDirectory.Root, CredentialsFileName), protector, logger);
     }
 
-    public void Dispose()
+    public Task<string?> GetAccessTokenAsync()
     {
-        _lock.Dispose();
+        var expired = _credentials is not null && _credentials.ExpiresAt <= _timeProvider.GetUtcNow();
+        return Task.FromResult(expired ? null : _credentials?.AccessToken);
     }
 
-    public event EventHandler? TokensChanged;
-
-    public bool IsPaired => _credentials is not null;
-
-    public bool IsTokenExpired => TokenExpiresAt is { } expiresAt && expiresAt <= _timeProvider.GetUtcNow();
-
-    public bool IsTokenExpiringSoon =>
-        TokenExpiresAt is { } expiresAt &&
-        expiresAt > _timeProvider.GetUtcNow() &&
-        expiresAt - _timeProvider.GetUtcNow() <= ExpiringSoonThreshold;
-
-    public DateTimeOffset? TokenExpiresAt => _credentials?.ExpiresAt;
-
-    public bool AutoConnectOnStart => _credentials?.AutoConnectOnStart ?? DefaultAutoConnectOnStart;
-
-    public string? BindingMethod => _credentials?.BindingMethod;
-
-    public string? LastKnownNodeName => _credentials?.LastKnownNodeName;
-
-    public async Task<string?> GetAccessTokenAsync()
+    public Task<Guid?> GetClientNodeIdAsync()
     {
-        await EnsureCredentialsLoadedAsync();
-        return IsTokenExpired ? null : _credentials?.AccessToken;
+        return Task.FromResult(_credentials?.ClientNodeId);
     }
 
-    public async Task<Guid?> GetClientNodeIdAsync()
+    private static StoredWorkerCredentials? LoadCredentialsFromDisk(string credentialsPath, IDataProtector protector, ILogger<TokenStore> logger)
     {
-        await EnsureCredentialsLoadedAsync();
-        return _credentials?.ClientNodeId;
-    }
-
-    public async Task<string?> GetRefreshTokenAsync()
-    {
-        await EnsureCredentialsLoadedAsync();
-        return _credentials?.RefreshToken;
-    }
-
-    public async Task StoreTokensAsync(PairClientResponse pairingResponse, TokenStoreMetadata? metadata = null)
-    {
-        ArgumentNullException.ThrowIfNull(pairingResponse);
-
-        var expiresAt = ParseJwtExpiry(pairingResponse.AccessToken) ?? pairingResponse.ExpiresAt;
-        var credentials = new StoredWorkerCredentials
-        {
-            ClientNodeId = pairingResponse.ClientNodeId,
-            AccessToken = pairingResponse.AccessToken,
-            RefreshToken = pairingResponse.RefreshToken,
-            ExpiresAt = expiresAt,
-            BindingMethod = metadata?.BindingMethod ?? _credentials?.BindingMethod ?? "pairing-token",
-            AutoConnectOnStart = metadata?.AutoConnectOnStart ?? _credentials?.AutoConnectOnStart ?? DefaultAutoConnectOnStart,
-            LastKnownNodeName = metadata?.LastKnownNodeName ?? _credentials?.LastKnownNodeName
-        };
-
-        var payload = JsonSerializer.SerializeToUtf8Bytes(credentials, SerializerOptions);
-        var protectedPayload = _protector.Protect(payload);
-
-        await _lock.WaitAsync();
-        try
-        {
-            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload);
-            SecureFilePermissions.Apply(_credentialsPath);
-            _credentials = credentials;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-
-        RaiseTokensChanged();
-    }
-
-    public async Task SetAutoConnectOnStartAsync(bool enabled)
-    {
-        await EnsureCredentialsLoadedAsync();
-
-        await _lock.WaitAsync();
-        try
-        {
-            if (_credentials is null)
-            {
-                return;
-            }
-
-            _credentials = _credentials with
-            {
-                AutoConnectOnStart = enabled
-            };
-
-            var payload = JsonSerializer.SerializeToUtf8Bytes(_credentials, SerializerOptions);
-            var protectedPayload = _protector.Protect(payload);
-            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload);
-            SecureFilePermissions.Apply(_credentialsPath);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-
-        RaiseTokensChanged();
-    }
-
-    public async Task ClearTokensAsync()
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            if (File.Exists(_credentialsPath))
-            {
-                File.Delete(_credentialsPath);
-            }
-
-            _credentials = null;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-
-        RaiseTokensChanged();
-    }
-
-    public async Task HandleKeyRotationAsync()
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            _credentials = await TryReadCredentialsLockedAsync(true);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    private StoredWorkerCredentials? LoadCredentialsFromDisk()
-    {
-        if (!File.Exists(_credentialsPath))
+        if (!File.Exists(credentialsPath))
         {
             return null;
         }
 
         try
         {
-            // Constructor-time load: IsPaired, IsTokenExpired, TokenExpiresAt, AutoConnectOnStart, BindingMethod and
-            // LastKnownNodeName are synchronous public reads over _credentials, so the field has to be populated
-            // before the instance is handed out. A ctor cannot await.
-#pragma warning disable MA0045 // forced sync: constructor, backing synchronous public property reads
-            var protectedPayload = File.ReadAllBytes(_credentialsPath);
+            // Constructor-time load: both members are synchronous reads over the field, so it has to be populated
+            // before the instance is handed out, and a ctor cannot await.
+#pragma warning disable MA0045 // forced sync: constructor, backing synchronous reads
+            var protectedPayload = File.ReadAllBytes(credentialsPath);
 #pragma warning restore MA0045
-            return DeserializeCredentials(_protector.Unprotect(protectedPayload));
+            var payload = protector.Unprotect(protectedPayload);
+            return JsonSerializer.Deserialize<StoredWorkerCredentials>(payload, SerializerOptions);
         }
         catch (CryptographicException exception)
         {
-            _logger.LogWarning(exception, "Failed to unprotect worker credentials during startup. Clearing stored credentials.");
-            ClearCredentialsFileBestEffort();
+            logger.LogWarning(exception, "Failed to unprotect stored worker credentials. Treating this node as unpaired.");
             return null;
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to load worker credentials from disk.");
+            logger.LogWarning(exception, "Failed to load stored worker credentials from disk. Treating this node as unpaired.");
             return null;
         }
     }
 
-    private async Task EnsureCredentialsLoadedAsync()
-    {
-        if (_credentials is not null)
-        {
-            return;
-        }
-
-        // No token is available: ITokenStore exposes no cancellable member on this path.
-        await _lock.WaitAsync(CancellationToken.None);
-        try
-        {
-            _credentials = await TryReadCredentialsLockedAsync(true);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    private async Task<StoredWorkerCredentials?> TryReadCredentialsLockedAsync(bool clearOnCryptographicFailure)
-    {
-        if (!File.Exists(_credentialsPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            // No token is available: ITokenStore exposes no cancellable member on this path.
-            var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, CancellationToken.None);
-            var payload = _protector.Unprotect(protectedPayload);
-            return DeserializeCredentials(payload);
-        }
-        catch (CryptographicException exception) when (clearOnCryptographicFailure)
-        {
-            _logger.LogWarning(exception, "Worker credential decryption failed. Clearing stored credentials and requiring re-pairing.");
-            ClearCredentialsFileBestEffort();
-            RaiseTokensChanged();
-            return null;
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Worker credentials could not be read. Clearing stored credentials and requiring re-pairing.");
-            ClearCredentialsFileBestEffort();
-            RaiseTokensChanged();
-            return null;
-        }
-    }
-
-    private void RaiseTokensChanged()
-    {
-        TokensChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private static StoredWorkerCredentials DeserializeCredentials(byte[] payload)
-    {
-        var credentials = JsonSerializer.Deserialize<StoredWorkerCredentials>(payload, SerializerOptions);
-        return credentials ?? throw new InvalidOperationException("Stored worker credentials could not be deserialized.");
-    }
-
-    private void ClearCredentialsFileBestEffort()
-    {
-        _credentials = null;
-
-        try
-        {
-            if (File.Exists(_credentialsPath))
-            {
-                File.Delete(_credentialsPath);
-            }
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to delete corrupted worker credentials file.");
-        }
-    }
-
-    private static DateTimeOffset? ParseJwtExpiry(string accessToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
-
-        var segments = accessToken.Split('.');
-        if (segments.Length < 2)
-        {
-            return null;
-        }
-
-        try
-        {
-            var payloadBytes = DecodeBase64Url(segments[1]);
-            using var document = JsonDocument.Parse(payloadBytes);
-
-            if (!document.RootElement.TryGetProperty("exp", out var expElement))
-            {
-                return null;
-            }
-
-            return expElement.ValueKind switch
-            {
-                JsonValueKind.Number when expElement.TryGetInt64(out var exp) => DateTimeOffset.FromUnixTimeSeconds(exp),
-                JsonValueKind.String when long.TryParse(expElement.GetString(), out var exp) => DateTimeOffset.FromUnixTimeSeconds(exp),
-                _ => null
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static byte[] DecodeBase64Url(string value)
-    {
-        var normalized = value.Replace(oldChar: '-', newChar: '+').Replace(oldChar: '_', newChar: '/');
-        var padding = normalized.Length % 4;
-
-        if (padding > 0)
-        {
-            normalized = normalized.PadRight(normalized.Length + (4 - padding), paddingChar: '=');
-        }
-
-        return Convert.FromBase64String(normalized);
-    }
-
-    private sealed record StoredWorkerCredentials
-    {
-        public required Guid ClientNodeId { get; init; }
-
-        public required string AccessToken { get; init; }
-
-        public required string RefreshToken { get; init; }
-
-        public required DateTimeOffset ExpiresAt { get; init; }
-
-        public string BindingMethod { get; init; } = "pairing-token";
-
-        public bool AutoConnectOnStart { get; init; } = DefaultAutoConnectOnStart;
-
-        public string? LastKnownNodeName { get; init; }
-    }
+    private sealed record StoredWorkerCredentials(Guid ClientNodeId, string AccessToken, DateTimeOffset ExpiresAt);
 }

@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -107,11 +106,6 @@ public sealed class ToolCallCleanupServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -133,10 +127,6 @@ public sealed class ToolCallCleanupServiceTests
             {
                 throw CleanupException;
             }
-        }
-
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
         }
 
         public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)

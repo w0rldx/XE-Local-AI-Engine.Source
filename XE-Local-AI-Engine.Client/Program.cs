@@ -484,7 +484,6 @@ namespace XE_Local_AI_Engine.Client
             await RecoverInterruptedNodeChatMessagesAsync(app.Services);
             await ReconcileStaleScheduledRunsAsync(app.Services);
             ActivateInvocationResumeRegistry(app.Services);
-            RegisterWorkerShutdownDrain(app);
 
             app.UseSerilogRequestLogging(ConfigureRequestLogging);
 

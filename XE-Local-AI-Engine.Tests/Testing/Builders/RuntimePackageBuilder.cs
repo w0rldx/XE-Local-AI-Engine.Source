@@ -7,7 +7,6 @@ public sealed class RuntimePackageBuilder
 {
     private readonly List<AllowedToolDto> _allowedTools = [];
     private readonly List<ConversationMessageDto> _conversationContext = [];
-    private readonly List<string> _requestedCapabilities = [];
     private readonly Dictionary<string, object> _toolPolicies = [];
     private int _agentDefinitionVersion = 1;
     private Guid _clientNodeId = Guid.NewGuid();
@@ -152,9 +151,19 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    // ClientLocal by default because that is the only location a node ever offers: every production offer builder
+    // (LocalToolOfferProvider, McpExecutionBindingResolver) sets it, and ApiSide only ever arrived from the removed
+    // Central Platform envelope — BuildInvocationTools now refuses it outright.
+    //
+    // <paramref name="requiresApproval" /> is load-bearing for any turn that PARKS on an approval: the runner's
+    // `approvalPossible` predicate is "RequiresApproval OR a non-ClientLocal location", and it decides whether the
+    // segment's streamed updates are retained for the fold-and-resume. An offer of ClientLocal tools that all carry
+    // RequiresApproval=false can never wrap one, so the runner retains nothing — which is correct, and is why an
+    // approval test must offer an approval-requiring tool rather than leaning on the offer's location.
     public RuntimePackageBuilder WithAllowedTool(string name,
-        ToolLocation location = ToolLocation.ApiSide,
-        string? parameterSchema = null)
+        ToolLocation location = ToolLocation.ClientLocal,
+        string? parameterSchema = null,
+        bool requiresApproval = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -163,16 +172,10 @@ public sealed class RuntimePackageBuilder
             Id = Guid.NewGuid(),
             Name = name,
             Location = location,
-            ParameterSchema = parameterSchema
+            ParameterSchema = parameterSchema,
+            RequiresApproval = requiresApproval
         });
 
-        return this;
-    }
-
-    public RuntimePackageBuilder WithRequestedCapability(string capability)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(capability);
-        _requestedCapabilities.Add(capability);
         return this;
     }
 
@@ -270,7 +273,6 @@ public sealed class RuntimePackageBuilder
             AllowedTools = [.. _allowedTools],
             ToolPolicies = _toolPolicies.Count == 0 ? null : new Dictionary<string, object>(_toolPolicies),
             ModelProfile = _modelProfile,
-            RequestedCapabilities = _requestedCapabilities.Count == 0 ? null : [.. _requestedCapabilities],
             Timeouts = _timeouts,
             OrchestrationSpec = _orchestrationSpec,
             SamplingOptions = _samplingOptions,

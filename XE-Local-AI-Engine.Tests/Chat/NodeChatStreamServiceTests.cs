@@ -8,9 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
@@ -4841,11 +4839,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -4870,9 +4863,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class GatedCompletingInvocationRunner : IInvocationRunner
@@ -4902,11 +4892,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -4931,9 +4916,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class ContextCapturingInvocationRunner : IInvocationRunner
@@ -4969,11 +4951,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -4998,9 +4975,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class CompletingInvocationRunner : IInvocationRunner
@@ -5026,11 +5000,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -5055,9 +5024,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class AwaitingCoderReadInvocationRunner : IInvocationRunner
@@ -5092,12 +5058,6 @@ public sealed class NodeChatStreamServiceTests
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
-            string toolName,
-            string parameters,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(string.Empty);
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -5122,9 +5082,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class PackageCapturingInvocationRunner : IInvocationRunner
@@ -5168,11 +5125,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -5197,9 +5149,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class ReasoningCapturingInvocationRunner : IInvocationRunner
@@ -5246,11 +5195,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -5275,9 +5219,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class ToolEmittingInvocationRunner : IInvocationRunner
@@ -5320,11 +5261,6 @@ public sealed class NodeChatStreamServiceTests
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -5349,9 +5285,6 @@ public sealed class NodeChatStreamServiceTests
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class RecordingWorkerEventDispatcher : IWorkerEventDispatcher
@@ -5368,38 +5301,7 @@ public sealed class NodeChatStreamServiceTests
 
         public InvocationState? CurrentInvocation { get; private set; }
 
-        public bool IsAcceptingRemoteInvocations => true;
-
-        public void StopAcceptingRemoteInvocations()
-        {
-        }
-
-        public Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchToolCallResultAsync(ToolCallResultEvent evt)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt)
-        {
-            return Task.CompletedTask;
-        }
-
         public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt)
         {
             return Task.CompletedTask;
         }

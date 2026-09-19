@@ -26,9 +26,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
@@ -36,14 +34,11 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -65,6 +60,10 @@ using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerTests
 {
+#pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
+    private const string ReadSkillResourceToolName = AgentSkillsProvider.ReadSkillResourceToolName;
+#pragma warning restore MAAI001
+
     private const string SkillName = "demo";
 
     // One stubbed local warm, and the floor a turn that summed TWO of them must clear. The floor sits well under the
@@ -78,8 +77,6 @@ public sealed class InvocationRunnerTests
 #pragma warning disable MAAI001
     private const string LoadSkillToolName = AgentSkillsProvider.LoadSkillToolName;
 
-    private const string ReadSkillResourceToolName = AgentSkillsProvider.ReadSkillResourceToolName;
-
     private const string RunSkillScriptToolName = AgentSkillsProvider.RunSkillScriptToolName;
 #pragma warning restore MAAI001
 
@@ -88,37 +85,11 @@ public sealed class InvocationRunnerTests
     private static readonly Guid SkillId = Guid.Parse("2f2f9a3e-0d1a-4c9a-9d9c-6f6f0a2b7c11");
 
     [Test]
-    public async Task RunAsync_ValidPackage_SendsAcceptance()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunAsync(runner, package);
-
-        AssertEx.Contains(sender.AcceptedInvocations, package.InvocationId);
-    }
-
-    [Test]
-    public async Task RunAsync_ValidPackage_StreamsChunks()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.True(sender.SentEncryptedChunks.Count >= 1);
-        AssertEx.True(sender.SentEncryptedChunks.All(chunk => chunk.MessageId != Guid.Empty));
-        AssertEx.True(sender.SentEncryptedChunks.All(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind));
-    }
-
-    [Test]
     public async Task RunAsync_ValidPackage_ReportsChunksAndCompletionToDispatcher()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
 
         await RunAsync(runner, package);
 
@@ -135,10 +106,9 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WithThinkingAndTextChunks_ReportsBothToDispatcher()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
 
@@ -156,44 +126,15 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WithThinkingAndTextChunks_SendsEncryptedReasoningChunksAndFinalReasoning()
-    {
-        var sender = new MockHubMessageSender();
-        var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender,
-            agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
-
-        await RunAsync(runner, package);
-
-        var contentChunks = sender.SentEncryptedChunks.Where(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind).ToList();
-        var reasoningChunks = sender.SentEncryptedChunks.Where(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ReasoningKind).ToList();
-
-        AssertEx.Equal(expected: 2, contentChunks.Count);
-        AssertEx.Equal(expected: 2, reasoningChunks.Count);
-        AssertEx.Equal(expected: 1, reasoningChunks[0].Sequence);
-        AssertEx.Equal(expected: 2, reasoningChunks[1].Sequence);
-        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions.Count);
-        AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalIv.HasValue);
-        AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalCiphertext.HasValue);
-        AssertEx.False(sender.SentEncryptedCompletions[0].TokenCounts.ContainsKey("outputTokens"));
-        AssertEx.False(sender.SentEncryptedCompletions[0].TokenCounts.ContainsKey("reasoningTokens"));
-    }
-
-    [Test]
     public async Task RunAsync_WhenLoopbackInvocation_SkipsHubMessagesAndStillReportsDispatcherProgress()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var package = RuntimePackageBuilder.Valid()
-                                           .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
                                            .Build();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
 
         await RunAsync(runner, package);
 
-        AssertEx.Empty(sender.AcceptedInvocations);
-        AssertEx.Empty(sender.SentEncryptedChunks);
-        AssertEx.Empty(sender.SentEncryptedCompletions);
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
         await dispatcher.Received(1)
@@ -203,58 +144,10 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenPlainContext_StreamsTokenChunksAndSendsInvocationCompleted()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunPlainAsync(runner, package);
-
-        AssertEx.Contains(sender.AcceptedInvocations, package.InvocationId);
-        AssertEx.Empty(sender.SentEncryptedChunks);
-        AssertEx.Empty(sender.SentEncryptedCompletions);
-
-        var contentChunks = sender.SentChunks.Where(chunk => !chunk.IsComplete).ToList();
-        AssertEx.True(contentChunks.Count >= 2);
-        AssertEx.True(contentChunks.All(chunk => chunk.InvocationId == package.InvocationId));
-        AssertEx.True(sender.SentChunks.Any(chunk => chunk.IsComplete));
-
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(package.InvocationId, sender.SentCompletions[0].InvocationId);
-        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenPlainContext_StreamsReasoningChunksAndFinalReasoning()
-    {
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender,
-            eventDispatcher: dispatcher,
-            agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunPlainAsync(runner, package);
-
-        AssertEx.Empty(sender.SentEncryptedChunks);
-        var reasoningChunks = sender.SentReasoningChunks.Where(chunk => !chunk.IsComplete).ToList();
-        AssertEx.Equal(expected: 2, reasoningChunks.Count);
-        AssertEx.Equal("Let me think...", reasoningChunks[0].Token);
-        AssertEx.Equal(" more thought", reasoningChunks[1].Token);
-        AssertEx.True(sender.SentReasoningChunks.Any(chunk => chunk.IsComplete));
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal("Let me think... more thought", sender.SentCompletions[0].FinalReasoning);
-        AssertEx.Null(sender.SentCompletions[0].ReasoningTokens);
-        await dispatcher.Received().ReportInvocationThinkingChunkAsync(package.InvocationId, Arg.Any<string>());
-    }
-
-    [Test]
     public async Task RunAsync_WhenPlainContextReceivesUsageContent_SendsAuthoritativeTokenCounts()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: null),
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: null),
             (Text: " world", Usage: new UsageDetails
             {
                 InputTokenCount = 10,
@@ -265,10 +158,6 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: 10, sender.SentCompletions[0].InputTokens);
-        AssertEx.Equal(expected: 2, sender.SentCompletions[0].OutputTokens);
-        AssertEx.Equal(expected: 12, sender.SentCompletions[0].TokensUsed);
         // The authoritative token counts are asserted exactly; the new wall-clock duration arg is matched with Arg.Any
         // because the elapsed value is non-deterministic.
         await dispatcher.Received(1)
@@ -321,8 +210,7 @@ public sealed class InvocationRunnerTests
         });
         listener.Start();
 
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        var runner = CreateRunner(agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
         {
             InputTokenCount = 10,
             OutputTokenCount = 2,
@@ -353,8 +241,7 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenTurnCompletes_EmitsOneTerminalHarnessEfficiencyRecord()
     {
         using var capture = new HarnessMetricCapture();
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
+        var runner = CreateRunner(agentUpdates: CreateUpdates("Hello", " world"));
 
         await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -370,8 +257,7 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenTurnFails_EmitsOneFailedHarnessEfficiencyRecord()
     {
         using var capture = new HarnessMetricCapture();
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: ThrowingUpdates());
+        var runner = CreateRunner(agentUpdates: ThrowingUpdates());
 
         await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -386,9 +272,8 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenOrchestrationChangesParticipant_RecordsOneHandoffAndOneTerminal()
     {
         using var capture = new HarnessMetricCapture();
-        var sender = new MockHubMessageSender();
         var orchestrationFactory = CreateOrchestrationFactory(OrchestrationParticipantTransitionUpdates(), out _);
-        var runner = CreateRunner(sender, orchestrationAgentFactory: orchestrationFactory);
+        var runner = CreateRunner(orchestrationAgentFactory: orchestrationFactory);
 
         await RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build());
 
@@ -396,49 +281,6 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal("completed", terminal.Outcome);
         AssertEx.Equal(expected: true, terminal.Orchestration);
         AssertEx.Equal(expected: 1L, capture.Handoffs.Single());
-    }
-
-    [Test]
-    public async Task RunAsync_WhenUsageTokenCountExceedsInt32_SaturatesInsteadOfFaulting()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
-        {
-            // A provider reporting a count past int.MaxValue must clamp, not throw mid-stream and fail the invocation.
-            InputTokenCount = (long)int.MaxValue + 100,
-            OutputTokenCount = 5,
-            TotalTokenCount = (long)int.MaxValue + 105
-        })));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunPlainAsync(runner, package);
-
-        AssertEx.Empty(sender.SentFailures);
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].InputTokens);
-        AssertEx.Equal(expected: 5, sender.SentCompletions[0].OutputTokens);
-        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].TokensUsed);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenTheDerivedTotalExceedsInt32_SaturatesInsteadOfFaulting()
-    {
-        // The provider reported no total of its own, so the total is DERIVED from input + output. Summing them as
-        // checked ints threw OverflowException mid-stream and failed the invocation; the derivation has to clamp
-        // exactly as the single-round and accumulated paths already do.
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
-        {
-            InputTokenCount = int.MaxValue,
-            OutputTokenCount = 1
-        })));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunPlainAsync(runner, package);
-
-        AssertEx.Empty(sender.SentFailures);
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].TokensUsed);
     }
 
     [Test]
@@ -450,9 +292,8 @@ public sealed class InvocationRunnerTests
         // reads as context OCCUPANCY: a round's prompt is the whole conversation so far, so the last round already
         // contains every earlier one and summing showed 10,722 for a context that never held more than ~3,000. The
         // turn's COST is the sum, and it rides the terminal-telemetry report onto the run-envelope row instead.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             agentUpdates: CreateUpdatesWithUsage((Text: "round one", Usage: new UsageDetails
                 {
@@ -479,11 +320,6 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: 3_000, sender.SentCompletions[0].InputTokens);
-        AssertEx.Equal(expected: 30, sender.SentCompletions[0].OutputTokens);
-        AssertEx.Equal(expected: 8, sender.SentCompletions[0].ReasoningTokens);
-        AssertEx.Equal(expected: 3_038, sender.SentCompletions[0].TokensUsed);
         await dispatcher.Received(1)
                         .ReportInvocationCompletedAsync(package.InvocationId,
                             Arg.Is<int?>(3_000),
@@ -503,15 +339,125 @@ public sealed class InvocationRunnerTests
                                                                      && usage.ReasoningTokens == 18));
     }
 
+    // The four tests below pin UsageSnapshot.From()'s SINGLE-ROUND arithmetic — int32 saturation and the
+    // reasoning-double-counting-avoidance in the derived total. They used to observe it through the hub completion
+    // payload; the hub was only the observation point, so they now read the same numbers off the dispatcher report
+    // that persists them onto the assistant message. The sibling
+    // RunAsync_WhenSummedUsageExceedsInt32_SaturatesInsteadOfWrapping covers the cross-round Accumulate sum, which is
+    // a different code path and does not subsume any of these.
+    [Test]
+    public async Task RunAsync_WhenUsageTokenCountExceedsInt32_SaturatesInsteadOfFaulting()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            // A provider reporting a count past int.MaxValue must clamp, not throw mid-stream and fail the invocation.
+            InputTokenCount = (long)int.MaxValue + 100,
+            OutputTokenCount = 5,
+            TotalTokenCount = (long)int.MaxValue + 105
+        })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            int.MaxValue,
+            5,
+            int.MaxValue,
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheDerivedTotalExceedsInt32_SaturatesInsteadOfFaulting()
+    {
+        // The provider reported no total of its own, so the total is DERIVED from input + output. Summing them as
+        // checked ints threw OverflowException mid-stream and failed the invocation; the derivation has to clamp
+        // exactly as the single-round and accumulated paths already do.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            InputTokenCount = int.MaxValue,
+            OutputTokenCount = 1
+        })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            int.MaxValue,
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderReportsNoTotal_DerivesTheTotalWithoutDoubleCountingReasoning()
+    {
+        // Microsoft.Extensions.AI documents ReasoningTokenCount as counted INSIDE OutputTokenCount, so a derived total
+        // of input + output + reasoning charged every reasoning token twice whenever the provider omitted its own
+        // total. 100 + 40 is the turn, not 100 + 40 + 30.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            InputTokenCount = 100,
+            OutputTokenCount = 40,
+            ReasoningTokenCount = 30
+        })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            140,
+            30,
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderReportsOnlyReasoningTokens_LeavesTheTotalUnreported()
+    {
+        // Null-preserving: with neither input nor output reported there is nothing to derive a total from, and a
+        // reasoning-only count is not a turn total.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            ReasoningTokenCount = 30
+        })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        // A turn with no input or output count has no derivable total.
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            null,
+            30,
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+    }
+
     [Test]
     public async Task RunAsync_WhenSummedUsageExceedsInt32_SaturatesInsteadOfWrapping()
     {
         // Each round is comfortably inside int range; their SUM is not. The accumulator must clamp exactly as a single
         // oversized round does, rather than wrap negative and report a turn that consumed less than nothing. Asserted on
         // the turn totals, because they are the only place the rounds are added together at all.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             agentUpdates: CreateUpdatesWithUsage((Text: "first", Usage: new UsageDetails
                 {
@@ -529,8 +475,6 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        AssertEx.Empty(sender.SentFailures);
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
         await dispatcher.Received(1)
                         .ReportTurnTelemetryAsync(package.InvocationId,
                             Arg.Any<long?>(),
@@ -541,130 +485,17 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenProviderReportsNoTotal_DerivesTheTotalWithoutDoubleCountingReasoning()
-    {
-        // Microsoft.Extensions.AI documents ReasoningTokenCount as counted INSIDE OutputTokenCount, so a derived total
-        // of input + output + reasoning charged every reasoning token twice whenever the provider omitted its own
-        // total. 100 + 40 is the turn, not 100 + 40 + 30.
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
-        {
-            InputTokenCount = 100,
-            OutputTokenCount = 40,
-            ReasoningTokenCount = 30
-        })));
-
-        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: 140, sender.SentCompletions[0].TokensUsed);
-        AssertEx.Equal(expected: 30, sender.SentCompletions[0].ReasoningTokens);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenProviderReportsOnlyReasoningTokens_LeavesTheTotalUnreported()
-    {
-        // Null-preserving: with neither input nor output reported there is nothing to derive a total from, and a
-        // reasoning-only count is not a turn total.
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
-        {
-            ReasoningTokenCount = 30
-        })));
-
-        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Null(sender.SentCompletions[0].TokensUsed, "a turn with no input or output count has no derivable total");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenPlainContextAndAgentRuntimeThrows_SendsPlainInvocationFailed()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: ThrowingUpdates());
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunPlainAsync(runner, package);
-
-        AssertEx.Empty(sender.SentEncryptedFailures);
-        AssertEx.Equal(expected: 1, sender.SentFailures.Count);
-        AssertEx.Equal(package.InvocationId, sender.SentFailures[0].InvocationId);
-        AssertEx.Null(sender.SentFailures[0].MessageId);
-    }
-
-    [Test]
-    public async Task RunAsync_ValidPackage_SendsCompletion()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunAsync(runner, package);
-
-        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions.Count);
-        AssertEx.Equal(package.ConversationId, sender.SentEncryptedCompletions[0].ConversationId);
-        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions[0].EpochVersion);
-    }
-
-    [Test]
     public async Task RunAsync_ValidationFails_ThrowsInvalidOperationException()
     {
-        var sender = new MockHubMessageSender();
         var validator = Substitute.For<IRuntimePackageValidator>();
         validator.Validate(Arg.Any<RuntimePackage>(), Arg.Any<bool>()).Returns(new RuntimePackageValidationResult(isValid: false, ["bad package"]));
 
-        var runner = CreateRunner(sender, validator: validator);
+        var runner = CreateRunner(validator: validator);
         var package = RuntimePackageBuilder.Valid().Build();
 
         var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => RunAsync(runner, package));
 
         AssertEx.Contains(exception.Message, "bad package");
-        AssertEx.Empty(sender.SentEncryptedFailures);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenStoredHistoryHoldsAnOversizedMessage_StillRunsTheTurn()
-    {
-        // The poisoned-conversation regression: the per-turn re-validation used to hard-fail on ANY over-cap message in
-        // the assembled context, including one already persisted in the conversation. Every later turn then re-validated
-        // the same stored row and failed the same way, so the user could only abandon the conversation. The cap belongs
-        // to the entry seams; oversized history is the budgeter's problem.
-        var sender = new MockHubMessageSender();
-        var securityOptions = Options.Create(new SecurityOptions
-        {
-            MaxMessageSizeKb = 1,
-            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
-        });
-        var validator = new RuntimePackageValidator(new ModelNameValidator(securityOptions), securityOptions);
-
-        var package = RuntimePackageBuilder.Valid().Build() with
-        {
-            ConversationContext =
-            [
-                new ConversationMessageDto
-                {
-                    Id = Guid.NewGuid(),
-                    Role = MessageRole.User,
-                    Content = new string(c: 'h', count: 2048),
-                    SortOrder = 0
-                },
-                new ConversationMessageDto
-                {
-                    Id = Guid.NewGuid(),
-                    Role = MessageRole.User,
-                    Content = "and what about this?",
-                    SortOrder = 1
-                }
-            ]
-        };
-
-        var runner = CreateRunner(sender, validator: validator);
-
-        await RunAsync(runner, package);
-
-        AssertEx.Empty(sender.SentEncryptedFailures);
-        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions.Count);
     }
 
     [Test]
@@ -672,11 +503,10 @@ public sealed class InvocationRunnerTests
     {
         // Pins the wiring the healing above depends on: the cap is enforced at the inbound seams (the chat hub and the
         // encrypted-envelope assembler), never on the node's own re-assembled turn context.
-        var sender = new MockHubMessageSender();
         var validator = Substitute.For<IRuntimePackageValidator>();
         validator.Validate(Arg.Any<RuntimePackage>(), Arg.Any<bool>()).Returns(RuntimePackageValidationResult.Success);
 
-        var runner = CreateRunner(sender, validator: validator);
+        var runner = CreateRunner(validator: validator);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -686,20 +516,16 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_AgentRuntimeThrows_SendsInvocationFailed()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new NotSupportedException("factory failed")));
 
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId
-                                                                         && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
-                                                                         && failure.Error.Contains("Agent runtime error", StringComparison.Ordinal));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
             Arg.Is<string>(message => message.Contains("Agent runtime error", StringComparison.Ordinal)),
             FailureCategory.AgentRuntime);
@@ -711,13 +537,12 @@ public sealed class InvocationRunnerTests
         // MapFailure must classify NoChatModelInstalledException as ModelNotInstalled with the actionable, path-free
         // constant — NOT the generic Unexpected/ProviderUnreachable — so a local-default send with no installed GGUF
         // surfaces a "pull a model" CTA instead of a dead-end provider error.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new NoChatModelInstalledException()));
 
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -725,17 +550,15 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
             Arg.Is<string>(message => message.Contains("No chat model installed", StringComparison.Ordinal)),
             FailureCategory.ModelNotInstalled);
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelNotInstalled));
     }
 
     [Test]
     public async Task RunAsync_RespectsCancellationToken_StopsStreaming()
     {
-        var sender = new MockHubMessageSender();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: BlockingUpdates(gate.Task, started));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: BlockingUpdates(gate.Task, started));
         var package = RuntimePackageBuilder.Valid().Build();
         using var cancellationTokenSource = new CancellationTokenSource();
 
@@ -749,14 +572,12 @@ public sealed class InvocationRunnerTests
         // turn is Cancelled, matching the category the callers themselves report for the same event (see
         // NodeChatStreamService's OperationCanceledException handler). Timeout is reserved for the invocation
         // CancelAfter watchdog; see RunAsync_WhenInvocationTimeoutElapses_MapsTimeoutFailureCategory.
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
     }
 
     [Test]
     public async Task RunAsync_MapsInvocationDefinitionSystemPromptAndSortOrder()
     {
-        var sender = new MockHubMessageSender();
         InvocationAgentDefinition? capturedDefinition = null;
         var factory = CreateFactory(CreateUpdates("ok"), definition => capturedDefinition = definition);
 
@@ -766,7 +587,7 @@ public sealed class InvocationRunnerTests
                                            .WithConversationMessage(MessageRole.User, "early", sortOrder: -1)
                                            .Build();
 
-        var runner = CreateRunner(sender, factory);
+        var runner = CreateRunner(factory);
         await RunAsync(runner, package);
 
         var definition = AssertEx.NotNull(capturedDefinition);
@@ -782,7 +603,6 @@ public sealed class InvocationRunnerTests
     {
         // A vision turn: a ConversationMessageDto carrying image parts must map to an MEAI DataContent alongside its
         // text, so the model actually receives the image. Proves BuildChatMessages emits the image part.
-        var sender = new MockHubMessageSender();
         InvocationAgentDefinition? capturedDefinition = null;
         var factory = CreateFactory(CreateUpdates("ok"), definition => capturedDefinition = definition);
 
@@ -800,7 +620,7 @@ public sealed class InvocationRunnerTests
                                            .WithImageMessage("look:", "image/png", imageBytes, sortOrder: 1)
                                            .Build();
 
-        var runner = CreateRunner(sender, factory);
+        var runner = CreateRunner(factory);
         await RunAsync(runner, package);
 
         var definition = AssertEx.NotNull(capturedDefinition);
@@ -816,9 +636,8 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_PassesNullSessionToWorkerAgent()
     {
-        var sender = new MockHubMessageSender();
         var lastObservedSessionWasNull = false;
-        var runner = CreateRunner(sender, CreateFactory(CreateUpdates("ok"), onSessionObserved: value => lastObservedSessionWasNull = value));
+        var runner = CreateRunner(CreateFactory(CreateUpdates("ok"), onSessionObserved: value => lastObservedSessionWasNull = value));
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -826,66 +645,11 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WithApiSideAllowedTools_BuildsInvocationDefinitionTools()
-    {
-        var sender = new MockHubMessageSender();
-        InvocationAgentDefinition? capturedDefinition = null;
-        var factory = CreateFactory(CreateUpdates("ok"), definition => capturedDefinition = definition);
-
-        var package = RuntimePackageBuilder.Valid()
-                                           .WithAllowedTool("approve-job")
-                                           .Build();
-
-        var runner = CreateRunner(sender, factory);
-        await runner.RunAsync(package);
-
-        var definition = AssertEx.NotNull(capturedDefinition);
-        AssertEx.Equal(expected: 1, definition.Tools.Count);
-    }
-
-    [Test]
-    public async Task RunAsync_ExceedsMaxResponseSize_SendsInvocationFailed()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
-        {
-            NodeName = "worker",
-            MaxResponseSizeMb = 1,
-            MaxPendingToolCallAgeMinutes = 5
-        }, agentUpdates: CreateUpdates(new string(c: 'x', (1024 * 1024) + 1)));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunAsync(runner, package);
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Response size exceeded", StringComparison.Ordinal));
-    }
-
-    [Test]
-    public async Task RunAsync_ExceedsMaxReasoningSize_SendsInvocationFailed()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
-        {
-            NodeName = "worker",
-            MaxResponseSizeMb = 1,
-            MaxPendingToolCallAgeMinutes = 5
-        }, agentUpdates: CreateMixedUpdates((Text: null, Thinking: new string(c: 'x', (1024 * 1024) + 1))));
-        var package = RuntimePackageBuilder.Valid().Build();
-
-        await RunAsync(runner, package);
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Reasoning size exceeded", StringComparison.Ordinal));
-    }
-
-    [Test]
     public async Task RunAsync_WhenAlreadyBusy_ThrowsInvalidOperationException()
     {
-        var sender = new MockHubMessageSender();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+        var runner = CreateRunner(agentUpdates: BlockingUpdates(gate.Task, started));
 
         var firstTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
         await started.Task;
@@ -898,31 +662,12 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task Cancel_WhileRunning_TerminatesStream()
-    {
-        var sender = new MockHubMessageSender();
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
-
-        var runTask = RunAsync(runner, package);
-        await started.Task;
-        runner.Cancel(package.InvocationId);
-        gate.TrySetResult();
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
-    }
-
-    [Test]
     public async Task DrainActiveInvocationsAsync_WhenActiveInvocationCompletes_ReturnsTrue()
     {
-        var sender = new MockHubMessageSender();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+        var runner = CreateRunner(agentUpdates: BlockingUpdates(gate.Task, started));
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -941,11 +686,10 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task DrainActiveInvocationsAsync_WhenTimeoutElapses_ReturnsFalseWithoutCancellingInvocation()
     {
-        var sender = new MockHubMessageSender();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+        var runner = CreateRunner(agentUpdates: BlockingUpdates(gate.Task, started));
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -960,13 +704,11 @@ public sealed class InvocationRunnerTests
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
         AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
-        AssertEx.Empty(sender.SentEncryptedFailures);
     }
 
     [Test]
     public async Task RunAsync_WhenInvocationTimeoutElapses_MapsTimeoutFailureCategory()
     {
-        var sender = new MockHubMessageSender();
         // Use a normal (non-zero) invocation timeout so the token is NOT already cancelled when the
         // runner starts: that guarantees the agent is enumerated and signals `started`. WithTimeout(0)
         // raced the timeout against reaching enumeration — under load the token cancelled before the
@@ -974,7 +716,7 @@ public sealed class InvocationRunnerTests
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -985,7 +727,6 @@ public sealed class InvocationRunnerTests
         await AssertEx.NotNull(GetActiveInvocationCancellationTokenSource(runner)).CancelAsync();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
     }
 
@@ -996,10 +737,11 @@ public sealed class InvocationRunnerTests
         // ceiling, the stream-idle watchdog and an HTTP timeout all map to it), so the persisted message must name the
         // node's maximum message request timeout and its configured seconds. Pinned against the shared, unattributable
         // "Invocation timed out or was cancelled" this replaced.
-        var sender = new MockHubMessageSender();
         var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 900).Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)),
+            eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -1007,51 +749,10 @@ public sealed class InvocationRunnerTests
         await AssertEx.NotNull(GetActiveInvocationCancellationTokenSource(runner)).CancelAsync();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.Timeout)
-                       && failure.Error == "Timed out: the response exceeded the node maximum message request timeout (900s).");
-    }
-
-    [Test]
-    public async Task Cancel_WhileRunning_ReportsTheUserStopAsTheReason()
-    {
-        // The same breadcrumb from the other side: an operator stop must never read like a timeout. This is the pair
-        // that made the "Cancelled at ~550s" report unattributable — user stop, detached-grace reaper and the node
-        // watchdog all persisted the identical sentence.
-        var sender = new MockHubMessageSender();
-        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)));
-
-        var runTask = RunAsync(runner, package);
-        await started.Task;
-
-        runner.Cancel(package.InvocationId);
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.Cancelled) && failure.Error == "Stopped by user.");
-    }
-
-    [Test]
-    public async Task CancelDetached_WhileRunning_ReportsTheDisconnectGraceAsTheReason()
-    {
-        // The detached-run reaper is the third cancellation cause, and the one an operator is least able to guess at:
-        // it must name itself rather than share the user-stop sentence.
-        var sender = new MockHubMessageSender();
-        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)));
-
-        var runTask = RunAsync(runner, package);
-        await started.Task;
-
-        runner.CancelDetached(package.InvocationId);
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.Cancelled)
-                       && failure.Error == "Stopped: no client was attached to this run and the disconnect grace period expired.");
+        await dispatcher.Received(1)
+                        .ReportInvocationFailedAsync(package.InvocationId,
+                            "Timed out: the response exceeded the node maximum message request timeout (900s).",
+                            FailureCategory.Timeout);
     }
 
     [Test]
@@ -1061,53 +762,13 @@ public sealed class InvocationRunnerTests
         // caller's. It used to fall into the origin fallback and persist "Stopped externally (node shutdown or client
         // disconnect)" under the Cancelled category — blaming a disconnect that never happened and hiding a real
         // timeout. Nothing of ours is cancelled in this test, which is exactly the state that must map to Timeout.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
-        var runner = CreateRunner(sender, CreateFactory(ProviderTimeoutUpdates()), eventDispatcher: dispatcher);
+        var runner = CreateRunner(CreateFactory(ProviderTimeoutUpdates()), eventDispatcher: dispatcher);
 
         await RunAsync(runner, package);
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.Timeout)
-                       && failure.Error == "Timed out: the model provider stopped responding before the node's own ceiling was reached.");
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenToolResultTimesOut_KeepsTheToolTimeoutDistinctFromAGenericToolFailure()
-    {
-        // ToolResultTimeout used to collapse into the same "Worker tool execution failed." every tool error uses, so a
-        // turn killed by the tool-result bound was indistinguishable from a tool that simply errored.
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("read_file", "Tool call timed out waiting for a result.", new TimeoutException("timed out"))));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.AgentToolCall)
-                       && failure.Error == "A tool call timed out waiting for its result.");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenToolCallFailsWithoutATimeout_KeepsTheGenericToolFailureMessage()
-    {
-        // The guard on the arm above: an ordinary tool error must NOT be relabelled a timeout.
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("read_file", "boom")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.AgentToolCall) && failure.Error == "Worker tool execution failed.");
     }
 
     [Test]
@@ -1120,7 +781,6 @@ public sealed class InvocationRunnerTests
         // racing callback. This test makes that ordering deterministic instead of load-dependent: the late-registered
         // callback below releases the parked agent and then BLOCKS the cancel-callback loop until the failure has been
         // reported, so any earlier registration provably runs too late to influence the category.
-        var sender = new MockHubMessageSender();
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1134,7 +794,7 @@ public sealed class InvocationRunnerTests
                       return Task.CompletedTask;
                   });
 
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForRelease(release.Task, started, cancellationToken)), eventDispatcher: dispatcher);
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForRelease(release.Task, started, cancellationToken)), eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -1151,8 +811,62 @@ public sealed class InvocationRunnerTests
 
         await runTask.WaitAsync(TimeSpan.FromSeconds(5));
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheStreamEndsCleanlyOnACancelledTurn_ReportsCancelledNotCompleted()
+    {
+        // The Cancelled half of the runner's post-tool-loop invocationToken.ThrowIfCancellationRequested(). Same shape
+        // as the Timeout sibling below, and for the same reason: the test registers its own token callback AFTER the
+        // runner's, so in LIFO order it runs FIRST, releases the parked stream and then BLOCKS the callback chain until
+        // the failure has been reported. Nothing the runner registered earlier — and nothing downstream of the stream —
+        // can observe the cancellation before the loop returns, so the stream ends NORMALLY and the runner's own check
+        // is the only thing left that can stop a cancelled turn being reported as a completed one.
+        //
+        // The trigger is an OPERATOR stop rather than the raw token source, which is what makes this the category pin:
+        // Cancel records its origin, so the same check must classify this Cancelled while the sibling classifies
+        // Timeout. Both go red if that one line is removed.
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var failureReported = new ManualResetEventSlim(initialState: false);
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())
+                  .Returns(_ =>
+                  {
+                      failureReported.Set();
+                      return Task.CompletedTask;
+                  });
+
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForRelease(release.Task, started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        var invocationCancellationTokenSource = AssertEx.NotNull(GetActiveInvocationCancellationTokenSource(runner));
+        using (invocationCancellationTokenSource.Token.Register(() =>
+               {
+                   release.TrySetResult();
+                   failureReported.Wait(TimeSpan.FromSeconds(5));
+               }))
+        {
+            runner.Cancel(package.InvocationId);
+        }
+
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
+        await dispatcher.DidNotReceiveWithAnyArgs()
+                        .ReportInvocationCompletedAsync(Arg.Any<Guid>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<long?>(),
+                            Arg.Any<string?>(),
+                            Arg.Any<InvocationThroughput?>());
     }
 
     [Test]
@@ -1160,11 +874,10 @@ public sealed class InvocationRunnerTests
     {
         // A disconnect-driven CancelAll is an external stop, not the invocation watchdog: it must classify as
         // Cancelled, and it must do so without depending on which token callback happens to run first.
-        var sender = new MockHubMessageSender();
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -1172,171 +885,7 @@ public sealed class InvocationRunnerTests
         runner.CancelAll();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenProviderUnreachable_MapsFailureCategory()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("offline")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ProviderUnreachable));
-    }
-
-    [Test]
-    public async Task RunAsync_WhenProviderReturnsNotFound_MapsModelUnavailableFailureCategory()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("not found", inner: null, HttpStatusCode.NotFound)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelUnavailable)
-                                                                         && failure.Error == "Selected model is not installed on this node.");
-    }
-
-    [Test]
-    [Arguments("registry.ollama.ai/library/gemma:12b does not support thinking", "This model does not support reasoning.")]
-    [Arguments("this model does not support tools", "This model does not support tool calling.")]
-    public async Task RunAsync_WhenModelRejectsCapability_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage, string expectedError)
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, inner: null, HttpStatusCode.BadRequest)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported)
-                                                                         && failure.Error == expectedError);
-    }
-
-    [Test]
-    [Arguments("HTTP 400 (invalid_request_error: ) Failed to initialize samplers: failed to parse grammar")]
-    [Arguments("Failed to initialize samplers")]
-    [Arguments("failed to parse grammar")]
-    public async Task RunAsync_WhenToolGrammarFailsToCompile_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage)
-    {
-        // llama-server reports the sampler/grammar compile failure as an HTTP 400, so it must be classified here and not
-        // swallowed by the generic HttpRequestException arm (ProviderUnreachable) or surfaced raw as Unexpected. The
-        // model IS tool-capable, so the message must not claim otherwise.
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, inner: null, HttpStatusCode.BadRequest)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported)
-                       && failure.Error == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenToolGrammarFailsToCompileWith500_WinsOverModelLoadFailedArm()
-    {
-        // The grammar arm is ordered ahead of ReportsModelLoadFailure, which matches on the status code alone: a 500
-        // carrying the grammar signature must still classify as the (actionable) tool-preparation failure.
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("Failed to initialize samplers: failed to parse grammar", inner: null,
-                   HttpStatusCode.InternalServerError)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported));
-    }
-
-    [Test]
-    public async Task RunAsync_WhenToolGrammarFailureIsWrapped_MapsModelCapabilityUnsupportedFailureCategory()
-    {
-        // The agent framework wraps the transport exception, so the signature is only visible on an inner exception.
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("The chat client failed.",
-                   new HttpRequestException("Failed to initialize samplers: failed to parse grammar", inner: null, HttpStatusCode.BadRequest))));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported)
-                       && failure.Error == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model.");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenUnrelatedBadRequest_StillMapsProviderUnreachable()
-    {
-        // The new grammar arm must not widen: an unrelated HTTP 400 keeps its previous classification.
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("invalid request payload", inner: null, HttpStatusCode.BadRequest)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ProviderUnreachable));
-    }
-
-    [Test]
-    public async Task RunAsync_WhenModelLoadFailsWith500_MapsModelLoadFailedFailureCategory()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        // The blob path in the message must never reach the surfaced error; the status code alone drives the mapping.
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
-                   HttpStatusCode.InternalServerError)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelLoadFailed)
-                                                                         && failure.Error == "The model could not be loaded or run on the provider.");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenModelForceEjectedMidRequest_MapsCancelledWithTruthfulMessage()
-    {
-        // An operator FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as
-        // Cancelled (an operator action, not a generic provider failure) and surface the truthful "ejected" message
-        // rather than a generic "provider unreachable".
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        const string EjectMessage = "The model was ejected by the operator while this request was running.";
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new LlamaServerModelEjectedException(EjectMessage)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.Cancelled)
-                                                                         && failure.Error == EjectMessage);
     }
 
     [Test]
@@ -1344,7 +893,6 @@ public sealed class InvocationRunnerTests
     {
         // For a local llama.cpp model the runner warms the model to readiness BEFORE the watched streaming pull
         // begins, so the cold load is never guarded by (and killed by) the stream-idle watchdog.
-        var sender = new MockHubMessageSender();
         var events = new ConcurrentQueue<string>();
 
         var provider = Substitute.For<ILocalModelProvider>();
@@ -1363,7 +911,7 @@ public sealed class InvocationRunnerTests
                 .Returns(Task.FromResult(provider));
 
         var factory = CreateFactory(_ => WarmOrderingUpdates(events));
-        var runner = CreateRunner(sender, factory, providerResolver: resolver);
+        var runner = CreateRunner(factory, providerResolver: resolver);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -1380,7 +928,6 @@ public sealed class InvocationRunnerTests
         // The whole-turn clock starts BEFORE the warm above, so a cold first turn's duration is mostly llama-server
         // launching and the model loading (measured live: 206 s cold against 27 s warm for the same work). The warm
         // phase's own duration therefore has to reach the invocation state, or the persisted turn time cannot be split.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
 
         var provider = Substitute.For<ILocalModelProvider>();
@@ -1393,7 +940,7 @@ public sealed class InvocationRunnerTests
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -1406,7 +953,6 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenNoLocalRuntimeWarms_ReportsNoModelReadinessDuration()
     {
         // Null, not zero: a remote or Ollama turn warmed nothing, and zero would claim it proved a warm start.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(OllamaLocalModelProvider.OllamaProviderName);
@@ -1417,7 +963,7 @@ public sealed class InvocationRunnerTests
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -1431,7 +977,6 @@ public sealed class InvocationRunnerTests
     {
         // The readiness (warm) phase is llama.cpp-only. An Ollama model must NOT be warmed here (it warms
         // cheaply on first send), so the phase is a no-op for it.
-        var sender = new MockHubMessageSender();
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(OllamaLocalModelProvider.OllamaProviderName);
 
@@ -1441,7 +986,7 @@ public sealed class InvocationRunnerTests
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
-        var runner = CreateRunner(sender, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
+        var runner = CreateRunner(providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -1449,102 +994,13 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenModelLoadFailsWith500_DoesNotLeakBlobPath()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
-                   HttpStatusCode.InternalServerError)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => !failure.Error.Contains("blobs", StringComparison.Ordinal)
-                                                                         && !failure.Error.Contains(".ollama", StringComparison.Ordinal));
-    }
-
-    [Test]
-    public async Task RunAsync_WhenGenericTimeout_MapsSanitizedTimeoutMessageWithoutLeakingDetail()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        // A bare TimeoutException whose framework message names a host/path must NOT be forwarded verbatim.
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new TimeoutException("timed out reaching http://10.0.0.5:11434/api/chat")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.Timeout)
-                                                                         && failure.Error == "The operation timed out."
-                                                                         && !failure.Error.Contains("10.0.0.5", StringComparison.Ordinal));
-    }
-
-    [Test]
-    public async Task RunAsync_WhenStreamIdleTimeout_KeepsThePathFreeWatchdogMessage()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        // The stream idle watchdog's own message is already a fixed, path-free constant, so it is surfaced verbatim.
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new StreamIdleTimeoutException("The response stream stalled.")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.Timeout)
-                                                                         && failure.Error == "The response stream stalled.");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenProviderRoundIrreduciblyExceedsWindow_ClassifiesContextWindowExceeded()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        // The provider-boundary budgeter rejects a single irreducible over-window round with this typed exception; the
-        // runner must classify it as ContextWindowExceeded and surface its fixed, path-free message verbatim (the bounded
-        // token/window diagnostics it also carries are never surfaced).
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new ProviderContextWindowExceededException(estimatedTokens: 9000, windowTokens: 4096)));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ContextWindowExceeded)
-                                                                         && failure.Error == ProviderContextWindowExceededException.RoundExceedsWindowMessage
-                                                                         && !failure.Error.Contains("9000", StringComparison.Ordinal)
-                                                                         && !failure.Error.Contains("4096", StringComparison.Ordinal));
-    }
-
-    [Test]
-    public async Task RunAsync_WhenUnexpected_MapsFailureCategory()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("boom")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.Unexpected));
-    }
-
-    [Test]
     public async Task RunAsync_WhenUnexpected_ClearsInvocationCancellationTokenSource()
     {
-        var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("boom")));
 
-        var runner = CreateRunner(sender, factory);
+        var runner = CreateRunner(factory);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -1554,12 +1010,11 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_AfterUnexpected_StartsSecondInvocationCleanly()
     {
-        var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("boom")));
 
-        var runner = CreateRunner(sender, factory);
+        var runner = CreateRunner(factory);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
@@ -1568,43 +1023,27 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenAgentRuntimeMessageContainsFrameworkType_RedactsFrameworkNames()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new NotSupportedException("Microsoft.Agents.AI.ChatClientAgentException: provider blew up")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
-                                                                         && !failure.Error.Contains("ChatClientAgentException", StringComparison.Ordinal)
-                                                                         && !failure.Error.Contains("Microsoft.Agents.AI", StringComparison.Ordinal));
-    }
-
-    [Test]
     public async Task RunAsync_WhenUnexpectedMessageIsLong_TruncatesTo512Characters()
     {
-        var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         var longMessage = new string(c: 'x', count: 600);
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException(longMessage)));
 
-        var runner = CreateRunner(sender, factory);
+        string? failureMessage = null;
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Do<string>(message => failureMessage = message), Arg.Any<FailureCategory>())
+                  .Returns(Task.CompletedTask);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        var failure = sender.SentEncryptedFailures.Single();
-        AssertEx.Equal(expected: 512, failure.Error.Length);
+        AssertEx.Equal(expected: 512, AssertEx.NotNull(failureMessage).Length);
     }
 
     [Test]
     public async Task RunAsync_WhenToolApprovalRequested_SendsApprovalThenResumesAfterDecision()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var segment = 0;
         var factory = CreateFactory(_ =>
@@ -1612,16 +1051,26 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
         // The package must offer a tool: an approval request can only surface for a tool-bearing turn, and the runner
         // only retains the segment updates it folds on resume when the offer list is non-empty (see approvalPossible).
-        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
 
-        var requestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: true));
+        // The approval card's opaque request id is published only on the dispatcher now that no hub send carries it.
+        string? requestId = null;
+        await AssertEx.EventuallyAsync(() =>
+        {
+            var reported = dispatcher.ReceivedCalls()
+                                     .Where(call => string.Equals(call.GetMethodInfo().Name, nameof(IWorkerEventDispatcher.ReportApprovalRequestedAsync), StringComparison.Ordinal))
+                                     .Select(call => (ApprovalRequestPayload)call.GetArguments()[0]!)
+                                     .FirstOrDefault();
+            requestId = reported?.RequestId;
+            return requestId is not null;
+        }, TimeSpan.FromSeconds(5));
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the runner must re-invoke the agent threadlessly after the approval decision");
@@ -1636,14 +1085,14 @@ public sealed class InvocationRunnerTests
         // ClientLocal offer is judged on its own RequiresApproval flag, so a true one must still retain and fold the
         // segment. A predicate that narrowed to "any tool offered" vs "any tool that can be approval-wrapped" must not
         // lose this case — dropping the retention here would replay an approval resume without its assistant tool-call.
-        var sender = new MockHubMessageSender();
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
             segment++;
             return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
 
         var package = RuntimePackageBuilder.Valid().Build();
         package.AllowedTools.Add(new AllowedToolDto
@@ -1655,9 +1104,9 @@ public sealed class InvocationRunnerTests
         });
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "an approval-required ClientLocal tool must still drive the fold-and-resume segment");
@@ -1666,26 +1115,26 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task ResolveApprovalResult_WhenRequestIdIsUnmatched_DoesNotResumeThePendingApproval()
     {
-        var sender = new MockHubMessageSender();
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
             segment++;
             return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
         var runTask = RunAsync(runner,
-            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
         runner.ResolveApprovalResult(new ApprovalResolvedEvent($"unmatched-{Guid.NewGuid():N}", Approved: true));
 
         AssertEx.False(runTask.IsCompleted, "an unmatched approval response must not resume the held invocation");
         AssertEx.Equal(expected: 1, segment, "an unmatched approval response must not start the resume segment");
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the matching approval response must resume the invocation");
@@ -1694,7 +1143,6 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task ResolveApprovalResult_WhenDecisionIsDuplicated_FirstDecisionWins()
     {
-        var sender = new MockHubMessageSender();
         IReadOnlyList<ChatMessage>? resumeMessages = null;
         var segment = 0;
         var factory = CreateMessageCapturingFactory(_ =>
@@ -1703,16 +1151,20 @@ public sealed class InvocationRunnerTests
                 return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
             },
             messages => resumeMessages = messages);
-        var runner = CreateRunner(sender, factory);
+        // The approval card's opaque request id is published only on the dispatcher now that no hub send carries it.
+        string? requestId = null;
+        var approvalDispatcher = Substitute.For<IWorkerEventDispatcher>();
+        approvalDispatcher.ReportApprovalRequestedAsync(Arg.Do<ApprovalRequestPayload>(payload => requestId = payload.RequestId))
+                          .Returns(Task.CompletedTask);
+        var runner = CreateRunner(factory, eventDispatcher: approvalDispatcher);
         var invocationId = Guid.NewGuid();
 
         var runTask = RunAsync(runner,
-            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+            RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
 
-        var requestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: false));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => requestId is not null, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: false));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: true));
         await runTask;
 
         var response = AssertEx.NotNull(resumeMessages)
@@ -1726,20 +1178,20 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenSkillApprovalIsGrantedForTheSession_SuppressesTheNextPromptAndStillAudits()
     {
-        var sender = new MockHubMessageSender();
         var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
         var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName), approvalAuditRecorder: auditRecorder);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), approvalAuditRecorder: auditRecorder, eventDispatcher: dispatcher);
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
         await firstTurn;
 
         // A SECOND turn in the SAME conversation, on the same skill at the same version: the memo answers it.
         await RunAsync(runner, SkillPackage(conversationId).Build());
 
-        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a session-scoped approval must not prompt again for the same skill in the same conversation");
+        AssertEx.Equal(expected: 1, approvals.Count, "a session-scoped approval must not prompt again for the same skill in the same conversation");
         await auditRecorder.Received(1)
                            .RecordAsync(Arg.Any<Guid?>(),
                                LoadSkillToolName,
@@ -1751,96 +1203,24 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenSkillApprovalIsDeniedForTheSession_PromptsAgain()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
-
-        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: false), ApprovalScope.Session);
-        await firstTurn;
-
-        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: false));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a DENY must never be remembered, whatever scope the operator sent");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenTheSkillVersionChanges_TheSessionApprovalNoLongerApplies()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
-
-        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        // The operator edited the skill (or an import Replaced it) mid-conversation: same name, new content, new version.
-        var secondTurn = RunAsync(runner, SkillPackage(conversationId, version: 2).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a content change must invalidate the memo — the approval is bound to the version the operator saw");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenADifferentSkillResourceIsRead_TheSessionApprovalNoLongerApplies()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var segment = 0;
-        var factory = CreateFactory(_ =>
-        {
-            segment++;
-            return segment switch
-            {
-                1 => SkillApprovalRequestUpdates(ReadSkillResourceToolName, SkillName, "reference.md"),
-                3 => SkillApprovalRequestUpdates(ReadSkillResourceToolName, SkillName, "secrets.md"),
-                _ => CreateUpdates("done")
-            };
-        });
-        var runner = CreateRunner(sender, factory);
-
-        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "one approval must cover ONE resource, not every resource the skill carries");
-    }
-
-    [Test]
     public async Task RunAsync_WhenRunSkillScriptIsApprovedForTheSession_PromptsAgain()
     {
-        var sender = new MockHubMessageSender();
         var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
         var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, SkillApprovalFactory(RunSkillScriptToolName, SkillName), approvalAuditRecorder: auditRecorder);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(SkillApprovalFactory(RunSkillScriptToolName, SkillName), approvalAuditRecorder: auditRecorder, eventDispatcher: dispatcher);
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
         await secondTurn;
 
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "script execution is outside the memo allow-list and must be approved every single time");
+        AssertEx.Equal(expected: 2, approvals.Count, "script execution is outside the memo allow-list and must be approved every single time");
 
         // The other half of the audit fix: a provider-injected tool that is not in the package offer must still audit
         // under its real risk category rather than the fail-closed Unknown.
@@ -1852,87 +1232,6 @@ public sealed class InvocationRunnerTests
                                Arg.Any<string>(),
                                Arg.Any<long>(),
                                Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task RunAsync_WhenTheSkillIsImported_TheSessionApprovalIsNotRemembered()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
-
-        var firstTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        var secondTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "third-party skill names are attacker-chosen; a durable approval on one must not be available");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenFixedCustomToolApprovedForSession_SuppressesTheNextPrompt()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, CustomToolApprovalFactory(CustomToolName));
-
-        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        // A SECOND turn in the SAME conversation, same Fixed custom tool at the same version: the memo answers it.
-        await RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
-
-        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a session-scoped approval on a Fixed custom tool must not prompt again in the same conversation");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenTheCustomToolVersionChanges_TheSessionApprovalNoLongerApplies()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, CustomToolApprovalFactory(CustomToolName));
-
-        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 1, isFixed: true).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        // The operator edited the custom tool mid-conversation: same name, new version. The memo is bound to the version.
-        var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 2, isFixed: true).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "an edit that bumps the custom tool version must invalidate the memo and re-prompt");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenParameterizedCustomToolApprovedForSession_PromptsAgain()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var runner = CreateRunner(sender, CustomToolApprovalFactory(CustomToolName));
-
-        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        // A Parameterized custom tool is once-or-deny only: a session approval must NOT be remembered, so the next turn
-        // re-prompts even though the operator clicked "approve for session".
-        var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "a Parameterized custom tool must never be session-approvable — one click must not grant open-ended model-chosen execution");
     }
 
     [Test]
@@ -1954,49 +1253,30 @@ public sealed class InvocationRunnerTests
     // Runs one approval round-trip and returns the SessionScopeEligible flag the runner published with it.
     private static async Task<bool?> CaptureSessionScopeEligibleAsync(IInvocationAgentFactory factory, RuntimePackageBuilder package)
     {
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var published = new List<ApprovalLifecyclePayload>();
         dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(payload => published.Add(payload))).Returns(Task.CompletedTask);
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
 
         var turn = RunAsync(runner, package.Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await turn;
 
         return published.Single().SessionScopeEligible;
     }
 
     [Test]
-    public async Task RunAsync_WhenTheNodeDisablesSessionScope_TheSkillApprovalIsNotRemembered()
-    {
-        var sender = new MockHubMessageSender();
-        var conversationId = Guid.NewGuid();
-        var alwaysPrompt = NodeToolApprovalPolicy.FromSettings(new NodeToolApprovalPolicySettings
-        {
-            DisableSkillSessionScope = true
-        });
-        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName), approvalPolicy: alwaysPrompt);
-
-        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true), ApprovalScope.Session);
-        await firstTurn;
-
-        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
-        await secondTurn;
-
-        AssertEx.Equal(expected: 2, sender.SentApprovals.Count, "the operator's always-prompt switch must turn session scope off entirely");
-    }
-
-    [Test]
     public async Task RunAsync_WhenAnUnattendedRunNeedsApproval_FailsImmediatelyWithTheReason()
     {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, SkillApprovalFactory(LoadSkillToolName, SkillName));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        string? failureMessage = null;
+        FailureCategory? failureCategory = null;
+        dispatcher.ReportInvocationFailedAsync(Arg.Any<Guid>(),
+                      Arg.Do<string>(message => failureMessage = message),
+                      Arg.Do<FailureCategory>(category => failureCategory = category))
+                  .Returns(Task.CompletedTask);
+        var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), eventDispatcher: dispatcher);
 
         // The runner's pending-approval window is FIVE MINUTES in this fixture (see CreateRunner). Completing at all is
         // the evidence that the unattended run never entered that wait; the elapsed assertion states the bound.
@@ -2004,11 +1284,9 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, SkillPackage(Guid.NewGuid()).AsUnattended().Build());
         elapsed.Stop();
 
-        var failure = sender.SentEncryptedFailures.Single();
-        AssertEx.Equal(nameof(FailureCategory.AgentRuntime), failure.FailureCategory);
-        AssertEx.True(failure.Error.Contains($"approval required in an unattended run: {LoadSkillToolName}", StringComparison.Ordinal),
-            $"the failure must name the cause, not read as a generic timeout; got '{failure.Error}'");
-        AssertEx.Equal(expected: 0, sender.SentApprovals.Count, "an unattended run must not broadcast an approval request nobody can answer");
+        AssertEx.Equal(FailureCategory.AgentRuntime, failureCategory);
+        AssertEx.True(AssertEx.NotNull(failureMessage).Contains($"approval required in an unattended run: {LoadSkillToolName}", StringComparison.Ordinal),
+            $"the failure must name the cause, not read as a generic timeout; got '{failureMessage}'");
         AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(30), $"the unattended guard must fail fast, not wait out the approval window; took {elapsed.Elapsed}");
     }
 
@@ -2017,7 +1295,6 @@ public sealed class InvocationRunnerTests
     {
         // The asymmetry with the approval path, asserted: an unattended APPROVAL fails the turn fast, an unattended
         // QUESTION continues with "not answered" — and neither one waits out the pending-approval window.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var stash = new UserQuestionAnswerStash(TimeProvider.System);
         var segment = 0;
@@ -2026,14 +1303,13 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
 
         var elapsed = Stopwatch.StartNew();
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).AsUnattended().Build());
         elapsed.Stop();
 
         AssertEx.Equal(expected: 2, segment, "the turn must continue threadlessly rather than fail for an unattended run");
-        AssertEx.Equal(expected: 0, sender.SentEncryptedFailures.Count, "an unanswered question must never fail the turn, unlike an unattended approval");
         await dispatcher.DidNotReceive().ReportUserQuestionAsync(Arg.Any<UserQuestionLifecyclePayload>());
         AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(30),
             $"the unattended run must skip the park, not wait out the 5-minute question cap; took {elapsed.Elapsed}");
@@ -2049,7 +1325,6 @@ public sealed class InvocationRunnerTests
         // ask_user rides the approval seam for its BLOCKING behaviour, not for a risk verdict: the runner must present
         // the QUESTIONS (not an approve/deny card), park, then always approve so the framework executes the tool and the
         // handler returns the stashed answer as the tool result.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         UserQuestionLifecyclePayload? question = null;
         dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
@@ -2062,7 +1337,7 @@ public sealed class InvocationRunnerTests
                 return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
             },
             messages => resumeMessages = messages);
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
 
         var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build());
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
@@ -2095,7 +1370,6 @@ public sealed class InvocationRunnerTests
     {
         // Nothing unvalidated may reach a human: ask_user is intercepted before ToolArgumentRepairAIFunction, so the
         // runner is the first guard. A bad call is answered to the MODEL, not shown to the operator.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var stash = new UserQuestionAnswerStash(TimeProvider.System);
         var segment = 0;
@@ -2109,7 +1383,7 @@ public sealed class InvocationRunnerTests
                 })
                 : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, userQuestionAnswerStash: stash);
         var package = RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build();
 
         await RunAsync(runner, package).WaitAsync(TimeSpan.FromSeconds(10));
@@ -2127,7 +1401,6 @@ public sealed class InvocationRunnerTests
     {
         // ResolveToolCallCardId resolves a blank CallId to the tool name (so the card key matches the streaming
         // lifecycle's), and a blank key would otherwise throw out of the stash and take the whole turn with it.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         UserQuestionLifecyclePayload? question = null;
         dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
@@ -2137,7 +1410,7 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? BlankCallIdAskUserUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build();
 
         var runTask = RunAsync(runner, package);
@@ -2152,7 +1425,6 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task ResolveUserQuestionResult_WhenRequestIdIsUnmatched_DoesNotResumeTheParkedTurn()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         UserQuestionLifecyclePayload? question = null;
         dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
@@ -2162,7 +1434,7 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build());
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
@@ -2185,7 +1457,6 @@ public sealed class InvocationRunnerTests
         // was thinking, so the operator got "300 s minus whatever the model already spent" and the 10-minute
         // MaxPendingToolCallAge cap was dead code. Here the turn budget is 1 s and the operator takes ~2 s — without the
         // re-arm the turn dies as a Timeout before the answer can land.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         UserQuestionLifecyclePayload? question = null;
         dispatcher.ReportUserQuestionAsync(Arg.Do<UserQuestionLifecyclePayload>(payload => question = payload)).Returns(Task.CompletedTask);
@@ -2195,7 +1466,7 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? AskUserRequestUpdates(ValidAskUserArguments()) : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 1).WithAllowedTool(AskUserTool.ToolName).Build();
 
         var runTask = RunAsync(runner, package);
@@ -2218,25 +1489,24 @@ public sealed class InvocationRunnerTests
     {
         // The same deadline re-arm applies to the shipping tool-approval round-trip — a deliberate, separately reviewable
         // behaviour change to an existing feature, so it gets its own regression test.
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
             segment++;
             return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
-        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
         // real-timer: the same real CancelAfter deadline as the question park above: 1 s of turn budget has to actually elapse before
         // "still parked" means anything, and no fake clock reaches it.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an operator weighing an approval must not be pre-empted by the model's own turn budget");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -2248,8 +1518,7 @@ public sealed class InvocationRunnerTests
     {
         // Pins today's behaviour for the case the disconnect-grace work must NOT change: a browser is watching, so the
         // park still gets MaxPendingToolCallAge on top of the turn budget and the 1 s turn budget cannot pre-empt it.
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var invocationId = Guid.NewGuid();
         var tracker = CreateAttachmentTracker();
         using var attachment = tracker.Attach(invocationId);
@@ -2259,17 +1528,17 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, attachmentTracker: tracker);
-        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, attachmentTracker: tracker);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
         // real-timer: the same real CancelAfter deadline: the attached park's full budget is only proved by outliving the 1 s turn
         // budget in real time.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an attached operator weighing an approval must keep the full park budget");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -2282,7 +1551,6 @@ public sealed class InvocationRunnerTests
         // The detached-park fix. A browser that disconnected while the approval card was on screen used to buy the run
         // MaxPendingToolCallAge + InvocationTimeout (~15 min) PER PARK, holding the llama-server lease the whole time,
         // waiting for an answer that can no longer arrive. Detached, the park now gets only the turn budget.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var invocationId = Guid.NewGuid();
         var tracker = CreateAttachmentTracker();
@@ -2291,11 +1559,10 @@ public sealed class InvocationRunnerTests
         // different case (scheduled/platform runs) and is covered by InvocationAttachmentTrackerTests.
         tracker.Attach(invocationId).Dispose();
 
-        var runner = CreateRunner(sender, CreateFactory(_ => ApprovalRequestUpdates()), eventDispatcher: dispatcher, attachmentTracker: tracker);
-        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+        var runner = CreateRunner(CreateFactory(_ => ApprovalRequestUpdates()), eventDispatcher: dispatcher, attachmentTracker: tracker);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         // Nobody answers. The 1 s turn budget — not the 5 min park cap — is what ends this.
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
@@ -2309,8 +1576,7 @@ public sealed class InvocationRunnerTests
         // The reload case. The park started detached (short budget); the operator reloads mid-park, and from that moment
         // the turn must get the full MaxPendingToolCallAge back — otherwise a reload inherits whatever the detached park
         // left behind and the answer arrives too late.
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var invocationId = Guid.NewGuid();
         var tracker = CreateAttachmentTracker();
         tracker.Attach(invocationId).Dispose();
@@ -2321,11 +1587,11 @@ public sealed class InvocationRunnerTests
             segment++;
             return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher, attachmentTracker: tracker);
-        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home").Build();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, attachmentTracker: tracker);
+        var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithTimeout(invocationSeconds: 1).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
         // The reload lands well inside the detached park's 1 s budget and re-arms the deadline via AttachmentChanged.
         using var reattached = tracker.Attach(invocationId);
@@ -2334,7 +1600,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the re-attached park must get the full budget back from the moment of re-attach");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -2346,11 +1612,10 @@ public sealed class InvocationRunnerTests
     {
         // The reaper's cancel must look like an abandoned turn, not a node timeout: the row terminalizes Cancelled with
         // no error text, exactly as a user stop does.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
 
         var runTask = RunAsync(runner, package);
         await started.Task;
@@ -2366,7 +1631,6 @@ public sealed class InvocationRunnerTests
         // A parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
         // answer BOTH — the scalar this replaced kept only the last, so the first request dangled unanswered forever and
         // its tool call never executed. On resume, the folded history must carry a ToolApprovalResponseContent for EACH.
-        var sender = new MockHubMessageSender();
         IReadOnlyList<ChatMessage>? resumeMessages = null;
         var segment = 0;
         var factory = CreateMessageCapturingFactory(_ =>
@@ -2375,16 +1639,17 @@ public sealed class InvocationRunnerTests
                 return segment == 1 ? TwoApprovalRequestUpdates() : CreateUpdates("done");
             },
             messages => resumeMessages = messages);
-        var runner = CreateRunner(sender, factory);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
-        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
 
         // The transport presents approvals one at a time, so answer each as it arrives (present-each-in-turn).
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[0].RequestId, Approved: true));
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[0].RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the runner must resume only after BOTH approvals resolve");
@@ -2401,25 +1666,25 @@ public sealed class InvocationRunnerTests
         // Hardening: a CallId-less approval re-emitted across streamed chunks must dedup on its Id and be
         // presented exactly ONCE — a blank CallId must never bypass dedup (that would prompt N times for one call and
         // dangle N-1 ambiguous responses).
-        var sender = new MockHubMessageSender();
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
             segment++;
             return segment == 1 ? BlankCallIdApprovalUpdates() : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender, factory);
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
-        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
 
         // The whole segment (both chunks) drains before approvals are presented, so a bypassed dedup would already have
         // enqueued two; wait for the single presentation, resolve it, and confirm no second one follows.
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[0].RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[0].RequestId, Approved: true));
         await runTask;
 
-        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a CallId-less approval re-emitted across chunks must be presented exactly once");
+        AssertEx.Equal(expected: 1, approvals.Count, "a CallId-less approval re-emitted across chunks must be presented exactly once");
         AssertEx.Equal(expected: 2, segment, "the run resumes after the single approval resolves");
     }
 
@@ -2429,9 +1694,8 @@ public sealed class InvocationRunnerTests
         // A local turn admitted AFTER shutdown drain has snapshotted the active set must be rejected, never
         // become an untracked active run the drain never waits for. DrainActiveInvocationsAsync fences local admission;
         // a subsequent local (loopback) RunAsync is rejected with a classified failure and never streams.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("should-not-stream"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("should-not-stream"));
 
         // Drain with nothing active: returns immediately but latches the draining fence.
         var drained = await runner.DrainActiveInvocationsAsync(TimeSpan.FromSeconds(1));
@@ -2439,7 +1703,6 @@ public sealed class InvocationRunnerTests
 
         var package = RuntimePackageBuilder.Valid()
                                            .WithInvocationId(Guid.NewGuid())
-                                           .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
                                            .Build();
         await RunAsync(runner, package);
 
@@ -2452,11 +1715,10 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenPackageHasOrchestrationSpec_DrivesOrchestrationAndStreamsDeltas()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var singleAgentFactory = CreateFactory(CreateUpdates("single-agent-should-not-run"));
         var orchestrationFactory = CreateOrchestrationFactory(OrchestrationTextUpdates("Hello", " world"), out var sessionRef);
-        var runner = CreateRunner(sender, singleAgentFactory, eventDispatcher: dispatcher, orchestrationAgentFactory: orchestrationFactory);
+        var runner = CreateRunner(singleAgentFactory, eventDispatcher: dispatcher, orchestrationAgentFactory: orchestrationFactory);
         var package = RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build();
 
         await RunPlainAsync(runner, package);
@@ -2465,8 +1727,6 @@ public sealed class InvocationRunnerTests
         await singleAgentFactory.DidNotReceive().CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
-        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
         AssertEx.True(sessionRef.Value!.Disposed, "The orchestration session must be disposed after the run.");
     }
 
@@ -2474,23 +1734,20 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenNoOrchestrationSpec_TakesSingleAgentPath()
     {
         // The single-agent regression guard: a package without a spec must NOT touch the orchestration factory.
-        var sender = new MockHubMessageSender();
         var singleAgentFactory = CreateFactory(CreateUpdates("Hello", " world"));
         var orchestrationFactory = Substitute.For<IOrchestrationAgentFactory>();
-        var runner = CreateRunner(sender, singleAgentFactory, orchestrationAgentFactory: orchestrationFactory);
+        var runner = CreateRunner(singleAgentFactory, orchestrationAgentFactory: orchestrationFactory);
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunPlainAsync(runner, package);
 
         await orchestrationFactory.DidNotReceive().CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>());
         await singleAgentFactory.Received(1).CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
-        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
     }
 
     [Test]
     public async Task RunAsync_WhenOrchestrationSurfacesApproval_RoundTripsAndResumesOnSession()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         // The gated session blocks its post-approval text/terminal on ApprovalGate, which only RespondToApprovalAsync
         // completes — so "done" + completion are reached ONLY if the runner actually resumes the held session by key.
@@ -2498,132 +1755,63 @@ public sealed class InvocationRunnerTests
         var gatedSession = new FakeOrchestrationRunSession(session => OrchestrationGatedApprovalThenText(session, "call-1", "run_in_agent_home", "done"));
 #pragma warning restore CA2000
         var orchestrationFactory = CreateOrchestrationFactory(gatedSession, out var sessionRef);
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, orchestrationAgentFactory: orchestrationFactory);
+        var runner = CreateRunner(eventDispatcher: dispatcher, orchestrationAgentFactory: orchestrationFactory);
         var invocationId = Guid.NewGuid();
 
         var runTask = RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithOrchestrationSpec(SampleSpec()).Build());
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
-        var requestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: true));
+        // The approval card's opaque request id is published only on the dispatcher now that no hub send carries it.
+        string? requestId = null;
+        await AssertEx.EventuallyAsync(() =>
+        {
+            requestId = dispatcher.ReceivedCalls()
+                                  .Where(call => string.Equals(call.GetMethodInfo().Name, nameof(IWorkerEventDispatcher.ReportApprovalRequestedAsync), StringComparison.Ordinal))
+                                  .Select(call => ((ApprovalRequestPayload)call.GetArguments()[0]!).RequestId)
+                                  .FirstOrDefault();
+            return requestId is not null;
+        }, TimeSpan.FromSeconds(5));
+
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: true));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
         // The approval card must name the tool, not the opaque correlation id (single-agent UX parity).
-        AssertEx.Contains(sender.SentApprovals.Single().Description, "run_in_agent_home");
         AssertEx.Equal(expected: 1, sessionRef.Value!.ApprovalResponses.Count);
         AssertEx.True(sessionRef.Value.ApprovalResponses[0].Approved, "An approved decision must be forwarded to the session as approved=true.");
         AssertEx.Equal("call-1", sessionRef.Value.ApprovalResponses[0].RequestId);
         // Reaching this asserts the gated post-approval portion streamed — i.e. the resume drove the held session.
-        AssertEx.Equal("done", sender.SentCompletions.Single().FinalContent);
     }
 
     [Test]
-    public async Task RunAsync_WhenOrchestrationFails_SendsInvocationFailedWithoutLeakingRawDetail()
+    public async Task RunAsync_WhenCompletes_CleansUpStaleToolCalls()
     {
-        var sender = new MockHubMessageSender();
-        // The raw MAF executor detail must NOT reach the client (logged server-side only); the client sees a constant.
-        var orchestrationFactory = CreateOrchestrationFactory(OrchestrationFailure("workflow boom /secret/internal/path"), out _);
-        var runner = CreateRunner(sender, orchestrationAgentFactory: orchestrationFactory);
-        var package = RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build();
+        var registry = new PendingToolCallRegistry();
+        var runner = CreateRunner(workerOptions: OneMinutePendingToolCallAge(), pendingToolCallRegistry: registry);
+        var stale = ParkStaleToolCall(registry, TimeSpan.FromMinutes(2));
 
-        await RunPlainAsync(runner, package);
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        AssertEx.Equal(expected: 0, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: 1, sender.SentFailures.Count);
-        AssertEx.Equal(package.InvocationId, sender.SentFailures[0].InvocationId);
-        AssertEx.False(sender.SentFailures[0].Error.Contains("secret", StringComparison.Ordinal),
-            "The raw orchestration failure detail must not be forwarded to the client.");
-        AssertEx.Contains(sender.SentFailures[0].Error, "Orchestration run failed");
+        AssertEx.Equal(expected: 0, registry.Calls.Count, "a completed turn must sweep the calls nothing will ever answer");
+        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() => stale);
+        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
     [Test]
-    public async Task ExecuteApiToolCallAsync_WhenResultResolved_ReturnsResult()
+    public async Task RunAsync_WhenFaults_CleansUpStaleToolCalls()
     {
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher);
-        var invocationId = Guid.NewGuid();
+        // The sweep lives in RunAsync's finally, so a turn that died on its stream must still release the stranded
+        // calls — a failure path that skipped it would leave every one of them parked until the next cleanup tick.
+        var registry = new PendingToolCallRegistry();
+        var runner = CreateRunner(workerOptions: OneMinutePendingToolCallAge(),
+            agentUpdates: ThrowingUpdates(),
+            pendingToolCallRegistry: registry);
+        var stale = ParkStaleToolCall(registry, TimeSpan.FromMinutes(2));
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, Approved: true));
-        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
-
-        var requestId = sender.SentToolCalls.Single().RequestId;
-        runner.ResolveToolCallResult(new ToolCallResultEvent
-        {
-            RequestId = requestId,
-            Result = "done"
-        });
-
-        AssertEx.Equal(approvalRequestId, requestId);
-        await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId
-                                                                                                            && payload.RequestId == requestId
-                                                                                                            && payload.Description.Contains("test-tool", StringComparison.Ordinal)));
-        await dispatcher.Received(1).ReportToolCallRequestedAsync(Arg.Is<ToolCallRequestPayload>(payload => payload.InvocationId == invocationId
-                                                                                                            && payload.RequestId == requestId
-                                                                                                            && payload.ToolName == "test-tool"
-                                                                                                            && payload.Parameters == "{}"));
-        AssertEx.Equal("done", await task);
-    }
-
-    [Test]
-    public async Task ExecuteApiToolCallAsync_WhenToolReturnsError_ThrowsWorkerToolCallException()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender);
-        var invocationId = Guid.NewGuid();
-
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-
-        var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, Approved: true));
-        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
-
-        var requestId = sender.SentToolCalls.Single().RequestId;
-        runner.ResolveToolCallResult(new ToolCallResultEvent
-        {
-            RequestId = requestId,
-            Result = string.Empty,
-            Error = "approval timeout"
-        });
-
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => task);
-        AssertEx.Contains(exception.Message, "approval timeout");
-    }
-
-    [Test]
-    public async Task CancelAll_WhenPendingToolCallsExist_CancelsOutstandingCalls()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender);
-
-        var pendingCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-
-        runner.CancelAll();
-
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => pendingCall);
-        AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenToolBridgeFails_MapsAgentToolCallCategory()
-    {
-        var sender = new MockHubMessageSender();
-        var factory = Substitute.For<IInvocationAgentFactory>();
-        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("approve-job", "approval timeout")));
-
-        var runner = CreateRunner(sender, factory);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("approve-job").Build());
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentToolCall));
+        AssertEx.Equal(expected: 0, registry.Calls.Count, "a failed turn must sweep the calls nothing will ever answer");
+        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() => stale);
+        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
     [Test]
@@ -2648,172 +1836,6 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task ExecuteApiToolCallAsync_WhenTimedOut_ThrowsTaskCanceledException()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
-        {
-            NodeName = "worker",
-            MaxResponseSizeMb = 10,
-            MaxPendingToolCallAgeMinutes = 1
-        });
-        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
-
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
-        AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Test]
-    public async Task ExecuteApiToolCallAsync_WhenTimedOut_EmitsCompletedLifecycleWithError()
-    {
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, workerOptions: new WorkerNodeOptions
-        {
-            NodeName = "worker",
-            MaxResponseSizeMb = 10,
-            MaxPendingToolCallAgeMinutes = 1
-        });
-        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
-        var invocationId = Guid.NewGuid();
-
-        // requiresApproval: false guarantees the Requested lifecycle fires before the result-wait timeout, so the
-        // timeout path must emit a matching Completed (IsError=true) to clear the UI card.
-        await AssertEx.ThrowsAsync<WorkerToolCallException>(() =>
-            Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
-
-        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
-            payload.InvocationId == invocationId
-            && payload.ToolName == "test-tool"
-            && payload.Phase == ToolCallLifecyclePhase.Requested));
-        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
-            payload.InvocationId == invocationId
-            && payload.ToolName == "test-tool"
-            && payload.Phase == ToolCallLifecyclePhase.Completed
-            && payload.IsError
-            && !string.IsNullOrWhiteSpace(payload.Result)));
-    }
-
-    [Test]
-    public async Task ExecuteApiToolCallAsync_WhenApprovalNotRequired_SkipsApprovalAndExecutes()
-    {
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher);
-        var invocationId = Guid.NewGuid();
-
-        var task = Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
-        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
-
-        AssertEx.Equal(expected: 0, sender.SentApprovals.Count);
-
-        var requestId = sender.SentToolCalls.Single().RequestId;
-        runner.ResolveToolCallResult(new ToolCallResultEvent
-        {
-            RequestId = requestId,
-            Result = "tool-output"
-        });
-
-        var result = await task;
-        AssertEx.Equal("tool-output", result);
-
-        await dispatcher.Received().ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
-            payload.Phase == ToolCallLifecyclePhase.Requested
-            && !payload.RequiresApproval
-            && payload.ToolName == "test-tool"));
-        await dispatcher.Received().ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
-            payload.Phase == ToolCallLifecyclePhase.Completed
-            && payload.Result == "tool-output"
-            && !payload.IsError));
-    }
-
-    [Test]
-    public async Task ExecuteApiToolCallAsync_WhenApprovalRequired_SendsApprovalBeforeExecuting()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender);
-        var invocationId = Guid.NewGuid();
-
-        var task = Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: true);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-
-        AssertEx.Equal(expected: 0, sender.SentToolCalls.Count);
-
-        var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, Approved: true));
-        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
-
-        var requestId = sender.SentToolCalls.Single().RequestId;
-        runner.ResolveToolCallResult(new ToolCallResultEvent
-        {
-            RequestId = requestId,
-            Result = "tool-output"
-        });
-
-        var result = await task;
-        AssertEx.Equal("tool-output", result);
-    }
-
-    [Test]
-    public async Task CleanupStaleToolCalls_RemovesEntriesOlderThanMaxAge()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
-        {
-            NodeName = "worker",
-            MaxResponseSizeMb = 10,
-            MaxPendingToolCallAgeMinutes = 5
-        });
-
-        var task = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.CleanupStaleToolCalls(TimeSpan.Zero);
-
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => task);
-        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenCompletes_CleansUpStaleToolCalls()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
-        {
-            NodeName = "worker",
-            MaxResponseSizeMb = 10,
-            MaxPendingToolCallAgeMinutes = 1
-        });
-        var pendingToolCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
-        AgePendingToolCalls(runner, TimeSpan.FromMinutes(2));
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => pendingToolCall);
-        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Test]
-    public async Task RunAsync_WhenFaults_CleansUpStaleToolCalls()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender,
-            workerOptions: new WorkerNodeOptions
-            {
-                NodeName = "worker",
-                MaxResponseSizeMb = 10,
-                MaxPendingToolCallAgeMinutes = 1
-            },
-            agentUpdates: ThrowingUpdates());
-        var pendingToolCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
-        AgePendingToolCalls(runner, TimeSpan.FromMinutes(2));
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
-
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => pendingToolCall);
-        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Test]
     public async Task ResolveToolCallCardId_MatchesTheStreamingLoopSemantics_ForAllCallIdShapes()
     {
         await Task.CompletedTask;
@@ -2833,72 +1855,13 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenStreamStallsBeyondIdleTimeout_MapsTimeoutFailure()
-    {
-        var sender = new MockHubMessageSender();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        // Retry disabled so the single stalled attempt trips the 1s inter-chunk idle watchdog promptly (with retry on,
-        // the same stall would be retried before finally surfacing as a timeout).
-        var resilience = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
-            {
-                RetryEnabled = false,
-                CircuitBreakerEnabled = false
-            }),
-            TimeProvider.System,
-            NullLogger<ProviderStreamResilience>.Instance);
-        var runner = CreateRunner(sender,
-            CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)),
-            providerStreamResilience: resilience);
-        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 300, toolCallSeconds: 30, streamIdleSeconds: 1).Build();
-
-        await RunAsync(runner, package).WaitAsync(TimeSpan.FromSeconds(15));
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
-    }
-
-    [Test]
-    public async Task ExecuteApiToolCallAsync_DuringActiveInvocation_UsesPackageToolCallTimeoutOverNodeAge()
-    {
-        var sender = new MockHubMessageSender();
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        // Node-global pending age is 5 minutes; only the package's 1s ToolCallTimeoutSeconds keeps the result wait short.
-        var runner = CreateRunner(sender,
-            workerOptions: new WorkerNodeOptions
-            {
-                NodeName = "worker",
-                MaxResponseSizeMb = 10,
-                MaxPendingToolCallAgeMinutes = 5
-            },
-            agentUpdates: BlockingUpdates(gate.Task, started));
-        var invocationId = Guid.NewGuid();
-        var package = RuntimePackageBuilder.Valid()
-                                           .WithInvocationId(invocationId)
-                                           .WithTimeout(invocationSeconds: 300, toolCallSeconds: 1, streamIdleSeconds: 60)
-                                           .Build();
-
-        var runTask = RunAsync(runner, package);
-        await started.Task;
-
-        // If the result wait honoured the 5-minute node age instead of the 1s package timeout, this would not fault
-        // within 15s and the WaitAsync would surface a TimeoutException (failing the expected WorkerToolCallException).
-        var toolCall = Bridge(runner).ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
-        var exception = await AssertEx.ThrowsAsync<WorkerToolCallException>(() => toolCall.WaitAsync(TimeSpan.FromSeconds(15)));
-        AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
-
-        gate.TrySetResult();
-        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
-    }
-
-    [Test]
     public async Task RunAsync_WhenHistoryStillExceedsBudgetAfterTruncation_FailsCleanlyBeforeAnyProviderCall()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         // A capacity this tiny cannot be satisfied by ANY history (even a single protected turn), so the budgeter's
         // two-pass truncation cannot bring the estimate under budget: ExceedsBudget stays true and the runner must
         // hard-stop BEFORE ever touching the agent factory (no agentUpdates are ever consumed).
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             contextBudgetOptions: new ConversationContextBudgetOptions
             {
@@ -2920,15 +1883,14 @@ public sealed class InvocationRunnerTests
         // The boundary Pass 4 is measured against. On the approval resume the runner re-budgets the FOLDED segment, whose
         // assistant message carries the model's reasoning. Every message of that history is inside the protected recent
         // window, so Passes 1-3 have nothing to reclaim: with the pass off the turn dies before the resumed provider call.
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
             segment++;
             return segment == 1 ? ReasoningHeavyApprovalRequestUpdates(reasoningChars: 100_000) : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             factory,
             eventDispatcher: dispatcher,
             contextBudgetOptions: new ConversationContextBudgetOptions
@@ -2937,11 +1899,11 @@ public sealed class InvocationRunnerTests
                 ReservedOutputTokenFloor = 0,
                 StripProtectedReasoning = false
             });
-        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 1, segment, "the resume segment must never start once the round is rejected as over budget");
@@ -2955,15 +1917,14 @@ public sealed class InvocationRunnerTests
     {
         // Same turn, same numbers, Pass 4 at its shipped default: the superseded reasoning is reclaimed, the resume runs,
         // and the user is told what happened in a notice that names the reasoning strip rather than a plain history trim.
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
             segment++;
             return segment == 1 ? ReasoningHeavyApprovalRequestUpdates(reasoningChars: 100_000) : CreateUpdates("done");
         });
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             factory,
             eventDispatcher: dispatcher,
             contextBudgetOptions: new ConversationContextBudgetOptions
@@ -2973,11 +1934,11 @@ public sealed class InvocationRunnerTests
                 DefaultContextTokens = 4096,
                 ReservedOutputTokenFloor = 0
             });
-        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the approved resume must run instead of the turn failing");
@@ -2998,9 +1959,8 @@ public sealed class InvocationRunnerTests
         // running a 64k window was budgeted at the 8k default and long conversations failed before any provider call.
         // A default of 1 token cannot admit even a single protected turn, so this run can only survive if the effective
         // window replaced it.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 65536),
             contextBudgetOptions: new ConversationContextBudgetOptions
@@ -3022,9 +1982,8 @@ public sealed class InvocationRunnerTests
     {
         // The down-tier direction the original Math.Min was right about: a model launched below the configured default
         // must be budgeted at the smaller REAL window, so an over-large default cannot push an over-budget send.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 1),
             contextBudgetOptions: new ConversationContextBudgetOptions
@@ -3045,9 +2004,8 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenPerSendNumCtxIsSmallerThanTheLaunchedWindow_HonoursTheOverride()
     {
         // The explicit per-send bound is the user's ask: a roomy launched window must not silently widen it back.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 65536),
             contextBudgetOptions: new ConversationContextBudgetOptions
@@ -3072,11 +2030,10 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenGenerationAdmissionRejectsUnknownEffectiveContext_DoesNotCallProviderGeneration()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: null));
@@ -3107,11 +2064,10 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenGenerationAdmissionRejectsUndersizedEffectiveContext_DoesNotCallProviderGeneration()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 4096));
@@ -3137,11 +2093,10 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenGenerationAdmissionAllowsEffectiveContext_CallsProviderGenerationOnce()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 16384));
@@ -3172,12 +2127,11 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenWarmFailsBeforeGenerationAdmission_PreservesProviderFailureAndDoesNotGenerate()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
         var policy = new MinimumEffectiveContextAdmissionPolicy(requiredContextTokens: 8192);
         var warmFailure = new HttpRequestException("provider leaked /private/model/path", inner: null, HttpStatusCode.InternalServerError);
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: null, warmFailure));
@@ -3202,10 +2156,9 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenGenerationAdmissionReturnsHostileReason_SurfacesOnlyFixedPolicyMessage()
     {
         const string hostileReason = "../../private/model.gguf\r\nsecret-token";
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var generationCalls = 0;
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             CreateGenerationSpyFactory(() => generationCalls++),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 16384));
@@ -3283,7 +2236,6 @@ public sealed class InvocationRunnerTests
         // defaults it to the local llama.cpp provider. The warm path then tried to cold-load llama-server and failed with
         // "model not installed" for what is actually a cloud send. The warm must honour the same cloud-vs-local routing
         // decision the send makes, so a cloud-selected model warms nothing local.
-        var sender = new MockHubMessageSender();
 
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
@@ -3294,7 +2246,7 @@ public sealed class InvocationRunnerTests
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(true);
 
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             providerResolver: resolver,
             activeCloudFactory: cloudFactory,
             agentUpdates: CreateUpdates("ok"));
@@ -3310,14 +2262,13 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenRequestedModelCannotBeVerified_SurfacesAModelSubstitutedNotice()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         // Force the fallback branch: the requested model never verifies against Ollama, so ResolveModelAsync falls
         // back to the node's default model (Ollama:ChatModel = "qwen3.5:0.8b", wired in CreateRunner) and reports the
         // substitution.
         capabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(false));
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, capabilityReporter: capabilityReporter, agentUpdates: CreateUpdates("ok"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, capabilityReporter: capabilityReporter, agentUpdates: CreateUpdates("ok"));
         var package = RuntimePackageBuilder.Valid().WithModel("some-unverifiable-model").Build();
 
         await RunAsync(runner, package);
@@ -3348,10 +2299,9 @@ public sealed class InvocationRunnerTests
     [Arguments("xhigh")]
     public async Task Dispatch_WhenEffortIsNotAuto_DispatcherIsNeverResolvedOrInvoked(string? reasoningEffort)
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("The dispatcher must never be resolved on a non-auto turn."));
@@ -3374,30 +2324,14 @@ public sealed class InvocationRunnerTests
     ///     cannot pass by simply never wiring the dispatcher at all.
     /// </summary>
     [Test]
-    public async Task Dispatch_WhenEffortIsAuto_ResolvesTheDispatcherFromTheTurnScope()
-    {
-        var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender,
-            agentUpdates: CreateUpdates("ok"),
-            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("resolved-on-auto"));
-        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
-
-        // The resolution failure surfaces as the turn's failure, which is what proves the resolve happened.
-        await RunAsync(runner, package);
-
-        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "an auto turn must reach the dispatcher registration");
-    }
-
-    [Test]
     public async Task Dispatch_WhenTierIsNormalAndNoSwap_EmitsNoNotice()
     {
         // The common case. A notice on every ordinary turn would be noise, so NORMAL with the model unchanged is
         // silent — the effort still changes, it is just not worth interrupting the reader for.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Normal, "qwen3.5:0.8b", "medium", ReasoningDispatchReasons.Balanced));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             reasoningEffortDispatcherFactory: _ => stub);
@@ -3413,11 +2347,10 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task Dispatch_WhenModelSwapped_EmitsEffortDispatchedNotice()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             reasoningEffortDispatcherFactory: _ => stub);
@@ -3443,10 +2376,9 @@ public sealed class InvocationRunnerTests
         // run envelope's provider attribution are read from it. A swapped turn that leaves it alone is recorded, and
         // measured, against a model that never saw the turn — the fast model's tokens and latency land on the big
         // model's row.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
+        var runner = CreateRunner(agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
 
         await RunAsync(runner, package);
@@ -3462,10 +2394,9 @@ public sealed class InvocationRunnerTests
         // Both silent shapes: an `auto` turn the dispatcher chose not to swap, and an ordinary turn that never reaches
         // the dispatcher at all. The seeded model is already correct on each, and a redundant report would rewrite the
         // state on every turn for nothing.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.FastModelUnset));
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
+        var runner = CreateRunner(agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort(reasoningEffort).Build();
 
         await RunAsync(runner, package);
@@ -3478,11 +2409,10 @@ public sealed class InvocationRunnerTests
     {
         // The other half of the rule: the fast model did not serve this turn, the original one did, and the seeded
         // state already names it. Reporting the fast model here would put a model that produced nothing on the row.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
@@ -3501,11 +2431,10 @@ public sealed class InvocationRunnerTests
         // with two contradictory rows. When the send streams and THEN fails there is no fallback to announce — and the
         // turn used to end with no effort notice at all, which is the one outcome the ruling forbids. The notice names
         // the model that actually served; the failure itself is reported as on any other turn.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
@@ -3514,7 +2443,6 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
 
         AssertEx.Equal(expected: 1, observed.Count, "a turn that has already streamed must not be re-run");
-        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "the turn still fails");
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.Kind == TurnNoticeKind.EffortDispatched
             && payload.Detail == ReasoningDispatchReasons.ShortTurn
@@ -3528,10 +2456,9 @@ public sealed class InvocationRunnerTests
         // Declaration order is load-bearing: `using` disposes in REVERSE order, so the scope is declared first and
         // released LAST — after the ledger reservation produced by the CapacityService that lives inside it. Reversing
         // the two would tear down the scoped services while a live reservation still referred to them.
-        var sender = new MockHubMessageSender();
         using var reservation = new SpyReservation();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, reservation: reservation));
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), reasoningEffortDispatcherFactory: _ => stub);
+        var runner = CreateRunner(agentUpdates: CreateUpdates("ok"), reasoningEffortDispatcherFactory: _ => stub);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
 
@@ -3547,11 +2474,10 @@ public sealed class InvocationRunnerTests
         // The fast model went away between the capacity probe and the send. Nothing reached the client, so the turn
         // re-runs once on the model it was authorised for — and COMPLETES. A failed turn here would break the
         // dispatcher's "never fails a turn" contract.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
@@ -3564,7 +2490,6 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal("qwen3-1.7b", observed[0].ModelId);
         AssertEx.Equal("qwen3.5:0.8b", observed[1].ModelId, "the re-run uses the model the turn was authorised for");
         AssertEx.Equal("low", observed[1].ReasoningEffort, "the re-run keeps the tier the dispatcher chose and gives up only the model");
-        AssertEx.Empty(sender.SentEncryptedFailures);
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.Kind == TurnNoticeKind.EffortDispatched && payload.Detail == ReasoningDispatchReasons.FastModelUnavailable));
         // ONE notice for the turn. A swapped turn stays silent until the send has resolved precisely so a fallback
@@ -3595,7 +2520,6 @@ public sealed class InvocationRunnerTests
         // Two local warms in one turn: the dispatched fast model is warmed, its send fails before first output, and the
         // original model is warmed again for the re-run. The whole-turn clock contains BOTH, so assigning the second
         // warm's duration charged the turn only half the cold start it actually paid — the readiness total has to sum.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
@@ -3612,7 +2536,7 @@ public sealed class InvocationRunnerTests
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
             providerResolver: resolver,
@@ -3635,10 +2559,9 @@ public sealed class InvocationRunnerTests
     {
         // Once a token has reached the client there is nothing to re-run into: the turn fails exactly as any other
         // mid-stream failure does.
-        var sender = new MockHubMessageSender();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -3646,7 +2569,6 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
 
         AssertEx.Equal(expected: 1, observed.Count, "a turn that has already streamed must not be re-run");
-        AssertEx.True(sender.SentEncryptedFailures.Count > 0);
     }
 
     [Test]
@@ -3655,7 +2577,6 @@ public sealed class InvocationRunnerTests
         // The fast reservation books the small model's bytes and one of the loaded-process slots. Carrying it into the
         // re-run double-books the ledger against a model that is no longer being loaded, and can starve the original
         // model's own spawn on a node at the process cap — the exact failure the re-run exists to avoid.
-        var sender = new MockHubMessageSender();
         using var reservation = new SpyReservation();
         var observed = new List<InvocationAgentDefinition>();
         long? secondRunStartedAt = null;
@@ -3673,7 +2594,7 @@ public sealed class InvocationRunnerTests
                       return factory.CreateAsync(callInfo.Arg<InvocationAgentDefinition>(), callInfo.Arg<CancellationToken>());
                   });
 
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: spyFactory,
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -3695,12 +2616,11 @@ public sealed class InvocationRunnerTests
         // re-runs the ORIGINAL model inside the pin scope opened before the swap — so unless that scope also carries
         // the ORIGINAL model's pin, the fallback falls through to the transport's weaker unpinned rule and honours a
         // Local->Cloud escalation the pin exists to refuse.
-        var sender = new MockHubMessageSender();
         var recorder = new OpenAiWireRecorder();
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b",
                 registry,
                 recorder,
@@ -3715,7 +2635,6 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Equal(expected: 2, observed.Count, "the fallback must have been attempted");
         AssertEx.Empty(recorder.Requests, "the prompt must never reach the changed endpoint");
-        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "a refused fallback fails the turn rather than sending");
     }
 
     [Test]
@@ -3723,12 +2642,11 @@ public sealed class InvocationRunnerTests
     {
         // The other half of the pin: an untouched binding must not be turned into a refusal by pinning the original
         // model as well. The fallback sends, on the endpoint the turn was authorised for, and the turn completes.
-        var sender = new MockHubMessageSender();
         var recorder = new OpenAiWireRecorder();
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, observed),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub,
@@ -3738,7 +2656,6 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Equal(expected: 1, recorder.Requests.Count, "the fallback must reach the pinned endpoint");
         AssertEx.Equal("http://127.0.0.1:18099/v1/chat/completions", recorder.LastRequest.Uri?.AbsoluteUri);
-        AssertEx.Empty(sender.SentEncryptedFailures);
     }
 
     [Test]
@@ -3767,7 +2684,6 @@ public sealed class InvocationRunnerTests
     /// </summary>
     private static async Task<IReadOnlyList<ExternalProviderBindingPin>> RunNoSwapTurnAndCapturePinsAsync(string effort)
     {
-        var sender = new MockHubMessageSender();
         var recorder = new OpenAiWireRecorder();
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         var pinsAtSend = new List<IReadOnlyList<ExternalProviderBindingPin>>();
@@ -3775,7 +2691,7 @@ public sealed class InvocationRunnerTests
             ExternalProviderTestData.ModelId,
             "medium",
             ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, [], pinsAtSend: pinsAtSend),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub,
@@ -3783,7 +2699,6 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort(effort).Build());
 
-        AssertEx.Empty(sender.SentEncryptedFailures);
         AssertEx.Equal(expected: 1, pinsAtSend.Count, "the turn must have sent exactly once");
         return pinsAtSend[0];
     }
@@ -3791,9 +2706,8 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenAToolReturnsTheDisabledMarker_SurfacesAToolDisabledNoticeOncePerTool()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolDisabledUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolDisabledUpdates());
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
 
         await RunAsync(runner, package);
@@ -3812,7 +2726,7 @@ public sealed class InvocationRunnerTests
         // operand of the &&), so a read-count assertion would be wrong; the CORE SET is what the runner touches only
         // when the decision came out active, which makes it the honest negative observable.
         var coreSet = Substitute.For<IToolRelevanceCoreSet>();
-        var runner = CreateRunner(new MockHubMessageSender(), toolRelevanceCoreSet: coreSet);
+        var runner = CreateRunner(toolRelevanceCoreSet: coreSet);
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -3825,7 +2739,7 @@ public sealed class InvocationRunnerTests
         // The behaviour change this plan exists for: the decision now comes from the node setting, read per turn.
         var coreSet = Substitute.For<IToolRelevanceCoreSet>();
         coreSet.GetCoreToolNames().Returns(new HashSet<string>(StringComparer.Ordinal));
-        var runner = CreateRunner(new MockHubMessageSender(),
+        var runner = CreateRunner(
             toolRelevanceRead: static _ => Task.FromResult(true),
             toolRelevanceCoreSet: coreSet);
 
@@ -3840,7 +2754,7 @@ public sealed class InvocationRunnerTests
         // Guards the operand ORDER of `enabled && !package.DisableToolRelevanceFilter` against a later edit: the
         // per-agent opt-out must still win over the global switch.
         var coreSet = Substitute.For<IToolRelevanceCoreSet>();
-        var runner = CreateRunner(new MockHubMessageSender(),
+        var runner = CreateRunner(
             toolRelevanceRead: static _ => Task.FromResult(true),
             toolRelevanceCoreSet: coreSet);
 
@@ -3853,33 +2767,6 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenCancelledWhileReadingTheRelevanceSetting_EndsTheTurnCancelled()
-    {
-        // The read takes the INVOCATION token, not the caller's: an operator Cancel (or the whole-turn watchdog) trips
-        // that one. Reading on the caller token would leave a stalled settings read uncancellable, which is the failure
-        // this pins. Gates only, no sleeps.
-        var sender = new MockHubMessageSender();
-        var gateReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var package = RuntimePackageBuilder.Valid().Build();
-        var runner = CreateRunner(sender,
-            toolRelevanceRead: async cancellationToken =>
-            {
-                gateReached.TrySetResult();
-                return await hold.Task.WaitAsync(cancellationToken);
-            });
-
-        var runTask = RunAsync(runner, package);
-        // Bounded: if the runner ever stops reading the setting, this must fail fast rather than park the whole run.
-        await gateReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        runner.Cancel(package.InvocationId);
-        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
-
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
-            failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
-    }
-
-    [Test]
     public async Task RunAsync_WhenTheStoredValueChangesBetweenTurns_ThePreviouslyBuiltRunnerPicksItUp()
     {
         // ONE runner, two turns. Two separately constructed runners would pass even if the value were captured at
@@ -3887,7 +2774,7 @@ public sealed class InvocationRunnerTests
         var enabled = false;
         var coreSet = Substitute.For<IToolRelevanceCoreSet>();
         coreSet.GetCoreToolNames().Returns(new HashSet<string>(StringComparer.Ordinal));
-        var runner = CreateRunner(new MockHubMessageSender(),
+        var runner = CreateRunner(
             // ReSharper disable once AccessToModifiedClosure - reading the CURRENT value per turn is the point.
             toolRelevanceRead: _ => Task.FromResult(enabled),
             toolRelevanceCoreSet: coreSet);
@@ -3907,12 +2794,14 @@ public sealed class InvocationRunnerTests
         // The drain the hop cannot do itself: it leaves the pair on the ambient scope several awaited frames below the
         // runner, and the runner turns it into the one counts-only sentence at the end of the FIRST segment — after
         // the assistant text, exactly as HistoryTruncated does.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var chunksSentWhenTheNoticeFired = -1;
+        var chunksReportedWhenTheNoticeFired = -1;
+        var reportedChunks = 0;
+        dispatcher.When(static call => call.ReportInvocationStreamChunkAsync(Arg.Any<Guid>(), Arg.Any<string>()))
+                  .Do(_ => reportedChunks++);
         dispatcher.When(static call => call.ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered)))
-                  .Do(_ => chunksSentWhenTheNoticeFired = sender.SentEncryptedChunks.Count(static chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind));
-        var runner = CreateRunner(sender,
+                  .Do(_ => chunksReportedWhenTheNoticeFired = reportedChunks);
+        var runner = CreateRunner(
             eventDispatcher: dispatcher,
             agentUpdates: ToolsFilteredUpdates(hidden: 5, total: 12, "Hello"),
             toolRelevanceRead: static _ => Task.FromResult(true));
@@ -3926,7 +2815,7 @@ public sealed class InvocationRunnerTests
             payload.InvocationId == package.InvocationId
             && payload.Kind == TurnNoticeKind.ToolsFiltered
             && payload.Message == "5 of 12 tools were held back from this turn to save context; the assistant can list and use them by calling list_tools."));
-        AssertEx.True(chunksSentWhenTheNoticeFired >= 1, "The notice must follow the first assistant text, never precede it.");
+        AssertEx.True(chunksReportedWhenTheNoticeFired >= 1, "The notice must follow the first assistant text, never precede it.");
     }
 
     [Test]
@@ -3935,11 +2824,11 @@ public sealed class InvocationRunnerTests
         // Both silent shapes: the shipped default (the filter never engages) and an ACTIVE filter whose decision hid
         // nothing — "0 of N tools were held back" is a sentence no user should ever see.
         var shippedDefaultDispatcher = Substitute.For<IWorkerEventDispatcher>();
-        await RunAsync(CreateRunner(new MockHubMessageSender(), eventDispatcher: shippedDefaultDispatcher, agentUpdates: CreateUpdates("Hello")),
+        await RunAsync(CreateRunner(eventDispatcher: shippedDefaultDispatcher, agentUpdates: CreateUpdates("Hello")),
             RuntimePackageBuilder.Valid().Build());
 
         var nothingHiddenDispatcher = Substitute.For<IWorkerEventDispatcher>();
-        await RunAsync(CreateRunner(new MockHubMessageSender(),
+        await RunAsync(CreateRunner(
                 eventDispatcher: nothingHiddenDispatcher,
                 agentUpdates: ToolsFilteredUpdates(hidden: 0, total: 12, "Hello"),
                 toolRelevanceRead: static _ => Task.FromResult(true)),
@@ -3960,8 +2849,7 @@ public sealed class InvocationRunnerTests
     {
         // The drain is inside `if (isFirstSegment …)`, so an approval resume that rebinds the tool array and computes a
         // second decision must NOT post a second "tools were held back" line under output the user has already read.
-        var sender = new MockHubMessageSender();
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
         var segment = 0;
         var factory = CreateFactory(_ =>
         {
@@ -3970,15 +2858,15 @@ public sealed class InvocationRunnerTests
                 ? ToolsFilteredApprovalRequestUpdates(hidden: 5, total: 12)
                 : ToolsFilteredUpdates(hidden: 3, total: 9, "done");
         });
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             factory,
             eventDispatcher: dispatcher,
             toolRelevanceRead: static _ => Task.FromResult(true));
-        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var runTask = RunAsync(runner, package);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "The resume segment must actually run, or this proves nothing.");
@@ -3992,7 +2880,6 @@ public sealed class InvocationRunnerTests
     {
         // The columns are populated on the SHIPPED default (tool relevance off): the budget counts the schema either
         // way, and that is what makes the before/after measurable at all. Cumulative across rounds, maximum per round.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var order = new List<string>();
         dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
@@ -4005,7 +2892,7 @@ public sealed class InvocationRunnerTests
                       Arg.Any<string?>(),
                       Arg.Any<InvocationThroughput?>()))
                   .Do(_ => order.Add("completed"));
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedUpdates(640, 300));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedUpdates(640, 300));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4020,13 +2907,12 @@ public sealed class InvocationRunnerTests
     {
         // The easiest path to lose, and the most interesting one to keep: a turn that was stopped is exactly where an
         // operator asks what the tool schema was costing.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var order = new List<string>();
         dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
         dispatcher.When(static call => call.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())).Do(_ => order.Add("terminal"));
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, CreateFactory(cancellationToken => ToolSchemaBudgetedThenParkedUpdates(640, started, cancellationToken)), eventDispatcher: dispatcher);
+        var runner = CreateRunner(CreateFactory(cancellationToken => ToolSchemaBudgetedThenParkedUpdates(640, started, cancellationToken)), eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
 
         var runTask = RunAsync(runner, package);
@@ -4041,12 +2927,11 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenTheTurnFails_StillReportsTheToolSchemaTokenEstimate()
     {
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var order = new List<string>();
         dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
         dispatcher.When(static call => call.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())).Do(_ => order.Add("terminal"));
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedThenThrowingUpdates(640));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedThenThrowingUpdates(640));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4060,11 +2945,10 @@ public sealed class InvocationRunnerTests
     {
         // Telemetry never decides an outcome. The report runs immediately before the terminal report, so an unguarded
         // throw on the completed path would fall into the catch below it and turn a finished turn into a failed one.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())
                   .Returns<Task>(static _ => throw new InvalidOperationException("the estimate seam broke"));
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello"));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4086,9 +2970,8 @@ public sealed class InvocationRunnerTests
         // A re-emitted FunctionCallContent used to pay a fresh JsonSerializer.Serialize + dispatch + SignalR frame every
         // time. Downstream absorbed the duplicates (the frontend reducer keys tool cards on the call id), but each repeat
         // also displaced a real event from InvocationResumeRegistry's capped tool history.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: RepeatedToolCallUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: RepeatedToolCallUpdates());
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
 
         await RunAsync(runner, package);
@@ -4118,9 +3001,8 @@ public sealed class InvocationRunnerTests
     {
         // The guard must never swallow a payload change: the second event is genuinely different on the wire, and the
         // frontend reducer takes the newest arguments for a card.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ChangedArgumentsToolCallUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ChangedArgumentsToolCallUpdates());
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
 
         await RunAsync(runner, package);
@@ -4138,11 +3020,10 @@ public sealed class InvocationRunnerTests
         // consumer that correlates a call with its result drops a blank id (NodeChatPartAccumulator refuses one
         // outright), so an id-less call was recorded nowhere and a caller-managed continuation never replayed it. Two
         // such calls to one tool also collapsed onto a single card.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var lifecycle = new List<ToolCallLifecyclePayload>();
         dispatcher.ReportToolCallLifecycleAsync(Arg.Do<ToolCallLifecyclePayload>(lifecycle.Add)).Returns(Task.CompletedTask);
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CallIdLessToolCallUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CallIdLessToolCallUpdates());
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
 
         await RunAsync(runner, package);
@@ -4172,11 +3053,10 @@ public sealed class InvocationRunnerTests
         // The sequential shape, with IDENTICAL arguments — the one that reads exactly like a streamed re-emission.
         // Reusing the finished call's key swallowed the second call outright here, and merged the first call's
         // arguments with the last result when the arguments differed. A surrogate is retired by its result.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var lifecycle = new List<ToolCallLifecyclePayload>();
         dispatcher.ReportToolCallLifecycleAsync(Arg.Do<ToolCallLifecyclePayload>(lifecycle.Add)).Returns(Task.CompletedTask);
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: SequentialCallIdLessToolCallUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: SequentialCallIdLessToolCallUpdates());
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
 
         await RunAsync(runner, package);
@@ -4200,9 +3080,8 @@ public sealed class InvocationRunnerTests
     {
         // The benchmark ranking reads this off the terminal snapshot to tell a truncated answer from a complete one, so
         // an intermediate tool-call segment must not be what the turn is recorded as having stopped for: last wins.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(ChatFinishReason.ToolCalls, ChatFinishReason.Length));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(ChatFinishReason.ToolCalls, ChatFinishReason.Length));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4222,9 +3101,8 @@ public sealed class InvocationRunnerTests
     {
         // Fail open, never infer: a provider that reports nothing leaves the field null rather than being labelled
         // "stop", which would make an unmeasured turn indistinguishable from a measured complete one.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(first: null, last: null));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(first: null, last: null));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4245,9 +3123,8 @@ public sealed class InvocationRunnerTests
         // The benchmark reads this off the terminal snapshot. Before it existed, one blended tokens/second conflated
         // prefill with decode, so the same model measured on a long prompt and a short one produced two numbers that
         // could not be compared. pp and tg must arrive apart, with TTFT alongside them.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: TimingsUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: TimingsUpdates());
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4277,9 +3154,8 @@ public sealed class InvocationRunnerTests
         // A real run reported prompt 283 + cached 2346 + generated 1720 against a usage total of 4349 — those three
         // summed to the total precisely because a second request had happened and the first had been thrown away.
         // Every reading must fold in, and the request count must be visible so the sums can be read honestly.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: TwoRequestTimingsUpdates());
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: TwoRequestTimingsUpdates());
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4306,9 +3182,8 @@ public sealed class InvocationRunnerTests
         // Fail open: a provider that times nothing leaves the pp/tg split absent rather than having a zero-valued
         // measurement invented for it. Time to first token still arrives — it is measured by our own stopwatch, not by
         // the runtime — so the caller-visible latency is reported for every provider, cloud ones included.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(ChatFinishReason.Stop, ChatFinishReason.Stop));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: FinishReasonUpdates(ChatFinishReason.Stop, ChatFinishReason.Stop));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -4580,8 +3455,724 @@ public sealed class InvocationRunnerTests
         yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
     }
 
-    private static InvocationRunner CreateRunner(MockHubMessageSender sender,
-        IInvocationAgentFactory? invocationAgentFactory = null,
+    [Test]
+    [Arguments("registry.ollama.ai/library/gemma:12b does not support thinking", "This model does not support reasoning.")]
+    [Arguments("this model does not support tools", "This model does not support tool calling.")]
+    public async Task RunAsync_WhenModelRejectsCapability_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage, string expectedError)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, inner: null, HttpStatusCode.BadRequest)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == expectedError), FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderReturnsNotFound_MapsModelUnavailableFailureCategory()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("not found", inner: null, HttpStatusCode.NotFound)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Selected model is not installed on this node."), FailureCategory.ModelUnavailable);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderUnreachable_MapsFailureCategory()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("offline")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.ProviderUnreachable);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolBridgeFails_MapsAgentToolCallCategory()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("approve-job", "approval timeout")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("approve-job").Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.AgentToolCall);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolCallFailsWithoutATimeout_KeepsTheGenericToolFailureMessage()
+    {
+        // The guard on the arm above: an ordinary tool error must NOT be relabelled a timeout.
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("read_file", "boom")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Worker tool execution failed."), FailureCategory.AgentToolCall);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolGrammarFailsToCompileWith500_WinsOverModelLoadFailedArm()
+    {
+        // The grammar arm is ordered ahead of ReportsModelLoadFailure, which matches on the status code alone: a 500
+        // carrying the grammar signature must still classify as the (actionable) tool-preparation failure.
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("Failed to initialize samplers: failed to parse grammar", inner: null,
+                   HttpStatusCode.InternalServerError)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
+    [Arguments("HTTP 400 (invalid_request_error: ) Failed to initialize samplers: failed to parse grammar")]
+    [Arguments("Failed to initialize samplers")]
+    [Arguments("failed to parse grammar")]
+    public async Task RunAsync_WhenToolGrammarFailsToCompile_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage)
+    {
+        // llama-server reports the sampler/grammar compile failure as an HTTP 400, so it must be classified here and not
+        // swallowed by the generic HttpRequestException arm (ProviderUnreachable) or surfaced raw as Unexpected. The
+        // model IS tool-capable, so the message must not claim otherwise.
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, inner: null, HttpStatusCode.BadRequest)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model."), FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolGrammarFailureIsWrapped_MapsModelCapabilityUnsupportedFailureCategory()
+    {
+        // The agent framework wraps the transport exception, so the signature is only visible on an inner exception.
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("The chat client failed.",
+                   new HttpRequestException("Failed to initialize samplers: failed to parse grammar", inner: null, HttpStatusCode.BadRequest))));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be prepared for tool calling with the current tool set. Retry with tools turned off, or select a different model."), FailureCategory.ModelCapabilityUnsupported);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenToolResultTimesOut_KeepsTheToolTimeoutDistinctFromAGenericToolFailure()
+    {
+        // ToolResultTimeout used to collapse into the same "Worker tool execution failed." every tool error uses, so a
+        // turn killed by the tool-result bound was indistinguishable from a tool that simply errored.
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new WorkerToolCallException("read_file", "Tool call timed out waiting for a result.", new TimeoutException("timed out"))));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "A tool call timed out waiting for its result."), FailureCategory.AgentToolCall);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenUnexpected_MapsFailureCategory()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("boom")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Unexpected);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenUnrelatedBadRequest_StillMapsProviderUnreachable()
+    {
+        // The new grammar arm must not widen: an unrelated HTTP 400 keeps its previous classification.
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("invalid request payload", inner: null, HttpStatusCode.BadRequest)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.ProviderUnreachable);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAgentRuntimeMessageContainsFrameworkType_RedactsFrameworkNames()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new NotSupportedException("Microsoft.Agents.AI.ChatClientAgentException: provider blew up")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => !message.Contains("ChatClientAgentException", StringComparison.Ordinal)), FailureCategory.AgentRuntime);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenGenericTimeout_MapsSanitizedTimeoutMessageWithoutLeakingDetail()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        // A bare TimeoutException whose framework message names a host/path must NOT be forwarded verbatim.
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new TimeoutException("timed out reaching http://10.0.0.5:11434/api/chat")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The operation timed out."), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenModelLoadFailsWith500_DoesNotLeakBlobPath()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
+                   HttpStatusCode.InternalServerError)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => !message.Contains("blobs", StringComparison.Ordinal)), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenModelLoadFailsWith500_MapsModelLoadFailedFailureCategory()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        // The blob path in the message must never reach the surfaced error; the status code alone drives the mapping.
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
+                   HttpStatusCode.InternalServerError)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be loaded or run on the provider."), FailureCategory.ModelLoadFailed);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenOrchestrationFails_SendsInvocationFailedWithoutLeakingRawDetail()
+    {
+        // The raw MAF executor detail must NOT reach the client (logged server-side only); the client sees a constant.
+        var orchestrationFactory = CreateOrchestrationFactory(OrchestrationFailure("workflow boom /secret/internal/path"), out _);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(orchestrationAgentFactory: orchestrationFactory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build();
+
+        await RunPlainAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationCompletedAsync(Arg.Any<Guid>());
+        await dispatcher.Received(1)
+                        .ReportInvocationFailedAsync(package.InvocationId,
+                            Arg.Is<string>(message => !message.Contains("secret", StringComparison.Ordinal)
+                                                      && message.Contains("Orchestration run failed", StringComparison.Ordinal)),
+                            Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_ExceedsMaxResponseSize_SendsInvocationFailed()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 1,
+            MaxPendingToolCallAgeMinutes = 5
+        }, agentUpdates: CreateUpdates(new string(c: 'x', (1024 * 1024) + 1)), eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message.Contains("Response size exceeded", StringComparison.Ordinal)), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task RunAsync_ExceedsMaxReasoningSize_SendsInvocationFailed()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 1,
+            MaxPendingToolCallAgeMinutes = 5
+        }, agentUpdates: CreateMixedUpdates((Text: null, Thinking: new string(c: 'x', (1024 * 1024) + 1))), eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message.Contains("Reasoning size exceeded", StringComparison.Ordinal)), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
+    public async Task Cancel_WhileRunning_TerminatesStream()
+    {
+        // The stream-termination half: a stop while the provider is parked mid-stream must end the run rather than
+        // leave it blocked on the gate, and must classify Cancelled. The sibling below pins the breadcrumb message.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var package = RuntimePackageBuilder.Valid().Build();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(agentUpdates: BlockingUpdates(gate.Task, started), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+        runner.Cancel(package.InvocationId);
+        gate.TrySetResult();
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
+    }
+
+    [Test]
+    public async Task Cancel_WhileRunning_ReportsTheUserStopAsTheReason()
+    {
+        // The same breadcrumb from the other side: an operator stop must never read like a timeout. This is the pair
+        // that made the "Cancelled at ~550s" report unattributable — user stop, detached-grace reaper and the node
+        // watchdog all persisted the identical sentence.
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        runner.Cancel(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Stopped by user."), FailureCategory.Cancelled);
+    }
+
+    [Test]
+    public async Task CancelDetached_WhileRunning_ReportsTheDisconnectGraceAsTheReason()
+    {
+        // The detached-run reaper is the third cancellation cause, and the one an operator is least able to guess at:
+        // it must name itself rather than share the user-stop sentence.
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        runner.CancelDetached(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "Stopped: no client was attached to this run and the disconnect grace period expired."), FailureCategory.Cancelled);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCancelledWhileReadingTheRelevanceSetting_EndsTheTurnCancelled()
+    {
+        // The read takes the INVOCATION token, not the caller's: an operator Cancel (or the whole-turn watchdog) trips
+        // that one. Reading on the caller token would leave a stalled settings read uncancellable, which is the failure
+        // this pins. Gates only, no sleeps.
+        var gateReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var package = RuntimePackageBuilder.Valid().Build();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(
+            eventDispatcher: dispatcher,
+            toolRelevanceRead: async cancellationToken =>
+            {
+                gateReached.TrySetResult();
+                return await hold.Task.WaitAsync(cancellationToken);
+            });
+
+        var runTask = RunAsync(runner, package);
+        // Bounded: if the runner ever stops reading the setting, this must fail fast rather than park the whole run.
+        await gateReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        runner.Cancel(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Cancelled);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenModelForceEjectedMidRequest_MapsCancelledWithTruthfulMessage()
+    {
+        // An operator FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as
+        // Cancelled (an operator action, not a generic provider failure) and surface the truthful "ejected" message
+        // rather than a generic "provider unreachable".
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        const string EjectMessage = "The model was ejected by the operator while this request was running.";
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new LlamaServerModelEjectedException(EjectMessage)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == EjectMessage), FailureCategory.Cancelled);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenStreamIdleTimeout_KeepsThePathFreeWatchdogMessage()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        // The stream idle watchdog's own message is already a fixed, path-free constant, so it is surfaced verbatim.
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new StreamIdleTimeoutException("The response stream stalled.")));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The response stream stalled."), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenStreamStallsBeyondIdleTimeout_MapsTimeoutFailure()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Retry disabled so the single stalled attempt trips the 1s inter-chunk idle watchdog promptly (with retry on,
+        // the same stall would be retried before finally surfacing as a timeout).
+        var resilience = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
+            {
+                RetryEnabled = false,
+                CircuitBreakerEnabled = false
+            }),
+            TimeProvider.System,
+            NullLogger<ProviderStreamResilience>.Instance);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: resilience);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 300, toolCallSeconds: 30, streamIdleSeconds: 1).Build();
+
+        await RunAsync(runner, package).WaitAsync(TimeSpan.FromSeconds(15));
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Timeout);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderRoundIrreduciblyExceedsWindow_ClassifiesContextWindowExceeded()
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        // The provider-boundary budgeter rejects a single irreducible over-window round with this typed exception; the
+        // runner must classify it as ContextWindowExceeded and surface its fixed, path-free message verbatim (the bounded
+        // token/window diagnostics it also carries are never surfaced).
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new ProviderContextWindowExceededException(estimatedTokens: 9000, windowTokens: 4096)));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == ProviderContextWindowExceededException.RoundExceedsWindowMessage), FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenStoredHistoryHoldsAnOversizedMessage_StillRunsTheTurn()
+    {
+        // The poisoned-conversation regression: the per-turn re-validation used to hard-fail on ANY over-cap message in
+        // the assembled context, including one already persisted in the conversation. Every later turn then re-validated
+        // the same stored row and failed the same way, so the user could only abandon the conversation. The cap belongs
+        // to the entry seams; oversized history is the budgeter's problem.
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            MaxMessageSizeKb = 1,
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
+        });
+        var validator = new RuntimePackageValidator(new ModelNameValidator(securityOptions), securityOptions);
+
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = new string(c: 'h', count: 2048),
+                    SortOrder = 0
+                },
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = "and what about this?",
+                    SortOrder = 1
+                }
+            ]
+        };
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(validator: validator, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+        await dispatcher.ReceivedWithAnyArgs(1).ReportInvocationCompletedAsync(Arg.Any<Guid>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenADifferentSkillResourceIsRead_TheSessionApprovalNoLongerApplies()
+    {
+        var conversationId = Guid.NewGuid();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment switch
+            {
+                1 => SkillApprovalRequestUpdates(ReadSkillResourceToolName, SkillName, "reference.md"),
+                3 => SkillApprovalRequestUpdates(ReadSkillResourceToolName, SkillName, "secrets.md"),
+                _ => CreateUpdates("done")
+            };
+        });
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "one approval must cover ONE resource, not every resource the skill carries");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenFixedCustomToolApprovedForSession_SuppressesTheNextPrompt()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(CustomToolApprovalFactory(CustomToolName), eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // A SECOND turn in the SAME conversation, same Fixed custom tool at the same version: the memo answers it.
+        await RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
+
+        AssertEx.Equal(expected: 1, approvals.Count, "a session-scoped approval on a Fixed custom tool must not prompt again in the same conversation");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenParameterizedCustomToolApprovedForSession_PromptsAgain()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(CustomToolApprovalFactory(CustomToolName), eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // A Parameterized custom tool is once-or-deny only: a session approval must NOT be remembered, so the next turn
+        // re-prompts even though the operator clicked "approve for session".
+        var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "a Parameterized custom tool must never be session-approvable — one click must not grant open-ended model-chosen execution");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenSkillApprovalIsDeniedForTheSession_PromptsAgain()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: false), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: false));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "a DENY must never be remembered, whatever scope the operator sent");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheCustomToolVersionChanges_TheSessionApprovalNoLongerApplies()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(CustomToolApprovalFactory(CustomToolName), eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 1, isFixed: true).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // The operator edited the custom tool mid-conversation: same name, new version. The memo is bound to the version.
+        var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 2, isFixed: true).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "an edit that bumps the custom tool version must invalidate the memo and re-prompt");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheNodeDisablesSessionScope_TheSkillApprovalIsNotRemembered()
+    {
+        var conversationId = Guid.NewGuid();
+        var alwaysPrompt = NodeToolApprovalPolicy.FromSettings(new NodeToolApprovalPolicySettings
+        {
+            DisableSkillSessionScope = true
+        });
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), approvalPolicy: alwaysPrompt, eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "the operator's always-prompt switch must turn session scope off entirely");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheSkillIsImported_TheSessionApprovalIsNotRemembered()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "third-party skill names are attacker-chosen; a durable approval on one must not be available");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheSkillVersionChanges_TheSessionApprovalNoLongerApplies()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatcher = ApprovalRecordingDispatcher(out var approvals);
+        var runner = CreateRunner(SkillApprovalFactory(LoadSkillToolName, SkillName), eventDispatcher: dispatcher);
+
+        var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        await firstTurn;
+
+        // The operator edited the skill (or an import Replaced it) mid-conversation: same name, new content, new version.
+        var secondTurn = RunAsync(runner, SkillPackage(conversationId, version: 2).Build());
+        await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        await secondTurn;
+
+        AssertEx.Equal(expected: 2, approvals.Count, "a content change must invalidate the memo — the approval is bound to the version the operator saw");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenEffortIsAuto_ResolvesTheDispatcherFromTheTurnScope()
+    {
+        var runner = CreateRunner(
+            agentUpdates: CreateUpdates("ok"),
+            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("resolved-on-auto"));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        // The resolution failure surfaces as the turn's failure, which is what proves the resolve happened.
+        await RunAsync(runner, package);
+
+    }
+
+    // The approval card's opaque request id used to ride the hub send (MockHubMessageSender.SentApprovals); the
+    // dispatcher is the only place it is published now. A plain substitute with an Arg.Do recorder, so a test that
+    // also asserts on the dispatcher with Received()/DidNotReceive() keeps working against the same instance.
+    private static IWorkerEventDispatcher ApprovalRecordingDispatcher(out List<ApprovalRequestPayload> approvals)
+    {
+        var recorded = new List<ApprovalRequestPayload>();
+        approvals = recorded;
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportApprovalRequestedAsync(Arg.Do<ApprovalRequestPayload>(payload =>
+                  {
+                      lock (recorded)
+                      {
+                          recorded.Add(payload);
+                      }
+                  }))
+                  .Returns(Task.CompletedTask);
+
+        return dispatcher;
+    }
+
+    private static InvocationRunner CreateRunner(IInvocationAgentFactory? invocationAgentFactory = null,
         IRuntimePackageValidator? validator = null,
         ICapabilityReporter? capabilityReporter = null,
         WorkerNodeOptions? workerOptions = null,
@@ -4599,7 +4190,8 @@ public sealed class InvocationRunnerTests
         Func<CancellationToken, Task<bool>>? toolRelevanceRead = null,
         IToolRelevanceCoreSet? toolRelevanceCoreSet = null,
         Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null,
-        IExternalProviderRegistry? externalProviderRegistry = null)
+        IExternalProviderRegistry? externalProviderRegistry = null,
+        PendingToolCallRegistry? pendingToolCallRegistry = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -4662,19 +4254,17 @@ public sealed class InvocationRunnerTests
                                                      .Build();
 
         // One registry instance shared by the runner and all three collaborators, exactly as the DI graph wires it: a
-        // second copy would let a call be registered in one dictionary and resolved against another.
-        var pendingToolCallRegistry = new PendingToolCallRegistry();
+        // second copy would let a call be registered in one dictionary and resolved against another. A test that has to
+        // observe the registry directly (the stale sweep) passes its own and holds that same reference.
+        var resolvedPendingToolCallRegistry = pendingToolCallRegistry ?? new PendingToolCallRegistry();
 
-        return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
-            new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
+        return new InvocationRunner(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
             resolvedOrchestrationFactory,
-            new EnvelopeCryptoService(new AesGcmNodeAeadCipher()),
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
             new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System),
-            Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
             new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
             Options.Create(resolvedContextBudgetOptions),
@@ -4685,22 +4275,17 @@ public sealed class InvocationRunnerTests
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
-            pendingToolCallRegistry,
-            new ToolApprovalCoordinator(new Lazy<IHubMessageSender>(() => sender),
-                new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
-                pendingToolCallRegistry,
+            resolvedPendingToolCallRegistry,
+            new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
+                resolvedPendingToolCallRegistry,
                 approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
                 approvalPolicy ?? NodeToolApprovalPolicy.FromSettings(settings: null),
                 userQuestionAnswerStash ?? new UserQuestionAnswerStash(TimeProvider.System),
                 runtimeSettings,
                 NullLogger<ToolApprovalCoordinator>.Instance,
                 TimeProvider.System),
-            new ApiToolCallBridge(new Lazy<IHubMessageSender>(() => sender),
-                new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
-                pendingToolCallRegistry,
-                runtimeSettings,
-                TimeProvider.System),
-            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), pendingToolCallRegistry, runtimeSettings),
+            new ApiToolCallBridge(resolvedPendingToolCallRegistry, TimeProvider.System),
+            new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), resolvedPendingToolCallRegistry, runtimeSettings),
             externalProviderRegistry ?? new FakeExternalProviderRegistry(),
             // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
@@ -4728,17 +4313,15 @@ public sealed class InvocationRunnerTests
         IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null,
         CancellationToken cancellationToken = default)
     {
-        using var context = InvocationExecutionContext.Create(package,
+        var context = InvocationExecutionContext.CreatePlain(package,
             Guid.NewGuid(),
-            epochVersion: 1,
-            new byte[32],
-            generationAdmissionPolicy);
+            generationAdmissionPolicy: generationAdmissionPolicy);
         await runner.RunAsync(context, cancellationToken);
     }
 
     private static async Task RunPlainAsync(InvocationRunner runner, RuntimePackage package, CancellationToken cancellationToken = default)
     {
-        using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+        var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
         await runner.RunAsync(context, cancellationToken);
     }
 
@@ -4759,48 +4342,10 @@ public sealed class InvocationRunnerTests
         return (CancellationTokenSource?)field.GetValue(tracker);
     }
 
-    // The pending-call wait budget is read once at construction by four singletons — the runner, ToolApprovalCoordinator,
-    // ApiToolCallBridge and InvocationLifecycleTracker (whose park deadline adds it on top of the turn budget) — so
-    // shortening only one of them would silently miss the path under test.
-    private static void SetMaxPendingToolCallAge(InvocationRunner runner, TimeSpan maxPendingToolCallAge)
-    {
-        SetPrivateField(runner, "_maxPendingToolCallAge", maxPendingToolCallAge);
-        SetPrivateField(GetPrivateField(runner, "_toolApprovalCoordinator"), "_maxPendingToolCallAge", maxPendingToolCallAge);
-        SetPrivateField(GetPrivateField(runner, "_apiToolCallBridge"), "_maxPendingToolCallAge", maxPendingToolCallAge);
-        SetPrivateField(GetPrivateField(runner, "_lifecycleTracker"), "_maxPendingToolCallAge", maxPendingToolCallAge);
-    }
-
-    // The per-tool RequiresApproval overload now lives on ApiToolCallBridge; the runner only implements the
-    // approval-gated IInvocationRunner signature. Reach the collaborator the runner was built with so these tests keep
-    // exercising the SAME instance (and therefore the same shared pending-call registry) the turn would use.
-    private static ApiToolCallBridge Bridge(InvocationRunner runner)
-    {
-        return (ApiToolCallBridge)GetPrivateField(runner, "_apiToolCallBridge");
-    }
-
     private static object GetPrivateField(object target, string name)
     {
         var field = AssertEx.NotNull(target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic));
         return AssertEx.NotNull(field.GetValue(target));
-    }
-
-    private static void SetPrivateField(object target, string name, object? value)
-    {
-        var field = AssertEx.NotNull(target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic));
-        field.SetValue(target, value);
-    }
-
-    private static void AgePendingToolCalls(InvocationRunner runner, TimeSpan age)
-    {
-        var pendingToolCallsField = AssertEx.NotNull(typeof(InvocationRunner).GetField("_pendingToolCalls", BindingFlags.Instance | BindingFlags.NonPublic));
-        var pendingToolCalls = (IEnumerable)AssertEx.NotNull(pendingToolCallsField.GetValue(runner));
-
-        foreach (var pendingToolCallEntry in pendingToolCalls)
-        {
-            var pendingToolCall = AssertEx.NotNull(pendingToolCallEntry.GetType().GetProperty("Value")?.GetValue(pendingToolCallEntry));
-            var createdAtField = AssertEx.NotNull(pendingToolCall.GetType().GetField("<CreatedAt>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic));
-            createdAtField.SetValue(pendingToolCall, DateTimeOffset.UtcNow - age);
-        }
     }
 
     [Test]
@@ -4811,11 +4356,10 @@ public sealed class InvocationRunnerTests
         // No tier caps the output. A FAST turn differs from a non-`auto` turn only in its effort, on a wide window as
         // much as on a narrow one — which is what keeps both context budgeters' output RESERVATION where it was and
         // keeps a small window from being starved by a reservation a non-`auto` turn would never have made.
-        var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
             providerResolver: CreateLlamaCppResolver(effectiveContextTokens),
@@ -4825,7 +4369,6 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, package);
 
         AssertEx.Null(AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
-        AssertEx.Empty(sender.SentEncryptedFailures);
         await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.ContextWindowExceeded);
     }
 
@@ -4835,10 +4378,9 @@ public sealed class InvocationRunnerTests
         // The swapped model was warmed at 4096 and the turn policy was sized against THAT window. Re-running the
         // original model on it would measure a long conversation against the fast model's window and drop history the
         // authorised model would have kept — and would thread 4096 as the num_ctx of a process launched at 32768.
-        var sender = new MockHubMessageSender();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
             {
@@ -4853,7 +4395,6 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
         AssertEx.Equal(expected: 4096, observed[0].EffectiveContextTokens, "the swapped send is sized against the fast model's window");
         AssertEx.Equal(expected: 32768, observed[1].EffectiveContextTokens, "the re-run is sized against the window of the model it actually runs on");
-        AssertEx.Empty(sender.SentEncryptedFailures);
     }
 
     [Test]
@@ -4862,10 +4403,9 @@ public sealed class InvocationRunnerTests
         // The re-run re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered notice.
         // The dispatcher's own gate refuses a swap on any tool-bearing turn, so this shape is unreachable through the
         // real dispatcher; the guard makes that dependency explicit rather than load-bearing by coincidence.
-        var sender = new MockHubMessageSender();
         var observed = new List<InvocationAgentDefinition>();
         using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
-        var runner = CreateRunner(sender,
+        var runner = CreateRunner(
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             providerStreamResilience: NoRetryResilience(),
             reasoningEffortDispatcherFactory: _ => stub);
@@ -4873,7 +4413,6 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().WithAllowedTool("test-tool").Build());
 
         AssertEx.Equal(expected: 1, observed.Count, "a tool-bearing turn must not be re-run");
-        AssertEx.True(sender.SentEncryptedFailures.Count > 0);
     }
 
     // ---- reasoning-effort dispatch helpers -----------------------------------------------------------------------
@@ -5379,6 +4918,40 @@ public sealed class InvocationRunnerTests
         yield break;
     }
 
+    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationFailure(string message)
+    {
+        await Task.Yield();
+        yield return OrchestrationUpdate.Failed(message, "a", "Triage");
+    }
+
+    private static WorkerNodeOptions OneMinutePendingToolCallAge() =>
+        new()
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 10,
+            MaxPendingToolCallAgeMinutes = 1
+        };
+
+    /// <summary>
+    ///     A tool call parked <paramref name="age" /> ago and never answered, in the shape
+    ///     <c>ToolApprovalCoordinator.RequestToolApprovalAsync</c> leaves in the shared registry while a turn waits on
+    ///     the operator's card. Seeded directly rather than through a second parked invocation because the only thing
+    ///     these two tests assert is that <c>RunAsync</c>'s finally reaches the sweep at all; the registration and the
+    ///     sweep's effect on it are proven end to end, against the real coordinator and bridge, in
+    ///     <c>ToolApprovalCoordinatorTests</c>.
+    /// </summary>
+    private static Task<bool> ParkStaleToolCall(PendingToolCallRegistry registry, TimeSpan age)
+    {
+        var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        registry.Calls[$"stale-{Guid.NewGuid():N}"] = new PendingToolCall
+        {
+            InvocationId = Guid.NewGuid(),
+            CreatedAt = DateTimeOffset.UtcNow - age,
+            ApprovalCompletion = approvalCompletion
+        };
+        return approvalCompletion.Task;
+    }
+
     private static async IAsyncEnumerable<AgentResponseUpdate> ThrowingUpdates()
     {
         await Task.Yield();
@@ -5516,12 +5089,6 @@ public sealed class InvocationRunnerTests
         await session.ApprovalGate;
         yield return OrchestrationUpdate.TextFragment(finalText, "a", "Triage");
         yield return OrchestrationUpdate.Terminal();
-    }
-
-    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationFailure(string message)
-    {
-        await Task.Yield();
-        yield return OrchestrationUpdate.Failed(message, "a", "Triage");
     }
 
     private static OrchestrationSpec SampleSpec()

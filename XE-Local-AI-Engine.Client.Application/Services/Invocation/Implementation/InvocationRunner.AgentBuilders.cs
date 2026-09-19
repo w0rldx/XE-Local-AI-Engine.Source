@@ -18,9 +18,9 @@ public sealed partial class InvocationRunner
 {
     // Compiles the loopback OrchestrationSpec into the .AI.Agent OrchestrationAgentDefinition: each participant's
     // model is resolved to a concrete installed model (its pinned profile, else the turn's resolved model), and its
-    // projected offer list is bridged into AITools with the SAME switch BuildInvocationTools uses (ApiSide → real
-    // bridge over ExecuteApiToolCallAsync; ClientLocal → name-only placeholder the factory swaps for the registry
-    // executable). The seed history rides on the workflow input, not per participant.
+    // projected offer list is bridged into AITools with the SAME switch BuildInvocationTools uses (ClientLocal →
+    // name-only placeholder the factory swaps for the registry executable). The seed history rides on the workflow
+    // input, not per participant.
     private async Task<OrchestrationAgentDefinition> BuildOrchestrationDefinitionAsync(RuntimePackage package,
         OrchestrationSpec spec,
         string resolvedModel,
@@ -65,7 +65,7 @@ public sealed partial class InvocationRunner
                 // silently ignore, while one pinned to an enforcing model keeps its cap.
                 ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
                 EffectiveContextTokens = participantContextTokens,
-                Tools = BuildParticipantTools(package, participant.Tools)
+                Tools = BuildParticipantTools(participant.Tools)
             });
         }
 
@@ -135,16 +135,12 @@ public sealed partial class InvocationRunner
         return await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken);
     }
 
-    private IReadOnlyList<AITool> BuildParticipantTools(RuntimePackage package, IReadOnlyList<AllowedToolDto> tools)
+    private static IReadOnlyList<AITool> BuildParticipantTools(IReadOnlyList<AllowedToolDto> tools)
     {
         return
         [
             .. tools.Select(tool => tool.Location switch
             {
-                ToolLocation.ApiSide => InvocationToolBridge.Create(tool.Name,
-                    tool.Description,
-                    tool.ParameterSchema,
-                    (arguments, cancellationToken) => _apiToolCallBridge.ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
                 ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval),
                 _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
             })
@@ -301,7 +297,7 @@ public sealed partial class InvocationRunner
         }
     }
 
-    private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package,
+    private static InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package,
         string resolvedModel,
         IReadOnlyList<ChatMessage> messages,
         int? effectiveContextTokens)
@@ -602,19 +598,15 @@ public sealed partial class InvocationRunner
         return [.. package.AllowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", tool.ParameterSchema))];
     }
 
-    private IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)
+    private static IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)
     {
-        // The runtime package only carries the OFFER list. Api-side tools get a real bridge that round-trips to the
-        // platform; client-local (catalog) tools get a name-only placeholder, and the invocation factory swaps it for
-        // the matching executable from IAgentToolRegistry before the agent runs.
+        // The runtime package only carries the OFFER list: each client-local (catalog) tool gets a name-only
+        // placeholder, and the invocation factory swaps it for the matching executable from IAgentToolRegistry before
+        // the agent runs.
         return
         [
             .. package.AllowedTools.Select(tool => tool.Location switch
             {
-                ToolLocation.ApiSide => InvocationToolBridge.Create(tool.Name,
-                    tool.Description,
-                    tool.ParameterSchema,
-                    (arguments, cancellationToken) => _apiToolCallBridge.ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
                 ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval),
                 _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
             })

@@ -6,7 +6,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
-using XE_Local_AI_Engine.Client.Models.NodeBinding;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -94,7 +93,6 @@ public sealed class DomainValidationExceptionHandlerTests
     {
         Exception[] promoted =
         [
-            new NodeBindingException("The node binding session expired."),
             new EntraConnectionNotConfiguredException("No Entra connection is configured."),
             new SkillImportException("The archive contains an entry outside the skill root."),
             new AppUpdateException("The update could not be applied."),

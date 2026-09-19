@@ -4,7 +4,7 @@ using System.Reflection;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.AspNetCore.SignalR;
-using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -53,7 +53,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class EndpointDependencyTests
 {
-    private static readonly Assembly ClientAssembly = typeof(WorkerHealthCheck).Assembly;
+    private static readonly Assembly ClientAssembly = typeof(LocalApiRoutes).Assembly;
 
     /// <summary>Every FastEndpoints endpoint in the host: one scan's subject, and every scan's peer set.</summary>
     private static readonly IReadOnlyList<Type> EndpointTypes =

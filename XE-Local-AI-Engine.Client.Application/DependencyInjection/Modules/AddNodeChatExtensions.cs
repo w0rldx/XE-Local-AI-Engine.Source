@@ -14,7 +14,6 @@ internal static class AddNodeChatExtensions
         builder.Services.AddSingleton<NodeChatPersistenceWriter>();
         builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
         builder.Services.AddSingleton<INodeChatInvocationPump, NodeChatInvocationPump>();
-        builder.Services.AddSingleton<INodeChatRemotePersistenceCoordinator, NodeChatRemotePersistenceCoordinator>();
         builder.Services.AddSingleton<INodeChatMutationGuard, NodeChatMutationGuard>();
         builder.Services.AddSingleton<INodeChatStreamCancellationRegistry, NodeChatStreamCancellationRegistry>();
         builder.Services.AddSingleton<IInvocationResumeRegistry, InvocationResumeRegistry>();

@@ -30,7 +30,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Development;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
-using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -602,8 +601,6 @@ public static class ConfigureServices
             };
         });
 
-        builder.Services.AddHostedService<HeartbeatBackgroundService>();
-        builder.Services.AddHostedService<AutoConnectBackgroundService>();
         // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
         // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
         // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
@@ -650,11 +647,8 @@ public static class ConfigureServices
         // bundled llama.cpp runtime) and selected so a fresh double-click install can chat out of the box. Gated behind
         // desktop launch mode and offline-tolerant — headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();
-        // Readiness = essential node-local persistence AND Central Platform worker coordination. Both are tagged "ready"
-        // so a failure of either alone flips /health/ready: a dead/unwritable SQLite store must fail readiness even when
-        // worker pairing is fine, and vice versa.
+        // Readiness = essential node-local persistence: a dead or unwritable SQLite store must flip /health/ready.
         builder.Services.AddHealthChecks()
-               .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<NodeSqliteHealthCheck>("node_sqlite", tags: ["ready"]);
     }
 

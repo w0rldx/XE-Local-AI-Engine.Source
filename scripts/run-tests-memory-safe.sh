@@ -370,13 +370,11 @@ HEAVY=(
   XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1   # 57s
   XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1    # 57s
   XE_Local_AI_Engine.Tests.Endpoints.Proxy.V1          # 55s
-  XE_Local_AI_Engine.Tests.Connection                  # 54s
   XE_Local_AI_Engine.Tests.Auth.Integration            # 53s
   XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders # 53s
   XE_Local_AI_Engine.Tests.AppUpdate                   # 48s
   XE_Local_AI_Engine.Tests.Providers.LlamaServer       # 42s
   XE_Local_AI_Engine.Tests.Endpoints.Workspaces        # 38s
-  XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1    # 37s
   XE_Local_AI_Engine.Tests.RateLimiting                # 34s
   XE_Local_AI_Engine.Tests.Transcription               # 30s
   XE_Local_AI_Engine.Tests.Integration                 # 28s

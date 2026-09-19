@@ -20,7 +20,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -113,8 +112,6 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     ///     </para>
     /// </summary>
     public string EnvironmentName { get; init; } = "Testing";
-
-    public bool SkipDefaultBaseUrlOverride { get; init; }
 
     public bool? EnableDevelopmentMode { get; init; }
 
@@ -451,19 +448,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
             sp.GetRequiredService<ICudaManagedBuildSignal>()));
 
-        if (!SkipDefaultBaseUrlOverride)
-        {
-            services.Configure<CentralPlatformOptions>(options =>
-            {
-                options.BaseUrl = "https://test.example.com";
-            });
-        }
-
         services.RemoveAll<ITokenStore>();
         services.AddSingleton<ITokenStore>(_ => MockTokenStore.Unpaired());
 
-        services.RemoveAll<IDeadLetterStore>();
-        services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
 
         if (!RunLocalIntegration)
         {

@@ -2189,47 +2189,6 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse = z.object({
-	cancelled: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse = z.object({
-	status: z.string(),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	expiresAt: z.iso.datetime({ offset: true }).nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest = z.object({
-	deviceCode: z.string(),
-	userCode: z.string(),
-	verificationUri: z.string(),
-	verificationUriComplete: z.string(),
-	expiresAt: z.iso.datetime({ offset: true }).optional(),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse = z.object({
-	deviceCode: z.string(),
-	userCode: z.string(),
-	verificationUri: z.string(),
-	verificationUriComplete: z.string(),
-	expiresAt: z.iso.datetime({ offset: true }).optional(),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	status: z.string(),
-});
-
 export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = z.object({
 	role: z.string().nullish(),
 	tokensPerSecond: z.number().nullish(),
@@ -5808,21 +5767,6 @@ export const zXeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest = z
 	path: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
-	state: z.string(),
-	lastError: z.string().nullish(),
-	lastUpdatedAt: z.iso.datetime({ offset: true }).optional(),
-	isPaired: z.boolean().optional(),
-	autoConnectOnStart: z.boolean().optional(),
-	bindingMethod: z.string().nullish(),
-	lastKnownNodeName: z.string().nullish(),
-	tokenExpiresAt: z.iso.datetime({ offset: true }).nullish(),
-	canConnect: z.boolean().optional(),
-	canDisconnect: z.boolean().optional(),
-	canEnableAutoConnect: z.boolean().optional(),
-	canDisableAutoConnect: z.boolean().optional(),
-});
-
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = z.object({
 	deploymentName: z.string(),
 	displayLabel: z.string().nullish(),
@@ -8876,23 +8820,6 @@ export const zSaveNodeSettingsBody = zXeLocalAiEngineClientEndpointsNodeSettings
  */
 export const zSaveNodeSettingsResponse = zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse;
 
-/**
- * Success
- */
-export const zCancelNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingResponse;
-
-export const zPollNodeBindingBody = zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest;
-
-/**
- * Success
- */
-export const zPollNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse;
-
-/**
- * Success
- */
-export const zStartNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse;
-
 export const zBenchmarkInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
 
 /**
@@ -10843,31 +10770,6 @@ export const zValidateExecutableBody = zXeLocalAiEngineClientServicesCustomTools
  * Success
  */
 export const zValidateExecutableResponse = zXeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult;
-
-/**
- * Success
- */
-export const zConnectConnectionResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zDisableAutoConnectResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zDisconnectConnectionResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zEnableAutoConnectResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
-
-/**
- * Success
- */
-export const zGetConnectionStatusResponse = zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse;
 
 /**
  * Success

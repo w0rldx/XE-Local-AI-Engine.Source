@@ -14,18 +14,6 @@ public enum NodeConflictProblemType
     ImageModelInUse,
 
     /// <summary>
-    ///     A connect request was made while the worker node is not paired with the Central Platform. The operator must
-    ///     complete pairing before the node can connect.
-    /// </summary>
-    WorkerNotPaired,
-
-    /// <summary>
-    ///     A connect request was made while the worker node's pairing token has expired. Re-pairing is required before
-    ///     the node can connect.
-    /// </summary>
-    WorkerTokenExpired,
-
-    /// <summary>
     ///     A workspace could not be revoked because its owner/node execution lease is still held. Retryable once the
     ///     in-flight work finishes.
     /// </summary>

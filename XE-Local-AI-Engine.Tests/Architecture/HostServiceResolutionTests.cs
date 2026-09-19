@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using System.Reflection;
-using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -377,7 +377,7 @@ public sealed class HostServiceResolutionTests
     [
         .. new[]
            {
-               typeof(WorkerHealthCheck).Assembly,
+               typeof(LocalApiRoutes).Assembly,
                typeof(XE_Local_AI_Engine.Client.Services.ModelFit.LlamaCppRuntimeOrchestrationService).Assembly,
                typeof(XE_Local_AI_Engine.Client.Persistence.NodeChatDbContext).Assembly,
                typeof(XE_Local_AI_Engine.Providers.Abstractions.Gguf.IGgufModelStore).Assembly,

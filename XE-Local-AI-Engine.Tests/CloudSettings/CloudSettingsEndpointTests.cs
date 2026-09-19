@@ -42,9 +42,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenValid_SavesReportsAndDoesNotReturnApiKey()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -76,15 +74,13 @@ public sealed class CloudSettingsEndpointTests
                 && config.AzureFoundry.ApiKey == "new-secret-api-key"
                 && config.AzureFoundry.Models.Any(model => model.DeploymentName == "gpt-4o-mini")),
             Arg.Any<CancellationToken>());
-        await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task SaveCloudSettings_WhenEndpointIsNotHttps_ReturnsValidationProblem()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -106,16 +102,13 @@ public sealed class CloudSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
-        await capabilityReporter.DidNotReceiveWithAnyArgs().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ClearCloudSettings_ClearsCredentialsAndReportsCapabilities()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/cloud-settings");
@@ -126,7 +119,6 @@ public sealed class CloudSettingsEndpointTests
         AssertEx.Equal("None", settings.ProviderName);
         AssertEx.False(settings.AzureFoundry?.HasStoredApiKey == true);
         await cloudCredentialStore.Received(1).ClearAsync(Arg.Any<CancellationToken>());
-        await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -208,10 +200,8 @@ public sealed class CloudSettingsEndpointTests
             Value = "stored-secret",
             IsSecret = true
         }));
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        var body = await SendSaveAsync(cloudCredentialStore, capabilityReporter,
+        var body = await SendSaveAsync(cloudCredentialStore,
             new SaveAzureFoundryHeaderRequest
             {
                 Name = "X-Api-Token",
@@ -236,10 +226,8 @@ public sealed class CloudSettingsEndpointTests
             Value = "stored-secret",
             IsSecret = true
         }));
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        var body = await SendSaveAsync(cloudCredentialStore, capabilityReporter,
+        var body = await SendSaveAsync(cloudCredentialStore,
             new SaveAzureFoundryHeaderRequest
             {
                 Name = "X-Api-Token",
@@ -267,8 +255,7 @@ public sealed class CloudSettingsEndpointTests
             Value = "stored-secret",
             IsSecret = true
         }));
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -286,7 +273,6 @@ public sealed class CloudSettingsEndpointTests
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.False(body.Contains("stored-secret", StringComparison.Ordinal));
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
-        await capabilityReporter.DidNotReceiveWithAnyArgs().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -316,9 +302,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenAuthModeEntraId_PersistsEntraFieldsAndDoesNotReturnSecret()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -367,9 +351,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenEntraIdRequestsDeviceCodeSignIn_PersistsDeviceCodeMethod()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -404,9 +386,7 @@ public sealed class CloudSettingsEndpointTests
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
         cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateEntraIdConfig());
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -445,9 +425,7 @@ public sealed class CloudSettingsEndpointTests
         // secret must never inherit anything, and must fall back to interactive sign-in.
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
         cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfig());
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -484,8 +462,7 @@ public sealed class CloudSettingsEndpointTests
         // CloudSettingsEndpointDtoMapper.ParseAuthMode's ApiKey fallback is unreachable via this route in practice —
         // it exists only as a defensive default for direct mapper use.
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -513,9 +490,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenApiSurfaceIsOpenAiV1_PersistsAndReturnsIt()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -548,8 +523,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenApiSurfaceIsUnrecognized_ReturnsValidationProblem()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -578,8 +552,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenEntraIdMissingTenantId_ReturnsValidationProblem()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -646,8 +619,7 @@ public sealed class CloudSettingsEndpointTests
     private static async Task AssertSaveRejectedAsync(params SaveAzureFoundryHeaderRequest[] headers)
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -659,10 +631,9 @@ public sealed class CloudSettingsEndpointTests
     }
 
     private static async Task<string> SendSaveAsync(ICloudCredentialStore cloudCredentialStore,
-        ICapabilityReporter capabilityReporter,
         params SaveAzureFoundryHeaderRequest[] headers)
     {
-        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
@@ -715,7 +686,7 @@ public sealed class CloudSettingsEndpointTests
         };
     }
 
-    private static TestServerWebAppFactory CreateFactory(ICloudCredentialStore cloudCredentialStore, ICapabilityReporter? capabilityReporter = null)
+    private static TestServerWebAppFactory CreateFactory(ICloudCredentialStore cloudCredentialStore)
     {
         return new TestServerWebAppFactory
         {
@@ -723,8 +694,6 @@ public sealed class CloudSettingsEndpointTests
             {
                 services.RemoveAll<ICloudCredentialStore>();
                 services.AddSingleton(cloudCredentialStore);
-                services.RemoveAll<ICapabilityReporter>();
-                services.AddSingleton(capabilityReporter ?? Substitute.For<ICapabilityReporter>());
             }
         };
     }

@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Services.Shutdown;
 
 public sealed partial class Program
 {
@@ -177,53 +176,5 @@ public sealed partial class Program
         // Eagerly resolve the registry so it subscribes to the dispatcher before any invocation can start,
         // ensuring it observes every live invocation from the first one for reconnect/resume support.
         _ = services.GetRequiredService<IInvocationResumeRegistry>();
-    }
-
-    private static void RegisterWorkerShutdownDrain(WebApplication app)
-    {
-        ArgumentNullException.ThrowIfNull(app);
-
-        app.Lifetime.ApplicationStopping.Register(static state =>
-        {
-            var services = (IServiceProvider)state!;
-
-            try
-            {
-                var drainService = services.GetRequiredService<IWorkerShutdownDrainService>();
-                var drainOptions = services.GetRequiredService<IOptions<WorkerShutdownDrainOptions>>().Value;
-
-                // The drain enforces its own end-to-end deadline internally. This is a hard outer ceiling so that a stage
-                // which fails to honor that token (a non-cancellable await) still cannot block process shutdown forever:
-                // wait at most the configured deadline plus a grace, then abandon the remaining steps.
-                var configuredTimeout = drainOptions.DrainTimeout > TimeSpan.Zero
-                    ? drainOptions.DrainTimeout
-                    : WorkerShutdownDrainOptions.DefaultDrainTimeout;
-                var hardCeiling = configuredTimeout + TimeSpan.FromSeconds(5);
-
-                var drainTask = drainService.DrainAsync(CancellationToken.None);
-
-                // ApplicationStopping.Register takes a synchronous Action<object?>: the drain cannot be awaited here, so the
-                // hard ceiling is a blocking wait by contract. The host is already stopping, so there is no token to honor.
-#pragma warning disable MA0045 // ApplicationStopping.Register callback is synchronous by contract; awaiting the drain is not possible here.
-                if (!drainTask.Wait(hardCeiling, CancellationToken.None))
-                {
-                    Log.Warning("Worker shutdown drain exceeded its hard ceiling of {HardCeilingSeconds}s; abandoning remaining steps.",
-                        hardCeiling.TotalSeconds);
-                    return;
-                }
-
-                var result = drainTask.GetAwaiter().GetResult();
-#pragma warning restore MA0045
-                if (!result.Succeeded)
-                {
-                    Log.Warning("Worker shutdown drain completed with incomplete steps. Diagnostics: {Diagnostics}.", result.Diagnostics);
-                }
-            }
-            catch (Exception exception)
-            {
-                Log.Error("Worker shutdown drain failed before completion. Exception type: {ExceptionType}.",
-                    exception.GetType().Name);
-            }
-        }, app.Services);
     }
 }

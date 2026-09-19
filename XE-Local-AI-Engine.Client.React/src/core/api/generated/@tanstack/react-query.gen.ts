@@ -35,7 +35,6 @@ import {
 	cancelImageModelDownload,
 	cancelIntegrationExecution,
 	cancelLlamaCppSourceBuild,
-	cancelNodeBinding,
 	cancelNodeChatMessage,
 	cancelScheduledJobRun,
 	cancelStableDiffusionCppSourceBuild,
@@ -55,7 +54,6 @@ import {
 	compactNodeChatConversation,
 	compareBenchmarkCells,
 	confirmDevelopmentContainerRuntime,
-	connectConnection,
 	createAgentDefinition,
 	createBaseArtifact,
 	createBenchmarkFromComparison,
@@ -125,10 +123,8 @@ import {
 	deleteWorkSession,
 	deleteWorkspace,
 	detectDevelopmentRepositoryProfile,
-	disableAutoConnect,
 	disableScheduledJob,
 	discardTrainingArtifactQuality,
-	disconnectConnection,
 	downloadRecommendedEmbedding,
 	downloadRecommendedReranker,
 	draftAgentDefinition,
@@ -136,7 +132,6 @@ import {
 	ejectImageRuntime,
 	ejectRunningModel,
 	ejectTranscriptionRuntime,
-	enableAutoConnect,
 	enableScheduledJob,
 	ensureLlamaCppBinary,
 	entraAuthCodeSignIn,
@@ -166,7 +161,6 @@ import {
 	getBenchmarkRun,
 	getCloudSettings,
 	getComparison,
-	getConnectionStatus,
 	getCustomTool,
 	getDevelopmentArtifact,
 	getDevelopmentCapability,
@@ -341,7 +335,6 @@ import {
 	pauseDevWorkflowRun,
 	pauseWorkSession,
 	pinNodeChatConversation,
-	pollNodeBinding,
 	postWorkSessionMessage,
 	previewDevelopmentPatch,
 	previewGgufImport,
@@ -409,7 +402,6 @@ import {
 	startImageModelDownload,
 	startLiveTranscriptionSession,
 	startLlamaCppSourceBuild,
-	startNodeBinding,
 	startProcessCapture,
 	startStableDiffusionCppSourceBuild,
 	startTrainingExport,
@@ -512,8 +504,6 @@ import type {
 	CancelIntegrationExecutionError,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildResponse,
-	CancelNodeBindingData,
-	CancelNodeBindingResponse,
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageError,
 	CancelNodeChatMessageResponse,
@@ -560,9 +550,6 @@ import type {
 	CompareBenchmarkCellsResponse,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
-	ConnectConnectionData,
-	ConnectConnectionError,
-	ConnectConnectionResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
 	CreateBaseArtifactData,
@@ -741,15 +728,11 @@ import type {
 	DetectDevelopmentRepositoryProfileData,
 	DetectDevelopmentRepositoryProfileError,
 	DetectDevelopmentRepositoryProfileResponse,
-	DisableAutoConnectData,
-	DisableAutoConnectResponse,
 	DisableScheduledJobData,
 	DisableScheduledJobResponse,
 	DiscardTrainingArtifactQualityData,
 	DiscardTrainingArtifactQualityError,
 	DiscardTrainingArtifactQualityResponse,
-	DisconnectConnectionData,
-	DisconnectConnectionResponse,
 	DownloadRecommendedEmbeddingData,
 	DownloadRecommendedEmbeddingError,
 	DownloadRecommendedEmbeddingResponse,
@@ -770,8 +753,6 @@ import type {
 	EjectTranscriptionRuntimeData,
 	EjectTranscriptionRuntimeError,
 	EjectTranscriptionRuntimeResponse,
-	EnableAutoConnectData,
-	EnableAutoConnectResponse,
 	EnableScheduledJobData,
 	EnableScheduledJobResponse,
 	EnsureLlamaCppBinaryData,
@@ -840,8 +821,6 @@ import type {
 	GetCloudSettingsResponse,
 	GetComparisonData,
 	GetComparisonResponse,
-	GetConnectionStatusData,
-	GetConnectionStatusResponse,
 	GetCustomToolData,
 	GetCustomToolResponse,
 	GetDevelopmentArtifactData,
@@ -1235,8 +1214,6 @@ import type {
 	PinNodeChatConversationData,
 	PinNodeChatConversationError,
 	PinNodeChatConversationResponse,
-	PollNodeBindingData,
-	PollNodeBindingResponse,
 	PostWorkSessionMessageData,
 	PostWorkSessionMessageError,
 	PostWorkSessionMessageResponse,
@@ -1412,8 +1389,6 @@ import type {
 	StartLlamaCppSourceBuildData,
 	StartLlamaCppSourceBuildError,
 	StartLlamaCppSourceBuildResponse,
-	StartNodeBindingData,
-	StartNodeBindingResponse,
 	StartProcessCaptureData,
 	StartProcessCaptureError,
 	StartProcessCaptureResponse,
@@ -4336,58 +4311,6 @@ export const saveNodeSettingsMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await saveNodeSettings({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const cancelNodeBindingMutation = (
-	options?: Partial<Options<CancelNodeBindingData>>,
-): UseMutationOptions<CancelNodeBindingResponse, AxiosError<DefaultError>, Options<CancelNodeBindingData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelNodeBindingResponse,
-		AxiosError<DefaultError>,
-		Options<CancelNodeBindingData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelNodeBinding({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const pollNodeBindingMutation = (
-	options?: Partial<Options<PollNodeBindingData>>,
-): UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> => {
-	const mutationOptions: UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pollNodeBinding({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startNodeBindingMutation = (
-	options?: Partial<Options<StartNodeBindingData>>,
-): UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> => {
-	const mutationOptions: UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startNodeBinding({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -9217,108 +9140,6 @@ export const validateExecutableMutation = (
 	};
 	return mutationOptions;
 };
-
-export const connectConnectionMutation = (
-	options?: Partial<Options<ConnectConnectionData>>,
-): UseMutationOptions<ConnectConnectionResponse, AxiosError<ConnectConnectionError>, Options<ConnectConnectionData>> => {
-	const mutationOptions: UseMutationOptions<
-		ConnectConnectionResponse,
-		AxiosError<ConnectConnectionError>,
-		Options<ConnectConnectionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await connectConnection({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const disableAutoConnectMutation = (
-	options?: Partial<Options<DisableAutoConnectData>>,
-): UseMutationOptions<DisableAutoConnectResponse, AxiosError<DefaultError>, Options<DisableAutoConnectData>> => {
-	const mutationOptions: UseMutationOptions<
-		DisableAutoConnectResponse,
-		AxiosError<DefaultError>,
-		Options<DisableAutoConnectData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await disableAutoConnect({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const disconnectConnectionMutation = (
-	options?: Partial<Options<DisconnectConnectionData>>,
-): UseMutationOptions<DisconnectConnectionResponse, AxiosError<DefaultError>, Options<DisconnectConnectionData>> => {
-	const mutationOptions: UseMutationOptions<
-		DisconnectConnectionResponse,
-		AxiosError<DefaultError>,
-		Options<DisconnectConnectionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await disconnectConnection({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const enableAutoConnectMutation = (
-	options?: Partial<Options<EnableAutoConnectData>>,
-): UseMutationOptions<EnableAutoConnectResponse, AxiosError<DefaultError>, Options<EnableAutoConnectData>> => {
-	const mutationOptions: UseMutationOptions<
-		EnableAutoConnectResponse,
-		AxiosError<DefaultError>,
-		Options<EnableAutoConnectData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await enableAutoConnect({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getConnectionStatusQueryKey = (options?: Options<GetConnectionStatusData>) =>
-	createQueryKey("getConnectionStatus", options);
-
-export const getConnectionStatusOptions = (options?: Options<GetConnectionStatusData>) =>
-	queryOptions<
-		GetConnectionStatusResponse,
-		AxiosError<DefaultError>,
-		GetConnectionStatusResponse,
-		ReturnType<typeof getConnectionStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getConnectionStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getConnectionStatusQueryKey(options),
-	});
 
 export const clearCloudSettingsMutation = (
 	options?: Partial<Options<ClearCloudSettingsData>>,

@@ -8,9 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -2417,11 +2415,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -2446,9 +2439,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class RegenContextCapturingRunner : IInvocationRunner
@@ -2510,11 +2500,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -2539,9 +2524,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class RegenToolEmittingRunner : IInvocationRunner
@@ -2584,11 +2566,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -2613,9 +2590,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     // Streams one chunk, signals Started, then blocks until Release() (or the run token cancels — honoring a genuine
@@ -2658,11 +2632,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.FromResult(true);
         }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
         public void Cancel(Guid invocationId)
         {
         }
@@ -2687,9 +2656,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-        }
     }
 
     private sealed class RegenRecordingDispatcher : IWorkerEventDispatcher
@@ -2710,38 +2676,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public InvocationState? CurrentInvocation { get; private set; }
 
-        public bool IsAcceptingRemoteInvocations => true;
-
-        public void StopAcceptingRemoteInvocations()
-        {
-        }
-
-        public Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchToolCallResultAsync(ToolCallResultEvent evt)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt)
-        {
-            return Task.CompletedTask;
-        }
-
         public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt)
         {
             return Task.CompletedTask;
         }

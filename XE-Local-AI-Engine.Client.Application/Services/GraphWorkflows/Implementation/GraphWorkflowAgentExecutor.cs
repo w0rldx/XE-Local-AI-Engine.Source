@@ -558,7 +558,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {
-            using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+            var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
             await invocationRunner.RunAsync(executionContext, cancellationToken);
         }
         finally
@@ -631,7 +631,6 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             AgentDefinitionVersion = resolved.AgentDefinitionVersion,
             ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools = offeredTools,
-            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
             Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds

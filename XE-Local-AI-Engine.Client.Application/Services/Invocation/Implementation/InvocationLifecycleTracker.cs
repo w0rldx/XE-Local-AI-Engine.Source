@@ -166,7 +166,6 @@ public sealed class InvocationLifecycleTracker
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
                 removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
-                removedPendingToolCall.ResultCompletion.TrySetCanceled(CancellationToken.None);
             }
         }
     }
@@ -235,14 +234,13 @@ public sealed class InvocationLifecycleTracker
 
     // Registers the invocation's active-completion source. Returns null when the node is draining and this is a local
     // turn — the completion add and the draining check happen under _syncRoot so they are serialized with
-    // the drain snapshot, closing the admission-after-snapshot race. A non-local (remote) turn is not fenced here; the
-    // dispatcher already stops accepting remote assignments at drain.
-    public TaskCompletionSource? RegisterActiveInvocationCompletion(Guid invocationId, bool isLocalLoopback)
+    // the drain snapshot, closing the admission-after-snapshot race.
+    public TaskCompletionSource? RegisterActiveInvocationCompletion(Guid invocationId)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_syncRoot)
         {
-            if (_draining && isLocalLoopback)
+            if (_draining)
             {
                 return null;
             }
@@ -356,7 +354,6 @@ public sealed class InvocationLifecycleTracker
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
                 removedPendingToolCall.ApprovalCompletion.TrySetCanceled(CancellationToken.None);
-                removedPendingToolCall.ResultCompletion.TrySetCanceled(CancellationToken.None);
             }
         }
     }

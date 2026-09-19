@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 
 /// <summary>
 ///     Abstraction for worker event dispatcher behavior.
@@ -21,29 +19,26 @@ public interface IWorkerEventDispatcher
     /// </summary>
     InvocationState? CurrentInvocation { get; }
 
-    bool IsAcceptingRemoteInvocations { get; }
-
     event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
 
     /// <summary>
     ///     Raised once per tool-call lifecycle transition (requested/completed). The local chat stream subscribes
     ///     to surface these as <c>tool-call-requested</c>/<c>tool-call-completed</c> stream events alongside the
-    ///     content deltas; the platform-served path does not consume it.
+    ///     content deltas.
     /// </summary>
     event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
     /// <summary>
     ///     Raised once per non-fatal turn notice (model substitution, tool disabled, history truncated). The local
     ///     chat stream subscribes to surface these as <c>assistant-notice</c> stream events alongside the content
-    ///     deltas and tool-call lifecycle; the platform-served path does not consume it.
+    ///     deltas and tool-call lifecycle.
     /// </summary>
     event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
     /// <summary>
     ///     Raised once per tool-approval request the in-flight invocation is paused on. The local chat stream
     ///     subscribes to surface these as <c>approval-requested</c> stream events so the browser can render
-    ///     Approve/Deny controls on the waiting tool-call card; the platform-served path (which resolves approvals over
-    ///     the worker hub) does not consume it.
+    ///     Approve/Deny controls on the waiting tool-call card.
     /// </summary>
     event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
 
@@ -55,32 +50,17 @@ public interface IWorkerEventDispatcher
     /// </summary>
     event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
 
-    void StopAcceptingRemoteInvocations();
-
-    Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
-
-    Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope);
-
-    Task DispatchToolCallResultAsync(ToolCallResultEvent evt);
-
-    Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt);
-
     /// <summary>
-    ///     Carries an operator's approval decision to the runner. <paramref name="scope" /> is Application-internal and
-    ///     defaults to <see cref="ApprovalScope.Once" />: the platform hub path passes the wire
-    ///     <see cref="ApprovalResolvedEvent" /> unchanged (session scope is a loopback-only concept and deliberately
-    ///     absent from that cross-repo contract), while the loopback resolve endpoint can ask for a decision that lasts
+    ///     Carries an operator's approval decision to the runner. <paramref name="scope" /> defaults to
+    ///     <see cref="ApprovalScope.Once" />; the loopback resolve endpoint can ask instead for a decision that lasts
     ///     the rest of the conversation.
     /// </summary>
     Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once);
 
-    Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt);
-
     /// <summary>
-    ///     Reports a local invocation assignment, queueing behind any in-flight invocation (local or platform)
-    ///     instead of throwing when busy. The returned lease holds the shared invocation slot until disposed,
-    ///     which the caller must do when the local run terminates. Cancelling <paramref name="cancellationToken" />
-    ///     while the turn is still queued aborts the wait.
+    ///     Reports an invocation assignment, queueing behind any in-flight invocation instead of throwing when busy.
+    ///     The returned lease holds the shared invocation slot until disposed, which the caller must do when the run
+    ///     terminates. Cancelling <paramref name="cancellationToken" /> while the turn is still queued aborts the wait.
     /// </summary>
     Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default);
 

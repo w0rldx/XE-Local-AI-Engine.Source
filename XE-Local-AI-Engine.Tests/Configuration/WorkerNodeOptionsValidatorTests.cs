@@ -102,17 +102,6 @@ public sealed class WorkerNodeOptionsValidatorTests
     }
 
     [Test]
-    [Arguments("")]
-    [Arguments("   ")]
-    public void Validate_WhenDeadLetterQueuePathIsMissing_ReturnsFailure(string value)
-    {
-        var options = CreateValidOptions();
-        options.DeadLetterQueuePath = value;
-
-        AssertFailureContains(_validator.Validate(name: null, options), "DeadLetterQueuePath is required.");
-    }
-
-    [Test]
     public void Validate_WhenMaxResponseSizeAboveMaximum_ReturnsFailure()
     {
         var options = CreateValidOptions();

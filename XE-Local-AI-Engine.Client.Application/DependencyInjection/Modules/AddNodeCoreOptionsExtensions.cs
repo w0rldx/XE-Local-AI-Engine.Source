@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
@@ -16,9 +15,6 @@ internal static class AddNodeCoreOptionsExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        builder.Services.AddOptions<CentralPlatformOptions>()
-               .Bind(configuration.GetSection(CentralPlatformOptions.SectionName))
-               .ValidateOnStart();
         builder.Services.AddOptions<WorkerNodeOptions>()
                .Bind(configuration.GetSection(WorkerNodeOptions.SectionName))
                .ValidateOnStart();
@@ -46,7 +42,6 @@ internal static class AddNodeCoreOptionsExtensions
                .Bind(configuration.GetSection(NodeDbBackupOptions.SectionName))
                .Validate(static options => options.RetainCount >= 1, "NodeDbBackup:RetainCount must be at least one.")
                .ValidateOnStart();
-        builder.Services.AddOptions<WorkerShutdownDrainOptions>();
 
         // The single source of truth for the per-node runtime-state directory. Registered first (foundational): the
         // settings store, the encrypted credential stores, the cert-pin store, the AgentHome workspace, and the hardware
@@ -55,7 +50,6 @@ internal static class AddNodeCoreOptionsExtensions
         // off the desktop flag every consumer reads/writes exactly where it did before.
         builder.Services.AddSingleton<INodeDataDirectory, NodeDataDirectory>();
 
-        builder.Services.AddSingleton<IValidateOptions<CentralPlatformOptions>, CentralPlatformOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<ClientSecurityOptions>, SecurityOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<CloudProviderOptions>, CloudProviderOptionsValidator>();

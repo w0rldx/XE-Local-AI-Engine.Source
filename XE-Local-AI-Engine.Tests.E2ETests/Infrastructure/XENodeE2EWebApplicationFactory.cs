@@ -26,7 +26,6 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Capacity;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
@@ -445,16 +444,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<ICapacityService>();
             services.AddSingleton<ICapacityService, E2EAlwaysAdmitCapacityService>();
 
-            services.Configure<CentralPlatformOptions>(options =>
-            {
-                options.BaseUrl = "https://test.example.com";
-            });
-
             services.RemoveAll<ITokenStore>();
             services.AddSingleton<ITokenStore>(_ => new StubTokenStore());
-
-            services.RemoveAll<IDeadLetterStore>();
-            services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
 
             // Training lifecycle E2E: production run/export/evaluation/promotion services stay registered. Only the
             // unavailable Python, transient llama.cpp and final registry-I/O boundaries are deterministic.

@@ -16,8 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
-using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
@@ -57,29 +55,6 @@ internal static class AddNodeModelRuntimeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        builder.Services.AddSingleton<WorkerHubConnection>(sp =>
-        {
-            var connection = ActivatorUtilities.CreateInstance<WorkerHubConnection>(sp);
-            var dispatcher = new Lazy<IWorkerEventDispatcher>(() => sp.GetRequiredService<IWorkerEventDispatcher>());
-            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("WorkerHubConnectionEventBindings");
-
-            connection.InvocationAssignedReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchInvocationAssignedV2Async(args.Envelope), logger, nameof(IWorkerEventDispatcher.DispatchInvocationAssignedV2Async));
-            connection.ToolCallResultReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchToolCallResultAsync(args.ToolCallResult), logger, nameof(IWorkerEventDispatcher.DispatchToolCallResultAsync));
-            connection.DisconnectRequestedReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchDisconnectRequestedAsync(args.DisconnectRequest), logger, nameof(IWorkerEventDispatcher.DispatchDisconnectRequestedAsync));
-            connection.ApprovalResolvedReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchApprovalResolvedAsync(args.ApprovalResolution), logger, nameof(IWorkerEventDispatcher.DispatchApprovalResolvedAsync));
-            connection.InvocationCancelledReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchInvocationCancelledAsync(args.Cancellation), logger, nameof(IWorkerEventDispatcher.DispatchInvocationCancelledAsync));
-
-            return connection;
-        });
-        builder.Services.AddSingleton<IWorkerHubConnection>(sp => sp.GetRequiredService<WorkerHubConnection>());
-        builder.Services.AddSingleton<IHubMessageSender>(sp => sp.GetRequiredService<WorkerHubConnection>());
-        // Pre-positioned by decision: complete and tested, with no production consumer. See ICertPinStore's remarks.
-        builder.Services.AddSingleton<ICertPinStore, CertPinStore>();
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
         builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
         builder.Services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
@@ -393,27 +368,6 @@ internal static class AddNodeModelRuntimeExtensions
             chatConnectionSettings.Model);
     }
 
-    private static void DispatchSafely(Task dispatchTask, ILogger logger, string operationName)
-    {
-        ArgumentNullException.ThrowIfNull(dispatchTask);
-        ArgumentNullException.ThrowIfNull(logger);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-
-        _ = dispatchTask.ContinueWith(static (task, state) =>
-            {
-                var (continuationLogger, dispatchOperationName) = (DispatchContinuationState)(state ?? throw new ArgumentNullException(nameof(state)));
-
-                if (task.IsFaulted)
-                {
-                    continuationLogger.LogError(task.Exception, "Unhandled worker hub event dispatch failure during {OperationName}.", dispatchOperationName);
-                }
-            },
-            new DispatchContinuationState(logger, operationName),
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted,
-            TaskScheduler.Default);
-    }
-
     private static ChatConnectionSettings ResolveChatConnectionSettings(IServiceProvider serviceProvider, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -547,5 +501,4 @@ internal static class AddNodeModelRuntimeExtensions
 
     // The boxed state the fault continuation is handed. A named type instead of a cast to an anonymous tuple shape:
     // the continuation runs on a plain object?, and the cast has to match the boxed type exactly.
-    private sealed record DispatchContinuationState(ILogger Logger, string OperationName);
 }

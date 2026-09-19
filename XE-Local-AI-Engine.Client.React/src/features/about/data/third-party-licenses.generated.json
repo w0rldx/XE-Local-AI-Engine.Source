@@ -602,14 +602,6 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:BouncyCastle.Cryptography@2.7.0",
-			"name": "BouncyCastle.Cryptography",
-			"version": "2.7.0",
-			"license": "MIT",
-			"homepageUrl": "https://www.bouncycastle.org/stable/nuget/csharp/website",
-			"source": "backend"
-		},
-		{
 			"id": "frontend:call-bind-apply-helpers@1.0.2",
 			"name": "call-bind-apply-helpers",
 			"version": "1.0.2",
@@ -1458,14 +1450,6 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:libsodium@1.0.22",
-			"name": "libsodium",
-			"version": "1.0.22",
-			"license": "ISC",
-			"homepageUrl": "https://libsodium.org/",
-			"source": "backend"
-		},
-		{
 			"id": "frontend:longest-streak@3.1.0",
 			"name": "longest-streak",
 			"version": "3.1.0",
@@ -1890,14 +1874,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Connections.Abstractions@10.0.12",
-			"name": "Microsoft.AspNetCore.Connections.Abstractions",
-			"version": "10.0.12",
-			"license": "MIT",
-			"homepageUrl": "https://asp.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.AspNetCore.Cryptography.Internal@10.0.12",
 			"name": "Microsoft.AspNetCore.Cryptography.Internal",
 			"version": "10.0.12",
@@ -1922,14 +1898,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Http.Connections.Common@10.0.12",
-			"name": "Microsoft.AspNetCore.Http.Connections.Common",
-			"version": "10.0.12",
-			"license": "MIT",
-			"homepageUrl": "https://asp.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.AspNetCore.Identity.EntityFrameworkCore@10.0.12",
 			"name": "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
 			"version": "10.0.12",
@@ -1948,22 +1916,6 @@
 		{
 			"id": "backend:Microsoft.AspNetCore.SignalR.Client.Core@10.0.12",
 			"name": "Microsoft.AspNetCore.SignalR.Client.Core",
-			"version": "10.0.12",
-			"license": "MIT",
-			"homepageUrl": "https://asp.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Common@10.0.12",
-			"name": "Microsoft.AspNetCore.SignalR.Common",
-			"version": "10.0.12",
-			"license": "MIT",
-			"homepageUrl": "https://asp.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Protocols.Json@10.0.12",
-			"name": "Microsoft.AspNetCore.SignalR.Protocols.Json",
 			"version": "10.0.12",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
@@ -2760,14 +2712,6 @@
 			"license": "MIT",
 			"homepageUrl": "https://github.com/bitinn/node-fetch",
 			"source": "frontend"
-		},
-		{
-			"id": "backend:NSec.Cryptography@26.4.0",
-			"name": "NSec.Cryptography",
-			"version": "26.4.0",
-			"license": "MIT",
-			"homepageUrl": "https://nsec.rocks/",
-			"source": "backend"
 		},
 		{
 			"id": "backend:NSwag.Annotations@14.7.1",

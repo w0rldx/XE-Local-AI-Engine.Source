@@ -1,34 +1,31 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
-using System.Security.Cryptography;
-
 /// <summary>
-///     Represents invocation execution context.
+///     Everything one invocation needs beyond its <see cref="Client.Models.RuntimePackage" />: the assistant message
+///     it answers, the optional admission policy, and the timings the entry path already measured.
+///     <para>
+///         This used to carry an epoch version and an epoch key as well, and a second <c>Create</c> factory that took
+///         them, because a Central-Platform-assigned invocation arrived as an end-to-end-encrypted envelope. That
+///         transport is gone, every invocation is built through <see cref="CreatePlain" />, and with no key to hold
+///         the type no longer owns anything to zero on dispose.
+///     </para>
 /// </summary>
-public sealed class InvocationExecutionContext : IDisposable
+public sealed class InvocationExecutionContext
 {
-    private byte[]? _ownedEpochKey;
-
     public required Client.Models.RuntimePackage Package { get; init; }
 
     public required Guid MessageId { get; init; }
 
-    public required int EpochVersion { get; init; }
-
-    public required ReadOnlyMemory<byte> EpochKey { get; init; }
-
-    public required bool IsEncrypted { get; init; }
-
     /// <summary>
-    ///     Optional post-warm, pre-generation admission policy. Existing chat, scheduler, and platform callers leave it
-    ///     unset and retain their current behavior.
+    ///     Optional post-warm, pre-generation admission policy. Existing chat and scheduler callers leave it unset and
+    ///     retain their current behavior.
     /// </summary>
     public IInvocationGenerationAdmissionPolicy? GenerationAdmissionPolicy { get; init; }
 
     /// <summary>
     ///     Optional monotonic timestamp captured by the product entry path before chat admission/context/persistence.
-    ///     The runner uses it only for end-to-end harness latency; external/platform invocations leave it unset and use
-    ///     the runner-entry timestamp.
+    ///     The runner uses it only for end-to-end harness latency; callers that leave it unset get the runner-entry
+    ///     timestamp.
     /// </summary>
     public long? HarnessStartedTimestamp { get; init; }
 
@@ -37,38 +34,6 @@ public sealed class InvocationExecutionContext : IDisposable
 
     /// <summary>Elapsed collision-slot queue time, when supplied by the local chat path.</summary>
     public double? QueueDurationMs { get; init; }
-
-    public void Dispose()
-    {
-        if (_ownedEpochKey is not null)
-        {
-            CryptographicOperations.ZeroMemory(_ownedEpochKey);
-            _ownedEpochKey = null;
-        }
-    }
-
-    public static InvocationExecutionContext Create(Client.Models.RuntimePackage package,
-        Guid messageId,
-        int epochVersion,
-        ReadOnlyMemory<byte> epochKey,
-        IInvocationGenerationAdmissionPolicy? generationAdmissionPolicy = null)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-
-        var ownedEpochKey = epochKey.ToArray();
-        var isEncrypted = ownedEpochKey.Length > 0;
-
-        return new InvocationExecutionContext
-        {
-            Package = package,
-            MessageId = messageId,
-            EpochVersion = epochVersion,
-            EpochKey = ownedEpochKey,
-            IsEncrypted = isEncrypted,
-            GenerationAdmissionPolicy = generationAdmissionPolicy,
-            _ownedEpochKey = ownedEpochKey
-        };
-    }
 
     public static InvocationExecutionContext CreatePlain(Client.Models.RuntimePackage package,
         Guid messageId,
@@ -83,9 +48,6 @@ public sealed class InvocationExecutionContext : IDisposable
         {
             Package = package,
             MessageId = messageId,
-            EpochVersion = 0,
-            EpochKey = ReadOnlyMemory<byte>.Empty,
-            IsEncrypted = false,
             GenerationAdmissionPolicy = generationAdmissionPolicy,
             HarnessStartedTimestamp = harnessStartedTimestamp,
             PreRunDurationMs = preRunDurationMs,

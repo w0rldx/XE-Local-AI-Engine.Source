@@ -47,9 +47,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenValid_SavesAndReportsCapabilities()
     {
         var nodeSettingsStore = NewSettingsStore();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
-        await using var factory = CreateFactory(nodeSettingsStore, capabilityReporter);
+        await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
@@ -65,7 +63,6 @@ public sealed class NodeSettingsEndpointTests
         await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
                 Persisted(mutate).MaxMessageRequestTimeoutSeconds == 600),
             Arg.Any<CancellationToken>());
-        await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -171,8 +168,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenOutOfRange_ReturnsValidationProblem()
     {
         var nodeSettingsStore = NewSettingsStore();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        await using var factory = CreateFactory(nodeSettingsStore, capabilityReporter);
+        await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
@@ -184,7 +180,6 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
-        await capabilityReporter.DidNotReceiveWithAnyArgs().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1169,7 +1164,6 @@ public sealed class NodeSettingsEndpointTests
     }
 
     private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,
-        ICapabilityReporter? capabilityReporter = null,
         INodeRuntimeSettings? runtimeSettings = null)
     {
         return new TestServerWebAppFactory
@@ -1178,8 +1172,6 @@ public sealed class NodeSettingsEndpointTests
             {
                 services.RemoveAll<INodeSettingsStore>();
                 services.AddSingleton(nodeSettingsStore);
-                services.RemoveAll<ICapabilityReporter>();
-                services.AddSingleton(capabilityReporter ?? Substitute.For<ICapabilityReporter>());
                 if (runtimeSettings is not null)
                 {
                     services.RemoveAll<INodeRuntimeSettings>();

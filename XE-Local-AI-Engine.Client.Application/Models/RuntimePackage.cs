@@ -86,7 +86,6 @@ public sealed record RuntimePackage
     /// </summary>
     public bool AllowAutoModelSwap { get; init; }
 
-    public List<string>? RequestedCapabilities { get; init; }
 
     public required TimeoutSettings Timeouts { get; init; }
 

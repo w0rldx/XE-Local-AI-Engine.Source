@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -987,8 +986,7 @@ public sealed class WorkSessionStepLoopTests
                         {
                             InvocationId = request.RequestId.GetValueOrDefault(),
                             CreatedAt = DateTimeOffset.UtcNow,
-                            ApprovalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
-                            ResultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously)
+                            ApprovalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
                         });
                     yield return streamEvent with
                     {

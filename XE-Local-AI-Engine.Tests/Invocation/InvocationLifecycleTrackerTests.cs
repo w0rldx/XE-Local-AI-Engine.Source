@@ -98,20 +98,19 @@ public sealed class InvocationLifecycleTrackerTests
     }
 
     [Test]
-    public async Task DrainActiveInvocationsAsync_FencesLocalAdmissionOnly_AndWaitsForTheActiveCompletion()
+    public async Task DrainActiveInvocationsAsync_FencesLaterAdmission_AndWaitsForTheActiveCompletion()
     {
         var tracker = CreateTracker();
         var activeInvocationId = Guid.NewGuid();
-        var activeCompletion = AssertEx.NotNull(tracker.RegisterActiveInvocationCompletion(activeInvocationId, isLocalLoopback: true));
+        var activeCompletion = AssertEx.NotNull(tracker.RegisterActiveInvocationCompletion(activeInvocationId));
         AssertEx.Equal(expected: 1, tracker.ActiveInvocationCount);
 
         var drainTask = tracker.DrainActiveInvocationsAsync(TimeSpan.FromSeconds(5));
         AssertEx.False(drainTask.IsCompleted, "The drain must wait for the registered completion.");
 
-        // A local turn arriving after the fence is refused, because it would become an untracked run the drain never
-        // waits for. A remote assignment is not fenced here — the dispatcher already stopped accepting those at drain.
-        AssertEx.Null(tracker.RegisterActiveInvocationCompletion(Guid.NewGuid(), isLocalLoopback: true));
-        AssertEx.NotNull(tracker.RegisterActiveInvocationCompletion(Guid.NewGuid(), isLocalLoopback: false));
+        // A turn arriving after the fence is refused, because it would become an untracked run the drain never
+        // waits for.
+        AssertEx.Null(tracker.RegisterActiveInvocationCompletion(Guid.NewGuid()));
 
         tracker.CompleteActiveInvocation(activeInvocationId, activeCompletion);
         AssertEx.True(await drainTask);

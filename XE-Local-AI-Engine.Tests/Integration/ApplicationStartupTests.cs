@@ -4,10 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -30,17 +27,10 @@ public sealed class ApplicationStartupTests
     }
 
     [Test]
-    public async Task IWorkerHubConnection_IsRegistered()
+    public async Task ITokenStore_IsResolvable()
     {
         var factory = Factory;
-        AssertEx.NotNull(factory.Services.GetRequiredService<IWorkerHubConnection>());
-    }
-
-    [Test]
-    public async Task IPairingService_IsRegistered()
-    {
-        var factory = Factory;
-        AssertEx.NotNull(factory.Services.GetRequiredService<IPairingService>());
+        AssertEx.NotNull(factory.Services.GetRequiredService<ITokenStore>());
     }
 
     [Test]
@@ -61,27 +51,10 @@ public sealed class ApplicationStartupTests
     }
 
     [Test]
-    public async Task IDeadLetterStore_IsRegistered()
-    {
-        var factory = Factory;
-        AssertEx.NotNull(factory.Services.GetRequiredService<IDeadLetterStore>());
-    }
-
-    [Test]
     public async Task ICapabilityReporter_IsRegistered()
     {
         var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<ICapabilityReporter>());
-    }
-
-    [Test]
-    public async Task IWorkerShutdownDrainService_IsRegistered()
-    {
-        var factory = Factory;
-
-        AssertEx.NotNull(factory.Services.GetRequiredService<IWorkerShutdownDrainService>());
-        AssertEx.Equal(WorkerShutdownDrainOptions.DefaultDrainTimeout,
-            factory.Services.GetRequiredService<IOptions<WorkerShutdownDrainOptions>>().Value.DrainTimeout);
     }
 
     [Test]
@@ -113,32 +86,5 @@ public sealed class ApplicationStartupTests
         // has to name the knob, not merely fail, or the operator is left guessing which of the two settings to move.
         AssertEx.True(exception?.ToString().Contains("WorkSessions:MaxParkedSeconds", StringComparison.Ordinal) == true,
             $"Startup should have failed naming WorkSessions:MaxParkedSeconds; got: {exception?.ToString() ?? "no exception"}");
-    }
-
-    [Test]
-    public async Task ConfigurationValidation_WithMissingBaseUrl_FailsStartup()
-    {
-        await using var invalidFactory = new TestServerWebAppFactory
-        {
-            SkipDefaultBaseUrlOverride = true,
-            AdditionalConfiguration = new Dictionary<string, string?>
-            {
-                ["CentralPlatform:BaseUrl"] = string.Empty
-            }
-        };
-
-        Exception? exception = null;
-
-        try
-        {
-            _ = invalidFactory.Services;
-            throw new AssertionException("Expected startup to fail for missing CentralPlatform:BaseUrl.");
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or OptionsValidationException)
-        {
-            exception = ex;
-        }
-
-        AssertEx.NotNull(exception);
     }
 }

@@ -35,7 +35,6 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.Equal(expected: 1, package.AgentDefinitionVersion);
         AssertEx.Empty(package.AllowedTools);
         AssertEx.Null(package.ToolPolicies);
-        AssertEx.Null(package.RequestedCapabilities);
         AssertEx.Equal(expected: 600, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
@@ -91,7 +90,6 @@ public sealed class LocalChatRuntimePackageBuilderTests
             {
                 ["approvalRequired"] = true
             },
-            RequestedCapabilities = ["local-chat", "loopback"],
             Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 45,
@@ -107,7 +105,6 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.Equal("open_url", package.AllowedTools[0].Name);
         AssertEx.Equal(expected: true, package.ToolPolicies!["approvalRequired"]);
         AssertEx.Equal("high", package.ReasoningEffort);
-        AssertEx.Equal(expected: 2, AssertEx.NotNull(package.RequestedCapabilities).Count);
 
         var expectedHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
             request.ResolvedSystemPrompt,

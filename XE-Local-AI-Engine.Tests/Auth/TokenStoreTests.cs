@@ -1,19 +1,24 @@
 namespace XE_Local_AI_Engine.Tests.Auth;
 
-using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+/// <summary>
+///     <see cref="TokenStore" /> is read-only since the Central Platform pairing flow that wrote
+///     <c>worker-credentials.enc</c> was removed: nothing creates, updates or deletes the file any more. These tests
+///     pin the two reads a shipped node still depends on — a node that never paired answers null (so
+///     <c>AgentHomeIdentityProvider</c> falls back to the loopback identity), and one whose file an earlier build
+///     wrote keeps answering with the node id it was issued.
+/// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TokenStoreTests : IDisposable
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly string _contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -25,227 +30,82 @@ public sealed class TokenStoreTests : IDisposable
     }
 
     [Test]
-    public async Task IsPaired_WhenNothingStored_ReturnsFalse()
+    public async Task GetClientNodeIdAsync_WhenNothingStored_ReturnsNull()
     {
-        using var tokenStore = CreateTokenStore();
+        var tokenStore = CreateTokenStore();
 
-        AssertEx.False(tokenStore.IsPaired);
+        AssertEx.Null(await tokenStore.GetClientNodeIdAsync());
         AssertEx.Null(await tokenStore.GetAccessTokenAsync());
     }
 
     [Test]
-    public async Task StoreTokensAsync_WhenResponseIsValid_SetsPairedState()
+    public async Task GetClientNodeIdAsync_WhenCredentialsFileExists_ReturnsTheStoredNodeId()
     {
-        using var tokenStore = CreateTokenStore();
+        var clientNodeId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        WriteCredentials(clientNodeId, "stored-access-token", DateTimeOffset.UtcNow.AddHours(1));
 
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+        var tokenStore = CreateTokenStore();
 
-        AssertEx.True(tokenStore.IsPaired);
+        AssertEx.Equal(clientNodeId, await tokenStore.GetClientNodeIdAsync());
+        AssertEx.Equal("stored-access-token", await tokenStore.GetAccessTokenAsync());
     }
 
     [Test]
-    public async Task StoreTokensAsync_WritesCredentialsUnderDataDirectory_NotContentRoot()
+    public async Task GetAccessTokenAsync_WhenStoredTokenHasExpired_ReturnsNullButKeepsTheNodeId()
     {
-        // The encrypted credential must land in the per-user data dir the node-data-directory abstraction resolves,
-        // never in the shared/shipped install (content-root) directory.
-        var contentRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(contentRoot);
-        Directory.CreateDirectory(_contentRootPath);
-        try
-        {
-            using var tokenStore = new TokenStore(new MockDataProtector(),
-                new FakeNodeDataDirectory(_contentRootPath),
-                NullLogger<TokenStore>.Instance,
-                TimeProvider.System);
-
-            await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
-
-            AssertEx.True(File.Exists(GetCredentialsPath()), "the credential must be written under the data dir.");
-            AssertEx.False(File.Exists(Path.Combine(contentRoot, "worker-credentials.enc")), "no credential may land in the content root.");
-        }
-        finally
-        {
-            Directory.Delete(contentRoot, recursive: true);
-        }
-    }
-
-    [Test]
-    public async Task GetAccessTokenAsync_AfterStore_ReturnsStoredToken()
-    {
-        using var tokenStore = CreateTokenStore();
-        var response = PairClientResponseBuilder.Valid().WithToken(CreateJwt(DateTimeOffset.UtcNow.AddDays(2))).Build();
-
-        await tokenStore.StoreTokensAsync(response);
-
-        AssertEx.Equal(response.AccessToken, await tokenStore.GetAccessTokenAsync());
-    }
-
-    [Test]
-    public async Task GetClientNodeIdAsync_AfterStore_ReturnsStoredIdentifier()
-    {
-        using var tokenStore = CreateTokenStore();
         var clientNodeId = Guid.NewGuid();
-        var response = PairClientResponseBuilder.Valid().WithClientNodeId(clientNodeId).Build();
+        var now = new DateTimeOffset(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
+        WriteCredentials(clientNodeId, "stale-access-token", now.AddMinutes(-1));
 
-        await tokenStore.StoreTokensAsync(response);
+        var tokenStore = CreateTokenStore(new FixedTimeProvider(now));
 
+        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
+        // The identity outlives the token: AgentHomeIdentityProvider keys on the node id, not on a live session.
         AssertEx.Equal(clientNodeId, await tokenStore.GetClientNodeIdAsync());
     }
 
     [Test]
-    public async Task IsTokenExpired_WhenExpiryIsPast_ReturnsTrue()
-    {
-        using var tokenStore = CreateTokenStore();
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().WithToken(CreateJwt(expiresAt)).WithExpiresAt(expiresAt).Build());
-
-        AssertEx.True(tokenStore.IsTokenExpired);
-        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
-    }
-
-    [Test]
-    public async Task IsTokenExpiringSoon_WhenExpiryWithinThreshold_ReturnsTrue()
-    {
-        using var tokenStore = CreateTokenStore();
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(12);
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().WithToken(CreateJwt(expiresAt)).WithExpiresAt(expiresAt).Build());
-
-        AssertEx.True(tokenStore.IsTokenExpiringSoon);
-    }
-
-    [Test]
-    public async Task ClearTokensAsync_WhenTokensExist_RemovesState()
-    {
-        using var tokenStore = CreateTokenStore();
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
-
-        await tokenStore.ClearTokensAsync();
-
-        AssertEx.False(tokenStore.IsPaired);
-        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
-        AssertEx.Null(await tokenStore.GetClientNodeIdAsync());
-    }
-
-    [Test]
-    public async Task StoreTokensAsync_RaisesTokensChangedEventOnce()
-    {
-        using var tokenStore = CreateTokenStore();
-        var eventCount = 0;
-        tokenStore.TokensChanged += (_, _) => eventCount++;
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
-
-        AssertEx.Equal(expected: 1, eventCount);
-    }
-
-    [Test]
-    public async Task HandleKeyRotationAsync_WhenDecryptionFails_ClearsTokens()
-    {
-        var protector = Substitute.For<IDataProtector>();
-        protector.CreateProtector(Arg.Any<string>()).Returns(protector);
-        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("boom"));
-
-        using var tokenStore = CreateTokenStore(protector);
-        await File.WriteAllBytesAsync(GetCredentialsPath(), [1, 2, 3]);
-
-        await tokenStore.HandleKeyRotationAsync();
-
-        AssertEx.False(tokenStore.IsPaired);
-        AssertEx.False(File.Exists(GetCredentialsPath()));
-    }
-
-    [Test]
-    public async Task GetAccessTokenAsync_WhenCredentialFileIsCorrupted_ReturnsNull()
+    public async Task GetClientNodeIdAsync_WhenTheCredentialsFileIsUnreadable_ReportsUnpaired()
     {
         Directory.CreateDirectory(_contentRootPath);
-        await File.WriteAllTextAsync(GetCredentialsPath(), "not-json");
-        using var tokenStore = CreateTokenStore();
+        await File.WriteAllBytesAsync(GetCredentialsPath(), Encoding.UTF8.GetBytes("not a protected payload"));
 
-        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
-    }
-
-    [Test]
-    public void Dispose_WhenCalled_DoesNotThrow()
-    {
         var tokenStore = CreateTokenStore();
 
-        tokenStore.Dispose();
+        AssertEx.Null(await tokenStore.GetClientNodeIdAsync());
+        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
+        // Read-only: an unreadable file is left exactly where it was rather than deleted.
+        AssertEx.True(File.Exists(GetCredentialsPath()));
     }
 
-    [Test]
-    public async Task StoreTokensAsync_WhenJwtIsMalformed_UsesResponseExpiry()
-    {
-        using var tokenStore = CreateTokenStore();
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(30);
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().WithToken("not-a-jwt").WithExpiresAt(expiresAt).Build());
-
-        AssertEx.Equal(expiresAt, tokenStore.TokenExpiresAt);
-    }
-
-    [Test]
-    public async Task StoreTokensAsync_WhenMetadataProvided_PersistsBindingMetadata()
-    {
-        using var tokenStore = CreateTokenStore();
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build(), new TokenStoreMetadata
-        {
-            BindingMethod = "device-code",
-            AutoConnectOnStart = false,
-            LastKnownNodeName = "worker-a"
-        });
-
-        AssertEx.Equal("device-code", tokenStore.BindingMethod);
-        AssertEx.False(tokenStore.AutoConnectOnStart);
-        AssertEx.Equal("worker-a", tokenStore.LastKnownNodeName);
-    }
-
-    [Test]
-    public async Task StoreTokensAsync_WhenMetadataOmitted_DefaultsAutoConnectOnStartFalse()
-    {
-        using var tokenStore = CreateTokenStore();
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
-
-        AssertEx.False(tokenStore.AutoConnectOnStart);
-        AssertEx.Equal("pairing-token", tokenStore.BindingMethod);
-    }
-
-    [Test]
-    public async Task StoreTokensAsync_WhenMetadataOmitted_PreservesExistingAutoConnectPreference()
-    {
-        using var tokenStore = CreateTokenStore();
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build(), new TokenStoreMetadata
-        {
-            AutoConnectOnStart = true
-        });
-
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
-
-        AssertEx.True(tokenStore.AutoConnectOnStart);
-    }
-
-    [Test]
-    public async Task SetAutoConnectOnStartAsync_WhenPaired_PersistsPreference()
-    {
-        using var tokenStore = CreateTokenStore();
-        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
-
-        await tokenStore.SetAutoConnectOnStartAsync(false);
-
-        AssertEx.False(tokenStore.AutoConnectOnStart);
-    }
-
-    private TokenStore CreateTokenStore(IDataProtectionProvider? dataProtectionProvider = null)
+    private TokenStore CreateTokenStore(TimeProvider? timeProvider = null)
     {
         Directory.CreateDirectory(_contentRootPath);
 
-        return new TokenStore(dataProtectionProvider ?? new MockDataProtector(),
+        return new TokenStore(new MockDataProtector(),
             new FakeNodeDataDirectory(_contentRootPath),
             NullLogger<TokenStore>.Instance,
-            TimeProvider.System);
+            timeProvider ?? TimeProvider.System);
+    }
+
+    private void WriteCredentials(Guid clientNodeId, string accessToken, DateTimeOffset expiresAt)
+    {
+        Directory.CreateDirectory(_contentRootPath);
+
+        // The exact envelope the removed pairing flow wrote, so this proves the store still reads a real install's file.
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            clientNodeId,
+            accessToken,
+            refreshToken = "stored-refresh-token",
+            expiresAt,
+            bindingMethod = "pairing-token",
+            autoConnectOnStart = false,
+            lastKnownNodeName = "XE-Local-Worker-01"
+        }, SerializerOptions);
+
+        var protector = new MockDataProtector().CreateProtector("WorkerNode.TokenStore.v1");
+        File.WriteAllBytes(GetCredentialsPath(), protector.Protect(payload));
     }
 
     private string GetCredentialsPath()
@@ -253,18 +113,18 @@ public sealed class TokenStoreTests : IDisposable
         return Path.Combine(_contentRootPath, "worker-credentials.enc");
     }
 
-    private static string CreateJwt(DateTimeOffset expiresAt)
+    private sealed class FixedTimeProvider : TimeProvider
     {
-        var header = Base64UrlEncode("{\"alg\":\"none\"}");
-        var payload = Base64UrlEncode($"{{\"exp\":{expiresAt.ToUnixTimeSeconds()}}}");
-        return $"{header}.{payload}.";
-    }
+        private readonly DateTimeOffset _utcNow;
 
-    private static string Base64UrlEncode(string value)
-    {
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
-                      .TrimEnd('=')
-                      .Replace(oldChar: '+', newChar: '-')
-                      .Replace(oldChar: '/', newChar: '_');
+        public FixedTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
     }
 }

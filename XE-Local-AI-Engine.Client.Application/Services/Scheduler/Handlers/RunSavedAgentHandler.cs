@@ -270,7 +270,6 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             AgentDefinitionVersion = resolved.AgentDefinitionVersion,
             ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools = offeredTools,
-            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
             // Only the invocation timeout is operator-controlled; tool-call and stream-idle keep their defaults. When the
             // setting equals the TimeoutSettings default the package — and its config hash — is byte-identical to one
             // built without an explicit Timeouts.
@@ -327,7 +326,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {
-            using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+            var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
             await invocationRunner.RunAsync(executionContext, cancellationToken);
         }
         finally

@@ -4,26 +4,16 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 public sealed class SaveCloudSettingsEndpoint : Endpoint<SaveCloudSettingsRequest, CloudSettingsResponse>
 {
-    private readonly ICapabilityReporter _capabilityReporter;
     private readonly ICloudCredentialStore _cloudCredentialStore;
-    private readonly ILogger<SaveCloudSettingsEndpoint> _logger;
 
-    public SaveCloudSettingsEndpoint(
-        ICloudCredentialStore cloudCredentialStore,
-        ICapabilityReporter capabilityReporter,
-        ILogger<SaveCloudSettingsEndpoint> logger)
+    public SaveCloudSettingsEndpoint(ICloudCredentialStore cloudCredentialStore)
     {
-        ArgumentNullException.ThrowIfNull(capabilityReporter);
         ArgumentNullException.ThrowIfNull(cloudCredentialStore);
-        ArgumentNullException.ThrowIfNull(logger);
-        _capabilityReporter = capabilityReporter;
         _cloudCredentialStore = cloudCredentialStore;
-        _logger = logger;
     }
 
     public override void Configure()
@@ -73,19 +63,6 @@ public sealed class SaveCloudSettingsEndpoint : Endpoint<SaveCloudSettingsReques
 
         var config = req.ToStoredConfig(mergedHeaders, mergedEntraClientSecret);
         await _cloudCredentialStore.SaveConfigAsync(config, ct);
-        await TryReportCapabilitiesAsync(ct);
         await Send.OkAsync(config.ToResponse(), ct);
-    }
-
-    private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _capabilityReporter.ReportToApiAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to report capabilities after cloud settings were saved.");
-        }
     }
 }

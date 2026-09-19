@@ -15,7 +15,7 @@ public static class NodeApplicationServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.AddNodeCoreOptions(configuration);
-        builder.AddNodeAuthAndConnection(configuration);
+        builder.AddNodeAuth(configuration);
         builder.AddNodeInvocation(configuration);
         builder.AddNodeWorkspaceAndAgents(configuration);
         builder.AddNodeAnalysis(configuration);

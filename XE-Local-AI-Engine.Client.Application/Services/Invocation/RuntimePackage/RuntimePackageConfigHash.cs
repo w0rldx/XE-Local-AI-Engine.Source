@@ -22,18 +22,6 @@ public static class RuntimePackageConfigHash
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    public static string Compute(EncryptedRuntimePackageDto package)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-
-        return Compute(package.AgentDefinitionVersion,
-            package.ResolvedSystemPrompt,
-            package.AllowedTools,
-            package.ModelProfile,
-            package.Timeouts,
-            package.ReasoningEffort);
-    }
-
     public static string Compute(int agentDefinitionVersion,
         string resolvedSystemPrompt,
         IReadOnlyList<MixedEnvelopeAllowedToolDto> allowedTools,

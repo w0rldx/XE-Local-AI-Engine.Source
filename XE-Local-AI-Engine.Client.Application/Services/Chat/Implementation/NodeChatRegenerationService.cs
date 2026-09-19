@@ -285,7 +285,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
                 ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
                 AllowedTools = allowedTools,
-                RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
                 Timeouts = new TimeoutSettings
                 {
                     InvocationTimeoutSeconds = runtimeNodeSettings.MaxMessageRequestTimeoutSeconds
@@ -575,7 +574,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 throw new NoChatModelInstalledException();
             }
 
-            using var context = InvocationExecutionContext.CreatePlain(package, messageId);
+            var context = InvocationExecutionContext.CreatePlain(package, messageId);
             await _invocationRunner.RunAsync(context, cancellationToken);
         }
         catch (OperationCanceledException)

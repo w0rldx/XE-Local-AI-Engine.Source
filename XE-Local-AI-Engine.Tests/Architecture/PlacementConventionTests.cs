@@ -6,7 +6,7 @@ using ArchUnitNET.Fluent.Extensions;
 using ArchUnitNET.Loader;
 using FastEndpoints;
 using FluentValidation;
-using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -46,7 +46,7 @@ public sealed class PlacementConventionTests
 {
     // Marker types anchor each assembly so the rules run over the real compiled IL, not a namespace string. These
     // mirror LayerDependencyTests' markers deliberately: one marker set, one place to fix when a type is renamed.
-    private static readonly Assembly ClientAssembly = typeof(WorkerHealthCheck).Assembly;
+    private static readonly Assembly ClientAssembly = typeof(LocalApiRoutes).Assembly;
 
     // Providers.Abstractions is absent on purpose and is NOT an exception to Rule A: that assembly IS the shared
     // contracts layer, its root namespace is where its ~30 public seam interfaces belong, and a `.Contracts`

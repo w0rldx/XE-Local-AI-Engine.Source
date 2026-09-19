@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Xml.Linq;
 using NetArchTest.Rules;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
-using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -80,7 +80,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly AiAgentAssembly = typeof(IInvocationAgentFactory).Assembly;
     private static readonly Assembly ApplicationAssembly = typeof(RuntimePackageValidationResult).Assembly;
     private static readonly Assembly PersistenceAssembly = typeof(NodeChatDbContext).Assembly;
-    private static readonly Assembly HostAssembly = typeof(WorkerHealthCheck).Assembly;
+    private static readonly Assembly HostAssembly = typeof(LocalApiRoutes).Assembly;
     private static readonly Assembly ServiceDefaultsAssembly = typeof(Extensions).Assembly;
     private static readonly Assembly WindowsLauncherAssembly = typeof(WindowsLauncherApplication).Assembly;
 
@@ -196,7 +196,6 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.Client"] =
             [
                 "Azure.AI.OpenAI",
-                "BouncyCastle.Cryptography",
                 "FastEndpoints",
                 "FastEndpoints.Swagger",
                 "Microsoft.AspNetCore.Authentication.JwtBearer",
@@ -224,12 +223,10 @@ public sealed class LayerDependencyTests
             [
                 "Azure.AI.OpenAI",
                 "Azure.Identity",
-                "BouncyCastle.Cryptography",
                 "Docker.DotNet.Enhanced",
                 "DocumentFormat.OpenXml",
                 "Microsoft.Agents.AI",
                 "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
-                "Microsoft.AspNetCore.SignalR.Client",
                 "Microsoft.EntityFrameworkCore.Sqlite",
                 "Microsoft.Extensions.AI",
                 "Microsoft.Extensions.AI.OpenAI",
@@ -240,7 +237,6 @@ public sealed class LayerDependencyTests
                 "Microsoft.IdentityModel.JsonWebTokens",
                 "ModelContextProtocol",
                 "NAudio.Wasapi",
-                "NSec.Cryptography",
                 "PdfPig",
                 "Quartz",
                 "Quartz.Extensions.Hosting",

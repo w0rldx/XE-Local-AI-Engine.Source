@@ -23,7 +23,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     // sides use the same instance; it is deliberately NOT the store's (private) one.
     private static readonly JsonSerializerOptions ComparisonSerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly ICapabilityReporter _capabilityReporter;
     private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly ILocalModelProviderResolver _localModelProviderResolver;
@@ -35,14 +34,12 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     public NodeSettingsAdministrationService(
         INodeSettingsStore store,
         INodeRuntimeSettings runtimeSettings,
-        ICapabilityReporter capabilityReporter,
         DefaultModelSelectionPolicy defaultModelSelectionPolicy,
         IGgufModelStore ggufModelStore,
         IModelTrustResolver modelTrustResolver,
         ILocalModelProviderResolver localModelProviderResolver,
         ILogger<NodeSettingsAdministrationService> logger)
     {
-        ArgumentNullException.ThrowIfNull(capabilityReporter);
         ArgumentNullException.ThrowIfNull(defaultModelSelectionPolicy);
         ArgumentNullException.ThrowIfNull(ggufModelStore);
         ArgumentNullException.ThrowIfNull(localModelProviderResolver);
@@ -50,7 +47,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(store);
-        _capabilityReporter = capabilityReporter;
         _defaultModelSelectionPolicy = defaultModelSelectionPolicy;
         _ggufModelStore = ggufModelStore;
         _localModelProviderResolver = localModelProviderResolver;
@@ -265,7 +261,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 continue;
             }
 
-            await TryReportCapabilitiesAsync(cancellationToken);
             return NodeSettingsAdministrationResult.Saved(persisted);
         }
 
@@ -296,18 +291,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         };
 
         return JsonSerializer.Serialize(withoutMachineKey, ComparisonSerializerOptions);
-    }
-
-    private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _capabilityReporter.ReportToApiAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to report capabilities after node settings were saved.");
-        }
     }
 
     // Enforcement point 1's predicate. Shared verbatim with enforcement point 2 (the dispatcher's per-turn re-check)

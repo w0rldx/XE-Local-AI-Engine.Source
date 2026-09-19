@@ -84,9 +84,6 @@ import type {
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildErrors,
 	CancelLlamaCppSourceBuildResponses,
-	CancelNodeBindingData,
-	CancelNodeBindingErrors,
-	CancelNodeBindingResponses,
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageErrors,
 	CancelNodeChatMessageResponses,
@@ -144,9 +141,6 @@ import type {
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeErrors,
 	ConfirmDevelopmentContainerRuntimeResponses,
-	ConnectConnectionData,
-	ConnectConnectionErrors,
-	ConnectConnectionResponses,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
@@ -354,18 +348,12 @@ import type {
 	DetectDevelopmentRepositoryProfileData,
 	DetectDevelopmentRepositoryProfileErrors,
 	DetectDevelopmentRepositoryProfileResponses,
-	DisableAutoConnectData,
-	DisableAutoConnectErrors,
-	DisableAutoConnectResponses,
 	DisableScheduledJobData,
 	DisableScheduledJobErrors,
 	DisableScheduledJobResponses,
 	DiscardTrainingArtifactQualityData,
 	DiscardTrainingArtifactQualityErrors,
 	DiscardTrainingArtifactQualityResponses,
-	DisconnectConnectionData,
-	DisconnectConnectionErrors,
-	DisconnectConnectionResponses,
 	DownloadRecommendedEmbeddingData,
 	DownloadRecommendedEmbeddingErrors,
 	DownloadRecommendedEmbeddingResponses,
@@ -387,9 +375,6 @@ import type {
 	EjectTranscriptionRuntimeData,
 	EjectTranscriptionRuntimeErrors,
 	EjectTranscriptionRuntimeResponses,
-	EnableAutoConnectData,
-	EnableAutoConnectErrors,
-	EnableAutoConnectResponses,
 	EnableScheduledJobData,
 	EnableScheduledJobErrors,
 	EnableScheduledJobResponses,
@@ -477,9 +462,6 @@ import type {
 	GetComparisonData,
 	GetComparisonErrors,
 	GetComparisonResponses,
-	GetConnectionStatusData,
-	GetConnectionStatusErrors,
-	GetConnectionStatusResponses,
 	GetCustomToolData,
 	GetCustomToolErrors,
 	GetCustomToolResponses,
@@ -999,9 +981,6 @@ import type {
 	PinNodeChatConversationData,
 	PinNodeChatConversationErrors,
 	PinNodeChatConversationResponses,
-	PollNodeBindingData,
-	PollNodeBindingErrors,
-	PollNodeBindingResponses,
 	PostWorkSessionMessageData,
 	PostWorkSessionMessageErrors,
 	PostWorkSessionMessageResponses,
@@ -1203,9 +1182,6 @@ import type {
 	StartLlamaCppSourceBuildData,
 	StartLlamaCppSourceBuildErrors,
 	StartLlamaCppSourceBuildResponses,
-	StartNodeBindingData,
-	StartNodeBindingErrors,
-	StartNodeBindingResponses,
 	StartProcessCaptureData,
 	StartProcessCaptureErrors,
 	StartProcessCaptureResponses,
@@ -1390,7 +1366,6 @@ import {
 	zCancelImageModelDownloadResponse,
 	zCancelIntegrationExecutionPath,
 	zCancelLlamaCppSourceBuildResponse,
-	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
 	zCancelNodeChatMessageResponse,
 	zCancelScheduledJobRunPath,
@@ -1428,7 +1403,6 @@ import {
 	zCompareBenchmarkCellsResponse,
 	zConfirmDevelopmentContainerRuntimeBody,
 	zConfirmDevelopmentContainerRuntimeResponse,
-	zConnectConnectionResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
 	zCreateBaseArtifactBody,
@@ -1585,13 +1559,11 @@ import {
 	zDeleteWorkspaceResponse,
 	zDetectDevelopmentRepositoryProfilePath,
 	zDetectDevelopmentRepositoryProfileResponse,
-	zDisableAutoConnectResponse,
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
 	zDiscardTrainingArtifactQualityBody,
 	zDiscardTrainingArtifactQualityPath,
 	zDiscardTrainingArtifactQualityResponse,
-	zDisconnectConnectionResponse,
 	zDownloadRecommendedEmbeddingResponse,
 	zDownloadRecommendedRerankerResponse,
 	zDraftAgentDefinitionBody,
@@ -1604,7 +1576,6 @@ import {
 	zEjectRunningModelResponse,
 	zEjectTranscriptionRuntimeBody,
 	zEjectTranscriptionRuntimeResponse,
-	zEnableAutoConnectResponse,
 	zEnableScheduledJobPath,
 	zEnableScheduledJobResponse,
 	zEnsureLlamaCppBinaryBody,
@@ -1659,7 +1630,6 @@ import {
 	zGetCloudSettingsResponse,
 	zGetComparisonPath,
 	zGetComparisonResponse,
-	zGetConnectionStatusResponse,
 	zGetCustomToolPath,
 	zGetCustomToolResponse,
 	zGetDevelopmentArtifactPath,
@@ -1961,8 +1931,6 @@ import {
 	zPinNodeChatConversationBody,
 	zPinNodeChatConversationPath,
 	zPinNodeChatConversationResponse,
-	zPollNodeBindingBody,
-	zPollNodeBindingResponse,
 	zPostWorkSessionMessageBody,
 	zPostWorkSessionMessagePath,
 	zPostWorkSessionMessageResponse,
@@ -2116,7 +2084,6 @@ import {
 	zStartLiveTranscriptionSessionResponse,
 	zStartLlamaCppSourceBuildBody,
 	zStartLlamaCppSourceBuildResponse,
-	zStartNodeBindingResponse,
 	zStartProcessCaptureBody,
 	zStartProcessCapturePath,
 	zStartProcessCaptureResponse,
@@ -6212,100 +6179,6 @@ export const saveNodeSettings = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const cancelNodeBinding = <ThrowOnError extends boolean = false>(
-	options?: Options<CancelNodeBindingData, ThrowOnError>,
-): RequestResult<CancelNodeBindingResponses, CancelNodeBindingErrors, ThrowOnError> =>
-	(options?.client ?? client).post<CancelNodeBindingResponses, CancelNodeBindingErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCancelNodeBindingResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/binding/cancel",
-		...options,
-	});
-
-export const pollNodeBinding = <ThrowOnError extends boolean = false>(
-	options: Options<PollNodeBindingData, ThrowOnError>,
-): RequestResult<PollNodeBindingResponses, PollNodeBindingErrors, ThrowOnError> =>
-	(options.client ?? client).post<PollNodeBindingResponses, PollNodeBindingErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zPollNodeBindingBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zPollNodeBindingResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/binding/poll",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const startNodeBinding = <ThrowOnError extends boolean = false>(
-	options?: Options<StartNodeBindingData, ThrowOnError>,
-): RequestResult<StartNodeBindingResponses, StartNodeBindingErrors, ThrowOnError> =>
-	(options?.client ?? client).post<StartNodeBindingResponses, StartNodeBindingErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zStartNodeBindingResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/binding/start",
-		...options,
 	});
 
 export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
@@ -13249,156 +13122,6 @@ export const validateExecutable = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const connectConnection = <ThrowOnError extends boolean = false>(
-	options?: Options<ConnectConnectionData, ThrowOnError>,
-): RequestResult<ConnectConnectionResponses, ConnectConnectionErrors, ThrowOnError> =>
-	(options?.client ?? client).post<ConnectConnectionResponses, ConnectConnectionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zConnectConnectionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/connection/connect",
-		...options,
-	});
-
-export const disableAutoConnect = <ThrowOnError extends boolean = false>(
-	options?: Options<DisableAutoConnectData, ThrowOnError>,
-): RequestResult<DisableAutoConnectResponses, DisableAutoConnectErrors, ThrowOnError> =>
-	(options?.client ?? client).post<DisableAutoConnectResponses, DisableAutoConnectErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zDisableAutoConnectResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/connection/auto-connect/disable",
-		...options,
-	});
-
-export const disconnectConnection = <ThrowOnError extends boolean = false>(
-	options?: Options<DisconnectConnectionData, ThrowOnError>,
-): RequestResult<DisconnectConnectionResponses, DisconnectConnectionErrors, ThrowOnError> =>
-	(options?.client ?? client).post<DisconnectConnectionResponses, DisconnectConnectionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zDisconnectConnectionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/connection/disconnect",
-		...options,
-	});
-
-export const enableAutoConnect = <ThrowOnError extends boolean = false>(
-	options?: Options<EnableAutoConnectData, ThrowOnError>,
-): RequestResult<EnableAutoConnectResponses, EnableAutoConnectErrors, ThrowOnError> =>
-	(options?.client ?? client).post<EnableAutoConnectResponses, EnableAutoConnectErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zEnableAutoConnectResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/connection/auto-connect/enable",
-		...options,
-	});
-
-export const getConnectionStatus = <ThrowOnError extends boolean = false>(
-	options?: Options<GetConnectionStatusData, ThrowOnError>,
-): RequestResult<GetConnectionStatusResponses, GetConnectionStatusErrors, ThrowOnError> =>
-	(options?.client ?? client).get<GetConnectionStatusResponses, GetConnectionStatusErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetConnectionStatusResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/connection",
-		...options,
 	});
 
 export const clearCloudSettings = <ThrowOnError extends boolean = false>(

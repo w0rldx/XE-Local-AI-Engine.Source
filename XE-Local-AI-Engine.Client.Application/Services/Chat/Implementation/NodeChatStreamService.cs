@@ -433,7 +433,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 throw new NoChatModelInstalledException();
             }
 
-            using var context = InvocationExecutionContext.CreatePlain(package,
+            var context = InvocationExecutionContext.CreatePlain(package,
                 messageId,
                 harnessStartedTimestamp,
                 preRunDurationMs,
@@ -839,7 +839,6 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools = allowedTools,
-            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
             Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = invocationTimeoutSeconds

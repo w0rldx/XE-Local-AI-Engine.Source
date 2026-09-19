@@ -4,7 +4,6 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -234,9 +233,6 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
     public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
-
     public void CancelDetached(Guid invocationId) =>
         throw new NotSupportedException();
 
@@ -250,9 +246,6 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
         throw new NotSupportedException();
 
     public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt) =>
-        throw new NotSupportedException();
-
-    public void ResolveToolCallResult(ToolCallResultEvent evt) =>
         throw new NotSupportedException();
 
     private static string Prompt(RuntimePackage package) =>

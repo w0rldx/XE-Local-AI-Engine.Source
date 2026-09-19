@@ -12,8 +12,6 @@ public sealed class WorkerNodeOptions
     [Range(minimum: 1, maximum: 100)]
     public int MaxResponseSizeMb { get; set; } = 10;
 
-    public string DeadLetterQueuePath { get; set; } = "dead-letter-queue";
-
     [Range(minimum: 1, maximum: 60)]
     public int MaxPendingToolCallAgeMinutes { get; set; } = 10;
 

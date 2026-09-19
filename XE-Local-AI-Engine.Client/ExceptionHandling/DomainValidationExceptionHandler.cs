@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.JsonWebTokens;
-using XE_Local_AI_Engine.Client.Models.NodeBinding;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
@@ -59,7 +58,6 @@ public sealed class DomainValidationExceptionHandler : IExceptionHandler
             or AgentSkillValidationException
             or WorkSessionValidationException
             or DevWorkflowValidationException
-            or NodeBindingException
             or EntraConnectionNotConfiguredException
             or SkillImportException
             or AppUpdateException

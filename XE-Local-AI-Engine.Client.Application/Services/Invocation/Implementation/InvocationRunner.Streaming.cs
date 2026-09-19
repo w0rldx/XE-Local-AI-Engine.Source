@@ -6,7 +6,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -150,33 +149,20 @@ public sealed partial class InvocationRunner
     }
 
     // The single emit path both branches use: it appends to the accumulator, enforces the response/reasoning byte
-    // caps, advances the sequence counter, reports the chunk to the dispatcher, and sends it over the encrypted or
-    // plain hub transport. Keeping this one place guarantees the orchestration path streams byte-for-byte like the
-    // single-agent path.
+    // caps, advances the sequence counter and reports the chunk to the dispatcher. Keeping this one place guarantees
+    // the orchestration path streams byte-for-byte like the single-agent path.
     private sealed class StreamTransport
     {
-        private readonly InvocationExecutionContext _context;
         private readonly RuntimePackage _package;
         private readonly InvocationRunner _runner;
-        private readonly bool _sendEncrypted;
-        private readonly bool _sendPlain;
-        private readonly IHubMessageSender _sender;
 
         public StreamTransport(InvocationRunner runner,
-            IHubMessageSender sender,
             IWorkerEventDispatcher dispatcher,
-            InvocationExecutionContext context,
-            RuntimePackage package,
-            bool sendEncrypted,
-            bool sendPlain)
+            RuntimePackage package)
         {
             _runner = runner;
-            _sender = sender;
             Dispatcher = dispatcher;
-            _context = context;
             _package = package;
-            _sendEncrypted = sendEncrypted;
-            _sendPlain = sendPlain;
         }
 
         public IWorkerEventDispatcher Dispatcher { get; }
@@ -218,15 +204,12 @@ public sealed partial class InvocationRunner
             }
         }
 
-        public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)
+        public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk)
         {
             RecordFirstOutputLatency(stream);
 
-            // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
-            // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
-            // allocation-free GetByteCount.
-            var thinkingBytes = _sendEncrypted ? Encoding.UTF8.GetBytes(thinkingChunk) : null;
-            stream.TotalReasoningBytes += thinkingBytes?.Length ?? Encoding.UTF8.GetByteCount(thinkingChunk);
+            // The size cap needs only the encoded length, so it takes the allocation-free GetByteCount.
+            stream.TotalReasoningBytes += Encoding.UTF8.GetByteCount(thinkingChunk);
             if (stream.TotalReasoningBytes > _runner._maxResponseSizeBytes)
             {
                 throw new InvalidOperationException($"Reasoning size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
@@ -236,39 +219,16 @@ public sealed partial class InvocationRunner
             stream.ReasoningBuilder.Append(thinkingChunk);
 
             await Dispatcher.ReportInvocationThinkingChunkAsync(_package.InvocationId, thinkingChunk);
-
-            if (_sendEncrypted)
-            {
-                await _sender.SendEncryptedChunkAsync(_runner._envelopeCryptoService.EncryptChunk(_package.ConversationId,
-                        _context.MessageId,
-                        _context.EpochVersion,
-                        _context.EpochKey.Span,
-                        thinkingBytes!,
-                        stream.ReasoningSequence,
-                        EncryptedChunkEnvelopeV1.ReasoningKind),
-                    cancellationToken);
-            }
-            else if (_sendPlain)
-            {
-                await _sender.SendReasoningStreamChunkAsync(_package.InvocationId,
-                    thinkingChunk,
-                    isComplete: false,
-                    stream.ReasoningSequence,
-                    cancellationToken);
-            }
         }
 
-        public async Task EmitTextAsync(StreamState stream, string textChunk, CancellationToken cancellationToken)
+        public async Task EmitTextAsync(StreamState stream, string textChunk)
         {
             RecordFirstOutputLatency(stream);
 
             stream.Sequence++;
 
-            // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
-            // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
-            // allocation-free GetByteCount.
-            var textBytes = _sendEncrypted ? Encoding.UTF8.GetBytes(textChunk) : null;
-            stream.TotalResponseBytes += textBytes?.Length ?? Encoding.UTF8.GetByteCount(textChunk);
+            // The size cap needs only the encoded length, so it takes the allocation-free GetByteCount.
+            stream.TotalResponseBytes += Encoding.UTF8.GetByteCount(textChunk);
 
             if (stream.TotalResponseBytes > _runner._maxResponseSizeBytes)
             {
@@ -278,25 +238,6 @@ public sealed partial class InvocationRunner
             stream.ResponseBuilder.Append(textChunk);
 
             await Dispatcher.ReportInvocationStreamChunkAsync(_package.InvocationId, textChunk);
-
-            if (_sendEncrypted)
-            {
-                await _sender.SendEncryptedChunkAsync(_runner._envelopeCryptoService.EncryptChunk(_package.ConversationId,
-                        _context.MessageId,
-                        _context.EpochVersion,
-                        _context.EpochKey.Span,
-                        textBytes!,
-                        stream.Sequence),
-                    cancellationToken);
-            }
-            else if (_sendPlain)
-            {
-                await _sender.SendTokenStreamChunkAsync(_package.InvocationId,
-                    textChunk,
-                    isComplete: false,
-                    stream.Sequence,
-                    cancellationToken);
-            }
         }
     }
 

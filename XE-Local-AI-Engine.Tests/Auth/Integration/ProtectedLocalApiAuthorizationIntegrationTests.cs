@@ -10,8 +10,8 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }
 
-    // A non-auth local API endpoint guarded by the NodeOperator policy.
-    private const string ProtectedConnectionStatusRoute = "/api/local/v1/connection";
+    // A non-auth local API endpoint guarded by the NodeOperator policy. Read-only, so both tests can share one host.
+    private const string ProtectedNodeSettingsRoute = "/api/local/v1/node-settings";
 
     [Test]
     public async Task ProtectedEndpoint_WhenNoBearerTokenProvided_ReturnsUnauthorized()
@@ -19,7 +19,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
+        using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedNodeSettingsRoute);
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -31,7 +31,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
+        using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedNodeSettingsRoute);
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request);
 

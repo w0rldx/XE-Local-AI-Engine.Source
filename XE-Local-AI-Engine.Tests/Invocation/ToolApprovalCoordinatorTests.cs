@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -39,21 +38,20 @@ public sealed class ToolApprovalCoordinatorTests
     [Test]
     public async Task RequestToolApprovalAsync_WhenUnattended_RefusesBeforeTheSessionMemoIsConsulted()
     {
-        var sender = new MockHubMessageSender();
         var auditRecorder = Substitute.For<IToolApprovalAuditRecorder>();
-        var coordinator = CreateCoordinator(sender, auditRecorder: auditRecorder);
+        var dispatcher = new RecordingApprovalDispatcher();
+        var coordinator = CreateCoordinator(auditRecorder: auditRecorder, dispatcher: dispatcher);
         var conversationId = Guid.NewGuid();
 
         // Grant a session-scoped approval for exactly this skill tool, skill and version, so the memo WOULD answer the
         // second request if it were ever reached.
-        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId));
+        await GrantSessionApprovalAsync(coordinator, dispatcher, SkillPackage(conversationId));
 
         var unattended = SkillPackage(conversationId).AsUnattended().Build();
         var exception = await AssertEx.ThrowsAsync<ApprovalUnavailableException>(() =>
             coordinator.RequestToolApprovalAsync(unattended, SkillApprovalRequest(), static _ => { }, CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "unattended", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "the unattended run must not raise a card");
 
         // The decisive assertion: the refusal is audited, and the memo hit that would have approved it never is. If the
         // guards were inverted the second call would audit "session-scope auto-approve" and return true.
@@ -78,23 +76,21 @@ public sealed class ToolApprovalCoordinatorTests
     [Test]
     public async Task RequestToolApprovalAsync_WhenTheSessionMemoIsFull_FailsClosedAndPromptsAgain()
     {
-        var sender = new MockHubMessageSender();
-        var coordinator = CreateCoordinator(sender);
+        var dispatcher = new RecordingApprovalDispatcher();
+        var coordinator = CreateCoordinator(dispatcher: dispatcher);
         var conversationId = Guid.NewGuid();
 
         // 256 distinct memo keys — same conversation and tool, one per skill VERSION — fill the cap exactly.
         for (var version = 1; version <= 256; version++)
         {
-            await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version));
+            await GrantSessionApprovalAsync(coordinator, dispatcher, SkillPackage(conversationId, version));
         }
 
-        AssertEx.Equal(expected: 256, sender.SentApprovals.Count);
 
         // The 257th grant is refused by the cap: the operator's approval still applies to THIS call, but nothing is
         // remembered, so the very next request for it must prompt again.
-        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version: 257));
-        await GrantSessionApprovalAsync(coordinator, sender, SkillPackage(conversationId, version: 257));
-        AssertEx.Equal(expected: 258, sender.SentApprovals.Count, "an overflowed memo must fail closed and re-prompt");
+        await GrantSessionApprovalAsync(coordinator, dispatcher, SkillPackage(conversationId, version: 257));
+        await GrantSessionApprovalAsync(coordinator, dispatcher, SkillPackage(conversationId, version: 257));
 
         // An entry that made it in before the cap is still honoured — overflow only ever ADDS prompts.
         var remembered = await coordinator.RequestToolApprovalAsync(SkillPackage(conversationId, version: 1).Build(),
@@ -103,33 +99,26 @@ public sealed class ToolApprovalCoordinatorTests
             CancellationToken.None);
 
         AssertEx.True(remembered);
-        AssertEx.Equal(expected: 258, sender.SentApprovals.Count, "a remembered approval must not prompt");
     }
 
     [Test]
-    public async Task RequestToolApprovalAsync_OnALoopbackTurn_DispatchesLocallyWithoutTheHub()
+    public async Task RequestToolApprovalAsync_OnALoopbackTurn_DispatchesTheCardLocallyAndParksTheTurn()
     {
-        // The ordinary desktop case: an unpaired standalone node whose hub sender throws on every send. The approval
-        // must still reach the local chat stream and park the turn — sending to the hub first failed the whole turn
-        // before the card was ever rendered.
-        var sender = new MockHubMessageSender();
-        sender.ThrowOnNextSend(new InvalidOperationException("Worker hub connection is not active. Cannot send 'ApprovalRequested'."));
-
+        // The approval must reach the local chat stream and park the turn: the card the operator answers is the
+        // only way the run continues.
         ApprovalRequestPayload? dispatchedApproval = null;
         ApprovalLifecyclePayload? dispatchedLifecycle = null;
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportApprovalRequestedAsync(Arg.Do<ApprovalRequestPayload>(payload => dispatchedApproval = payload)).Returns(Task.CompletedTask);
         dispatcher.ReportApprovalLifecycleAsync(Arg.Do<ApprovalLifecyclePayload>(payload => dispatchedLifecycle = payload)).Returns(Task.CompletedTask);
 
-        var coordinator = CreateCoordinator(sender, dispatcher: dispatcher);
+        var coordinator = CreateCoordinator(dispatcher: dispatcher);
         var loopback = RuntimePackageBuilder.Valid()
-                                            .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
                                             .Build();
 
         var pending = coordinator.RequestToolApprovalAsync(loopback, ToolApprovalRequest(), static _ => { }, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => dispatchedLifecycle is not null, TimeSpan.FromSeconds(5));
 
-        AssertEx.Equal(expected: 0, sender.SentApprovals.Count, "a loopback turn must not touch the worker hub");
         AssertEx.False(pending.IsCompleted, "the turn parks on the approval card");
 
         // The loopback resolve endpoint answers the card the local dispatch rendered, and the turn continues.
@@ -138,45 +127,45 @@ public sealed class ToolApprovalCoordinatorTests
     }
 
     [Test]
-    public async Task RequestToolApprovalAsync_OnAHubBoundTurn_StillSendsToTheHub()
+    public async Task CleanupStaleToolCalls_FaultsTheApprovalNobodyAnswered_AndLeavesAFreshOneResolvable()
     {
-        // The paired case is unchanged: a package without the loopback capability still raises the card on the hub.
-        var sender = new MockHubMessageSender();
-        var coordinator = CreateCoordinator(sender);
-
-        var pending = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(),
-            ToolApprovalRequest(),
-            static _ => { },
-            CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
-
-        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
-        AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
-    }
-
-    [Test]
-    public async Task ResolveApprovalResult_ReleasesACallTheApiBridgeRegistered()
-    {
-        // The two collaborators must share ONE pending-call dictionary: the bridge parks the call, the coordinator's
-        // resolve (fed by the hub/loopback endpoint) releases it. Two copies would strand the turn until its timeout.
-        await Task.CompletedTask;
-
-        var sender = new MockHubMessageSender();
+        // The stale sweep runs every ToolCallCleanupService tick against the registry the APPROVAL round-trip
+        // populates — the only thing that registers a pending tool call now. Real coordinator, real bridge, one shared
+        // registry and one clock, exactly as the DI graph wires them: a sweep that silently stopped removing would
+        // park every unanswered turn on its full MaxPendingToolCallAge instead of releasing it.
+        var timeProvider = new ManualTimeProvider();
         var registry = new PendingToolCallRegistry();
-        var coordinator = CreateCoordinator(sender, registry);
-        var bridge = new ApiToolCallBridge(new Lazy<IHubMessageSender>(() => sender),
-            new Lazy<IWorkerEventDispatcher>(() => Substitute.For<IWorkerEventDispatcher>()),
-            registry,
-            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
-            TimeProvider.System);
+        var dispatcher = new RecordingApprovalDispatcher();
+        var coordinator = CreateCoordinator(registry, dispatcher: dispatcher, timeProvider: timeProvider);
+        var bridge = new ApiToolCallBridge(registry, timeProvider);
 
-        var call = bridge.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}", requiresApproval: true, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        var abandoned = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 1, TimeSpan.FromSeconds(5));
+        var abandonedRequestId = dispatcher.Approvals[0].RequestId;
 
-        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        // The control is raised AFTER the clock moves, so the same cutoff that condemns the first call spares it.
+        timeProvider.Advance(TimeSpan.FromMinutes(10));
+        var fresh = coordinator.RequestToolApprovalAsync(RuntimePackageBuilder.Valid().Build(), ToolApprovalRequest(), static _ => { }, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count == 2, TimeSpan.FromSeconds(5));
+        var freshRequestId = dispatcher.Approvals[1].RequestId;
 
-        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
-        AssertEx.False(call.IsCompleted, "the call is still waiting for its RESULT, not its approval");
+        bridge.CleanupStaleToolCalls(TimeSpan.FromMinutes(5));
+
+        // Asserted before the faulted waiter's own finally can run, so removal is attributed to the sweep alone.
+        AssertEx.False(registry.Calls.ContainsKey(abandonedRequestId), "the sweep must remove the call nothing will ever answer");
+        AssertEx.True(registry.Calls.ContainsKey(freshRequestId), "a call younger than the cutoff must survive the sweep");
+
+        var exception = await AssertEx.ThrowsAsync<TimeoutException>(() => abandoned);
+        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
+
+        // A second sweep at the same instant is a no-op: nothing else is condemned and the survivor still resolves
+        // normally through the operator's card.
+        bridge.CleanupStaleToolCalls(TimeSpan.FromMinutes(5));
+        AssertEx.True(registry.Calls.ContainsKey(freshRequestId), "a repeated sweep must not condemn a call it already spared");
+        AssertEx.False(fresh.IsCompleted, "a repeated sweep must not release a call the operator has not answered");
+
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(freshRequestId, Approved: true));
+        AssertEx.True(await fresh.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Test]
@@ -209,17 +198,123 @@ public sealed class ToolApprovalCoordinatorTests
         // defensive floor for a future content type that does not carry one.
     }
 
-    // Raises one approval and answers it with ApprovalScope.Session. RequestToolApprovalAsync runs synchronously up to
-    // the completion await (every send/report the coordinator makes returns a completed task), so the request id is on
-    // the sender before the resolve — no polling needed, and 256 iterations stay fast.
+    // Raises one approval and answers it with ApprovalScope.Session. The request id is read off the dispatcher the
+    // coordinator reports the card to — the only place it is published now that there is no hub send.
     private static async Task GrantSessionApprovalAsync(ToolApprovalCoordinator coordinator,
-        MockHubMessageSender sender,
+        RecordingApprovalDispatcher dispatcher,
         RuntimePackageBuilder packageBuilder)
     {
         var pending = coordinator.RequestToolApprovalAsync(packageBuilder.Build(), SkillApprovalRequest(), static _ => { }, CancellationToken.None);
-        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count > 0 && !pending.IsCompleted, TimeSpan.FromSeconds(5));
-        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[^1].RequestId, Approved: true), ApprovalScope.Session);
+        await AssertEx.EventuallyAsync(() => dispatcher.Approvals.Count > 0 && !pending.IsCompleted, TimeSpan.FromSeconds(5));
+        coordinator.ResolveApprovalResult(new ApprovalResolvedEvent(dispatcher.Approvals[^1].RequestId, Approved: true), ApprovalScope.Session);
         AssertEx.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    /// <summary>
+    ///     Records the approval cards the coordinator reports, which is how a test learns the opaque request id it
+    ///     must echo back. A substitute would need an argument matcher per call site for the same thing.
+    /// </summary>
+    private sealed class RecordingApprovalDispatcher : IWorkerEventDispatcher
+    {
+        private readonly IWorkerEventDispatcher _inner = Substitute.For<IWorkerEventDispatcher>();
+
+        public List<ApprovalRequestPayload> Approvals { get; } = [];
+
+        public InvocationState? CurrentInvocation => _inner.CurrentInvocation;
+
+        public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged
+        {
+            add => _inner.InvocationStateChanged += value;
+            remove => _inner.InvocationStateChanged -= value;
+        }
+
+        public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged
+        {
+            add => _inner.ToolCallLifecycleChanged += value;
+            remove => _inner.ToolCallLifecycleChanged -= value;
+        }
+
+        public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged
+        {
+            add => _inner.TurnNoticeChanged += value;
+            remove => _inner.TurnNoticeChanged -= value;
+        }
+
+        public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged
+        {
+            add => _inner.ApprovalRequestedChanged += value;
+            remove => _inner.ApprovalRequestedChanged -= value;
+        }
+
+        public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged
+        {
+            add => _inner.UserQuestionRequestedChanged += value;
+            remove => _inner.UserQuestionRequestedChanged -= value;
+        }
+
+        public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
+        {
+            Approvals.Add(payload);
+            return Task.CompletedTask;
+        }
+
+        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once) =>
+            _inner.DispatchApprovalResolvedAsync(evt, scope);
+
+        public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default) =>
+            _inner.ReportInvocationAssignedAsync(package, cancellationToken);
+
+        public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk) =>
+            _inner.ReportInvocationStreamChunkAsync(invocationId, chunk);
+
+        public Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk) =>
+            _inner.ReportInvocationThinkingChunkAsync(invocationId, chunk);
+
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase) =>
+            _inner.ReportInvocationPhaseAsync(invocationId, phase);
+
+        public Task ReportInvocationCompletedAsync(Guid invocationId,
+            int? inputTokens = null,
+            int? outputTokens = null,
+            int? totalTokens = null,
+            int? reasoningTokens = null,
+            long? generationDurationMs = null,
+            string? finishReason = null,
+            InvocationThroughput? throughput = null) =>
+            _inner.ReportInvocationCompletedAsync(invocationId, inputTokens, outputTokens, totalTokens, reasoningTokens, generationDurationMs, finishReason, throughput);
+
+        public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory) =>
+            _inner.ReportInvocationFailedAsync(invocationId, failureMessage, failureCategory);
+
+        public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens) =>
+            _inner.ReportToolSchemaTokensAsync(invocationId, toolSchemaTokens, maxToolSchemaTokens);
+
+        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage) =>
+            _inner.ReportTurnTelemetryAsync(invocationId, modelReadinessMs, usage);
+
+        public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort) =>
+            _inner.ReportEffortDispatchAsync(invocationId, dispatchedTier, authoredEffort);
+
+        public Task ReportServedModelAsync(Guid invocationId, string modelUsed) =>
+            _inner.ReportServedModelAsync(invocationId, modelUsed);
+
+        public Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload) =>
+            _inner.ReportToolCallRequestedAsync(payload);
+
+        public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload) =>
+            _inner.ReportToolCallLifecycleAsync(payload);
+
+        public Task ReportTurnNoticeAsync(TurnNoticePayload payload) =>
+            _inner.ReportTurnNoticeAsync(payload);
+
+        public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload) =>
+            _inner.ReportApprovalLifecycleAsync(payload);
+
+        public Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload) =>
+            _inner.ReportUserQuestionAsync(payload);
+
+        public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt) =>
+            _inner.DispatchUserQuestionAnsweredAsync(evt);
     }
 
     // A plain, memo-INELIGIBLE approval request (not a skill tool), so the session memo never short-circuits the
@@ -248,19 +343,21 @@ public sealed class ToolApprovalCoordinatorTests
                                     .WithSkills(new ResolvedSkill(SkillId, SkillName, "A skill.", "Skill body.", version, IsImported: false));
     }
 
-    private static ToolApprovalCoordinator CreateCoordinator(MockHubMessageSender sender,
+    private static ToolApprovalCoordinator CreateCoordinator(
         PendingToolCallRegistry? registry = null,
         IToolApprovalAuditRecorder? auditRecorder = null,
-        IWorkerEventDispatcher? dispatcher = null)
+        IWorkerEventDispatcher? dispatcher = null,
+        TimeProvider? timeProvider = null)
     {
-        return new ToolApprovalCoordinator(new Lazy<IHubMessageSender>(() => sender),
-            new Lazy<IWorkerEventDispatcher>(() => dispatcher ?? Substitute.For<IWorkerEventDispatcher>()),
+        return new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => dispatcher ?? Substitute.For<IWorkerEventDispatcher>()),
             registry ?? new PendingToolCallRegistry(),
             auditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
             NodeToolApprovalPolicy.FromSettings(settings: null),
             new UserQuestionAnswerStash(TimeProvider.System),
             StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
             NullLogger<ToolApprovalCoordinator>.Instance,
-            TimeProvider.System);
+            // The clock the pending call's CreatedAt is stamped from; a test that ages a call hands the SAME provider
+            // to the ApiToolCallBridge whose sweep reads the cutoff off it.
+            timeProvider ?? TimeProvider.System);
     }
 }

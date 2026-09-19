@@ -649,7 +649,6 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                   AgentDefinitionVersion = resolved.AgentDefinitionVersion,
                                   ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
                                   AllowedTools = offeredTools,
-                                  RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
                                   Timeouts = new TimeoutSettings
                                   {
                                       InvocationTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
@@ -973,7 +972,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 // pending tool calls and attributes the turn to CancellationOrigin.User rather than to a bare abort.
                 // Registered for the CURRENT run only, and unregistered with it.
                 await using var cancelBridge = cancelToken.Register(() => runner.Cancel(package.InvocationId));
-                using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+                var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
                 await runner.RunAsync(executionContext, runToken);
             }
             catch (ApprovalUnavailableException approvalUnavailable)

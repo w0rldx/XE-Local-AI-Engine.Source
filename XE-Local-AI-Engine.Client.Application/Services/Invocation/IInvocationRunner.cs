@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 
 /// <summary>
 ///     Abstraction for invocation runner behavior.
@@ -13,8 +12,6 @@ public interface IInvocationRunner
     Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default);
 
     Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
-
-    Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default);
 
     void Cancel(Guid invocationId);
 
@@ -31,9 +28,8 @@ public interface IInvocationRunner
 
     /// <summary>
     ///     Releases a turn parked on a tool-approval request with the operator's decision. <paramref name="scope" /> is
-    ///     how long an APPROVE lasts and defaults to <see cref="ApprovalScope.Once" />, so the platform-hub path — which
-    ///     has no notion of session scope, and whose wire event deliberately does not carry one — keeps its exact
-    ///     previous behaviour. A deny is never remembered whatever the scope.
+    ///     how long an APPROVE lasts and defaults to <see cref="ApprovalScope.Once" />. A deny is never remembered
+    ///     whatever the scope.
     /// </summary>
     void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once);
 
@@ -43,6 +39,4 @@ public interface IInvocationRunner
     ///     is pending for that id, so a duplicate or stale answer can never fault the turn.
     /// </summary>
     void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt);
-
-    void ResolveToolCallResult(ToolCallResultEvent evt);
 }

@@ -59,7 +59,6 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below (same reason as IsUnattended): it describes how the model
             // was CHOSEN, not the agent's configuration, so a menu pick and the node default hash identically.
             AllowAutoModelSwap = request.AllowAutoModelSwap,
-            RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,
             // Normalize an empty assigned-skill set to null so the no-skills loopback package carries no skill payload

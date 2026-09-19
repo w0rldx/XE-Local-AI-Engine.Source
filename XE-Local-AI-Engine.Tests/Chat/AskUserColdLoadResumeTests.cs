@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -142,11 +141,7 @@ public sealed class AskUserColdLoadResumeTests
     private static WorkerEventDispatcher CreateDispatcher(IInvocationRunner runner)
     {
         return new WorkerEventDispatcher(runner,
-            Substitute.For<IRuntimePackageEnvelopeAssembler>(),
-            new Lazy<IHubMessageSender>(static () => Substitute.For<IHubMessageSender>()),
-            Substitute.For<INodeKeyRegistry>(),
             Substitute.For<IInvocationHistory>(),
-            Substitute.For<INodeChatRemotePersistenceCoordinator>(),
             NullLogger<WorkerEventDispatcher>.Instance,
             TimeProvider.System);
     }

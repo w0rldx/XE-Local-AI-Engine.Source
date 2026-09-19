@@ -23,7 +23,6 @@ public sealed class LocalChatRuntimePackageRequest
 
     public IReadOnlyDictionary<string, object>? ToolPolicies { get; init; }
 
-    public IReadOnlyList<string>? RequestedCapabilities { get; init; }
 
     public TimeoutSettings? Timeouts { get; init; }
 

@@ -8,10 +8,8 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
-using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -97,8 +95,6 @@ public sealed class ToolApprovalCoordinator
 
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
 
-    private readonly Lazy<IHubMessageSender> _hubSender;
-
     private readonly ILogger<ToolApprovalCoordinator> _logger;
 
     private readonly TimeSpan _maxPendingToolCallAge;
@@ -107,8 +103,7 @@ public sealed class ToolApprovalCoordinator
 
     private readonly UserQuestionAnswerStash _userQuestionAnswerStash;
 
-    public ToolApprovalCoordinator(Lazy<IHubMessageSender> hubSender,
-        Lazy<IWorkerEventDispatcher> eventDispatcher,
+    public ToolApprovalCoordinator(Lazy<IWorkerEventDispatcher> eventDispatcher,
         PendingToolCallRegistry pendingToolCallRegistry,
         IToolApprovalAuditRecorder approvalAuditRecorder,
         IToolApprovalPolicy approvalPolicy,
@@ -117,7 +112,6 @@ public sealed class ToolApprovalCoordinator
         ILogger<ToolApprovalCoordinator> logger,
         TimeProvider timeProvider)
     {
-        _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
         _pendingToolCalls = pendingToolCallRegistry.Calls;
@@ -199,9 +193,7 @@ public sealed class ToolApprovalCoordinator
 
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall { InvocationId = package.InvocationId, CreatedAt = _timeProvider.GetUtcNow(), ApprovalCompletion = approvalCompletion, ResultCompletion = resultCompletion };
-        var sender = _hubSender.Value;
+        var pendingToolCall = new PendingToolCall { InvocationId = package.InvocationId, CreatedAt = _timeProvider.GetUtcNow(), ApprovalCompletion = approvalCompletion };
         var dispatcher = _eventDispatcher.Value;
 
         if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
@@ -227,23 +219,14 @@ public sealed class ToolApprovalCoordinator
                               ?? $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs."
             };
 
-            // The hub send exists for the PAIRED case only, and is skipped for a loopback turn exactly as every other
-            // hub send on the invocation path is (InvocationRunner.RunAsync's shouldSendHubMessages). A standalone node
-            // has no worker hub, so sending unconditionally threw before the local dispatch below could run — failing
-            // the whole turn instead of rendering the approval card the operator answers.
-            if (!InvocationRunner.IsLocalLoopbackInvocation(package))
-            {
-                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken);
-            }
-
             await dispatcher.ReportApprovalRequestedAsync(approvalPayload);
 
             // Surface the pending approval on the LOCAL chat stream. The CallId is derived through the SAME
             // helper the streaming tool-call-requested lifecycle uses (CallId, falling back to the tool name when it is
             // absent OR blank) so both events resolve the identical id, and the browser can
-            // attach the Approve/Deny controls to the matching tool-call card. In desktop/local mode there is no worker
-            // hub to resolve the approval, so the loopback resolve endpoint feeds ResolveApprovalResult below. ToolCall
-            // is the base ToolCallContent (CallId only); the concrete FunctionCallContent carries the tool name.
+            // attach the Approve/Deny controls to the matching tool-call card. The loopback resolve endpoint feeds
+            // ResolveApprovalResult below. ToolCall is the base ToolCallContent (CallId only); the concrete
+            // FunctionCallContent carries the tool name.
             var approvalCallId = InvocationRunner.ResolveToolCallCardId(approvalRequest.ToolCall.CallId, approvalToolName);
             await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
             {
@@ -609,7 +592,7 @@ public sealed class ToolApprovalCoordinator
         _sessionApprovals[memoKey] = 0;
     }
 
-    // Resolves the audited category (from the offered tool's declared ToolCategory) and source (loopback vs hub) for a
+    // Resolves the audited category (from the offered tool's declared ToolCategory) for a
     // resolved approval decision and hands them to the fire-and-forget-safe recorder. The recorder swallows every failure,
     // so this can never throw into — or stall — the approval round-trip.
     private async Task RecordApprovalDecisionAuditAsync(RuntimePackage package,
@@ -620,12 +603,11 @@ public sealed class ToolApprovalCoordinator
     {
         var latencyMs = (long)Stopwatch.GetElapsedTime(requestedTimestamp).TotalMilliseconds;
         var category = ResolveApprovalToolCategory(package, toolName);
-        var source = InvocationRunner.IsLocalLoopbackInvocation(package) ? ApprovalDecisionSources.Local : ApprovalDecisionSources.Hub;
         await _approvalAuditRecorder.RecordAsync(package.InvocationId,
             toolName ?? string.Empty,
             category,
             decision,
-            source,
+            ApprovalDecisionSources.Local,
             latencyMs,
             cancellationToken);
     }

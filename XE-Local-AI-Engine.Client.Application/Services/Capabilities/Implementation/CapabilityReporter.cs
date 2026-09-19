@@ -1,53 +1,25 @@
 namespace XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 
-using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Represents capability reporter. Orchestrates the <see cref="ModelCapabilityProber" /> (runtime/model probing)
-///     and the <see cref="CapabilityReportComposer" /> (hardware detection + report assembly) behind the
-///     <see cref="ICapabilityReporter" /> facade, and owns report throttling plus the hub push.
+///     Represents capability reporter: the Ollama runtime/model preflight, driven through the
+///     <see cref="ModelCapabilityProber" /> behind the <see cref="ICapabilityReporter" /> facade.
 /// </summary>
-internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
+internal sealed class CapabilityReporter : ICapabilityReporter
 {
-    private static readonly TimeSpan ReportThrottleInterval = TimeSpan.FromSeconds(5);
-
-    private readonly ICloudCredentialStore _cloudCredentialStore;
-    private readonly CapabilityReportComposer _composer;
-    private readonly IWorkerHubConnection _hubConnection;
     private readonly ILogger<CapabilityReporter> _logger;
-    private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ModelCapabilityProber _prober;
-    private readonly SemaphoreSlim _reportSync = new(initialCount: 1, maxCount: 1);
 
     // Read LIVE, never captured. See ResolveDefaultModelAsync.
     private readonly INodeRuntimeSettings _runtimeSettings;
-    private readonly TimeProvider _timeProvider;
-    private readonly ITokenStore _tokenStore;
-    private DateTimeOffset? _lastReportStartedAt;
 
     public CapabilityReporter(ModelCapabilityProber prober,
-        CapabilityReportComposer composer,
-        ICloudCredentialStore cloudCredentialStore,
-        INodeSettingsStore nodeSettingsStore,
         INodeRuntimeSettings runtimeSettings,
-        IWorkerHubConnection hubConnection,
-        ITokenStore tokenStore,
-        TimeProvider timeProvider,
         ILogger<CapabilityReporter> logger)
     {
         _prober = prober ?? throw new ArgumentNullException(nameof(prober));
-        _composer = composer ?? throw new ArgumentNullException(nameof(composer));
-        _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -68,71 +40,6 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     /// </remarks>
     private Task<string> ResolveDefaultModelAsync(CancellationToken cancellationToken) =>
         _runtimeSettings.GetDefaultModelNameAsync(cancellationToken);
-
-    public async Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var hardware = await _composer.DetectHardwareAsync(cancellationToken);
-        var cloudConfig = await _cloudCredentialStore.LoadConfigAsync(cancellationToken);
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
-        var detectedAt = _timeProvider.GetUtcNow();
-
-        // An Azure connection (API-key or managed-identity, single- or multi-model) reports as a configured cloud node.
-        if (cloudConfig?.AzureFoundry is { } connection
-            && string.Equals(cloudConfig.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase)
-            && connection.Models.Any(static model => !string.IsNullOrWhiteSpace(model.DeploymentName)))
-        {
-            return CapabilityReportComposer.ComposeCloud(connection, nodeSettings, hardware, detectedAt);
-        }
-
-        var ollamaStatus = await _prober.DetectOllamaRuntimeAsync(cancellationToken);
-        var installedModelInventory = await _prober.GetInstalledModelInventoryAsync(cancellationToken);
-        var installedModelMetadata = await _prober.GetInstalledModelMetadataAsync(installedModelInventory.Models, cancellationToken);
-        var activeModel = await _prober.DetectActiveModelAsync(cancellationToken);
-
-        return _composer.ComposeLocal(hardware, ollamaStatus, installedModelInventory, installedModelMetadata, activeModel, nodeSettings, detectedAt);
-    }
-
-    public async Task ReportToApiAsync(CancellationToken cancellationToken = default)
-    {
-        // Standalone/desktop mode has no remote worker hub to report to (and no Ollama daemon to probe). IsPaired is the
-        // canonical standalone-vs-paired signal — the same one IWorkerHubConnection.SendCapabilitiesAsync gates on — so
-        // short-circuit BEFORE the capability probe: this skips both the Ollama capability probe and the hub send (which
-        // would otherwise probe Ollama, then throw "hub not active" and be swallowed at Debug). No probe, no caught
-        // exception, no latency.
-        if (!_tokenStore.IsPaired)
-        {
-            _logger.LogDebug("Skipping capability report because the node is not paired (standalone/desktop mode — no worker hub).");
-            return;
-        }
-
-        if (!await _reportSync.WaitAsync(millisecondsTimeout: 0, cancellationToken))
-        {
-            _logger.LogDebug("Skipping capability report because another report is already in progress.");
-            return;
-        }
-
-        try
-        {
-            var now = _timeProvider.GetUtcNow();
-            if (_lastReportStartedAt is not null && now - _lastReportStartedAt.Value < ReportThrottleInterval)
-            {
-                _logger.LogDebug("Skipping capability report because the last report started at {LastReportStartedAt}.", _lastReportStartedAt);
-                return;
-            }
-
-            _lastReportStartedAt = now;
-            var capabilities = await DetectCapabilitiesAsync(cancellationToken);
-            await _hubConnection.SendCapabilitiesAsync(capabilities, cancellationToken);
-            _logger.LogInformation("Reported worker capabilities to API with {ModelCount} installed model(s).",
-                capabilities.InstalledModels.Count);
-        }
-        finally
-        {
-            _reportSync.Release();
-        }
-    }
 
     public async Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default)
     {
@@ -186,10 +93,5 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         }
 
         return canFallback;
-    }
-
-    public void Dispose()
-    {
-        _reportSync.Dispose();
     }
 }

@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Contracts.Telemetry;
-using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -42,7 +42,7 @@ public sealed class RequiredMemberSerializationTests
     /// </summary>
     private static readonly Assembly[] ProductAssemblies =
     [
-        typeof(WorkerHealthCheck).Assembly,
+        typeof(LocalApiRoutes).Assembly,
         typeof(RuntimePackageValidationResult).Assembly,
         typeof(NodeChatDbContext).Assembly,
         typeof(IInvocationAgentFactory).Assembly,

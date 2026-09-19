@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
-using XE_Local_AI_Engine.Client.Models.Events;
 
 /// <summary>
 ///     The one set of tool calls currently parked on an out-of-stream answer, shared by every collaborator that can
@@ -17,14 +16,13 @@ using XE_Local_AI_Engine.Client.Models.Events;
 public sealed class PendingToolCallRegistry
 {
     /// <summary>
-    ///     Pending calls keyed by the opaque request id the browser/hub echoes back.
+    ///     Pending calls keyed by the opaque request id the browser echoes back.
     /// </summary>
     public ConcurrentDictionary<string, PendingToolCall> Calls { get; } = new(StringComparer.Ordinal);
 }
 
 /// <summary>
-///     A tool call awaiting an out-of-stream answer: first the approval decision (when the call is approval-gated),
-///     then the tool result itself.
+///     A tool call parked on the operator's approval decision.
 /// </summary>
 public sealed class PendingToolCall
 {
@@ -33,6 +31,4 @@ public sealed class PendingToolCall
     public required DateTimeOffset CreatedAt { get; init; }
 
     public required TaskCompletionSource<bool> ApprovalCompletion { get; init; }
-
-    public required TaskCompletionSource<ToolCallResultEvent> ResultCompletion { get; init; }
 }

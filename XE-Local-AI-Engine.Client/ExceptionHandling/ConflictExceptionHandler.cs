@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -46,8 +45,6 @@ public class ConflictExceptionHandler : IExceptionHandler
         {
             NodeChatReadOnlyConversationException => NodeConflictProblemType.ReadOnlyConversation,
             ImageModelInUseException => NodeConflictProblemType.ImageModelInUse,
-            WorkerNotPairedException => NodeConflictProblemType.WorkerNotPaired,
-            WorkerTokenExpiredException => NodeConflictProblemType.WorkerTokenExpired,
             WorkspaceRevocationBusyException => NodeConflictProblemType.WorkspaceRevocationBusy,
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,
             InstalledModelProviderConflictException => NodeConflictProblemType.InstalledModelProviderConflict,

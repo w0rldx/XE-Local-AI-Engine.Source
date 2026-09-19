@@ -227,7 +227,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
                                                              await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment);
                                                              using var endpointScope = _endpointBinding.Bind(profiling.Endpoint);
                                                              await using var assignment = await _dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
-                                                             using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
+                                                             var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
                                                              await _runner.RunAsync(context, profilingToken);
                                                              return true;
                                                          },
@@ -331,7 +331,6 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             AgentDefinitionVersion = 1,
             ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools = [],
-            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
             Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions = BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
             IsUnattended = true,

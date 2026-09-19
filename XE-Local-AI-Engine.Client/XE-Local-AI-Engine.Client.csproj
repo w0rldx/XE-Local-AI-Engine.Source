@@ -62,7 +62,6 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI"/>
-    <PackageReference Include="BouncyCastle.Cryptography"/>
     <PackageReference Include="FastEndpoints"/>
     <PackageReference Include="FastEndpoints.Swagger"/>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"/>

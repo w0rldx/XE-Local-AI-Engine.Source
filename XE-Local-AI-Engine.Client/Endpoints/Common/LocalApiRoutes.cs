@@ -62,22 +62,6 @@ public static class LocalApiRoutes
         public const string ResolveUserQuestion = "chat/questions/resolve";
     }
 
-    public static class NodeBinding
-    {
-        public const string Start = "binding/start";
-        public const string Poll = "binding/poll";
-        public const string Cancel = "binding/cancel";
-    }
-
-    public static class Connection
-    {
-        public const string Status = "connection";
-        public const string Connect = "connection/connect";
-        public const string Disconnect = "connection/disconnect";
-        public const string EnableAutoConnect = "connection/auto-connect/enable";
-        public const string DisableAutoConnect = "connection/auto-connect/disable";
-    }
-
     public static class NodeSettings
     {
         public const string Settings = "node-settings";

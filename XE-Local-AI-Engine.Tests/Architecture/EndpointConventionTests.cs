@@ -5,7 +5,7 @@ using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent.Extensions;
 using FastEndpoints;
 using TUnit.Core.Exceptions;
-using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
@@ -97,7 +97,7 @@ public sealed class EndpointConventionTests
         "WorkSessions/V1/WorkSessionLifecycleEndpoints.cs"
     ];
 
-    private static readonly Assembly ClientAssembly = typeof(WorkerHealthCheck).Assembly;
+    private static readonly Assembly ClientAssembly = typeof(LocalApiRoutes).Assembly;
 
     // FastEndpoints is loaded because AreAssignableTo(Type) resolves the base type inside the architecture and
     // throws TypeDoesNotExistInArchitecture otherwise; nothing in it is asserted over.

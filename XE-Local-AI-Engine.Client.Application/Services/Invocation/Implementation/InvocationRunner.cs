@@ -17,19 +17,15 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -67,11 +63,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly IExternalProviderRegistry _externalProviderRegistry;
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
-    private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
-    private readonly IEnvelopeCryptoService _envelopeCryptoService;
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
-    private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly ApiToolCallBridge _apiToolCallBridge;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
     private readonly InvocationLifecycleTracker _lifecycleTracker;
@@ -106,16 +99,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // to the next turn without a restart (INodeRuntimeSettings' own doc forbids capturing a migrated value in a field).
     private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public InvocationRunner(Lazy<IHubMessageSender> hubSender,
-        Lazy<IWorkerEventDispatcher> eventDispatcher,
+    public InvocationRunner(Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
         IOrchestrationAgentFactory orchestrationAgentFactory,
-        IEnvelopeCryptoService envelopeCryptoService,
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
         ILocalModelProviderResolver providerResolver,
         LocalRuntimeWarmer localRuntimeWarmer,
-        IDeadLetterStore deadLetterStore,
         IProviderStreamResilience providerStreamResilience,
         IConversationContextBudgeter contextBudgeter,
         IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
@@ -134,7 +124,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IServiceScopeFactory scopeFactory,
         ILogger<InvocationRunner> logger)
     {
-        _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _lifecycleTracker = lifecycleTracker ?? throw new ArgumentNullException(nameof(lifecycleTracker));
         _toolApprovalCoordinator = toolApprovalCoordinator ?? throw new ArgumentNullException(nameof(toolApprovalCoordinator));
         _apiToolCallBridge = apiToolCallBridge ?? throw new ArgumentNullException(nameof(apiToolCallBridge));
@@ -143,12 +132,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));
-        _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _localRuntimeWarmer = localRuntimeWarmer ?? throw new ArgumentNullException(nameof(localRuntimeWarmer));
-        _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
         _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
         ArgumentNullException.ThrowIfNull(contextBudgetOptions);
@@ -208,11 +195,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
         }
 
-        var sender = _hubSender.Value;
         var dispatcher = _eventDispatcher.Value;
-        var shouldSendHubMessages = !IsLocalLoopbackInvocation(package);
-        var sendEncrypted = shouldSendHubMessages && context.IsEncrypted;
-        var sendPlain = shouldSendHubMessages && !context.IsEncrypted;
 
         // Resolved ONCE per turn from the package's TimeoutSettings plus the node-level operational options, then
         // flowed unchanged through both the single-agent and orchestration paths so the two enforce identical policy.
@@ -220,12 +203,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge);
 
         _lifecycleTracker.RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, cancellationToken);
-        var activeInvocationCompletion = _lifecycleTracker.RegisterActiveInvocationCompletion(package.InvocationId, !shouldSendHubMessages);
+        var activeInvocationCompletion = _lifecycleTracker.RegisterActiveInvocationCompletion(package.InvocationId);
         if (activeInvocationCompletion is null)
         {
-            // Shutdown drain has started and this is a local turn admitted after the drain snapshot. Undo the
+            // Shutdown drain has started and this turn was admitted after the drain snapshot. Undo the
             // registration above and surface a clean, classified failure instead of running it into a drain that has
-            // stopped waiting. A local turn sends no hub messages, so reporting to the dispatcher is the whole surface.
+            // stopped waiting. Reporting to the dispatcher is the whole surface.
             _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
             _logger.LogInformation("Rejecting local invocation {InvocationId}: the node is draining for shutdown.", package.InvocationId);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, NodeDrainingMessage, FailureCategory.Cancelled);
@@ -388,12 +371,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 HarnessStartedTimestamp = harnessStartedTimestamp
             };
 
-            if (shouldSendHubMessages)
-            {
-                await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken);
-            }
-
-            var transport = new StreamTransport(this, sender, dispatcher, context, package, sendEncrypted, sendPlain);
+            var transport = new StreamTransport(this, dispatcher, package);
 
             // Surface the silent model-substitution fallback (previously LogWarning-only) as a visible, non-fatal
             // chat notice now that the transport (and therefore the dispatcher) exists.
@@ -567,9 +545,28 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
             }
 
-            // Read the whole-turn wall-clock duration once. The same value rides every completion transport (encrypted
-            // counts dict, plain payload, dispatcher report) so the persisted tokens-per-second is computed from one
-            // authoritative measurement regardless of which path serves the turn.
+            // The late-cancellation check, on the ONE path that now exists. A turn can be cancelled — by the
+            // invocation watchdog, the stream-idle watchdog, an operator stop or a shutdown drain — at the very moment
+            // its stream ends with no further chunks, and the agent loop then returns NORMALLY without ever observing
+            // the token: cancellation callbacks run in reverse registration order, so the runner's own propagation can
+            // still be queued behind a later registration when the stream's final continuation resumes. Without this,
+            // such a turn falls straight through to ReportInvocationCompletedAsync and is persisted as a SUCCESSFUL
+            // answer the user never received.
+            //
+            // This used to happen by accident and only for a paired node: the removed hub-send branches here passed
+            // invocationToken into a send, which threw on a cancelled token and landed in the OperationCanceledException
+            // handler below. A local turn had no branch at all and so had no check — a pre-existing defect that the
+            // Central Platform removal would otherwise have made the only behaviour. Throwing explicitly makes the
+            // check the point rather than a side effect of a transport.
+            //
+            // The CATEGORY is unaffected: InvocationLifecycleTracker.ResolveCancellationOrigin consults the origin its
+            // requester recorded (Cancel/CancelDetached/CancelAll), then the host token, and only falls back to the
+            // watchdog by elimination — it never looks at where the OperationCanceledException was thrown. An operator
+            // stop still classifies Cancelled; only a watchdog/provider timeout classifies Timeout.
+            invocationToken.ThrowIfCancellationRequested();
+
+            // Read the whole-turn wall-clock duration once. The same value rides the dispatcher report, so the
+            // persisted tokens-per-second is computed from one authoritative measurement.
             var generationDurationMs = (long)stream.GenerationStopwatch.Elapsed.TotalMilliseconds;
 
             // Emit cumulative model token usage from the single per-turn finalize point (NOT the per-tool-loop
@@ -577,57 +574,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // coarse provider dimension, model id, and direction only.
             RecordTokenUsageMetric(stream, resolvedModel);
 
-            if (sendEncrypted)
+            if (stream.LastRoundUsage is null)
             {
-                // LAST ROUND, not the turn total: these counts land on the assistant message, and the chat context meter
-                // reads the newest message's tokens as the model's context OCCUPANCY. A round's prompt is the whole
-                // conversation so far, so the final round already contains every earlier one — summing would treble it.
-                // The turn's cost is carried separately, on the run-envelope row, by ReportTurnTelemetryAsync below.
-                var tokenCounts = stream.LastRoundUsage?.ToTokenCounts() ?? new Dictionary<string, long>(StringComparer.Ordinal);
-                tokenCounts["generationDurationMs"] = generationDurationMs;
-                await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
-                        context.MessageId,
-                        context.EpochVersion,
-                        context.EpochKey.Span,
-                        Encoding.UTF8.GetBytes(stream.ResponseBuilder.ToString()),
-                        stream.Sequence,
-                        tokenCounts,
-                        stream.ReasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(stream.ReasoningBuilder.ToString()) : null),
-                    invocationToken);
-            }
-            else if (sendPlain)
-            {
-                if (stream.LastRoundUsage is null)
-                {
-                    _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
-                        package.InvocationId,
-                        resolvedModel);
-                }
-
-                await sender.SendReasoningStreamChunkAsync(package.InvocationId,
-                    string.Empty,
-                    isComplete: true,
-                    stream.ReasoningSequence + 1,
-                    invocationToken);
-                await sender.SendTokenStreamChunkAsync(package.InvocationId,
-                    string.Empty,
-                    isComplete: true,
-                    stream.Sequence + 1,
-                    invocationToken);
-                await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
-                {
-                    InvocationId = package.InvocationId,
-                    FinalContent = stream.ResponseBuilder.ToString(),
-                    ModelUsed = resolvedModel,
-                    // LAST ROUND, for the same reason as the encrypted counts above: this payload's tokens become the
-                    // assistant message's, and the meter reads them as context occupancy rather than turn cost.
-                    InputTokens = stream.LastRoundUsage?.InputTokens,
-                    OutputTokens = stream.LastRoundUsage?.OutputTokens,
-                    TokensUsed = stream.LastRoundUsage?.TotalTokens,
-                    FinalReasoning = stream.ReasoningBuilder.ToString(),
-                    ReasoningTokens = stream.LastRoundUsage?.ReasoningTokens,
-                    GenerationDurationMs = generationDurationMs
-                }, invocationToken);
+                _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
+                    package.InvocationId,
+                    resolvedModel);
             }
 
             await ReportTerminalTelemetryAsync();
@@ -661,10 +612,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", InvocationLifecycleTracker.ClassifyCancellationMetricCategory(cancellationOrigin)));
             await ReportTerminalTelemetryAsync();
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory);
-            if (shouldSendHubMessages)
-            {
-                await TrySendFailureAsync(sender, context, cancellationMessage, failureCategory);
-            }
         }
         catch (Exception exception)
         {
@@ -680,10 +627,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             await ReportTerminalTelemetryAsync();
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory);
-            if (shouldSendHubMessages)
-            {
-                await TrySendFailureAsync(sender, context, message, failureCategory);
-            }
         }
         finally
         {
@@ -709,7 +652,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _apiToolCallBridge.ClearToolResultTimeout(package.InvocationId);
             _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
             _lifecycleTracker.CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
-            await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId);
         }
     }
 
@@ -753,25 +695,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
     {
         _toolApprovalCoordinator.ResolveUserQuestionResult(evt);
-    }
-
-    /// <inheritdoc />
-    public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
-        string toolName,
-        string parameters,
-        CancellationToken cancellationToken = default)
-    {
-        return _apiToolCallBridge.ExecuteApiToolCallAsync(invocationId, toolName, parameters, cancellationToken);
-    }
-
-    public void ResolveToolCallResult(ToolCallResultEvent evt)
-    {
-        ArgumentNullException.ThrowIfNull(evt);
-
-        if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
-        {
-            pendingToolCall.ResultCompletion.TrySetResult(evt);
-        }
     }
 
     /// <summary>
@@ -818,16 +741,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Keep the fallback content-free: no record values or user/model/tool data are echoed here.
             _logger.LogTrace(exception, "Agent harness efficiency telemetry could not be emitted.");
         }
-    }
-
-    // True for a turn the node dispatched to ITSELF (local chat, scheduler, benchmarks): it carries the loopback
-    // requested-capability marker, has no hub connection behind it, and therefore sends no hub messages and audits its
-    // approval decisions as locally sourced.
-    internal static bool IsLocalLoopbackInvocation(RuntimePackage package)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-
-        return package.RequestedCapabilities?.Any(static capability => string.Equals(capability, LocalChatLoopbackDefaults.RequestedCapability, StringComparison.Ordinal)) == true;
     }
 
     // The single-agent path. Drives one ChatClientAgent over an approval-gated do/while loop, accumulating into
@@ -1163,7 +1076,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 if (thinkingBuilder is { Length: > 0 })
                 {
-                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(), invocationToken);
+                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString());
                 }
 
                 if (string.IsNullOrEmpty(textChunk))
@@ -1171,7 +1084,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     continue;
                 }
 
-                await transport.EmitTextAsync(stream, textChunk, invocationToken);
+                await transport.EmitTextAsync(stream, textChunk);
             }
 
             // The tool-relevance notice, drained at the end of the FIRST segment so it FOLLOWS the first assistant
@@ -1283,11 +1196,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             switch (update.Kind)
             {
                 case OrchestrationUpdateKind.ReasoningDelta when !string.IsNullOrEmpty(update.Text):
-                    await transport.EmitReasoningAsync(stream, update.Text, invocationToken);
+                    await transport.EmitReasoningAsync(stream, update.Text);
                     break;
 
                 case OrchestrationUpdateKind.TextDelta when !string.IsNullOrEmpty(update.Text):
-                    await transport.EmitTextAsync(stream, update.Text, invocationToken);
+                    await transport.EmitTextAsync(stream, update.Text);
                     break;
 
                 case OrchestrationUpdateKind.ApprovalRequest when update.RequestId is { } requestId:
@@ -1320,7 +1233,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
     {
-        using var context = InvocationExecutionContext.Create(package, Guid.Empty, epochVersion: 0, ReadOnlyMemory<byte>.Empty);
+        var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
         await RunAsync(context, cancellationToken);
     }
 
@@ -1338,69 +1251,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // private) purely as a test seam via InternalsVisibleTo; not part of the public contract.
     internal static string ResolveToolCallCardId(string? callId, string? toolName) =>
         string.IsNullOrEmpty(callId) ? toolName ?? string.Empty : callId;
-
-    private async Task TryReportCapabilitiesAfterInvocationAsync(Guid invocationId)
-    {
-        try
-        {
-            var reportTask = _capabilityReporter.ReportToApiAsync(CancellationToken.None);
-            if (reportTask is not null)
-            {
-                await reportTask;
-            }
-        }
-        catch (Exception exception)
-        {
-            // Best-effort, post-invocation telemetry. In standalone desktop mode there is no remote worker hub to
-            // report to (the connection is never active), so this fires benignly after every chat — log at Debug to
-            // keep the operator console clean. Genuine worker-mode reporting issues surface elsewhere.
-            _logger.LogDebug(exception, "Could not report capabilities after invocation {InvocationId} (no active worker hub in desktop mode).", invocationId);
-        }
-    }
-
-    private async Task TrySendFailureAsync(IHubMessageSender sender,
-        InvocationExecutionContext context,
-        string error,
-        FailureCategory failureCategory)
-    {
-        try
-        {
-            if (!context.IsEncrypted)
-            {
-                await sender.SendInvocationFailedAsync(new InvocationFailedPayload
-                {
-                    InvocationId = context.Package.InvocationId,
-                    MessageId = context.MessageId == Guid.Empty ? null : context.MessageId,
-                    Error = error,
-                    FailureCategory = failureCategory.ToString()
-                }, CancellationToken.None);
-            }
-            else
-            {
-                await sender.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
-                    {
-                        ConversationId = context.Package.ConversationId,
-                        MessageId = context.MessageId,
-                        EpochVersion = context.EpochVersion,
-                        Error = error,
-                        FailureCategory = failureCategory.ToString()
-                    },
-                    CancellationToken.None);
-            }
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}. Enqueueing to dead letter store.", context.Package.InvocationId);
-            await _deadLetterStore.EnqueueAsync(new InvocationFailedPayload
-            {
-                InvocationId = context.Package.InvocationId,
-                MessageId = context.MessageId == Guid.Empty ? null : context.MessageId,
-                Error = error,
-                FailureCategory = failureCategory.ToString()
-            }, CancellationToken.None);
-        }
-    }
-
 
     // A local tool call seen requested on the stream but not yet resulted: the tool name plus the arguments as they
     // arrived, kept so a repeated call for the same id can be detected and the result can be attributed to its tool.

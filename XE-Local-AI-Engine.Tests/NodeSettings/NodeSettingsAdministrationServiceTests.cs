@@ -609,8 +609,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatchAsync_WhenFieldRangeIsInvalid_DoesNotNormalizeSaveOrReport()
     {
         var store = NewSubstituteStore(new StoredNodeSettings());
-        var reporter = Substitute.For<ICapabilityReporter>();
-        var service = CreateService(store, reporter: reporter);
+        var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
@@ -620,7 +619,6 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.ChatCacheReuse, result.ValidationErrors[0].Field);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
-        await reporter.DidNotReceive().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -662,7 +660,6 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     private static NodeSettingsAdministrationService CreateService(INodeSettingsStore store,
-        ICapabilityReporter? reporter = null,
         ICloudModelResolver? cloudResolver = null,
         IActiveCloudChatClientFactory? cloudFactory = null,
         INodeRuntimeSettings? runtimeSettings = null,
@@ -690,8 +687,6 @@ public sealed class NodeSettingsAdministrationServiceTests
                                       .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
         }
 
-        reporter ??= Substitute.For<ICapabilityReporter>();
-        reporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         cloudResolver ??= Substitute.For<ICloudModelResolver>();
         cloudFactory ??= Substitute.For<IActiveCloudChatClientFactory>();
 
@@ -706,7 +701,6 @@ public sealed class NodeSettingsAdministrationServiceTests
             new ModelNameValidator(Options.Create(new SecurityOptions())));
         return new NodeSettingsAdministrationService(store,
             runtime,
-            reporter,
             selectionPolicy,
             ggufModelStore,
             modelTrustResolver,

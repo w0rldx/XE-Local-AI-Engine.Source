@@ -28,11 +28,6 @@ public sealed partial class WorkerEventDispatcher
         };
     }
 
-    private static bool IsInvocationActive(InvocationState? state)
-    {
-        return state is not null && state.Status is InvocationStatus.Assigned or InvocationStatus.Running;
-    }
-
     private InvocationState? GetCurrentInvocationSnapshot()
     {
         lock (_syncRoot)

@@ -81,14 +81,13 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                                            .WithModel(ModelName)
                                            .WithSystemPrompt("Follow the user instruction exactly.")
                                            .WithUserMessage("Reply with exactly FRAMEWORK_COMPAT_OK and nothing else.")
-                                           .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
                                            .WithTimeout(invocationSeconds: 600, streamIdleSeconds: 180)
                                            .Build();
 
         try
         {
             await using var invocationLease = await dispatcher.ReportInvocationAssignedAsync(package);
-            using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+            var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
             await runner.RunAsync(context);
 
             var state = AssertEx.NotNull(dispatcher.CurrentInvocation);
