@@ -97,6 +97,13 @@ function renderPage(selection: DevWorkflowDetailSelection = {}) {
 	return { onSelectionChange };
 }
 
+/** Edit lives behind the header's action menu, next to Delete — the one place a work item is acted on as a whole. */
+async function openEditDialog(): Promise<void> {
+	fireEvent.click(await screen.findByTestId("dev-workflow-actions"));
+	fireEvent.click(await screen.findByTestId("dev-workflow-edit"));
+	await screen.findByTestId("edit-dev-workflow-work-item-dialog");
+}
+
 /**
  * The node's DevWorkflows:Enabled switch, which this page reads before anything else. It ships OFF, so every test
  * that wants the real detail view has to say the node has it on.
@@ -483,5 +490,84 @@ describe("DevWorkflowDetailPage", () => {
 		const alert = await screen.findByTestId("dev-workflows-disabled");
 		expect(alert.textContent).toContain("the node is unreachable");
 		expect(alert.textContent).not.toContain("disabled by this node's runtime configuration");
+	});
+
+	// The PATCH accepts title and request and nothing else, and refuses in no run state — the runtime's only write to a
+	// work item is its STATUS — so what these owe is the payload contract, not a matrix of states the server never rejects.
+	it("opens the edit dialog on the loaded work item and keeps Save unavailable until something changes", async () => {
+		server.use(...baseRoutes());
+		renderPage();
+		await openEditDialog();
+
+		expect((screen.getByTestId("edit-dev-workflow-work-item-title") as HTMLInputElement).value).toBe(
+			"Survey the vector-store options",
+		);
+		expect((screen.getByTestId("edit-dev-workflow-work-item-request") as HTMLTextAreaElement).value).toBe(
+			"Compare the options and propose one.",
+		);
+		const submit = screen.getByTestId("edit-dev-workflow-work-item-submit");
+		expect(submit).toHaveProperty("disabled", true);
+
+		fireEvent.change(screen.getByTestId("edit-dev-workflow-work-item-title"), { target: { value: "Survey the vector stores" } });
+		expect(submit).toHaveProperty("disabled", false);
+
+		// Mirrors the server's validator: a member that is PRESENT must not be blank, so an emptied field is not a save.
+		fireEvent.change(screen.getByTestId("edit-dev-workflow-work-item-request"), { target: { value: "  " } });
+		expect(submit).toHaveProperty("disabled", true);
+	});
+
+	it("patches only the field that changed, then shows the new title once the work item is re-read", async () => {
+		let sentBody: Record<string, unknown> | undefined;
+		let title = "Survey the vector-store options";
+		server.use(
+			// Ahead of `baseRoutes()`, whose own work-item route would otherwise win and answer the pre-edit title forever.
+			http.get(localApiPath(`development-workflows/work-items/${workItemId}`), () =>
+				HttpResponse.json(devWorkflowWorkItem({ title })),
+			),
+			...baseRoutes(),
+			http.patch(localApiPath(`development-workflows/work-items/${workItemId}`), async ({ request }) => {
+				sentBody = (await request.json()) as Record<string, unknown>;
+				title = "Survey the vector stores";
+				return HttpResponse.json(devWorkflowWorkItem({ title, version: 2 }));
+			}),
+		);
+		renderPage();
+		await openEditDialog();
+
+		fireEvent.change(screen.getByTestId("edit-dev-workflow-work-item-title"), { target: { value: "Survey the vector stores" } });
+		fireEvent.click(screen.getByTestId("edit-dev-workflow-work-item-submit"));
+
+		// The untouched request is ABSENT, not echoed back: the endpoint reads an omitted member as "leave it alone".
+		await waitFor(() => expect(sentBody).toEqual({ title: "Survey the vector stores" }));
+		await waitFor(() => expect(screen.queryByTestId("edit-dev-workflow-work-item-dialog")).toBeNull());
+		await waitFor(() => expect(screen.getByTestId("dev-workflow-title").textContent).toBe("Survey the vector stores"));
+	});
+
+	it("keeps the dialog open on a refusal and puts a per-field 400 on the field it names", async () => {
+		server.use(
+			...baseRoutes(),
+			http.patch(localApiPath(`development-workflows/work-items/${workItemId}`), () =>
+				HttpResponse.json(
+					{
+						type: "about:blank",
+						title: "One or more validation errors occurred.",
+						status: 400,
+						detail: "",
+						errors: [{ name: "title", reason: "The title is longer than the 200-character limit." }],
+					},
+					{ status: 400, headers: { "content-type": "application/problem+json" } },
+				),
+			),
+		);
+		renderPage();
+		await openEditDialog();
+
+		fireEvent.change(screen.getByTestId("edit-dev-workflow-work-item-title"), { target: { value: "Survey the vector stores" } });
+		fireEvent.click(screen.getByTestId("edit-dev-workflow-work-item-submit"));
+
+		expect(await screen.findByText("The title is longer than the 200-character limit.")).toBeDefined();
+		// The edit is unsaved, so the dialog stays put rather than discarding what the operator typed.
+		expect(screen.getByTestId("edit-dev-workflow-work-item-dialog")).toBeDefined();
+		expect((screen.getByTestId("edit-dev-workflow-work-item-title") as HTMLInputElement).value).toBe("Survey the vector stores");
 	});
 });

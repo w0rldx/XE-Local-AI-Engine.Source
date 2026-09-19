@@ -5401,6 +5401,13 @@
 				"submit": "Anlegen und starten",
 				"failed": "Das Arbeitspaket konnte nicht angelegt werden."
 			},
+			"edit": {
+				"open": "Bearbeiten",
+				"title": "Arbeitspaket bearbeiten",
+				"requestHint": "Ein bereits gestarteter Lauf behält den Text, den er bekommen hat; dies erhält der nächste Lauf.",
+				"saved": "Arbeitspaket gespeichert.",
+				"failed": "Das Arbeitspaket konnte nicht gespeichert werden."
+			},
 			"detail": {
 				"actions": "Aktionen für das Arbeitspaket",
 				"back": "Zurück zu den Workflow-Läufen",

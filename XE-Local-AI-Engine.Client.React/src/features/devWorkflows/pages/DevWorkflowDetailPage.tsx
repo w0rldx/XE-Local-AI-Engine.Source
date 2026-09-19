@@ -13,7 +13,7 @@ import {
 	VisuallyHidden,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconTrash } from "@tabler/icons-react";
+import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconPencil, IconTrash } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +24,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
 import { usePaneLayoutMode } from "@/core/ui/components/ResponsivePaneLayout/usePaneLayoutMode";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { toast } from "@/core/ui/notifications/Toast";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowDefinitionPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionPanel";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
@@ -34,6 +35,7 @@ import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/D
 import { DevWorkflowRunToolbar } from "@/features/devWorkflows/components/DevWorkflowRunToolbar";
 import { DevWorkflowsDisabledAlert } from "@/features/devWorkflows/components/DevWorkflowsDisabledAlert";
 import { DevWorkflowWorkItemStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
+import { type EditWorkItemValues, EditWorkItemDialog } from "@/features/devWorkflows/components/EditWorkItemDialog";
 import { useDevWorkflowDetailData } from "@/features/devWorkflows/hooks/useDevWorkflowDetailData";
 import { type DevWorkflowDetailTab, toDevWorkflowWorkItemStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 import { useDevWorkflowCapability } from "@/features/devWorkflows/queries/useDevWorkflows";
@@ -60,6 +62,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const [summaryDrawerOpened, summaryDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
+	const [editOpened, setEditOpened] = useState(false);
 	// Seeded once from `?tab=`, sticky after that. Both tab strips write the same search param, so reading the centre
 	// pane straight off it meant a click on Events threw the operator back to the graph. Accepted drift: a reload after
 	// a side-tab click opens the centre on the graph again, because the param no longer says otherwise.
@@ -88,6 +91,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 		lifecycle,
 		decide,
 		startRun,
+		updateWorkItem,
 		deleteWorkItem,
 		run,
 		runStatus,
@@ -100,6 +104,21 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const select = useCallback(
 		(next: DevWorkflowDetailSelection) => onSelectionChange({ ...selection, ...next }),
 		[onSelectionChange, selection],
+	);
+
+	// The dialog stays open on a failure — the edit is unsaved, and closing it would throw the text away. Success is
+	// toasted rather than shown inline, because the title in the header is about to change under the operator's eyes.
+	const handleEditSubmit = useCallback(
+		async (values: EditWorkItemValues): Promise<void> => {
+			try {
+				await updateWorkItem.mutateAsync({ path: { workItemId }, body: values });
+			} catch {
+				return;
+			}
+			setEditOpened(false);
+			toast.success(t("pages.devWorkflows.edit.saved", "Work item saved."));
+		},
+		[t, updateWorkItem, workItemId],
 	);
 
 	const handleDelete = useCallback(async (): Promise<void> => {
@@ -395,6 +414,18 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 							</ActionIcon>
 						</Menu.Target>
 						<Menu.Dropdown>
+							{/* Always offered: the PATCH touches title and request only, and the runtime's one write to a work
+							    item is its STATUS, so there is no run state in which the server refuses this. */}
+							<Menu.Item
+								leftSection={<IconPencil size={14} />}
+								onClick={() => {
+									updateWorkItem.reset();
+									setEditOpened(true);
+								}}
+								data-testid="dev-workflow-edit"
+							>
+								{t("pages.devWorkflows.edit.open", "Edit")}
+							</Menu.Item>
 							<Menu.Item
 								color="red"
 								leftSection={<IconTrash size={14} />}
@@ -455,6 +486,19 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 						</Drawer>
 					</>
 				) : null}
+				<EditWorkItemDialog
+					opened={editOpened}
+					workItem={workItem}
+					isSubmitting={updateWorkItem.isPending}
+					error={updateWorkItem.isError ? updateWorkItem.error : undefined}
+					onClose={() => {
+						updateWorkItem.reset();
+						setEditOpened(false);
+					}}
+					onSubmit={(values) => {
+						handleEditSubmit(values).catch(() => undefined);
+					}}
+				/>
 			</Stack>
 		</FullHeightPage>
 	);

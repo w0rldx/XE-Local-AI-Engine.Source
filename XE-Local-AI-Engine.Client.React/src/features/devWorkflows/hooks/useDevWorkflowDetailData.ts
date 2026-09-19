@@ -19,6 +19,7 @@ import {
 	useDevWorkflowRunLifecycle,
 	useDevWorkflowWorkItem,
 	useStartDevWorkflowRun,
+	useUpdateDevWorkflowWorkItem,
 } from "@/features/devWorkflows/queries/useDevWorkflows";
 
 /**
@@ -57,6 +58,7 @@ export function useDevWorkflowDetailData(
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
 	const decide = useDecideDevWorkflowNodeRun(runId, workItemId);
 	const startRun = useStartDevWorkflowRun();
+	const updateWorkItem = useUpdateDevWorkflowWorkItem();
 	const deleteWorkItem = useDeleteDevWorkflowWorkItem();
 
 	const run = runQuery.data;
@@ -87,6 +89,7 @@ export function useDevWorkflowDetailData(
 		lifecycle,
 		decide,
 		startRun,
+		updateWorkItem,
 		deleteWorkItem,
 		run,
 		runStatus,

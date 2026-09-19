@@ -38,6 +38,7 @@ import {
 	startDevWorkflowRunMutation,
 	updateDevWorkflowDefinitionMutation,
 	updateDevWorkflowRuleSetMutation,
+	updateDevWorkflowWorkItemMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
@@ -427,6 +428,28 @@ export function useCreateDevWorkflowWorkItem() {
 	return useMutation({
 		...withResponseValidation(createDevWorkflowWorkItemMutation()),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) }),
+	});
+}
+
+/**
+ * Rename a work item, or restate its request. A PATCH: an omitted member is left alone, so the caller sends only what
+ * the operator actually changed. Both the detail (the page the edit was made from) and the list (whose card carries
+ * the title) are re-read — the response body is not primed into the cache, because the list row carries run counters
+ * this write knows nothing about.
+ */
+export function useUpdateDevWorkflowWorkItem() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(updateDevWorkflowWorkItemMutation()),
+		onSuccess: async (_data, variables) => {
+			const workItemId = variables.path?.workItemId;
+			if (workItemId) {
+				await queryClient.invalidateQueries({
+					queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }),
+				});
+			}
+			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) });
+		},
 	});
 }
 

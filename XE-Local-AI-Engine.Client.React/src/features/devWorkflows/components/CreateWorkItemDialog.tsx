@@ -1,9 +1,10 @@
-import { Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { WorkItemFields } from "@/features/devWorkflows/components/WorkItemFields";
 import type {
 	CreateWorkItemValues,
 	DevelopmentProjectOption,
@@ -19,11 +20,6 @@ export interface CreateWorkItemDialogProps {
 	readonly onClose: () => void;
 	readonly onSubmit: (values: CreateWorkItemValues) => void;
 }
-
-// Server-side limits (DevWorkflowRequestLimits). Enforced here too so the operator is stopped by the input rather
-// than by a 400 after typing eight thousand characters.
-const TITLE_MAX = 200;
-const REQUEST_MAX = 8000;
 
 /**
  * Creating a work item and starting its run are TWO calls: a work item is definition-agnostic at creation.
@@ -95,28 +91,17 @@ export function CreateWorkItemDialog({
 				{errorMessage ? (
 					<InlineErrorAlert message={errorMessage} variant="light" data-testid="create-dev-workflow-work-item-error" />
 				) : null}
-				<TextInput
-					label={t("pages.devWorkflows.create.titleLabel", "Title")}
-					value={title}
-					maxLength={TITLE_MAX}
-					required={true}
-					onChange={(event) => setTitle(event.currentTarget.value)}
-					data-testid="create-dev-workflow-work-item-title"
-				/>
-				<Textarea
-					label={t("pages.devWorkflows.create.requestLabel", "Request")}
-					description={t(
-						"pages.devWorkflows.create.requestHint",
-						"What should this workflow deliver? The first node receives this text as its objective.",
-					)}
-					value={request}
-					maxLength={REQUEST_MAX}
-					required={true}
-					autosize={true}
-					minRows={4}
-					maxRows={10}
-					onChange={(event) => setRequest(event.currentTarget.value)}
-					data-testid="create-dev-workflow-work-item-request"
+				<WorkItemFields
+					values={{ title, request }}
+					onChange={(next) => {
+						if (next.title !== undefined) {
+							setTitle(next.title);
+						}
+						if (next.request !== undefined) {
+							setRequest(next.request);
+						}
+					}}
+					testIdPrefix="create-dev-workflow-work-item"
 				/>
 				<Select
 					label={t("pages.devWorkflows.create.definitionLabel", "Workflow template")}

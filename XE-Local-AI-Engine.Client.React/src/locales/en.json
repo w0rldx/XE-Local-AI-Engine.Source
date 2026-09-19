@@ -5401,6 +5401,13 @@
 				"submit": "Create and start",
 				"failed": "Could not create the work item."
 			},
+			"edit": {
+				"open": "Edit",
+				"title": "Edit work item",
+				"requestHint": "A run that has already started keeps the text it was given; this is what the next run receives.",
+				"saved": "Work item saved.",
+				"failed": "Could not save this work item."
+			},
 			"detail": {
 				"actions": "Work item actions",
 				"back": "Back to workflow runs",
