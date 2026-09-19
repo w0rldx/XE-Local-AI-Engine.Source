@@ -761,6 +761,39 @@ through `core/ui/stores/PendingComposerTextStore.ts`, which exists to carry text
 the feature — the capture sources, the worklet, the hub hook and the live panel — is described in
 [Browser capture and the live UI](#browser-capture-and-the-live-ui). See [React Client](10-react-client.md).
 
+The **managed source build** is the one part of this feature whose UI does *not* live in `features/transcription/`:
+`WhisperRuntimeSourceBuildCard` sits in `features/node-settings/components/` beside `SourceBuildCard` (llama.cpp) and
+`ImageRuntimeSourceBuildCard` (stable-diffusion.cpp), rendered on the Node Settings page, because that is where the
+other two managed-build lanes are. All three are visible to **every** operator: they were Developer-Mode gated until
+2026-09-19, when that gate was removed on the owner's ruling — the routes behind them are Operator-authorized and do
+nothing until Build is pressed, and hiding the only GPU-transcription path a Linux + NVIDIA box has behind a mode its
+operator has no reason to enable made the feature unfindable. It calls the five
+`transcription/runtime/source-build*` routes through `queries/useWhisperRuntime.ts`, and shares
+`CudaBuildLogView`, `SourceBuildPrerequisiteList` and the helpers in `models/SourceBuildModels.ts` with the other two
+cards — each keeps its own i18n subtree, so the prerequisite list takes the key prefix as a prop. It differs from
+them in one way that matters: whisper.cpp registers **no SignalR hub**
+(`IWhisperCppSourceBuildEventPublisher` has only its no-op floor and the host substitutes nothing), so the card's
+live phase and log come from a three-second poll of the status route, and that poll's terminal transition is what
+re-reads the runtime status after an adoption. An invalid managed record shows its sanitized reason and keeps
+eject/remove usable, which is the only in-app exit from a fail-closed tombstone. The transcription runtime card
+points at it when the resolved backend is `cpu` and no managed build exists — the SPA never infers the host's OS or
+GPU, only the backend the daemon reported, so the pointer names the Linux + NVIDIA condition rather than asserting it.
+
+Each card's prerequisite probe really runs the toolchain (`cmake --version`, `gcc`, `g++`, `ninja`/`make`, `git`, plus
+`readelf` here and `nvcc`/`nvidia-smi` or `glslc`/`vulkaninfo` for an accelerated backend), so the three of them
+together spawn roughly twenty short-lived child processes per probe round. Ungated, that would have been the cost of
+every operator's every visit to Node Settings, so **the build form sits behind a disclosure and the probe is `enabled`
+only while it is open** — `SourceBuildFormDisclosure` plus `useSourceBuildFormDisclosure`, shared by all three cards.
+Everything the node already knows stays outside it (the adopted-build summary, a running build's phase and log, the
+failure, Cancel/Eject/Remove): those come from the status route and the hubs, and each status endpoint just returns
+in-memory state under a lock. The form opens itself — from status data alone, never by probing — when it is the thing
+the operator needs: a build is running, a build ended in a failure, or the managed record is invalid. That expansion is
+a one-way latch, so the tick where a build stops running cannot collapse the retry form under whoever is reading it.
+Closed, the section is `keepMounted={false}`, so it holds no focusable inputs, and the toggle carries
+`aria-expanded`/`aria-controls`. On top of that the three prerequisite queries share `sourceBuildPrerequisiteStaleTime`
+(five minutes, in `models/SourceBuildModels.ts`), so reopening the form does not re-probe either; the start endpoint
+re-probes server-side regardless, so a stale "can build" can never let an unbuildable request through.
+
 ## Options and settings
 
 | Key | Where | Default | What it does |

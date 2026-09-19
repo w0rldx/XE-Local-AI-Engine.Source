@@ -47,6 +47,19 @@ export interface SourceBuildDraft {
 	readonly acknowledgeCustomSourceRisk: boolean;
 }
 
+/**
+ * How long a toolchain probe answer stays fresh, shared by all three source-build lanes.
+ *
+ * Each `GET .../source-build/prerequisites` really runs the tools: the node spawns `cmake --version`,
+ * `gcc`, `g++`, `ninja`/`make`, `git` (and `readelf` for whisper, `nvcc`/`nvidia-smi` or `glslc`/`vulkaninfo` for an
+ * accelerated backend) one after another, because "on PATH" and "runs" differ often enough to matter. That is ~6-9
+ * child processes per card, and since the three cards render unconditionally on Node Settings, a zero staleTime made
+ * every visit to that page re-run all of them. A toolchain changes when the operator installs something, not while
+ * they navigate, so five minutes is both generous and a real bound; a build's own start path re-probes server-side
+ * regardless, so a stale "can build" answer here can never let an unbuildable request through.
+ */
+export const sourceBuildPrerequisiteStaleTime = 5 * 60_000;
+
 export type SourceBuildValidationIssue = "commit" | "repository" | "acknowledgement";
 
 const commitPattern = /^[0-9a-fA-F]{40}$/;
@@ -128,7 +141,11 @@ export function sourceBuildPrerequisiteDiagnostic(item: LlamaCppSourceBuildPrere
 	return separator >= 0 ? item.detail.slice(separator + 2).trim() || null : null;
 }
 
-export function sourceBuildRequest(draft: SourceBuildDraft) {
+// Generic in the backend so a lane with a narrower one — whisper.cpp builds CPU and CUDA only — gets a request whose
+// backend still matches its own generated DTO instead of being widened to the three-way llama.cpp union.
+export function sourceBuildRequest<TBackend extends LlamaCppSourceBackend>(
+	draft: Omit<SourceBuildDraft, "backend"> & { readonly backend: TBackend },
+) {
 	return {
 		backend: draft.backend,
 		source: draft.source,

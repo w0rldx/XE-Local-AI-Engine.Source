@@ -10,7 +10,7 @@ import type {
 	LlamaCppSourceBuildStatus,
 } from "@/features/node-settings/models/SourceBuildModels";
 
-const { state, devMode } = vi.hoisted(() => ({
+const { state } = vi.hoisted(() => ({
 	state: {
 		prerequisites: { backend: "cpu", canBuild: true, items: [] } as LlamaCppSourceBuildPrerequisites,
 		status: {
@@ -36,15 +36,14 @@ const { state, devMode } = vi.hoisted(() => ({
 		prerequisiteArgs: vi.fn(),
 		statusArgs: vi.fn(),
 	},
-	devMode: { enabled: true },
 }));
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
 		t: (key: string, vars?: Record<string, unknown>) => {
 			const labels: Record<string, string> = {
+				"components.sourceBuild.buildFromSource": "Build from source",
 				"pages.nodeSettings.llamaCpp.sourceBuild.title": "llama.cpp build from source",
-				"pages.nodeSettings.llamaCpp.sourceBuild.devBadge": "Dev",
 				"pages.nodeSettings.llamaCpp.sourceBuild.description": "Description",
 				"pages.nodeSettings.llamaCpp.sourceBuild.backend": "Backend",
 				"pages.nodeSettings.llamaCpp.sourceBuild.backends.cpu": "CPU",
@@ -71,9 +70,10 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
+// Pinned OFF for the whole file. The card was ungated on 2026-09-19 and must not consult this store again: every
+// assertion below therefore describes a node whose operator has never touched Developer Mode.
 vi.mock("@/core/dev-tools/stores/DeveloperModeStore", () => ({
-	useDeveloperModeStore: (selector: (value: { developerMode: boolean }) => unknown) =>
-		selector({ developerMode: devMode.enabled }),
+	useDeveloperModeStore: (selector: (value: { developerMode: boolean }) => unknown) => selector({ developerMode: false }),
 }));
 
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: vi.fn() } }));
@@ -109,6 +109,17 @@ function renderCard(): void {
 	);
 }
 
+/**
+ * Opens the build form. Everything that measures the toolchain lives behind this disclosure, because the probe behind
+ * it spawns a compiler-toolchain's worth of child processes and all three source-build cards render unconditionally.
+ */
+async function openBuildForm(): Promise<void> {
+	fireEvent.click(screen.getByTestId("source-build-form-toggle"));
+	// `keepMounted={false}` means the controls are MOUNTED by the open, not merely revealed, so the first one has to
+	// be awaited rather than queried synchronously.
+	await screen.findByRole("combobox", { name: "Backend" });
+}
+
 describe("SourceBuildCard", () => {
 	beforeEach(() => {
 		Object.defineProperty(window, "matchMedia", {
@@ -129,7 +140,6 @@ describe("SourceBuildCard", () => {
 				}
 			},
 		});
-		devMode.enabled = true;
 		state.runtime = {
 			installed: null,
 			recommendedTag: "b1",
@@ -165,6 +175,7 @@ describe("SourceBuildCard", () => {
 			);
 		});
 		renderCard();
+		await openBuildForm();
 
 		fireEvent.click(screen.getByRole("button", { name: "Build" }));
 
@@ -173,12 +184,71 @@ describe("SourceBuildCard", () => {
 		);
 	});
 
-	it("hides and disables queries when Developer mode is off", () => {
-		devMode.enabled = false;
+	// The ungating, stated as behaviour: the card renders in full and subscribes to the node on a machine where
+	// Developer Mode is off, and it passes no `enabled` flag at all — the queries are unconditional now.
+	// The reason the disclosure exists: each prerequisite GET really RUNS the toolchain (`cmake --version`, `gcc`,
+	// `g++`, `ninja`/`make`, `git`, plus the backend's own tools), and three of these cards render on Node Settings
+	// for every operator. `enabled` is the proof here — a disabled query cannot be in flight, which is the hole a bare
+	// "no request yet" assertion right after render would leave open.
+	it("asks for no toolchain probe while the build form is closed", async () => {
 		renderCard();
-		expect(screen.queryByTestId("source-build-card")).toBeNull();
+
 		expect(state.prerequisiteArgs).toHaveBeenCalledWith("cpu", false);
-		expect(state.statusArgs).toHaveBeenCalledWith(false);
+		expect(state.prerequisiteArgs.mock.calls.every((call: readonly unknown[]) => call[1] === false)).toBe(true);
+		// `keepMounted={false}`: a closed form holds no focusable inputs either.
+		expect(screen.queryByRole("combobox", { name: "Backend" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Build" })).toBeNull();
+
+		await openBuildForm();
+
+		expect(state.prerequisiteArgs).toHaveBeenLastCalledWith("cpu", true);
+	});
+
+	it("names the collapsed form for a screen reader and points it at the region it controls", async () => {
+		renderCard();
+
+		const toggle = screen.getByRole("button", { name: "Build from source" });
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+		// The region has to exist while collapsed, or `aria-controls` points at nothing in the one state it describes.
+		const controlled = toggle.getAttribute("aria-controls");
+		expect(controlled).toBeTruthy();
+		expect(document.getElementById(controlled as string)).not.toBeNull();
+
+		await openBuildForm();
+		expect(toggle.getAttribute("aria-expanded")).toBe("true");
+	});
+
+	// A running build and a failure each mean the form IS the next thing the operator needs, so it opens itself —
+	// decided from the status read alone, never by probing.
+	it("expands the build form on its own while a build is running", async () => {
+		state.status = { ...state.status, phase: "Building", isRunning: true };
+		renderCard();
+
+		expect(await screen.findByRole("combobox", { name: "Backend" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Build from source" }).getAttribute("aria-expanded")).toBe("true");
+		expect(state.prerequisiteArgs).toHaveBeenLastCalledWith("cpu", true);
+	});
+
+	it("expands the build form on its own after a build failed, because the form is the retry", async () => {
+		state.status = { ...state.status, phase: "Failed", terminal: true, sanitizedError: "The build failed." };
+		renderCard();
+
+		expect(await screen.findByRole("combobox", { name: "Backend" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Build from source" }).getAttribute("aria-expanded")).toBe("true");
+	});
+
+	it("renders in full with developer mode off", async () => {
+		state.prerequisites = { backend: "cpu", canBuild: true, items: [] };
+		renderCard();
+		await openBuildForm();
+
+		expect(screen.getByTestId("source-build-card")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Build" })).toBeTruthy();
+		// The status read is unconditional — it costs nothing. The probe is not: it is asked for only once the form
+		// that needs its answer is open, which is the whole point of the disclosure.
+		expect(state.statusArgs).toHaveBeenCalledWith(undefined);
+		expect(state.prerequisiteArgs).toHaveBeenNthCalledWith(1, "cpu", false);
+		expect(state.prerequisiteArgs).toHaveBeenLastCalledWith("cpu", true);
 	});
 
 	it("hydrates explicit custom provenance even when it uses the canonical official repository URL", async () => {
@@ -198,6 +268,7 @@ describe("SourceBuildCard", () => {
 			},
 		};
 		renderCard();
+		await openBuildForm();
 
 		await waitFor(() =>
 			expect((screen.getByLabelText("GitHub repository") as HTMLInputElement).value).toBe(
@@ -223,9 +294,10 @@ describe("SourceBuildCard", () => {
 		expect(acknowledgement.checked).toBe(false);
 	});
 
-	it("submits an optional explicit commit for official upstream", () => {
+	it("submits an optional explicit commit for official upstream", async () => {
 		state.prerequisites = { backend: "cpu", canBuild: true, items: [] };
 		renderCard();
+		await openBuildForm();
 
 		fireEvent.change(screen.getByLabelText("Commit SHA (optional)"), { target: { value: "A".repeat(40) } });
 		fireEvent.click(screen.getByRole("button", { name: "Build" }));
@@ -236,16 +308,17 @@ describe("SourceBuildCard", () => {
 		);
 	});
 
-	it("blocks an official build on a malformed commit", () => {
+	it("blocks an official build on a malformed commit", async () => {
 		state.prerequisites = { backend: "cpu", canBuild: true, items: [] };
 		renderCard();
+		await openBuildForm();
 
 		fireEvent.change(screen.getByLabelText("Commit SHA (optional)"), { target: { value: "abc123" } });
 
 		expect((screen.getByRole("button", { name: "Build" }) as HTMLButtonElement).disabled).toBe(true);
 	});
 
-	it("renders active provenance exclusively from the installed runtime", () => {
+	it("renders active provenance exclusively from the installed runtime", async () => {
 		state.runtime = {
 			...state.runtime,
 			installed: {
@@ -279,6 +352,7 @@ describe("SourceBuildCard", () => {
 			items: [{ key: "os-is-linux", satisfied: true, detail: "Linux host detected." }],
 		};
 		renderCard();
+		await openBuildForm();
 		const provenance = screen.getByText(/github.com\/ggml-org\/llama.cpp/);
 		expect(screen.queryByText(/github.com\/example\/fork/)).toBeNull();
 		expect(screen.getByText(/Engine-pinned revision/)).toBeTruthy();

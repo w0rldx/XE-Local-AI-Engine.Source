@@ -33,6 +33,7 @@ import {
 } from "@/features/node-settings/components/NodeSettingsAuxiliaryPanels";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
+import { WhisperRuntimeSourceBuildCard } from "@/features/node-settings/components/WhisperRuntimeSourceBuildCard";
 import { useNodeSettingsModelOptions } from "@/features/node-settings/hooks/useNodeSettingsModelOptions";
 import { useRecommendedModelDownloads } from "@/features/node-settings/hooks/useRecommendedModelDownloads";
 import {
@@ -313,6 +314,8 @@ export function NodeSettings() {
 			<SourceBuildCard />
 
 			<ImageRuntimeSourceBuildCard />
+
+			<WhisperRuntimeSourceBuildCard />
 
 			<NodeSettingsFieldsCard
 				form={fieldsForm}

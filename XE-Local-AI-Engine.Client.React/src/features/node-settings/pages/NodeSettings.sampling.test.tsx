@@ -109,6 +109,10 @@ vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () =>
 	ImageRuntimeSourceBuildCard: () => null,
 }));
 
+vi.mock("@/features/node-settings/components/WhisperRuntimeSourceBuildCard", () => ({
+	WhisperRuntimeSourceBuildCard: () => null,
+}));
+
 describe("NodeSettings developer-mode switch", () => {
 	beforeEach(() => {
 		localStorage.clear();

@@ -1693,7 +1693,6 @@
 				"sourceBuild": {
 					"title": "llama.cpp aus Quellcode bauen",
 					"description": "CPU-, Vulkan- oder CUDA-llama.cpp aus dem offiziellen Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen.",
-					"devBadge": "Entwicklung",
 					"backend": "Backend",
 					"backends": {
 						"cpu": "CPU",
@@ -1756,9 +1755,6 @@
 				"sourceBuild": {
 					"title": "stable-diffusion.cpp aus Quellcode bauen",
 					"description": "Die Bildlaufzeit aus dem offiziellen stable-diffusion.cpp-Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen und verwalten.",
-					"devBadge": "Entwicklung",
-					"recoveryBadge": "Wiederherstellung",
-					"recoveryDescription": "Die verwaltete Bildlaufzeit ist ungültig und bleibt gesperrt. Wirf alle aktiven Bildprozesse aus und entferne anschließend die ungültige Laufzeit, bevor die Bilderzeugung erneut verwendet wird.",
 					"backend": "Backend",
 					"backends": {
 						"cpu": "CPU",
@@ -1821,6 +1817,81 @@
 					"cancelError": "Der Quellbuild der Bildlaufzeit konnte nicht abgebrochen werden.",
 					"ejectError": "Die Prozesse der Bildlaufzeit konnten nicht ausgeworfen werden.",
 					"removeError": "Die verwaltete Bildlaufzeit konnte nicht entfernt werden.",
+					"validation": {
+						"commit": "Der Commit muss eine vollständige hexadezimale SHA mit 40 Zeichen sein.",
+						"repository": "Verwende eine kanonische öffentliche GitHub-HTTPS-Repository-URL.",
+						"acknowledgement": "Bestätige, dass Code aus dem benutzerdefinierten Repository mit den Rechten der App ausgeführt wird."
+					}
+				}
+			},
+			"transcriptionRuntime": {
+				"sourceBuild": {
+					"title": "whisper.cpp aus Quellcode bauen",
+					"description": "Die Transkriptionslaufzeit aus dem offiziellen whisper.cpp-Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen und verwalten. whisper.cpp veröffentlicht keine vorgebaute Linux-CUDA-Binärdatei; unter Linux mit NVIDIA-GPU ist dies daher der einzige Weg, auf der GPU zu transkribieren.",
+					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"cuda": "CUDA"
+					},
+					"source": "Quelle",
+					"sources": {
+						"official": "Offizieller Upstream",
+						"custom": "Benutzerdefinierter öffentlicher Fork"
+					},
+					"revisions": {
+						"enginePinned": "Von der Engine festgelegte Revision",
+						"defaultBranch": "Standardbranch",
+						"explicitCommit": "Expliziter Commit"
+					},
+					"revisionBehavior": {
+						"enginePinned": "Offizielle Builds verwenden den vom Server ausgewählten, festgelegten Engine-Commit; ein hier eingegebener Commit würde abgelehnt.",
+						"defaultBranch": "Ohne Commit-SHA verwendet ein benutzerdefinierter Build den Standardbranch des Repositorys.",
+						"explicitCommit": "Dieser benutzerdefinierte Build verwendet exakt die unten eingegebene 40-stellige Commit-SHA."
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux-Host",
+						"cmake": "CMake",
+						"gcc": "C-Compiler",
+						"g++": "C++-Compiler",
+						"make-or-ninja": "Make oder Ninja",
+						"git": "Git",
+						"readelf": "readelf (binutils)",
+						"nvcc": "CUDA-Compiler",
+						"nvidia-smi": "NVIDIA-Treiber",
+						"free-disk": "Freier Speicherplatz"
+					},
+					"prerequisiteAvailability": {
+						"available": "Verfügbar",
+						"missing": "Fehlt oder ist nicht verfügbar"
+					},
+					"repository": "GitHub-Repository",
+					"repositoryPlaceholder": "https://github.com/owner/whisper.cpp",
+					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",
+					"riskAcknowledgement": "Ich vertraue diesem öffentlichen GitHub-Repository und akzeptiere das Risiko der Codeausführung.",
+					"commit": "Commit-SHA (optional)",
+					"buildCost": "Ein CUDA-Build übersetzt whisper.cpp für die GPU-Architektur dieses Computers: Er benötigt mindestens 15 GiB freien Speicherplatz und kann deutlich über eine Stunde laufen. Er läuft weiter, wenn du diese Seite verlässt.",
+					"succeeded": "Der Build ist fertig und die verwaltete Laufzeit wurde übernommen. Sie wird beim nächsten Start der Whisper-Laufzeit verwendet — wirf eine noch laufende Laufzeit aus, um sofort zu wechseln.",
+					"validity": {
+						"active": "Aktive verwaltete {{backend}}-Transkriptionslaufzeit",
+						"invalid": "Ungültige verwaltete {{backend}}-Transkriptionslaufzeit"
+					},
+					"activity": {
+						"idle": "Transkriptionslaufzeit im Leerlauf",
+						"busy": "Transkriptionslaufzeit beschäftigt",
+						"detail": "{{transcriptions}} Transkription(en), {{starting}} im Start, {{processes}} aktive(r) Prozess(e)"
+					},
+					"build": "Bauen",
+					"rebuild": "Neu bauen",
+					"cancel": "Abbrechen",
+					"eject": "Whisper-Prozesse auswerfen",
+					"remove": "Entfernen",
+					"removeConfirmTitle": "Verwaltete Laufzeit entfernen?",
+					"removeConfirmBody": "Die gebaute whisper.cpp-Laufzeit und ihr Eintrag werden von diesem Knoten gelöscht. Die Transkription fällt auf die vorgebaute CPU-Binärdatei zurück, bis du erneut baust.",
+					"removeConfirm": "Laufzeit entfernen",
+					"startError": "Der Quellbuild der Transkriptionslaufzeit konnte nicht gestartet werden.",
+					"cancelError": "Der Quellbuild der Transkriptionslaufzeit konnte nicht abgebrochen werden.",
+					"ejectError": "Die Prozesse der Transkriptionslaufzeit konnten nicht ausgeworfen werden.",
+					"removeError": "Die verwaltete Transkriptionslaufzeit konnte nicht entfernt werden.",
 					"validation": {
 						"commit": "Der Commit muss eine vollständige hexadezimale SHA mit 40 Zeichen sein.",
 						"repository": "Verwende eine kanonische öffentliche GitHub-HTTPS-Repository-URL.",
@@ -6859,6 +6930,7 @@
 					"active": "Verwalteter Build installiert.",
 					"invalid": "Der verwaltete Build ist ungültig und wird neu gebaut."
 				},
+				"cpuSourceBuildHint": "Transkription läuft auf der CPU. Unter Linux mit NVIDIA-GPU lässt sich in den Knoteneinstellungen eine CUDA-Laufzeit aus dem Quellcode bauen; alle anderen Systeme erhalten bereits eine vorgebaute Binärdatei.",
 				"eject": "Entladen",
 				"ejectFailed": "Die Laufzeit konnte nicht entladen werden.",
 				"models": {
@@ -7077,6 +7149,9 @@
 			"exitFullscreen": "Vollbild beenden",
 			"unsavedTitle": "Nicht gespeicherte Änderungen verwerfen?",
 			"unsavedDescription": "Es gibt nicht gespeicherte Änderungen. Wenn Sie jetzt verlassen, gehen sie verloren."
+		},
+		"sourceBuild": {
+			"buildFromSource": "Aus Quellcode bauen"
 		},
 		"chatConnectionStatus": {
 			"reconnecting": "Verbindung wird wiederhergestellt…",

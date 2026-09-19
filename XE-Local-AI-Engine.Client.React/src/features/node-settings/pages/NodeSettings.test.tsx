@@ -135,6 +135,10 @@ vi.mock("@/features/node-settings/components/ImageRuntimeSourceBuildCard", () =>
 	ImageRuntimeSourceBuildCard: () => null,
 }));
 
+vi.mock("@/features/node-settings/components/WhisperRuntimeSourceBuildCard", () => ({
+	WhisperRuntimeSourceBuildCard: () => null,
+}));
+
 // The runtime card renders a TanStack Router <Link> (eject-first notice) and the change-password card calls
 // useNavigate (a successful change is a sign-out that routes to /login). Stub both so the page mounts without a
 // RouterProvider OR loading the generated route tree (which eval-fails outside a real router).

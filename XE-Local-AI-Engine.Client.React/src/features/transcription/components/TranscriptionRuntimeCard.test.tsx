@@ -56,11 +56,11 @@ function modelList(models: readonly unknown[], selectedModelId: string | null = 
 	return { models, selectedModelId, recommendedModelId };
 }
 
-function runtimeBody(overrides: { selectedModelId?: string | null; vadInstalled?: boolean } = {}) {
+function runtimeBody(overrides: { selectedModelId?: string | null; vadInstalled?: boolean; backend?: "cpu" | "cuda" } = {}) {
 	return {
 		enabled: true,
 		state: "stopped",
-		backend: null,
+		backend: overrides.backend ?? null,
 		binarySource: null,
 		binaryVersion: null,
 		loadedModelId: null,
@@ -407,5 +407,45 @@ describe("TranscriptionRuntimeCard", () => {
 		renderWithProviders(<TranscriptionRuntimeCard />);
 
 		expect((await screen.findByTestId("transcription-models-error")).textContent).toContain("the catalogue is unavailable");
+	});
+
+	// whisper.cpp publishes no Linux CUDA binary, so a Linux NVIDIA box resolves the CPU tarball and stays there
+	// silently. The card cannot see the host's OS or GPU — only the backend the daemon resolved — so it points at the
+	// source build conditionally rather than claiming this node has a GPU.
+	it("points a CPU runtime at the source build, and says nothing once a managed build is adopted", async () => {
+		server.use(
+			jsonRoute("get", "transcription/runtime", runtimeBody({ backend: "cpu" })),
+			recommendationRoute(),
+			jsonRoute("get", "transcription/models", modelList([model("base", 147_951_465, { installed: true })], "base")),
+		);
+		const { unmount } = renderWithProviders(<TranscriptionRuntimeCard />);
+
+		expect((await screen.findByTestId("transcription-runtime-cpu-hint")).textContent).toBe(
+			en.pages.transcription.runtime.cpuSourceBuildHint,
+		);
+
+		unmount();
+		server.use(
+			http.get(localApiPath("transcription/runtime"), () =>
+				HttpResponse.json({
+					...runtimeBody({ backend: "cpu" }),
+					managedRuntime: {
+						validity: "active",
+						desiredBackend: "cuda",
+						sourceRepository: "https://github.com/ggml-org/whisper.cpp",
+						sourceCommit: "a".repeat(40),
+						sourceSelection: "official",
+						sourceRevisionMode: "enginePinned",
+						sourceRequestedCommit: null,
+						installedAtUtc: 1,
+						invalidReason: null,
+					},
+				}),
+			),
+		);
+		renderWithProviders(<TranscriptionRuntimeCard />);
+
+		expect(await screen.findByTestId("transcription-runtime-managed")).toBeTruthy();
+		expect(screen.queryByTestId("transcription-runtime-cpu-hint")).toBeNull();
 	});
 });

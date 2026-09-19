@@ -19,7 +19,7 @@ import type {
 	ImageRuntimeSourceBackend,
 	ImageRuntimeSourceBuildDraft,
 } from "@/features/node-settings/models/ImageRuntimeSourceBuildModels";
-import { sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
+import { sourceBuildPrerequisiteStaleTime, sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
 import { localRuntimeInvalidationKey } from "@/features/node-settings/queries/useLocalRuntime";
 
 export const imageRuntimeQueryIds = {
@@ -45,6 +45,7 @@ export function useImageRuntimeSourceBuildPrerequisites(backend: ImageRuntimeSou
 		...withResponseValidation(getStableDiffusionCppSourceBuildPrerequisitesOptions({ query: { backend } })),
 		select: toImageRuntimeSourceBuildPrerequisites,
 		enabled,
+		staleTime: sourceBuildPrerequisiteStaleTime,
 	});
 }
 

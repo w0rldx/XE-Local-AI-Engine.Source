@@ -19,7 +19,7 @@ import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRu
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
 import { toSourceBuildPrerequisites, toSourceBuildStatus } from "@/features/node-settings/models/SourceBuildMappers";
 import type { LlamaCppSourceBackend, SourceBuildDraft } from "@/features/node-settings/models/SourceBuildModels";
-import { sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
+import { sourceBuildPrerequisiteStaleTime, sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
 
 // Server state for the local-runtime cards on the Node Settings page (relocated from the model-fit advisor — they
 // tune this worker's local runtime, not model recommendations). Reads use the generated hey-api `*Options()` (which
@@ -172,6 +172,7 @@ export function useSourceBuildPrerequisites(backend: LlamaCppSourceBackend, enab
 		...withResponseValidation(getLlamaCppSourceBuildPrerequisitesOptions({ query: { backend } })),
 		select: toSourceBuildPrerequisites,
 		enabled,
+		staleTime: sourceBuildPrerequisiteStaleTime,
 	});
 }
 

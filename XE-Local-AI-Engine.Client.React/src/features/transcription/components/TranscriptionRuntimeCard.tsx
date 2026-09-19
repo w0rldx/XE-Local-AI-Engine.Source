@@ -81,6 +81,14 @@ export function TranscriptionRuntimeCard() {
 						{t(`pages.transcription.runtime.managed.${runtime.managedRuntimeValidity}`)}
 					</Text>
 				)}
+				{/* upstream whisper.cpp ships no Linux CUDA binary, so a Linux NVIDIA box resolves the CPU tarball and
+				    stays on the CPU until someone builds the runtime from source. The SPA cannot see the host's OS or
+				    GPU — only the backend the daemon resolved — so this states the condition instead of asserting it. */}
+				{runtime.backend === "cpu" && runtime.managedRuntimeValidity === null ? (
+					<Text size="xs" c="dimmed" data-testid="transcription-runtime-cpu-hint">
+						{t("pages.transcription.runtime.cpuSourceBuildHint")}
+					</Text>
+				) : null}
 			</Stack>
 			<TranscriptionModelManager />
 			<Group justify="flex-end">

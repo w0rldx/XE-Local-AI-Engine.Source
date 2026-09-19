@@ -1693,7 +1693,6 @@
 				"sourceBuild": {
 					"title": "llama.cpp build from source",
 					"description": "Build CPU, Vulkan, or CUDA llama.cpp from official upstream or a trusted public GitHub fork.",
-					"devBadge": "Dev",
 					"backend": "Backend",
 					"backends": {
 						"cpu": "CPU",
@@ -1756,9 +1755,6 @@
 				"sourceBuild": {
 					"title": "stable-diffusion.cpp build from source",
 					"description": "Build and manage the image runtime from official stable-diffusion.cpp or a trusted public GitHub fork.",
-					"devBadge": "Dev",
-					"recoveryBadge": "Recovery",
-					"recoveryDescription": "The managed image runtime is invalid and remains fail-closed. Eject any resident image process, then remove the invalid runtime before using image generation again.",
 					"backend": "Backend",
 					"backends": {
 						"cpu": "CPU",
@@ -1821,6 +1817,81 @@
 					"cancelError": "Could not cancel the image-runtime source build.",
 					"ejectError": "Could not eject the image-runtime processes.",
 					"removeError": "Could not remove the managed image runtime.",
+					"validation": {
+						"commit": "Commit must be a full 40-character hexadecimal SHA.",
+						"repository": "Use a canonical public GitHub HTTPS repository URL.",
+						"acknowledgement": "Acknowledge that custom repository code executes with the app user's privileges."
+					}
+				}
+			},
+			"transcriptionRuntime": {
+				"sourceBuild": {
+					"title": "whisper.cpp build from source",
+					"description": "Build and manage the transcription runtime from official whisper.cpp or a trusted public GitHub fork. whisper.cpp publishes no prebuilt Linux CUDA binary, so on Linux with an NVIDIA GPU this is the only way to transcribe on the GPU.",
+					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"cuda": "CUDA"
+					},
+					"source": "Source",
+					"sources": {
+						"official": "Official upstream",
+						"custom": "Custom public fork"
+					},
+					"revisions": {
+						"enginePinned": "Engine-pinned revision",
+						"defaultBranch": "Default branch",
+						"explicitCommit": "Explicit commit"
+					},
+					"revisionBehavior": {
+						"enginePinned": "Official builds use the engine-pinned commit selected by the server; a commit entered here would be refused.",
+						"defaultBranch": "Without a commit SHA, a custom build resolves the repository's default branch.",
+						"explicitCommit": "This custom build uses the exact 40-character commit SHA entered below."
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux host",
+						"cmake": "CMake",
+						"gcc": "C compiler",
+						"g++": "C++ compiler",
+						"make-or-ninja": "Make or Ninja",
+						"git": "Git",
+						"readelf": "readelf (binutils)",
+						"nvcc": "CUDA compiler",
+						"nvidia-smi": "NVIDIA driver",
+						"free-disk": "Free disk space"
+					},
+					"prerequisiteAvailability": {
+						"available": "Available",
+						"missing": "Missing or unavailable"
+					},
+					"repository": "GitHub repository",
+					"repositoryPlaceholder": "https://github.com/owner/whisper.cpp",
+					"riskWarning": "Custom repository code executes with the app user's privileges. It is trusted code, not sandboxed.",
+					"riskAcknowledgement": "I trust this public GitHub repository and accept the code-execution risk.",
+					"commit": "Commit SHA (optional)",
+					"buildCost": "A CUDA build compiles whisper.cpp for this computer's GPU architecture: it needs at least 15 GiB of free disk space and can run for well over an hour. It keeps running if you leave this page.",
+					"succeeded": "The build finished and the managed runtime was adopted. It is used the next time the whisper runtime starts — eject a resident one to switch over now.",
+					"validity": {
+						"active": "Active {{backend}} managed transcription runtime",
+						"invalid": "Invalid {{backend}} managed transcription runtime"
+					},
+					"activity": {
+						"idle": "Transcription runtime idle",
+						"busy": "Transcription runtime busy",
+						"detail": "{{transcriptions}} transcription(s), {{starting}} starting, {{processes}} resident process(es)"
+					},
+					"build": "Build",
+					"rebuild": "Rebuild",
+					"cancel": "Cancel",
+					"eject": "Eject whisper processes",
+					"remove": "Remove",
+					"removeConfirmTitle": "Remove the managed runtime?",
+					"removeConfirmBody": "The built whisper.cpp runtime and its record are deleted from this node. Transcription falls back to the prebuilt CPU binary until you build again.",
+					"removeConfirm": "Remove runtime",
+					"startError": "Could not start the transcription-runtime source build.",
+					"cancelError": "Could not cancel the transcription-runtime source build.",
+					"ejectError": "Could not eject the transcription-runtime processes.",
+					"removeError": "Could not remove the managed transcription runtime.",
 					"validation": {
 						"commit": "Commit must be a full 40-character hexadecimal SHA.",
 						"repository": "Use a canonical public GitHub HTTPS repository URL.",
@@ -6859,6 +6930,7 @@
 					"active": "Managed build installed.",
 					"invalid": "The managed build is invalid and will be rebuilt."
 				},
+				"cpuSourceBuildHint": "Transcribing on the CPU. On Linux with an NVIDIA GPU, a CUDA runtime can be built from source in Node Settings; every other host already gets a prebuilt binary.",
 				"eject": "Eject",
 				"ejectFailed": "Could not eject the runtime.",
 				"models": {
@@ -7077,6 +7149,9 @@
 			"exitFullscreen": "Exit fullscreen",
 			"unsavedTitle": "Discard unsaved changes?",
 			"unsavedDescription": "You have unsaved changes. If you leave now, they will be lost."
+		},
+		"sourceBuild": {
+			"buildFromSource": "Build from source"
 		},
 		"chatConnectionStatus": {
 			"reconnecting": "Reconnecting…",
