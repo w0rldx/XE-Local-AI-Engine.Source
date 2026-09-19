@@ -43,6 +43,14 @@ export const Route = createFileRoute("/_layout")({
 			if (settings.externalAccessProfile === "pending") {
 				throw redirect({ to: "/external-access" });
 			}
+
+			// The same typed-URL catch for the step AFTER it. Order is load-bearing: the profile check above runs first,
+			// so a fresh install answers the two questions in sequence and cannot bounce between them. An upgraded node
+			// never reaches this branch — UiModeBackfillService stamps "advanced" before Kestrel accepts a request — so a
+			// null mode here really does mean "nobody has been asked yet".
+			if (settings.uiMode === null || settings.uiMode === undefined) {
+				throw redirect({ to: "/ui-mode-setup" });
+			}
 		} catch (error) {
 			// Fail open on a settings read failure — a throw here would make every authenticated page unreachable, which is
 			// far worse than a skipped profile screen. The re-throw is load-bearing: the catch wraps the block that threw

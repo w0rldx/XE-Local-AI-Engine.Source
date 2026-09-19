@@ -236,3 +236,12 @@ export const nodeRoutePaths = {
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;
 export type NodeRoutePath = (typeof nodeRoutePaths)[NodeRouteId];
+
+// The two navigation modes the operator picks between, stored server-side as `uiMode` on the node settings. `simple`
+// shows the everyday surfaces only; `advanced` shows everything this build offers, and is what an absent server value
+// reads as, so a node that never answered looks exactly as it did before the mode existed.
+//
+// It lives beside the capability flags because it is the SECOND navigation gate, and it is a very different one: a
+// capability is compile-time and decides what EXISTS, while this is a runtime preference that only decides what is
+// RENDERED IN THE NAV. Every route stays reachable by its own address in either mode, and no server gate reads it.
+export type UiMode = "simple" | "advanced";

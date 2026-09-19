@@ -19,6 +19,7 @@ internal static class NodeSettingsEndpointDtoMapper
             CustomToolsEnabled = settings.CustomToolsEnabled,
             ToolRelevanceEnabled = settings.ToolRelevanceEnabled,
             ExternalAccessProfile = settings.ExternalAccessProfile,
+            UiMode = settings.UiMode,
             AutoCheckApplicationUpdates = settings.AutoCheckApplicationUpdates,
             AutoCheckRuntimeUpdates = settings.AutoCheckRuntimeUpdates,
             AutoProvisionFirstRunModel = settings.AutoProvisionFirstRunModel,
@@ -108,6 +109,12 @@ internal static class NodeSettingsEndpointDtoMapper
             CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
             ToolRelevanceEnabled = request.ToolRelevanceEnabled ?? currentSettings.ToolRelevanceEnabled,
             ExternalAccessProfile = externalAccessProfile,
+            // Plain null-preserving merge, unlike the external-access block above: the mode couples to no other field,
+            // so it needs no joint resolution. The validator has already proven a supplied value is one of the two
+            // literals; the store's Normalize trims and re-checks it.
+            UiMode = request.UiMode is null
+                ? currentSettings.UiMode
+                : request.UiMode.Trim(),
             AutoCheckApplicationUpdates = autoCheckApplicationUpdates,
             AutoCheckRuntimeUpdates = autoCheckRuntimeUpdates,
             AutoProvisionFirstRunModel = autoProvisionFirstRunModel,

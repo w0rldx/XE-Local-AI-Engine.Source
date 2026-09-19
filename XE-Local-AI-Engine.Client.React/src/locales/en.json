@@ -2102,6 +2102,10 @@
 				"timeoutError": "Enter a whole number from {{min}} to {{max}}.",
 				"save": "Save settings",
 				"reload": "Reload"
+			},
+			"uiMode": {
+				"title": "Interface mode",
+				"description": "Simple shows the everyday pages only; Advanced shows every page this build offers. This changes the navigation and nothing else — every page stays reachable by its own address, and nothing is deleted."
 			}
 		},
 		"cloudSettings": {
@@ -6712,6 +6716,21 @@
 				"title": "Custom"
 			},
 			"notChosen": "Not chosen",
+			"saveError": "Could not save your choice. Try again."
+		},
+		"uiMode": {
+			"setupTitle": "How much of the engine do you want to see?",
+			"setupSubtitle": "Nothing is deleted either way, and you can change this later in Node settings.",
+			"simple": {
+				"title": "Simple",
+				"badge": "Recommended for most people",
+				"body": "Chat, agents, models, knowledge, images and transcription. The building and monitoring tools stay out of the way."
+			},
+			"advanced": {
+				"title": "Advanced",
+				"body": "Everything, including tool and skill authoring, scheduling, workflows, integrations, benchmarks and training."
+			},
+			"continue": "Continue",
 			"saveError": "Could not save your choice. Try again."
 		},
 		"transcription": {

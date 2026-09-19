@@ -626,6 +626,75 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments(StoredNodeSettings.UiModeSimple)]
+    [Arguments(StoredNodeSettings.UiModeAdvanced)]
+    public async Task Normalize_KeepsAValidUiMode(string mode)
+    {
+        await WriteSettingsJsonAsync($"{{ \"uiMode\": \"{mode}\" }}");
+
+        AssertEx.Equal(mode, (await LoadAsync()).UiMode);
+    }
+
+    [Test]
+    [Arguments("expert")]
+    [Arguments("Simple")]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task Normalize_NullsAnUnrecognisedUiMode(string mode)
+    {
+        // Unlike the external-access profile, junk here falls back to NULL rather than to an "ask again" literal: the
+        // mode only decides which navigation entries render, so the reader re-seeds "advanced" and the navigation looks
+        // exactly as it did before the setting existed. "Simple" pins the ORDINAL comparison — a later case-insensitive
+        // change has to edit this test, i.e. it becomes a visible decision.
+        await WriteSettingsJsonAsync($"{{ \"uiMode\": \"{mode}\" }}");
+
+        AssertEx.Null((await LoadAsync()).UiMode);
+    }
+
+    [Test]
+    public async Task Normalize_TrimsTheUiMode()
+    {
+        await WriteSettingsJsonAsync("{ \"uiMode\": \"  simple  \" }");
+
+        AssertEx.Equal(StoredNodeSettings.UiModeSimple, (await LoadAsync()).UiMode);
+    }
+
+    [Test]
+    public async Task OldFileMissingTheUiMode_LoadsToNull_WithoutThrowing()
+    {
+        // Null is what the boot backfill and the SPA's first-run step both key on, so an upgraded node's file — which
+        // predates the member entirely — must deserialize to null rather than to a spurious "simple".
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+
+        AssertEx.Null((await LoadAsync()).UiMode);
+    }
+
+    [Test]
+    public async Task UiMode_RoundTripsThroughTheStore()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            UiMode = StoredNodeSettings.UiModeSimple
+        });
+
+        AssertEx.Equal(StoredNodeSettings.UiModeSimple, loaded.UiMode);
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.UiModeSimple, true)]
+    [Arguments(StoredNodeSettings.UiModeAdvanced, true)]
+    [Arguments(null, false)]
+    [Arguments("", false)]
+    [Arguments("Advanced", false)]
+    [Arguments("expert", false)]
+    public void IsValidUiMode_AcceptsOnlyTheTwoLiterals(string? mode, bool expected)
+    {
+        // One predicate, unlike the external-access pair: there is no engine-written mode, so what may be STORED and
+        // what a client may SEND are the same set, and the boundary validator gates on this very method.
+        AssertEx.Equal(expected, StoredNodeSettings.IsValidUiMode(mode));
+    }
+
+    [Test]
     public async Task InterruptedSave_LeavesTheStoredOfflineProfileIntact()
     {
         // The save writes a temp sibling and renames it over the target, so a crash between the two leaves a leftover

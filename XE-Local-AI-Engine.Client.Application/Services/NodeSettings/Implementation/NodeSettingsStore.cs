@@ -330,7 +330,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             AutoEffortFastModelName = TrimToNull(settings.AutoEffortFastModelName),
             DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile),
             UsageRates = NormalizeUsageRates(settings.UsageRates),
-            ExternalAccessProfile = NormalizeExternalAccessProfile(settings.ExternalAccessProfile)
+            ExternalAccessProfile = NormalizeExternalAccessProfile(settings.ExternalAccessProfile),
+            UiMode = NormalizeUiMode(settings.UiMode)
         };
     }
 
@@ -429,6 +430,23 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
 
         return StoredNodeSettings.IsValidExternalAccessProfile(trimmed) ? trimmed : StoredNodeSettings.ExternalAccessProfilePending;
+    }
+
+    /// <summary>
+    ///     Unlike the external-access profile, an unrecognised value falls back to <see langword="null" /> rather than to
+    ///     a "ask again" literal: the mode is presentation only, so a junk value costs nothing to answer for — the reader
+    ///     re-seeds <see cref="StoredNodeSettings.DefaultUiMode" /> and the navigation looks exactly as it did before the
+    ///     setting existed. The comparison is ordinal, so <c>"Simple"</c> is unrecognised and <c>"  simple  "</c> is not.
+    ///     <para>
+    ///         The cost of the null fallback is that a hand-edited junk value makes the node look like one that never
+    ///         answered, and the boot backfill may then stamp <c>advanced</c> over it. That is the same value the reader
+    ///         would have used anyway.
+    ///     </para>
+    /// </summary>
+    private static string? NormalizeUiMode(string? value)
+    {
+        var trimmed = TrimToNull(value);
+        return StoredNodeSettings.IsValidUiMode(trimmed) ? trimmed : null;
     }
 
     private static string? NormalizeRecommendedTag(string? value)

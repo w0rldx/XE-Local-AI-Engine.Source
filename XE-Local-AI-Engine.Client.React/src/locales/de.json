@@ -2102,6 +2102,10 @@
 				"timeoutError": "Bitte eine ganze Zahl von {{min}} bis {{max}} eingeben.",
 				"save": "Einstellungen speichern",
 				"reload": "Neu laden"
+			},
+			"uiMode": {
+				"title": "Oberflächenmodus",
+				"description": "„Einfach“ zeigt nur die alltäglichen Seiten, „Erweitert“ jede Seite, die dieser Build anbietet. Das ändert nur die Navigation — jede Seite bleibt über ihre eigene Adresse erreichbar, und nichts wird gelöscht."
 			}
 		},
 		"cloudSettings": {
@@ -6712,6 +6716,21 @@
 				"title": "Benutzerdefiniert"
 			},
 			"notChosen": "Nicht gewählt",
+			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut."
+		},
+		"uiMode": {
+			"setupTitle": "Wie viel von der Engine möchten Sie sehen?",
+			"setupSubtitle": "In beiden Fällen wird nichts gelöscht, und Sie können dies später in den Node-Einstellungen ändern.",
+			"simple": {
+				"title": "Einfach",
+				"badge": "Für die meisten empfohlen",
+				"body": "Chat, Agenten, Modelle, Wissen, Bilder und Transkription. Die Werkzeuge zum Bauen und Überwachen bleiben aus dem Weg."
+			},
+			"advanced": {
+				"title": "Erweitert",
+				"body": "Alles, einschließlich Tool- und Skill-Erstellung, Zeitplanung, Workflows, Integrationen, Benchmarks und Training."
+			},
+			"continue": "Weiter",
 			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut."
 		},
 		"transcription": {

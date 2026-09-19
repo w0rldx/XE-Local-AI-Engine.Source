@@ -1108,6 +1108,76 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    [Arguments(StoredNodeSettings.UiModeSimple)]
+    [Arguments(StoredNodeSettings.UiModeAdvanced)]
+    public async Task SaveNodeSettings_RoundTripsTheUiMode(string mode)
+    {
+        // Both halves: the response the client reads back AND the record handed to the store. ToStoredSettings builds a
+        // FRESH record, so an omitted member ERASES the value — the second half is what catches that.
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            UiMode = mode
+        });
+        using var response = await client.SendAsync(request);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(mode, settings.UiMode);
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).UiMode == mode),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("expert")]
+    [Arguments("Simple")]
+    [Arguments("")]
+    public async Task SaveNodeSettings_WhenTheUiModeIsNotOneOfTheTwoLiterals_ReturnsBadRequestWithoutSaving(string mode)
+    {
+        // The boundary is the trust boundary: the SPA can only produce the two literals, so anything else is a
+        // hand-written client and is rejected ahead of Normalize's defence in depth. An empty string is rejected
+        // rather than read as "keep the current value" — only an ABSENT member keeps.
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            UiMode = StoredNodeSettings.UiModeSimple
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            UiMode = mode
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenASaveOmitsTheUiMode_KeepsTheStoredOne()
+    {
+        // The common case for every other setting: an unrelated save must not drop an operator's navigation choice.
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                UiMode = StoredNodeSettings.UiModeSimple
+            },
+            new SaveNodeSettingsRequest
+            {
+                MaxMessageRequestTimeoutSeconds = 600
+            });
+
+        AssertEx.Equal(StoredNodeSettings.UiModeSimple, settings.UiMode);
+        AssertEx.Equal(expected: 600, settings.MaxMessageRequestTimeoutSeconds);
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenTheFileIsUnreadable_ReturnsAProblemResponseNamingTheRecovery()
     {
         // Driven against the REAL store over a hand-corrupted file, because the behaviour under test lives in the

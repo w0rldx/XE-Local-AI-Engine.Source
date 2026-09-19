@@ -27328,6 +27328,11 @@
       "XE_Local_AI_EngineClientServicesTrainingDatasetsSampleValidationLayerResultV1": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "layer",
+          "passed",
+          "scoredBy"
+        ],
         "properties": {
           "layer": {
             "type": "string"
@@ -29361,6 +29366,10 @@
             "type": "string",
             "nullable": true
           },
+          "uiMode": {
+            "type": "string",
+            "nullable": true
+          },
           "autoCheckApplicationUpdates": {
             "type": "boolean",
             "nullable": true
@@ -29652,6 +29661,10 @@
             "nullable": true
           },
           "externalAccessProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "uiMode": {
             "type": "string",
             "nullable": true
           },
@@ -40813,6 +40826,11 @@
       "XE_Local_AI_EngineClientServicesDevelopmentDevelopmentPatchPreviewFile": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "path",
+          "changeType",
+          "previousPath"
+        ],
         "properties": {
           "path": {
             "type": "string"
@@ -41138,6 +41156,11 @@
       "XE_Local_AI_EngineClientServicesCustomToolsHostExecutableProbeResult": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "ok",
+          "reason",
+          "path"
+        ],
         "properties": {
           "ok": {
             "type": "boolean"

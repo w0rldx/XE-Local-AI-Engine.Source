@@ -285,6 +285,12 @@ through the operator's cloud credentials. See [API & Hubs](09-api-and-hubs.md).
 
 Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthAndConnectionExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
 
+**The Simple / Advanced interface mode is not part of this gate.** `uiMode` in `node-settings.json` decides which
+entries the SPA's navigation renders and nothing more: every route stays reachable by its own address in either mode,
+no endpoint consults it, and the `Operator` policy above is what actually decides who may do what. Treating it as an
+authorization boundary — hiding an endpoint's page instead of gating the endpoint — would be the mistake it is named
+against. See [React Client](10-react-client.md).
+
 ### 3.3 Desktop / loopback hosting
 
 In Desktop and McpOnly local modes the node binds plain HTTP on loopback only and bypasses the

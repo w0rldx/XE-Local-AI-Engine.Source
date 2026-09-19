@@ -9,6 +9,8 @@ import {
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
+	IconMicrophone,
+	IconPhoto,
 	IconPlug,
 	IconRobot,
 	IconSchool,
@@ -17,6 +19,7 @@ import {
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
+import type { UiMode } from "@/capabilities/NodeCapabilities";
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
@@ -42,34 +45,49 @@ type NavigationCapabilityKey =
 	| "transcription"
 	| "invocationMonitor";
 
+type NavigationIcon = ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>;
+
 interface INavigationNestedLink {
 	translationKey: string;
 	to: string;
 	onClick?: () => void;
 	capability?: NavigationCapabilityKey;
+	// Whether this leaf is part of the Simple navigation. Explicit on EVERY leaf, never inferred: an omitted flag is a
+	// forgotten classification, which NavigationMenuData.test.ts fails on rather than letting it default silently.
+	simple: boolean;
+	// Set on a Simple leaf whose group would otherwise hold it alone: in Simple mode the leaf is rendered as a top-level
+	// entry at its group's position (and needs its own id + icon for that), and the emptied group is dropped. Advanced
+	// mode never reads this, so today's grouping and order are byte-identical there.
+	promoteInSimple?: { id: string; icon: NavigationIcon };
 }
 
 export interface INavigationLink {
 	id: string;
-	icon: ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>;
+	icon: NavigationIcon;
 	translationKey: string;
 	to?: string;
 	links?: INavigationNestedLink[];
 	onClick?: () => void;
 	capability?: NavigationCapabilityKey;
+	// Only a top-level LEAF carries this; a group's visibility in Simple mode is decided by its surviving children, so
+	// setting it on a group would be a second, contradictable authority. The test enforces both halves of that rule.
+	simple?: boolean;
 }
 
 // Full link set with the related node pages collapsed into groups (Models / Settings / Automation / Preview). A group
 // entry has no `to` of its own — it is a pure expand/collapse toggle whose children carry the routes. The
 // exported navigationLinks below is this list with capability-gated children removed (and any group left
 // empty dropped) — see the filter at the bottom of this file. The nav bars stay capability-unaware.
-const allNavigationLinks: INavigationLink[] = [
-	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home },
+// Exported for the classification guard in NavigationMenuData.test.ts, which has to see EVERY leaf — including the
+// ones the capability filter below removes from the default build — to prove none of them is missing its `simple` flag.
+export const allNavigationLinks: INavigationLink[] = [
+	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home, simple: true },
 	{
 		id: "chat",
 		icon: IconMessageCircle,
 		translationKey: "navigation.chat",
 		to: nodeRoutePaths.chat,
+		simple: true,
 	},
 	{
 		id: "knowledgeBase",
@@ -77,6 +95,7 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.knowledgeBase",
 		to: nodeRoutePaths.knowledgeBase,
 		capability: "knowledgeBase",
+		simple: true,
 	},
 	// Models group: installed models (always) plus the model-fit recommendations page, which is gated on the
 	// static modelFit capability. With modelFit off the group keeps just Installed.
@@ -85,9 +104,14 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconCpu,
 		translationKey: "navigation.models",
 		links: [
-			{ translationKey: "navigation.modelsInstalled", to: nodeRoutePaths.models },
-			{ translationKey: "navigation.recommendations", to: nodeRoutePaths.modelRecommendations, capability: "modelFit" },
-			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels" },
+			{ translationKey: "navigation.modelsInstalled", to: nodeRoutePaths.models, simple: true },
+			{
+				translationKey: "navigation.recommendations",
+				to: nodeRoutePaths.modelRecommendations,
+				capability: "modelFit",
+				simple: true,
+			},
+			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels", simple: true },
 		],
 	},
 	// Settings group: node settings (always) + cloud settings + external providers (each gated on its own capability,
@@ -99,10 +123,17 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconSettings,
 		translationKey: "navigation.settingsGroup",
 		links: [
-			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings },
-			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings, capability: "cloudSettings" },
-			{ translationKey: "navigation.externalProviders", to: nodeRoutePaths.externalProviders, capability: "externalProviders" },
-			{ translationKey: "navigation.diagnostics", to: nodeRoutePaths.diagnostics },
+			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings, simple: true },
+			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings, capability: "cloudSettings", simple: true },
+			{
+				translationKey: "navigation.externalProviders",
+				to: nodeRoutePaths.externalProviders,
+				capability: "externalProviders",
+				simple: true,
+			},
+			// Advanced-only in the nav, but NOT removed: the header's "Report Problem" button opens the same capture in
+			// both modes, so a Simple operator who hits a bug still has the path (see useReportProblem).
+			{ translationKey: "navigation.diagnostics", to: nodeRoutePaths.diagnostics, simple: false },
 		],
 	},
 	// Automation group: agents / MCP servers / scheduler are each gated on their own capability; tools is
@@ -112,14 +143,24 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconRobot,
 		translationKey: "navigation.automationGroup",
 		links: [
-			{ translationKey: "navigation.commands", to: nodeRoutePaths.commands },
-			{ translationKey: "navigation.agents", to: nodeRoutePaths.agents, capability: "agentManagement" },
-			{ translationKey: "navigation.workSessions", to: nodeRoutePaths.workSessions, capability: "workSessions" },
-			{ translationKey: "navigation.skills", to: nodeRoutePaths.skills, capability: "agentManagement" },
-			{ translationKey: "navigation.customTools", to: nodeRoutePaths.customTools, capability: "agentManagement" },
-			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },
-			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler" },
-			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
+			{ translationKey: "navigation.commands", to: nodeRoutePaths.commands, simple: false },
+			// The one Simple child of this group, so in Simple mode it is promoted to a top-level entry and the group is
+			// dropped rather than rendered as a collapsible holding a single item.
+			{
+				translationKey: "navigation.agents",
+				to: nodeRoutePaths.agents,
+				capability: "agentManagement",
+				simple: true,
+				promoteInSimple: { id: "agents", icon: IconRobot },
+			},
+			{ translationKey: "navigation.workSessions", to: nodeRoutePaths.workSessions, capability: "workSessions", simple: false },
+			{ translationKey: "navigation.skills", to: nodeRoutePaths.skills, capability: "agentManagement", simple: false },
+			{ translationKey: "navigation.customTools", to: nodeRoutePaths.customTools, capability: "agentManagement", simple: false },
+			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers", simple: false },
+			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler", simple: false },
+			// Advanced-only, and NOT removed: it is the read-only catalog of what the four authoring surfaces above
+			// register, so in Simple mode — where none of them is offered — it would list nothing and lead nowhere.
+			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools, simple: false },
 		],
 	},
 	// External Integrations group: every child carries the same `integrations` capability, so the generic
@@ -131,14 +172,30 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconPlug,
 		translationKey: "navigation.integrationsGroup",
 		links: [
-			{ translationKey: "navigation.integrationTriggers", to: nodeRoutePaths.integrationTriggers, capability: "integrations" },
-			{ translationKey: "navigation.integrationSessions", to: nodeRoutePaths.integrationSessions, capability: "integrations" },
+			{
+				translationKey: "navigation.integrationTriggers",
+				to: nodeRoutePaths.integrationTriggers,
+				capability: "integrations",
+				simple: false,
+			},
+			{
+				translationKey: "navigation.integrationSessions",
+				to: nodeRoutePaths.integrationSessions,
+				capability: "integrations",
+				simple: false,
+			},
 			{
 				translationKey: "navigation.integrationExecutions",
 				to: nodeRoutePaths.integrationExecutions,
 				capability: "integrations",
+				simple: false,
 			},
-			{ translationKey: "navigation.integrationKeys", to: nodeRoutePaths.integrationKeys, capability: "integrations" },
+			{
+				translationKey: "navigation.integrationKeys",
+				to: nodeRoutePaths.integrationKeys,
+				capability: "integrations",
+				simple: false,
+			},
 		],
 	},
 	// External Apps group, directly after Integrations: both children carry the same `externalApps` capability, so
@@ -152,11 +209,17 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconApps,
 		translationKey: "navigation.externalAppsGroup",
 		links: [
-			{ translationKey: "navigation.externalAppsCatalog", to: nodeRoutePaths.externalApps, capability: "externalApps" },
+			{
+				translationKey: "navigation.externalAppsCatalog",
+				to: nodeRoutePaths.externalApps,
+				capability: "externalApps",
+				simple: false,
+			},
 			{
 				translationKey: "navigation.externalAppsInstalled",
 				to: nodeRoutePaths.externalAppsInstalled,
 				capability: "externalApps",
+				simple: false,
 			},
 		],
 	},
@@ -172,12 +235,26 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconBinaryTree2,
 		translationKey: "navigation.previewGroup",
 		links: [
-			{ translationKey: "navigation.images", to: nodeRoutePaths.images, capability: "images" },
-			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development" },
+			// Images and Transcription are the group's only Simple children, and a "Preview" heading is itself an
+			// Advanced idea, so in Simple mode both are promoted to top-level entries and the group is dropped.
+			{
+				translationKey: "navigation.images",
+				to: nodeRoutePaths.images,
+				capability: "images",
+				simple: true,
+				promoteInSimple: { id: "images", icon: IconPhoto },
+			},
+			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development", simple: false },
 			// Labelled "Workflow Runs", not "Development Workflows" (C42): sitting next to "Development" the module name
 			// reads as its sibling, and the two are not siblings — this one lists work items, their runs and their nodes.
-			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows" },
-			{ translationKey: "navigation.transcription", to: nodeRoutePaths.transcription, capability: "transcription" },
+			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows", simple: false },
+			{
+				translationKey: "navigation.transcription",
+				to: nodeRoutePaths.transcription,
+				capability: "transcription",
+				simple: true,
+				promoteInSimple: { id: "transcription", icon: IconMicrophone },
+			},
 		],
 	},
 	// Graph Workflows is a TOP-LEVEL entry, not a Preview child: it is the successor to the retired Open Canvas and
@@ -188,6 +265,7 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.graphWorkflows",
 		to: nodeRoutePaths.graphWorkflows,
 		capability: "graphWorkflows",
+		simple: false,
 	},
 	{
 		id: "benchmarks",
@@ -195,6 +273,7 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.benchmarks",
 		to: nodeRoutePaths.benchmarks,
 		capability: "benchmarks",
+		simple: false,
 	},
 	// Training group. Each child carries its own capability (like Models / Automation / Preview), so the generic
 	// empty-group filter drops the whole group if `training` is ever turned off again — it ships on today.
@@ -203,9 +282,19 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconSchool,
 		translationKey: "navigation.trainingGroup",
 		links: [
-			{ translationKey: "navigation.trainingDatasets", to: nodeRoutePaths.trainingDatasets, capability: "training" },
-			{ translationKey: "navigation.training", to: nodeRoutePaths.training, capability: "training" },
-			{ translationKey: "navigation.trainingComparisons", to: nodeRoutePaths.trainingComparisons, capability: "training" },
+			{
+				translationKey: "navigation.trainingDatasets",
+				to: nodeRoutePaths.trainingDatasets,
+				capability: "training",
+				simple: false,
+			},
+			{ translationKey: "navigation.training", to: nodeRoutePaths.training, capability: "training", simple: false },
+			{
+				translationKey: "navigation.trainingComparisons",
+				to: nodeRoutePaths.trainingComparisons,
+				capability: "training",
+				simple: false,
+			},
 		],
 	},
 	{
@@ -214,12 +303,14 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.invocations",
 		to: nodeRoutePaths.invocations,
 		capability: "invocationMonitor",
+		simple: false,
 	},
 	{
 		id: "usage",
 		icon: IconChartHistogram,
 		translationKey: "navigation.usage",
 		to: nodeRoutePaths.usage,
+		simple: true,
 	},
 ];
 
@@ -266,6 +357,61 @@ export const navigationLinks: INavigationLink[] = allNavigationLinks
 		link.links ? { ...link, links: link.links.filter((nestedLink) => isCapabilityEnabled(nestedLink.capability)) } : link,
 	)
 	.filter((link) => !link.links || link.links.length > 0);
+
+// The SECOND, independent filter, layered on top of the capability one above. It is a separate pure function rather
+// than another branch inside that computation because the two gates have incompatible lifetimes: `navigationLinks` is
+// computed ONCE at module-eval time from compile-time constants, while `uiMode` is a server value that changes without
+// a rebuild (the Node Settings toggle) and must re-filter live. So the nav bars compose them — capability first, mode
+// second — inside the `useMemo` they already have.
+//
+// Capability still wins: this runs on the already-capability-filtered list, so a leaf compiled off stays off in either
+// mode. `advanced` is the identity function, which is what pins Advanced mode to today's navigation byte for byte.
+export function filterNavigationLinksByUiMode(links: readonly INavigationLink[], uiMode: UiMode): INavigationLink[] {
+	if (uiMode !== "simple") {
+		return [...links];
+	}
+
+	const simpleLinks: INavigationLink[] = [];
+
+	for (const link of links) {
+		if (!link.links) {
+			if (link.simple === true) {
+				simpleLinks.push(link);
+			}
+
+			continue;
+		}
+
+		const keptChildren = link.links.filter((nestedLink) => nestedLink.simple);
+
+		// A promoted child leaves its group and takes the group's position, so the operator does not meet a collapsible
+		// holding one item — or a "Preview"/"Automation" heading that is itself an Advanced idea.
+		for (const nestedLink of keptChildren) {
+			if (nestedLink.promoteInSimple === undefined) {
+				continue;
+			}
+
+			simpleLinks.push({
+				id: nestedLink.promoteInSimple.id,
+				icon: nestedLink.promoteInSimple.icon,
+				translationKey: nestedLink.translationKey,
+				to: nestedLink.to,
+				onClick: nestedLink.onClick,
+				capability: nestedLink.capability,
+				simple: true,
+			});
+		}
+
+		const remainingChildren = keptChildren.filter((nestedLink) => nestedLink.promoteInSimple === undefined);
+		// A group whose children all went away is dropped whole, never rendered as an empty expandable — the same rule
+		// the capability filter above applies, for the same reason.
+		if (remainingChildren.length > 0) {
+			simpleLinks.push({ ...link, links: remainingChildren });
+		}
+	}
+
+	return simpleLinks;
+}
 
 // Only what the rail actually renders may claim a sub-path: an entry whose capability is off has no link to be
 // the "more specific" one, and would otherwise silently take the highlight away from its visible parent.

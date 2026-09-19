@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
-import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
+import {
+	allNavigationLinks,
+	filterNavigationLinksByUiMode,
+	matchesNavRoute,
+	navigationLinks,
+} from "@/data/navigation/NavigationMenuData";
 
 const mockCapabilities = (overrides: Record<string, boolean>) => {
 	vi.resetModules();
@@ -318,6 +323,152 @@ describe("navigationLinks", () => {
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.scheduler)).toBe(false);
 		// Tools is ungated, so the group never collapses to empty.
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.tools)).toBe(true);
+	});
+});
+
+describe("filterNavigationLinksByUiMode", () => {
+	afterEach(() => {
+		vi.resetModules();
+		vi.doUnmock("@/capabilities/NodeCapabilities");
+	});
+
+	// The whole promise made to existing operators: turning the feature on changes nothing for them. Pinned against the
+	// BUILDER's own output rather than a hand-copied list, so a future nav edit cannot drift the two apart silently.
+	it("leaves the Advanced navigation byte-identical to the unfiltered, capability-filtered list", () => {
+		expect(filterNavigationLinksByUiMode(navigationLinks, "advanced")).toEqual(navigationLinks);
+	});
+
+	it("shows only the everyday entries in Simple mode, with the one-child groups promoted away", () => {
+		// Agents, Images and Transcription are TOP-LEVEL here: their groups (Automation, Preview) hold no other Simple
+		// child, and a collapsible with one item inside — under an "Automation"/"Preview" heading that is itself an
+		// Advanced idea — defeats the point of the mode.
+		expect(filterNavigationLinksByUiMode(navigationLinks, "simple").map((link) => link.id)).toEqual([
+			"home",
+			"chat",
+			"knowledgeBase",
+			"models",
+			"settings",
+			"agents",
+			"images",
+			"transcription",
+			"usage",
+		]);
+	});
+
+	it("gives a promoted entry its own route, icon and label, and takes it out of its group", () => {
+		const simpleLinks = filterNavigationLinksByUiMode(navigationLinks, "simple");
+
+		const agents = simpleLinks.find((link) => link.id === "agents");
+		expect(agents?.to).toBe(nodeRoutePaths.agents);
+		expect(agents?.translationKey).toBe("navigation.agents");
+		expect(agents?.links).toBeUndefined();
+		expect(agents?.icon).toBeTruthy();
+
+		expect(simpleLinks.find((link) => link.id === "images")?.to).toBe(nodeRoutePaths.images);
+		expect(simpleLinks.find((link) => link.id === "transcription")?.to).toBe(nodeRoutePaths.transcription);
+
+		// ...and the groups they came from are gone entirely, not rendered empty.
+		expect(simpleLinks.some((link) => link.id === "automation")).toBe(false);
+		expect(simpleLinks.some((link) => link.id === "preview")).toBe(false);
+	});
+
+	it("drops every group whose children are all Advanced, rather than rendering an empty expandable", () => {
+		const simpleIds = filterNavigationLinksByUiMode(navigationLinks, "simple").map((link) => link.id);
+
+		for (const groupId of ["automation", "integrations", "externalApps", "preview", "training"]) {
+			expect(simpleIds).not.toContain(groupId);
+		}
+	});
+
+	it("keeps a mixed group and hides only its Advanced children", () => {
+		const settings = filterNavigationLinksByUiMode(navigationLinks, "simple").find((link) => link.id === "settings");
+
+		// Diagnostics is Advanced-only in the nav; the header "Report Problem" button is its Simple-mode entry point.
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.cloudSettings,
+			nodeRoutePaths.externalProviders,
+		]);
+	});
+
+	it("keeps the Models group whole in Simple mode", () => {
+		const models = filterNavigationLinksByUiMode(navigationLinks, "simple").find((link) => link.id === "models");
+
+		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.models,
+			nodeRoutePaths.modelRecommendations,
+			nodeRoutePaths.loadedModels,
+		]);
+	});
+
+	// Capability is the FIRST gate and the mode never widens it: the mode filter runs on the already-capability-filtered
+	// list, so a leaf compiled off is absent in both modes.
+	it("cannot resurrect a leaf its capability compiled off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ knowledgeBase: false, images: false });
+
+		for (const mode of ["simple", "advanced"] as const) {
+			const ids = filterNavigationLinksByUiMode(gatedLinks, mode).map((link) => link.id);
+			expect(ids).not.toContain("knowledgeBase");
+			expect(ids).not.toContain("images");
+		}
+	});
+
+	it("drops a promoted entry with its capability, and the emptied group with it", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ agentManagement: false });
+		const simpleIds = filterNavigationLinksByUiMode(gatedLinks, "simple").map((link) => link.id);
+
+		// Agents is the group's only Simple child, so with agentManagement off nothing survives — neither the promoted
+		// entry nor an empty "Automation" group.
+		expect(simpleIds).not.toContain("agents");
+		expect(simpleIds).not.toContain("automation");
+		// Advanced still shows the group, because its Advanced children are untouched by the capability.
+		expect(filterNavigationLinksByUiMode(gatedLinks, "advanced").map((link) => link.id)).toContain("automation");
+	});
+
+	it("hides an Advanced leaf whose capability is on, in Simple mode only", () => {
+		expect(filterNavigationLinksByUiMode(navigationLinks, "advanced").map((link) => link.id)).toContain("benchmarks");
+		expect(filterNavigationLinksByUiMode(navigationLinks, "simple").map((link) => link.id)).not.toContain("benchmarks");
+	});
+});
+
+// The guard the design asks for: a leaf added without a classification would otherwise default to Advanced-only and
+// silently never appear in Simple mode. Walks `allNavigationLinks` — the list BEFORE the capability filter — so a leaf
+// that ships behind an off-by-default capability is covered too.
+describe("Simple/Advanced classification coverage", () => {
+	it("classifies every leaf explicitly", () => {
+		const unclassified: string[] = [];
+
+		for (const link of allNavigationLinks) {
+			if (link.links) {
+				for (const nestedLink of link.links) {
+					if (typeof nestedLink.simple !== "boolean") {
+						unclassified.push(`${link.id} > ${nestedLink.translationKey}`);
+					}
+				}
+
+				continue;
+			}
+
+			if (typeof link.simple !== "boolean") {
+				unclassified.push(link.id);
+			}
+		}
+
+		expect(unclassified).toEqual([]);
+	});
+
+	it("leaves the flag off group entries, whose children decide instead", () => {
+		const groupsCarryingTheFlag = allNavigationLinks.filter((link) => link.links !== undefined && link.simple !== undefined);
+
+		expect(groupsCarryingTheFlag.map((link) => link.id)).toEqual([]);
+	});
+
+	it("promotes only leaves that are in Simple mode", () => {
+		const promotedButAdvanced = allNavigationLinks
+			.flatMap((link) => link.links ?? [])
+			.filter((nestedLink) => nestedLink.promoteInSimple !== undefined && !nestedLink.simple);
+
+		expect(promotedButAdvanced.map((nestedLink) => nestedLink.translationKey)).toEqual([]);
 	});
 });
 

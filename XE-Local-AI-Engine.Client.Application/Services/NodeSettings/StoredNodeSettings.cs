@@ -190,6 +190,18 @@ public sealed partial record StoredNodeSettings
     /// </summary>
     public const string ExternalAccessProfilePending = "pending";
 
+    /// <summary>The <see cref="UiMode" /> literal for the reduced navigation: the everyday surfaces only.</summary>
+    public const string UiModeSimple = "simple";
+
+    /// <summary>The <see cref="UiMode" /> literal for the full navigation — every entry this build offers.</summary>
+    public const string UiModeAdvanced = "advanced";
+
+    /// <summary>
+    ///     What an absent <see cref="UiMode" /> reads as. <c>advanced</c> so a node that has never answered the question
+    ///     shows exactly the navigation it showed before the mode existed.
+    /// </summary>
+    public const string DefaultUiMode = UiModeAdvanced;
+
     /// <summary>
     ///     Automatic application-update checks are ON when unset, so an upgraded node behaves exactly as it did before this
     ///     switch existed. Gates <c>AppUpdateCheckService</c> only; the manual check and apply flow ignore it.
@@ -290,6 +302,18 @@ public sealed partial record StoredNodeSettings
     public static bool IsExternalAccessPreset(string? profile)
     {
         return profile is ExternalAccessProfileRecommended or ExternalAccessProfileOffline;
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="mode" /> is one of the two navigation modes,
+    ///     <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />. The comparison is ordinal (a constant string
+    ///     pattern), so <c>"Simple"</c> is rejected rather than silently accepted. <see langword="null" /> is a state
+    ///     (not answered yet), not a literal, and is <see langword="false" /> here. Unlike the external-access profile
+    ///     there is no engine-written third literal: the client may send either value it may store.
+    /// </summary>
+    public static bool IsValidUiMode(string? mode)
+    {
+        return mode is UiModeSimple or UiModeAdvanced;
     }
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
@@ -452,6 +476,19 @@ public sealed partial record StoredNodeSettings
     ///     only <see langword="null" /> is backfillable.
     /// </summary>
     public string? ExternalAccessProfile { get; init; }
+
+    /// <summary>
+    ///     Which navigation mode the operator chose: <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />.
+    ///     <see langword="null" /> means the question has not been answered, which is what the SPA's first-run step
+    ///     keys on; <c>UiModeBackfillService</c> stamps <see cref="UiModeAdvanced" /> at boot on a node that finished
+    ///     onboarding before this setting existed, so an upgraded node is never asked.
+    ///     <para>
+    ///         PRESENTATION ONLY, and never a security boundary: it decides which navigation entries are rendered and
+    ///         nothing else. Every route stays reachable by URL, no server gate reads it, and the compile-time
+    ///         capability flags still decide what exists at all.
+    ///     </para>
+    /// </summary>
+    public string? UiMode { get; init; }
 
     /// <summary>
     ///     Whether the node checks for application updates on its own. <see langword="null" /> (absent) reads as

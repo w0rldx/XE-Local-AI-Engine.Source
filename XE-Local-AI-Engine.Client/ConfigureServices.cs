@@ -639,6 +639,11 @@ public static class ConfigureServices
         // mode). It does its work in StartAsync rather than ExecuteAsync so the decision is durable before Kestrel
         // accepts a request — the SPA must never read a null profile from a node that has been running for months.
         builder.Services.AddHostedService<ExternalAccessProfileBackfillService>();
+        // Upgrade backfill for the navigation mode, in StartAsync for the same reason: a node whose operator is past the
+        // first-run external-access step but has no interface mode is stamped "advanced" so the navigation stays exactly
+        // as it was. Its discriminator is the stored external-access profile, not this service's output, so it does not
+        // depend on running after the one above.
+        builder.Services.AddHostedService<UiModeBackfillService>();
         // FRR-2 upgrade backfill: maps any Ollama model pulled on an EARLIER build (which never wrote a provider-map row)
         // to the ollama provider so the flipped llamacpp default does not silently re-route it. Idempotent + offline-
         // tolerant; not desktop-gated (a pre-existing Ollama install can exist on any launch mode).

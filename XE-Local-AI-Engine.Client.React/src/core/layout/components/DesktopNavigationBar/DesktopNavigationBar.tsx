@@ -13,7 +13,13 @@ import type {
 } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.types";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
-import { matchesNavRoute, navigationLinks, navLinkActiveOptions } from "@/data/navigation/NavigationMenuData";
+import {
+	filterNavigationLinksByUiMode,
+	matchesNavRoute,
+	navigationLinks,
+	navLinkActiveOptions,
+} from "@/data/navigation/NavigationMenuData";
+import { useUiMode } from "@/core/layout/hooks/useUiMode";
 
 import classes from "./DesktopNavigationBar.module.css";
 import {
@@ -29,6 +35,9 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 	// Prefix for the nested-links containers a group toggle points `aria-controls` at. React owns it, so two
 	// mounted navigation bars (app + a test render) cannot collide on the same DOM id.
 	const groupIdPrefix = useId();
+	// The second nav gate: capability (compile-time, already applied to `navigationLinks`) then mode (live, from the
+	// node settings). Changing the mode in Node Settings re-renders this memo on the next commit — no reload.
+	const uiMode = useUiMode();
 
 	// Explicit open/closed state per group id, persisted so the user's choices survive a reload. A group with
 	// no explicit entry falls back to "open when it contains the active route" so the active page is always
@@ -71,8 +80,8 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			return viewableLinks;
 		};
 
-		return mapViewableNavigationLinks(navigationLinks);
-	}, [t]);
+		return mapViewableNavigationLinks(filterNavigationLinksByUiMode(navigationLinks, uiMode));
+	}, [t, uiMode]);
 
 	const toggleSidebar = () => {
 		setSideBarCollapsed(!sideBarCollapsed);

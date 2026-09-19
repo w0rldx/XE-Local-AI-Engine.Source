@@ -50,6 +50,17 @@ public sealed record NodeSettingsResponse
     public string? ExternalAccessProfile { get; init; }
 
     /// <summary>
+    ///     Which navigation mode this node shows: <c>simple</c> (the everyday surfaces only) or <c>advanced</c>
+    ///     (everything this build offers). <see langword="null" /> means the first-run question has not been answered
+    ///     yet — the SPA's onboarding step keys on exactly that, and reads null as <c>advanced</c> everywhere else.
+    ///     <para>
+    ///         Presentation only. It hides navigation entries and nothing more: every route stays reachable by URL, no
+    ///         server-side gate consults it, and the build's capability flags still decide what exists.
+    ///     </para>
+    /// </summary>
+    public string? UiMode { get; init; }
+
+    /// <summary>
     ///     Whether the node checks for application updates on its own. <see langword="null" /> reads as on. The manual
     ///     check and apply flow are unaffected. The check runs once per process, so turning it back on takes effect at
     ///     the next node start.
@@ -229,6 +240,13 @@ public sealed record SaveNodeSettingsRequest
     ///     stored value, unless one of the three switches below is supplied, which stamps <c>custom</c>.
     /// </summary>
     public string? ExternalAccessProfile { get; init; }
+
+    /// <summary>
+    ///     Set the navigation mode: <c>simple</c> or <c>advanced</c> ONLY; anything else is rejected with a 400.
+    ///     <see langword="null" /> keeps the current stored value. It composes with no other field, so it can be sent on
+    ///     its own — which is how both the first-run step and the Node Settings toggle save it.
+    /// </summary>
+    public string? UiMode { get; init; }
 
     /// <summary>
     ///     Whether the node checks for application updates on its own. <see langword="null" /> keeps the current stored

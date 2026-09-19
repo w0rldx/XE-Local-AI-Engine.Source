@@ -108,6 +108,33 @@ Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPa
 
 Route paths and their capability flags are declared centrally in `src/capabilities/NodeCapabilities.ts` (`nodeRoutePaths`, `nodeCapabilities`), not scattered across route files. Capability-flagged pages (`agents`, `skills`, `mcp`, `scheduler`, `modelFit`, `loadedModels`, `knowledgeBase`, `images`, `development`, `benchmarks`, `training`, `workSessions`, `devWorkflows`, `graphWorkflows`, `integrations`, `externalApps`, `transcription`) are all **on** by default; a page whose flag is off redirects home and has its nav entry filtered out. Custom Tools shares the `agentManagement` capability, while `commands`, `usage`, and `diagnostics` are authenticated but otherwise ungated. `development` additionally re-checks the *server* capability at runtime — a frontend flag alone is not treated as authoritative.
 
+### First-run steps and the Simple / Advanced navigation mode
+
+Two questions are answered once, in order, before an operator reaches the app. `_layout.tsx`'s `beforeLoad` is the
+single place both are enforced — it authenticates, then `ensureQueryData(getNodeSettingsOptions())` once per session
+and redirects on the first unanswered one: `externalAccessProfile === "pending"` → `/external-access`, then a null
+`uiMode` → `/ui-mode-setup`. Each step's own route redirects home once its question is answered, so a typed URL or a
+back-navigation cannot re-ask it, and each fails *toward* its chooser on a settings read error while the layout guard
+fails *open*. Both chooser pages save through `saveNodeSettingsMutation` and then `queryClient.setQueryData` — seeding,
+never invalidating, because an invalidation would leave the layout guard reading back the value it had already cached.
+
+`uiMode` (`simple` | `advanced`, `null` = not answered) is a presentation setting stored in `node-settings.json`
+alongside the external-access members. It **hides navigation entries and nothing else**: every route stays reachable by
+its own address, no server gate reads it, and the compile-time capability flags above still decide what exists at all
+(see [Security & Privacy](12-security-and-privacy.md) §3.2). `UiModeBackfillService` stamps `advanced` at boot on any
+node whose operator is already past the external-access step, so an upgraded install keeps exactly the navigation it
+had and is never asked.
+
+The filtering is two composed gates, not one. `NavigationMenuData.ts` still computes `navigationLinks` **once at
+module-eval time** from the compile-time capabilities; `filterNavigationLinksByUiMode(links, uiMode)` is a second pure
+function the two nav bars apply to that result inside their existing `useMemo`, with the live mode from `useUiMode()`.
+Advanced mode is the identity function, which is what keeps today's grouping and order unchanged. In Simple mode every
+leaf carries an explicit `simple` flag (a test fails on an unclassified one), a leaf marked `promoteInSimple` leaves a
+group that would otherwise hold it alone and becomes a top-level entry — Agents, Image Generation and Transcription do
+— and a group left with no children is dropped rather than rendered empty. Changing the mode on the Node Settings page
+re-renders the rails on the next commit; no reload, and the operator stays on whatever page they were on.
+
+
 ---
 
 ## State strategy

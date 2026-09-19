@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient } from "@tanstack/react-query";
+import { isRedirect } from "@tanstack/react-router";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -136,13 +137,22 @@ describe("ExternalAccessSetup", () => {
 		await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/" }));
 
 		// The real layout guard, against the very client the page just wrote to. With `setQueryData` removed it reads the
-		// stale "pending" entry and throws a redirect straight back to this page.
+		// stale "pending" entry and throws a redirect straight back to THIS page; with it, the fresh install moves on to
+		// the second first-run step instead (its uiMode is still null), which is the whole sequencing contract.
 		const beforeLoad = LayoutRoute.options.beforeLoad;
 		if (beforeLoad === undefined) {
 			throw new Error("the layout route declares no beforeLoad");
 		}
-		// biome-ignore lint/suspicious/noExplicitAny: the guard reads only `context` and `location` off the router argument.
-		await expect((beforeLoad as any)({ context: { queryClient }, location: { href: "/" } })).resolves.toBeUndefined();
+		const guardResult =
+			await // biome-ignore lint/suspicious/noExplicitAny: the guard reads only `context` and `location` off the router argument.
+			(beforeLoad as any)({ context: { queryClient }, location: { href: "/" } }).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+		expect(isRedirect(guardResult) ? (guardResult as { options?: { to?: string } }).options?.to : undefined).toBe(
+			"/ui-mode-setup",
+		);
 	});
 
 	it("keeps both choices enabled and shows an error when the save fails", async () => {

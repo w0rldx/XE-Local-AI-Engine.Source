@@ -1202,9 +1202,9 @@ export const zXeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleContent
 });
 
 export const zXeLocalAiEngineClientServicesTrainingDatasetsSampleValidationLayerResultV1 = z.object({
-	layer: z.string().optional(),
-	passed: z.boolean().optional(),
-	scoredBy: z.string().optional(),
+	layer: z.string(),
+	passed: z.boolean(),
+	scoredBy: z.string(),
 	reason: z.string().nullish(),
 });
 
@@ -1898,6 +1898,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	customToolsEnabled: z.boolean().nullish(),
 	toolRelevanceEnabled: z.boolean().nullish(),
 	externalAccessProfile: z.string().nullish(),
+	uiMode: z.string().nullish(),
 	autoCheckApplicationUpdates: z.boolean().nullish(),
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
 	autoProvisionFirstRunModel: z.boolean().nullish(),
@@ -2106,6 +2107,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	customToolsEnabled: z.boolean().nullish(),
 	toolRelevanceEnabled: z.boolean().nullish(),
 	externalAccessProfile: z.string().nullish(),
+	uiMode: z.string().nullish(),
 	autoCheckApplicationUpdates: z.boolean().nullish(),
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
 	autoProvisionFirstRunModel: z.boolean().nullish(),
@@ -5651,9 +5653,9 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactCont
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = z.object({
-	path: z.string().optional(),
-	changeType: z.string().optional(),
-	previousPath: z.string().nullish(),
+	path: z.string(),
+	changeType: z.string(),
+	previousPath: z.string().nullable(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse = z.object({
@@ -5758,9 +5760,9 @@ export const zXeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse = 
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult = z.object({
-	ok: z.boolean().optional(),
-	reason: z.string().nullish(),
-	path: z.string().nullish(),
+	ok: z.boolean(),
+	reason: z.string().nullable(),
+	path: z.string().nullable(),
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest = z.object({

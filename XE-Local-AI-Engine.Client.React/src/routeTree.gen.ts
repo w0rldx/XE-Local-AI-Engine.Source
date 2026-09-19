@@ -13,6 +13,7 @@ import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as ExternalAccessRouteImport } from './routes/external-access'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as UiModeSetupRouteImport } from './routes/ui-mode-setup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
 import { Route as LayoutBenchmarksRouteImport } from './routes/_layout/benchmarks'
@@ -72,6 +73,11 @@ const LoginRoute = LoginRouteImport.update({
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UiModeSetupRoute = UiModeSetupRouteImport.update({
+  id: '/ui-mode-setup',
+  path: '/ui-mode-setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
@@ -298,6 +304,7 @@ export interface FileRoutesByFullPath {
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/ui-mode-setup': typeof UiModeSetupRoute
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
@@ -343,6 +350,7 @@ export interface FileRoutesByTo {
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/ui-mode-setup': typeof UiModeSetupRoute
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
@@ -391,6 +399,7 @@ export interface FileRoutesById {
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/ui-mode-setup': typeof UiModeSetupRoute
   '/_layout/agents': typeof LayoutAgentsRoute
   '/_layout/benchmarks': typeof LayoutBenchmarksRoute
   '/_layout/chat': typeof LayoutChatRoute
@@ -440,6 +449,7 @@ export interface FileRouteTypes {
     | '/external-access'
     | '/login'
     | '/setup'
+    | '/ui-mode-setup'
     | '/agents'
     | '/benchmarks'
     | '/chat'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/external-access'
     | '/login'
     | '/setup'
+    | '/ui-mode-setup'
     | '/agents'
     | '/benchmarks'
     | '/chat'
@@ -532,6 +543,7 @@ export interface FileRouteTypes {
     | '/external-access'
     | '/login'
     | '/setup'
+    | '/ui-mode-setup'
     | '/_layout/agents'
     | '/_layout/benchmarks'
     | '/_layout/chat'
@@ -580,6 +592,7 @@ export interface RootRouteChildren {
   ExternalAccessRoute: typeof ExternalAccessRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
+  UiModeSetupRoute: typeof UiModeSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -610,6 +623,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ui-mode-setup': {
+      id: '/ui-mode-setup'
+      path: '/ui-mode-setup'
+      fullPath: '/ui-mode-setup'
+      preLoaderRoute: typeof UiModeSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout/': {
@@ -1000,6 +1020,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExternalAccessRoute: ExternalAccessRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
+  UiModeSetupRoute: UiModeSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

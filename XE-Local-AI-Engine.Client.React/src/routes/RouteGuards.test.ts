@@ -27,14 +27,17 @@ vi.mock("@/core/layout/components/Layout/Layout", () => ({ Layout: () => null })
 
 vi.mock("@/features/node-settings/pages/ExternalAccessSetup", () => ({ ExternalAccessSetup: () => null }));
 
+vi.mock("@/features/node-settings/pages/UiModeSetup", () => ({ UiModeSetup: () => null }));
+
 import { Route as ExternalAccessRoute } from "@/routes/external-access";
 import { Route as LayoutRoute } from "@/routes/_layout";
+import { Route as UiModeSetupRoute } from "@/routes/ui-mode-setup";
 
 // A client whose node-settings entry is already resolved, so `ensureQueryData` answers from the cache; the queryFn is
 // what a read FAILURE runs.
-function clientWith(profile: string | null): QueryClient {
+function clientWith(profile: string | null, uiMode: string | null = "advanced"): QueryClient {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	queryClient.setQueryData(getNodeSettingsQueryKey(), { externalAccessProfile: profile });
+	queryClient.setQueryData(getNodeSettingsQueryKey(), { externalAccessProfile: profile, uiMode });
 	return queryClient;
 }
 
@@ -62,6 +65,15 @@ async function runLayoutGuard(queryClient: QueryClient): Promise<unknown> {
 	return await (beforeLoad as any)({ context: { queryClient }, location });
 }
 
+async function runUiModeGuard(queryClient: QueryClient): Promise<unknown> {
+	const beforeLoad = UiModeSetupRoute.options.beforeLoad;
+	if (beforeLoad === undefined) {
+		throw new Error("the ui-mode-setup route declares no beforeLoad");
+	}
+	// biome-ignore lint/suspicious/noExplicitAny: same hand-built context as the layout guard.
+	return await (beforeLoad as any)({ context: { queryClient }, location });
+}
+
 async function runExternalAccessGuard(queryClient: QueryClient): Promise<unknown> {
 	const beforeLoad = ExternalAccessRoute.options.beforeLoad;
 	if (beforeLoad === undefined) {
@@ -79,7 +91,7 @@ function redirectTarget(error: unknown): string | undefined {
 	return (error as { options?: { to?: string } }).options?.to;
 }
 
-describe("route guards for the first-run external-access choice", () => {
+describe("route guards for the first-run external-access and interface-mode choices", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		restoreMock.mockResolvedValue("authenticated");
@@ -129,6 +141,62 @@ describe("route guards for the first-run external-access choice", () => {
 		restoreMock.mockResolvedValue("unauthenticated");
 
 		const error = await runExternalAccessGuard(clientWith("pending")).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(redirectTarget(error)).toBe("/login");
+	});
+
+	it("redirects an authenticated operator whose interface mode is unanswered to the ui-mode route", async () => {
+		const error = await runLayoutGuard(clientWith("recommended", null)).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(redirectTarget(error)).toBe("/ui-mode-setup");
+	});
+
+	// Order, not just presence: the two first-run steps must be answered in sequence, or an operator could bounce
+	// between them. A node with BOTH unanswered goes to the external-access step first.
+	it("answers the external-access question before the interface-mode one", async () => {
+		const error = await runLayoutGuard(clientWith("pending", null)).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(redirectTarget(error)).toBe("/external-access");
+	});
+
+	it("lets an authenticated operator with a decided interface mode through the layout", async () => {
+		await expect(runLayoutGuard(clientWith("recommended", "simple"))).resolves.toBeUndefined();
+		await expect(runLayoutGuard(clientWith("recommended", "advanced"))).resolves.toBeUndefined();
+	});
+
+	it("keeps the ui-mode chooser open while the mode is still unanswered", async () => {
+		await expect(runUiModeGuard(clientWith("recommended", null))).resolves.toBeUndefined();
+	});
+
+	it("redirects away from the ui-mode route once the mode is decided", async () => {
+		const error = await runUiModeGuard(clientWith("recommended", "simple")).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(redirectTarget(error)).toBe("/");
+	});
+
+	it("renders the chooser when the ui-mode route's settings read fails", async () => {
+		// The same fail-TOWARD-the-chooser as the external-access route: this screen has no skip control, so an error
+		// boundary here would be a dead end.
+		await expect(runUiModeGuard(failingClient())).resolves.toBeUndefined();
+	});
+
+	it("sends an unauthenticated visitor of the ui-mode route to login", async () => {
+		useNodeAuthStore.getState().actions.clear();
+		restoreMock.mockResolvedValue("unauthenticated");
+
+		const error = await runUiModeGuard(clientWith("recommended", null)).then(
 			() => undefined,
 			(thrown: unknown) => thrown,
 		);

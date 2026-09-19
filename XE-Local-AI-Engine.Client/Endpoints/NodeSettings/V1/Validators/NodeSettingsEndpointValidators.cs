@@ -40,6 +40,13 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.ExternalAccessProfile is not null)
             .WithMessage("External access profile must be recommended or offline.");
 
+        // Both storable literals are client-sendable here (there is no engine-written third state), so the boundary
+        // allow-list IS the full set. A blank string is rejected rather than read as "keep": only an absent member keeps.
+        RuleFor(static request => request.UiMode)
+            .Must(StoredNodeSettings.IsValidUiMode)
+            .When(static request => request.UiMode is not null)
+            .WithMessage("Interface mode must be simple or advanced.");
+
         RuleFor(static request => request.LlamaMaxLoadedProcesses!.Value)
             .InclusiveBetween(StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses)
             .When(static request => request.LlamaMaxLoadedProcesses is not null);

@@ -1100,9 +1100,9 @@ export type XeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleValidatio
 };
 
 export type XeLocalAiEngineClientServicesTrainingDatasetsSampleValidationLayerResultV1 = {
-	layer?: string;
-	passed?: boolean;
-	scoredBy?: string;
+	layer: string;
+	passed: boolean;
+	scoredBy: string;
 	reason?: string | null;
 };
 
@@ -1668,6 +1668,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	customToolsEnabled?: boolean | null;
 	toolRelevanceEnabled?: boolean | null;
 	externalAccessProfile?: string | null;
+	uiMode?: string | null;
 	autoCheckApplicationUpdates?: boolean | null;
 	autoCheckRuntimeUpdates?: boolean | null;
 	autoProvisionFirstRunModel?: boolean | null;
@@ -1743,6 +1744,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	customToolsEnabled?: boolean | null;
 	toolRelevanceEnabled?: boolean | null;
 	externalAccessProfile?: string | null;
+	uiMode?: string | null;
 	autoCheckApplicationUpdates?: boolean | null;
 	autoCheckRuntimeUpdates?: boolean | null;
 	autoProvisionFirstRunModel?: boolean | null;
@@ -4806,9 +4808,9 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewRe
 };
 
 export type XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = {
-	path?: string;
-	changeType?: string;
-	previousPath?: string | null;
+	path: string;
+	changeType: string;
+	previousPath: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse = {
@@ -4897,9 +4899,9 @@ export type XeLocalAiEngineClientServicesCustomToolsListCustomToolsResponse = {
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsHostExecutableProbeResult = {
-	ok?: boolean;
-	reason?: string | null;
-	path?: string | null;
+	ok: boolean;
+	reason: string | null;
+	path: string | null;
 };
 
 export type XeLocalAiEngineClientServicesCustomToolsProbeExecutableRequest = {

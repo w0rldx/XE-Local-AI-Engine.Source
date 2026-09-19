@@ -17,8 +17,10 @@ import { SidebarMenu } from "@/core/layout/components/Sidebar/SidebarMenu";
 import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuItem";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
-import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
+import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
+import { filterNavigationLinksByUiMode, matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
 import { useReportProblem } from "@/features/diagnostics/hooks/useReportProblem";
+import { useUiMode } from "@/core/layout/hooks/useUiMode";
 
 // Same lazy pattern as AboutDialogButton: the dialog bundle only loads on first open.
 const AboutDialog = lazy(async () => {
@@ -33,6 +35,8 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
 	const { logout, logoutPending } = useNodeLogout();
 	const [aboutOpened, { open: openAbout, close: closeAbout }] = useDisclosure(false);
+	// Same two-gate composition as the desktop rail: capability first (baked into `navigationLinks`), mode second.
+	const uiMode = useUiMode();
 	const { report, pending: reportPending } = useReportProblem(() => {
 		navigate({ to: "/diagnostics" }).catch(() => undefined);
 	});
@@ -47,7 +51,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 		}),
 	};
 
-	const viewableNavigationMenus = (links: typeof navigationLinks) => {
+	const viewableNavigationMenus = (links: readonly INavigationLink[]) => {
 		const viewableMenus = [];
 
 		for (const link of links) {
@@ -116,7 +120,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 					<Divider />
 
 					{/* Regular Navigation Menus */}
-					{viewableNavigationMenus(navigationLinks).map((menu) => (
+					{viewableNavigationMenus(filterNavigationLinksByUiMode(navigationLinks, uiMode)).map((menu) => (
 						<MobileNavigationMenu
 							key={menu.menuId}
 							menuItemStyle={menuItemStyle}

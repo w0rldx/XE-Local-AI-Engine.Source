@@ -32,6 +32,7 @@ import {
 	NodeSettingsDeveloperModePanel,
 } from "@/features/node-settings/components/NodeSettingsAuxiliaryPanels";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import { NodeSettingsUiModeCard } from "@/features/node-settings/components/NodeSettingsUiModeCard";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
 import { WhisperRuntimeSourceBuildCard } from "@/features/node-settings/components/WhisperRuntimeSourceBuildCard";
 import { useNodeSettingsModelOptions } from "@/features/node-settings/hooks/useNodeSettingsModelOptions";
@@ -263,6 +264,11 @@ export function NodeSettings() {
 			) : null}
 
 			{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
+
+			{/* First on the page on purpose: the first-run step promises the choice can be changed "in Node settings",
+			    so it has to be the first thing an operator who followed that sentence sees. It saves on change, so it
+			    deliberately sits outside the big fields form and its Save button. */}
+			<NodeSettingsUiModeCard />
 
 			<SectionCard title={t("pages.nodeSettings.localChatRuntime.title", "Local chat runtime")} icon={<IconSettings size={22} />}>
 				<Text c="dimmed">
