@@ -44,7 +44,7 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
         {
             var record = await _store.AddAsync(alias, registration.HostPath, registration.Mode, cancellationToken);
             _logger.LogInformation("Registered selected folder {FolderId} with alias {Alias}.", record.Id, record.Alias);
-            return new SelectedFolderReference(record.Id.ToString(), record.Alias);
+            return new SelectedFolderReference { Id = record.Id.ToString(), Alias = record.Alias };
         }
         catch (DbUpdateException exception)
         {
@@ -57,7 +57,7 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
     public async Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
     {
         var records = await _store.ListAsync(cancellationToken);
-        return records.Select(record => new SelectedFolderReference(record.Id.ToString(), record.Alias)).ToArray();
+        return records.Select(record => new SelectedFolderReference { Id = record.Id.ToString(), Alias = record.Alias }).ToArray();
     }
 
     public async Task<ResolvedSelectedFolder> ResolveAsync(string id, CancellationToken cancellationToken = default)
@@ -75,7 +75,7 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
             throw new SelectedFolderNotFoundException($"No selected folder is registered with id '{id}'.");
         }
 
-        return new ResolvedSelectedFolder(record.Id, record.Alias, record.HostPath, record.Mode);
+        return new ResolvedSelectedFolder { Id = record.Id, Alias = record.Alias, HostPath = record.HostPath, Mode = record.Mode };
     }
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",

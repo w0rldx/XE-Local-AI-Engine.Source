@@ -15,10 +15,17 @@ public interface IInferenceBenchmarkHarness
 }
 
 /// <summary>A deterministic mock tool the tool-call stage offers the model; the result is fixed so the round is reproducible.</summary>
-/// <param name="Name">Tool function name.</param>
-/// <param name="Description">Tool description the model sees.</param>
-/// <param name="DeterministicResult">The fixed result returned whenever the model invokes the tool.</param>
-public sealed record InferenceBenchmarkToolDefinition(string Name, string Description, string DeterministicResult);
+public sealed record InferenceBenchmarkToolDefinition
+{
+    /// <summary>Tool function name.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Tool description the model sees.</summary>
+    public required string Description { get; init; }
+
+    /// <summary>The fixed result returned whenever the model invokes the tool.</summary>
+    public required string DeterministicResult { get; init; }
+}
 
 /// <summary>
 ///     Operator-configurable VRAM-admission thresholds for inference benchmarks. Bound from
@@ -43,28 +50,38 @@ public sealed class InferenceBenchmarkVramAdmissionOptions
 ///     The fixed golden transcript + sampling for a benchmark run. Built per-profile by
 ///     <see cref="Golden" /> so the long-context stage is sized near the profile's context window.
 /// </summary>
-/// <param name="Backend">The lowercase backend token (<c>cuda</c>/<c>vulkan</c>/<c>cpu</c>) for the host-VRAM probe.</param>
-/// <param name="CtxSize">The profile's context size; drives the long-context injection length.</param>
-/// <param name="SystemPersona">The fixed system persona for every stage.</param>
-/// <param name="ColdUserTurn">The first user turn (cold cache).</param>
-/// <param name="WarmFollowUpTurn">The follow-up user turn that reuses the cold context (warm cache).</param>
-/// <param name="ToolUserTurn">The user turn that should trigger the mock tool.</param>
-/// <param name="Tool">The deterministic mock tool offered in the tool-call stage.</param>
-/// <param name="LongContextUserTurn">A long user turn sized near <paramref name="CtxSize" /> to exercise long-context handling.</param>
-/// <param name="Seed">Fixed RNG seed for reproducibility.</param>
-/// <param name="Temperature">Fixed sampling temperature (0 = greedy/deterministic).</param>
-public sealed record InferenceBenchmarkSpec(
-    string Backend,
-    int CtxSize,
-    string SystemPersona,
-    string ColdUserTurn,
-    string WarmFollowUpTurn,
-    string ToolUserTurn,
-    InferenceBenchmarkToolDefinition Tool,
-    string LongContextUserTurn,
-    int Seed,
-    float Temperature)
+public sealed record InferenceBenchmarkSpec
 {
+    /// <summary>The lowercase backend token (<c>cuda</c>/<c>vulkan</c>/<c>cpu</c>) for the host-VRAM probe.</summary>
+    public required string Backend { get; init; }
+
+    /// <summary>The profile's context size; drives the long-context injection length.</summary>
+    public required int CtxSize { get; init; }
+
+    /// <summary>The fixed system persona for every stage.</summary>
+    public required string SystemPersona { get; init; }
+
+    /// <summary>The first user turn (cold cache).</summary>
+    public required string ColdUserTurn { get; init; }
+
+    /// <summary>The follow-up user turn that reuses the cold context (warm cache).</summary>
+    public required string WarmFollowUpTurn { get; init; }
+
+    /// <summary>The user turn that should trigger the mock tool.</summary>
+    public required string ToolUserTurn { get; init; }
+
+    /// <summary>The deterministic mock tool offered in the tool-call stage.</summary>
+    public required InferenceBenchmarkToolDefinition Tool { get; init; }
+
+    /// <summary>A long user turn sized near <see cref="CtxSize" /> to exercise long-context handling.</summary>
+    public required string LongContextUserTurn { get; init; }
+
+    /// <summary>Fixed RNG seed for reproducibility.</summary>
+    public required int Seed { get; init; }
+
+    /// <summary>Fixed sampling temperature (0 = greedy/deterministic).</summary>
+    public required float Temperature { get; init; }
+
     /// <summary>Untimed role-specific warm-up passes before measurements begin.</summary>
     public int WarmupRuns { get; init; } = 1;
 
@@ -139,25 +156,27 @@ public sealed record InferenceBenchmarkSpec(
         var safeCtx = ctxSize > 0 ? ctxSize : 4096;
         var admission = vramAdmission ?? new InferenceBenchmarkVramAdmissionOptions();
 
-        return new InferenceBenchmarkSpec(Backend: backend,
-            CtxSize: safeCtx,
-            SystemPersona: "You are a concise benchmarking assistant. Answer briefly and deterministically.",
-            ColdUserTurn: "List three primary colors, comma separated.",
-            WarmFollowUpTurn: "Now list three secondary colors, comma separated.",
-            ToolUserTurn: "What is the current bench status? Call the bench_status tool to find out.",
-            Tool: new InferenceBenchmarkToolDefinition("bench_status",
-                "Returns a fixed benchmark status payload for the deterministic tool-call round.",
-                "{\"status\":\"ok\",\"phase\":\"benchmark\"}"),
-            LongContextUserTurn: BuildLongContextTurn(safeCtx),
-            Seed: 0,
-            Temperature: 0f)
+        return new InferenceBenchmarkSpec
         {
+            Backend = backend,
+            CtxSize = safeCtx,
+            SystemPersona = "You are a concise benchmarking assistant. Answer briefly and deterministically.",
+            ColdUserTurn = "List three primary colors, comma separated.",
+            WarmFollowUpTurn = "Now list three secondary colors, comma separated.",
+            ToolUserTurn = "What is the current bench status? Call the bench_status tool to find out.",
+            Tool = new InferenceBenchmarkToolDefinition
+            {
+                Name = "bench_status",
+                Description = "Returns a fixed benchmark status payload for the deterministic tool-call round.",
+                DeterministicResult = "{\"status\":\"ok\",\"phase\":\"benchmark\"}"
+            },
+            LongContextUserTurn = BuildLongContextTurn(safeCtx),
+            Seed = 0,
+            Temperature = 0f,
             PreSpawnVramAmbientBaselineBytes = Math.Max(0, admission.PreSpawnAmbientBaselineBytes),
-            PreSpawnVramPressureAbsoluteThresholdBytes =
-                Math.Max(0, admission.PreSpawnPressureAbsoluteThresholdBytes),
+            PreSpawnVramPressureAbsoluteThresholdBytes = Math.Max(0, admission.PreSpawnPressureAbsoluteThresholdBytes),
             PreSpawnVramPressureRatioThreshold = Math.Max(0d, admission.PreSpawnPressureRatioThreshold),
-            IncrementalVramDivergenceAbsoluteThresholdBytes =
-                Math.Max(0, admission.IncrementalPressureAbsoluteThresholdBytes),
+            IncrementalVramDivergenceAbsoluteThresholdBytes = Math.Max(0, admission.IncrementalPressureAbsoluteThresholdBytes),
             IncrementalVramDivergenceRatioThreshold = Math.Max(0d, admission.IncrementalPressureRatioThreshold)
         };
     }
@@ -187,74 +206,112 @@ public sealed record InferenceBenchmarkSpec(
 ///     and llama.cpp's process-local budget are recorded separately so WDDM pressure cannot masquerade as a valid run.
 ///     Any figure that could not be derived is <see langword="null" />.
 /// </summary>
-/// <param name="Success">Whether the run completed; <see langword="false" /> blocks the freeze gate.</param>
-/// <param name="FailureReason">Sanitized failure reason when <paramref name="Success" /> is false.</param>
-/// <param name="TokensPerSecond">Token-generation throughput (TG tok/s) from <c>/metrics</c>.</param>
-/// <param name="PpTokensPerSecond">Prompt-processing throughput (PP tok/s) from <c>/metrics</c>.</param>
-/// <param name="TtftMs">Wall-clock time-to-first-token of the cold stage, in milliseconds.</param>
-/// <param name="TotalLatencyMs">Total wall-clock of the whole transcript, in milliseconds.</param>
-/// <param name="CacheHitRate">Warm-request reused prompt fraction, 0..1.</param>
-/// <param name="ToolLoopMs">Wall-clock of the tool-call round, in milliseconds.</param>
-/// <param name="VramLoadBytes">Effective free VRAM observed at load (global-free when available, otherwise process budget).</param>
-/// <param name="VramAfterBytes">Effective free VRAM observed after the loop (global-free when available, otherwise process budget).</param>
-/// <param name="Runs">Number of measured passes.</param>
-/// <param name="RawJson">Raw <c>/metrics</c> scrape for operator diagnostics.</param>
-/// <param name="RequestsProcessingAtLastScrape">Requests actively processing at the last scrape.</param>
-/// <param name="RequestsDeferredAtLastScrape">Requests deferred at the last scrape.</param>
-/// <param name="ContextTokensHighWatermark">Largest server-reported context-token watermark.</param>
-/// <param name="AverageBusySlotsPerDecode">Server-reported average busy slots per decode.</param>
-/// <param name="WarmPromptTimings">Ordered per-measured-pass warm-request timings; null for non-chat benchmarks.</param>
-public sealed record InferenceBenchmarkMetrics(
-    bool Success,
-    string? FailureReason,
-    double? TokensPerSecond,
-    double? PpTokensPerSecond,
-    double? TtftMs,
-    double? TotalLatencyMs,
-    double? CacheHitRate,
-    double? ToolLoopMs,
-    long? VramLoadBytes,
-    long? VramAfterBytes,
-    int Runs,
-    string? RawJson,
-    string? Role = null,
-    double? ItemsPerSecond = null,
-    double? InputTokensPerSecond = null,
-    double? P50LatencyMs = null,
-    double? P95LatencyMs = null,
-    int? BatchSize = null,
-    int? OutputDimension = null,
-    bool? ValuesFinite = null,
-    bool? DeterministicOutput = null,
-    long? GlobalFreeVramLoadBytes = null,
-    long? GlobalFreeVramAfterBytes = null,
-    long? ProcessBudgetVramLoadBytes = null,
-    long? ProcessBudgetVramAfterBytes = null,
-    long? MinimumGlobalFreeVramBytes = null,
-    long? MinimumProcessBudgetVramBytes = null,
-    long? PeakProcessRamBytes = null,
-    bool ExternalPressureDetected = false,
-    string? DiagnosticsJson = null,
-    double? RequestsProcessingAtLastScrape = null,
-    double? RequestsDeferredAtLastScrape = null,
-    double? ContextTokensHighWatermark = null,
-    double? AverageBusySlotsPerDecode = null,
-    IReadOnlyList<LlamaServerGenerationTimings?>? WarmPromptTimings = null)
+public sealed record InferenceBenchmarkMetrics
 {
+    /// <summary>Whether the run completed; <see langword="false" /> blocks the freeze gate.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Sanitized failure reason when <see cref="Success" /> is false.</summary>
+    public required string? FailureReason { get; init; }
+
+    /// <summary>Token-generation throughput (TG tok/s) from <c>/metrics</c>.</summary>
+    public required double? TokensPerSecond { get; init; }
+
+    /// <summary>Prompt-processing throughput (PP tok/s) from <c>/metrics</c>.</summary>
+    public required double? PpTokensPerSecond { get; init; }
+
+    /// <summary>Wall-clock time-to-first-token of the cold stage, in milliseconds.</summary>
+    public required double? TtftMs { get; init; }
+
+    /// <summary>Total wall-clock of the whole transcript, in milliseconds.</summary>
+    public required double? TotalLatencyMs { get; init; }
+
+    /// <summary>Warm-request reused prompt fraction, 0..1.</summary>
+    public required double? CacheHitRate { get; init; }
+
+    /// <summary>Wall-clock of the tool-call round, in milliseconds.</summary>
+    public required double? ToolLoopMs { get; init; }
+
+    /// <summary>Effective free VRAM observed at load (global-free when available, otherwise process budget).</summary>
+    public required long? VramLoadBytes { get; init; }
+
+    /// <summary>Effective free VRAM observed after the loop (global-free when available, otherwise process budget).</summary>
+    public required long? VramAfterBytes { get; init; }
+
+    /// <summary>Number of measured passes.</summary>
+    public required int Runs { get; init; }
+
+    /// <summary>Raw <c>/metrics</c> scrape for operator diagnostics.</summary>
+    public required string? RawJson { get; init; }
+
+    public string? Role { get; init; }
+
+    public double? ItemsPerSecond { get; init; }
+
+    public double? InputTokensPerSecond { get; init; }
+
+    public double? P50LatencyMs { get; init; }
+
+    public double? P95LatencyMs { get; init; }
+
+    public int? BatchSize { get; init; }
+
+    public int? OutputDimension { get; init; }
+
+    public bool? ValuesFinite { get; init; }
+
+    public bool? DeterministicOutput { get; init; }
+
+    public long? GlobalFreeVramLoadBytes { get; init; }
+
+    public long? GlobalFreeVramAfterBytes { get; init; }
+
+    public long? ProcessBudgetVramLoadBytes { get; init; }
+
+    public long? ProcessBudgetVramAfterBytes { get; init; }
+
+    public long? MinimumGlobalFreeVramBytes { get; init; }
+
+    public long? MinimumProcessBudgetVramBytes { get; init; }
+
+    public long? PeakProcessRamBytes { get; init; }
+
+    public bool ExternalPressureDetected { get; init; }
+
+    public string? DiagnosticsJson { get; init; }
+
+    /// <summary>Requests actively processing at the last scrape.</summary>
+    public double? RequestsProcessingAtLastScrape { get; init; }
+
+    /// <summary>Requests deferred at the last scrape.</summary>
+    public double? RequestsDeferredAtLastScrape { get; init; }
+
+    /// <summary>Largest server-reported context-token watermark.</summary>
+    public double? ContextTokensHighWatermark { get; init; }
+
+    /// <summary>Server-reported average busy slots per decode.</summary>
+    public double? AverageBusySlotsPerDecode { get; init; }
+
+    /// <summary>Ordered per-measured-pass warm-request timings; null for non-chat benchmarks.</summary>
+    public IReadOnlyList<LlamaServerGenerationTimings?>? WarmPromptTimings { get; init; }
+
     /// <summary>A failed run carrying only the sanitized <paramref name="reason" />.</summary>
     public static InferenceBenchmarkMetrics Failed(string reason)
     {
-        return new InferenceBenchmarkMetrics(Success: false,
-            FailureReason: reason,
-            TokensPerSecond: null,
-            PpTokensPerSecond: null,
-            TtftMs: null,
-            TotalLatencyMs: null,
-            CacheHitRate: null,
-            ToolLoopMs: null,
-            VramLoadBytes: null,
-            VramAfterBytes: null,
-            Runs: 0,
-            RawJson: null);
+        return new InferenceBenchmarkMetrics
+        {
+            Success = false,
+            FailureReason = reason,
+            TokensPerSecond = null,
+            PpTokensPerSecond = null,
+            TtftMs = null,
+            TotalLatencyMs = null,
+            CacheHitRate = null,
+            ToolLoopMs = null,
+            VramLoadBytes = null,
+            VramAfterBytes = null,
+            Runs = 0,
+            RawJson = null
+        };
     }
 }

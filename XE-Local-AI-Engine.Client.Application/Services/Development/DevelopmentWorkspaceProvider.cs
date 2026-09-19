@@ -337,14 +337,17 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 _nodeOptions)
         }, cancellationToken);
 
-        return new DevelopmentWorkspaceSession(snapshot.ProjectId,
-            snapshot.TaskId,
-            snapshot.AttemptId,
-            baseCommit,
-            identity,
-            worktreePath,
-            runtimePath,
-            handle);
+        return new DevelopmentWorkspaceSession
+        {
+            ProjectId = snapshot.ProjectId,
+            TaskId = snapshot.TaskId,
+            AttemptId = snapshot.AttemptId,
+            BaseCommit = baseCommit,
+            RepositoryIdentityHash = identity,
+            HostWorktreePath = worktreePath,
+            RuntimePath = runtimePath,
+            SandboxHandle = handle
+        };
     }
 
     /// <summary>
@@ -529,14 +532,17 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
         try
         {
-            var warmSession = new DevelopmentWorkspaceSession(snapshot.ProjectId,
-                snapshot.TaskId,
-                snapshot.AttemptId,
-                baseCommit,
-                identity,
-                worktreePath,
-                runtimePath,
-                warmHandle);
+            var warmSession = new DevelopmentWorkspaceSession
+            {
+                ProjectId = snapshot.ProjectId,
+                TaskId = snapshot.TaskId,
+                AttemptId = snapshot.AttemptId,
+                BaseCommit = baseCommit,
+                RepositoryIdentityHash = identity,
+                HostWorktreePath = worktreePath,
+                RuntimePath = runtimePath,
+                SandboxHandle = warmHandle
+            };
 
             // Routed through the same tools the attempt uses, so the warm runs under the same environment, the same
             // per-command budget and the same post-command workspace invariants. Composing a second execution path

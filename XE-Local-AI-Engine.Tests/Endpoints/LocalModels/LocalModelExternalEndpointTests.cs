@@ -34,14 +34,17 @@ public sealed class LocalModelExternalEndpointTests
     {
         var catalogService = Substitute.For<ILocalModelCatalogService>();
         catalogService.GetCatalogAsync(Arg.Any<CancellationToken>())
-                      .Returns(new LocalModelCatalog(SelectedModelName: null,
-                          ConfiguredDefaultModelName: null,
-                          OllamaModels: [],
-                          Classifications: new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase),
-                          InstalledGgufModels: [],
-                          HasUsableCodexSession: false,
-                          AzureFoundryConnection: null,
-                          ExternalModels: [Registration()]));
+                      .Returns(new LocalModelCatalog
+                      {
+                          SelectedModelName = null,
+                          ConfiguredDefaultModelName = null,
+                          OllamaModels = [],
+                          Classifications = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase),
+                          InstalledGgufModels = [],
+                          HasUsableCodexSession = false,
+                          AzureFoundryConnection = null,
+                          ExternalModels = [Registration()]
+                      });
         await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>

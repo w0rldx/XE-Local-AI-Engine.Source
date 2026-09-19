@@ -170,8 +170,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
-                    new DevWorkflowLanes(scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
-                        scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()),
+                    new DevWorkflowLanes
+                    {
+                        Agent = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
+                        DevTasks = scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
+                    },
                     runId,
                     cancellationToken);
         }
@@ -385,11 +388,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                  run,
                                  nodeRun,
                                  nodeRuns,
-                                 new DevWorkflowFailure(DevWorkflowFailureClasses.Timeout,
-                                     $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
-                                     JsonSerializer.Serialize(new TimedOutOutput(DevWorkflowNodeOutputStatuses.Failed, nodeRun.Attempt, DevWorkflowFailureClasses.Timeout),
+                                 new DevWorkflowFailure
+                                 {
+                                     FailureClass = DevWorkflowFailureClasses.Timeout,
+                                     SanitizedReason = $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
+                                     OutputJson = JsonSerializer.Serialize(new TimedOutOutput { Status = DevWorkflowNodeOutputStatuses.Failed, Attempt = nodeRun.Attempt, FailureClass = DevWorkflowFailureClasses.Timeout },
                                          JsonOptions),
-                                     DevWorkflowOutcomes.Timeout),
+                                     Outcome = DevWorkflowOutcomes.Timeout
+                                 },
                                  cancellationToken);
     }
 
@@ -1024,7 +1030,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         var outputJson = node.NodeType == DevWorkflowNodeType.Gate
             ? ComposeGateOutput(node, graph, byKey, nodeRun.Attempt)
-            : JsonSerializer.Serialize(new InlineOutput(DevWorkflowNodeOutputStatuses.Succeeded, nodeRun.Attempt, Branch: null), JsonOptions);
+            : JsonSerializer.Serialize(new InlineOutput { Status = DevWorkflowNodeOutputStatuses.Succeeded, Attempt = nodeRun.Attempt, Branch = null }, JsonOptions);
 
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
         {
@@ -1366,7 +1372,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     The two lanes a tick resolves per scope. The sandbox lane is not here: it is a singleton, because its slots
     ///     and its registry outlive a tick and these do not.
     /// </summary>
-    private sealed record DevWorkflowLanes(DevWorkflowAgentExecutor Agent, DevWorkflowDevTaskExecutor DevTasks);
+    private sealed record DevWorkflowLanes
+    {
+        public required DevWorkflowAgentExecutor Agent { get; init; }
+
+        public required DevWorkflowDevTaskExecutor DevTasks { get; init; }
+    }
 
     private sealed record ReasonDetail(string Reason);
 
@@ -1374,7 +1385,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     What a node run that ran out of time leaves as its output document. Deliberately the three members every
     ///     output carries and nothing else: the lane holds the detail, and this row's lane had nothing to hand over.
     /// </summary>
-    private sealed record TimedOutOutput(string Status, int Attempt, string FailureClass);
+    private sealed record TimedOutOutput
+    {
+        public required string Status { get; init; }
 
-    private sealed record InlineOutput(string Status, int Attempt, string? Branch);
+        public required int Attempt { get; init; }
+
+        public required string FailureClass { get; init; }
+    }
+
+    private sealed record InlineOutput
+    {
+        public required string Status { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string? Branch { get; init; }
+    }
 }

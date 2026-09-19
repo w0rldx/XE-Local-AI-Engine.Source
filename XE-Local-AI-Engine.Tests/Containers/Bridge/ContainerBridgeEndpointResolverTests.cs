@@ -236,6 +236,6 @@ public sealed class ContainerBridgeEndpointResolverTests
             addresses.Add(IPAddress.Parse(ipv6));
         }
 
-        return new HostInterfaceSnapshot(isUp, isLoopback, isTunnel, hasGateway, addresses);
+        return new HostInterfaceSnapshot { IsUp = isUp, IsLoopback = isLoopback, IsTunnel = isTunnel, HasGateway = hasGateway, UnicastAddresses = addresses };
     }
 }

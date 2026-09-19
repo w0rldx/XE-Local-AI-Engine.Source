@@ -96,7 +96,7 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
                 throw new DevelopmentInvalidTransitionException("The current workspace no longer matches its exact patch evidence.");
             }
 
-            return new DevelopmentEvidenceSet(current, patch, manifest, patchContent, manifestContent);
+            return new DevelopmentEvidenceSet { Current = current, PatchArtifact = patch, ManifestArtifact = manifest, Patch = patchContent, Manifest = manifestContent };
         }
         catch (DevelopmentInvalidTransitionException)
         {
@@ -179,8 +179,10 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
 
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
-        return new DevelopmentPreparedArtifact(artifactId,
-            new DevelopmentAttachArtifactCommand
+        return new DevelopmentPreparedArtifact
+        {
+            ArtifactId = artifactId,
+            Attachment = new DevelopmentAttachArtifactCommand
             {
                 ArtifactId = artifactId,
                 ProjectId = snapshot.ProjectId,
@@ -198,7 +200,8 @@ internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
                 InputArtifactIdsJson = JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions),
                 CommandProfileVersion = commandProfileVersion,
                 CommandProfileDigest = commandProfileDigest
-            });
+            }
+        };
     }
 
     private async Task<ReadOnlyMemory<byte>> ReadRequiredAsync(DevelopmentArtifactSnapshot artifact, CancellationToken cancellationToken)

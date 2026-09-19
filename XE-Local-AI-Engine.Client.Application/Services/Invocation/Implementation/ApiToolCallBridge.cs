@@ -74,7 +74,7 @@ public sealed class ApiToolCallBridge
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall(invocationId, _timeProvider.GetUtcNow(), approvalCompletion, resultCompletion);
+        var pendingToolCall = new PendingToolCall { InvocationId = invocationId, CreatedAt = _timeProvider.GetUtcNow(), ApprovalCompletion = approvalCompletion, ResultCompletion = resultCompletion };
         var sender = _hubSender.Value;
         var dispatcher = _eventDispatcher.Value;
 

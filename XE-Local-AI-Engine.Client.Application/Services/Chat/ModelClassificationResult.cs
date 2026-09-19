@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     a "reset to detected" affordance, and <see cref="Capabilities" /> are the raw capability strings for read-only
 ///     badges.
 /// </summary>
-public sealed record ModelClassificationResult(
-    string ModelName,
-    ModelKind Kind,
-    ModelKind DetectedKind,
-    IReadOnlyList<string> Capabilities,
-    bool IsOverridden);
+public sealed class ModelClassificationResult
+{
+    public required string ModelName { get; init; }
+
+    public required ModelKind Kind { get; init; }
+
+    public required ModelKind DetectedKind { get; init; }
+
+    public required IReadOnlyList<string> Capabilities { get; init; }
+
+    public required bool IsOverridden { get; init; }
+}

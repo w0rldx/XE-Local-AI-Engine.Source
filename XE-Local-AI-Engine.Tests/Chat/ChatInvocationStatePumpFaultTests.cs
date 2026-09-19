@@ -97,11 +97,14 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId);
 
         // The row already reached a genuine Completed terminal before the fault handler runs.
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                             NodeChatMessageStatusValues.Completed,
-                             NowMs(),
-                             "the real answer",
-                             Model: "model-x"));
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = NowMs(),
+            Content = "the real answer",
+            Model = "model-x"
+        });
 
         var faultingPump = new FlushFailingPump(ChatPumpTestFactory.Create(persistence));
         var pump = new ChatInvocationStatePump(faultingPump, TimeProvider.System);
@@ -152,13 +155,13 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
     private static async Task<(NodeChatMessageCorrelation Correlation, Guid AssistantMessageId)> SeedStreamingRowAsync(NodeChatPersistenceService persistence, Guid conversationId)
     {
-        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId, "Pump fault", "node", CreatedAtUtc: 10, NodeChatOriginValues.Local));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "hello", CreatedAtUtc: 11));
+        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest { ConversationId = conversationId, Title = "Pump fault", UserId = "node", CreatedAtUtc = 10, Origin = NodeChatOriginValues.Local });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = Guid.NewGuid(), Content = "hello", CreatedAtUtc = 11 });
 
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversationId, assistantMessageId, requestId);
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, assistantMessageId, requestId, CreatedAtUtc: 12, "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId, CreatedAtUtc = 12, Model = "model-x" });
         await persistence.MarkAssistantQueuedAsync(correlation, NowMs());
         await persistence.MarkAssistantStreamingAsync(correlation, NowMs());
         return (correlation, assistantMessageId);

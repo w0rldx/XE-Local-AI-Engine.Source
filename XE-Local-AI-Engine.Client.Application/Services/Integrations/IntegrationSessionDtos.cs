@@ -14,23 +14,42 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         answer every foreign session identically.
 ///     </para>
 /// </summary>
-public sealed record IntegrationSessionDto(
-    Guid Id,
-    Guid TriggerId,
-    string TriggerName,
-    Guid PrincipalId,
-    Guid AgentDefinitionId,
-    IntegrationSessionStatus Status,
-    long CreatedAtUtc,
-    long LastActivityUtc,
-    int ExecutionCount);
+public sealed class IntegrationSessionDto
+{
+    public required Guid Id { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    public required string TriggerName { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required IntegrationSessionStatus Status { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long LastActivityUtc { get; init; }
+
+    public required int ExecutionCount { get; init; }
+}
 
 /// <summary>
 ///     The admin list query. Filtering and paging are SERVER-side: a client-side page over a bounded result would hide
 ///     older sessions entirely, and the store's <c>LastActivityUtc DESC, Id DESC</c> order is part of the contract the
 ///     UI renders rather than re-sorts.
 /// </summary>
-public sealed record IntegrationSessionFilter(Guid? TriggerId, IntegrationSessionStatus? Status, int Limit, int Offset);
+public sealed class IntegrationSessionFilter
+{
+    public required Guid? TriggerId { get; init; }
+
+    public required IntegrationSessionStatus? Status { get; init; }
+
+    public required int Limit { get; init; }
+
+    public required int Offset { get; init; }
+}
 
 /// <summary>What an operator delete decided. <see cref="Busy" /> is the 409 with a cancel-first message.</summary>
 public enum IntegrationSessionDeleteOutcome
@@ -50,4 +69,11 @@ public enum IntegrationSessionDeleteOutcome
 ///         inside the persistence assembly and only records cross a store boundary.
 ///     </para>
 /// </summary>
-internal sealed record IntegrationSessionGateResult(IntegrationAcceptOutcome Outcome, IntegrationSessionSnapshot? Existing, string Message);
+internal sealed class IntegrationSessionGateResult
+{
+    public required IntegrationAcceptOutcome Outcome { get; init; }
+
+    public required IntegrationSessionSnapshot? Existing { get; init; }
+
+    public required string Message { get; init; }
+}

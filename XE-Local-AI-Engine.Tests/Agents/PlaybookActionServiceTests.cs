@@ -859,7 +859,7 @@ public sealed class PlaybookActionServiceTests
              {
                  Behavior = "Edited behavior."
              });
-        var input = new SuggestedActionEditInput(agentId, actionId, "Edited behavior.", "new trigger", "new-scope", Priority: 7);
+        var input = new SuggestedActionEditInput { AgentDefinitionId = agentId, ActionId = actionId, Behavior = "Edited behavior.", TriggerCondition = "new trigger", Scope = "new-scope", Priority = 7 };
 
         var result = await service.UpdateSuggestedAsync(input);
 
@@ -887,7 +887,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
-        var input = new SuggestedActionEditInput(routeAgentId, actionId, "Edited behavior.", TriggerCondition: null, Scope: null, Priority: 1);
+        var input = new SuggestedActionEditInput { AgentDefinitionId = routeAgentId, ActionId = actionId, Behavior = "Edited behavior.", TriggerCondition = null, Scope = null, Priority = 1 };
 
         var result = await service.UpdateSuggestedAsync(input);
 
@@ -900,7 +900,7 @@ public sealed class PlaybookActionServiceTests
     {
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
-        var input = new SuggestedActionEditInput(agentId, Guid.NewGuid(), "   ", TriggerCondition: null, Scope: null, Priority: 1);
+        var input = new SuggestedActionEditInput { AgentDefinitionId = agentId, ActionId = Guid.NewGuid(), Behavior = "   ", TriggerCondition = null, Scope = null, Priority = 1 };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateSuggestedAsync(input));
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
@@ -910,13 +910,16 @@ public sealed class PlaybookActionServiceTests
         IReadOnlyList<Guid> feedbackIds,
         double confidence)
     {
-        return new PlaybookAnalysisSuggestionInput(agentDefinitionId,
-            "Prefer the existing shared helper over a new one-off.",
-            TriggerCondition: null,
-            Scope: null,
-            Priority: 100,
-            feedbackIds,
-            confidence);
+        return new PlaybookAnalysisSuggestionInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            Behavior = "Prefer the existing shared helper over a new one-off.",
+            TriggerCondition = null,
+            Scope = null,
+            Priority = 100,
+            SourceFeedbackIds = feedbackIds,
+            Confidence = confidence
+        };
     }
 
     private static PlaybookActionRecord CreateSuggestedRecord(Guid agentDefinitionId, Guid actionId)
@@ -1033,7 +1036,7 @@ public sealed class PlaybookActionServiceTests
         // stable, unchanged model; the fingerprint helpers below pass the same token so a fabricated pass matches.
         var identityResolver = Substitute.For<IEvalModelIdentityResolver>();
         identityResolver.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns(new EvalModelIdentity(EvalModelIdentityToken, IsVerified: true));
+                        .Returns(new EvalModelIdentity { Token = EvalModelIdentityToken, IsVerified = true });
         return new PlaybookActionService(store, agentStore, goldenStore, identityResolver, actionOptions, evalOptions);
     }
 

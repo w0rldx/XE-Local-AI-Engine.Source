@@ -1327,7 +1327,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
         IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo(fileId, conversationId, "spec.txt", "text/plain", ".txt", SizeBytes: 128, DocumentExtractionStatus.Extracted, ExtractedChars: 24, CreatedAtUtc: 0)];
+            [new ConversationUploadedFileInfo { FileId = fileId, ConversationId = conversationId, OriginalFileName = "spec.txt", MimeType = "text/plain", Extension = ".txt", SizeBytes = 128, ExtractionStatus = DocumentExtractionStatus.Extracted, ExtractedChars = 24, CreatedAtUtc = 0 }];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -1468,8 +1468,18 @@ public sealed class NodeChatStreamServiceTests
                 {
                     (byte)(10 + i)
                 };
-            files.Add(new ConversationUploadedFileInfo(fileId, conversationId, $"photo{i}.png", "image/png", ".png", SizeBytes: imageBytes.Length, DocumentExtractionStatus.Image, ExtractedChars: null,
-                CreatedAtUtc: 0));
+            files.Add(new ConversationUploadedFileInfo
+            {
+                FileId = fileId,
+                ConversationId = conversationId,
+                OriginalFileName = $"photo{i}.png",
+                MimeType = "image/png",
+                Extension = ".png",
+                SizeBytes = imageBytes.Length,
+                ExtractionStatus = DocumentExtractionStatus.Image,
+                ExtractedChars = null,
+                CreatedAtUtc = 0
+            });
             uploadedFileStore.ReadBytesAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns<ReadOnlyMemory<byte>?>(imageBytes);
         }
 
@@ -1664,7 +1674,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
         IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo(fileId, conversationId, "spec.txt", "text/plain", ".txt", SizeBytes: 128, DocumentExtractionStatus.Extracted, ExtractedChars: 24, CreatedAtUtc: 0)];
+            [new ConversationUploadedFileInfo { FileId = fileId, ConversationId = conversationId, OriginalFileName = "spec.txt", MimeType = "text/plain", Extension = ".txt", SizeBytes = 128, ExtractionStatus = DocumentExtractionStatus.Extracted, ExtractedChars = 24, CreatedAtUtc = 0 }];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -2410,8 +2420,16 @@ public sealed class NodeChatStreamServiceTests
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
-                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null)));
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
+                             {
+                                 Spec = spec,
+                                 ResolvedSystemPrompt = "Orchestrator prompt.",
+                                 ModelProfile = "qwen3:8b",
+                                 ReasoningEffort = null,
+                                 AgentDefinitionVersion = 4,
+                                 AnyParticipantIsCloud = false,
+                                 FirstCloudParticipantModel = null
+                             }));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2474,8 +2492,16 @@ public sealed class NodeChatStreamServiceTests
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
-                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null)));
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
+                             {
+                                 Spec = spec,
+                                 ResolvedSystemPrompt = "Orchestrator prompt.",
+                                 ModelProfile = "qwen3:8b",
+                                 ReasoningEffort = null,
+                                 AgentDefinitionVersion = 4,
+                                 AnyParticipantIsCloud = false,
+                                 FirstCloudParticipantModel = null
+                             }));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2635,7 +2661,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
         IReadOnlyList<ConversationUploadedFileInfo> files =
-            [new ConversationUploadedFileInfo(fileId, conversationId, "spec.txt", "text/plain", ".txt", SizeBytes: 128, DocumentExtractionStatus.Extracted, ExtractedChars: 24, CreatedAtUtc: 0)];
+            [new ConversationUploadedFileInfo { FileId = fileId, ConversationId = conversationId, OriginalFileName = "spec.txt", MimeType = "text/plain", Extension = ".txt", SizeBytes = 128, ExtractionStatus = DocumentExtractionStatus.Extracted, ExtractedChars = 24, CreatedAtUtc = 0 }];
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -2650,10 +2676,16 @@ public sealed class NodeChatStreamServiceTests
                                    agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(CreateSampleSpec(), "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null,
-                                 AgentDefinitionVersion: 4,
-                                 AnyParticipantIsCloud: anyParticipantIsCloud,
-                                 FirstCloudParticipantModel: anyParticipantIsCloud ? "azure-specialist-deploy" : null)));
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
+                             {
+                                 Spec = CreateSampleSpec(),
+                                 ResolvedSystemPrompt = "Orchestrator prompt.",
+                                 ModelProfile = "qwen3:8b",
+                                 ReasoningEffort = null,
+                                 AgentDefinitionVersion = 4,
+                                 AnyParticipantIsCloud = anyParticipantIsCloud,
+                                 FirstCloudParticipantModel = anyParticipantIsCloud ? "azure-specialist-deploy" : null
+                             }));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -3284,20 +3316,26 @@ public sealed class NodeChatStreamServiceTests
 
         // Hand-build the legacy null-path package (embedded prompt + full offer + version 1) and compare config hashes.
         var builder = new LocalChatRuntimePackageBuilder();
-        var legacyPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            conversationId,
-            embeddedPrompt,
-            [],
-            new LocalChatAgentOptions().DefaultModel,
-            AgentDefinitionVersion: 1,
-            AllowedTools: [offeredTool]));
-        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            conversationId,
-            runner.LastSystemPrompt!,
-            [],
-            new LocalChatAgentOptions().DefaultModel,
-            runner.LastAgentDefinitionVersion,
-            AllowedTools: runner.LastAllowedTools));
+        var legacyPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = embeddedPrompt,
+            ConversationContext = [],
+            ModelProfile = new LocalChatAgentOptions().DefaultModel,
+            AgentDefinitionVersion = 1,
+            AllowedTools = [offeredTool]
+        });
+        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = runner.LastSystemPrompt!,
+            ConversationContext = [],
+            ModelProfile = new LocalChatAgentOptions().DefaultModel,
+            AgentDefinitionVersion = runner.LastAgentDefinitionVersion,
+            AllowedTools = runner.LastAllowedTools
+        });
 
         AssertEx.Equal(legacyPackage.ConfigHash, resolvedPackage.ConfigHash);
     }
@@ -3391,20 +3429,26 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         var builder = new LocalChatRuntimePackageBuilder();
-        var legacyPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            conversationId,
-            embeddedPrompt,
-            [],
-            new LocalChatAgentOptions().DefaultModel,
-            AgentDefinitionVersion: 1,
-            AllowedTools: [offeredTool]));
-        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            conversationId,
-            runner.LastSystemPrompt!,
-            [],
-            new LocalChatAgentOptions().DefaultModel,
-            runner.LastAgentDefinitionVersion,
-            AllowedTools: runner.LastAllowedTools));
+        var legacyPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = embeddedPrompt,
+            ConversationContext = [],
+            ModelProfile = new LocalChatAgentOptions().DefaultModel,
+            AgentDefinitionVersion = 1,
+            AllowedTools = [offeredTool]
+        });
+        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = runner.LastSystemPrompt!,
+            ConversationContext = [],
+            ModelProfile = new LocalChatAgentOptions().DefaultModel,
+            AgentDefinitionVersion = runner.LastAgentDefinitionVersion,
+            AllowedTools = runner.LastAllowedTools
+        });
 
         AssertEx.True(legacyPackage.ConfigHash != resolvedPackage.ConfigHash,
             "Editing the Default Assistant (prompt + version bump) must change the mode-off config hash.");
@@ -3833,13 +3877,13 @@ public sealed class NodeChatStreamServiceTests
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(new KnowledgeSearchResult(hits));
+                     .Returns(new KnowledgeSearchResult { Results = hits });
         return CreateScopeFactory(searchService);
     }
 
     private static KnowledgeSearchHit KnowledgeHit(string title, string content, double score)
     {
-        return new KnowledgeSearchHit(Guid.NewGuid(), Guid.NewGuid(), title, "Section", content, "knowledge-base", score, ChunkIndex: 0, KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false);
+        return new KnowledgeSearchHit { DocumentId = Guid.NewGuid(), ChunkId = Guid.NewGuid(), Title = title, Section = "Section", Content = content, Source = "knowledge-base", Score = score, ChunkIndex = 0, DocumentStatus = KnowledgeDocumentStatus.Indexed, ServingLastKnownGood = false };
     }
 
     private static NodeChatStreamService CreateAgentHomeService(INodeChatPersistenceService persistence,
@@ -3992,7 +4036,7 @@ public sealed class NodeChatStreamServiceTests
 
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity(_owner, _node));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = _owner, NodeId = _node });
         }
     }
 
@@ -4090,7 +4134,7 @@ public sealed class NodeChatStreamServiceTests
                    {
                        if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
                        {
-                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, resolved, IsOverridden: false);
+                           map[modelName] = new ModelClassificationResult { ModelName = modelName, Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = resolved, IsOverridden = false };
                        }
                    }
 
@@ -4423,20 +4467,23 @@ public sealed class NodeChatStreamServiceTests
         string content,
         Guid? variantGroupId = null)
     {
-        return new NodeChatPersistedMessageDto(messageId,
-            conversationId,
-            RequestId: null,
-            sequence,
-            role,
-            content,
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: sequence,
-            UpdatedAtUtc: sequence,
-            Model: null,
-            Error: null,
-            MetadataJson: null,
-            VariantGroupId: variantGroupId);
+        return new NodeChatPersistedMessageDto
+        {
+            MessageId = messageId,
+            ConversationId = conversationId,
+            RequestId = null,
+            Sequence = sequence,
+            Role = role,
+            Content = content,
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = sequence,
+            UpdatedAtUtc = sequence,
+            Model = null,
+            Error = null,
+            MetadataJson = null,
+            VariantGroupId = variantGroupId
+        };
     }
 
     private static async Task<ContextCapturingInvocationRunner> RunWithVariantConversationAsync(Guid conversationId,
@@ -4518,72 +4565,87 @@ public sealed class NodeChatStreamServiceTests
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
 
-        var userTurn = new NodeChatPersistedMessageDto(Guid.NewGuid(),
-            conversationId,
-            RequestId: null,
-            Sequence: 0,
-            "user",
-            "original question",
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
-        var olderVariant = new NodeChatPersistedMessageDto(olderVariantId,
-            conversationId,
-            Guid.NewGuid(),
-            Sequence: 1,
-            "assistant",
-            "older answer",
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Model: null,
-            Error: null,
-            MetadataJson: null,
-            VariantGroupId: variantGroupId);
-        var newerVariant = new NodeChatPersistedMessageDto(newerVariantId,
-            conversationId,
-            Guid.NewGuid(),
-            Sequence: 2,
-            "assistant",
-            "newer answer",
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 2,
-            UpdatedAtUtc: 2,
-            Model: null,
-            Error: null,
-            MetadataJson: null,
-            VariantGroupId: variantGroupId);
+        var userTurn = new NodeChatPersistedMessageDto
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            RequestId = null,
+            Sequence = 0,
+            Role = "user",
+            Content = "original question",
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
+        var olderVariant = new NodeChatPersistedMessageDto
+        {
+            MessageId = olderVariantId,
+            ConversationId = conversationId,
+            RequestId = Guid.NewGuid(),
+            Sequence = 1,
+            Role = "assistant",
+            Content = "older answer",
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Model = null,
+            Error = null,
+            MetadataJson = null,
+            VariantGroupId = variantGroupId
+        };
+        var newerVariant = new NodeChatPersistedMessageDto
+        {
+            MessageId = newerVariantId,
+            ConversationId = conversationId,
+            RequestId = Guid.NewGuid(),
+            Sequence = 2,
+            Role = "assistant",
+            Content = "newer answer",
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 2,
+            UpdatedAtUtc = 2,
+            Model = null,
+            Error = null,
+            MetadataJson = null,
+            VariantGroupId = variantGroupId
+        };
 
-        var conversation = new NodeChatConversationDto(conversationId,
-            "variant chat",
-            UserId: null,
-            CreatedAtUtc: 1,
-            LastSeenUtc: 1,
-            Purged: false,
-            conversationMessages ?? [userTurn, olderVariant, newerVariant],
-            SelectedPath: persistedSelection,
-            CompactionSummary: compactionSummary,
-            CompactionSummaryCoversToSequence: compactionCoversToSequence);
+        var conversation = new NodeChatConversationDto
+        {
+            ConversationId = conversationId,
+            Title = "variant chat",
+            UserId = null,
+            CreatedAtUtc = 1,
+            LastSeenUtc = 1,
+            Purged = false,
+            Messages = conversationMessages ?? [userTurn, olderVariant, newerVariant],
+            SelectedPath = persistedSelection,
+            CompactionSummary = compactionSummary,
+            CompactionSummaryCoversToSequence = compactionCoversToSequence
+        };
         // The just-sent turn always takes the next free PHYSICAL sequence, exactly like NextSequenceAsync does.
-        var newUserMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
-            conversationId,
-            RequestId: null,
-            Sequence: conversation.Messages.Max(message => message.Sequence) + 1,
-            "user",
-            "follow up",
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 3,
-            UpdatedAtUtc: 3,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        var newUserMessage = new NodeChatPersistedMessageDto
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            RequestId = null,
+            Sequence = conversation.Messages.Max(message => message.Sequence) + 1,
+            Role = "user",
+            Content = "follow up",
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 3,
+            UpdatedAtUtc = 3,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
         var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, reasoning: null);
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
@@ -4637,27 +4699,33 @@ public sealed class NodeChatStreamServiceTests
         Action<NodeChatCreateAssistantPlaceholderRequest>? placeholderObserver = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
-        var conversation = new NodeChatConversationDto(conversationId,
-            "test",
-            UserId: null,
-            CreatedAtUtc: 1,
-            LastSeenUtc: 1,
-            Purged: false,
-            [],
-            AgentDefinitionId: agentDefinitionId);
-        var userMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
-            conversationId,
-            RequestId: null,
-            Sequence: 1,
-            "user",
-            "hello",
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        var conversation = new NodeChatConversationDto
+        {
+            ConversationId = conversationId,
+            Title = "test",
+            UserId = null,
+            CreatedAtUtc = 1,
+            LastSeenUtc = 1,
+            Purged = false,
+            Messages = [],
+            AgentDefinitionId = agentDefinitionId
+        };
+        var userMessage = new NodeChatPersistedMessageDto
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            RequestId = null,
+            Sequence = 1,
+            Role = "user",
+            Content = "hello",
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
         var assistantPending = CreateAssistantMessage(conversationId,
             assistantMessageId,
             requestId,
@@ -4733,19 +4801,22 @@ public sealed class NodeChatStreamServiceTests
         string? reasoning,
         string? error = null)
     {
-        return new NodeChatPersistedMessageDto(assistantMessageId,
-            conversationId,
-            requestId,
-            Sequence: 2,
-            "assistant",
-            content,
-            reasoning,
-            status,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Model: null,
-            error,
-            MetadataJson: null);
+        return new NodeChatPersistedMessageDto
+        {
+            MessageId = assistantMessageId,
+            ConversationId = conversationId,
+            RequestId = requestId,
+            Sequence = 2,
+            Role = "assistant",
+            Content = content,
+            Reasoning = reasoning,
+            Status = status,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Model = null,
+            Error = error,
+            MetadataJson = null
+        };
     }
 
     private sealed class StreamingUntilCancelledInvocationRunner : IInvocationRunner

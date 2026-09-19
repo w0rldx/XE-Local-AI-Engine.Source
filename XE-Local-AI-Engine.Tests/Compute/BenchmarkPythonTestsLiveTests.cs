@@ -298,6 +298,6 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity("owner-live", "node-live"));
+            Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-live", NodeId = "node-live" });
     }
 }

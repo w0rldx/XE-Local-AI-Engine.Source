@@ -90,7 +90,7 @@ public sealed class LocalModelAdministrationServiceTests
                .Returns(LlamaServerProviderConstants.ProviderName);
         var operationId = Guid.NewGuid();
         var receipt = new GgufDeletionStageReceipt(operationId, "local", [], [], [], "aliases", "members");
-        var committed = new CommittedModelDeletion(operationId, "local", ["local"], receipt);
+        var committed = new CommittedModelDeletion { OperationId = operationId, RequestedModelName = "local", RemovedModelNames = ["local"], StageReceipt = receipt };
         harness.DeletionCoordinator.CommitDeleteAsync("local", Arg.Any<CancellationToken>()).Returns(committed);
 
         var result = await harness.Service.DeleteAsync("local");
@@ -108,7 +108,7 @@ public sealed class LocalModelAdministrationServiceTests
                .Returns(LlamaServerProviderConstants.ProviderName);
         var operationId = Guid.NewGuid();
         var receipt = new GgufDeletionStageReceipt(operationId, "local", [], [], [], "aliases", "members");
-        var committed = new CommittedModelDeletion(operationId, "local", ["local"], receipt);
+        var committed = new CommittedModelDeletion { OperationId = operationId, RequestedModelName = "local", RemovedModelNames = ["local"], StageReceipt = receipt };
         harness.DeletionCoordinator.CommitDeleteAsync("local", Arg.Any<CancellationToken>()).Returns(committed);
         harness.DeletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None)
                .Returns(Task.FromException(new IOException("purge failed")));

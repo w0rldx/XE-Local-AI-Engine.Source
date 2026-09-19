@@ -19,19 +19,32 @@ public interface IBenchmarkRuntimeSnapshotFactory
     BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload);
 }
 
-public sealed record BenchmarkRuntimeSnapshotInput(
-    Guid ProjectId,
-    Guid AgentDefinitionId,
-    long AgentVersion,
-    string CoreTask,
-    int RequestedContextTokens,
-    ResolvedAgentRuntime ResolvedRuntime,
-    BenchmarkLlamaRuntimeSnapshotV1 PrimaryRuntime,
-    BenchmarkSamplingSnapshotV1 PrimarySampling,
-    BenchmarkInstalledModelSnapshotV1 PrimaryModel,
-    BenchmarkFreezeDependencySetV1 Dependencies,
-    string ApplicationVersion,
-    long CreatedAtUtc);
+public sealed record BenchmarkRuntimeSnapshotInput
+{
+    public required Guid ProjectId { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required long AgentVersion { get; init; }
+
+    public required string CoreTask { get; init; }
+
+    public required int RequestedContextTokens { get; init; }
+
+    public required ResolvedAgentRuntime ResolvedRuntime { get; init; }
+
+    public required BenchmarkLlamaRuntimeSnapshotV1 PrimaryRuntime { get; init; }
+
+    public required BenchmarkSamplingSnapshotV1 PrimarySampling { get; init; }
+
+    public required BenchmarkInstalledModelSnapshotV1 PrimaryModel { get; init; }
+
+    public required BenchmarkFreezeDependencySetV1 Dependencies { get; init; }
+
+    public required string ApplicationVersion { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     What a run was frozen with. Primary-only: judging is defined by the project's judge policy revision and frozen

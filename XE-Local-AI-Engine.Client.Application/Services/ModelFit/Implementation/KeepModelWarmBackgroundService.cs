@@ -158,7 +158,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
         }
         catch (Exception exception)
         {
-            var failure = new FailureSignature(attemptedModelName, exception.GetType(), exception.Message);
+            var failure = new FailureSignature { ModelName = attemptedModelName, ExceptionType = exception.GetType(), Message = exception.Message };
             if (exception is LlamaRuntimeException)
             {
                 // The llama.cpp supervisor logs its own operational failure with process/model context. Keep this layer
@@ -232,5 +232,12 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
         _lastWarmAttemptTimestamp = null;
     }
 
-    private sealed record FailureSignature(string? ModelName, Type ExceptionType, string Message);
+    private sealed record FailureSignature
+    {
+        public required string? ModelName { get; init; }
+
+        public required Type ExceptionType { get; init; }
+
+        public required string Message { get; init; }
+    }
 }

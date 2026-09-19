@@ -202,8 +202,8 @@ public sealed class IntegrationSessionServiceTests
             _ = harness.SeedSession(trigger.Id, lastActivityUtc: 100);
         }
 
-        var first = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, Status: null, Limit: 3, Offset: 0));
-        var second = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, Status: null, Limit: 3, Offset: 3));
+        var first = await harness.SessionService.ListAsync(new IntegrationSessionFilter { TriggerId = null, Status = null, Limit = 3, Offset = 0 });
+        var second = await harness.SessionService.ListAsync(new IntegrationSessionFilter { TriggerId = null, Status = null, Limit = 3, Offset = 3 });
 
         var ids = first.Concat(second).Select(static session => session.Id).ToArray();
         AssertEx.Equal(expected: 6, ids.Distinct().Count(), "Two pages of the same size must be disjoint and cover every row.");
@@ -221,8 +221,8 @@ public sealed class IntegrationSessionServiceTests
         _ = harness.SeedSession(mine.Id, status: IntegrationSessionStatus.Closed);
         _ = harness.SeedSession(other.Id);
 
-        var byStatus = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, IntegrationSessionStatus.Active, Limit: 50, Offset: 0));
-        var byTrigger = await harness.SessionService.ListAsync(new IntegrationSessionFilter(mine.Id, Status: null, Limit: 50, Offset: 0));
+        var byStatus = await harness.SessionService.ListAsync(new IntegrationSessionFilter { TriggerId = null, Status = IntegrationSessionStatus.Active, Limit = 50, Offset = 0 });
+        var byTrigger = await harness.SessionService.ListAsync(new IntegrationSessionFilter { TriggerId = mine.Id, Status = null, Limit = 50, Offset = 0 });
 
         AssertEx.Equal(expected: 2, byStatus.Count);
         AssertEx.Equal(expected: 2, byTrigger.Count);

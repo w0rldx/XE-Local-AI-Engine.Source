@@ -30,15 +30,19 @@ public interface IEvalModelIdentityResolver
 ///     sentinel so callers (and logs) can surface "model identity unverifiable" rather than treating the fallback as a
 ///     trusted identity.
 /// </summary>
-/// <param name="Token">
-///     The opaque identity token folded into the fingerprint. A verified token carries a source prefix
-///     (e.g. <c>gguf-sha256:</c>, <c>gguf-rev:</c>, <c>ollama-digest:</c>); the unverified sentinel is
-///     <see cref="UnverifiedToken" />, which shares no prefix with any verified token, so an unverified run can never
-///     collide with a verified one of the same name.
-/// </param>
-/// <param name="IsVerified">Whether a real weight identity was resolved (as opposed to the unverified fallback).</param>
-public sealed record EvalModelIdentity(string Token, bool IsVerified)
+public sealed class EvalModelIdentity
 {
+    /// <summary>
+    ///     The opaque identity token folded into the fingerprint. A verified token carries a source prefix
+    ///     (e.g. <c>gguf-sha256:</c>, <c>gguf-rev:</c>, <c>ollama-digest:</c>); the unverified sentinel is
+    ///     <see cref="UnverifiedToken" />, which shares no prefix with any verified token, so an unverified run can never
+    ///     collide with a verified one of the same name.
+    /// </summary>
+    public required string Token { get; init; }
+
+    /// <summary>Whether a real weight identity was resolved (as opposed to the unverified fallback).</summary>
+    public required bool IsVerified { get; init; }
+
     /// <summary>
     ///     The sentinel token recorded when no weight identity could be resolved. Deliberately prefix-free so it never
     ///     equals a verified token, keeping an identity-unverifiable run distinct from a verified run of the same name.
@@ -46,5 +50,5 @@ public sealed record EvalModelIdentity(string Token, bool IsVerified)
     public const string UnverifiedToken = "unverified";
 
     /// <summary>The shared unverified identity (the <see cref="UnverifiedToken" /> sentinel, not verified).</summary>
-    public static EvalModelIdentity Unverified { get; } = new(UnverifiedToken, IsVerified: false);
+    public static EvalModelIdentity Unverified { get; } = new() { Token = UnverifiedToken, IsVerified = false };
 }

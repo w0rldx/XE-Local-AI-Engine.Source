@@ -170,9 +170,9 @@ public sealed class BenchmarkCatalogServiceTests
         ]);
         var provider = new FactsProvider(new Dictionary<string, InstalledModelFacts>(StringComparer.OrdinalIgnoreCase)
             {
-                ["chat"] = new("chat", "llamacpp", GgufRole.Chat, LocalModelOrigin.HuggingFace, recorded),
-                ["embedding"] = new("embedding", "llamacpp", GgufRole.Embedding, LocalModelOrigin.HuggingFace, recorded),
-                ["legacy"] = new("legacy", "llamacpp", GgufRole.Chat, null, null)
+                ["chat"] = new() { ModelName = "chat", ProviderName = "llamacpp", Role = GgufRole.Chat, Origin = LocalModelOrigin.HuggingFace, ModelContentFingerprint = recorded },
+                ["embedding"] = new() { ModelName = "embedding", ProviderName = "llamacpp", Role = GgufRole.Embedding, Origin = LocalModelOrigin.HuggingFace, ModelContentFingerprint = recorded },
+                ["legacy"] = new() { ModelName = "legacy", ProviderName = "llamacpp", Role = GgufRole.Chat, Origin = null, ModelContentFingerprint = null }
             },
             new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
             {

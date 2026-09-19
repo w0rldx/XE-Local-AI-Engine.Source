@@ -27,15 +27,20 @@ public sealed class TranscriptionModelEndpointTests
     {
         var service = new StubTranscriptionRuntimeService
         {
-            Catalog = new TranscriptionModelCatalogView([
-                new TranscriptionModelView(Entry("tiny"), Installed: true, Download: null),
-                new TranscriptionModelView(Entry("base"), Installed: false,
-                    new WhisperModelDownloadStatus("base", WhisperModelDownloadPhase.Running, CompletedBytes: 10, TotalBytes: 100, SanitizedError: null)
-                    {
-                        PartIndex = 2,
-                        PartCount = 2
-                    })
-            ], "tiny", "large-v3-turbo")
+            Catalog = new TranscriptionModelCatalogView
+            {
+                Models = [
+                new TranscriptionModelView { Entry = Entry("tiny"), Installed = true, Download = null },
+                new TranscriptionModelView
+                {
+                    Entry = Entry("base"),
+                    Installed = false,
+                    Download = new WhisperModelDownloadStatus { ModelId = "base", Phase = WhisperModelDownloadPhase.Running, CompletedBytes = 10, TotalBytes = 100, SanitizedError = null, PartIndex = 2, PartCount = 2 }
+                }
+            ],
+                SelectedModelId = "tiny",
+                RecommendedModelId = "large-v3-turbo"
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -95,7 +100,7 @@ public sealed class TranscriptionModelEndpointTests
     {
         var coordinator = new StubDownloadCoordinator
         {
-            Status = new WhisperModelDownloadStatus("base", WhisperModelDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null)
+            Status = new WhisperModelDownloadStatus { ModelId = "base", Phase = WhisperModelDownloadPhase.Running, CompletedBytes = null, TotalBytes = null, SanitizedError = null }
         };
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
@@ -330,7 +335,7 @@ public sealed class TranscriptionModelEndpointTests
         public WhisperModelDownloadTicket Start(string modelId)
         {
             LastStartedModelId = modelId;
-            return new WhisperModelDownloadTicket(modelId, AlreadyInFlight);
+            return new WhisperModelDownloadTicket { ModelId = modelId, AlreadyInFlight = AlreadyInFlight };
         }
 
         public WhisperModelDownloadStatus? GetStatus(string modelId) =>
@@ -349,22 +354,25 @@ public sealed class TranscriptionModelEndpointTests
     private sealed class StubTranscriptionRuntimeService : ITranscriptionRuntimeService
     {
         public TranscriptionModelCatalogView Catalog { get; init; } =
-            new([], SelectedModelId: null, "base");
+            new() { Models = [], SelectedModelId = null, RecommendedModelId = "base" };
 
         public bool SelectCalled { get; private set; }
 
         public string? LastSelectedModelId { get; private set; }
 
         public Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct) =>
-            Task.FromResult(new TranscriptionRuntimeView(Enabled: true,
-                new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
-                new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false),
-                ManagedRuntime: null,
-                Catalog.SelectedModelId,
-                Catalog.RecommendedModelId,
-                IdleTimeoutMinutes: 15,
-                VadInstalled: true,
-                ProcessCaptureSupported: false));
+            Task.FromResult(new TranscriptionRuntimeView
+            {
+                Enabled = true,
+                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
+                Activity = new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false),
+                ManagedRuntime = null,
+                SelectedModelId = Catalog.SelectedModelId,
+                RecommendedModelId = Catalog.RecommendedModelId,
+                IdleTimeoutMinutes = 15,
+                VadInstalled = true,
+                ProcessCaptureSupported = false
+            });
 
         public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) =>
             Task.FromResult(new WhisperServerEvictResult(Evicted: true,

@@ -85,12 +85,12 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Query))
         {
-            return new KnowledgeSearchResult([]);
+            return new KnowledgeSearchResult { Results = [] };
         }
 
         if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))
         {
-            return new KnowledgeSearchResult([]);
+            return new KnowledgeSearchResult { Results = [] };
         }
 
         var limit = Math.Max(1, request.Limit);
@@ -137,7 +137,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var fused = _fusion.FuseScored([ftsRanked, vectorRanked], _options.FusionStrategy, _options.FusionScoreWeight);
         if (fused.Count == 0)
         {
-            return new KnowledgeSearchResult([]);
+            return new KnowledgeSearchResult { Results = [] };
         }
 
         var connection = _dbContext.Database.GetDbConnection();
@@ -182,27 +182,30 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 || (!queryVector.IsEmpty
                     && !string.Equals(selection.Row.VectorIdentity, vectorIdentity, StringComparison.Ordinal));
 
-            hits.Add(new KnowledgeSearchHit(selection.Row.DocumentId,
-                selection.ChunkId,
-                DeriveTitle(selection.Row.HeadingPath, selection.Row.StoragePath),
-                selection.Row.HeadingPath,
-                contents[index],
-                SourceTag,
-                selection.Score,
-                selection.Row.ChunkIndex,
-                selection.Row.DocumentStatus,
-                servingLastKnownGood,
-                selection.Row.CollectionId,
-                selection.Row.SourcePath,
-                selection.Row.ContentKind,
-                selection.Row.Language,
-                selection.Row.Symbol,
-                selection.Row.PageNumber,
-                selection.Row.StartOffset,
-                selection.Row.EndOffset));
+            hits.Add(new KnowledgeSearchHit
+            {
+                DocumentId = selection.Row.DocumentId,
+                ChunkId = selection.ChunkId,
+                Title = DeriveTitle(selection.Row.HeadingPath, selection.Row.StoragePath),
+                Section = selection.Row.HeadingPath,
+                Content = contents[index],
+                Source = SourceTag,
+                Score = selection.Score,
+                ChunkIndex = selection.Row.ChunkIndex,
+                DocumentStatus = selection.Row.DocumentStatus,
+                ServingLastKnownGood = servingLastKnownGood,
+                CollectionId = selection.Row.CollectionId,
+                SourcePath = selection.Row.SourcePath,
+                ContentKind = selection.Row.ContentKind,
+                Language = selection.Row.Language,
+                Symbol = selection.Row.Symbol,
+                PageNumber = selection.Row.PageNumber,
+                StartOffset = selection.Row.StartOffset,
+                EndOffset = selection.Row.EndOffset
+            });
         }
 
-        return new KnowledgeSearchResult(hits);
+        return new KnowledgeSearchResult { Results = hits };
     }
 
     // Lexical arm wrapper: times the FTS round trip. Reads the request-scoped DB connection (so it never overlaps another
@@ -295,7 +298,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         {
             if (hydrated.TryGetValue(entry.ChunkId, out var row))
             {
-                pool.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
+                pool.Add(new ChunkSelection { ChunkId = entry.ChunkId, Row = row, Score = entry.Score });
             }
         }
 
@@ -437,7 +440,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // identity (including native width), which the read path validates before accepting a hit.
             _queryEmbeddingCache.Store(cacheFamilyIdentity,
                 query,
-                new KnowledgeQueryEmbeddingCacheEntry(transformed.Values, transformed.Identity));
+                new KnowledgeQueryEmbeddingCacheEntry { Vector = transformed.Values, VectorIdentity = transformed.Identity });
             return new QueryEmbedding(transformed.Values, embeddingModelName, transformed.Identity);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException or KnowledgeIngestionException)
@@ -505,21 +508,24 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 var headingPath = await reader.IsDBNullAsync(ordinal: 4, cancellationToken)
                     ? null
                     : reader.GetString(4);
-                hydrated[chunkId] = new HydratedChunk(Guid.Parse(reader.GetString(1)),
-                    reader.GetInt32(2),
-                    reader.GetString(3),
-                    headingPath,
-                    reader.GetString(5),
-                    ParseDocumentStatus(reader.GetString(6)),
-                    reader.GetString(7),
-                    reader.GetString(8),
-                    await reader.IsDBNullAsync(9, cancellationToken) ? null : reader.GetString(9),
-                    reader.GetString(10),
-                    await reader.IsDBNullAsync(11, cancellationToken) ? null : reader.GetString(11),
-                    await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
-                    await reader.IsDBNullAsync(13, cancellationToken) ? null : reader.GetInt32(13),
-                    reader.GetInt32(14),
-                    reader.GetInt32(15));
+                hydrated[chunkId] = new HydratedChunk
+                {
+                    DocumentId = Guid.Parse(reader.GetString(1)),
+                    ChunkIndex = reader.GetInt32(2),
+                    Content = reader.GetString(3),
+                    HeadingPath = headingPath,
+                    StoragePath = reader.GetString(5),
+                    DocumentStatus = ParseDocumentStatus(reader.GetString(6)),
+                    VectorIdentity = reader.GetString(7),
+                    CollectionId = reader.GetString(8),
+                    SourcePath = await reader.IsDBNullAsync(9, cancellationToken) ? null : reader.GetString(9),
+                    ContentKind = reader.GetString(10),
+                    Language = await reader.IsDBNullAsync(11, cancellationToken) ? null : reader.GetString(11),
+                    Symbol = await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
+                    PageNumber = await reader.IsDBNullAsync(13, cancellationToken) ? null : reader.GetInt32(13),
+                    StartOffset = reader.GetInt32(14),
+                    EndOffset = reader.GetInt32(15)
+                };
             }
         }
 
@@ -550,26 +556,49 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return root.Length > 0 ? root[0] : storagePath;
     }
 
-    private sealed record HydratedChunk(
-        Guid DocumentId,
-        int ChunkIndex,
-        string Content,
-        string? HeadingPath,
-        string StoragePath,
-        KnowledgeDocumentStatus DocumentStatus,
-        string VectorIdentity,
-        string CollectionId,
-        string? SourcePath,
-        string ContentKind,
-        string? Language,
-        string? Symbol,
-        int? PageNumber,
-        int StartOffset,
-        int EndOffset);
+    private sealed record HydratedChunk
+    {
+        public required Guid DocumentId { get; init; }
+
+        public required int ChunkIndex { get; init; }
+
+        public required string Content { get; init; }
+
+        public required string? HeadingPath { get; init; }
+
+        public required string StoragePath { get; init; }
+
+        public required KnowledgeDocumentStatus DocumentStatus { get; init; }
+
+        public required string VectorIdentity { get; init; }
+
+        public required string CollectionId { get; init; }
+
+        public required string? SourcePath { get; init; }
+
+        public required string ContentKind { get; init; }
+
+        public required string? Language { get; init; }
+
+        public required string? Symbol { get; init; }
+
+        public required int? PageNumber { get; init; }
+
+        public required int StartOffset { get; init; }
+
+        public required int EndOffset { get; init; }
+    }
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
     // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).
-    private sealed record ChunkSelection(Guid ChunkId, HydratedChunk Row, double Score);
+    private sealed record ChunkSelection
+    {
+        public required Guid ChunkId { get; init; }
+
+        public required HydratedChunk Row { get; init; }
+
+        public required double Score { get; init; }
+    }
 
     // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm),
     // the resolved model name that scopes which stored chunk vectors it may be compared against, and the vector

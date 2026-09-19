@@ -118,26 +118,46 @@ public enum PlaybookPromotionStatus
 ///     whether to return 200 (<c>Promoted</c>), 404 (<c>NotFound</c>) or 409 (any <c>Eval*</c> block, or <c>CapReached</c>);
 ///     <see cref="Record" /> carries the enabled record only when <see cref="Status" /> is <c>Promoted</c>.
 /// </summary>
-public sealed record PlaybookPromotionResult(PlaybookPromotionStatus Status, PlaybookActionRecord? Record);
+public sealed class PlaybookPromotionResult
+{
+    public required PlaybookPromotionStatus Status { get; init; }
+
+    public required PlaybookActionRecord? Record { get; init; }
+}
 
 /// <summary>Input for the analysis-staging write path — provenance + confidence are required; state/source are pinned by the service.</summary>
-public sealed record PlaybookAnalysisSuggestionInput(
-    Guid AgentDefinitionId,
-    string Behavior,
-    string? TriggerCondition,
-    string? Scope,
-    int Priority,
-    IReadOnlyList<Guid> SourceFeedbackIds,
-    double Confidence);
+public sealed record PlaybookAnalysisSuggestionInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required string Behavior { get; init; }
+
+    public required string? TriggerCondition { get; init; }
+
+    public required string? Scope { get; init; }
+
+    public required int Priority { get; init; }
+
+    public required IReadOnlyList<Guid> SourceFeedbackIds { get; init; }
+
+    public required double Confidence { get; init; }
+}
 
 /// <summary>Operator edits applied to a pending Suggested action; the action stays Suggested/Analysis and keeps its evidence.</summary>
-public sealed record SuggestedActionEditInput(
-    Guid AgentDefinitionId,
-    Guid ActionId,
-    string Behavior,
-    string? TriggerCondition,
-    string? Scope,
-    int Priority);
+public sealed class SuggestedActionEditInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid ActionId { get; init; }
+
+    public required string Behavior { get; init; }
+
+    public required string? TriggerCondition { get; init; }
+
+    public required string? Scope { get; init; }
+
+    public required int Priority { get; init; }
+}
 
 /// <summary>Thrown when a playbook-action create/update fails validation. The message is safe to surface to callers.</summary>
 public sealed class PlaybookActionValidationException : Exception

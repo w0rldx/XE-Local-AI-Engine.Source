@@ -56,24 +56,27 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         var managedRuntime = await _installedRuntimeStore.ReadAsync(ct);
         var recommended = await GetRecommendedModelAsync(ct);
 
-        return new TranscriptionRuntimeView(_options.Enabled,
-            _supervisor.GetStatus(),
-            _activityGate.GetSnapshot(),
-            managedRuntime,
-            NormalizeSelection(settings.TranscriptionSelectedModelId),
-            recommended.Id,
+        return new TranscriptionRuntimeView
+        {
+            Enabled = _options.Enabled,
+            Runtime = _supervisor.GetStatus(),
+            Activity = _activityGate.GetSnapshot(),
+            ManagedRuntime = managedRuntime,
+            SelectedModelId = NormalizeSelection(settings.TranscriptionSelectedModelId),
+            RecommendedModelId = recommended.Id,
             // The EFFECTIVE idle timeout, not the stored default: the supervisor's TTL is seeded from
             // Transcription:IdleTimeoutMinutes when no operator value is stored (NodeRuntimeSettings.GetTranscriptionIdleTimeout),
             // so reporting the bare default here showed 15 while the reaper was firing at the configured value.
-            settings.TranscriptionIdleTimeoutMinutes
+            IdleTimeoutMinutes = settings.TranscriptionIdleTimeoutMinutes
             ?? (_options.IdleTimeoutMinutes > 0 ? _options.IdleTimeoutMinutes : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes),
-            VadInstalled: _pathResolver.IsVadInstalled(),
+            VadInstalled = _pathResolver.IsVadInstalled(),
             // Named, because these are two adjacent booleans: swapped positionally the node would report the VAD
             // state as the capture capability, and no test of the mapper could catch it.
             // The capability, not the operating system: it is false on Windows below the documented process-loopback
             // build too. Computed here rather than in each endpoint so the two routes that project this view cannot
             // disagree about it.
-            ProcessCaptureSupported: _processCapture.IsSupported);
+            ProcessCaptureSupported = _processCapture.IsSupported
+        };
     }
 
     /// <inheritdoc />
@@ -134,12 +137,15 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     private TranscriptionModelCatalogView BuildCatalogView(string? selectedModelId, string recommendedModelId)
     {
         var models = WhisperModelCatalog.Models
-                                        .Select(entry => new TranscriptionModelView(entry,
-                                            _pathResolver.IsInstalled(entry),
-                                            _downloadCoordinator.GetStatus(entry.Id)))
+                                        .Select(entry => new TranscriptionModelView
+                                        {
+                                            Entry = entry,
+                                            Installed = _pathResolver.IsInstalled(entry),
+                                            Download = _downloadCoordinator.GetStatus(entry.Id)
+                                        })
                                         .ToArray();
 
-        return new TranscriptionModelCatalogView(models, selectedModelId, recommendedModelId);
+        return new TranscriptionModelCatalogView { Models = models, SelectedModelId = selectedModelId, RecommendedModelId = recommendedModelId };
     }
 
     private async Task<StoredNodeSettings> LoadSettingsAsync(CancellationToken ct) =>

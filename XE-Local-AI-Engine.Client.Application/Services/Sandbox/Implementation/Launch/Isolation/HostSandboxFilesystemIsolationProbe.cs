@@ -9,7 +9,12 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 /// <summary>The outcome of one filesystem-isolation measurement: the ingredients, or the reason there are none.</summary>
-internal sealed record SandboxFilesystemIsolationProbeResult(SandboxFilesystemIsolation? Isolation, string? Reason);
+internal sealed class SandboxFilesystemIsolationProbeResult
+{
+    public required SandboxFilesystemIsolation? Isolation { get; init; }
+
+    public required string? Reason { get; init; }
+}
 
 /// <summary>
 ///     Measures whether this host can really run a command with the host filesystem absent from its mount namespace,
@@ -48,7 +53,7 @@ internal static class HostSandboxFilesystemIsolationProbe
 
         if (!OperatingSystem.IsLinux())
         {
-            return new SandboxFilesystemIsolationProbeResult(Isolation: null, "the host is not Linux");
+            return new SandboxFilesystemIsolationProbeResult { Isolation = null, Reason = "the host is not Linux" };
         }
 
         try
@@ -57,11 +62,11 @@ internal static class HostSandboxFilesystemIsolationProbe
         }
         catch (SandboxIsolationUnavailableException exception)
         {
-            return new SandboxFilesystemIsolationProbeResult(Isolation: null, exception.Message);
+            return new SandboxFilesystemIsolationProbeResult { Isolation = null, Reason = exception.Message };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException or SocketException)
         {
-            return new SandboxFilesystemIsolationProbeResult(Isolation: null, $"the filesystem isolation probe failed: {exception.Message}");
+            return new SandboxFilesystemIsolationProbeResult { Isolation = null, Reason = $"the filesystem isolation probe failed: {exception.Message}" };
         }
     }
 
@@ -142,7 +147,7 @@ internal static class HostSandboxFilesystemIsolationProbe
         var failure = FindFailedControl(facts, scratch, exitCode);
 
         return failure is null
-            ? new SandboxFilesystemIsolationProbeResult(isolation, Reason: null)
+            ? new SandboxFilesystemIsolationProbeResult { Isolation = isolation, Reason = null }
             : Unavailable(failure);
     }
 
@@ -363,7 +368,7 @@ internal static class HostSandboxFilesystemIsolationProbe
 
     private static SandboxFilesystemIsolationProbeResult Unavailable(string reason)
     {
-        return new SandboxFilesystemIsolationProbeResult(Isolation: null, reason);
+        return new SandboxFilesystemIsolationProbeResult { Isolation = null, Reason = reason };
     }
 
     /// <summary>

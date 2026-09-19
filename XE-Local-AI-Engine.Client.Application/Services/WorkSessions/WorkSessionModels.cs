@@ -3,14 +3,22 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>One row of the work-session list. Deliberately carries no objective — the list never renders one.</summary>
-public sealed record WorkSessionSummary(
-    Guid Id,
-    string Title,
-    AgentWorkSessionKind Kind,
-    AgentWorkSessionStatus Status,
-    Guid AgentDefinitionId,
-    int StepCount,
-    long UpdatedUtc);
+public sealed class WorkSessionSummary
+{
+    public required Guid Id { get; init; }
+
+    public required string Title { get; init; }
+
+    public required AgentWorkSessionKind Kind { get; init; }
+
+    public required AgentWorkSessionStatus Status { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required int StepCount { get; init; }
+
+    public required long UpdatedUtc { get; init; }
+}
 
 /// <summary>
 ///     One work session in full.
@@ -21,89 +29,151 @@ public sealed record WorkSessionSummary(
 ///         later update or lifecycle call echoes back.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionDetail(
-    Guid Id,
-    string Title,
-    string Objective,
-    AgentWorkSessionKind Kind,
-    AgentWorkSessionStatus Status,
-    Guid AgentDefinitionId,
-    Guid ConversationId,
-    Guid? CurrentTaskId,
-    int StepCount,
-    int MaxStepsPerRun,
-    Guid? LastCheckpointId,
-    long LastSequence,
-    long Version,
-    long CreatedUtc,
-    long UpdatedUtc);
+public sealed class WorkSessionDetail
+{
+    public required Guid Id { get; init; }
 
-public sealed record WorkSessionTaskDto(
-    Guid Id,
-    Guid? ParentTaskId,
-    long Sequence,
-    string Title,
-    string? Detail,
-    AgentWorkSessionTaskStatus Status,
-    string? BlockedReason,
-    AgentWorkSessionTaskOrigin Origin,
-    int CreatedStep,
-    int UpdatedStep);
+    public required string Title { get; init; }
 
-public sealed record WorkSessionFindingDto(
-    Guid Id,
-    Guid? TaskId,
-    long Sequence,
-    AgentWorkSessionFindingKind Kind,
-    string Text,
-    string? SourceRef,
-    int CreatedStep,
-    bool Superseded);
+    public required string Objective { get; init; }
 
-public sealed record WorkSessionArtifactDto(
-    Guid Id,
-    long Sequence,
-    AgentWorkSessionArtifactKind Kind,
-    string Name,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    bool IsValid,
-    int CreatedStep);
+    public required AgentWorkSessionKind Kind { get; init; }
 
-public sealed record WorkSessionCheckpointDto(
-    Guid Id,
-    long Sequence,
-    int Step,
-    string? Summary,
-    string StateJson,
-    long CreatedUtc);
+    public required AgentWorkSessionStatus Status { get; init; }
 
-/// <param name="DetailJson">
-///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only after
-///     matching on <paramref name="EventType" />, and must tolerate a shape it does not know.
-///     <para>
-///         Two shapes are defined today. <c>CompletionRequested</c> carries
-///         <c>{ "Summary": string, "ObjectiveMet": bool? }</c> — PascalCase, because the handler serializes it with
-///         bare defaults — where an absent or null <c>ObjectiveMet</c> means the objective WAS met, so a completion
-///         recorded before that member existed still reads as the success it was.
-///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
-///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
-///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
-///         "attachedBudgets": int, "toolSchemaTokens": long, "toolNames": string[] }</c>. It is null on a step that
-///         made no provider round at all, and <c>toolNames</c> is absent on a row written before that member existed.
-///         Counts plus tool NAMES: no prompt, no model output, no tool argument and no tool result.
-///     </para>
-/// </param>
-public sealed record WorkSessionEventDto(
-    Guid Id,
-    long Sequence,
-    int Step,
-    string EventType,
-    string? DetailJson,
-    string? Outcome,
-    long OccurredUtc,
-    Guid? OperationId);
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid? CurrentTaskId { get; init; }
+
+    public required int StepCount { get; init; }
+
+    public required int MaxStepsPerRun { get; init; }
+
+    public required Guid? LastCheckpointId { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long CreatedUtc { get; init; }
+
+    public required long UpdatedUtc { get; init; }
+}
+
+public sealed class WorkSessionTaskDto
+{
+    public required Guid Id { get; init; }
+
+    public required Guid? ParentTaskId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string? Detail { get; init; }
+
+    public required AgentWorkSessionTaskStatus Status { get; init; }
+
+    public required string? BlockedReason { get; init; }
+
+    public required AgentWorkSessionTaskOrigin Origin { get; init; }
+
+    public required int CreatedStep { get; init; }
+
+    public required int UpdatedStep { get; init; }
+}
+
+public sealed class WorkSessionFindingDto
+{
+    public required Guid Id { get; init; }
+
+    public required Guid? TaskId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required AgentWorkSessionFindingKind Kind { get; init; }
+
+    public required string Text { get; init; }
+
+    public required string? SourceRef { get; init; }
+
+    public required int CreatedStep { get; init; }
+
+    public required bool Superseded { get; init; }
+}
+
+public sealed class WorkSessionArtifactDto
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required AgentWorkSessionArtifactKind Kind { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required bool IsValid { get; init; }
+
+    public required int CreatedStep { get; init; }
+}
+
+public sealed class WorkSessionCheckpointDto
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string? Summary { get; init; }
+
+    public required string StateJson { get; init; }
+
+    public required long CreatedUtc { get; init; }
+}
+
+public sealed class WorkSessionEventDto
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string EventType { get; init; }
+
+    /// <summary>
+    ///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only after
+    ///     matching on <see cref="EventType" />, and must tolerate a shape it does not know.
+    ///     <para>
+    ///         Two shapes are defined today. <c>CompletionRequested</c> carries
+    ///         <c>{ "Summary": string, "ObjectiveMet": bool? }</c> — PascalCase, because the handler serializes it with
+    ///         bare defaults — where an absent or null <c>ObjectiveMet</c> means the objective WAS met, so a completion
+    ///         recorded before that member existed still reads as the success it was.
+    ///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
+    ///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
+    ///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
+    ///         "attachedBudgets": int, "toolSchemaTokens": long, "toolNames": string[] }</c>. It is null on a step that
+    ///         made no provider round at all, and <c>toolNames</c> is absent on a row written before that member existed.
+    ///         Counts plus tool NAMES: no prompt, no model output, no tool argument and no tool result.
+    ///     </para>
+    /// </summary>
+    public required string? DetailJson { get; init; }
+
+    public required string? Outcome { get; init; }
+
+    public required long OccurredUtc { get; init; }
+
+    public required Guid? OperationId { get; init; }
+}
 
 /// <summary>
 ///     What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row so the per-step provider-call cap
@@ -169,7 +239,14 @@ public sealed record WorkSessionStepConsumptionDetail(
 ///     An artifact's bytes as text. <see cref="IsBase64" /> is set for a media type the node cannot hand over as UTF-8,
 ///     so a caller never has to guess whether the payload is decodable.
 /// </summary>
-public sealed record WorkSessionArtifactContent(WorkSessionArtifactDto Artifact, string Content, bool IsBase64);
+public sealed class WorkSessionArtifactContent
+{
+    public required WorkSessionArtifactDto Artifact { get; init; }
+
+    public required string Content { get; init; }
+
+    public required bool IsBase64 { get; init; }
+}
 
 /// <summary>
 ///     What ONE session runs on when its caller pins it rather than the bound agent definition: the model name and the
@@ -182,20 +259,26 @@ public sealed record WorkSessionArtifactContent(WorkSessionArtifactDto Artifact,
 ///         lives, and it re-supplies this on every start and resume.
 ///     </para>
 /// </summary>
-/// <param name="ModelProfile">The model this session's turns run on, or null to leave that to the agent.</param>
-/// <param name="ReasoningEffort">The reasoning effort those turns run at, or null to leave that to the agent.</param>
-/// <param name="RefuseUndeclaredWrites">
-///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Set by a
-///     development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives
-///     nothing: every turn of that session must then be refused if the agent definition it re-resolves would offer a
-///     tool that writes files or runs commands. Checked once at creation it is not checked at all — the definition can
-///     be edited between two steps, or deleted so the turn falls back to the default persona and its whole offer.
-///     <para>
-///         Default <see langword="false" />, which is every other caller and today's behaviour exactly.
-///     </para>
-/// </param>
-public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? ReasoningEffort, bool RefuseUndeclaredWrites = false)
+public sealed class WorkSessionRuntimeOverride
 {
+    /// <summary>The model this session's turns run on, or null to leave that to the agent.</summary>
+    public required string? ModelProfile { get; init; }
+
+    /// <summary>The reasoning effort those turns run at, or null to leave that to the agent.</summary>
+    public required string? ReasoningEffort { get; init; }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Set by a
+    ///     development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives
+    ///     nothing: every turn of that session must then be refused if the agent definition it re-resolves would offer a
+    ///     tool that writes files or runs commands. Checked once at creation it is not checked at all — the definition can
+    ///     be edited between two steps, or deleted so the turn falls back to the default persona and its whole offer.
+    ///     <para>
+    ///         Default <see langword="false" />, which is every other caller and today's behaviour exactly.
+    ///     </para>
+    /// </summary>
+    public bool RefuseUndeclaredWrites { get; init; }
+
     /// <summary>
     ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has. The
     ///     refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and the
@@ -209,15 +292,28 @@ public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? Re
 ///     <c>CreateWorkSessionCommand</c>, which carries the ids and the concurrency token this one has no business
 ///     knowing about.
 /// </summary>
-public sealed record CreateWorkSessionRequestModel(
-    string Title,
-    string Objective,
-    AgentWorkSessionKind Kind,
-    Guid AgentDefinitionId,
-    WorkSessionRuntimeOverride? Runtime = null);
+public sealed class CreateWorkSessionRequestModel
+{
+    public required string Title { get; init; }
+
+    public required string Objective { get; init; }
+
+    public required AgentWorkSessionKind Kind { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public WorkSessionRuntimeOverride? Runtime { get; init; }
+}
 
 /// <summary>Update input. A null member leaves the stored value alone.</summary>
-public sealed record UpdateWorkSessionRequestModel(string? Title, string? Objective, Guid? AgentDefinitionId);
+public sealed class UpdateWorkSessionRequestModel
+{
+    public required string? Title { get; init; }
+
+    public required string? Objective { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+}
 
 /// <summary>
 ///     The completion request the supervisor reads back at step end, as it is written to the event log.

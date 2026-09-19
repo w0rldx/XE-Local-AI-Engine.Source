@@ -100,11 +100,14 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             return "search_knowledge_base 'collectionId' is invalid.";
         }
 
-        var searchRequest = new KnowledgeSearchRequest(normalizedQuery,
-            limit,
-            documentId,
-            request.ExpandNeighbors ?? false,
-            collectionId);
+        var searchRequest = new KnowledgeSearchRequest
+        {
+            Query = normalizedQuery,
+            Limit = limit,
+            DocumentId = documentId,
+            ExpandNeighbors = request.ExpandNeighbors ?? false,
+            CollectionId = collectionId
+        };
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();

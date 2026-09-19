@@ -55,7 +55,7 @@ public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, S
             return;
         }
 
-        var request = new KnowledgeSearchRequest(normalizedQuery, limit, req.DocumentId, req.ExpandNeighbors, collectionId);
+        var request = new KnowledgeSearchRequest { Query = normalizedQuery, Limit = limit, DocumentId = req.DocumentId, ExpandNeighbors = req.ExpandNeighbors, CollectionId = collectionId };
         var result = await _searchService.SearchAsync(request, ct);
 
         await Send.OkAsync(new SearchKnowledgeResponse

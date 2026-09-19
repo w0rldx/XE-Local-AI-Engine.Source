@@ -389,7 +389,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         if (pinned is null || union is null)
         {
-            return new ApprovalCorrelation(null, []);
+            return new ApprovalCorrelation { Pinned = null, Groups = [] };
         }
 
         if (messageOfCallId is not null)
@@ -407,7 +407,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        return new ApprovalCorrelation(pinned, union.CollectGroups(pinned, decided));
+        return new ApprovalCorrelation { Pinned = pinned, Groups = union.CollectGroups(pinned, decided) };
     }
 
     /// <summary>
@@ -445,10 +445,20 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         return true;
     }
 
-    private sealed record ApprovalCorrelation(bool[]? Pinned, IReadOnlyList<ApprovalGroup> Groups);
+    private sealed record ApprovalCorrelation
+    {
+        public required bool[]? Pinned { get; init; }
+
+        public required IReadOnlyList<ApprovalGroup> Groups { get; init; }
+    }
 
     /// <summary>One tool-approval round as the budgeter must treat it: an all-or-nothing set of message indices.</summary>
-    private sealed record ApprovalGroup(IReadOnlyList<int> MessageIndices, bool Complete);
+    private sealed record ApprovalGroup
+    {
+        public required IReadOnlyList<int> MessageIndices { get; init; }
+
+        public required bool Complete { get; init; }
+    }
 
     /// <summary>
     ///     Disjoint-set over message indices, merged whenever two messages share a tool-call id. A message carrying
@@ -500,7 +510,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 }
             }
 
-            return [.. members.Select(entry => new ApprovalGroup(entry.Value, complete.Contains(entry.Key)))];
+            return [.. members.Select(entry => new ApprovalGroup { MessageIndices = entry.Value, Complete = complete.Contains(entry.Key) })];
         }
 
         private int Find(int index)

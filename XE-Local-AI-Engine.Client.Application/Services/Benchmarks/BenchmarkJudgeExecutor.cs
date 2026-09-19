@@ -206,16 +206,22 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             // wait after it share this allowance rather than each taking a full one.
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                                                               new CapacityRequest(runtime.Model.ModelName,
-                                                                   ModelRole.Chat,
-                                                                   runtime.Runtime.ContextTokens,
-                                                                   PublishLaunchAdmission: false,
-                                                                   runtime.Runtime.KvTypeK),
-                                                               new BenchmarkAdmissionContext(work.RunId,
-                                                                   "judge",
-                                                                   runtime.RequestedContextTokens,
-                                                                   runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                                                   CapacityRejectedMessage),
+                                                               new CapacityRequest
+                                                               {
+                                                                   ModelName = runtime.Model.ModelName,
+                                                                   Role = ModelRole.Chat,
+                                                                   RequiredContextTokens = runtime.Runtime.ContextTokens,
+                                                                   PublishLaunchAdmission = false,
+                                                                   KvCacheType = runtime.Runtime.KvTypeK
+                                                               },
+                                                               new BenchmarkAdmissionContext
+                                                               {
+                                                                   RunId = work.RunId,
+                                                                   Phase = "judge",
+                                                                   RequestedContextTokens = runtime.RequestedContextTokens,
+                                                                   KvCacheType = runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                                   RejectedMessage = CapacityRejectedMessage
+                                                               },
                                                                waitBudget,
                                                                _logger,
                                                                token);
@@ -232,7 +238,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
             _events.Append(work.RunId,
                 BenchmarkRunStreamEventKind.JudgeState,
-                new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running));
+                new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Running });
 
             var currentVariant = await _variantSelector.SelectVariantAsync(token);
             if (currentVariant != runtime.Runtime.Variant)
@@ -282,7 +288,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 verifierResults);
             var terminalEvent = _events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-                new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
+                new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Succeeded, RunVersion = work.Run.Version + 1 });
             var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
             {
                 RunId = work.RunId,
@@ -436,10 +442,12 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             BenchmarkJudgeOutputSchemaV2.Json,
             primaryOutputTruncated,
             primaryOutputIncomplete);
-        return _packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated, primaryOutputIncomplete),
-            [
+        return _packageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated, primaryOutputIncomplete),
+            ConversationContext = [
                 new ConversationMessageDto
                 {
                     Id = Guid.NewGuid(),
@@ -448,18 +456,19 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                     SortOrder = 0
                 }
             ],
-            runtime.Model.ModelName,
-            AgentDefinitionVersion: 1,
-            ClientNodeId: LocalChatLoopbackDefaults.ClientNodeId,
-            AllowedTools: [],
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
-            SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
-            IsUnattended: true,
+            ModelProfile = runtime.Model.ModelName,
+            AgentDefinitionVersion = 1,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = [],
+            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(),
+            SamplingOptions = BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
+            IsUnattended = true,
             // The prompt ASKS for this shape and the parser refuses anything else, which cost one judge invocation in
             // three against a small model. Constraining the decode makes the two agree instead of hoping they do; the
             // response-format schema drops the string-length bounds the parser still enforces (see the constant).
-            ResponseJsonSchema: JudgeResponseFormatSchema));
+            ResponseJsonSchema = JudgeResponseFormatSchema
+        });
     }
 
     /// <summary>
@@ -474,7 +483,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     {
         _events.Append(work.RunId,
             BenchmarkRunStreamEventKind.JudgeState,
-            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running));
+            new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Running });
         token.ThrowIfCancellationRequested();
         var passed = verifiers.Count(static verifier => verifier.Passed);
         var result = Merge(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
@@ -486,7 +495,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             verifiers);
         var terminalEvent = _events.Reserve(work.RunId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
+            new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Succeeded, RunVersion = work.Run.Version + 1 });
         var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
         {
             RunId = work.RunId,
@@ -590,7 +599,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
 
         var terminal = _events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Cancelled, RunVersion: run.Version + 1));
+            new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Cancelled, RunVersion = run.Version + 1 });
         try
         {
             var persisted = await _store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
@@ -632,7 +641,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
 
         var terminal = _events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Failed, RunVersion: run.Version + 1));
+            new BenchmarkRunStreamPayload { State = BenchmarkRunJudgeStates.Failed, RunVersion = run.Version + 1 });
         var persisted = await _store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None);
         _events.PublishReserved(terminal with
         {

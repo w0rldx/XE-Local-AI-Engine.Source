@@ -35,9 +35,12 @@ public sealed class ConversationSummarizerBoundaryTests
             }),
             NullLogger<ConversationSummarizer>.Instance);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", content)],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = content }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.True(client.Requests.Count > 1, "An individually oversized message must be split across fold requests.");
@@ -75,9 +78,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient(responseFactory: requestIndex => requestIndex == 0 ? new string('s', 2000) : "done");
         var summarizer = CreateSummarizer(client, requestBudget, summaryCap);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", new string('a', 1400))],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 1400) }],
+            ModelName = "model"
+        });
 
         AssertEx.Equal("done", result);
         AssertEx.True(client.Requests.Count > 1);
@@ -94,9 +100,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget, maxSummaryChars: 120);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", content)],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = content }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         var fragments = client.Requests.SelectMany(static request => PromptContents(request)).ToList();
@@ -114,9 +123,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 1800, summaryCap);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.True(client.Options.Count > 1, "The oversized message must be folded in more than one pass.");
@@ -130,9 +142,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Options);
@@ -148,9 +163,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient(responseFactory: requestIndex => requestIndex == 1 ? string.Empty : "running summary");
         var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", new string('a', 6000))],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 6000) }],
+            ModelName = "model"
+        });
 
         AssertEx.Null(result, "A fold that yields no text must abort the summarization rather than return partial coverage.");
         AssertEx.Equal(expected: 2, client.Requests.Count, "No further fold may be attempted once one returned nothing.");
@@ -162,10 +180,13 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model",
-            SupportsThinking: true));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            ModelName = "model",
+            SupportsThinking = true
+        });
 
         AssertEx.NotNull(result);
         AssertEx.True(client.Options.Count > 1, "The oversized message must be folded in more than one pass.");
@@ -187,9 +208,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = new string('a', 4000) }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Options);
@@ -209,9 +233,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", han)],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = han }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);
@@ -228,9 +255,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", "the node supervises llama-server")],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = "the node supervises llama-server" }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);
@@ -261,9 +291,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget, maxSummaryChars: 300);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", content)],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = content }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.Equal(expected: 1, client.Requests.Count,
@@ -279,9 +312,12 @@ public sealed class ConversationSummarizerBoundaryTests
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars);
 
-        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
-            [new ConversationSummarizerMessage("user", "the node supervises llama-server")],
-            "model"));
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [new ConversationSummarizerMessage { Role = "user", Content = "the node supervises llama-server" }],
+            ModelName = "model"
+        });
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);

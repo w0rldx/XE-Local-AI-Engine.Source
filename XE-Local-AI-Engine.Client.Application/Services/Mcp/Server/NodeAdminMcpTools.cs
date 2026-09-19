@@ -226,18 +226,23 @@ public sealed partial class NodeAdminMcpTools
     {
         if (!TryParseKind(kind, out var parsedKind) || !TryParseIds(allowedSkillIds, out var parsedSkillIds))
         {
-            return new McpAgentResponse("rejected", null, McpAdminToolFailureCodes.ValidationFailed,
-                "Agent kind must be single or orchestrator and every skill id must be a UUID.");
+            return new McpAgentResponse
+            {
+                Status = "rejected",
+                Agent = null,
+                FailureCode = McpAdminToolFailureCodes.ValidationFailed,
+                DisplayMessage = "Agent kind must be single or orchestrator and every skill id must be a UUID."
+            };
         }
 
         if (!TryMapGenerationMetadata(generationMetadata, out var metadata, out var metadataError))
         {
-            return new McpAgentResponse("rejected", null, McpAdminToolFailureCodes.ValidationFailed, metadataError);
+            return new McpAgentResponse { Status = "rejected", Agent = null, FailureCode = McpAdminToolFailureCodes.ValidationFailed, DisplayMessage = metadataError };
         }
 
         if (GenerationProvenance.Validate(metadata) is { } validationError)
         {
-            return new McpAgentResponse("rejected", null, McpAdminToolFailureCodes.ValidationFailed, validationError);
+            return new McpAgentResponse { Status = "rejected", Agent = null, FailureCode = McpAdminToolFailureCodes.ValidationFailed, DisplayMessage = validationError };
         }
 
         var input = new AgentDefinitionInput
@@ -273,16 +278,16 @@ public sealed partial class NodeAdminMcpTools
             }
 
             var status = id is null ? "created" : "updated";
-            return new McpAgentResponse(status, McpAgentDefinition.FromRecord(record));
+            return new McpAgentResponse { Status = status, Agent = McpAgentDefinition.FromRecord(record) };
         }
         catch (AgentDefinitionValidationException exception)
         {
-            return new McpAgentResponse("rejected", null, McpAdminToolFailureCodes.ValidationFailed, exception.Message);
+            return new McpAgentResponse { Status = "rejected", Agent = null, FailureCode = McpAdminToolFailureCodes.ValidationFailed, DisplayMessage = exception.Message };
         }
     }
 
     private static McpAgentResponse AgentNotFound() =>
-        new("not_found", null, McpAdminToolFailureCodes.AgentNotFound, "Agent not found.");
+        new() { Status = "not_found", Agent = null, FailureCode = McpAdminToolFailureCodes.AgentNotFound, DisplayMessage = "Agent not found." };
 
     private static string ToWirePhase(GgufDownloadPhase phase) =>
         phase switch
@@ -361,14 +366,17 @@ public sealed partial class NodeAdminMcpTools
             return false;
         }
 
-        metadata = new GenerationMetadataInput(value.Model,
-            mode.Value,
-            value.UserBrief,
-            value.Rationale,
-            value.Assumptions,
-            value.Confidence,
-            value.GeneratedAtUtc,
-            value.DraftContentHash);
+        metadata = new GenerationMetadataInput
+        {
+            Model = value.Model,
+            Mode = mode.Value,
+            UserBrief = value.UserBrief,
+            Rationale = value.Rationale,
+            Assumptions = value.Assumptions,
+            Confidence = value.Confidence,
+            GeneratedAtUtc = value.GeneratedAtUtc,
+            DraftContentHash = value.DraftContentHash
+        };
         error = null;
         return true;
     }

@@ -2,12 +2,23 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
 ///     The paired difference between two measurement cells over the items they SHARE, with a percentile bootstrap
-///     interval around it. <paramref name="Separated" /> is false exactly when 0 lies inside the interval, allowing a
+///     interval around it. <see cref="Separated" /> is false exactly when 0 lies inside the interval, allowing a
 ///     reader to say: "these two are not separated by this suite".
 /// </summary>
-/// <param name="SharedItemCount">How many items were rankable in BOTH cells; the resampling unit is one of these.</param>
-/// <param name="Delta">Mean of <c>qualityA − qualityB</c> over the shared items. Positive means A scored higher.</param>
-public sealed record BenchmarkPairedDelta(int SharedItemCount, double Delta, double CiLow, double CiHigh, bool Separated);
+public sealed record BenchmarkPairedDelta
+{
+    /// <summary>How many items were rankable in BOTH cells; the resampling unit is one of these.</summary>
+    public required int SharedItemCount { get; init; }
+
+    /// <summary>Mean of <c>qualityA − qualityB</c> over the shared items. Positive means A scored higher.</summary>
+    public required double Delta { get; init; }
+
+    public required double CiLow { get; init; }
+
+    public required double CiHigh { get; init; }
+
+    public required bool Separated { get; init; }
+}
 
 /// <summary>
 ///     Paired-difference bootstrap over per-item quality scores. Pure and read-time: nothing here is stored, and
@@ -76,14 +87,16 @@ public static class BenchmarkPairedBootstrap
         Array.Sort(means);
         var low = Percentile(means, 0.025);
         var high = Percentile(means, 0.975);
-        return new BenchmarkPairedDelta(deltas.Length,
-            deltas.Average(),
-            low,
-            high,
-
+        return new BenchmarkPairedDelta
+        {
+            SharedItemCount = deltas.Length,
+            Delta = deltas.Average(),
+            CiLow = low,
+            CiHigh = high,
             // Separated means the interval stays on one side of zero. An interval that touches zero is not separated:
             // a delta of exactly 0 is inside [0, 0], which is the all-equal case and the clearest "no difference".
-            low > 0 || high < 0);
+            Separated = low > 0 || high < 0
+        };
     }
 
     /// <summary>Nearest-rank percentile, matching <see cref="BenchmarkBradleyTerry" />'s so two intervals agree.</summary>

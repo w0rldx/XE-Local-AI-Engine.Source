@@ -1,3 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection;
 
-public sealed record CertificatePin(string Sha256Thumbprint, DateTimeOffset PinnedAtUtc, string SubjectCommonName);
+public sealed class CertificatePin
+{
+    public required string Sha256Thumbprint { get; init; }
+
+    public required DateTimeOffset PinnedAtUtc { get; init; }
+
+    public required string SubjectCommonName { get; init; }
+}

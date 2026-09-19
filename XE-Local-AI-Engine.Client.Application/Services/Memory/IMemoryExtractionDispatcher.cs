@@ -25,14 +25,25 @@ public interface IMemoryExtractionDispatcher
 ///     content. <see cref="ErrorClass" /> is an exception TYPE NAME only (never message text). Tokens are nullable —
 ///     streaming usage is best-effort and a GGUF model may omit it.
 /// </summary>
-public sealed record MemoryExtractionDispatchContext(
-    Guid AgentDefinitionId,
-    Guid ConversationId,
-    Guid MessageId,
-    string ModelName,
-    string ConfigHash,
-    long LatencyMs,
-    bool Success,
-    int? PromptTokens,
-    int? CompletionTokens,
-    string? ErrorClass);
+public sealed class MemoryExtractionDispatchContext
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid MessageId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string ConfigHash { get; init; }
+
+    public required long LatencyMs { get; init; }
+
+    public required bool Success { get; init; }
+
+    public required int? PromptTokens { get; init; }
+
+    public required int? CompletionTokens { get; init; }
+
+    public required string? ErrorClass { get; init; }
+}

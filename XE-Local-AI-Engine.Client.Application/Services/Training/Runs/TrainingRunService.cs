@@ -8,7 +8,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>The frozen membership: what trains, what is held back, and the held-back rows' canonical sequences.</summary>
-internal sealed record TrainingSplit(IReadOnlyList<Guid> Train, IReadOnlyList<Guid> Holdout, IReadOnlyList<int> HoldoutSequences);
+internal sealed class TrainingSplit
+{
+    public required IReadOnlyList<Guid> Train { get; init; }
+
+    public required IReadOnlyList<Guid> Holdout { get; init; }
+
+    public required IReadOnlyList<int> HoldoutSequences { get; init; }
+}
 
 /// <summary>
 ///     Creation, listing and cancellation of training runs.
@@ -171,7 +178,7 @@ public sealed class TrainingRunService : ITrainingRunService
             }
         }
 
-        return new TrainingSplit(train, holdout, holdoutSequences);
+        return new TrainingSplit { Train = train, Holdout = holdout, HoldoutSequences = holdoutSequences };
     }
 
     private async Task<TrainingRunFreezeV1> MaterializeFreezeAsync(TrainingDatasetRecord dataset, Guid freezeId, CancellationToken cancellationToken)

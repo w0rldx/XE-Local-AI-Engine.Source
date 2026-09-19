@@ -119,7 +119,7 @@ public sealed class SeedAssemblyContractTests
 
     private static StructuredAgentRequest TeacherRequest(string userTurn)
     {
-        return new StructuredAgentRequest(TeacherModel, Instructions, userTurn, TeacherOutputMode.ValidateAfter, TeacherSchema, Temperature: 0f, Seed: null);
+        return new StructuredAgentRequest { ModelName = TeacherModel, SystemInstructions = Instructions, UserPrompt = userTurn, OutputMode = TeacherOutputMode.ValidateAfter, ResponseSchema = TeacherSchema, Temperature = 0f, Seed = null };
     }
 
     private static readonly JsonElement TeacherSchema = JsonDocument.Parse("""{"type":"object","properties":{"userMessage":{"type":"string"}}}""").RootElement.Clone();

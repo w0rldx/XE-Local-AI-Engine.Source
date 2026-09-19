@@ -38,13 +38,16 @@ public sealed class IntegrationStreamEventEnvelopeBoundTests
             },
             RingOptions);
 
-        var streamEvent = new IntegrationStreamEvent(IntegrationStreamEventTypes.ExecutionCancelled,
-            long.MaxValue,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            long.MaxValue,
-            "application/vnd.example.extremely-long-media-type+json",
-            payload);
+        var streamEvent = new IntegrationStreamEvent
+        {
+            Type = IntegrationStreamEventTypes.ExecutionCancelled,
+            Sequence = long.MaxValue,
+            ExecutionId = Guid.NewGuid(),
+            SessionId = Guid.NewGuid(),
+            OccurredAtUtc = long.MaxValue,
+            ContentType = "application/vnd.example.extremely-long-media-type+json",
+            Payload = payload
+        };
         var serialized = JsonSerializer.SerializeToUtf8Bytes(streamEvent, RingOptions).Length;
 
         var overhead = serialized - Encoding.UTF8.GetByteCount(envelope);
@@ -75,13 +78,16 @@ public sealed class IntegrationStreamEventEnvelopeBoundTests
 
         var payload = MaximalPayload(maxOutputBytes);
         var sequence = buffer.Reserve(executionId);
-        buffer.Publish(new IntegrationStreamEvent(IntegrationStreamEventTypes.ExternalOutput,
-            sequence,
-            executionId,
-            sessionId,
-            OccurredAtUtc: 1,
-            "application/json",
-            payload));
+        buffer.Publish(new IntegrationStreamEvent
+        {
+            Type = IntegrationStreamEventTypes.ExternalOutput,
+            Sequence = sequence,
+            ExecutionId = executionId,
+            SessionId = sessionId,
+            OccurredAtUtc = 1,
+            ContentType = "application/json",
+            Payload = payload
+        });
 
         AssertEx.Equal(expected: 1L, buffer.Floor(executionId),
             "An exactly-maximal output must not trim the ring: a floor above 1 is the gap that hands the caller a 410 for output it already committed.");

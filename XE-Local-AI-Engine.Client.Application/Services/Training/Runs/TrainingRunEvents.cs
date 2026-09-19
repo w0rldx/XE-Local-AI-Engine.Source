@@ -34,21 +34,34 @@ public enum TrainingRunEventKind
     Export
 }
 
-public sealed record TrainingRunPayload(
-    string? State = null,
-    string? Phase = null,
-    int? Step = null,
-    int? TotalSteps = null,
-    double? Epoch = null,
-    double? Loss = null,
-    double? LearningRate = null,
-    long? VramBytes = null,
-    string? Message = null,
-    long? RunVersion = null,
+public sealed class TrainingRunPayload
+{
+    public string? State { get; init; }
+
+    public string? Phase { get; init; }
+
+    public int? Step { get; init; }
+
+    public int? TotalSteps { get; init; }
+
+    public double? Epoch { get; init; }
+
+    public double? Loss { get; init; }
+
+    public double? LearningRate { get; init; }
+
+    public long? VramBytes { get; init; }
+
+    public string? Message { get; init; }
+
+    public long? RunVersion { get; init; }
+
     /// <summary>Set on the evaluation kinds only — which evaluation of this run the event describes.</summary>
-    Guid? EvaluationId = null,
+    public Guid? EvaluationId { get; init; }
+
     /// <summary>Evaluation kinds only: how many of the scored samples passed.</summary>
-    int? PassedCount = null);
+    public int? PassedCount { get; init; }
+}
 
 public sealed class TrainingRunEvent
 {
@@ -72,7 +85,14 @@ public sealed class TrainingRunEventArgs : EventArgs
     public TrainingRunEvent Event { get; }
 }
 
-public sealed record TrainingRunReplay(IReadOnlyList<TrainingRunEvent> Events, bool ResetRequired, long LatestSequence);
+public sealed class TrainingRunReplay
+{
+    public required IReadOnlyList<TrainingRunEvent> Events { get; init; }
+
+    public required bool ResetRequired { get; init; }
+
+    public required long LatestSequence { get; init; }
+}
 
 public interface ITrainingRunEventBuffer
 {
@@ -142,7 +162,7 @@ public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
         {
             if (!_runs.TryGetValue(runId, out var state))
             {
-                return new TrainingRunReplay([], ResetRequired: false, LatestSequence: 0);
+                return new TrainingRunReplay { Events = [], ResetRequired = false, LatestSequence = 0 };
             }
 
             var firstRetained = state.Events.First?.Value.Sequence;
@@ -150,10 +170,13 @@ public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
                         || (firstRetained is { } first && afterSequence < first - 1)
                         || (firstRetained is null && state.HistoryTruncated && afterSequence < state.LatestSequence);
             return reset
-                ? new TrainingRunReplay([], ResetRequired: true, state.LatestSequence)
-                : new TrainingRunReplay(state.Events.Where(item => item.Sequence > afterSequence).ToArray(),
-                    ResetRequired: false,
-                    state.LatestSequence);
+                ? new TrainingRunReplay { Events = [], ResetRequired = true, LatestSequence = state.LatestSequence }
+                : new TrainingRunReplay
+                {
+                    Events = state.Events.Where(item => item.Sequence > afterSequence).ToArray(),
+                    ResetRequired = false,
+                    LatestSequence = state.LatestSequence
+                };
         }
     }
 

@@ -132,7 +132,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                     cancellationToken);
             if (existing is not { } row || row.DocumentId == Guid.Empty)
             {
-                return new KnowledgeDocumentAddResult(Guid.Empty, WasInserted: false);
+                return new KnowledgeDocumentAddResult { DocumentId = Guid.Empty, WasInserted = false };
             }
 
             if (repositorySource && !string.Equals(row.ContentHash, input.ContentHash, StringComparison.Ordinal))
@@ -148,7 +148,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                         extension,
                         now,
                         cancellationToken);
-                return new KnowledgeDocumentAddResult(row.DocumentId, WasInserted: false, WasUpdated: true);
+                return new KnowledgeDocumentAddResult { DocumentId = row.DocumentId, WasInserted = false, WasUpdated = true };
             }
 
             // Dedupe hit: unchanged content already exists. Do not write a second blob — but if a crash between the
@@ -165,7 +165,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken);
             }
 
-            return new KnowledgeDocumentAddResult(row.DocumentId, WasInserted: false);
+            return new KnowledgeDocumentAddResult { DocumentId = row.DocumentId, WasInserted = false };
         }
 
         // Only write the encrypted blob for a freshly inserted row so a dedupe never orphans bytes on disk. If the blob
@@ -180,7 +180,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             throw;
         }
 
-        return new KnowledgeDocumentAddResult(input.DocumentId, WasInserted: true);
+        return new KnowledgeDocumentAddResult { DocumentId = input.DocumentId, WasInserted = true };
     }
 
     // Encrypts and writes a document blob via a temp sibling + atomic rename, so a crash mid-write never leaves a torn
@@ -447,7 +447,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         var storedContentHash = await reader.IsDBNullAsync(2, cancellationToken)
             ? string.Empty
             : reader.GetString(2);
-        return new DocumentIdentity(documentId, extension, storedContentHash);
+        return new DocumentIdentity { DocumentId = documentId, Extension = extension, ContentHash = storedContentHash };
     }
 
     private static async Task<string?> SelectExtensionAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
@@ -575,5 +575,12 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 
     // An already-stored document matched by identity: its id plus the extension and content hash the row currently
     // carries — the extension locates the existing blob, the hash decides whether a repository re-add is an update.
-    private sealed record DocumentIdentity(Guid DocumentId, string Extension, string ContentHash);
+    private sealed record DocumentIdentity
+    {
+        public required Guid DocumentId { get; init; }
+
+        public required string Extension { get; init; }
+
+        public required string ContentHash { get; init; }
+    }
 }

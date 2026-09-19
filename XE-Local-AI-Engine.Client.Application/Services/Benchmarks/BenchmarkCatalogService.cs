@@ -78,7 +78,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
             try
             {
                 _ = _eligibilityPolicy.Apply(runtime);
-                eligible.Add(new BenchmarkEligibleAgent(definition.Id, definition.Name, definition.Version));
+                eligible.Add(new BenchmarkEligibleAgent { Id = definition.Id, Name = definition.Name, Version = definition.Version });
             }
             catch (BenchmarkEligibilityException)
             {
@@ -119,21 +119,27 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
                     // A legacy entry acquired before the registry recorded an aggregate identity has to be verified to
                     // learn one. That model alone pays the hashing cost the whole catalog used to pay.
                     await using var lease = await AcquireEligibleModelAsync(descriptor.ModelName, cancellationToken);
-                    eligible.Add(new BenchmarkEligibleModel(lease.Snapshot.ModelName,
-                        descriptor.MaxContextTokens,
-                        EffectiveContextTokens: null,
-                        lease.Snapshot.Origin,
-                        lease.Snapshot.ModelContentFingerprint,
-                        descriptor.IsToolCapable));
+                    eligible.Add(new BenchmarkEligibleModel
+                    {
+                        ModelName = lease.Snapshot.ModelName,
+                        MaxContextTokens = descriptor.MaxContextTokens,
+                        EffectiveContextTokens = null,
+                        Origin = lease.Snapshot.Origin,
+                        ModelContentFingerprint = lease.Snapshot.ModelContentFingerprint,
+                        SupportsTools = descriptor.IsToolCapable
+                    });
                     continue;
                 }
 
-                eligible.Add(new BenchmarkEligibleModel(facts.ModelName,
-                    descriptor.MaxContextTokens,
-                    EffectiveContextTokens: null,
-                    facts.Origin,
-                    fingerprint,
-                    descriptor.IsToolCapable));
+                eligible.Add(new BenchmarkEligibleModel
+                {
+                    ModelName = facts.ModelName,
+                    MaxContextTokens = descriptor.MaxContextTokens,
+                    EffectiveContextTokens = null,
+                    Origin = facts.Origin,
+                    ModelContentFingerprint = fingerprint,
+                    SupportsTools = descriptor.IsToolCapable
+                });
             }
             catch (BenchmarkEligibilityException)
             {

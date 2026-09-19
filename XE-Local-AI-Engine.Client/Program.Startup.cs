@@ -46,7 +46,7 @@ public sealed partial class Program
         catch (Exception exception)
         {
             Log.Error(exception, "Saved Open Canvas workflows could not be read before migrations; none will be imported.");
-            return new CanvasWorkflowImportSnapshot([], FailedCount: 0);
+            return new CanvasWorkflowImportSnapshot { Candidates = [], FailedCount = 0 };
         }
     }
 

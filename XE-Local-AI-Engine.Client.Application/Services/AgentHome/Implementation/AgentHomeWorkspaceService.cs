@@ -163,7 +163,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 folder.Alias);
         }
 
-        return new PlannedFolderCopy(folder, BuildCopyPlan(root, folder.Alias, cancellationToken));
+        return new PlannedFolderCopy { Folder = folder, CopyPlan = BuildCopyPlan(root, folder.Alias, cancellationToken) };
     }
 
     private CopyPlan BuildCopyPlan(string root, string alias, CancellationToken cancellationToken)
@@ -227,12 +227,12 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 }
 
                 var relative = Path.GetRelativePath(root, file.FullName).Replace(oldChar: '\\', newChar: '/');
-                files.Add(new CopyFile(file.FullName, relative, file.Length));
+                files.Add(new CopyFile { HostPath = file.FullName, RelativePosixPath = relative, Length = file.Length });
                 totalBytes += file.Length;
             }
         }
 
-        return new CopyPlan(files, totalBytes, excludedFiles, excludedDirectories);
+        return new CopyPlan { Files = files, TotalBytes = totalBytes, ExcludedFileCount = excludedFiles, ExcludedDirectoryCount = excludedDirectories };
     }
 
     private static void HandleReparseEntry(FileSystemInfo info, string root, string alias)
@@ -312,13 +312,30 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         return $"workspace/selected/{alias}";
     }
 
-    private sealed record CopyFile(string HostPath, string RelativePosixPath, long Length);
+    private sealed record CopyFile
+    {
+        public required string HostPath { get; init; }
 
-    private sealed record CopyPlan(
-        IReadOnlyList<CopyFile> Files,
-        long TotalBytes,
-        int ExcludedFileCount,
-        int ExcludedDirectoryCount);
+        public required string RelativePosixPath { get; init; }
 
-    private sealed record PlannedFolderCopy(ResolvedSelectedFolder Folder, CopyPlan CopyPlan);
+        public required long Length { get; init; }
+    }
+
+    private sealed record CopyPlan
+    {
+        public required IReadOnlyList<CopyFile> Files { get; init; }
+
+        public required long TotalBytes { get; init; }
+
+        public required int ExcludedFileCount { get; init; }
+
+        public required int ExcludedDirectoryCount { get; init; }
+    }
+
+    private sealed record PlannedFolderCopy
+    {
+        public required ResolvedSelectedFolder Folder { get; init; }
+
+        public required CopyPlan CopyPlan { get; init; }
+    }
 }

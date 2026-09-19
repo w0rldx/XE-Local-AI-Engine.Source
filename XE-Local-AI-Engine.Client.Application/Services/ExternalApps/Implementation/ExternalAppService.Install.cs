@@ -36,20 +36,23 @@ internal sealed partial class ExternalAppService
         var manifest = await RequireApplicationAsync(services.Catalog, applicationId, cancellationToken);
         var admission = await EvaluateInstallAsync(services, manifest, cancellationToken);
 
-        return new InstallPreview(manifest.Id,
-            manifest.ManifestVersion,
-            manifest.ManifestSha256,
-            admission.BlockedReason is null,
-            admission.BlockedReason,
-            admission.ExistingInstanceId,
-            manifest.Permissions,
-            ExternalAppEffectivePermissions.From(manifest),
+        return new InstallPreview
+        {
+            ApplicationId = manifest.Id,
+            ManifestVersion = manifest.ManifestVersion,
+            ManifestSha256 = manifest.ManifestSha256,
+            CanInstall = admission.BlockedReason is null,
+            BlockedReason = admission.BlockedReason,
+            ExistingInstanceId = admission.ExistingInstanceId,
+            Permissions = manifest.Permissions,
+            EffectivePermissions = ExternalAppEffectivePermissions.From(manifest),
             // Every DECLARED variable, not the required ones: the install form renders the optional rows too, and an
             // application with sixteen optional settings would otherwise arrive with none of them.
-            manifest.Variables,
-            admission.Resources,
-            admission.Runtime,
-            admission.MissingCapabilities);
+            Variables = manifest.Variables,
+            Resources = admission.Resources,
+            Runtime = admission.Runtime,
+            MissingCapabilities = admission.MissingCapabilities
+        };
     }
 
     public async Task<ExternalAppInstanceSummary> InstallAsync(InstallCommand command, CancellationToken cancellationToken = default)
@@ -118,19 +121,22 @@ internal sealed partial class ExternalAppService
 
             // The admitted snapshot, built from what was just written rather than re-read: a read would race the
             // pipeline's own first transition and could hand back a status the caller never admitted.
-            return new ExternalAppInstanceSummary(instanceId,
-                manifest.Id,
-                DisplayNameFor(command, manifest),
-                manifest.ManifestVersion,
-                ExternalAppInstanceStatus.Installing,
-                ExternalAppDesiredState.Stopped,
-                FailureCategory: null,
-                FailureSummary: null,
-                UpdateAvailable: false,
-                AvailableManifestVersion: null,
-                CatalogMissing: false,
-                createdAtUtc,
-                version);
+            return new ExternalAppInstanceSummary
+            {
+                Id = instanceId,
+                ApplicationId = manifest.Id,
+                DisplayName = DisplayNameFor(command, manifest),
+                ManifestVersion = manifest.ManifestVersion,
+                Status = ExternalAppInstanceStatus.Installing,
+                DesiredState = ExternalAppDesiredState.Stopped,
+                FailureCategory = null,
+                FailureSummary = null,
+                UpdateAvailable = false,
+                AvailableManifestVersion = null,
+                CatalogMissing = false,
+                UpdatedAtUtc = createdAtUtc,
+                Version = version
+            };
         }
         finally
         {
@@ -290,11 +296,14 @@ internal sealed partial class ExternalAppService
         var missing = resolution.Capabilities.FindMissing(manifest.Requires);
         var resources = await _resourceGate.EvaluateAsync(manifest, _layout.Root, cancellationToken);
 
-        return new InstallAdmission(BlockingReason(existing.Count > 0, BridgeUnavailableFor(manifest), resolution, manifest, missing, resources),
-            resolution,
-            missing,
-            resources,
-            existing.Count > 0 ? existing[0].Id : null);
+        return new InstallAdmission
+        {
+            BlockedReason = BlockingReason(existing.Count > 0, BridgeUnavailableFor(manifest), resolution, manifest, missing, resources),
+            Runtime = resolution,
+            MissingCapabilities = missing,
+            Resources = resources,
+            ExistingInstanceId = existing.Count > 0 ? existing[0].Id : null
+        };
     }
 
     private static ExternalAppBlockedReason? BlockingReason(bool alreadyInstalled,
@@ -403,15 +412,24 @@ internal sealed partial class ExternalAppService
 
     private static ExternalAppFailure Cancelled()
     {
-        return new ExternalAppFailure(ExternalAppFailureCategory.Unknown,
-            "This operation was cancelled before it finished; the application's data was kept.");
+        return new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.Unknown,
+            Summary = "This operation was cancelled before it finished; the application's data was kept."
+        };
     }
 
     /// <summary>What the four admission inputs said, so the preview and the command read one evaluation.</summary>
-    private sealed record InstallAdmission(
-        ExternalAppBlockedReason? BlockedReason,
-        ContainerRuntimeResolution Runtime,
-        IReadOnlyList<string> MissingCapabilities,
-        ExternalAppResourceVerdict Resources,
-        Guid? ExistingInstanceId);
+    private sealed record InstallAdmission
+    {
+        public required ExternalAppBlockedReason? BlockedReason { get; init; }
+
+        public required ContainerRuntimeResolution Runtime { get; init; }
+
+        public required IReadOnlyList<string> MissingCapabilities { get; init; }
+
+        public required ExternalAppResourceVerdict Resources { get; init; }
+
+        public required Guid? ExistingInstanceId { get; init; }
+    }
 }

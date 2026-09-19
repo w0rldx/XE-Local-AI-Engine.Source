@@ -3,16 +3,20 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 /// <summary>
 ///     What detection found in a registered repository, before the operator confirms it.
 /// </summary>
-/// <param name="ProfileId">The code-owned profile id this repository looks like.</param>
-/// <param name="BuildTarget">The repository-relative solution or project file, null for <c>generic-git</c>.</param>
-/// <param name="Candidates">
-///     Every build target found, so the operator can pick a different one when a repository has more than one. Bounded,
-///     because a large repository can contain hundreds of project files and this list crosses an API boundary.
-/// </param>
-public sealed record DevelopmentProfileDetection(
-    string ProfileId,
-    string? BuildTarget,
-    IReadOnlyList<string> Candidates);
+public sealed class DevelopmentProfileDetection
+{
+    /// <summary>The code-owned profile id this repository looks like.</summary>
+    public required string ProfileId { get; init; }
+
+    /// <summary>The repository-relative solution or project file, null for <c>generic-git</c>.</summary>
+    public required string? BuildTarget { get; init; }
+
+    /// <summary>
+    ///     Every build target found, so the operator can pick a different one when a repository has more than one. Bounded,
+    ///     because a large repository can contain hundreds of project files and this list crosses an API boundary.
+    /// </summary>
+    public required IReadOnlyList<string> Candidates { get; init; }
+}
 
 /// <summary>
 ///     Public so tests can substitute it, matching <c>IDevelopmentRepositoryBindingService</c> and
@@ -63,15 +67,15 @@ internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandPro
                         .ToArray();
         if (solutions.Length > 0)
         {
-            return new DevelopmentProfileDetection(DevelopmentCommandProfileCatalog.DotnetSlnx, solutions[0], solutions);
+            return new DevelopmentProfileDetection { ProfileId = DevelopmentCommandProfileCatalog.DotnetSlnx, BuildTarget = solutions[0], Candidates = solutions };
         }
 
         var projects = EnumerateRelative(canonical, "*.csproj", MaxProjectSearchDepth)
                        .Take(MaxCandidates)
                        .ToArray();
         return projects.Length > 0
-            ? new DevelopmentProfileDetection(DevelopmentCommandProfileCatalog.DotnetCsproj, projects[0], projects)
-            : new DevelopmentProfileDetection(DevelopmentCommandProfileCatalog.GenericGit, BuildTarget: null, []);
+            ? new DevelopmentProfileDetection { ProfileId = DevelopmentCommandProfileCatalog.DotnetCsproj, BuildTarget = projects[0], Candidates = projects }
+            : new DevelopmentProfileDetection { ProfileId = DevelopmentCommandProfileCatalog.GenericGit, BuildTarget = null, Candidates = [] };
     }
 
     /// <summary>

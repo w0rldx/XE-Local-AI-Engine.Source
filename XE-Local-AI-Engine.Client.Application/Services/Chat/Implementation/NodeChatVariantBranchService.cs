@@ -135,7 +135,7 @@ internal sealed class NodeChatVariantBranchService
                 }
 
                 await transaction.CommitAsync(token);
-                return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Count);
+                return new NodeChatBranchResultDto { SourceConversationId = request.ConversationId, BranchedConversationId = branchedConversationId, CopiedMessageCount = copies.Count };
             },
             cancellationToken);
     }
@@ -280,27 +280,30 @@ internal sealed class NodeChatVariantBranchService
                         await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token);
                         await transaction.CommitAsync(token);
 
-                        var variant = new NodeChatPersistedMessageDto(request.NewMessageId,
-                            request.ConversationId,
-                            request.RequestId,
-                            sequence,
-                            AssistantRole,
-                            string.Empty,
-                            Reasoning: null,
-                            NodeChatMessageStatusValues.Pending,
-                            request.CreatedAtUtc,
-                            request.CreatedAtUtc,
-                            request.Model,
-                            Error: null,
-                            request.MetadataJson,
-                            Origin: NodeChatOriginValues.Local,
-                            ParentMessageId: request.OriginalMessageId,
-                            VariantGroupId: variantGroupId,
-                            AgentDefinitionId: request.AgentDefinitionId,
-                            AgentName: request.AgentName,
-                            ReasoningEffort: request.ReasoningEffort);
+                        var variant = new NodeChatPersistedMessageDto
+                        {
+                            MessageId = request.NewMessageId,
+                            ConversationId = request.ConversationId,
+                            RequestId = request.RequestId,
+                            Sequence = sequence,
+                            Role = AssistantRole,
+                            Content = string.Empty,
+                            Reasoning = null,
+                            Status = NodeChatMessageStatusValues.Pending,
+                            CreatedAtUtc = request.CreatedAtUtc,
+                            UpdatedAtUtc = request.CreatedAtUtc,
+                            Model = request.Model,
+                            Error = null,
+                            MetadataJson = request.MetadataJson,
+                            Origin = NodeChatOriginValues.Local,
+                            ParentMessageId = request.OriginalMessageId,
+                            VariantGroupId = variantGroupId,
+                            AgentDefinitionId = request.AgentDefinitionId,
+                            AgentName = request.AgentName,
+                            ReasoningEffort = request.ReasoningEffort
+                        };
 
-                        return new NodeChatMessageVariantDto(variantGroupId, request.OriginalMessageId, variant);
+                        return new NodeChatMessageVariantDto { VariantGroupId = variantGroupId, OriginalMessageId = request.OriginalMessageId, Variant = variant };
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {

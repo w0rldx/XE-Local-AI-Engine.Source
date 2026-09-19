@@ -5,4 +5,9 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 ///     browser tab. The token exchange completes in the background once the browser redirects back to the loopback
 ///     listener; observe via <see cref="IEntraAuthCodeSignInCoordinator.GetStatus" />. Contains no secrets.
 /// </summary>
-public sealed record EntraAuthCodeSignInHandle(string AuthorizeUrl, DateTimeOffset ExpiresAtUtc);
+public sealed class EntraAuthCodeSignInHandle
+{
+    public required string AuthorizeUrl { get; init; }
+
+    public required DateTimeOffset ExpiresAtUtc { get; init; }
+}

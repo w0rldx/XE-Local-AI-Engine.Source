@@ -391,7 +391,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             OnAttaching?.Invoke();
             state.Producer = producer;
             _log?.Enqueue("attach");
-            return new LiveProducerRegistration(state.Cancellation.Token, new Detach(state));
+            return new LiveProducerRegistration { ProducerToken = state.Cancellation.Token, Detach = new Detach(state) };
         }
 
         public async Task PushAudioAsync(Guid sessionId, TranscriptChannel channel, ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken)

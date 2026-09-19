@@ -120,7 +120,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
         // A real conversation, because a session owns one and the delete path sweeps it. Nothing here sends a turn on it.
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                      .CreateConversationAsync(new NodeChatCreateConversationRequest(title, UserId: null, CreatedAtUtc: 0), cancellationToken);
+                                      .CreateConversationAsync(new NodeChatCreateConversationRequest { Title = title, UserId = null, CreatedAtUtc = 0 }, cancellationToken);
         var created = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                                  .CreateAsync(new CreateWorkSessionCommand
                                  {
@@ -208,19 +208,22 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
     /// <summary>The step budget is the node's option in production; nothing here reads it, so the default stands in.</summary>
     private static WorkSessionDetail ToDetail(AgentWorkSessionSnapshot session) =>
-        new(session.Id,
-            session.Title,
-            session.Objective,
-            session.Kind,
-            session.Status,
-            session.AgentDefinitionId,
-            session.ConversationId,
-            session.CurrentTaskId,
-            session.StepCount,
-            MaxStepsPerRun: 25,
-            session.LastCheckpointId,
-            session.LastSequence,
-            session.Version,
-            session.CreatedAtUtc,
-            session.UpdatedAtUtc);
+        new()
+        {
+            Id = session.Id,
+            Title = session.Title,
+            Objective = session.Objective,
+            Kind = session.Kind,
+            Status = session.Status,
+            AgentDefinitionId = session.AgentDefinitionId,
+            ConversationId = session.ConversationId,
+            CurrentTaskId = session.CurrentTaskId,
+            StepCount = session.StepCount,
+            MaxStepsPerRun = 25,
+            LastCheckpointId = session.LastCheckpointId,
+            LastSequence = session.LastSequence,
+            Version = session.Version,
+            CreatedUtc = session.CreatedAtUtc,
+            UpdatedUtc = session.UpdatedAtUtc
+        };
 }

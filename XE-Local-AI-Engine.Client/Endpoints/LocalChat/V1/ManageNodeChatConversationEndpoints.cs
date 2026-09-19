@@ -39,7 +39,7 @@ public sealed class RenameNodeChatConversationEndpoint : Endpoint<RenameNodeChat
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.RenameConversationAsync(new NodeChatRenameConversationRequest(req.ConversationId, req.Title, updatedAtUtc), ct);
+        var updated = await _chatPersistence.RenameConversationAsync(new NodeChatRenameConversationRequest { ConversationId = req.ConversationId, Title = req.Title, UpdatedAtUtc = updatedAtUtc }, ct);
 
         if (updated is null)
         {
@@ -82,7 +82,7 @@ public sealed class PinNodeChatConversationEndpoint : Endpoint<PinNodeChatConver
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(req.ConversationId, req.IsPinned, updatedAtUtc), ct);
+        var updated = await _chatPersistence.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest { ConversationId = req.ConversationId, IsPinned = req.IsPinned, UpdatedAtUtc = updatedAtUtc }, ct);
 
         if (updated is null)
         {
@@ -125,7 +125,7 @@ public sealed class ArchiveNodeChatConversationEndpoint : Endpoint<ArchiveNodeCh
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest(req.ConversationId, req.Archived, updatedAtUtc), ct);
+        var updated = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest { ConversationId = req.ConversationId, Archived = req.Archived, UpdatedAtUtc = updatedAtUtc }, ct);
 
         if (updated is null)
         {
@@ -173,7 +173,7 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<Set
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest(req.ConversationId, req.MemoryExcluded, updatedAtUtc), ct);
+        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest { ConversationId = req.ConversationId, MemoryExcluded = req.MemoryExcluded, UpdatedAtUtc = updatedAtUtc }, ct);
 
         if (updated is null)
         {

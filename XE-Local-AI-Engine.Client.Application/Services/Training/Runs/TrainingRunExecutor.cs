@@ -271,7 +271,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 {
                     Phase = parsed.Phase ?? string.Empty
                 };
-                _ = _events.Append(runId, TrainingRunEventKind.Phase, new TrainingRunPayload(Phase: parsed.Phase));
+                _ = _events.Append(runId, TrainingRunEventKind.Phase, new TrainingRunPayload { Phase = parsed.Phase });
                 break;
             case TrainingStdioEventKind.Progress:
                 state.Progress = state.Progress with
@@ -285,12 +285,15 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 };
                 _ = _events.Append(runId,
                     TrainingRunEventKind.Progress,
-                    new TrainingRunPayload(Step: state.Progress.Step,
-                        TotalSteps: state.Progress.TotalSteps,
-                        Epoch: state.Progress.Epoch,
-                        Loss: state.Progress.Loss,
-                        LearningRate: state.Progress.LearningRate,
-                        VramBytes: state.Progress.VramBytes));
+                    new TrainingRunPayload
+                    {
+                        Step = state.Progress.Step,
+                        TotalSteps = state.Progress.TotalSteps,
+                        Epoch = state.Progress.Epoch,
+                        Loss = state.Progress.Loss,
+                        LearningRate = state.Progress.LearningRate,
+                        VramBytes = state.Progress.VramBytes
+                    });
                 break;
             case TrainingStdioEventKind.Done:
                 state.Done = true;
@@ -298,7 +301,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 break;
             case TrainingStdioEventKind.Error:
                 state.ErrorMessage = parsed.Message ?? parsed.Category;
-                _ = _events.Append(runId, TrainingRunEventKind.Error, new TrainingRunPayload(Message: state.ErrorMessage));
+                _ = _events.Append(runId, TrainingRunEventKind.Error, new TrainingRunPayload { Message = state.ErrorMessage });
                 break;
             case TrainingStdioEventKind.Artifact:
             case TrainingStdioEventKind.Heartbeat:
@@ -411,7 +414,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         }
 
         _ = await _store.CreateArtifactAsync(new TrainingArtifactInput { RunId = runId, Kind = kind, Path = full }, CancellationToken.None);
-        _ = _events.Append(runId, TrainingRunEventKind.Artifact, new TrainingRunPayload(Message: kind.ToString()));
+        _ = _events.Append(runId, TrainingRunEventKind.Artifact, new TrainingRunPayload { Message = kind.ToString() });
     }
 
     private async Task FlushAsync(Guid runId, StreamState state, bool force)
@@ -458,13 +461,13 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         var run = await _store.CompleteRunAsync(runId, status, message, CancellationToken.None);
         _ = _events.Append(runId,
             TrainingRunEventKind.State,
-            new TrainingRunPayload(State: run.Status.ToString(), Message: message, RunVersion: run.Version));
+            new TrainingRunPayload { State = run.Status.ToString(), Message = message, RunVersion = run.Version });
     }
 
     private async Task<long> TransitionAsync(Guid runId, long expectedVersion, TrainingRunStatus status, CancellationToken cancellationToken)
     {
         var run = await _store.TransitionAsync(runId, expectedVersion, status, cancellationToken);
-        _ = _events.Append(runId, TrainingRunEventKind.State, new TrainingRunPayload(State: run.Status.ToString(), RunVersion: run.Version));
+        _ = _events.Append(runId, TrainingRunEventKind.State, new TrainingRunPayload { State = run.Status.ToString(), RunVersion = run.Version });
         return run.Version;
     }
 

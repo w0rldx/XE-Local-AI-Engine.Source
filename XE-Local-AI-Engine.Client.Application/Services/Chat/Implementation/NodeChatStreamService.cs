@@ -147,7 +147,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var sequence = new NodeChatStreamSequence();
         var startedAtUtc = NowUnixMilliseconds();
 
-        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(request.ConversationId, userMessageId, trimmedContent, startedAtUtc),
+        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = request.ConversationId, MessageId = userMessageId, Content = trimmedContent, CreatedAtUtc = startedAtUtc },
             cancellationToken);
         yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
 
@@ -493,7 +493,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                                         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
                .Concat([userMessage])
                .OrderBy(anchorSequence)
-               .Select(static message => new MemoryExtractionTurn(message.Content))
+               .Select(static message => new MemoryExtractionTurn { Content = message.Content })
                .ToArray();
     }
 
@@ -553,7 +553,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
 
         var persistedSelectedPath = request.SelectedPath is not null
-            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken)
+            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = request.ConversationId, SelectedPath = request.SelectedPath, UpdatedAtUtc = NowUnixMilliseconds() }, cancellationToken)
             : null;
 
         // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
@@ -563,7 +563,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var conversation = await _persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken)
                            ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
 
-        return new ChatTurnLoad(conversation, persistedSelectedPath ?? conversation.SelectedPath);
+        return new ChatTurnLoad { Conversation = conversation, SelectedPath = persistedSelectedPath ?? conversation.SelectedPath };
     }
 
     // Mints the assistant row this turn streams into. It is stamped with the model that will actually run (the agent pin
@@ -577,14 +577,17 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        return _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
-                assistantMessageId,
-                requestId,
-                NowUnixMilliseconds(),
-                resolution.EffectiveModel,
-                AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
-                AgentName: resolution.Resolved?.AgentName,
-                ReasoningEffort: EffectiveReasoningEffort(request, resolution.Resolved?.ReasoningEffort)),
+        return _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = request.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = requestId,
+            CreatedAtUtc = NowUnixMilliseconds(),
+            Model = resolution.EffectiveModel,
+            AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
+            AgentName = resolution.Resolved?.AgentName,
+            ReasoningEffort = EffectiveReasoningEffort(request, resolution.Resolved?.ReasoningEffort)
+        },
             cancellationToken);
     }
 
@@ -619,22 +622,25 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
         if (!offerTools)
         {
-            return new ChatToolOffer(OfferTools: false, AllowedTools: null);
+            return new ChatToolOffer { OfferTools = false, AllowedTools = null };
         }
 
         if (resolution.Resolved?.AllowedTools is { } resolvedAllowedTools)
         {
-            return new ChatToolOffer(OfferTools: true, resolvedAllowedTools);
+            return new ChatToolOffer { OfferTools = true, AllowedTools = resolvedAllowedTools };
         }
 
         var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken);
-        return new ChatToolOffer(OfferTools: true,
-        [
+        return new ChatToolOffer
+        {
+            OfferTools = true,
+            AllowedTools = [
             .. fallbackOffer.Select(tool => tool with
             {
                 RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
             })
-        ]);
+        ]
+        };
     }
 
     /// <summary>
@@ -729,7 +735,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             error = "The AgentHome workspace could not be prepared for this response.";
         }
 
-        return new SandboxStagingOutcome(preparation, error);
+        return new SandboxStagingOutcome { Preparation = preparation, Error = error };
     }
 
     // Terminalizes the assistant row Failed for a pre-run refusal (no invocation ever started, hence the zero-duration
@@ -737,11 +743,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     // caller's token has already fired.
     private Task<NodeChatPersistedMessageDto> TerminalizeAssistantFailureAsync(NodeChatMessageCorrelation correlation, string error)
     {
-        return _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Failed,
-                NowUnixMilliseconds(),
-                Error: error,
-                Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L)),
+        return _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Failed,
+            UpdatedAtUtc = NowUnixMilliseconds(),
+            Error = error,
+            Envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L }
+        },
             CancellationToken.None);
     }
 
@@ -803,7 +812,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             imageContext = await _turnContextBuilder.BuildImageContextAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
         }
 
-        return new ChatTurnContext(attachmentContext, imageContext, knowledgeContext, knowledgeSources);
+        return new ChatTurnContext { Attachment = attachmentContext, Image = imageContext, Knowledge = knowledgeContext, KnowledgeSources = knowledgeSources };
     }
 
     // Assembles the runtime package the invocation runs from. The active-model precedence, the effective-agent
@@ -820,36 +829,39 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Guid requestId)
     {
         var resolved = resolution.Resolved;
-        return _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
-            request.ConversationId,
-            resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(_localChatOptions.Value),
-            conversationContext,
-            resolution.EffectiveModel,
-            resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
-            LocalChatLoopbackDefaults.ClientNodeId,
-            allowedTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: new TimeoutSettings
+        return _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = requestId,
+            ConversationId = request.ConversationId,
+            ResolvedSystemPrompt = resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(_localChatOptions.Value),
+            ConversationContext = conversationContext,
+            ModelProfile = resolution.EffectiveModel,
+            AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = allowedTools,
+            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = invocationTimeoutSeconds
             },
-            ReasoningEffort: EffectiveReasoningEffort(request, resolved?.ReasoningEffort),
-            OrchestrationSpec: request.SuppressAskUser ? AskUserToolOffer.Withdraw(resolution.Orchestration?.Spec) : resolution.Orchestration?.Spec,
-            SupportsThinking: resolution.SupportsThinking,
-            SamplingOptions: request.SamplingOptions,
-            Skills: resolved?.Skills,
-            CustomTools: resolved?.CustomTools,
-            ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable,
+            ReasoningEffort = EffectiveReasoningEffort(request, resolved?.ReasoningEffort),
+            OrchestrationSpec = request.SuppressAskUser ? AskUserToolOffer.Withdraw(resolution.Orchestration?.Spec) : resolution.Orchestration?.Spec,
+            SupportsThinking = resolution.SupportsThinking,
+            SamplingOptions = request.SamplingOptions,
+            Skills = resolved?.Skills,
+            CustomTools = resolved?.CustomTools,
+            ReasoningBudgetEnforceable = resolution.ReasoningBudgetEnforceable,
             // Per-agent opt-out from the send-time tool-relevance filter; not hashed, so an opted-out agent keeps a
             // byte-identical config hash.
-            DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false,
+            DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
             // Model-selection provenance for the runner's reasoning-effort dispatcher; false = pinned, never swap.
             // A work-session step never swaps, whatever its provenance says — and every development-workflow node runs
             // as one. The graph was authored against a model; a node that authors neither a model nor an effort, bound
             // to an agent that pins neither, would otherwise be swap-eligible, and a workflow step silently served by a
             // different model is not a decision the graph's author made. IsWorkSessionTurn is set unconditionally by
             // the work-session supervisor, so it covers those turns whether or not the node authored anything.
-            AllowAutoModelSwap: resolution.AllowAutoModelSwap && !request.IsWorkSessionTurn));
+            AllowAutoModelSwap = resolution.AllowAutoModelSwap && !request.IsWorkSessionTurn
+        });
     }
 
     /// <summary>
@@ -1063,20 +1075,40 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     // The conversation this send turn is built from, plus the variant selection that shapes its history.
-    private sealed record ChatTurnLoad(NodeChatConversationDto Conversation, IReadOnlyDictionary<Guid, Guid>? SelectedPath);
+    private sealed record ChatTurnLoad
+    {
+        public required NodeChatConversationDto Conversation { get; init; }
+
+        public required IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
+    }
 
     // The tool offer for one turn: whether tools are offered at all, and the allow-list that travels in the runtime
     // package (null whenever nothing is offered).
-    private sealed record ChatToolOffer(bool OfferTools, IReadOnlyList<AllowedToolDto>? AllowedTools);
+    private sealed record ChatToolOffer
+    {
+        public required bool OfferTools { get; init; }
+
+        public required IReadOnlyList<AllowedToolDto>? AllowedTools { get; init; }
+    }
 
     // The outcome of staging a conversation's attachments into the AgentHome sandbox. A busy workspace yields BOTH a
     // lease to dispose and a refusal reason, so neither field implies the other is null.
-    private sealed record SandboxStagingOutcome(ConversationSandboxPreparation? Preparation, string? Error);
+    private sealed record SandboxStagingOutcome
+    {
+        public required ConversationSandboxPreparation? Preparation { get; init; }
+
+        public required string? Error { get; init; }
+    }
 
     // The synthetic context messages prepended to one turn, plus the provenance of any inlined knowledge hits.
-    private sealed record ChatTurnContext(
-        ConversationMessageDto? Attachment,
-        ConversationMessageDto? Image,
-        ConversationMessageDto? Knowledge,
-        IReadOnlyList<NodeChatMessageSource>? KnowledgeSources);
+    private sealed record ChatTurnContext
+    {
+        public required ConversationMessageDto? Attachment { get; init; }
+
+        public required ConversationMessageDto? Image { get; init; }
+
+        public required ConversationMessageDto? Knowledge { get; init; }
+
+        public required IReadOnlyList<NodeChatMessageSource>? KnowledgeSources { get; init; }
+    }
 }

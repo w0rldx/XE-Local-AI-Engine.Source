@@ -22,7 +22,7 @@ public sealed class InvocationRunnerChatMessageBuilderTests
                                            .WithUserMessage("list the files")
                                            .WithToolExchangeMessage("there are two files",
                                                sortOrder: 1,
-                                               new ConversationToolExchange("call-1", "list_files", "{\"path\":\".\"}", "a.txt", IsError: false))
+                                               new ConversationToolExchange { CallId = "call-1", Name = "list_files", ArgumentsJson = "{\"path\":\".\"}", Result = "a.txt", IsError = false })
                                            .Build();
 
         var messages = InvocationRunner.BuildChatMessages(package);
@@ -53,7 +53,7 @@ public sealed class InvocationRunnerChatMessageBuilderTests
                                            .WithUserMessage("save it")
                                            .WithToolExchangeMessage(string.Empty,
                                                sortOrder: 1,
-                                               new ConversationToolExchange("call-1", "save_artifact", "{}", "saved", IsError: false))
+                                               new ConversationToolExchange { CallId = "call-1", Name = "save_artifact", ArgumentsJson = "{}", Result = "saved", IsError = false })
                                            .Build();
 
         var messages = InvocationRunner.BuildChatMessages(package);
@@ -89,7 +89,7 @@ public sealed class InvocationRunnerChatMessageBuilderTests
                                            .WithUserMessage("save it")
                                            .WithToolExchangeMessage(string.Empty,
                                                sortOrder: 1,
-                                               new ConversationToolExchange("call-1", "save_artifact", "{}", "saved", IsError: false))
+                                               new ConversationToolExchange { CallId = "call-1", Name = "save_artifact", ArgumentsJson = "{}", Result = "saved", IsError = false })
                                            .Build();
 
         var messages = InvocationRunner.BuildChatMessages(package);
@@ -106,7 +106,7 @@ public sealed class InvocationRunnerChatMessageBuilderTests
                                            .WithUserMessage("go")
                                            .WithToolExchangeMessage("done",
                                                sortOrder: 1,
-                                               new ConversationToolExchange("call-1", "list_files", "not json at all", "a.txt", IsError: false))
+                                               new ConversationToolExchange { CallId = "call-1", Name = "list_files", ArgumentsJson = "not json at all", Result = "a.txt", IsError = false })
                                            .Build();
 
         var messages = InvocationRunner.BuildChatMessages(package);
@@ -123,7 +123,7 @@ public sealed class InvocationRunnerChatMessageBuilderTests
                                            .WithUserMessage("go")
                                            .WithToolExchangeMessage("done",
                                                sortOrder: 1,
-                                               new ConversationToolExchange("call-1", "get_current_time", ArgumentsJson: null, "12:00", IsError: false))
+                                               new ConversationToolExchange { CallId = "call-1", Name = "get_current_time", ArgumentsJson = null, Result = "12:00", IsError = false })
                                            .Build();
 
         var messages = InvocationRunner.BuildChatMessages(package);

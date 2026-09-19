@@ -176,27 +176,30 @@ public sealed class InferenceProfileEndpointTests
         var service = Substitute.For<IInferenceProfileService>();
         service.ListProfilesAsync(Arg.Any<CancellationToken>())
                .Returns([
-                   new InferenceProfileView(profileId,
-                       ModelName: "unsloth/gemma-3-12b-it-GGUF",
-                       Role: 0,
-                       Backend: "vulkan",
-                       LlamacppBuild: "b9692",
-                       Quant: "Q4_K_M",
-                       CtxSize: 8192,
-                       NGpuLayers: 33,
-                       TensorSplit: null,
-                       OverrideTensor: null,
-                       KvTypeK: "q8_0",
-                       KvTypeV: "q8_0",
-                       FlashAttn: true,
-                       NParams: 12_000_000_000,
-                       IsMoe: false,
-                       ExpertCount: null,
-                       Status: "Frozen",
-                       BenchmarkSnapshotId: Guid.NewGuid(),
-                       CreatedAtUtc: 1,
-                       UpdatedAtUtc: 2,
-                       GlobalFreeVramAtFreezeBytes: 6_000_000_000)
+                   new InferenceProfileView
+                   {
+                       Id = profileId,
+                       ModelName = "unsloth/gemma-3-12b-it-GGUF",
+                       Role = 0,
+                       Backend = "vulkan",
+                       LlamacppBuild = "b9692",
+                       Quant = "Q4_K_M",
+                       CtxSize = 8192,
+                       NGpuLayers = 33,
+                       TensorSplit = null,
+                       OverrideTensor = null,
+                       KvTypeK = "q8_0",
+                       KvTypeV = "q8_0",
+                       FlashAttn = true,
+                       NParams = 12_000_000_000,
+                       IsMoe = false,
+                       ExpertCount = null,
+                       Status = "Frozen",
+                       BenchmarkSnapshotId = Guid.NewGuid(),
+                       CreatedAtUtc = 1,
+                       UpdatedAtUtc = 2,
+                       GlobalFreeVramAtFreezeBytes = 6_000_000_000
+                   }
                ]);
 
         await using var factory = CreateFactory(service);
@@ -310,26 +313,29 @@ public sealed class InferenceProfileEndpointTests
 
     private static InferenceProfileView ExploredProfile(Guid profileId, int ctxSize)
     {
-        return new InferenceProfileView(profileId,
-            ModelName: "some/model-GGUF",
-            Role: 0,
-            Backend: "cuda",
-            LlamacppBuild: "b10201",
-            Quant: "Q4_K_M",
-            CtxSize: ctxSize,
-            NGpuLayers: 33,
-            TensorSplit: null,
-            OverrideTensor: null,
-            KvTypeK: null,
-            KvTypeV: null,
-            FlashAttn: false,
-            NParams: 27_000_000_000,
-            IsMoe: false,
-            ExpertCount: null,
-            Status: "Explored",
-            BenchmarkSnapshotId: null,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2);
+        return new InferenceProfileView
+        {
+            Id = profileId,
+            ModelName = "some/model-GGUF",
+            Role = 0,
+            Backend = "cuda",
+            LlamacppBuild = "b10201",
+            Quant = "Q4_K_M",
+            CtxSize = ctxSize,
+            NGpuLayers = 33,
+            TensorSplit = null,
+            OverrideTensor = null,
+            KvTypeK = null,
+            KvTypeV = null,
+            FlashAttn = false,
+            NParams = 27_000_000_000,
+            IsMoe = false,
+            ExpertCount = null,
+            Status = "Explored",
+            BenchmarkSnapshotId = null,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2
+        };
     }
 
     private static TestServerWebAppFactory CreateFactory(IInferenceProfileService inferenceProfileService)

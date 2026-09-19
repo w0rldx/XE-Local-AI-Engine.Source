@@ -182,12 +182,16 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     ///     two different generations. They are never projected onto a descriptor, so the key-free read model every
     ///     catalog, UI and policy consumer sees is unchanged.
     /// </remarks>
-    private sealed record ExternalProviderSnapshot(
-        long Generation,
-        IReadOnlyList<ExternalProviderModelRegistration> Registrations,
-        FrozenDictionary<string, ExternalProviderModelRegistration> ByModelId,
-        FrozenDictionary<string, string> KeysByConnectionId)
+    private sealed record ExternalProviderSnapshot
     {
+        public required long Generation { get; init; }
+
+        public required IReadOnlyList<ExternalProviderModelRegistration> Registrations { get; init; }
+
+        public required FrozenDictionary<string, ExternalProviderModelRegistration> ByModelId { get; init; }
+
+        public required FrozenDictionary<string, string> KeysByConnectionId { get; init; }
+
         public static ExternalProviderSnapshot Build(long generation, StoredExternalProviderConfig config)
         {
             // Shared with the reconciler (see ExternalProviderConfigProjection): the pass that DELETES drift derives
@@ -203,10 +207,13 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
                 index[registration.ModelId] = registration;
             }
 
-            return new ExternalProviderSnapshot(generation,
-                registrations,
-                index.ToFrozenDictionary(StringComparer.Ordinal),
-                keys.ToFrozenDictionary(StringComparer.Ordinal));
+            return new ExternalProviderSnapshot
+            {
+                Generation = generation,
+                Registrations = registrations,
+                ByModelId = index.ToFrozenDictionary(StringComparer.Ordinal),
+                KeysByConnectionId = keys.ToFrozenDictionary(StringComparer.Ordinal)
+            };
         }
     }
 }

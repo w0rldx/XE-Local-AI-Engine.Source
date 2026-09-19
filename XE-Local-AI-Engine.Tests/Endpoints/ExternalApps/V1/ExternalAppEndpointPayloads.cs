@@ -303,13 +303,16 @@ internal static class ExternalAppEndpointPayloads
         };
 
     public static ExternalAppResourceVerdict ResourceVerdict(bool satisfied = true) =>
-        new(satisfied,
-            satisfied ? null : ExternalAppFailureCategory.InsufficientMemory,
-            1_073_741_824L,
-            satisfied ? 8_589_934_592L : 536_870_912L,
-            2_147_483_648L,
-            17_179_869_184L,
-            satisfied ? "Enough memory and disk are free." : "This application needs 1 GB of memory; 512 MB is free.");
+        new()
+        {
+            Satisfied = satisfied,
+            FailureCategory = satisfied ? null : ExternalAppFailureCategory.InsufficientMemory,
+            RequiredMemoryBytes = 1_073_741_824L,
+            AvailableMemoryBytes = satisfied ? 8_589_934_592L : 536_870_912L,
+            RequiredDiskBytes = 2_147_483_648L,
+            AvailableDiskBytes = 17_179_869_184L,
+            Message = satisfied ? "Enough memory and disk are free." : "This application needs 1 GB of memory; 512 MB is free."
+        };
 
     public static InstallPreview Preview(ApplicationManifest? manifest = null,
         bool canInstall = true,
@@ -319,18 +322,21 @@ internal static class ExternalAppEndpointPayloads
     {
         var source = manifest ?? Manifest();
 
-        return new InstallPreview(source.Id,
-            source.ManifestVersion,
-            source.ManifestSha256,
-            canInstall,
-            blockedReason,
-            existingInstanceId,
-            source.Permissions,
-            ExternalAppEffectivePermissions.From(source),
-            source.Variables,
-            ResourceVerdict(satisfied: canInstall || blockedReason != ExternalAppBlockedReason.InsufficientMemory),
-            resolution ?? Resolution(),
-            MissingCapabilities: []);
+        return new InstallPreview
+        {
+            ApplicationId = source.Id,
+            ManifestVersion = source.ManifestVersion,
+            ManifestSha256 = source.ManifestSha256,
+            CanInstall = canInstall,
+            BlockedReason = blockedReason,
+            ExistingInstanceId = existingInstanceId,
+            Permissions = source.Permissions,
+            EffectivePermissions = ExternalAppEffectivePermissions.From(source),
+            Variables = source.Variables,
+            Resources = ResourceVerdict(satisfied: canInstall || blockedReason != ExternalAppBlockedReason.InsufficientMemory),
+            Runtime = resolution ?? Resolution(),
+            MissingCapabilities = []
+        };
     }
 
     public static UpdatePreview UpdatePreviewOf(ApplicationManifest? target = null,
@@ -341,64 +347,73 @@ internal static class ExternalAppEndpointPayloads
     {
         var manifest = target ?? Manifest(manifestVersion: 3);
 
-        return new UpdatePreview(manifest.Id,
-            InstanceId,
-            2,
-            manifest.ManifestVersion,
-            manifest.ManifestSha256,
-            manifest.Variables,
-            currentValues ?? new Dictionary<string, string>(StringComparer.Ordinal)
+        return new UpdatePreview
+        {
+            ApplicationId = manifest.Id,
+            InstanceId = InstanceId,
+            CurrentManifestVersion = 2,
+            TargetManifestVersion = manifest.ManifestVersion,
+            ManifestSha256 = manifest.ManifestSha256,
+            Variables = manifest.Variables,
+            CurrentValues = currentValues ?? new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [SecretVariableName] = ExternalAppVariableMask.Value,
                 [PlainVariableName] = "http://127.0.0.1:11434"
             },
-            addedPermissions ?? [],
-            ExternalAppEffectivePermissions.From(manifest),
-            ResourceVerdict(),
-            canUpdate,
-            blockedReason);
+            AddedPermissions = addedPermissions ?? [],
+            EffectivePermissions = ExternalAppEffectivePermissions.From(manifest),
+            ResourceVerdict = ResourceVerdict(),
+            CanUpdate = canUpdate,
+            BlockedReason = blockedReason
+        };
     }
 
     public static ExternalAppInstanceSummary Summary(ExternalAppInstanceStatus status = ExternalAppInstanceStatus.Running,
         long version = 7,
         bool updateAvailable = false,
         bool catalogMissing = false) =>
-        new(InstanceId,
-            ApplicationId,
-            "Odysseus",
-            2,
-            status,
-            status == ExternalAppInstanceStatus.Running ? ExternalAppDesiredState.Running : ExternalAppDesiredState.Stopped,
-            FailureCategory: null,
-            FailureSummary: null,
-            updateAvailable,
-            updateAvailable ? 3 : null,
-            catalogMissing,
-            1_780_000_000_000L,
-            version);
+        new()
+        {
+            Id = InstanceId,
+            ApplicationId = ApplicationId,
+            DisplayName = "Odysseus",
+            ManifestVersion = 2,
+            Status = status,
+            DesiredState = status == ExternalAppInstanceStatus.Running ? ExternalAppDesiredState.Running : ExternalAppDesiredState.Stopped,
+            FailureCategory = null,
+            FailureSummary = null,
+            UpdateAvailable = updateAvailable,
+            AvailableManifestVersion = updateAvailable ? 3 : null,
+            CatalogMissing = catalogMissing,
+            UpdatedAtUtc = 1_780_000_000_000L,
+            Version = version
+        };
 
     /// <summary>
     ///     One installed instance. The variables arrive ALREADY masked, because masking happens where the stored values
     ///     are read; the endpoint layer never owns a second mask constant.
     /// </summary>
     public static ExternalAppInstanceDetail Detail(ExternalAppInstanceSummary? summary = null, ApplicationManifest? manifest = null) =>
-        new(summary ?? Summary(),
-            manifest ?? Manifest(),
-            "1.4.0",
-            new Dictionary<string, string>(StringComparer.Ordinal)
+        new()
+        {
+            Summary = summary ?? Summary(),
+            Manifest = manifest ?? Manifest(),
+            TestedVersion = "1.4.0",
+            MaskedVariables = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [SecretVariableName] = ExternalAppVariableMask.Value,
                 [PlainVariableName] = "http://127.0.0.1:11434"
             },
-            [new ExternalAppPublishedPort("web", 8080, 18080), new ExternalAppPublishedPort("worker", 9090, 19090)],
-            "docker",
-            RuntimeOverride: null,
-            "/var/lib/xe/external-apps/odysseus",
-            42,
-            NeedsRecreate: false,
-            1_779_000_000_000L,
-            1_779_500_000_000L,
-            StoppedAtUtc: null);
+            PublishedPorts = [new ExternalAppPublishedPort { Service = "web", ContainerPort = 8080, HostPort = 18080 }, new ExternalAppPublishedPort { Service = "worker", ContainerPort = 9090, HostPort = 19090 }],
+            RuntimeProvider = "docker",
+            RuntimeOverride = null,
+            StoragePath = "/var/lib/xe/external-apps/odysseus",
+            LastSequence = 42,
+            NeedsRecreate = false,
+            InstalledAtUtc = 1_779_000_000_000L,
+            StartedAtUtc = 1_779_500_000_000L,
+            StoppedAtUtc = null
+        };
 
     /// <summary>A body for the install POST. Anonymous so a DTO rename shows up as a failing request.</summary>
     public static object InstallBody(string? applicationId = ApplicationId,

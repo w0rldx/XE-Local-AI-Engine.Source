@@ -205,11 +205,14 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository) =>
-        new(snapshot.ProjectId,
-            snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
-            "repository",
-            repository,
-            snapshot.RepositoryIdentityHash);
+        new()
+        {
+            ProjectId = snapshot.ProjectId,
+            SelectedFolderId = snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
+            Alias = "repository",
+            RepositoryRoot = repository,
+            RepositoryIdentityHash = snapshot.RepositoryIdentityHash
+        };
 
     private async Task<string> CreateRepositoryAsync()
     {
@@ -279,7 +282,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
             var workspaceRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace!.RootPath));
             var mounts = new List<SandboxMountBinding>
             {
-                new(workspaceRoot, WorkspaceTarget, ReadOnly: false)
+                new() { HostPath = workspaceRoot, SandboxPath = WorkspaceTarget, ReadOnly = false }
             };
             mounts.AddRange((request.Mounts ?? []).Select(mount =>
             {
@@ -288,7 +291,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
                 var target = hostPath.StartsWith(prefix, StringComparison.Ordinal)
                     ? WorkspaceTarget + "/" + hostPath[prefix.Length..].Replace(Path.DirectorySeparatorChar, '/')
                     : mount.SandboxPath;
-                return new SandboxMountBinding(hostPath, target, mount.ReadOnly);
+                return new SandboxMountBinding { HostPath = hostPath, SandboxPath = target, ReadOnly = mount.ReadOnly };
             }));
 
             _handle = new SandboxHandle

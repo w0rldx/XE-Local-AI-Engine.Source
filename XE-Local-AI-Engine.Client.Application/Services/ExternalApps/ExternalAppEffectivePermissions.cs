@@ -4,12 +4,18 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>What one service of an application is granted, as opposed to what the application as a whole declares.</summary>
-public sealed record ExternalAppServicePermissions(
-    string ServiceName,
-    IReadOnlySet<string> Capabilities,
-    bool WritableRootFilesystem,
-    IReadOnlySet<string> PublishedPorts,
-    IReadOnlySet<string> ExtraHosts);
+public sealed class ExternalAppServicePermissions
+{
+    public required string ServiceName { get; init; }
+
+    public required IReadOnlySet<string> Capabilities { get; init; }
+
+    public required bool WritableRootFilesystem { get; init; }
+
+    public required IReadOnlySet<string> PublishedPorts { get; init; }
+
+    public required IReadOnlySet<string> ExtraHosts { get; init; }
+}
 
 /// <summary>
 ///     Everything an application may do, computed from one manifest. The single authority behind the install
@@ -22,13 +28,18 @@ public sealed record ExternalAppServicePermissions(
 ///     already is. The application-level flags stay application-level because that is how the manifest declares
 ///     them.
 /// </remarks>
-public sealed record ExternalAppEffectivePermissions(
-    bool Internet,
-    bool LocalNetwork,
-    string HostFiles,
-    string Gpu,
-    IReadOnlyDictionary<string, ExternalAppServicePermissions> Services)
+public sealed class ExternalAppEffectivePermissions
 {
+    public required bool Internet { get; init; }
+
+    public required bool LocalNetwork { get; init; }
+
+    public required string HostFiles { get; init; }
+
+    public required string Gpu { get; init; }
+
+    public required IReadOnlyDictionary<string, ExternalAppServicePermissions> Services { get; init; }
+
     /// <summary>The eight names a widening is reported as, in the order they are emitted.</summary>
     public static IReadOnlyList<string> Vocabulary { get; } =
     [
@@ -43,18 +54,24 @@ public sealed record ExternalAppEffectivePermissions(
         var services = new Dictionary<string, ExternalAppServicePermissions>(StringComparer.Ordinal);
         foreach (var service in manifest.Services)
         {
-            services[service.Name] = new ExternalAppServicePermissions(service.Name,
-                new HashSet<string>(service.CapAdd ?? [], StringComparer.Ordinal),
-                !service.ReadOnlyRootFilesystem,
-                new HashSet<string>((service.Ports ?? []).Select(port => Port(service.Name, port)), StringComparer.Ordinal),
-                new HashSet<string>(service.ExtraHosts ?? [], StringComparer.Ordinal));
+            services[service.Name] = new ExternalAppServicePermissions
+            {
+                ServiceName = service.Name,
+                Capabilities = new HashSet<string>(service.CapAdd ?? [], StringComparer.Ordinal),
+                WritableRootFilesystem = !service.ReadOnlyRootFilesystem,
+                PublishedPorts = new HashSet<string>((service.Ports ?? []).Select(port => Port(service.Name, port)), StringComparer.Ordinal),
+                ExtraHosts = new HashSet<string>(service.ExtraHosts ?? [], StringComparer.Ordinal)
+            };
         }
 
-        return new ExternalAppEffectivePermissions(manifest.Permissions.Internet,
-            manifest.Permissions.LocalNetwork,
-            manifest.Permissions.HostFiles,
-            manifest.Permissions.Gpu,
-            services);
+        return new ExternalAppEffectivePermissions
+        {
+            Internet = manifest.Permissions.Internet,
+            LocalNetwork = manifest.Permissions.LocalNetwork,
+            HostFiles = manifest.Permissions.HostFiles,
+            Gpu = manifest.Permissions.Gpu,
+            Services = services
+        };
     }
 
     /// <summary>

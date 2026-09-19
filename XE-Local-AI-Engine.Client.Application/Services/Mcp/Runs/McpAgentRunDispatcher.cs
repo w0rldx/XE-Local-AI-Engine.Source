@@ -178,7 +178,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         }
 
         using var watchdogCompleted = new CancellationTokenSource();
-        var watchdog = RunWatchdogAsync(new McpAgentRunCancellationHandle(claimed.RequestId, claimToken, claimed.Version),
+        var watchdog = RunWatchdogAsync(new McpAgentRunCancellationHandle { RequestId = claimed.RequestId, ClaimToken = claimToken, Version = claimed.Version },
             watchdogCompleted.Token);
 
         try
@@ -374,7 +374,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
     {
         try
         {
-            var active = new McpAgentRunCancellationHandle(claimed.RequestId, claimToken, claimed.Version);
+            var active = new McpAgentRunCancellationHandle { RequestId = claimed.RequestId, ClaimToken = claimToken, Version = claimed.Version };
             await PersistStopThenSignalAsync(active,
                 McpAgentRunStopReason.HostShutdown,
                 "host",

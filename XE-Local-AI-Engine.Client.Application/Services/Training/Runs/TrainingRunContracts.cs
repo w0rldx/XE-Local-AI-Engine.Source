@@ -166,30 +166,50 @@ public sealed record BaseCheckpointConfigV1
 ///     activation term is inherently fuzzy, so the estimate carries headroom and a floor rather than pretending to
 ///     predict VRAM to the megabyte.
 /// </summary>
-public sealed record TrainingFootprintEstimate(
-    long GpuBytes,
-    long RamBytes,
-    long ParameterCount,
-    long TrainableParameterCount,
-    bool Experimental);
+public sealed class TrainingFootprintEstimate
+{
+    public required long GpuBytes { get; init; }
+
+    public required long RamBytes { get; init; }
+
+    public required long ParameterCount { get; init; }
+
+    public required long TrainableParameterCount { get; init; }
+
+    public required bool Experimental { get; init; }
+}
 
 /// <summary>The wizard's computed starting point plus the estimate behind it.</summary>
-public sealed record TrainingRunDefaults(
-    TrainingRunOptionsV1 Options,
-    TrainingFootprintEstimate Estimate,
-    long AvailableVramBytes,
-    bool VramKnown,
-    bool Fits,
-    string? RejectionReason);
+public sealed record TrainingRunDefaults
+{
+    public required TrainingRunOptionsV1 Options { get; init; }
+
+    public required TrainingFootprintEstimate Estimate { get; init; }
+
+    public required long AvailableVramBytes { get; init; }
+
+    public required bool VramKnown { get; init; }
+
+    public required bool Fits { get; init; }
+
+    public required string? RejectionReason { get; init; }
+}
 
 /// <summary>The base checkpoint's licensing as the run wizard presents it.</summary>
-public sealed record TrainingLicenseGateView(
-    Guid BaseArtifactId,
-    string RepoId,
-    string? License,
-    bool IsGated,
-    bool MetadataPresent,
-    string ConfirmationText);
+public sealed class TrainingLicenseGateView
+{
+    public required Guid BaseArtifactId { get; init; }
+
+    public required string RepoId { get; init; }
+
+    public required string? License { get; init; }
+
+    public required bool IsGated { get; init; }
+
+    public required bool MetadataPresent { get; init; }
+
+    public required string ConfirmationText { get; init; }
+}
 
 /// <summary>A refusal the run surface reports as a 4xx rather than as a fault. Message is operator-facing.</summary>
 public sealed class TrainingRunRejectedException : Exception
@@ -210,11 +230,18 @@ public sealed class TrainingRunRejectedException : Exception
 }
 
 /// <summary>What the operator asked for. Options are optional — omitted means "use the computed defaults".</summary>
-public sealed record CreateTrainingRunCommand(
-    Guid DatasetId,
-    long ExpectedDatasetVersion,
-    Guid BaseArtifactId,
-    bool LicenseConfirmed,
-    TrainingRunOptionsV1? Options = null,
+public sealed class CreateTrainingRunCommand
+{
+    public required Guid DatasetId { get; init; }
+
+    public required long ExpectedDatasetVersion { get; init; }
+
+    public required Guid BaseArtifactId { get; init; }
+
+    public required bool LicenseConfirmed { get; init; }
+
+    public TrainingRunOptionsV1? Options { get; init; }
+
     /// <summary>The installed GGUF to link as the base's counterpart; null lets the linker suggest one by repo convention.</summary>
-    string? LinkedModelName = null);
+    public string? LinkedModelName { get; init; }
+}

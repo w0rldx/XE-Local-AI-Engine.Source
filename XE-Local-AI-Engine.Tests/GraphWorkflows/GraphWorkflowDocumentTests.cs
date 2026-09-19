@@ -61,7 +61,7 @@ public sealed class GraphWorkflowDocumentTests
     public void Compose_ForAConditionNode_PassesTheUpstreamOutputThroughSoItsOwnEdgeFires()
     {
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson);
-        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument("analyze", AnalyzeDocument)]);
+        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument { NodeKey = "analyze", OutputDocumentJson = AnalyzeDocument }]);
 
         var document = GraphWorkflowDocuments.Compose(graph,
             graph.Nodes["check"],
@@ -81,7 +81,7 @@ public sealed class GraphWorkflowDocumentTests
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson);
         var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null,
         [
-            new GraphWorkflowUpstreamDocument("analyze", """{"status":"succeeded","attempt":1,"branch":null,"output":{"json":{"requiresReview":false}}}""")
+            new GraphWorkflowUpstreamDocument { NodeKey = "analyze", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"json":{"requiresReview":false}}}""" }
         ]);
 
         var document = GraphWorkflowDocuments.Compose(graph,
@@ -117,7 +117,7 @@ public sealed class GraphWorkflowDocumentTests
     public void Compose_ForAParallelNode_PassesTheUpstreamOutputThroughUnchanged()
     {
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.ParallelJoinAll);
-        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument("start", AnalyzeDocument)]);
+        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument { NodeKey = "start", OutputDocumentJson = AnalyzeDocument }]);
 
         var document = GraphWorkflowDocuments.Compose(graph,
             graph.Nodes["fanout"],
@@ -141,8 +141,8 @@ public sealed class GraphWorkflowDocumentTests
             attempt: 1,
             GraphWorkflowNodeOutputStatuses.Succeeded,
             GraphWorkflowDocuments.JoinOutput([
-                new GraphWorkflowUpstreamDocument("right", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}"""),
-                new GraphWorkflowUpstreamDocument("left", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}""")
+                new GraphWorkflowUpstreamDocument { NodeKey = "right", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}""" },
+                new GraphWorkflowUpstreamDocument { NodeKey = "left", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}""" }
             ]),
             RoomToSpare);
 
@@ -157,7 +157,7 @@ public sealed class GraphWorkflowDocumentTests
     public void EndOutput_WithNoResultPath_CarriesTheWholeInputDocument()
     {
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.StartAgentEnd);
-        var input = GraphWorkflowDocuments.ComposeInput("""{"topic":"latency"}""", [new GraphWorkflowUpstreamDocument("analyze", AnalyzeDocument)]);
+        var input = GraphWorkflowDocuments.ComposeInput("""{"topic":"latency"}""", [new GraphWorkflowUpstreamDocument { NodeKey = "analyze", OutputDocumentJson = AnalyzeDocument }]);
 
         var document = GraphWorkflowDocuments.Compose(graph,
             graph.Nodes["done"],
@@ -177,7 +177,7 @@ public sealed class GraphWorkflowDocumentTests
     public void EndOutput_WithAResultPath_ProjectsThatPathOutOfTheInputDocument()
     {
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.EndWithResultPath);
-        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument("analyze", AnalyzeDocument)]);
+        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument { NodeKey = "analyze", OutputDocumentJson = AnalyzeDocument }]);
 
         var document = GraphWorkflowDocuments.Compose(graph,
             graph.Nodes["done"],
@@ -199,7 +199,7 @@ public sealed class GraphWorkflowDocumentTests
     public void EndOutput_WithAPathTheDocumentDoesNotCarry_ResolvesToNull()
     {
         var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.EndWithResultPath);
-        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument("analyze", AnalyzeDocument)]);
+        var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null, [new GraphWorkflowUpstreamDocument { NodeKey = "analyze", OutputDocumentJson = AnalyzeDocument }]);
 
         var document = GraphWorkflowDocuments.Compose(graph,
             graph.Nodes["done"],
@@ -216,8 +216,8 @@ public sealed class GraphWorkflowDocumentTests
     {
         var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null,
         [
-            new GraphWorkflowUpstreamDocument("left", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}"""),
-            new GraphWorkflowUpstreamDocument("right", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}""")
+            new GraphWorkflowUpstreamDocument { NodeKey = "left", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}""" },
+            new GraphWorkflowUpstreamDocument { NodeKey = "right", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}""" }
         ]);
 
         using var parsed = JsonDocument.Parse(input);
@@ -283,8 +283,8 @@ public sealed class GraphWorkflowDocumentTests
     {
         var input = GraphWorkflowDocuments.ComposeInput(runInputJson: null,
         [
-            new GraphWorkflowUpstreamDocument("left", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}"""),
-            new GraphWorkflowUpstreamDocument("right", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}""")
+            new GraphWorkflowUpstreamDocument { NodeKey = "left", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}""" },
+            new GraphWorkflowUpstreamDocument { NodeKey = "right", OutputDocumentJson = """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}""" }
         ]);
 
         AssertEx.Equal("{}", GraphWorkflowDocuments.PassThroughOutput(input).GetRawText());

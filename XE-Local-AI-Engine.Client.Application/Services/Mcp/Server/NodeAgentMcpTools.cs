@@ -80,7 +80,7 @@ public sealed class NodeAgentMcpTools
     public async Task<IReadOnlyList<AgentSummary>> ListAgentsAsync(CancellationToken cancellationToken)
     {
         var definitions = await _agentDefinitionStore.ListAsync(cancellationToken);
-        return [.. definitions.Select(static definition => new AgentSummary(definition.Id.ToString(), definition.Name, definition.Description))];
+        return [.. definitions.Select(static definition => new AgentSummary { Id = definition.Id.ToString(), Name = definition.Name, Description = definition.Description })];
     }
 
     [McpServerTool(Name = "list_models")]
@@ -93,10 +93,13 @@ public sealed class NodeAgentMcpTools
         [
             .. models.Where(static model => model.IsAvailable)
                      .OrderBy(static model => model.ModelName, StringComparer.Ordinal)
-                     .Select(model => new LocalModelSummary(model.ModelName,
-                         model.SizeBytes,
-                         ToWireKind(LocalGgufModelKindClassifier.Classify(model.ModelName)),
-                         string.Equals(model.ModelName, settings.DefaultModelName, StringComparison.Ordinal)))
+                     .Select(model => new LocalModelSummary
+                     {
+                         Name = model.ModelName,
+                         SizeBytes = model.SizeBytes,
+                         Kind = ToWireKind(LocalGgufModelKindClassifier.Classify(model.ModelName)),
+                         IsDefault = string.Equals(model.ModelName, settings.DefaultModelName, StringComparison.Ordinal)
+                     })
         ];
     }
 
@@ -107,9 +110,9 @@ public sealed class NodeAgentMcpTools
     {
         var references = await _selectedFolderResolver.ListReferencesAsync(cancellationToken);
         var bounded = references.Take(_runOptions.MaxListLimit)
-                                .Select(static reference => new McpWorkspaceSummary(reference.Id, reference.Alias, "read-only"))
+                                .Select(static reference => new McpWorkspaceSummary { Id = reference.Id, Alias = reference.Alias, Mode = "read-only" })
                                 .ToArray();
-        return new McpWorkspaceListResponse("ok", bounded, references.Count, references.Count > bounded.Length);
+        return new McpWorkspaceListResponse { Status = "ok", Workspaces = bounded, Count = references.Count, Truncated = references.Count > bounded.Length };
     }
 
     [McpServerTool(Name = "start_agent_run")]
@@ -153,9 +156,11 @@ public sealed class NodeAgentMcpTools
                 "Cannot start: the selected workspace is not authorized.");
         }
 
-        var result = await _runCoordinator.StartAsync(new McpAgentRunStartRequest(requestId,
-                task,
-                new McpExecutionBindingRequest
+        var result = await _runCoordinator.StartAsync(new McpAgentRunStartRequest
+        {
+            RequestId = requestId,
+            Task = task,
+            Binding = new McpExecutionBindingRequest
                 {
                     AgentKey = NullIfWhiteSpace(agent),
                     ModelId = NullIfWhiteSpace(model),
@@ -164,13 +169,17 @@ public sealed class NodeAgentMcpTools
                     InboundContext = inboundContext,
                     ExecutionRequestId = requestId
                 },
-                workspaceId),
+            WorkspaceId = workspaceId
+        },
             cancellationToken);
 
-        return new McpAgentRunStartResponse(MapStartStatus(result.Kind),
-            result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
-            result.FailureCode,
-            result.DisplayMessage);
+        return new McpAgentRunStartResponse
+        {
+            Status = MapStartStatus(result.Kind),
+            Run = result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
+            FailureCode = result.FailureCode,
+            DisplayMessage = result.DisplayMessage
+        };
     }
 
     [McpServerTool(Name = "get_agent_run")]
@@ -183,13 +192,13 @@ public sealed class NodeAgentMcpTools
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
-            return new McpAgentRunGetResponse("invalid_request", null, InvalidRequestCode, "Cannot get: provide a valid request UUID.");
+            return new McpAgentRunGetResponse { Status = "invalid_request", Run = null, FailureCode = InvalidRequestCode, DisplayMessage = "Cannot get: provide a valid request UUID." };
         }
 
         var run = await _runCoordinator.GetAsync(requestId, cancellationToken);
         if (run is null)
         {
-            return new McpAgentRunGetResponse("not_found", null, RunNotFoundCode, "Run not found.");
+            return new McpAgentRunGetResponse { Status = "not_found", Run = null, FailureCode = RunNotFoundCode, DisplayMessage = "Run not found." };
         }
 
         var result = run.PayloadExpired ? null : run.Result;
@@ -206,10 +215,13 @@ public sealed class NodeAgentMcpTools
         var displayMessage = run.PayloadExpired
             ? "The retained result for this request has expired."
             : run.DisplayMessage ?? "Run found.";
-        return new McpAgentRunGetResponse(responseStatus,
-            new McpAgentRunDetail(McpAgentToolResponseMapper.ToSummary(run), result, resultTruncated),
-            failureCode,
-            displayMessage);
+        return new McpAgentRunGetResponse
+        {
+            Status = responseStatus,
+            Run = new McpAgentRunDetail { Metadata = McpAgentToolResponseMapper.ToSummary(run), Result = result, ResultTruncated = resultTruncated },
+            FailureCode = failureCode,
+            DisplayMessage = displayMessage
+        };
     }
 
     [McpServerTool(Name = "cancel_agent_run")]
@@ -222,14 +234,17 @@ public sealed class NodeAgentMcpTools
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
-            return new McpAgentRunCancelResponse("not_found", null, InvalidRequestCode, "Cannot cancel: provide a valid request UUID.");
+            return new McpAgentRunCancelResponse { Status = "not_found", Run = null, FailureCode = InvalidRequestCode, DisplayMessage = "Cannot cancel: provide a valid request UUID." };
         }
 
         var result = await _runCoordinator.CancelAsync(requestId, cancellationToken);
-        return new McpAgentRunCancelResponse(MapCancelStatus(result.Kind),
-            result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
-            MapCancelFailureCode(result.Kind),
-            result.DisplayMessage);
+        return new McpAgentRunCancelResponse
+        {
+            Status = MapCancelStatus(result.Kind),
+            Run = result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
+            FailureCode = MapCancelFailureCode(result.Kind),
+            DisplayMessage = result.DisplayMessage
+        };
     }
 
     [McpServerTool(Name = "list_agent_runs")]
@@ -250,12 +265,15 @@ public sealed class NodeAgentMcpTools
                                       .FirstOrDefault(name => string.Equals(name, status, StringComparison.OrdinalIgnoreCase));
             if (canonicalStatus is null || !Enum.TryParse(canonicalStatus, out McpAgentRunStatus value))
             {
-                return new McpAgentRunListResponse("invalid_status",
-                    [],
-                    0,
-                    ClampListLimit(limit),
-                    InvalidStatusCode,
-                    "Cannot list: status must be queued, running, succeeded, failed, cancelled, or interrupted.");
+                return new McpAgentRunListResponse
+                {
+                    Status = "invalid_status",
+                    Runs = [],
+                    Count = 0,
+                    Limit = ClampListLimit(limit),
+                    FailureCode = InvalidStatusCode,
+                    DisplayMessage = "Cannot list: status must be queued, running, succeeded, failed, cancelled, or interrupted."
+                };
             }
 
             parsedStatus = value;
@@ -263,10 +281,13 @@ public sealed class NodeAgentMcpTools
 
         var boundedLimit = ClampListLimit(limit);
         var runs = await _runCoordinator.ListAsync(boundedLimit, parsedStatus, cancellationToken);
-        return new McpAgentRunListResponse("ok",
-            runs.Select(McpAgentToolResponseMapper.ToSummary).ToArray(),
-            runs.Count,
-            boundedLimit);
+        return new McpAgentRunListResponse
+        {
+            Status = "ok",
+            Runs = runs.Select(McpAgentToolResponseMapper.ToSummary).ToArray(),
+            Count = runs.Count,
+            Limit = boundedLimit
+        };
     }
 
     [McpServerTool(Name = "run_agent")]
@@ -396,7 +417,7 @@ public sealed class NodeAgentMcpTools
     }
 
     private static McpAgentRunStartResponse RejectedStart(string failureCode, string displayMessage) =>
-        new("rejected", null, failureCode, displayMessage);
+        new() { Status = "rejected", Run = null, FailureCode = failureCode, DisplayMessage = displayMessage };
 
     private static string MapStartStatus(McpAgentRunStartKind kind) =>
         kind switch
@@ -444,8 +465,24 @@ public sealed class NodeAgentMcpTools
         };
 
     /// <summary>One saved agent, as offered to an external MCP client. Ids are stringified for a JSON-schema-friendly shape.</summary>
-    public sealed record AgentSummary(string Id, string Name, string? Description);
+    public sealed class AgentSummary
+    {
+        public required string Id { get; init; }
+
+        public required string Name { get; init; }
+
+        public required string? Description { get; init; }
+    }
 
     /// <summary>One available local model, including the node-default marker used by external agents during setup.</summary>
-    public sealed record LocalModelSummary(string Name, long? SizeBytes, string Kind, bool IsDefault);
+    public sealed class LocalModelSummary
+    {
+        public required string Name { get; init; }
+
+        public required long? SizeBytes { get; init; }
+
+        public required string Kind { get; init; }
+
+        public required bool IsDefault { get; init; }
+    }
 }

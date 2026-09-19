@@ -359,24 +359,27 @@ internal sealed class DevWorkflowGraph
         var toolMode = ParseToolMode(element, nodeKey, nodeType, commandIds);
         var retryTarget = OptionalString(element, "retryTarget");
 
-        return new DevWorkflowGraphNode(nodeKey,
-            nodeType,
-            OptionalString(element, "label") ?? nodeKey,
-            OptionalGuid(element, "agentDefinitionId", nodeKey),
-            OptionalString(element, "agentSeedSlug"),
-            OptionalString(element, "instructions"),
-            commandIds,
-            OptionalEnum(element, "joinPolicy", nodeKey, DevWorkflowJoinPolicy.All),
-            OptionalPositiveInt(element, "maxAttempts", nodeKey) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
-            OptionalNonNegativeInt(element, "retryDelaySeconds", nodeKey) ?? 0,
-            OptionalPositiveInt(element, "nodeTimeoutSeconds", nodeKey),
-            retryTarget,
-            ParseMaterialization(element, nodeKey),
-            toolMode,
-            TrimmedOptionalString(element, "modelProfile"),
-            ParseReasoningEffort(element, nodeKey),
-            ParseRequiredCapabilities(element, nodeKey, nodeType),
-            ParseMaxLoopIterations(element, nodeKey, retryTarget));
+        return new DevWorkflowGraphNode
+        {
+            NodeKey = nodeKey,
+            NodeType = nodeType,
+            Label = OptionalString(element, "label") ?? nodeKey,
+            AgentDefinitionId = OptionalGuid(element, "agentDefinitionId", nodeKey),
+            AgentSeedSlug = OptionalString(element, "agentSeedSlug"),
+            Instructions = OptionalString(element, "instructions"),
+            ValidationCommandIds = commandIds,
+            JoinPolicy = OptionalEnum(element, "joinPolicy", nodeKey, DevWorkflowJoinPolicy.All),
+            MaxAttempts = OptionalPositiveInt(element, "maxAttempts", nodeKey) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
+            RetryDelaySeconds = OptionalNonNegativeInt(element, "retryDelaySeconds", nodeKey) ?? 0,
+            NodeTimeoutSeconds = OptionalPositiveInt(element, "nodeTimeoutSeconds", nodeKey),
+            RetryTarget = retryTarget,
+            Materialization = ParseMaterialization(element, nodeKey),
+            ToolMode = toolMode,
+            ModelProfile = TrimmedOptionalString(element, "modelProfile"),
+            ReasoningEffort = ParseReasoningEffort(element, nodeKey),
+            RequiredCapabilities = ParseRequiredCapabilities(element, nodeKey, nodeType),
+            MaxLoopIterations = ParseMaxLoopIterations(element, nodeKey, retryTarget)
+        };
     }
 
     /// <summary>
@@ -528,11 +531,14 @@ internal sealed class DevWorkflowGraph
             throw new DevWorkflowValidationException($"The 'materialization' on node '{nodeKey}' must be an object.");
         }
 
-        return new DevWorkflowMaterialization(RequiredString(materialization, "templateNodeKey", $"the materialization on node '{nodeKey}'"),
-            RequiredEnum<DevWorkflowArtifactKind>(materialization, "artifactKind", $"the materialization on node '{nodeKey}'"),
-            RequiredString(materialization, "joinNodeKey", $"the materialization on node '{nodeKey}'"),
-            OptionalPositiveInt(materialization, "maxChildren", nodeKey)
-            ?? throw new DevWorkflowValidationException($"The materialization on node '{nodeKey}' needs a positive 'maxChildren'."));
+        return new DevWorkflowMaterialization
+        {
+            TemplateNodeKey = RequiredString(materialization, "templateNodeKey", $"the materialization on node '{nodeKey}'"),
+            ArtifactKind = RequiredEnum<DevWorkflowArtifactKind>(materialization, "artifactKind", $"the materialization on node '{nodeKey}'"),
+            JoinNodeKey = RequiredString(materialization, "joinNodeKey", $"the materialization on node '{nodeKey}'"),
+            MaxChildren = OptionalPositiveInt(materialization, "maxChildren", nodeKey)
+            ?? throw new DevWorkflowValidationException($"The materialization on node '{nodeKey}' needs a positive 'maxChildren'.")
+        };
     }
 
     private static List<DevWorkflowGraphEdge> ParseEdges(JsonElement root, Dictionary<string, DevWorkflowGraphNode> nodes)

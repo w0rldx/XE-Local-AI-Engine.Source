@@ -136,7 +136,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 SanitizedReason = passed ? null : BuildFailureReason(verdict)
             },
                                 cancellationToken);
-            return new DevelopmentValidationResult(prepared.ArtifactId, passed, target, evidence.Current.SubjectHash);
+            return new DevelopmentValidationResult { ArtifactId = prepared.ArtifactId, Passed = passed, TaskStatus = target, SubjectHash = evidence.Current.SubjectHash };
         }
         catch (Exception exception)
         {

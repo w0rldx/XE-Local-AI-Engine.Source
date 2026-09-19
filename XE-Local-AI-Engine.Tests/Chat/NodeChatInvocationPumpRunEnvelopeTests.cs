@@ -438,19 +438,22 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(new NodeChatPersistedMessageDto(correlation.MessageId,
-                       correlation.ConversationId,
-                       correlation.RequestId,
-                       Sequence: 0,
-                       "assistant",
-                       "partial",
-                       Reasoning: null,
-                       NodeChatMessageStatusValues.Cancelled,
-                       CreatedAtUtc: 0,
-                       UpdatedAtUtc: 5,
-                       Model: null,
-                       Error: null,
-                       MetadataJson: null));
+                   .Returns(new NodeChatPersistedMessageDto
+                   {
+                       MessageId = correlation.MessageId,
+                       ConversationId = correlation.ConversationId,
+                       RequestId = correlation.RequestId,
+                       Sequence = 0,
+                       Role = "assistant",
+                       Content = "partial",
+                       Reasoning = null,
+                       Status = NodeChatMessageStatusValues.Cancelled,
+                       CreatedAtUtc = 0,
+                       UpdatedAtUtc = 5,
+                       Model = null,
+                       Error = null,
+                       MetadataJson = null
+                   });
         var pump = ChatPumpTestFactory.Create(persistence);
 
         var result = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
@@ -508,19 +511,22 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                    .Returns(callInfo =>
                    {
                        var request = callInfo.Arg<NodeChatTerminalizeMessageRequest>();
-                       return new NodeChatPersistedMessageDto(request.Correlation.MessageId,
-                           request.Correlation.ConversationId,
-                           request.Correlation.RequestId,
-                           Sequence: 0,
-                           "assistant",
-                           request.Content ?? string.Empty,
-                           request.Reasoning,
-                           request.Status,
-                           CreatedAtUtc: 0,
-                           request.UpdatedAtUtc,
-                           request.Model,
-                           request.Error,
-                           MetadataJson: null);
+                       return new NodeChatPersistedMessageDto
+                       {
+                           MessageId = request.Correlation.MessageId,
+                           ConversationId = request.Correlation.ConversationId,
+                           RequestId = request.Correlation.RequestId,
+                           Sequence = 0,
+                           Role = "assistant",
+                           Content = request.Content ?? string.Empty,
+                           Reasoning = request.Reasoning,
+                           Status = request.Status,
+                           CreatedAtUtc = 0,
+                           UpdatedAtUtc = request.UpdatedAtUtc,
+                           Model = request.Model,
+                           Error = request.Error,
+                           MetadataJson = null
+                       };
                    });
         return persistence;
     }

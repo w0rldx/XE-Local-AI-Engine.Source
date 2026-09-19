@@ -30,12 +30,15 @@ public sealed class UpdateSuggestedPlaybookActionEndpoint : Endpoint<UpdateSugge
 
     public override async Task HandleAsync(UpdateSuggestedPlaybookActionRequest req, CancellationToken ct)
     {
-        var record = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput(req.AgentDefinitionId,
-                req.ActionId,
-                req.Behavior ?? string.Empty,
-                req.TriggerCondition,
-                req.Scope,
-                req.Priority),
+        var record = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput
+        {
+            AgentDefinitionId = req.AgentDefinitionId,
+            ActionId = req.ActionId,
+            Behavior = req.Behavior ?? string.Empty,
+            TriggerCondition = req.TriggerCondition,
+            Scope = req.Scope,
+            Priority = req.Priority
+        },
             ct);
 
         if (record is null)

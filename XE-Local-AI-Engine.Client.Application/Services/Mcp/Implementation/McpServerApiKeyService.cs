@@ -49,7 +49,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         var record = await _store.SetAsync(prefix, HashKey(key), (int)scope, cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
-        return new GeneratedMcpServerApiKey(key, ToView(record));
+        return new GeneratedMcpServerApiKey { Key = key, View = ToView(record) };
     }
 
     public async Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default)
@@ -100,8 +100,11 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
             return null;
         }
 
-        return new McpServerApiKeyValidation(ToScope(record.Scope),
-            record.Prefix[..Math.Min(record.Prefix.Length, KeyScheme.Length + PrefixSecretCharacters)]);
+        return new McpServerApiKeyValidation
+        {
+            Scope = ToScope(record.Scope),
+            Prefix = record.Prefix[..Math.Min(record.Prefix.Length, KeyScheme.Length + PrefixSecretCharacters)]
+        };
     }
 
     /// <summary>
@@ -118,10 +121,13 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
 
     private static McpServerApiKeyView ToView(McpServerApiKeyRecord record)
     {
-        return new McpServerApiKeyView(record.Prefix,
-            ToScope(record.Scope),
-            DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
-            record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value));
+        return new McpServerApiKeyView
+        {
+            Prefix = record.Prefix,
+            Scope = ToScope(record.Scope),
+            CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
+            LastUsedAt = record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value)
+        };
     }
 
     private static McpServerApiKeyScope ToScope(int scope) =>

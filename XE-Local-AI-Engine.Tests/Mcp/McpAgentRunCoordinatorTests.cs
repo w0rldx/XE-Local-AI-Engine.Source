@@ -29,12 +29,15 @@ public sealed class McpAgentRunCoordinatorTests
     public void RequestFingerprint_WhenDelegateRequestMatchesPreMigrationCanonical_RemainsV1Compatible()
     {
         using var harness = new Harness();
-        var request = new McpAgentRunStartRequest(Guid.Parse("11111111-2222-3333-4444-555555555555"),
-            "inspect",
-            new McpExecutionBindingRequest
+        var request = new McpAgentRunStartRequest
+        {
+            RequestId = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            Task = "inspect",
+            Binding = new McpExecutionBindingRequest
             {
                 ModelId = "model"
-            });
+            }
+        };
 
         AssertEx.Equal(LegacyDelegateRequestFingerprint, Convert.ToHexString(harness.ComputeFingerprint(request)));
     }
@@ -44,24 +47,27 @@ public sealed class McpAgentRunCoordinatorTests
     {
         using var harness = new Harness();
         var requestId = Guid.NewGuid();
-        var delegateRequest = new McpAgentRunStartRequest(requestId,
-            "inspect",
-            new McpExecutionBindingRequest
+        var delegateRequest = new McpAgentRunStartRequest
+        {
+            RequestId = requestId,
+            Task = "inspect",
+            Binding = new McpExecutionBindingRequest
             {
                 ModelId = "model"
-            });
+            }
+        };
         var agenticRequest = delegateRequest with
         {
             Binding = delegateRequest.Binding with
             {
-                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123")
+                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" }
             }
         };
         var otherAgenticRequest = agenticRequest with
         {
             Binding = agenticRequest.Binding with
             {
-                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_def456")
+                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_def456" }
             }
         };
 
@@ -73,12 +79,15 @@ public sealed class McpAgentRunCoordinatorTests
     public async Task StartAsync_WhenMigratedQueuedDelegateRetries_ReusesLegacyIdentityWithoutResolution()
     {
         using var harness = new Harness();
-        var request = new McpAgentRunStartRequest(Guid.Parse("11111111-2222-3333-4444-555555555555"),
-            "inspect",
-            new McpExecutionBindingRequest
+        var request = new McpAgentRunStartRequest
+        {
+            RequestId = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            Task = "inspect",
+            Binding = new McpExecutionBindingRequest
             {
                 ModelId = "model"
-            });
+            }
+        };
         harness.Store.GetAsync(request.RequestId, Arg.Any<CancellationToken>())
                .Returns(CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
                {
@@ -100,13 +109,16 @@ public sealed class McpAgentRunCoordinatorTests
     {
         using var harness = new Harness();
         var workspaceId = Guid.NewGuid();
-        var request = new McpAgentRunStartRequest(Guid.NewGuid(),
-            "inspect the repository",
-            new McpExecutionBindingRequest
+        var request = new McpAgentRunStartRequest
+        {
+            RequestId = Guid.NewGuid(),
+            Task = "inspect the repository",
+            Binding = new McpExecutionBindingRequest
             {
                 ModelId = "local-model"
             },
-            workspaceId);
+            WorkspaceId = workspaceId
+        };
         var existing = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
         {
             RequestId = request.RequestId,
@@ -129,12 +141,15 @@ public sealed class McpAgentRunCoordinatorTests
         using var harness = new Harness();
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
                .Returns(McpExecutionBindingResolution.Success(ExactCoderBinding()));
-        var request = new McpAgentRunStartRequest(Guid.NewGuid(),
-            "inspect the repository",
-            new McpExecutionBindingRequest
+        var request = new McpAgentRunStartRequest
+        {
+            RequestId = Guid.NewGuid(),
+            Task = "inspect the repository",
+            Binding = new McpExecutionBindingRequest
             {
                 AgentKey = "Coder"
-            });
+            }
+        };
 
         var result = await harness.Coordinator.StartAsync(request, CancellationToken.None);
 
@@ -191,7 +206,7 @@ public sealed class McpAgentRunCoordinatorTests
         harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
                .Returns(McpExecutionBindingResolution.Success(binding));
         harness.WorkspaceResolver.ResolveAsync(workspaceId.ToString("D"), Arg.Any<CancellationToken>())
-               .Returns(new ResolvedSelectedFolder(workspaceId, "repo", "/private/not-persisted", SelectedFolderMode.ReadOnlyMount));
+               .Returns(new ResolvedSelectedFolder { Id = workspaceId, Alias = "repo", HostPath = "/private/not-persisted", Mode = SelectedFolderMode.ReadOnlyMount });
         McpAgentRunAdmissionRequest? captured = null;
         harness.Store.AdmitAsync(Arg.Any<McpAgentRunAdmissionRequest>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
@@ -227,14 +242,17 @@ public sealed class McpAgentRunCoordinatorTests
         {
             ModelId = "local-model"
         };
-        var binding = new McpExecutionBinding(Convert.ToHexString(SHA256.HashData("binding"u8)),
-            "local-model",
-            "read only",
-            AgentDefinitionId: null,
-            AgentDefinitionVersion: null,
-            AllowedTools: [],
-            ReasoningEffort: null,
-            SupportsThinking: false);
+        var binding = new McpExecutionBinding
+        {
+            BindingFingerprint = Convert.ToHexString(SHA256.HashData("binding"u8)),
+            ModelId = "local-model",
+            Instructions = "read only",
+            AgentDefinitionId = null,
+            AgentDefinitionVersion = null,
+            AllowedTools = [],
+            ReasoningEffort = null,
+            SupportsThinking = false
+        };
         harness.Resolver.ResolveAsync(bindingRequest, Arg.Any<CancellationToken>())
                .Returns(McpExecutionBindingResolution.Success(binding));
         McpAgentRunAdmissionRequest? admission = null;
@@ -256,9 +274,12 @@ public sealed class McpAgentRunCoordinatorTests
         harness.Store.GetLedgerSnapshotAsync(Arg.Any<CancellationToken>())
                .Returns(EmptySnapshot());
 
-        var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest(requestId,
-                "inspect the repository",
-                bindingRequest),
+        var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest
+        {
+            RequestId = requestId,
+            Task = "inspect the repository",
+            Binding = bindingRequest
+        },
             CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Accepted, result.Kind);
@@ -382,28 +403,33 @@ public sealed class McpAgentRunCoordinatorTests
         };
 
     private static McpAgentRunStartRequest WorkspaceRequest(Guid workspaceId) =>
-        new(Guid.NewGuid(),
-            "inspect the repository",
-            new McpExecutionBindingRequest
+        new()
+        {
+            RequestId = Guid.NewGuid(),
+            Task = "inspect the repository",
+            Binding = new McpExecutionBindingRequest
             {
                 AgentKey = "Coder"
             },
-            workspaceId);
+            WorkspaceId = workspaceId
+        };
 
     private static McpExecutionBinding ExactCoderBinding() =>
-        new(Convert.ToHexString(SHA256.HashData("coder-binding"u8)),
-            "local-model",
-            "read only",
-            Guid.NewGuid(),
-            AgentDefinitionVersion: 1,
-            AllowedTools:
-            [
+        new()
+        {
+            BindingFingerprint = Convert.ToHexString(SHA256.HashData("coder-binding"u8)),
+            ModelId = "local-model",
+            Instructions = "read only",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 1,
+            AllowedTools = [
                 Tool("list_files"),
                 Tool("read_file"),
                 Tool("search_text")
             ],
-            ReasoningEffort: null,
-            SupportsThinking: false);
+            ReasoningEffort = null,
+            SupportsThinking = false
+        };
 
     private static AllowedToolDto Tool(string name) =>
         new()

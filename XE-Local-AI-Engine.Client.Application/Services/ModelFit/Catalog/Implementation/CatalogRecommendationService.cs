@@ -96,7 +96,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         var recommended = ordered.Where(IsRecommended).ToList();
         var canRun = ordered.Where(candidate => !IsRecommended(candidate)).ToList();
 
-        return new CatalogRecommendationResult(recommended, canRun, snapshot);
+        return new CatalogRecommendationResult { Recommended = recommended, CanRun = canRun, CatalogSnapshot = snapshot };
     }
 
     /// <summary>
@@ -171,14 +171,17 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         var modelName = GgufModelName.Format(entry.GgufRepo, file.Quant);
         var kvQuantAdvisory = BuildKvQuantAdvisory(entry, file, ctxTarget, profile);
         var attention = BuildAttentionShape(file);
-        return new CatalogRecommendationCandidate(entry,
-            file,
-            estimate,
-            modelName,
-            installedKeys.Contains(modelName),
-            kvQuantAdvisory,
-            BuildKvBytesPerTokenAtCtx(file, ctxTarget, attention),
-            AttentionArchTag.Resolve(attention, file.AttentionHeadCount, file.AttentionHeadCountKV));
+        return new CatalogRecommendationCandidate
+        {
+            Entry = entry,
+            File = file,
+            Estimate = estimate,
+            ModelName = modelName,
+            IsInstalled = installedKeys.Contains(modelName),
+            KvQuantAdvisory = kvQuantAdvisory,
+            KvBytesPerTokenAtCtx = BuildKvBytesPerTokenAtCtx(file, ctxTarget, attention),
+            AttentionArchTag = AttentionArchTag.Resolve(attention, file.AttentionHeadCount, file.AttentionHeadCountKV)
+        };
     }
 
     /// <summary>
@@ -238,11 +241,14 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             QuantLadder.IsNativeFormat(file.Quant));
 
         // Quantized KV always requires flash attention per the ResolvedLaunchArguments contract (KV types force FlashAttn).
-        return new KvQuantAdvisory(KvCacheQuant.Q8_0,
-            quantizedEstimate.EstimatedBytes,
-            quantizedEstimate.HeadroomBytes,
-            quantizedEstimate.Fits,
-            RequiresFlashAttention: true);
+        return new KvQuantAdvisory
+        {
+            Quant = KvCacheQuant.Q8_0,
+            EstimatedBytes = quantizedEstimate.EstimatedBytes,
+            HeadroomBytes = quantizedEstimate.HeadroomBytes,
+            Fits = quantizedEstimate.Fits,
+            RequiresFlashAttention = true
+        };
     }
 
     /// <summary>
@@ -261,7 +267,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
 
         var activeParamCount = entry.ActiveParamsB is { } activeB ? (long?)(activeB * 1_000_000_000d) : null;
         var expertCount = file.ExpertCount is > 0 ? file.ExpertCount : 1;
-        return new MoeFacts(activeParamCount, expertCount, file.ExpertUsedCount);
+        return new MoeFacts { ActiveParamCount = activeParamCount, ExpertCount = expertCount, ExpertUsedCount = file.ExpertUsedCount };
     }
 
     // Explicit attention geometry from the file header for the estimator: per-head key/value lengths (preferred over the
@@ -269,7 +275,14 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     // estimator on its legacy derived-head_dim, no-SWA path.
     private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
     {
-        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern,
-            file.AttentionKeyLengthMla, file.AttentionValueLengthMla);
+        return new GgufAttentionShape
+        {
+            KeyLength = file.AttentionKeyLength,
+            ValueLength = file.AttentionValueLength,
+            SlidingWindow = file.SlidingWindow,
+            SlidingWindowPattern = file.SlidingWindowPattern,
+            KeyLengthMla = file.AttentionKeyLengthMla,
+            ValueLengthMla = file.AttentionValueLengthMla
+        };
     }
 }

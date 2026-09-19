@@ -369,10 +369,13 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         ILocalModelProviderResolver? providerResolver = null)
     {
         var identityResolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
-        var identity = identityResolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Download,
-            Repo,
-            Quant,
-            Download: ProvisioningDownloadTransaction.IntentMetadata));
+        var identity = identityResolver.Resolve(new GgufAcquisitionIntent
+        {
+            OperationKind = GgufAcquisitionOperationKind.Download,
+            ModelBaseName = Repo,
+            Quantization = Quant,
+            Download = ProvisioningDownloadTransaction.IntentMetadata
+        });
         var services = new ServiceCollection();
         services.AddScoped(_ => mapStore);
         services.AddScoped<IGgufAcquisitionPreflight>(_ => new AvailablePreflight(identity, disposition));
@@ -419,7 +422,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     private sealed class ProvisioningDownloadTransaction : IGgufDownloadTransaction
     {
         private static readonly string Hash = new('a', 64);
-        public static GgufDownloadAcquisitionMetadata IntentMetadata { get; } = new(Repo, "revision", "model.gguf", 1, Hash, GgufRole.Chat);
+        public static GgufDownloadAcquisitionMetadata IntentMetadata { get; } = new() { RepoId = Repo, ResolvedRevision = "revision", SourceDisplayName = "model.gguf", DeclaredSizeBytes = 1, DeclaredSha256 = Hash, Role = GgufRole.Chat };
         public bool FailDownload { get; init; }
         public Exception? UnexpectedFailure { get; init; }
         public bool BlockPrepare { get; init; }
@@ -653,9 +656,12 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
             CancellationToken cancellationToken = default)
         {
-            var request = new InstalledModelMutationRequest(_identity.CanonicalModelName,
-                InstalledModelMutationKind.Acquire,
-                [new(_identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight), new(_identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)]);
+            var request = new InstalledModelMutationRequest
+            {
+                ModelName = _identity.CanonicalModelName,
+                Kind = InstalledModelMutationKind.Acquire,
+                IntendedMembers = [new() { RelativePath = _identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight }, new() { RelativePath = _identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }]
+            };
             var keys = new[]
             {
                 ModelCoordinationKeys.Model(_identity.CanonicalModelName),

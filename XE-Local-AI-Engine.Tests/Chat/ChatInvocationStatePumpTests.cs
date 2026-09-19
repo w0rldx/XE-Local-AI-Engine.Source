@@ -389,14 +389,17 @@ public sealed class ChatInvocationStatePumpTests
 
             if (content.Length <= cursor.Content.Length && reasoning.Length <= cursor.Reasoning.Length)
             {
-                return Task.FromResult(new NodeChatPumpFlushResult(cursor, Persisted: null, ContentDelta: null, ReasoningDelta: null));
+                return Task.FromResult(new NodeChatPumpFlushResult { Cursor = cursor, Persisted = null, ContentDelta = null, ReasoningDelta = null });
             }
 
             Flushes.Add(content);
-            return Task.FromResult(new NodeChatPumpFlushResult(new NodeChatPumpCursor(content, reasoning),
-                NewPersisted(correlation, content, reasoning, NodeChatMessageStatusValues.Streaming),
-                content[cursor.Content.Length..],
-                reasoning[cursor.Reasoning.Length..]));
+            return Task.FromResult(new NodeChatPumpFlushResult
+            {
+                Cursor = new NodeChatPumpCursor(content, reasoning),
+                Persisted = NewPersisted(correlation, content, reasoning, NodeChatMessageStatusValues.Streaming),
+                ContentDelta = content[cursor.Content.Length..],
+                ReasoningDelta = reasoning[cursor.Reasoning.Length..]
+            });
         }
 
         public Task<NodeChatPumpTerminalResult> TerminalizeAsync(NodeChatMessageCorrelation correlation,
@@ -405,9 +408,12 @@ public sealed class ChatInvocationStatePumpTests
             IReadOnlyList<NodeChatMessagePart>? parts = null,
             IReadOnlyList<NodeChatMessageSource>? sources = null)
         {
-            return Task.FromResult(new NodeChatPumpTerminalResult(NewPersisted(correlation, state.StreamedContent, state.StreamedThinkingContent, NodeChatMessageStatusValues.Completed),
-                NodeChatMessageStatusValues.Completed,
-                ChatStreamEventTypes.AssistantCompleted));
+            return Task.FromResult(new NodeChatPumpTerminalResult
+            {
+                Persisted = NewPersisted(correlation, state.StreamedContent, state.StreamedThinkingContent, NodeChatMessageStatusValues.Completed),
+                TerminalStatus = NodeChatMessageStatusValues.Completed,
+                EventType = ChatStreamEventTypes.AssistantCompleted
+            });
         }
 
         public Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
@@ -415,9 +421,12 @@ public sealed class ChatInvocationStatePumpTests
             bool wasCancelled)
         {
             var status = wasCancelled ? NodeChatMessageStatusValues.Cancelled : NodeChatMessageStatusValues.Interrupted;
-            return Task.FromResult(new NodeChatPumpTerminalResult(NewPersisted(correlation, cursor.Content, cursor.Reasoning, status),
-                status,
-                ChatStreamEventMapper.TerminalEventType(status)));
+            return Task.FromResult(new NodeChatPumpTerminalResult
+            {
+                Persisted = NewPersisted(correlation, cursor.Content, cursor.Reasoning, status),
+                TerminalStatus = status,
+                EventType = ChatStreamEventMapper.TerminalEventType(status)
+            });
         }
 
         private static NodeChatPersistedMessageDto NewPersisted(NodeChatMessageCorrelation correlation,
@@ -425,21 +434,24 @@ public sealed class ChatInvocationStatePumpTests
             string reasoning,
             string status)
         {
-            return new NodeChatPersistedMessageDto(correlation.MessageId,
-                correlation.ConversationId,
-                correlation.RequestId,
-                Sequence: 1,
-                Role: "assistant",
-                Content: content,
-                Reasoning: string.IsNullOrEmpty(reasoning) ? null : reasoning,
-                Status: status,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                Model: "model-x",
-                Error: null,
-                MetadataJson: null,
-                InputCount: null,
-                OutputCount: null);
+            return new NodeChatPersistedMessageDto
+            {
+                MessageId = correlation.MessageId,
+                ConversationId = correlation.ConversationId,
+                RequestId = correlation.RequestId,
+                Sequence = 1,
+                Role = "assistant",
+                Content = content,
+                Reasoning = string.IsNullOrEmpty(reasoning) ? null : reasoning,
+                Status = status,
+                CreatedAtUtc = 0,
+                UpdatedAtUtc = 0,
+                Model = "model-x",
+                Error = null,
+                MetadataJson = null,
+                InputCount = null,
+                OutputCount = null
+            };
         }
     }
 }

@@ -213,8 +213,11 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         };
         var options = configure is null ? defaults : configure(defaults);
 
-        var runtime = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///xe-external-apps-tests.sock"),
-            DockerDaemonEndpointSource.Configuration));
+        var runtime = new FakeDockerRuntimeClient(new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///xe-external-apps-tests.sock"),
+            Source = DockerDaemonEndpointSource.Configuration
+        });
         var gated = new GatedContainerRuntime(runtime);
         var resolver = new FakeContainerRuntimeResolver(gated);
         var catalog = SubstituteCatalog(manifest);

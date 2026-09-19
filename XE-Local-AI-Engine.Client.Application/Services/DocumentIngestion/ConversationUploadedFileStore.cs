@@ -86,15 +86,18 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         await OpenIfNeededAsync(command.Connection, cancellationToken);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        return new ConversationUploadedFileInfo(input.FileId,
-            input.ConversationId,
-            input.OriginalFileName,
-            input.MimeType,
-            extension,
-            input.SizeBytes,
-            input.ExtractionStatus,
-            input.ExtractedChars,
-            createdAtUtc);
+        return new ConversationUploadedFileInfo
+        {
+            FileId = input.FileId,
+            ConversationId = input.ConversationId,
+            OriginalFileName = input.OriginalFileName,
+            MimeType = input.MimeType,
+            Extension = extension,
+            SizeBytes = input.SizeBytes,
+            ExtractionStatus = input.ExtractionStatus,
+            ExtractedChars = input.ExtractedChars,
+            CreatedAtUtc = createdAtUtc
+        };
     }
 
     public async Task<IReadOnlyList<ConversationUploadedFileInfo>> ListAsync(Guid conversationId, CancellationToken cancellationToken)
@@ -121,15 +124,18 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             var nameBytes = await reader.GetFieldValueAsync<byte[]>(ordinal: 2, cancellationToken);
             var originalFileName = dbContext.DecryptUploadedFileName(nameBytes, ownerConversationId, fileId);
 
-            files.Add(new ConversationUploadedFileInfo(fileId,
-                ownerConversationId,
-                originalFileName,
-                reader.GetString(3),
-                reader.GetString(4),
-                reader.GetInt64(5),
-                ParseStatus(reader.GetString(6)),
-                await reader.IsDBNullAsync(ordinal: 7, cancellationToken) ? null : reader.GetInt32(7),
-                reader.GetInt64(8)));
+            files.Add(new ConversationUploadedFileInfo
+            {
+                FileId = fileId,
+                ConversationId = ownerConversationId,
+                OriginalFileName = originalFileName,
+                MimeType = reader.GetString(3),
+                Extension = reader.GetString(4),
+                SizeBytes = reader.GetInt64(5),
+                ExtractionStatus = ParseStatus(reader.GetString(6)),
+                ExtractedChars = await reader.IsDBNullAsync(ordinal: 7, cancellationToken) ? null : reader.GetInt32(7),
+                CreatedAtUtc = reader.GetInt64(8)
+            });
         }
 
         return files;

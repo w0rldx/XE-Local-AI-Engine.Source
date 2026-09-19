@@ -72,7 +72,7 @@ public sealed class ToolMockService : IToolMockService
                                       verification.Passed ? ToolMockVerificationState.Verified : ToolMockVerificationState.Rejected,
                                       JsonSerializer.SerializeToUtf8Bytes(verification, TrainingJson.Options),
                                       cancellationToken);
-        return new ToolMockVerifyResult(updated, verification);
+        return new ToolMockVerifyResult { Mock = updated, Verification = verification };
     }
 
     private async Task<string?> FindSchemaAsync(string toolName, CancellationToken cancellationToken)

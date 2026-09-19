@@ -19,11 +19,14 @@ public interface IBenchmarkInstalledModelLeaseProvider
     {
         await using var lease = await AcquireAsync(modelName, cancellationToken);
         var snapshot = lease.Snapshot;
-        return new InstalledModelFacts(snapshot.ModelName,
-            snapshot.ProviderName ?? string.Empty,
-            snapshot.Role,
-            snapshot.Origin,
-            snapshot.ModelContentFingerprint);
+        return new InstalledModelFacts
+        {
+            ModelName = snapshot.ModelName,
+            ProviderName = snapshot.ProviderName ?? string.Empty,
+            Role = snapshot.Role,
+            Origin = snapshot.Origin,
+            ModelContentFingerprint = snapshot.ModelContentFingerprint
+        };
     }
 }
 

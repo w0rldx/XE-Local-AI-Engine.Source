@@ -62,13 +62,16 @@ public sealed class BenchmarkRunBatchServiceTests
               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new NotSupportedException("Unsupported snapshot."));
         freeze.StartAsync(Request("good", 4), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>()).Returns([Run()]);
         var service = new BenchmarkRunBatchService(freeze, TimeProvider.System);
-        var request = new BenchmarkRunBatchRequest(ProjectId,
-            4,
-            [new BenchmarkRunBatchItem(" ", null), new BenchmarkRunBatchItem("unsupported", null), new BenchmarkRunBatchItem("good", null)],
-            1,
-            false,
-            BenchmarkRepeatMode.Throughput,
-            null);
+        var request = new BenchmarkRunBatchRequest
+        {
+            ProjectId = ProjectId,
+            ExpectedProjectVersion = 4,
+            Items = [new BenchmarkRunBatchItem { ModelName = " ", KvCacheType = null }, new BenchmarkRunBatchItem { ModelName = "unsupported", KvCacheType = null }, new BenchmarkRunBatchItem { ModelName = "good", KvCacheType = null }],
+            RepeatCount = 1,
+            Warmup = false,
+            RepeatMode = BenchmarkRepeatMode.Throughput,
+            AnswerVarianceTemperature = null
+        };
 
         var result = await service.StartAsync(request);
 
@@ -83,16 +86,19 @@ public sealed class BenchmarkRunBatchServiceTests
     }
 
     private static BenchmarkRunBatchRequest Batch(params string[] modelNames) =>
-        new(ProjectId,
-            4,
-            [.. modelNames.Select(static name => new BenchmarkRunBatchItem(name, null))],
-            1,
-            false,
-            BenchmarkRepeatMode.Throughput,
-            null);
+        new()
+        {
+            ProjectId = ProjectId,
+            ExpectedProjectVersion = 4,
+            Items = [.. modelNames.Select(static name => new BenchmarkRunBatchItem { ModelName = name, KvCacheType = null })],
+            RepeatCount = 1,
+            Warmup = false,
+            RepeatMode = BenchmarkRepeatMode.Throughput,
+            AnswerVarianceTemperature = null
+        };
 
     private static BenchmarkRunStartRequest Request(string modelName, long expectedVersion) =>
-        new(ProjectId, modelName, expectedVersion, null, 1, false);
+        new() { ProjectId = ProjectId, PrimaryModelName = modelName, ExpectedProjectVersion = expectedVersion, KvCacheType = null, RepeatCount = 1, Warmup = false };
 
     private static BenchmarkRunRecord Run() =>
         new()

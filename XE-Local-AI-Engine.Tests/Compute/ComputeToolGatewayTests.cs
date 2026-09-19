@@ -670,7 +670,7 @@ public sealed class ComputeToolGatewayTests
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
             Requested = true;
-            return Task.FromResult(new AgentHomeOwnerIdentity("owner-1", "node-1"));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-1", NodeId = "node-1" });
         }
     }
 

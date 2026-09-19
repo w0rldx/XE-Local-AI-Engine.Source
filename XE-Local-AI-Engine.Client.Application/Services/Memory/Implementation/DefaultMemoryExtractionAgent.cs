@@ -90,10 +90,13 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
     private static ProposedMemory ToProposedMemory(ExtractionCandidate candidate)
     {
         // Pass the raw candidate through; the service validates/dedupes and the store stamps Suggested/Extracted.
-        return new ProposedMemory(candidate.Behavior ?? string.Empty,
-            MapScope(candidate.Scope),
-            candidate.TriggerCondition,
-            candidate.Confidence);
+        return new ProposedMemory
+        {
+            Behavior = candidate.Behavior ?? string.Empty,
+            Scope = MapScope(candidate.Scope),
+            TriggerCondition = candidate.TriggerCondition,
+            Confidence = candidate.Confidence
+        };
     }
 
     private static MemoryScope MapScope(string? scope)

@@ -51,7 +51,7 @@ public sealed class ToolInvocationServiceTests
     public required TestServerWebAppFactory Factory { get; init; }
 
     private static ToolInvocationContext Context(TimeSpan? timeout = null) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), "tool-node", timeout ?? TimeSpan.FromSeconds(30));
+        new() { RunId = Guid.NewGuid(), NodeRunId = Guid.NewGuid(), NodeKey = "tool-node", Timeout = timeout ?? TimeSpan.FromSeconds(30) };
 
     private static IToolInvocationService ServiceOf(TestServerWebAppFactory factory) =>
         factory.Services.GetRequiredService<IToolInvocationService>();

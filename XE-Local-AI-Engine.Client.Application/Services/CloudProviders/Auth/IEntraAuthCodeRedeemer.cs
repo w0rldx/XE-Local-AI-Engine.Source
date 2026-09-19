@@ -3,7 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using Microsoft.Identity.Client;
 
 /// <summary>Result of redeeming an authorization code via an MSAL confidential-client PKCE exchange.</summary>
-public sealed record EntraAuthCodeRedemptionResult(IConfidentialClientApplication ConfidentialClientApplication, IAccount Account);
+public sealed class EntraAuthCodeRedemptionResult
+{
+    public required IConfidentialClientApplication ConfidentialClientApplication { get; init; }
+
+    public required IAccount Account { get; init; }
+}
 
 /// <summary>
 ///     Seam over the real MSAL authorization-code redemption call

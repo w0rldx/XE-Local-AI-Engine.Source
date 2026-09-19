@@ -55,13 +55,16 @@ internal static class SkillFrontmatterReader
             return false;
         }
 
-        result = new SkillFrontmatterDocument(Value(scalars, "name"),
-            Value(scalars, "description"),
-            Value(scalars, "license"),
-            Value(scalars, "compatibility"),
-            Value(scalars, "allowed-tools"),
-            metadata.Count == 0 ? null : metadata,
-            string.Join('\n', lines[(close + 1)..]).Trim());
+        result = new SkillFrontmatterDocument
+        {
+            Name = Value(scalars, "name"),
+            Description = Value(scalars, "description"),
+            License = Value(scalars, "license"),
+            Compatibility = Value(scalars, "compatibility"),
+            AllowedTools = Value(scalars, "allowed-tools"),
+            Metadata = metadata.Count == 0 ? null : metadata,
+            Body = string.Join('\n', lines[(close + 1)..]).Trim()
+        };
 
         return true;
     }
@@ -199,15 +202,23 @@ internal static class SkillFrontmatterReader
 }
 
 /// <summary>
-///     The six specification frontmatter keys plus the body. <paramref name="AllowedTools" /> is normalised here, once,
+///     The six specification frontmatter keys plus the body. <see cref="AllowedTools" /> is normalised here, once,
 ///     to the space-delimited string form — the shape MAF consumes and the shape persistence stores — so no caller
 ///     downstream has to know the frontmatter could also have written it as a sequence.
 /// </summary>
-internal sealed record SkillFrontmatterDocument(
-    string? Name,
-    string? Description,
-    string? License,
-    string? Compatibility,
-    string? AllowedTools,
-    IReadOnlyDictionary<string, string>? Metadata,
-    string Body);
+internal sealed class SkillFrontmatterDocument
+{
+    public required string? Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string? License { get; init; }
+
+    public required string? Compatibility { get; init; }
+
+    public required string? AllowedTools { get; init; }
+
+    public required IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    public required string Body { get; init; }
+}

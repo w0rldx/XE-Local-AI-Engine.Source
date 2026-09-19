@@ -256,14 +256,16 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(workspace, ".gitattributes"), "* filter=pwn\n");
         await File.WriteAllTextAsync(Path.Combine(workspace, "feature.txt"), "implemented\n");
 
-        var session = new DevelopmentWorkspaceSession(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            baseCommit,
-            "identity",
-            workspace,
-            runtime,
-            new SandboxHandle
+        var session = new DevelopmentWorkspaceSession
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            BaseCommit = baseCommit,
+            RepositoryIdentityHash = "identity",
+            HostWorktreePath = workspace,
+            RuntimePath = runtime,
+            SandboxHandle = new SandboxHandle
             {
                 ProviderName = "process",
                 SandboxId = "sandbox",
@@ -277,7 +279,8 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                 },
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = 2
-            });
+            }
+        };
 
         return new PoisonedWorkspace(session, filterSentinel, fsmonitorSentinel);
     }

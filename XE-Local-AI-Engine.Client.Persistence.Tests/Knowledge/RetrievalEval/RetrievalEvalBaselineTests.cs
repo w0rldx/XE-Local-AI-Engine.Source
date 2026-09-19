@@ -123,7 +123,7 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
         var reranker = new BudgetObservingReranker();
         var search = fixture.CreateRerankedSearchService(reranker, retrievalLatencyBudgetMilliseconds: 500);
 
-        var result = await search.SearchAsync(new KnowledgeSearchRequest("retention period", Limit: 3), CancellationToken.None);
+        var result = await search.SearchAsync(new KnowledgeSearchRequest { Query = "retention period", Limit = 3 }, CancellationToken.None);
 
         if (reranker.InvocationObserved)
         {

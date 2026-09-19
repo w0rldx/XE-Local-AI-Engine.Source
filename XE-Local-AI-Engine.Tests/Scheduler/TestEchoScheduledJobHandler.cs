@@ -24,16 +24,19 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
 
     public string TemplateId => Id;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(Id,
-        "Echo (test)",
-        "No-op test handler that records invocations.",
-        ParameterSchema: null,
-        DefaultParameters: null,
-        [ScheduleKind.OneShot, ScheduleKind.Cron],
-        ScheduleKind.OneShot,
-        SchedulerMisfirePolicy.SkipMissed,
-        DefaultMaxRuntimeSeconds: null,
-        AllowManualTrigger: true);
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new()
+    {
+        TemplateId = Id,
+        DisplayName = "Echo (test)",
+        Description = "No-op test handler that records invocations.",
+        ParameterSchema = null,
+        DefaultParameters = null,
+        SupportedScheduleKinds = [ScheduleKind.OneShot, ScheduleKind.Cron],
+        DefaultScheduleKind = ScheduleKind.OneShot,
+        DefaultMisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+        DefaultMaxRuntimeSeconds = null,
+        AllowManualTrigger = true
+    };
 
     public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {

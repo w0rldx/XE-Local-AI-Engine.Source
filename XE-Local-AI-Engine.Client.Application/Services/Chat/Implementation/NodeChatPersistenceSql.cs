@@ -82,12 +82,15 @@ internal static class NodeChatPersistenceSql
             return null;
         }
 
-        return new NodeChatMessageFeedbackDto(Guid.Parse(reader.GetString(0)),
-            Guid.Parse(reader.GetString(1)),
-            reader.GetString(2),
-            await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
-            reader.GetInt64(4),
-            reader.GetInt64(5));
+        return new NodeChatMessageFeedbackDto
+        {
+            MessageId = Guid.Parse(reader.GetString(0)),
+            ConversationId = Guid.Parse(reader.GetString(1)),
+            Rating = reader.GetString(2),
+            Comment = await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
+            CreatedAtUtc = reader.GetInt64(4),
+            UpdatedAtUtc = reader.GetInt64(5)
+        };
     }
 
     internal static async Task<NodeChatConversationDto?> ReadConversationWithMessagesAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
@@ -121,24 +124,27 @@ internal static class NodeChatPersistenceSql
         var titleBytes = await reader.IsDBNullAsync(ordinal: 1, cancellationToken)
             ? null
             : await reader.GetFieldValueAsync<byte[]>(ordinal: 1, cancellationToken);
-        return new NodeChatConversationDto(Guid.Parse(reader.GetString(0)),
-            DecryptTitle(titleBytes, dbContext, conversationId),
-            await reader.IsDBNullAsync(ordinal: 2, cancellationToken) ? null : reader.GetString(2),
-            reader.GetInt64(3),
-            reader.GetInt64(4),
-            reader.GetBoolean(5),
-            [],
-            reader.GetString(6),
-            reader.GetBoolean(7),
-            reader.GetBoolean(8),
-            await reader.IsDBNullAsync(ordinal: 9, cancellationToken) ? null : Guid.Parse(reader.GetString(9)),
-            AgentDefinitionId: await reader.IsDBNullAsync(ordinal: 10, cancellationToken) ? null : Guid.Parse(reader.GetString(10)),
-            MemoryExcluded: reader.GetBoolean(11),
-            CompactionSummary: dbContext.DecryptConversationCompactionSummary(
+        return new NodeChatConversationDto
+        {
+            ConversationId = Guid.Parse(reader.GetString(0)),
+            Title = DecryptTitle(titleBytes, dbContext, conversationId),
+            UserId = await reader.IsDBNullAsync(ordinal: 2, cancellationToken) ? null : reader.GetString(2),
+            CreatedAtUtc = reader.GetInt64(3),
+            LastSeenUtc = reader.GetInt64(4),
+            Purged = reader.GetBoolean(5),
+            Messages = [],
+            Origin = reader.GetString(6),
+            IsPinned = reader.GetBoolean(7),
+            Archived = reader.GetBoolean(8),
+            BranchOfConversationId = await reader.IsDBNullAsync(ordinal: 9, cancellationToken) ? null : Guid.Parse(reader.GetString(9)),
+            AgentDefinitionId = await reader.IsDBNullAsync(ordinal: 10, cancellationToken) ? null : Guid.Parse(reader.GetString(10)),
+            MemoryExcluded = reader.GetBoolean(11),
+            CompactionSummary = dbContext.DecryptConversationCompactionSummary(
                 await reader.IsDBNullAsync(ordinal: 12, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 12, cancellationToken),
                 conversationId),
-            CompactionSummaryCoversToSequence: await reader.IsDBNullAsync(ordinal: 13, cancellationToken) ? null : reader.GetInt32(13),
-            CompactionSummaryUpdatedAtUtc: await reader.IsDBNullAsync(ordinal: 14, cancellationToken) ? null : reader.GetInt64(14));
+            CompactionSummaryCoversToSequence = await reader.IsDBNullAsync(ordinal: 13, cancellationToken) ? null : reader.GetInt32(13),
+            CompactionSummaryUpdatedAtUtc = await reader.IsDBNullAsync(ordinal: 14, cancellationToken) ? null : reader.GetInt64(14)
+        };
     }
 
     /// <summary>
@@ -219,34 +225,37 @@ internal static class NodeChatPersistenceSql
             var content = await reader.IsDBNullAsync(ordinal: 5, cancellationToken)
                 ? string.Empty
                 : dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken), messageConversationId, messageId);
-            messages.Add(new NodeChatPersistedMessageDto(messageId,
-                messageConversationId,
-                await reader.IsDBNullAsync(ordinal: 2, cancellationToken) ? null : Guid.Parse(reader.GetString(2)),
-                reader.GetInt32(3),
-                reader.GetString(4),
-                content,
-                metadata.Reasoning,
-                reader.GetString(7),
-                reader.GetInt64(8),
-                reader.GetInt64(9),
-                metadata.Model,
-                await reader.IsDBNullAsync(ordinal: 10, cancellationToken) ? null : reader.GetString(10),
-                metadata.MetadataJson,
-                metadata.InputCount,
-                metadata.OutputCount,
-                metadata.TotalCount,
-                metadata.ReasoningCount,
-                reader.GetString(11),
-                await reader.IsDBNullAsync(ordinal: 12, cancellationToken) ? null : Guid.Parse(reader.GetString(12)),
-                await reader.IsDBNullAsync(ordinal: 13, cancellationToken) ? null : Guid.Parse(reader.GetString(13)),
-                await reader.IsDBNullAsync(ordinal: 14, cancellationToken) ? null : reader.GetString(14),
-                await reader.IsDBNullAsync(ordinal: 15, cancellationToken) ? null : reader.GetString(15),
-                metadata.Parts,
-                metadata.AgentDefinitionId,
-                metadata.AgentName,
-                metadata.ReasoningEffort,
-                metadata.GenerationDurationMs,
-                metadata.Sources));
+            messages.Add(new NodeChatPersistedMessageDto
+            {
+                MessageId = messageId,
+                ConversationId = messageConversationId,
+                RequestId = await reader.IsDBNullAsync(ordinal: 2, cancellationToken) ? null : Guid.Parse(reader.GetString(2)),
+                Sequence = reader.GetInt32(3),
+                Role = reader.GetString(4),
+                Content = content,
+                Reasoning = metadata.Reasoning,
+                Status = reader.GetString(7),
+                CreatedAtUtc = reader.GetInt64(8),
+                UpdatedAtUtc = reader.GetInt64(9),
+                Model = metadata.Model,
+                Error = await reader.IsDBNullAsync(ordinal: 10, cancellationToken) ? null : reader.GetString(10),
+                MetadataJson = metadata.MetadataJson,
+                InputCount = metadata.InputCount,
+                OutputCount = metadata.OutputCount,
+                TotalCount = metadata.TotalCount,
+                ReasoningCount = metadata.ReasoningCount,
+                Origin = reader.GetString(11),
+                ParentMessageId = await reader.IsDBNullAsync(ordinal: 12, cancellationToken) ? null : Guid.Parse(reader.GetString(12)),
+                VariantGroupId = await reader.IsDBNullAsync(ordinal: 13, cancellationToken) ? null : Guid.Parse(reader.GetString(13)),
+                FeedbackRating = await reader.IsDBNullAsync(ordinal: 14, cancellationToken) ? null : reader.GetString(14),
+                FeedbackComment = await reader.IsDBNullAsync(ordinal: 15, cancellationToken) ? null : reader.GetString(15),
+                Parts = metadata.Parts,
+                AgentDefinitionId = metadata.AgentDefinitionId,
+                AgentName = metadata.AgentName,
+                ReasoningEffort = metadata.ReasoningEffort,
+                GenerationDurationMs = metadata.GenerationDurationMs,
+                Sources = metadata.Sources
+            });
         }
 
         return messages;
@@ -273,16 +282,19 @@ internal static class NodeChatPersistenceSql
                 : dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken),
                     convId,
                     Guid.Parse(reader.GetString(10)));
-            conversations.Add(new NodeChatConversationSummaryDto(convId,
-                DecryptTitle(titleBytes, dbContext, convId),
-                reader.GetInt64(2),
-                reader.GetInt64(3),
-                Preview(content),
-                await reader.IsDBNullAsync(ordinal: 6, cancellationToken) ? null : reader.GetString(6),
-                reader.GetBoolean(4),
-                reader.GetString(7),
-                reader.GetBoolean(8),
-                reader.GetBoolean(9)));
+            conversations.Add(new NodeChatConversationSummaryDto
+            {
+                ConversationId = convId,
+                Title = DecryptTitle(titleBytes, dbContext, convId),
+                CreatedAtUtc = reader.GetInt64(2),
+                LastSeenUtc = reader.GetInt64(3),
+                LastMessagePreview = Preview(content),
+                LastMessageStatus = await reader.IsDBNullAsync(ordinal: 6, cancellationToken) ? null : reader.GetString(6),
+                Purged = reader.GetBoolean(4),
+                Origin = reader.GetString(7),
+                IsPinned = reader.GetBoolean(8),
+                Archived = reader.GetBoolean(9)
+            });
         }
 
         return conversations;

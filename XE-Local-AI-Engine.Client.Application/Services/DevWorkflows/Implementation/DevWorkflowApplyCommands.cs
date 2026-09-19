@@ -105,7 +105,7 @@ internal sealed class DevWorkflowApplyCommands
             {
                 // Already applied, by this node before a restart or by an operator in the Dev Mode view. The same answer
                 // arriving earlier, and re-applying it is exactly what the task's own state exists to prevent.
-                applied.Add(new AppliedTask(implementation.NodeKey, taskId, title, AppliedOutcomes.AlreadyApplied, Detail: null));
+                applied.Add(new AppliedTask { NodeKey = implementation.NodeKey, TaskId = taskId, Title = title, Outcome = AppliedOutcomes.AlreadyApplied, Detail = null });
                 continue;
             }
 
@@ -152,11 +152,11 @@ internal sealed class DevWorkflowApplyCommands
             var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
-                return (new AppliedTask(implementation.NodeKey, task.Id, title, AppliedOutcomes.Applied, Detail: null), null);
+                return (new AppliedTask { NodeKey = implementation.NodeKey, TaskId = task.Id, Title = title, Outcome = AppliedOutcomes.Applied, Detail = null }, null);
             }
 
             var blocked = $"The Development apply gate declined '{title}': the repository is not at the exact base the approved patch was reviewed against.";
-            return (new AppliedTask(implementation.NodeKey, task.Id, title, AppliedOutcomes.Blocked, blocked), DevWorkflowFailureClasses.Policy);
+            return (new AppliedTask { NodeKey = implementation.NodeKey, TaskId = task.Id, Title = title, Outcome = AppliedOutcomes.Blocked, Detail = blocked }, DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {
@@ -189,11 +189,14 @@ internal sealed class DevWorkflowApplyCommands
         string? lead = null)
     {
         var sanitized = DevWorkflowToolCommands.Sanitized(exception);
-        return new AppliedTask(implementation.NodeKey,
-            task.Id,
-            title,
-            AppliedOutcomes.Refused,
-            lead is null ? sanitized : $"{lead} Development answered: {sanitized}");
+        return new AppliedTask
+        {
+            NodeKey = implementation.NodeKey,
+            TaskId = task.Id,
+            Title = title,
+            Outcome = AppliedOutcomes.Refused,
+            Detail = lead is null ? sanitized : $"{lead} Development answered: {sanitized}"
+        };
     }
 
     /// <summary>
@@ -251,11 +254,14 @@ internal sealed class DevWorkflowApplyCommands
     ///     </para>
     /// </summary>
     private static AppliedTask Unattempted(DevWorkflowNodeRunSnapshot implementation) =>
-        new(implementation.NodeKey,
-            implementation.DevelopmentTaskId!.Value,
-            Title: null,
-            AppliedOutcomes.Cancelled,
-            "The run was cancelled before this patch was offered to the Development apply gate.");
+        new()
+        {
+            NodeKey = implementation.NodeKey,
+            TaskId = implementation.DevelopmentTaskId!.Value,
+            Title = null,
+            Outcome = AppliedOutcomes.Cancelled,
+            Detail = "The run was cancelled before this patch was offered to the Development apply gate."
+        };
 
     /// <summary>
     ///     One task title, fit to be stored on a row and rendered on a wire. A title is what the decomposing agent
@@ -333,22 +339,28 @@ internal sealed class DevWorkflowApplyCommands
         detail = detail is { Length: > MaxTerminalReason } overlong ? $"{overlong[..(MaxTerminalReason - 1)]}…" : detail;
         var failed = applied.Count(static entry => !string.Equals(entry.Outcome, AppliedOutcomes.Applied, StringComparison.Ordinal)
                                                    && !string.Equals(entry.Outcome, AppliedOutcomes.AlreadyApplied, StringComparison.Ordinal));
-        var report = new DevWorkflowApplyReport(failureClass is null,
-            nodeRun.NodeKey,
-            nodeRun.Attempt,
-            applied.Count - failed,
-            applied,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
-        return new DevWorkflowToolRun(failureClass is null,
-            failureClass,
-            FailureCode: null,
-            detail,
-            applied.Count,
-            failed,
-            TestsPassed: null,
-            TestsFailed: null,
-            JsonSerializer.SerializeToUtf8Bytes(report, JsonOptions),
-            []);
+        var report = new DevWorkflowApplyReport
+        {
+            Passed = failureClass is null,
+            NodeKey = nodeRun.NodeKey,
+            Attempt = nodeRun.Attempt,
+            TasksApplied = applied.Count - failed,
+            Tasks = applied,
+            CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
+        return new DevWorkflowToolRun
+        {
+            Passed = failureClass is null,
+            FailureClass = failureClass,
+            FailureCode = null,
+            SanitizedReason = detail,
+            CommandsRun = applied.Count,
+            CommandsFailed = failed,
+            TestsPassed = null,
+            TestsFailed = null,
+            Report = JsonSerializer.SerializeToUtf8Bytes(report, JsonOptions),
+            SecretPaths = []
+        };
     }
 
     /// <summary>What became of one task at the gate. Lowercase-hyphenated, like every other token this product renders.</summary>
@@ -363,7 +375,18 @@ internal sealed class DevWorkflowApplyCommands
         public const string Cancelled = "cancelled";
     }
 
-    private sealed record AppliedTask(string NodeKey, Guid TaskId, string? Title, string Outcome, string? Detail);
+    private sealed record AppliedTask
+    {
+        public required string NodeKey { get; init; }
+
+        public required Guid TaskId { get; init; }
+
+        public required string? Title { get; init; }
+
+        public required string Outcome { get; init; }
+
+        public required string? Detail { get; init; }
+    }
 
     /// <summary>
     ///     The report an apply node leaves behind: which task each patch belonged to, and what the gate did with it.
@@ -373,11 +396,18 @@ internal sealed class DevWorkflowApplyCommands
     ///         is written under the ordinary <c>Report</c> kind for the same reason.
     ///     </para>
     /// </summary>
-    private sealed record DevWorkflowApplyReport(
-        bool Passed,
-        string NodeKey,
-        int Attempt,
-        int TasksApplied,
-        IReadOnlyList<AppliedTask> Tasks,
-        long CompletedAtUtc);
+    private sealed record DevWorkflowApplyReport
+    {
+        public required bool Passed { get; init; }
+
+        public required string NodeKey { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required int TasksApplied { get; init; }
+
+        public required IReadOnlyList<AppliedTask> Tasks { get; init; }
+
+        public required long CompletedAtUtc { get; init; }
+    }
 }

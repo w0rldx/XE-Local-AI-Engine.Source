@@ -318,7 +318,7 @@ public sealed class CatalogRecommendationServiceTests
     private static CatalogRecommendationService BuildService(IReadOnlyList<ModelCatalogEntry> entries, IHuggingFaceGgufDiscovery discovery, string installedTag)
     {
         var document = new ModelCatalogDocument(SchemaVersion: 1, "test", UpdatedAt: null, entries);
-        var snapshot = new ModelCatalogSnapshot(document, ModelCatalogSource.Bundled, FetchedAtUtc: null, SourceUrl: null);
+        var snapshot = new ModelCatalogSnapshot { Document = document, Source = ModelCatalogSource.Bundled, FetchedAtUtc = null, SourceUrl = null };
         var catalogProvider = Substitute.For<IModelCatalogProvider>();
         catalogProvider.GetCatalogAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(snapshot));
 

@@ -249,7 +249,7 @@ public sealed class SandboxedMcpStdioLiveTests
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity("owner", $"node-{Guid.NewGuid():N}"));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = $"node-{Guid.NewGuid():N}" });
         }
     }
 

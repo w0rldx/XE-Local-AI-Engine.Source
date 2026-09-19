@@ -695,7 +695,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity(Owner, Node));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = Owner, NodeId = Node });
         }
     }
 

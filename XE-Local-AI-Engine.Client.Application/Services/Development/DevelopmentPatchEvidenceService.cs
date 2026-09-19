@@ -93,14 +93,17 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             "\0",
             manifestHash,
             "\0")));
-        return new DevelopmentPatchEvidence(session.BaseCommit,
-            patchHash,
-            manifestHash,
-            subjectHash,
-            Encoding.UTF8.GetString(resultTree.StandardOutput).Trim(),
-            patchBytes,
-            manifestBytes,
-            changedFiles);
+        return new DevelopmentPatchEvidence
+        {
+            BaseCommit = session.BaseCommit,
+            PatchHash = patchHash,
+            ManifestHash = manifestHash,
+            SubjectHash = subjectHash,
+            ExpectedResultHash = Encoding.UTF8.GetString(resultTree.StandardOutput).Trim(),
+            PatchBytes = patchBytes,
+            ManifestBytes = manifestBytes,
+            ChangedFiles = changedFiles
+        };
     }
 
     /// <summary>
@@ -229,7 +232,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
                                                     + Encoding.UTF8.GetString(error.Bytes));
             }
 
-            return new ExactGitResult(output.Bytes);
+            return new ExactGitResult { StandardOutput = output.Bytes };
         }
         catch
         {
@@ -258,7 +261,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
                 path = tokens[index++];
             }
 
-            result.Add(new DevelopmentChangedFile(path, ChangeType(code), previousPath));
+            result.Add(new DevelopmentChangedFile { Path = path, ChangeType = ChangeType(code), PreviousPath = previousPath });
         }
 
         return result.OrderBy(static item => item.Path, StringComparer.Ordinal).ToArray();
@@ -331,7 +334,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             truncated |= read > remaining;
         }
 
-        return new CappedBytes(captured.ToArray(), truncated);
+        return new CappedBytes { Bytes = captured.ToArray(), Truncated = truncated };
     }
 
     private static void CopyEnvironment(ProcessStartInfo startInfo, string name)
@@ -343,7 +346,15 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         }
     }
 
-    private sealed record ExactGitResult(byte[] StandardOutput);
+    private sealed record ExactGitResult
+    {
+        public required byte[] StandardOutput { get; init; }
+    }
 
-    private sealed record CappedBytes(byte[] Bytes, bool Truncated);
+    private sealed record CappedBytes
+    {
+        public required byte[] Bytes { get; init; }
+
+        public required bool Truncated { get; init; }
+    }
 }

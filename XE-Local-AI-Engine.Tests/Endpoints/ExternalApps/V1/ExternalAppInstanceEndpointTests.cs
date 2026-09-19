@@ -54,12 +54,14 @@ public sealed class ExternalAppInstanceEndpointTests
     [Test]
     public async Task ListInstances_WithARowWhoseManifestCouldNotBeRead_StillAnswersOkWithBothRows()
     {
-        var degraded = new ExternalAppInstanceDetail(ExternalAppEndpointPayloads.Summary() with
+        var degraded = new ExternalAppInstanceDetail
+        {
+            Summary = ExternalAppEndpointPayloads.Summary() with
             {
                 FailureCategory = ExternalAppFailureCategory.Unknown,
                 FailureSummary = "The stored manifest for this application could not be read."
             },
-            new ApplicationManifest("corrupt-app",
+            Manifest = new ApplicationManifest("corrupt-app",
                 1,
                 string.Empty,
                 "Corrupt App",
@@ -74,17 +76,18 @@ public sealed class ExternalAppInstanceEndpointTests
                 new ApplicationResources(0, 0, 0, 0),
                 [],
                 []),
-            TestedVersion: null,
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            [],
-            "docker",
-            RuntimeOverride: null,
-            "/var/lib/xe/external-apps/corrupt",
-            1,
-            NeedsRecreate: false,
-            1_779_000_000_000L,
-            StartedAtUtc: null,
-            StoppedAtUtc: null);
+            TestedVersion = null,
+            MaskedVariables = new Dictionary<string, string>(StringComparer.Ordinal),
+            PublishedPorts = [],
+            RuntimeProvider = "docker",
+            RuntimeOverride = null,
+            StoragePath = "/var/lib/xe/external-apps/corrupt",
+            LastSequence = 1,
+            NeedsRecreate = false,
+            InstalledAtUtc = 1_779_000_000_000L,
+            StartedAtUtc = null,
+            StoppedAtUtc = null
+        };
 
         var apps = Substitute.For<IExternalAppService>();
         apps.ListDetailsAsync(Arg.Any<CancellationToken>()).Returns([ExternalAppEndpointPayloads.Detail(), degraded]);

@@ -43,7 +43,7 @@ public sealed class IntegrationExternalAccessTests
         var fixture = new Fixture();
         var executionId = fixture.SeedExecution(fixture.TriggerB, fixture.PrincipalId);
 
-        var result = await fixture.Access.ResolveExecutionAsync(executionId, new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix));
+        var result = await fixture.Access.ResolveExecutionAsync(executionId, new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = BroadPrefix });
 
         AssertEx.Equal(IntegrationAccessOutcome.Allowed, result.Outcome, "A null allowlist means every trigger.");
         AssertEx.Equal(executionId, AssertEx.NotNull(result.Execution).Id);
@@ -58,8 +58,8 @@ public sealed class IntegrationExternalAccessTests
         var fixture = new Fixture();
         var executionId = fixture.SeedExecution(fixture.TriggerB, fixture.PrincipalId);
 
-        var broad = await fixture.Access.ResolveExecutionAsync(executionId, new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix));
-        var narrow = await fixture.Access.ResolveExecutionAsync(executionId, new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix));
+        var broad = await fixture.Access.ResolveExecutionAsync(executionId, new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = BroadPrefix });
+        var narrow = await fixture.Access.ResolveExecutionAsync(executionId, new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = NarrowPrefix });
 
         AssertEx.Equal(IntegrationAccessOutcome.Allowed, broad.Outcome, "The broad key of the owning principal reads its own execution.");
         AssertEx.Equal(IntegrationAccessOutcome.Masked, narrow.Outcome, "The narrow key is scoped to another trigger, so this row must not be confirmable.");
@@ -70,7 +70,7 @@ public sealed class IntegrationExternalAccessTests
     {
         var fixture = new Fixture();
         var executionId = fixture.SeedExecution(fixture.TriggerB, fixture.PrincipalId);
-        var caller = new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix);
+        var caller = new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = BroadPrefix };
 
         var before = await fixture.Access.ResolveExecutionAsync(executionId, caller);
         fixture.NarrowBroadKeyToTriggerA();
@@ -89,7 +89,7 @@ public sealed class IntegrationExternalAccessTests
         // difference is measurable from a same-host process holding a narrow key, and it answers "does this execution
         // id exist" behind two identical 404s.
         var fixture = new Fixture();
-        var caller = new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix);
+        var caller = new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = NarrowPrefix };
 
         var existing = fixture.SeedExecution(fixture.TriggerB, fixture.PrincipalId);
         var before = fixture.KeyReads;
@@ -108,7 +108,7 @@ public sealed class IntegrationExternalAccessTests
     public async Task ResolveSession_DoesTheSameStoreWorkWhetherTheRowExistsOrNot()
     {
         var fixture = new Fixture();
-        var caller = new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix);
+        var caller = new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = NarrowPrefix };
 
         var existing = fixture.SeedSession(fixture.TriggerB, fixture.PrincipalId);
         var before = fixture.KeyReads;
@@ -129,10 +129,10 @@ public sealed class IntegrationExternalAccessTests
         var fixture = new Fixture();
         var sessionId = fixture.SeedSession(fixture.TriggerB, fixture.PrincipalId);
 
-        var broad = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix));
-        var narrow = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix));
-        var foreign = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity(Guid.NewGuid(), BroadPrefix));
-        var unknown = await fixture.Access.ResolveSessionAsync(Guid.NewGuid(), new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix));
+        var broad = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = BroadPrefix });
+        var narrow = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = NarrowPrefix });
+        var foreign = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity { PrincipalId = Guid.NewGuid(), KeyPrefix = BroadPrefix });
+        var unknown = await fixture.Access.ResolveSessionAsync(Guid.NewGuid(), new IntegrationCallerIdentity { PrincipalId = fixture.PrincipalId, KeyPrefix = BroadPrefix });
 
         AssertEx.Equal(IntegrationAccessOutcome.Allowed, broad.Outcome);
         AssertEx.Equal(IntegrationAccessOutcome.Masked, narrow.Outcome, "The session rule is the execution rule, against session.TriggerId.");
@@ -233,18 +233,18 @@ public sealed class IntegrationExternalAccessTests
             switch (cause)
             {
                 case MaskingCause.UnknownExecution:
-                    return (Guid.NewGuid(), new IntegrationCallerIdentity(PrincipalId, BroadPrefix));
+                    return (Guid.NewGuid(), new IntegrationCallerIdentity { PrincipalId = PrincipalId, KeyPrefix = BroadPrefix });
                 case MaskingCause.ForeignPrincipal:
-                    return (SeedExecution(TriggerA, Guid.NewGuid()), new IntegrationCallerIdentity(PrincipalId, BroadPrefix));
+                    return (SeedExecution(TriggerA, Guid.NewGuid()), new IntegrationCallerIdentity { PrincipalId = PrincipalId, KeyPrefix = BroadPrefix });
                 case MaskingCause.TriggerOutsideAllowlist:
-                    return (SeedExecution(TriggerB, PrincipalId), new IntegrationCallerIdentity(PrincipalId, NarrowPrefix));
+                    return (SeedExecution(TriggerB, PrincipalId), new IntegrationCallerIdentity { PrincipalId = PrincipalId, KeyPrefix = NarrowPrefix });
                 case MaskingCause.RevokedKey:
                     var revoked = SeedExecution(TriggerA, PrincipalId);
                     var row = _keys.Rows.Single(candidate => string.Equals(candidate.KeyPrefix, BroadPrefix, StringComparison.Ordinal));
                     _ = _keys.RevokeAsync(row.Id, atUtc: 1).GetAwaiter().GetResult();
-                    return (revoked, new IntegrationCallerIdentity(PrincipalId, BroadPrefix));
+                    return (revoked, new IntegrationCallerIdentity { PrincipalId = PrincipalId, KeyPrefix = BroadPrefix });
                 default:
-                    return (SeedExecution(TriggerA, PrincipalId), new IntegrationCallerIdentity(PrincipalId, "xeint_nosuch01"));
+                    return (SeedExecution(TriggerA, PrincipalId), new IntegrationCallerIdentity { PrincipalId = PrincipalId, KeyPrefix = "xeint_nosuch01" });
             }
         }
 

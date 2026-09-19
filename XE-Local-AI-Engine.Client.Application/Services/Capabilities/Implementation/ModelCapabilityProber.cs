@@ -65,7 +65,7 @@ internal sealed class ModelCapabilityProber
         var cachedModels = TryGetCachedInstalledModels();
         if (cachedModels is not null)
         {
-            return new InstalledModelInventoryResult(cachedModels, OllamaQuerySucceeded: true, []);
+            return new InstalledModelInventoryResult { Models = cachedModels, OllamaQuerySucceeded = true, Diagnostics = [] };
         }
 
         try
@@ -78,9 +78,9 @@ internal sealed class ModelCapabilityProber
                                        Digest = NormalizeModelName(model.Digest)
                                    })
                                    .Where(model => !string.IsNullOrWhiteSpace(model.Name))
-                                   .Select(model => new InstalledModelInfo(model.Name!, model.Digest, IsDiscovered: true))
+                                   .Select(model => new InstalledModelInfo { Name = model.Name!, Digest = model.Digest, IsDiscovered = true })
                                    .ToArray();
-            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, Digest: null, IsDiscovered: false));
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo { Name = modelName, Digest = null, IsDiscovered = false });
             var normalizedModels = discoveredModels
                                    .Concat(configuredModels)
                                    .DistinctBy(model => model.Name, StringComparer.OrdinalIgnoreCase)
@@ -95,7 +95,7 @@ internal sealed class ModelCapabilityProber
                 string.Join(", ", normalizedModels.Select(model => model.Name)));
 
             CacheInstalledModels(normalizedModels);
-            return new InstalledModelInventoryResult(normalizedModels, OllamaQuerySucceeded: true, []);
+            return new InstalledModelInventoryResult { Models = normalizedModels, OllamaQuerySucceeded = true, Diagnostics = [] };
         }
         catch (HttpRequestException exception)
         {
@@ -105,8 +105,8 @@ internal sealed class ModelCapabilityProber
             _logger.LogDebug(exception, "Ollama not reachable while querying installed models; reporting {ConfiguredModelCount} configured fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
-            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, Digest: null, IsDiscovered: false)).ToArray();
-            return new InstalledModelInventoryResult(configuredModels, OllamaQuerySucceeded: false, [DiagnosticOllamaUnreachable]);
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo { Name = modelName, Digest = null, IsDiscovered = false }).ToArray();
+            return new InstalledModelInventoryResult { Models = configuredModels, OllamaQuerySucceeded = false, Diagnostics = [DiagnosticOllamaUnreachable] };
         }
     }
 
@@ -142,17 +142,17 @@ internal sealed class ModelCapabilityProber
             if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken))
             {
                 diagnostics.Add(DiagnosticOllamaUnreachable);
-                return new OllamaRuntimeStatus(Reachable: false, Version: null, diagnostics);
+                return new OllamaRuntimeStatus { Reachable = false, Version = null, Diagnostics = diagnostics };
             }
 
             var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken);
-            return new OllamaRuntimeStatus(Reachable: true, NormalizeModelName(version), diagnostics);
+            return new OllamaRuntimeStatus { Reachable = true, Version = NormalizeModelName(version), Diagnostics = diagnostics };
         }
         catch (HttpRequestException exception)
         {
             _logger.LogDebug(exception, "Ollama runtime not reachable (expected in desktop mode without an Ollama daemon).");
             diagnostics.Add(DiagnosticOllamaUnreachable);
-            return new OllamaRuntimeStatus(Reachable: false, Version: null, diagnostics);
+            return new OllamaRuntimeStatus { Reachable = false, Version = null, Diagnostics = diagnostics };
         }
     }
 
@@ -176,7 +176,7 @@ internal sealed class ModelCapabilityProber
                 return ActiveModelInfo.None;
             }
 
-            return new ActiveModelInfo(modelName, active.ExpiresAt);
+            return new ActiveModelInfo { Name = modelName, ExpiresAt = active.ExpiresAt };
         }
         catch (HttpRequestException exception)
         {
@@ -187,7 +187,7 @@ internal sealed class ModelCapabilityProber
 
     private async Task<int?> GetMaxContextTokensAsync(InstalledModelInfo installedModel, CancellationToken cancellationToken)
     {
-        var cacheKey = new ModelContextCacheKey(installedModel.Name, installedModel.Digest!);
+        var cacheKey = new ModelContextCacheKey { ModelName = installedModel.Name, Digest = installedModel.Digest! };
         lock (_modelContextCacheSync)
         {
             if (_modelContextCache.TryGetValue(cacheKey, out var cachedContextLength))
@@ -284,11 +284,21 @@ internal sealed class ModelCapabilityProber
     {
         lock (_installedModelsCacheSync)
         {
-            _installedModelsCache = new CachedInstalledModels(models, _timeProvider.GetUtcNow().Add(InstalledModelsCacheLifetime));
+            _installedModelsCache = new CachedInstalledModels { Models = models, ExpiresAt = _timeProvider.GetUtcNow().Add(InstalledModelsCacheLifetime) };
         }
     }
 
-    private sealed record CachedInstalledModels(IReadOnlyList<InstalledModelInfo> Models, DateTimeOffset ExpiresAt);
+    private sealed record CachedInstalledModels
+    {
+        public required IReadOnlyList<InstalledModelInfo> Models { get; init; }
 
-    private sealed record ModelContextCacheKey(string ModelName, string Digest);
+        public required DateTimeOffset ExpiresAt { get; init; }
+    }
+
+    private sealed record ModelContextCacheKey
+    {
+        public required string ModelName { get; init; }
+
+        public required string Digest { get; init; }
+    }
 }

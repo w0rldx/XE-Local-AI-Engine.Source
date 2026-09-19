@@ -23,56 +23,65 @@ public enum HistoryDetailLevel
 ///     Consumed by <see cref="IScheduledJobTemplateRegistry" /> and surfaced to the management API
 ///     and the React template-picker UI.
 /// </summary>
-/// <param name="TemplateId">
-///     Stable, globally-unique identifier. Stored in <c>scheduled_job_definitions.template_id</c> and must
-///     never change once job definitions referencing it exist in the database.
-/// </param>
-/// <param name="DisplayName">Short human-readable name shown in the UI template picker.</param>
-/// <param name="Description">One-sentence description of what this template does.</param>
-/// <param name="ParameterSchema">
-///     Optional JSON Schema (as a JSON string) that validates the <c>parameters</c> column.
-///     <see langword="null" /> when the template accepts no parameters.
-/// </param>
-/// <param name="DefaultParameters">
-///     Optional default parameter JSON pre-filled when a new job definition is created from this template.
-///     <see langword="null" /> when there are no defaults.
-/// </param>
-/// <param name="SupportedScheduleKinds">
-///     One or more <see cref="ScheduleKind" /> values that this template supports. The management API filters the
-///     schedule-kind picker to this list.
-/// </param>
-/// <param name="DefaultScheduleKind">
-///     The pre-selected schedule kind when creating a new job definition from this template.
-///     Must be present in <paramref name="SupportedScheduleKinds" />.
-/// </param>
-/// <param name="DefaultMisfirePolicy">
-///     Misfire policy pre-filled on new job definitions. Handlers that must not fire after a delay should
-///     use <see cref="SchedulerMisfirePolicy.SkipMissed" />.
-/// </param>
-/// <param name="DefaultMaxRuntimeSeconds">
-///     Optional per-template cap on wall-clock runtime in seconds. <see langword="null" /> defers to the
-///     node-level <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>.
-/// </param>
-/// <param name="AllowManualTrigger">
-///     Whether operators may fire this template manually from the management UI.
-/// </param>
-/// <param name="AllowAgentCreation">
-///     Whether the AI agent is permitted to create new job definitions from this template.
-///     Defaults to <see langword="false" /> — handlers must opt in explicitly to agent-driven scheduling.
-/// </param>
-/// <param name="HistoryDetailLevel">
-///     Default verbosity level for run-history events emitted by handlers of this template.
-/// </param>
-public sealed record ScheduledJobTemplateDescriptor(
-    string TemplateId,
-    string DisplayName,
-    string Description,
-    string? ParameterSchema,
-    string? DefaultParameters,
-    IReadOnlyList<ScheduleKind> SupportedScheduleKinds,
-    ScheduleKind DefaultScheduleKind,
-    SchedulerMisfirePolicy DefaultMisfirePolicy,
-    int? DefaultMaxRuntimeSeconds,
-    bool AllowManualTrigger,
-    bool AllowAgentCreation = false,
-    HistoryDetailLevel HistoryDetailLevel = HistoryDetailLevel.Summary);
+public sealed class ScheduledJobTemplateDescriptor
+{
+    /// <summary>
+    ///     Stable, globally-unique identifier. Stored in <c>scheduled_job_definitions.template_id</c> and must
+    ///     never change once job definitions referencing it exist in the database.
+    /// </summary>
+    public required string TemplateId { get; init; }
+
+    /// <summary>Short human-readable name shown in the UI template picker.</summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>One-sentence description of what this template does.</summary>
+    public required string Description { get; init; }
+
+    /// <summary>
+    ///     Optional JSON Schema (as a JSON string) that validates the <c>parameters</c> column.
+    ///     <see langword="null" /> when the template accepts no parameters.
+    /// </summary>
+    public required string? ParameterSchema { get; init; }
+
+    /// <summary>
+    ///     Optional default parameter JSON pre-filled when a new job definition is created from this template.
+    ///     <see langword="null" /> when there are no defaults.
+    /// </summary>
+    public required string? DefaultParameters { get; init; }
+
+    /// <summary>
+    ///     One or more <see cref="ScheduleKind" /> values that this template supports. The management API filters the
+    ///     schedule-kind picker to this list.
+    /// </summary>
+    public required IReadOnlyList<ScheduleKind> SupportedScheduleKinds { get; init; }
+
+    /// <summary>
+    ///     The pre-selected schedule kind when creating a new job definition from this template.
+    ///     Must be present in <see cref="SupportedScheduleKinds" />.
+    /// </summary>
+    public required ScheduleKind DefaultScheduleKind { get; init; }
+
+    /// <summary>
+    ///     Misfire policy pre-filled on new job definitions. Handlers that must not fire after a delay should
+    ///     use <see cref="SchedulerMisfirePolicy.SkipMissed" />.
+    /// </summary>
+    public required SchedulerMisfirePolicy DefaultMisfirePolicy { get; init; }
+
+    /// <summary>
+    ///     Optional per-template cap on wall-clock runtime in seconds. <see langword="null" /> defers to the
+    ///     node-level <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>.
+    /// </summary>
+    public required int? DefaultMaxRuntimeSeconds { get; init; }
+
+    /// <summary>Whether operators may fire this template manually from the management UI.</summary>
+    public required bool AllowManualTrigger { get; init; }
+
+    /// <summary>
+    ///     Whether the AI agent is permitted to create new job definitions from this template.
+    ///     Defaults to <see langword="false" /> — handlers must opt in explicitly to agent-driven scheduling.
+    /// </summary>
+    public bool AllowAgentCreation { get; init; }
+
+    /// <summary>Default verbosity level for run-history events emitted by handlers of this template.</summary>
+    public HistoryDetailLevel HistoryDetailLevel { get; init; }
+}

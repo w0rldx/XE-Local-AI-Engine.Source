@@ -278,7 +278,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         var lease = _leaseManager.TryAcquire(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId));
         if (lease is null)
         {
-            return new CoderWorkspaceAccess(Handle: null, Lease: null, IsBusy: true);
+            return new CoderWorkspaceAccess { Handle = null, Lease = null, IsBusy = true };
         }
 
         var attachKey = new SandboxAttachKey
@@ -294,13 +294,13 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         {
             // The operation owns or ambiently borrows the same owner-node lease AgentHome preparation and execution use.
             var handle = await _provider.ConnectAsync(attachKey, cancellationToken);
-            return new CoderWorkspaceAccess(handle, lease, IsBusy: false);
+            return new CoderWorkspaceAccess { Handle = handle, Lease = lease, IsBusy = false };
         }
         catch (SandboxHandleInvalidException)
         {
             // No live sandbox / no folder selected — a model-facing message, not an exception.
             lease.Dispose();
-            return new CoderWorkspaceAccess(Handle: null, Lease: null, IsBusy: false);
+            return new CoderWorkspaceAccess { Handle = null, Lease = null, IsBusy = false };
         }
         catch
         {
@@ -328,41 +328,46 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         try
         {
-            return new SurveyOutcome(await survey(timeoutCts.Token), ErrorMessage: null);
+            return new SurveyOutcome { Lines = await survey(timeoutCts.Token), ErrorMessage = null };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new SurveyOutcome(Lines: null, "the workspace survey did not complete (it may have timed out).");
+            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace survey did not complete (it may have timed out)." };
         }
         catch (SandboxHandleInvalidException)
         {
-            return new SurveyOutcome(Lines: null, NoWorkspaceMessage);
+            return new SurveyOutcome { Lines = null, ErrorMessage = NoWorkspaceMessage };
         }
         catch (SandboxCapabilityNotSupportedException)
         {
-            return new SurveyOutcome(Lines: null, "the workspace provider cannot survey files.");
+            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace provider cannot survey files." };
         }
         catch (UnauthorizedAccessException)
         {
             // The provider rejected a traversal or a symlink component in the requested directory.
-            return new SurveyOutcome(Lines: null, "the workspace path was rejected because it may escape the workspace.");
+            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace path was rejected because it may escape the workspace." };
         }
         catch (WorkspaceScanRejectedException)
         {
-            return new SurveyOutcome(Lines: null, "the workspace path was rejected because it may escape the workspace.");
+            return new SurveyOutcome { Lines = null, ErrorMessage = "the workspace path was rejected because it may escape the workspace." };
         }
         catch (DirectoryNotFoundException)
         {
-            return new SurveyOutcome(Lines: null, "that workspace path does not exist.");
+            return new SurveyOutcome { Lines = null, ErrorMessage = "that workspace path does not exist." };
         }
         catch (ArgumentException)
         {
             // Only the pattern can be argument-invalid by the time it reaches here, and the model supplied it.
-            return new SurveyOutcome(Lines: null, "the search pattern is not a valid regular expression.");
+            return new SurveyOutcome { Lines = null, ErrorMessage = "the search pattern is not a valid regular expression." };
         }
     }
 
-    private sealed record SurveyOutcome(IReadOnlyList<string>? Lines, string? ErrorMessage);
+    private sealed record SurveyOutcome
+    {
+        public required IReadOnlyList<string>? Lines { get; init; }
+
+        public required string? ErrorMessage { get; init; }
+    }
 
     private bool IsExcludedRelativePath(string relativePath)
     {
@@ -501,8 +506,14 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         return prefix + trimmed;
     }
 
-    private sealed record CoderWorkspaceAccess(SandboxHandle? Handle, IAgentHomeExecutionLease? Lease, bool IsBusy) : IDisposable
+    private sealed record CoderWorkspaceAccess : IDisposable
     {
+        public required SandboxHandle? Handle { get; init; }
+
+        public required IAgentHomeExecutionLease? Lease { get; init; }
+
+        public required bool IsBusy { get; init; }
+
         public void Dispose()
         {
             Lease?.Dispose();

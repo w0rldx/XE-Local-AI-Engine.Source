@@ -57,7 +57,7 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
                     continue;
                 }
 
-                _entries[normalizedPath] = new CacheEntry(after, sha256);
+                _entries[normalizedPath] = new CacheEntry { Stamp = after, Sha256 = sha256 };
                 return sha256;
             }
         }
@@ -218,7 +218,12 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
         _entries.TryRemove(Path.GetFullPath(args.FullPath), out _);
     }
 
-    private sealed record CacheEntry(FileStamp Stamp, string Sha256);
+    private sealed record CacheEntry
+    {
+        public required FileStamp Stamp { get; init; }
+
+        public required string Sha256 { get; init; }
+    }
 
     private readonly record struct FileStamp(
         long Length,

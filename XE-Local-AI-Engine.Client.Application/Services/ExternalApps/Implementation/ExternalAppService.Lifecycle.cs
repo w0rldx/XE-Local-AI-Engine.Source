@@ -173,7 +173,7 @@ internal sealed partial class ExternalAppService
                 throw new ExternalAppConcurrencyException("The instance changed while this command was being admitted.");
             }
 
-            var context = new LifecycleContext(instanceId, cursor.Version, cursor.Sequence, admitted, row);
+            var context = new LifecycleContext { InstanceId = instanceId, Version = cursor.Version, Sequence = cursor.Sequence, Status = admitted, Row = row };
             if (!_runner.TryStart(instanceId, kind, lease, (provider, token) => pipeline(provider, context, token), out _))
             {
                 throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
@@ -464,8 +464,11 @@ internal sealed partial class ExternalAppService
 
             if (!await services.Store.DeleteAsync(context.InstanceId, cursor.Version, CancellationToken.None))
             {
-                throw new ExternalAppPipelineException(new ExternalAppFailure(ExternalAppFailureCategory.Unknown,
-                    "This application changed while it was being uninstalled."));
+                throw new ExternalAppPipelineException(new ExternalAppFailure
+                {
+                    Category = ExternalAppFailureCategory.Unknown,
+                    Summary = "This application changed while it was being uninstalled."
+                });
             }
 
             // Published after the rows are gone and never replayable, which is correct: there is nothing left to
@@ -620,7 +623,7 @@ internal sealed partial class ExternalAppService
                 return null;
             }
 
-            hostPorts.Add(new ExternalAppHostPort(serviceName, containerPort, match.HostPort));
+            hostPorts.Add(new ExternalAppHostPort { Service = serviceName, ContainerPort = containerPort, HostPort = match.HostPort });
         }
 
         try
@@ -763,13 +766,18 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>What admission decided, handed to the background operation as values rather than as shared state.</summary>
-    private sealed record LifecycleContext(
-        Guid InstanceId,
-        long Version,
-        long Sequence,
-        ExternalAppInstanceStatus Status,
-        ExternalAppInstanceSnapshot Row)
+    private sealed record LifecycleContext
     {
+        public required Guid InstanceId { get; init; }
+
+        public required long Version { get; init; }
+
+        public required long Sequence { get; init; }
+
+        public required ExternalAppInstanceStatus Status { get; init; }
+
+        public required ExternalAppInstanceSnapshot Row { get; init; }
+
         public InstanceCursor ToCursor()
         {
             return new InstanceCursor(InstanceId, Version, Status)

@@ -92,19 +92,22 @@ public sealed class LocalChatMapperPartsTests
 
     private static NodeChatPersistedMessageDto BuildMessage(IReadOnlyList<NodeChatMessagePart>? parts)
     {
-        return new NodeChatPersistedMessageDto(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Sequence: 0,
-            "assistant",
-            "the answer",
-            "before\nafter",
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 2,
-            "llama",
-            Error: null,
-            MetadataJson: null,
-            Parts: parts);
+        return new NodeChatPersistedMessageDto
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid(),
+            Sequence = 0,
+            Role = "assistant",
+            Content = "the answer",
+            Reasoning = "before\nafter",
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 2,
+            Model = "llama",
+            Error = null,
+            MetadataJson = null,
+            Parts = parts
+        };
     }
 }

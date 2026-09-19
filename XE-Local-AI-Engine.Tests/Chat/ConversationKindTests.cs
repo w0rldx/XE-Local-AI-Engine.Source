@@ -35,15 +35,25 @@ public sealed class ConversationKindTests : IDisposable
         await using var provider = await BuildProviderAsync($"kind-list-{includeArchived}.sqlite");
         var service = CreateService(provider);
 
-        var chat = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("A chat", "node", CreatedAtUtc: 10));
+        var chat = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "A chat", UserId = "node", CreatedAtUtc = 10 });
         var workSession = await service
-                                .CreateConversationAsync(new NodeChatCreateConversationRequest("Work session", "node", CreatedAtUtc: 20,
-                                    Kind: NodeConversationKind.WorkSession));
+                                .CreateConversationAsync(new NodeChatCreateConversationRequest
+                                {
+                                    Title = "Work session",
+                                    UserId = "node",
+                                    CreatedAtUtc = 20,
+                                    Kind = NodeConversationKind.WorkSession
+                                });
         var integration = await service
-                                .CreateConversationAsync(new NodeChatCreateConversationRequest("Integration", "node", CreatedAtUtc: 30,
-                                    Kind: NodeConversationKind.Integration));
+                                .CreateConversationAsync(new NodeChatCreateConversationRequest
+                                {
+                                    Title = "Integration",
+                                    UserId = "node",
+                                    CreatedAtUtc = 30,
+                                    Kind = NodeConversationKind.Integration
+                                });
 
-        var listed = (await service.ListConversationsAsync(new NodeChatListConversationsRequest(includeArchived)))
+        var listed = (await service.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = includeArchived }))
                      .Select(static summary => summary.ConversationId)
                      .ToArray();
 
@@ -60,8 +70,13 @@ public sealed class ConversationKindTests : IDisposable
         var service = CreateService(provider);
 
         var integration = await service
-                                .CreateConversationAsync(new NodeChatCreateConversationRequest("Integration", "node", CreatedAtUtc: 10,
-                                    Kind: NodeConversationKind.Integration));
+                                .CreateConversationAsync(new NodeChatCreateConversationRequest
+                                {
+                                    Title = "Integration",
+                                    UserId = "node",
+                                    CreatedAtUtc = 10,
+                                    Kind = NodeConversationKind.Integration
+                                });
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(integration.ConversationId),
             "By-id reads stay unfiltered: the session transcript readers legitimately load these rows.");
@@ -74,10 +89,15 @@ public sealed class ConversationKindTests : IDisposable
         await using var provider = await BuildProviderAsync("kind-default.sqlite");
         var service = CreateService(provider);
 
-        var defaulted = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Default", "node", CreatedAtUtc: 10));
+        var defaulted = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Default", UserId = "node", CreatedAtUtc = 10 });
         var explicitKind = await service
-                                 .CreateConversationAsync(new NodeChatCreateConversationRequest("Explicit", "node", CreatedAtUtc: 20,
-                                     Kind: NodeConversationKind.WorkSession));
+                                 .CreateConversationAsync(new NodeChatCreateConversationRequest
+                                 {
+                                     Title = "Explicit",
+                                     UserId = "node",
+                                     CreatedAtUtc = 20,
+                                     Kind = NodeConversationKind.WorkSession
+                                 });
 
         AssertEx.Equal(NodeConversationKind.Chat, await ReadKindAsync(provider, defaulted.ConversationId));
         AssertEx.Equal(NodeConversationKind.WorkSession, await ReadKindAsync(provider, explicitKind.ConversationId));
@@ -91,9 +111,14 @@ public sealed class ConversationKindTests : IDisposable
         var preMinted = Guid.NewGuid();
 
         var supplied = await service
-                             .CreateConversationAsync(new NodeChatCreateConversationRequest("Pre-minted", "node", CreatedAtUtc: 10,
-                                 Kind: NodeConversationKind.Integration,
-                                 ConversationId: preMinted));
+                             .CreateConversationAsync(new NodeChatCreateConversationRequest
+                             {
+                                 Title = "Pre-minted",
+                                 UserId = "node",
+                                 CreatedAtUtc = 10,
+                                 Kind = NodeConversationKind.Integration,
+                                 ConversationId = preMinted
+                             });
 
         AssertEx.Equal(preMinted, supplied.ConversationId, "The integration accept path commits its rows first and creates the conversation at the id they carry.");
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(preMinted), "The stored row must be readable at the caller's id.");
@@ -101,7 +126,7 @@ public sealed class ConversationKindTests : IDisposable
 
         // The regression guard: every existing caller passes nothing, and a botched `??` would mint over a supplied id
         // or, worse, insert Guid.Empty.
-        var minted = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Minted", "node", CreatedAtUtc: 20));
+        var minted = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Minted", UserId = "node", CreatedAtUtc = 20 });
         AssertEx.NotEqual(Guid.Empty, minted.ConversationId);
         AssertEx.NotEqual(preMinted, minted.ConversationId);
     }
@@ -116,8 +141,8 @@ public sealed class ConversationKindTests : IDisposable
         await using var provider = await BuildProviderAsync("kind-backfill-join.sqlite");
         var service = CreateService(provider);
 
-        var owned = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Owned", "node", CreatedAtUtc: 10));
-        var plain = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Plain", "node", CreatedAtUtc: 20));
+        var owned = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Owned", UserId = "node", CreatedAtUtc = 10 });
+        var plain = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Plain", UserId = "node", CreatedAtUtc = 20 });
 
         await using (var scope = provider.CreateAsyncScope())
         {

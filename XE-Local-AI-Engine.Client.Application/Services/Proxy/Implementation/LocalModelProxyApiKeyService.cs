@@ -45,7 +45,7 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
         var record = await _store.SetAsync(prefix, HashKey(key), cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
-        return new GeneratedLocalModelProxyApiKey(key, ToView(record));
+        return new GeneratedLocalModelProxyApiKey { Key = key, View = ToView(record) };
     }
 
     public async Task<LocalModelProxyApiKeyView?> GetAsync(CancellationToken cancellationToken = default)
@@ -107,8 +107,11 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
 
     private static LocalModelProxyApiKeyView ToView(LocalModelProxyApiKeyRecord record)
     {
-        return new LocalModelProxyApiKeyView(record.Prefix,
-            DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
-            record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value));
+        return new LocalModelProxyApiKeyView
+        {
+            Prefix = record.Prefix,
+            CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
+            LastUsedAt = record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value)
+        };
     }
 }

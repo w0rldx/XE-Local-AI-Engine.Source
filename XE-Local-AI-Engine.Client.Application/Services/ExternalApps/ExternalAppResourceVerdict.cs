@@ -10,11 +10,19 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     which unit a number is in. The figures ship even on a pass, because the install dialog shows what it
 ///     measured rather than only what it concluded.
 /// </remarks>
-public sealed record ExternalAppResourceVerdict(
-    bool Satisfied,
-    ExternalAppFailureCategory? FailureCategory,
-    long RequiredMemoryBytes,
-    long AvailableMemoryBytes,
-    long RequiredDiskBytes,
-    long AvailableDiskBytes,
-    string Message);
+public sealed class ExternalAppResourceVerdict
+{
+    public required bool Satisfied { get; init; }
+
+    public required ExternalAppFailureCategory? FailureCategory { get; init; }
+
+    public required long RequiredMemoryBytes { get; init; }
+
+    public required long AvailableMemoryBytes { get; init; }
+
+    public required long RequiredDiskBytes { get; init; }
+
+    public required long AvailableDiskBytes { get; init; }
+
+    public required string Message { get; init; }
+}

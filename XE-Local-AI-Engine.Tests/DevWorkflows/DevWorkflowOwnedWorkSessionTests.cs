@@ -44,10 +44,13 @@ public sealed class DevWorkflowOwnedWorkSessionTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var created = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                     .CreateAsync(new CreateWorkSessionRequestModel("Research the runtime",
-                                         "Answer the work item's request.",
-                                         AgentWorkSessionKind.Workflow,
-                                         agentId));
+                                     .CreateAsync(new CreateWorkSessionRequestModel
+                                     {
+                                         Title = "Research the runtime",
+                                         Objective = "Answer the work item's request.",
+                                         Kind = AgentWorkSessionKind.Workflow,
+                                         AgentDefinitionId = agentId
+                                     });
             sessionId = created.Id;
             AssertEx.Equal(AgentWorkSessionKind.Workflow, created.Kind);
             AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status);

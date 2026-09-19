@@ -65,7 +65,7 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
 
             // A profile frozen under the PREVIOUS version is hard-rejected on version alone, whatever its value says —
             // it cannot prove whether an adapter was applied, because adapters did not exist when it was written.
-            var stale = new LaunchPolicyFingerprint(LaunchPolicyFingerprintProvider.CurrentVersion - 1, captured.Value);
+            var stale = new LaunchPolicyFingerprint { Version = LaunchPolicyFingerprintProvider.CurrentVersion - 1, Value = captured.Value };
             var staleMatches = await provider.MatchesAsync(Profile(Input(path), stale), path, CancellationToken.None);
             AssertEx.False(staleMatches, "A fingerprint from before the adapter input joined must not match.");
 
@@ -155,8 +155,11 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
 
             var secondProvider = BuildProvider(Runtime("runtime-b"), binaryPath);
             var second = await secondProvider.CaptureAsync(Input(path), CancellationToken.None);
-            var crossSpliced = new LaunchPolicyFingerprint(LaunchPolicyFingerprintProvider.CurrentVersion,
-                string.Concat(first.Value.AsSpan(0, 64), ".", second.Value.AsSpan(65)));
+            var crossSpliced = new LaunchPolicyFingerprint
+            {
+                Version = LaunchPolicyFingerprintProvider.CurrentVersion,
+                Value = string.Concat(first.Value.AsSpan(0, 64), ".", second.Value.AsSpan(65))
+            };
 
             var matches = await secondProvider.MatchesAsync(Profile(Input(path), crossSpliced),
                 path,
@@ -738,17 +741,20 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
 
     private static InferenceProfileFingerprintInput Input(string path)
     {
-        return new InferenceProfileFingerprintInput("bartowski/Model-GGUF:Q4_K_M",
-            (int)ModelRole.Embedding,
-            "cuda",
-            path,
-            CtxSize: 2048,
-            NGpuLayers: 33,
-            TensorSplit: null,
-            OverrideTensor: null,
-            KvTypeK: "q8_0",
-            KvTypeV: "q8_0",
-            FlashAttn: true);
+        return new InferenceProfileFingerprintInput
+        {
+            ModelName = "bartowski/Model-GGUF:Q4_K_M",
+            Role = (int)ModelRole.Embedding,
+            Backend = "cuda",
+            ModelFilePath = path,
+            CtxSize = 2048,
+            NGpuLayers = 33,
+            TensorSplit = null,
+            OverrideTensor = null,
+            KvTypeK = "q8_0",
+            KvTypeV = "q8_0",
+            FlashAttn = true
+        };
     }
 
     private static GgufModelRegistryEntry RegistryEntry(string path, string sha256)

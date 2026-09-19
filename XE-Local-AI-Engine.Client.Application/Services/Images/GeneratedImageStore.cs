@@ -73,7 +73,7 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         await OpenIfNeededAsync(command.Connection, cancellationToken);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        return new GeneratedImageInfo(imageId, jobId, metadata.MimeType, metadata.Width, metadata.Height, sizeBytes, createdAtUtc);
+        return new GeneratedImageInfo { ImageId = imageId, JobId = jobId, MimeType = metadata.MimeType, Width = metadata.Width, Height = metadata.Height, SizeBytes = sizeBytes, CreatedAtUtc = createdAtUtc };
     }
 
     public async Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken)
@@ -116,7 +116,7 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
 
         var encrypted = await File.ReadAllBytesAsync(storagePath, cancellationToken);
         var plaintext = _blobProtector.Decrypt(jobId, imageId, ImageBlobProtector.ImageBytesColumn, encrypted);
-        return new GeneratedImageContent(plaintext, mimeType, width, height);
+        return new GeneratedImageContent { Bytes = plaintext, MimeType = mimeType, Width = width, Height = height };
     }
 
     public void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths)

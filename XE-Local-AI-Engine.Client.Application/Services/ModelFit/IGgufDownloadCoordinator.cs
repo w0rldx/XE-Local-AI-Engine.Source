@@ -43,9 +43,18 @@ public interface IGgufDownloadCoordinator
 }
 
 /// <summary>The accepted-download identity returned by <see cref="IGgufDownloadCoordinator.Start" />.</summary>
-/// <param name="ModelName">Canonical <c>{repoId}[:{quant}]</c> model name the download is keyed by (track/cancel by this).</param>
-/// <param name="AlreadyInFlight"><c>true</c> when an existing download for the same model name was rejoined instead of started.</param>
-public sealed record GgufDownloadTicket(string ModelName, bool AlreadyInFlight, Guid OperationId = default, string OperationKind = "Download");
+public sealed class GgufDownloadTicket
+{
+    /// <summary>Canonical <c>{repoId}[:{quant}]</c> model name the download is keyed by (track/cancel by this).</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary><c>true</c> when an existing download for the same model name was rejoined instead of started.</summary>
+    public required bool AlreadyInFlight { get; init; }
+
+    public Guid OperationId { get; init; }
+
+    public string OperationKind { get; init; } = "Download";
+}
 
 /// <summary>Phase of a coordinated GGUF download.</summary>
 public enum GgufDownloadPhase
@@ -67,14 +76,25 @@ public enum GgufDownloadPhase
 ///     A sanitized snapshot of a coordinated download's progress. Carries only the model name, phase, byte counts and a
 ///     sanitized error reason — never an absolute path, URL, token, or raw store payload.
 /// </summary>
-public sealed record GgufDownloadStatus(
-    string ModelName,
-    GgufDownloadPhase Phase,
-    long? CompletedBytes,
-    long? TotalBytes,
-    string? SanitizedError,
-    Guid OperationId = default,
-    string OperationKind = "Download",
-    DateTimeOffset? StartedAtUtc = null,
-    DateTimeOffset? UpdatedAtUtc = null,
-    string? ErrorCode = null);
+public sealed class GgufDownloadStatus
+{
+    public required string ModelName { get; init; }
+
+    public required GgufDownloadPhase Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public Guid OperationId { get; init; }
+
+    public string OperationKind { get; init; } = "Download";
+
+    public DateTimeOffset? StartedAtUtc { get; init; }
+
+    public DateTimeOffset? UpdatedAtUtc { get; init; }
+
+    public string? ErrorCode { get; init; }
+}

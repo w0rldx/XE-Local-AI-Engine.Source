@@ -16,16 +16,19 @@ public sealed class KnowledgeChatContextComposerTests
 {
     private static KnowledgeSearchHit Hit(string title, string content, double score, string? section = "Section", Guid? documentId = null, Guid? chunkId = null, bool lastKnownGood = false)
     {
-        return new KnowledgeSearchHit(documentId ?? Guid.NewGuid(),
-            chunkId ?? Guid.NewGuid(),
-            title,
-            section,
-            content,
-            "knowledge-base",
-            score,
-            ChunkIndex: 0,
-            lastKnownGood ? KnowledgeDocumentStatus.Extracting : KnowledgeDocumentStatus.Indexed,
-            lastKnownGood);
+        return new KnowledgeSearchHit
+        {
+            DocumentId = documentId ?? Guid.NewGuid(),
+            ChunkId = chunkId ?? Guid.NewGuid(),
+            Title = title,
+            Section = section,
+            Content = content,
+            Source = "knowledge-base",
+            Score = score,
+            ChunkIndex = 0,
+            DocumentStatus = lastKnownGood ? KnowledgeDocumentStatus.Extracting : KnowledgeDocumentStatus.Indexed,
+            ServingLastKnownGood = lastKnownGood
+        };
     }
 
     [Test]

@@ -173,11 +173,14 @@ public sealed class DevWorkflowMaterializedIsolationTests
             graph.Nodes[nodeRun.NodeKey],
             run,
             nodeRun,
-            new DevelopmentRepositoryBinding(project.Id,
-                project.SelectedFolderId ?? Guid.Empty,
-                "repository",
-                Path.Combine(Path.GetTempPath(), $"xe-c3-{project.Id:N}"),
-                project.RepositoryIdentityHash));
+            new DevelopmentRepositoryBinding
+            {
+                ProjectId = project.Id,
+                SelectedFolderId = project.SelectedFolderId ?? Guid.Empty,
+                Alias = "repository",
+                RepositoryRoot = Path.Combine(Path.GetTempPath(), $"xe-c3-{project.Id:N}"),
+                RepositoryIdentityHash = project.RepositoryIdentityHash
+            });
 
     /// <summary>The task a child bound itself to, refusing a row that never bound one — which is a different failure.</summary>
     private static Guid TaskId(DevWorkflowNodeRunSnapshot nodeRun) =>

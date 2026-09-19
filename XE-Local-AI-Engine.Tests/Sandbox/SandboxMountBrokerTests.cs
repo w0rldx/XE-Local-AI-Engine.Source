@@ -38,7 +38,7 @@ public sealed class SandboxMountBrokerTests : IDisposable
     [Test]
     public void TryResolveSandboxPath_TranslatesAMountRootAndAnythingBeneathIt()
     {
-        var handle = Handle([new SandboxMountBinding("/host/runtime/home", "/xe-runtime/home", ReadOnly: false)]);
+        var handle = Handle([new SandboxMountBinding { HostPath = "/host/runtime/home", SandboxPath = "/xe-runtime/home", ReadOnly = false }]);
 
         AssertEx.Equal("/xe-runtime/home", handle.TryResolveSandboxPath("/host/runtime/home"));
         AssertEx.Equal("/xe-runtime/home/.nuget/packages", handle.TryResolveSandboxPath("/host/runtime/home/.nuget/packages"));
@@ -50,8 +50,8 @@ public sealed class SandboxMountBrokerTests : IDisposable
         // A nested mount must win over the one it sits inside — the read-only .git/config layered over the workspace is
         // exactly this shape, and answering with the workspace's mapping would name the wrong file.
         var handle = Handle([
-            new SandboxMountBinding("/host/workspace", "/workspace", ReadOnly: false),
-            new SandboxMountBinding("/host/workspace/.git/config", "/workspace/.git/config", ReadOnly: true)
+            new SandboxMountBinding { HostPath = "/host/workspace", SandboxPath = "/workspace", ReadOnly = false },
+            new SandboxMountBinding { HostPath = "/host/workspace/.git/config", SandboxPath = "/workspace/.git/config", ReadOnly = true }
         ]);
 
         AssertEx.Equal("/workspace/.git/config", handle.TryResolveSandboxPath("/host/workspace/.git/config"));
@@ -63,7 +63,7 @@ public sealed class SandboxMountBrokerTests : IDisposable
     {
         // Returning the host path would compose a command that fails deep inside a build against a directory the
         // sandbox has never heard of. Null is what lets the caller refuse at composition time instead.
-        var handle = Handle([new SandboxMountBinding("/host/workspace", "/workspace", ReadOnly: false)]);
+        var handle = Handle([new SandboxMountBinding { HostPath = "/host/workspace", SandboxPath = "/workspace", ReadOnly = false }]);
 
         AssertEx.Null(handle.TryResolveSandboxPath("/host/runtime/home"));
     }

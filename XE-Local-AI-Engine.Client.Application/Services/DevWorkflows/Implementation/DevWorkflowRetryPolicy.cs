@@ -7,11 +7,20 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>What a lane came back with, in the four terms the retry decision is made on.</summary>
-/// <param name="FailureClass">The closed failure-class token that says why.</param>
-/// <param name="SanitizedReason">What an operator is shown. Already sanitized by whoever produced it.</param>
-/// <param name="OutputJson">The node's output document, which a routed retry hands to the node it re-runs.</param>
-/// <param name="Outcome">The event outcome, for the two cases the status alone cannot express.</param>
-internal sealed record DevWorkflowFailure(string FailureClass, string SanitizedReason, string OutputJson, string? Outcome = null);
+internal sealed class DevWorkflowFailure
+{
+    /// <summary>The closed failure-class token that says why.</summary>
+    public required string FailureClass { get; init; }
+
+    /// <summary>What an operator is shown. Already sanitized by whoever produced it.</summary>
+    public required string SanitizedReason { get; init; }
+
+    /// <summary>The node's output document, which a routed retry hands to the node it re-runs.</summary>
+    public required string OutputJson { get; init; }
+
+    /// <summary>The event outcome, for the two cases the status alone cannot express.</summary>
+    public string? Outcome { get; init; }
+}
 
 /// <summary>
 ///     Where a failed node run's next move is decided: re-attempt it, re-run the upstream node that produced what it was
@@ -360,10 +369,13 @@ internal sealed class DevWorkflowRetryPolicy
                 : ReAttempt(run,
                     row,
                     delaySeconds: 0,
-                    new RetryDetail(row.Attempt,
-                        failure.FailureClass,
-                        $"Node '{retryTarget}' is being re-attempted because '{nodeRun.NodeKey}' failed, so this node run's result no longer describes it.",
-                        DelayUntil: null),
+                    new RetryDetail
+                    {
+                        Attempt = row.Attempt,
+                        FailureClass = failure.FailureClass,
+                        Reason = $"Node '{retryTarget}' is being re-attempted because '{nodeRun.NodeKey}' failed, so this node run's result no longer describes it.",
+                        DelayUntil = null
+                    },
                     outcome: null,
                     inputJson: null);
             moves.Add((command, row.Id, delayUntil));
@@ -372,7 +384,7 @@ internal sealed class DevWorkflowRetryPolicy
         var (targetCommand, targetDelay) = ReAttempt(run,
             target,
             node.RetryDelaySeconds,
-            new RetryDetail(target.Attempt, failure.FailureClass, $"Re-attempted because '{nodeRun.NodeKey}' failed.", DelayUntil: null),
+            new RetryDetail { Attempt = target.Attempt, FailureClass = failure.FailureClass, Reason = $"Re-attempted because '{nodeRun.NodeKey}' failed.", DelayUntil = null },
             outcome: null,
             PriorFailure(target.InputJson, nodeRun.NodeKey, nodeRun.Attempt, failure.OutputJson));
         moves.Add((targetCommand, target.Id, targetDelay));
@@ -416,7 +428,7 @@ internal sealed class DevWorkflowRetryPolicy
             NodeRunId = nodeRun.Id,
             OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
             Outcome = failure.Outcome ?? DevWorkflowOutcomes.Failed,
-            DetailJson = JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)
+            DetailJson = JsonSerializer.Serialize(new RoutedDetail { From = nodeRun.NodeKey, To = retryTarget, FailureClass = failure.FailureClass, Reason = failure.SanitizedReason }, JsonOptions)
         },
             Resets = [.. moves.Select(static move => move.Command)],
             MaxTotalAttempts = _options.MaxTotalAttempts
@@ -629,7 +641,7 @@ internal sealed class DevWorkflowRetryPolicy
     {
         if (delayUntil is { } notBefore)
         {
-            _notBefore[nodeRunId] = new ScheduledRetry(runId, notBefore);
+            _notBefore[nodeRunId] = new ScheduledRetry { RunId = runId, NotBefore = notBefore };
         }
         else
         {
@@ -771,7 +783,7 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     private static RetryDetail DetailFor(DevWorkflowNodeRunSnapshot nodeRun, DevWorkflowFailure failure) =>
-        new(nodeRun.Attempt, failure.FailureClass, failure.SanitizedReason, DelayUntil: null);
+        new() { Attempt = nodeRun.Attempt, FailureClass = failure.FailureClass, Reason = failure.SanitizedReason, DelayUntil = null };
 
     private static string BudgetExhausted(DevWorkflowFailure failure) =>
         $"{failure.SanitizedReason} This run has spent every re-attempt it allows, so nothing here can try again without a decision.";
@@ -780,10 +792,33 @@ internal sealed class DevWorkflowRetryPolicy
     ///     What a <c>node.retry.scheduled</c> event carries. The attempt is the one that FAILED, which is what makes the
     ///     per-attempt history readable off the log the single-row node-run schema does not keep.
     /// </summary>
-    private sealed record RetryDetail(int Attempt, string FailureClass, string Reason, long? DelayUntil);
+    private sealed record RetryDetail
+    {
+        public required int Attempt { get; init; }
+
+        public required string FailureClass { get; init; }
+
+        public required string Reason { get; init; }
+
+        public required long? DelayUntil { get; init; }
+    }
 
     /// <summary>One promised re-attempt: when it may go, and the run whose ending makes the promise moot.</summary>
-    private sealed record ScheduledRetry(Guid RunId, DateTimeOffset NotBefore);
+    private sealed record ScheduledRetry
+    {
+        public required Guid RunId { get; init; }
 
-    private sealed record RoutedDetail(string From, string To, string FailureClass, string Reason);
+        public required DateTimeOffset NotBefore { get; init; }
+    }
+
+    private sealed record RoutedDetail
+    {
+        public required string From { get; init; }
+
+        public required string To { get; init; }
+
+        public required string FailureClass { get; init; }
+
+        public required string Reason { get; init; }
+    }
 }

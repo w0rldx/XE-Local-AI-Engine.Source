@@ -174,7 +174,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     {
         var repository = await _repositoryBindings.ResolveFolderAsync(selectedFolderId, cancellationToken);
         var detected = _profileDetector.Detect(repository.RepositoryRoot);
-        return new DevelopmentProfileDetectionResult(detected.ProfileId, detected.BuildTarget, detected.Candidates);
+        return new DevelopmentProfileDetectionResult { ProfileId = detected.ProfileId, BuildTarget = detected.BuildTarget, Candidates = detected.Candidates };
     }
 
     public Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default) =>
@@ -285,15 +285,21 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var aggregates = new List<DevelopmentTaskAggregate>(tasks.Count);
         foreach (var task in tasks)
         {
-            aggregates.Add(new DevelopmentTaskAggregate(task,
-                await _store.ListAttemptsAsync(task.Id, cancellationToken),
-                await _store.ListArtifactsAsync(task.Id, cancellationToken),
-                workflowRunIds.TryGetValue(task.Id, out var runId) ? runId : null));
+            aggregates.Add(new DevelopmentTaskAggregate
+            {
+                Task = task,
+                Attempts = await _store.ListAttemptsAsync(task.Id, cancellationToken),
+                Artifacts = await _store.ListArtifactsAsync(task.Id, cancellationToken),
+                WorkflowRunId = workflowRunIds.TryGetValue(task.Id, out var runId) ? runId : null
+            });
         }
 
-        return new DevelopmentProjectAggregate(project,
-            aggregates,
-            await _store.ListEventsAsync(projectId, cancellationToken));
+        return new DevelopmentProjectAggregate
+        {
+            Project = project,
+            Tasks = aggregates,
+            Events = await _store.ListEventsAsync(projectId, cancellationToken)
+        };
     }
 
     public async Task<DevelopmentTaskAggregate> GetTaskAsync(Guid projectId,
@@ -304,10 +310,13 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
         // Read back through the pointer a DevTask node run stamps rather than stored on the task: the task row belongs
         // to Development Mode, and a workflow driving one is a fact about the workflow.
-        return new DevelopmentTaskAggregate(task,
-            await _store.ListAttemptsAsync(taskId, cancellationToken),
-            await _store.ListArtifactsAsync(taskId, cancellationToken),
-            await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken));
+        return new DevelopmentTaskAggregate
+        {
+            Task = task,
+            Attempts = await _store.ListAttemptsAsync(taskId, cancellationToken),
+            Artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken),
+            WorkflowRunId = await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken)
+        };
     }
 
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
@@ -328,19 +337,22 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             var existingAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken))
                 .Single(attempt => attempt.Id == existingAttemptId);
             var existingTask = await RequireTaskAsync(projectId, taskId, cancellationToken);
-            return new DevelopmentNextActionResult("Attempt",
-                projectId,
-                taskId,
-                existingAttemptId,
-                existingTask.Status,
-                existingAttempt.Role);
+            return new DevelopmentNextActionResult
+            {
+                Action = "Attempt",
+                ProjectId = projectId,
+                TaskId = taskId,
+                AttemptId = existingAttemptId,
+                TaskStatus = existingTask.Status,
+                Role = existingAttempt.Role
+            };
         }
 
         var task = await RequireTaskAsync(projectId, taskId, cancellationToken);
         if (task.Status == DevelopmentTaskStatus.Blocked
             && string.Equals(task.BlockedReason, ReviewRoundLimitReason, StringComparison.Ordinal))
         {
-            return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
+            return new DevelopmentNextActionResult { Action = "Blocked", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = DevelopmentTaskStatus.Blocked, Role = null };
         }
 
         if (task.Status == DevelopmentTaskStatus.Planned)
@@ -394,7 +406,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
                 task.CurrentReviewRound,
                 task.MaxReviewRounds,
                 ReviewRoundLimitReason);
-            return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
+            return new DevelopmentNextActionResult { Action = "Blocked", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = DevelopmentTaskStatus.Blocked, Role = null };
         }
 
         if (awaitingValidation)
@@ -404,7 +416,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
                 throw new DevelopmentConcurrencyException("Deterministic validation is already scheduled for this task.");
             }
 
-            return new DevelopmentNextActionResult("Validation", projectId, taskId, null, task.Status, null);
+            return new DevelopmentNextActionResult { Action = "Validation", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = task.Status, Role = null };
         }
 
         var role = task.Status switch
@@ -463,7 +475,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             taskId,
             projectId,
             role);
-        return new DevelopmentNextActionResult("Attempt", projectId, taskId, attemptId, startedTask.Status, role);
+        return new DevelopmentNextActionResult { Action = "Attempt", ProjectId = projectId, TaskId = taskId, AttemptId = attemptId, TaskStatus = startedTask.Status, Role = role };
     }
 
     public async Task<bool> CancelAttemptAsync(Guid projectId,
@@ -519,7 +531,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             throw new DevelopmentInvalidTransitionException("The Development artifact failed immutable blob verification.");
         }
 
-        return new DevelopmentArtifactContent(artifact, Encoding.UTF8.GetString(read.Content.Span));
+        return new DevelopmentArtifactContent { Artifact = artifact, Content = Encoding.UTF8.GetString(read.Content.Span) };
     }
 
     public async Task<DevelopmentPatchPreviewResult> PreviewAsync(Guid projectId,
@@ -529,12 +541,15 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
         var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
         var preview = await _applyService.PreviewAsync(taskId, repository, cancellationToken);
-        return new DevelopmentPatchPreviewResult(preview.Subject.SubjectHash,
-            preview.Subject.PatchHash,
-            preview.Subject.ManifestHash,
-            preview.Subject.ExpectedResultHash,
-            preview.Patch,
-            preview.ChangedFiles.Select(static file => new DevelopmentPatchPreviewFile(file.Path, file.ChangeType, file.PreviousPath)).ToArray());
+        return new DevelopmentPatchPreviewResult
+        {
+            SubjectHash = preview.Subject.SubjectHash,
+            PatchHash = preview.Subject.PatchHash,
+            ManifestHash = preview.Subject.ManifestHash,
+            ExpectedResultHash = preview.Subject.ExpectedResultHash,
+            Patch = preview.Patch,
+            ChangedFiles = preview.ChangedFiles.Select(static file => new DevelopmentPatchPreviewFile { Path = file.Path, ChangeType = file.ChangeType, PreviousPath = file.PreviousPath }).ToArray()
+        };
     }
 
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,

@@ -5,29 +5,50 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 ///     is safe to return from any Operator-gated surface. <see cref="AllowedTriggerIds" /> is <see langword="null" />
 ///     when the key may invoke every trigger.
 /// </summary>
-public sealed record IntegrationApiKeyView(
-    Guid Id,
-    Guid PrincipalId,
-    string KeyPrefix,
-    string Label,
-    IReadOnlyList<Guid>? AllowedTriggerIds,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? LastUsedAt,
-    DateTimeOffset? RevokedAt);
+public sealed class IntegrationApiKeyView
+{
+    public required Guid Id { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required string Label { get; init; }
+
+    public required IReadOnlyList<Guid>? AllowedTriggerIds { get; init; }
+
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    public required DateTimeOffset? LastUsedAt { get; init; }
+
+    public required DateTimeOffset? RevokedAt { get; init; }
+}
 
 /// <summary>
 ///     A freshly minted credential: the one-time plaintext <see cref="Key" /> plus the metadata that stays
 ///     retrievable. Separate from <see cref="IntegrationApiKeyView" /> so the type system — not a comment — is what
 ///     stops the secret leaking out of a retrieval path. Never log it and never persist it.
 /// </summary>
-public sealed record GeneratedIntegrationApiKey(string Key, IntegrationApiKeyView View);
+public sealed class GeneratedIntegrationApiKey
+{
+    public required string Key { get; init; }
+
+    public required IntegrationApiKeyView View { get; init; }
+}
 
 /// <summary>
 ///     Trusted metadata from a successful validation. <see cref="PrincipalId" /> comes FIRST because it is the
 ///     identity every ownership, uniqueness and fingerprint decision keys on (ruling R4-6);
 ///     <see cref="KeyPrefix" /> only names which credential was used and carries no authority.
 /// </summary>
-public sealed record IntegrationApiKeyValidation(Guid PrincipalId, string KeyPrefix, IReadOnlyList<Guid>? AllowedTriggerIds);
+public sealed class IntegrationApiKeyValidation
+{
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required IReadOnlyList<Guid>? AllowedTriggerIds { get; init; }
+}
 
 /// <summary>
 ///     Owns the lifecycle of the <c>xeint_</c> bearer credentials that authenticate an external integrator against the

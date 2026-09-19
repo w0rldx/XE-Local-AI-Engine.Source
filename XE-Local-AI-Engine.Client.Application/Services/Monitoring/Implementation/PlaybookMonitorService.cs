@@ -68,14 +68,17 @@ public sealed class PlaybookMonitorService : IPlaybookMonitorService
         // verdict raises the human-review flag.
         var flagged = afterSampleSize >= _options.MinSampleSize && status is PlaybookMonitorStatus.Flat or PlaybookMonitorStatus.Regressed;
 
-        return new PlaybookActionMonitorView(actionId,
-            enabledAtUtc,
-            beforeDownRate,
-            afterDownRate,
-            afterSampleSize,
-            status,
-            flagged,
-            facetToolName);
+        return new PlaybookActionMonitorView
+        {
+            ActionId = actionId,
+            EnabledAtUtc = enabledAtUtc,
+            BeforeDownRate = beforeDownRate,
+            AfterDownRate = afterDownRate,
+            AfterSampleSize = afterSampleSize,
+            Status = status,
+            Flagged = flagged,
+            FacetToolName = facetToolName
+        };
     }
 
     private PlaybookMonitorStatus ClassifyStatus(double beforeDownRate, double afterDownRate, int afterSampleSize)

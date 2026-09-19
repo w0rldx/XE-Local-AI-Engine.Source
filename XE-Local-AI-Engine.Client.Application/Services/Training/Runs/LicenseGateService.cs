@@ -51,12 +51,15 @@ public sealed class LicenseGateService : ILicenseGateService
         // found licensing metadata, which is a different statement from "the repository declares no license".
         var license = BaseArtifactManifest.DeserializeLicense(artifact.LicenseJson);
         var metadataPresent = artifact.LicenseJson.HasValue && license is not null;
-        return new TrainingLicenseGateView(artifact.Id,
-            license?.RepoId ?? artifact.RepoId,
-            license?.License,
-            license?.IsGated ?? false,
-            metadataPresent,
-            BuildText(license?.RepoId ?? artifact.RepoId, license?.License, license?.IsGated ?? false, metadataPresent));
+        return new TrainingLicenseGateView
+        {
+            BaseArtifactId = artifact.Id,
+            RepoId = license?.RepoId ?? artifact.RepoId,
+            License = license?.License,
+            IsGated = license?.IsGated ?? false,
+            MetadataPresent = metadataPresent,
+            ConfirmationText = BuildText(license?.RepoId ?? artifact.RepoId, license?.License, license?.IsGated ?? false, metadataPresent)
+        };
     }
 
     public TrainingLicenseConfirmationV1 BuildConfirmation(TrainingLicenseGateView view)

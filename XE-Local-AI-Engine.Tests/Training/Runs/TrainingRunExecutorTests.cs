@@ -365,13 +365,13 @@ public sealed class TrainingRunExecutorTests : IDisposable
 
             var capacity = Substitute.For<ITrainingCapacityGate>();
 #pragma warning disable CA2000 // Ownership passes to the executor, which disposes the reservation in its finally.
-            var reservation = new TrainingCapacityReservation(capacityGranted, capacityGranted ? null : "no room", Handle: null);
+            var reservation = new TrainingCapacityReservation { Granted = capacityGranted, Reason = capacityGranted ? null : "no room", Handle = null };
 #pragma warning restore CA2000
             _ = capacity.ReserveAsync(Arg.Any<TrainingFootprintEstimate>(), Arg.Any<CancellationToken>()).Returns(reservation);
 
             var defaults = Substitute.For<ITrainingOptionDefaultsCalculator>();
             _ = defaults.EstimateAsync(Arg.Any<Guid>(), Arg.Any<TrainingRunOptionsV1>(), Arg.Any<CancellationToken>())
-                        .Returns(new TrainingFootprintEstimate(1, 1, 1, 1, Experimental: false));
+                        .Returns(new TrainingFootprintEstimate { GpuBytes = 1, RamBytes = 1, ParameterCount = 1, TrainableParameterCount = 1, Experimental = false });
 
             var runtime = Substitute.For<ITrainingRuntimeService>();
             _ = runtime.ResolveInterpreterPath().Returns(runtimeReady ? "/venv/bin/python" : null);

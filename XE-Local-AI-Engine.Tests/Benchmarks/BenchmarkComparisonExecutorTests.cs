@@ -77,7 +77,7 @@ public sealed class BenchmarkComparisonExecutorTests
             new BenchmarkCancellationRegistry(),
             Substitute.For<IRuntimeEnvironmentFactsProvider>(),
             Substitute.For<IBenchmarkPairwiseFitter>(),
-            new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
             NullLogger<BenchmarkComparisonExecutor>.Instance);
 
     private static BenchmarkComparisonRecord Comparison(int? launchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion) =>

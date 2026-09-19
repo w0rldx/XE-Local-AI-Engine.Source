@@ -184,7 +184,7 @@ public sealed class LocalModelsGgufMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, ["tools"], IsOverridden: false)
+            ["qwen3:8b"] = new() { ModelName = "qwen3:8b", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = ["tools"], IsOverridden = false }
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
@@ -213,7 +213,7 @@ public sealed class LocalModelsGgufMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["shared-model"] = new("shared-model", ModelKind.Chat, ModelKind.Chat, [], IsOverridden: false)
+            ["shared-model"] = new() { ModelName = "shared-model", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = [], IsOverridden = false }
         };
 
         // A name present under BOTH runtimes (case-insensitively) is listed once — the Ollama entry wins.

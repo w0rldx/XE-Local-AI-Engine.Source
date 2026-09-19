@@ -87,7 +87,7 @@ public sealed class McpExecutionBindingResolverTests
         var result = await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
         {
             AgentKey = definition.Id.ToString(),
-            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123")
+            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" }
         }, CancellationToken.None);
 
         var binding = AssertEx.NotNull(result.Binding);
@@ -110,12 +110,12 @@ public sealed class McpExecutionBindingResolverTests
         var agenticBinding = AssertEx.NotNull((await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
         {
             AgentKey = definition.Id.ToString(),
-            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123")
+            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" }
         }, CancellationToken.None)).Binding);
         var otherAgenticBinding = AssertEx.NotNull((await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
         {
             AgentKey = definition.Id.ToString(),
-            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_def456")
+            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_def456" }
         }, CancellationToken.None)).Binding);
 
         AssertEx.NotEqual(delegateBinding.BindingFingerprint, agenticBinding.BindingFingerprint);

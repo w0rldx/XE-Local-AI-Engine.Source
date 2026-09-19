@@ -61,8 +61,11 @@ public sealed class DockerDaemonPreflightServiceTests
         var (service, client, _) = CreateService();
         await service.InspectAsync();
 
-        var movedEndpoint = new DockerDaemonEndpoint(new Uri("unix:///run/user/1000/docker.sock"),
-            DockerDaemonEndpointSource.UserRuntimeUnixSocket);
+        var movedEndpoint = new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///run/user/1000/docker.sock"),
+            Source = DockerDaemonEndpointSource.UserRuntimeUnixSocket
+        };
         client.Identity = client.Identity with
         {
             Endpoint = movedEndpoint
@@ -371,9 +374,9 @@ public sealed class DockerDaemonPreflightServiceTests
         {
             DaemonEndpoint = "unix:///fake.sock"
         };
-        var endpoint = new DockerDaemonEndpoint(new Uri("unix:///fake.sock"), DockerDaemonEndpointSource.Configuration);
+        var endpoint = new DockerDaemonEndpoint { Uri = new Uri("unix:///fake.sock"), Source = DockerDaemonEndpointSource.Configuration };
         var client = new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity("daemon-alpha", "99.0.0", "1.99", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
+            new DockerDaemonIdentity { DaemonId = "daemon-alpha", ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = endpoint, IsRootless = false, SupportsSeccomp = true });
         var store = attestationStore ?? new InMemoryAttestationStore();
 
         var service = new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(resolved),

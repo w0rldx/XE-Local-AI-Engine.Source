@@ -302,14 +302,17 @@ public sealed class MemoryExtractionServiceTests
 
     private static MemoryExtractionRunInput SuccessfulRun(Guid agentId)
     {
-        return new MemoryExtractionRunInput(agentId,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            [new MemoryExtractionTurn("How do I add a feature?")],
-            "Use the shared helper.",
-            Failed: false,
-            Error: null,
-            MemoryExcluded: false);
+        return new MemoryExtractionRunInput
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = Guid.NewGuid(),
+            AssistantMessageId = Guid.NewGuid(),
+            UserTurns = [new MemoryExtractionTurn { Content = "How do I add a feature?" }],
+            AssistantResponse = "Use the shared helper.",
+            Failed = false,
+            Error = null,
+            MemoryExcluded = false
+        };
     }
 
     private static MemoryExtractionRunInput FailedRun(Guid agentId)
@@ -323,7 +326,7 @@ public sealed class MemoryExtractionServiceTests
 
     private static ProposedMemory Candidate(string behavior, MemoryScope scope, string? trigger = null)
     {
-        return new ProposedMemory(behavior, scope, trigger, Confidence: 0.8d);
+        return new ProposedMemory { Behavior = behavior, Scope = scope, TriggerCondition = trigger, Confidence = 0.8d };
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentId, string behavior, MemoryScope scope)
@@ -377,7 +380,7 @@ public sealed class MemoryExtractionServiceTests
             IReadOnlyList<MemoryDedupCandidate> candidates,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(new MemorySemanticDedupResult(_applied, _duplicateIndexes));
+            return Task.FromResult(new MemorySemanticDedupResult { Applied = _applied, DuplicateIndexes = _duplicateIndexes });
         }
     }
 

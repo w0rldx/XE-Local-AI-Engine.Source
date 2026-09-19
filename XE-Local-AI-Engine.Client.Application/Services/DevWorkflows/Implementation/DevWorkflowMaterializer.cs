@@ -194,13 +194,19 @@ internal sealed class DevWorkflowMaterializer
                           run,
                           producer,
                           nodeRuns,
-                          new DevWorkflowFailure(DevWorkflowFailureClasses.Configuration,
-                              reason,
-                              JsonSerializer.Serialize(new RejectedOutput(DevWorkflowNodeOutputStatuses.Failed,
-                                      producer.Attempt,
-                                      DevWorkflowFailureClasses.Configuration,
-                                      reason),
-                                  JsonOptions)),
+                          new DevWorkflowFailure
+                          {
+                              FailureClass = DevWorkflowFailureClasses.Configuration,
+                              SanitizedReason = reason,
+                              OutputJson = JsonSerializer.Serialize(new RejectedOutput
+                              {
+                                  Status = DevWorkflowNodeOutputStatuses.Failed,
+                                  Attempt = producer.Attempt,
+                                  FailureClass = DevWorkflowFailureClasses.Configuration,
+                                  MaterializationError = reason
+                              },
+                                  JsonOptions)
+                          },
                           cancellationToken);
 
     /// <summary>
@@ -287,7 +293,7 @@ internal sealed class DevWorkflowMaterializer
             }
         }
 
-        return new TaskPackage([.. items], artifactId, Error: null);
+        return new TaskPackage { Tasks = [.. items], ArtifactId = artifactId, Error = null };
     }
 
     /// <summary>
@@ -484,7 +490,7 @@ internal sealed class DevWorkflowMaterializer
         var wired = new HashSet<(string From, string To)>();
         foreach (var (task, index) in tasks.Select(static (task, index) => (task, index + 1)))
         {
-            var brief = JsonSerializer.Serialize(new DevTaskBrief(Present(task.Title), RequirementsFor(task), Criteria(task.AcceptanceCriteria)), JsonOptions);
+            var brief = JsonSerializer.Serialize(new DevTaskBrief { Title = Present(task.Title), Requirements = RequirementsFor(task), AcceptanceCriteriaJson = Criteria(task.AcceptanceCriteria) }, JsonOptions);
             foreach (var key in subtree.OrderBy(static key => key, StringComparer.Ordinal))
             {
                 var clone = (JsonObject)templates[key].DeepClone();
@@ -495,7 +501,7 @@ internal sealed class DevWorkflowMaterializer
                 }
 
                 nodes.Add(clone);
-                clones.Add(new Clone(CloneKey(key, task.Id!), graph.Nodes[key], brief, index));
+                clones.Add(new Clone { NodeKey = CloneKey(key, task.Id!), Node = graph.Nodes[key], InputJson = brief, Index = index });
 
                 foreach (var edge in graph.OutboundEdges(key).Where(edge => subtree.Contains(edge.To)))
                 {
@@ -530,7 +536,7 @@ internal sealed class DevWorkflowMaterializer
         // the node behind the join was left inheriting the clones' validation reports and nothing else, so the run's
         // verification agent judged the feature without the task package it was decomposed into. Live, it said so
         // itself and returned "not yet".
-        return new Expansion(clones, root.ToJsonString(JsonOptions));
+        return new Expansion { Clones = clones, GraphJson = root.ToJsonString(JsonOptions) };
 
         void Wire(string from, string to, JsonNode? condition)
         {
@@ -601,11 +607,14 @@ internal sealed class DevWorkflowMaterializer
                 EventType = DevWorkflowEventTypes.GraphChanged,
                 NodeRunId = producer.Id,
                 OperationId = operationId,
-                DetailJson = JsonSerializer.Serialize(new ExpansionDetail(producer.NodeKey,
-                                           TaskCount: 0,
-                                           artifactId,
-                                           run.GraphRevision,
-                                           RevisionBumped: false),
+                DetailJson = JsonSerializer.Serialize(new ExpansionDetail
+                {
+                    NodeKey = producer.NodeKey,
+                    TaskCount = 0,
+                    SourceArtifactId = artifactId,
+                    GraphRevision = run.GraphRevision,
+                    RevisionBumped = false
+                },
                                        JsonOptions)
             },
                                cancellationToken);
@@ -637,11 +646,14 @@ internal sealed class DevWorkflowMaterializer
                                        // the one a reader of the panel needs.
                                        MaterializationIndex = null,
                                        Status = DevWorkflowNodeRunStatus.Succeeded,
-                                       OutputJson = JsonSerializer.Serialize(new NotApplicableOutput(DevWorkflowNodeOutputStatuses.Succeeded,
-                                               Attempt: 1,
-                                               DevWorkflowNodeOutputVerdicts.ValidationNotApplicable,
-                                               producer.NodeKey,
-                                               artifactId),
+                                       OutputJson = JsonSerializer.Serialize(new NotApplicableOutput
+                                       {
+                                           Status = DevWorkflowNodeOutputStatuses.Succeeded,
+                                           Attempt = 1,
+                                           Verdict = DevWorkflowNodeOutputVerdicts.ValidationNotApplicable,
+                                           ProducedBy = producer.NodeKey,
+                                           TaskPackageArtifactId = artifactId
+                                       },
                                            JsonOptions)
                                    })
                                ],
@@ -690,33 +702,91 @@ internal sealed class DevWorkflowMaterializer
         IReadOnlyList<string>? AcceptanceCriteria);
 
     /// <summary>A read package: its tasks and the artifact they came from, or the reason there are none.</summary>
-    private sealed record TaskPackage(IReadOnlyList<TaskPackageItem> Tasks, Guid ArtifactId, string? Error)
+    private sealed record TaskPackage
     {
+        public required IReadOnlyList<TaskPackageItem> Tasks { get; init; }
+
+        public required Guid ArtifactId { get; init; }
+
+        public required string? Error { get; init; }
+
         public static TaskPackage Rejected(string error) =>
-            new([], Guid.Empty, error);
+            new() { Tasks = [], ArtifactId = Guid.Empty, Error = error };
     }
 
     /// <summary>One node run to create: its new key, the template node it copies, and the brief its task carries.</summary>
-    private sealed record Clone(string NodeKey, DevWorkflowGraphNode Node, string InputJson, int Index);
+    private sealed record Clone
+    {
+        public required string NodeKey { get; init; }
 
-    private sealed record Expansion(IReadOnlyList<Clone> Clones, string GraphJson);
+        public required DevWorkflowGraphNode Node { get; init; }
+
+        public required string InputJson { get; init; }
+
+        public required int Index { get; init; }
+    }
+
+    private sealed record Expansion
+    {
+        public required IReadOnlyList<Clone> Clones { get; init; }
+
+        public required string GraphJson { get; init; }
+    }
 
     /// <summary>
     ///     What a materialized child is told to implement — the seam the implementation lane reads, whose
     ///     <c>requirements</c> is mandatory there and so is written from the task's <c>goal</c> here.
     /// </summary>
-    private sealed record DevTaskBrief(string? Title, string Requirements, string? AcceptanceCriteriaJson);
+    private sealed record DevTaskBrief
+    {
+        public required string? Title { get; init; }
+
+        public required string Requirements { get; init; }
+
+        public required string? AcceptanceCriteriaJson { get; init; }
+    }
 
     /// <summary>What the commit marker carries when there is no expansion to describe: which node, off what, and that the graph did not move.</summary>
-    private sealed record ExpansionDetail(string NodeKey, int TaskCount, Guid SourceArtifactId, int GraphRevision, bool RevisionBumped);
+    private sealed record ExpansionDetail
+    {
+        public required string NodeKey { get; init; }
+
+        public required int TaskCount { get; init; }
+
+        public required Guid SourceArtifactId { get; init; }
+
+        public required int GraphRevision { get; init; }
+
+        public required bool RevisionBumped { get; init; }
+    }
 
     /// <summary>
     ///     What a not-applicable validation row says it produced. <c>status</c> is the routing vocabulary's own
     ///     <c>succeeded</c>, so a conditional out-edge on the template's validation node fires exactly as a real pass
     ///     would; <c>verdict</c> is what keeps a reader from taking it for one.
     /// </summary>
-    private sealed record NotApplicableOutput(string Status, int Attempt, string Verdict, string ProducedBy, Guid TaskPackageArtifactId);
+    private sealed record NotApplicableOutput
+    {
+        public required string Status { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string Verdict { get; init; }
+
+        public required string ProducedBy { get; init; }
+
+        public required Guid TaskPackageArtifactId { get; init; }
+    }
 
     /// <summary>A decomposition whose own output it cannot use. The reason travels into the next attempt's objective.</summary>
-    private sealed record RejectedOutput(string Status, int Attempt, string FailureClass, string MaterializationError);
+    private sealed record RejectedOutput
+    {
+        public required string Status { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string FailureClass { get; init; }
+
+        public required string MaterializationError { get; init; }
+    }
 }

@@ -173,7 +173,7 @@ public sealed class DevWorkflowRunHubTests
             Version = 6
         };
         runs.GetAsync(RunId, Arg.Any<CancellationToken>())
-            .Returns(new DevWorkflowRunDetail(run, [NodeRun(GateNodeRunId, DevWorkflowNodeRunStatus.WaitingForApproval), NodeRun(Guid.NewGuid(), DevWorkflowNodeRunStatus.Running)], 1, GateNodeRunId));
+            .Returns(new DevWorkflowRunDetail { Run = run, NodeRuns = [NodeRun(GateNodeRunId, DevWorkflowNodeRunStatus.WaitingForApproval), NodeRun(Guid.NewGuid(), DevWorkflowNodeRunStatus.Running)], PendingDecisionCount = 1, BlockingGateNodeRunId = GateNodeRunId });
         return runs;
     }
 

@@ -298,7 +298,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
 
         public FakeManifestService Manifest { get; } = new();
 
-        public AgentHomeOwnerIdentity Owner { get; } = new("owner", "node");
+        public AgentHomeOwnerIdentity Owner { get; } = new() { OwnerUserId = "owner", NodeId = "node" };
 
         public IAgentSandboxRuntimeProvider Provider { get; } = Substitute.For<IAgentSandboxRuntimeProvider>();
 
@@ -307,7 +307,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         public SandboxHandle Handle { get; } = CreateHandle();
 
         public ResolvedSelectedFolder Workspace { get; } =
-            new(Guid.Parse("2253c107-339d-47e6-a7c0-46084464bfa1"), "repo", "/private/repo", SelectedFolderMode.ReadOnlyMount);
+            new() { Id = Guid.Parse("2253c107-339d-47e6-a7c0-46084464bfa1"), Alias = "repo", HostPath = "/private/repo", Mode = SelectedFolderMode.ReadOnlyMount };
 
         public FakeWorkspaceService WorkspaceService { get; } = new();
 

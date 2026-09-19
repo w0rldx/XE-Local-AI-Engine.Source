@@ -77,7 +77,7 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             // A template lives on the host and can be moved or deleted behind the registry's back, so availability is
             // probed rather than assumed — the same treatment registered repositories get.
             var availability = await ProbeAvailabilityAsync(template.HostPath, cancellationToken);
-            references.Add(new DevelopmentTemplateReference(template.Id.ToString(), template.Alias, availability));
+            references.Add(new DevelopmentTemplateReference { Id = template.Id.ToString(), Alias = template.Alias, Availability = availability });
         }
 
         return references;
@@ -91,7 +91,7 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(hostPath);
         await EnsureGitTopLevelAsync(canonical, cancellationToken);
         var template = await _templateStore.AddAsync(templateAlias.Trim(), canonical, cancellationToken);
-        return new DevelopmentTemplateReference(template.Id.ToString(), template.Alias, "Available");
+        return new DevelopmentTemplateReference { Id = template.Id.ToString(), Alias = template.Alias, Availability = "Available" };
     }
 
     public Task<bool> RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default) =>
@@ -134,7 +134,7 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
                 CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
             },
                 cancellationToken);
-            return new DevelopmentTemplateMaterializationResult(repository, template.Alias, templateCommit);
+            return new DevelopmentTemplateMaterializationResult { Repository = repository, TemplateAlias = template.Alias, TemplateCommit = templateCommit };
         }
         catch
         {

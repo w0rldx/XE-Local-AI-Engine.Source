@@ -30,24 +30,28 @@ internal enum LoopbackCallbackOutcome
 ///     attacker-controlled HTML, but the callback page itself never reflects them regardless — see
 ///     <see cref="LoopbackAuthorizationCodeListener" /> remarks).
 /// </summary>
-internal sealed record LoopbackCallbackResult(
-    LoopbackCallbackOutcome Outcome,
-    string? AuthorizationCode = null,
-    string? SanitizedError = null,
-    string? SanitizedErrorDescription = null)
+internal sealed class LoopbackCallbackResult
 {
+    public required LoopbackCallbackOutcome Outcome { get; init; }
+
+    public string? AuthorizationCode { get; init; }
+
+    public string? SanitizedError { get; init; }
+
+    public string? SanitizedErrorDescription { get; init; }
+
     public static LoopbackCallbackResult Success(string code)
     {
-        return new LoopbackCallbackResult(LoopbackCallbackOutcome.Success, AuthorizationCode: code);
+        return new LoopbackCallbackResult { Outcome = LoopbackCallbackOutcome.Success, AuthorizationCode = code };
     }
 
-    public static readonly LoopbackCallbackResult StateMismatch = new(LoopbackCallbackOutcome.StateMismatch);
-    public static readonly LoopbackCallbackResult MissingCode = new(LoopbackCallbackOutcome.MissingCode);
-    public static readonly LoopbackCallbackResult TimedOut = new(LoopbackCallbackOutcome.TimedOut);
+    public static readonly LoopbackCallbackResult StateMismatch = new() { Outcome = LoopbackCallbackOutcome.StateMismatch };
+    public static readonly LoopbackCallbackResult MissingCode = new() { Outcome = LoopbackCallbackOutcome.MissingCode };
+    public static readonly LoopbackCallbackResult TimedOut = new() { Outcome = LoopbackCallbackOutcome.TimedOut };
 
     public static LoopbackCallbackResult AadError(string? error, string? errorDescription)
     {
-        return new LoopbackCallbackResult(LoopbackCallbackOutcome.AadError, SanitizedError: error, SanitizedErrorDescription: errorDescription);
+        return new LoopbackCallbackResult { Outcome = LoopbackCallbackOutcome.AadError, SanitizedError = error, SanitizedErrorDescription = errorDescription };
     }
 }
 

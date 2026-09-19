@@ -387,7 +387,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
     private static ResolvedSelectedFolder Folder(string alias, string hostPath, SelectedFolderMode mode = SelectedFolderMode.Copy)
     {
-        return new ResolvedSelectedFolder(Guid.NewGuid(), alias, hostPath, mode);
+        return new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = alias, HostPath = hostPath, Mode = mode };
     }
 
     private static SandboxCreateRequest CreateRequest()

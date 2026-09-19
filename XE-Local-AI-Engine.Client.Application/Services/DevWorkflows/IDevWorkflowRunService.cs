@@ -10,19 +10,29 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         which the runtime already holds parsed and has no reason to re-serialize.
 ///     </para>
 /// </summary>
-/// <param name="PendingDecisionCount">Node runs waiting on a human — a gate's approval and an exhausted node's intervention alike.</param>
-/// <param name="BlockingGateNodeRunId">The oldest node run waiting on a gate answer, in sequence order, if there is one.</param>
-public sealed record DevWorkflowRunDetail(
-    DevWorkflowRunSnapshot Run,
-    IReadOnlyList<DevWorkflowNodeRunSnapshot> NodeRuns,
-    int PendingDecisionCount,
-    Guid? BlockingGateNodeRunId);
+public sealed class DevWorkflowRunDetail
+{
+    public required DevWorkflowRunSnapshot Run { get; init; }
+
+    public required IReadOnlyList<DevWorkflowNodeRunSnapshot> NodeRuns { get; init; }
+
+    /// <summary>Node runs waiting on a human — a gate's approval and an exhausted node's intervention alike.</summary>
+    public required int PendingDecisionCount { get; init; }
+
+    /// <summary>The oldest node run waiting on a gate answer, in sequence order, if there is one.</summary>
+    public required Guid? BlockingGateNodeRunId { get; init; }
+}
 
 /// <summary>
 ///     What a decision recorded, alongside where the run now stands. The decision travels with it so a repeated POST
 ///     can answer with the same body rather than merely the same run state.
 /// </summary>
-public sealed record DevWorkflowDecisionResult(DevWorkflowRunDetail Detail, DevWorkflowDecisionSnapshot Decision);
+public sealed class DevWorkflowDecisionResult
+{
+    public required DevWorkflowRunDetail Detail { get; init; }
+
+    public required DevWorkflowDecisionSnapshot Decision { get; init; }
+}
 
 /// <summary>
 ///     Every way a caller changes a development workflow run.

@@ -28,8 +28,14 @@ internal enum GraphWorkflowConditionOperator
 ///         interface and nothing else changes.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditionOperator Operator, JsonElement Value)
+internal sealed class GraphWorkflowCondition
 {
+    public required string Path { get; init; }
+
+    public required GraphWorkflowConditionOperator Operator { get; init; }
+
+    public required JsonElement Value { get; init; }
+
     /// <summary>
     ///     Whether the edge carrying <paramref name="condition" /> fires. A null condition is unconditional.
     ///     <para>
@@ -200,7 +206,7 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
         var value = element.TryGetProperty("value", out var valueElement) ? valueElement.Clone() : default;
         if (op is GraphWorkflowConditionOperator.Exists or GraphWorkflowConditionOperator.NotExists)
         {
-            return new GraphWorkflowCondition(path, op, value);
+            return new GraphWorkflowCondition { Path = path, Operator = op, Value = value };
         }
 
         if (value.ValueKind == JsonValueKind.Undefined)
@@ -228,6 +234,6 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
                                                        + "Booleans compare for equality only, so this edge could never fire.");
         }
 
-        return new GraphWorkflowCondition(path, op, value);
+        return new GraphWorkflowCondition { Path = path, Operator = op, Value = value };
     }
 }

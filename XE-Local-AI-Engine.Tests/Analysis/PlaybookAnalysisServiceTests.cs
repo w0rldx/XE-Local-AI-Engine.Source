@@ -246,18 +246,21 @@ public sealed class PlaybookAnalysisServiceTests
 
     private static FeedbackInsightsResult BuildInsights(Guid agentId, bool meetsThreshold, IReadOnlyList<FeedbackExemplarView> exemplars)
     {
-        return new FeedbackInsightsResult(agentId,
-            "Agent",
-            GeneratedAtUtc: 1_000,
-            MinOccurrenceThreshold: 3,
-            new OverallFeedback(Total: 5, Up: 1, Down: 4, DownRate: 0.8d, meetsThreshold),
-            [],
-            exemplars);
+        return new FeedbackInsightsResult
+        {
+            AgentDefinitionId = agentId,
+            AgentName = "Agent",
+            GeneratedAtUtc = 1_000,
+            MinOccurrenceThreshold = 3,
+            Overall = new OverallFeedback { Total = 5, Up = 1, Down = 4, DownRate = 0.8d, MeetsThreshold = meetsThreshold },
+            ByTool = [],
+            Exemplars = exemplars
+        };
     }
 
     private static FeedbackExemplarView Exemplar()
     {
-        return new FeedbackExemplarView("down", "needs better citations", Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 100, Truncated: false);
+        return new FeedbackExemplarView { Rating = "down", Comment = "needs better citations", MessageId = Guid.NewGuid(), ConversationId = Guid.NewGuid(), CreatedAtUtc = 100, Truncated = false };
     }
 
     private static ProposedPlaybookAction Proposal(IReadOnlyList<Guid> sourceFeedbackIds,
@@ -265,7 +268,7 @@ public sealed class PlaybookAnalysisServiceTests
         string behavior = "Prefer the existing shared helper.",
         string? scope = null)
     {
-        return new ProposedPlaybookAction(behavior, TriggerCondition: null, scope, sourceFeedbackIds, confidence);
+        return new ProposedPlaybookAction { Behavior = behavior, TriggerCondition = null, Scope = scope, SourceFeedbackIds = sourceFeedbackIds, Confidence = confidence };
     }
 
     private sealed class FakeAnalysisAgent : IPlaybookAnalysisAgent

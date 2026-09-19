@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 
 /// <summary>Who a verified bridge token belongs to: the application instance the engine issued it to at install.</summary>
-/// <param name="InstanceId">The external application instance the presented token was minted for.</param>
-public sealed record ContainerBridgeCaller(Guid InstanceId);
+public sealed class ContainerBridgeCaller
+{
+    /// <summary>The external application instance the presented token was minted for.</summary>
+    public required Guid InstanceId { get; init; }
+}
 
 /// <summary>
 ///     Turns a presented bridge token into the caller it identifies, or into nothing.

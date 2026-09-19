@@ -48,24 +48,34 @@ public sealed record McpExecutionBindingRequest
 ///     A complete, in-memory snapshot of the model-visible configuration for one inbound run. The keyed fingerprint is
 ///     safe to persist and compare; the remaining fields are execution inputs and must not be persisted as plaintext.
 /// </summary>
-/// <param name="ReasoningBudgetEnforceable">
-///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for <paramref name="ModelId" />
-///     (its chat template renders a literal reasoning end marker). Gates the budget marker on the child agent's
-///     construction-time options exactly as <paramref name="SupportsThinking" /> gates the <c>think</c> field.
-///     Deliberately NOT part of the keyed binding fingerprint: it is derived from <paramref name="ModelId" />, which
-///     already participates, so folding it in would only invalidate every previously recorded fingerprint. Defaults to
-///     <see langword="true" />, the value that never removes a working cap.
-/// </param>
-public sealed record McpExecutionBinding(
-    string BindingFingerprint,
-    string ModelId,
-    string Instructions,
-    Guid? AgentDefinitionId,
-    int? AgentDefinitionVersion,
-    IReadOnlyList<AllowedToolDto> AllowedTools,
-    string? ReasoningEffort,
-    bool SupportsThinking,
-    bool ReasoningBudgetEnforceable = true);
+public sealed record McpExecutionBinding
+{
+    public required string BindingFingerprint { get; init; }
+
+    public required string ModelId { get; init; }
+
+    public required string Instructions { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required int? AgentDefinitionVersion { get; init; }
+
+    public required IReadOnlyList<AllowedToolDto> AllowedTools { get; init; }
+
+    public required string? ReasoningEffort { get; init; }
+
+    public required bool SupportsThinking { get; init; }
+
+    /// <summary>
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for <see cref="ModelId" />
+    ///     (its chat template renders a literal reasoning end marker). Gates the budget marker on the child agent's
+    ///     construction-time options exactly as <see cref="SupportsThinking" /> gates the <c>think</c> field.
+    ///     Deliberately NOT part of the keyed binding fingerprint: it is derived from <see cref="ModelId" />, which
+    ///     already participates, so folding it in would only invalidate every previously recorded fingerprint. Defaults to
+    ///     <see langword="true" />, the value that never removes a working cap.
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; } = true;
+}
 
 /// <summary>Shared fail-closed policy for the only binding allowed to receive an opaque workspace.</summary>
 internal static class McpExecutionBindingPolicy
@@ -91,13 +101,19 @@ internal static class McpExecutionBindingPolicy
 }
 
 /// <summary>A non-throwing binding resolution result suitable for an external, unattended caller.</summary>
-public sealed record McpExecutionBindingResolution(McpExecutionBinding? Binding, string? FailureCode, string DisplayMessage)
+public sealed class McpExecutionBindingResolution
 {
+    public required McpExecutionBinding? Binding { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required string DisplayMessage { get; init; }
+
     public bool IsSuccess => Binding is not null;
 
     public static McpExecutionBindingResolution Success(McpExecutionBinding binding) =>
-        new(binding, FailureCode: null, string.Empty);
+        new() { Binding = binding, FailureCode = null, DisplayMessage = string.Empty };
 
     public static McpExecutionBindingResolution Rejected(string failureCode, string displayMessage) =>
-        new(Binding: null, failureCode, displayMessage);
+        new() { Binding = null, FailureCode = failureCode, DisplayMessage = displayMessage };
 }

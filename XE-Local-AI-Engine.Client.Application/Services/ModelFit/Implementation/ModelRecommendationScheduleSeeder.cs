@@ -66,20 +66,23 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
                 return;
             }
 
-            var input = new ScheduledJobManagementInput(ModelRecommendationCheckHandler.TemplateIdValue,
-                SeedDisplayName,
-                SeedDescription,
-                ScheduleKind.Manual,
-                CronExpression: null,
-                IntervalSeconds: null,
-                RepeatCount: null,
-                StartAtUtc: null,
-                EndAtUtc: null,
-                SeedTimeZoneId,
-                SchedulerMisfirePolicy.SkipMissed,
-                PreventOverlap: true,
-                SeedMaxRuntimeSeconds,
-                SeedParametersJson);
+            var input = new ScheduledJobManagementInput
+            {
+                TemplateId = ModelRecommendationCheckHandler.TemplateIdValue,
+                DisplayName = SeedDisplayName,
+                Description = SeedDescription,
+                ScheduleKind = ScheduleKind.Manual,
+                CronExpression = null,
+                IntervalSeconds = null,
+                RepeatCount = null,
+                StartAtUtc = null,
+                EndAtUtc = null,
+                TimeZoneId = SeedTimeZoneId,
+                MisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+                PreventOverlap = true,
+                MaxRuntimeSeconds = SeedMaxRuntimeSeconds,
+                Parameters = SeedParametersJson
+            };
 
             // CreateJobAsync persists the definition enabled, then registers the durable Manual Quartz job (no trigger).
             var created = await managementService.CreateJobAsync(input, cancellationToken);

@@ -1,27 +1,53 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed record PreviewGgufImportResult(
-    string ModelBaseName,
-    string? DetectedQuantization,
-    IReadOnlyList<string> CanonicalQuantizationChoices,
-    string? CanonicalModelName,
-    string? FinalFileName,
-    long SizeBytes,
-    string SourceDisplayName,
-    string? Architecture,
-    uint? GgufVersion,
-    IReadOnlyList<string> Warnings,
-    bool? HasSufficientStorage,
-    string PreviewToken,
-    DateTimeOffset ExpiresAtUtc);
+public sealed class PreviewGgufImportResult
+{
+    public required string ModelBaseName { get; init; }
 
-public sealed record StartGgufImportCommand(
-    string SourcePath,
-    string PreviewToken,
-    string ModelBaseName,
-    string Quantization);
+    public required string? DetectedQuantization { get; init; }
 
-public sealed record GgufImportTicket(Guid OperationId, string OperationKind, string ModelName);
+    public required IReadOnlyList<string> CanonicalQuantizationChoices { get; init; }
+
+    public required string? CanonicalModelName { get; init; }
+
+    public required string? FinalFileName { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string SourceDisplayName { get; init; }
+
+    public required string? Architecture { get; init; }
+
+    public required uint? GgufVersion { get; init; }
+
+    public required IReadOnlyList<string> Warnings { get; init; }
+
+    public required bool? HasSufficientStorage { get; init; }
+
+    public required string PreviewToken { get; init; }
+
+    public required DateTimeOffset ExpiresAtUtc { get; init; }
+}
+
+public sealed class StartGgufImportCommand
+{
+    public required string SourcePath { get; init; }
+
+    public required string PreviewToken { get; init; }
+
+    public required string ModelBaseName { get; init; }
+
+    public required string Quantization { get; init; }
+}
+
+public sealed class GgufImportTicket
+{
+    public required Guid OperationId { get; init; }
+
+    public required string OperationKind { get; init; }
+
+    public required string ModelName { get; init; }
+}
 
 public sealed class GgufImportApplicationException : Exception
 {

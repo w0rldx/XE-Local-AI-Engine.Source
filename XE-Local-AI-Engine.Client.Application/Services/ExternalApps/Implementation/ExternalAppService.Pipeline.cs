@@ -311,7 +311,7 @@ internal sealed partial class ExternalAppService
             // The post-start read-back IS the binding read-back: what the daemon actually bound is the same evidence
             // the port rule is verified against, and asking twice would let the two answers differ.
             published.AddRange(inspection.PublishedPorts.Select(port =>
-                new ExternalAppPublishedPort(service.ServiceName, port.ContainerPort, port.HostPort)));
+                new ExternalAppPublishedPort { Service = service.ServiceName, ContainerPort = port.ContainerPort, HostPort = port.HostPort }));
 
             await WaitUntilReadyAsync(runtime, service, containerId, plan, cancellationToken);
 
@@ -477,14 +477,20 @@ internal sealed partial class ExternalAppService
     {
         // The daemon mode is named because it is the whole diagnosis: in-container root maps to the invoking user
         // under a rootless daemon and does not under a rootful one, and the fix differs completely between them.
-        return new ExternalAppFailure(ExternalAppFailureCategory.StorageError,
-            $"This application cannot write to its own storage directory under a {(daemonIsRootless ? "rootless" : "rootful")} container daemon.");
+        return new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.StorageError,
+            Summary = $"This application cannot write to its own storage directory under a {(daemonIsRootless ? "rootless" : "rootful")} container daemon."
+        };
     }
 
     private static ExternalAppPipelineException NotReady(string serviceName, string what)
     {
-        return new ExternalAppPipelineException(new ExternalAppFailure(ExternalAppFailureCategory.HealthCheckFailed,
-            $"Service '{serviceName}' {what}."));
+        return new ExternalAppPipelineException(new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.HealthCheckFailed,
+            Summary = $"Service '{serviceName}' {what}."
+        });
     }
 
     private static ExternalAppPipelineException Failed(ExternalAppFailurePhase phase,
@@ -501,9 +507,12 @@ internal sealed partial class ExternalAppService
         [
             .. plan.Services.SelectMany(service => service.Specification.PublishedPorts
                                                           .Where(static publication => publication.HostPort.HasValue)
-                                                          .Select(publication => new ExternalAppPublishedPort(service.ServiceName,
-                                                              publication.ContainerPort,
-                                                              publication.HostPort!.Value)))
+                                                          .Select(publication => new ExternalAppPublishedPort
+                                                          {
+                                                              Service = service.ServiceName,
+                                                              ContainerPort = publication.ContainerPort,
+                                                              HostPort = publication.HostPort!.Value
+                                                          }))
         ];
     }
 
@@ -590,8 +599,11 @@ internal sealed partial class ExternalAppService
 
         // Content-free on purpose: what is left on the daemon is named in the log, and a summary is a string the
         // browser renders.
-        throw new ExternalAppPipelineException(new ExternalAppFailure(ExternalAppFailureCategory.Unknown,
-            "This application's existing containers could not be removed, so nothing was changed; try again."));
+        throw new ExternalAppPipelineException(new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.Unknown,
+            Summary = "This application's existing containers could not be removed, so nothing was changed; try again."
+        });
     }
 
     /// <summary>

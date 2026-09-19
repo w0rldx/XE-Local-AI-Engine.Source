@@ -69,7 +69,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
 
         if (proposals.Count == 0)
         {
-            return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, [], ProposedCount: 0, DuplicateCount: 0);
+            return new MemoryExtractionOutcome { MemoryExcluded = false, ModelConfigured = true, CreatedCandidates = [], ProposedCount = 0, DuplicateCount = 0 };
         }
 
         // Dedup against the agent's existing live memories so repeat runs don't flood the staging list. The lessons text
@@ -128,7 +128,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
                 continue;
             }
 
-            accepted.Add(new AcceptedCandidate(behavior, triggerCondition, proposal.Scope, proposal.Confidence));
+            accepted.Add(new AcceptedCandidate { Behavior = behavior, TriggerCondition = triggerCondition, Scope = proposal.Scope, Confidence = proposal.Confidence });
         }
 
         // PASS 2 — semantic (embedding-cosine) dedup ON TOP OF lexical: drop a lexically-distinct candidate that is a
@@ -136,7 +136,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
         // embedding failure it returns NotApplied and every lexically-surviving candidate is kept (no mass-dedup on
         // outage). The embed text never leaves the node and is never persisted (see MemorySemanticDeduplicator).
         var semantic = await _semanticDeduplicator.FindSemanticDuplicatesAsync(BuildSemanticExisting(existing),
-            [.. accepted.Select(static candidate => new MemoryDedupCandidate(candidate.Scope, candidate.Behavior))],
+            [.. accepted.Select(static candidate => new MemoryDedupCandidate { Scope = candidate.Scope, Behavior = candidate.Behavior })],
             cancellationToken);
 
         var created = new List<PlaybookActionRecord>();
@@ -173,7 +173,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
         _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), secret-rejected {Rejected}.",
             run.AgentDefinitionId, proposals.Count, created.Count, duplicates, semanticDuplicates, rejected);
 
-        return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, created, proposals.Count, duplicates);
+        return new MemoryExtractionOutcome { MemoryExcluded = false, ModelConfigured = true, CreatedCandidates = created, ProposedCount = proposals.Count, DuplicateCount = duplicates };
     }
 
     private static IReadOnlyList<MemoryDedupExisting> BuildSemanticExisting(IReadOnlyList<PlaybookActionRecord> existing)
@@ -186,15 +186,27 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
             .. existing
                .Where(static action => action.State is PlaybookActionState.Suggested or PlaybookActionState.Enabled)
                .Where(static action => !string.IsNullOrWhiteSpace(action.Behavior))
-               .Select(static action => new MemoryDedupExisting(action.Id,
-                   action.Version,
-                   action.MemoryScope ?? MemoryScope.Procedural,
-                   action.Behavior))
+               .Select(static action => new MemoryDedupExisting
+               {
+                   Id = action.Id,
+                   Version = action.Version,
+                   Scope = action.MemoryScope ?? MemoryScope.Procedural,
+                   Behavior = action.Behavior
+               })
         ];
     }
 
     // One lexically-surviving candidate carried between PASS 1 (lexical) and PASS 2 (semantic) before persistence.
-    private sealed record AcceptedCandidate(string Behavior, string? TriggerCondition, MemoryScope Scope, double? Confidence);
+    private sealed record AcceptedCandidate
+    {
+        public required string Behavior { get; init; }
+
+        public required string? TriggerCondition { get; init; }
+
+        public required MemoryScope Scope { get; init; }
+
+        public required double? Confidence { get; init; }
+    }
 
     private static HashSet<DedupKey> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
     {

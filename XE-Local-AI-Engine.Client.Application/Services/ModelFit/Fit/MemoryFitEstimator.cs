@@ -154,8 +154,19 @@ public sealed class MemoryFitEstimator
 
         if (residentEstimatedBytes <= budgetBytes)
         {
-            return new MemoryFitEstimate(Fits: true, residentEstimatedBytes, residentHeadroomBytes, mode, MoeFitVerdict.FitsResident,
-                GpuBytes: null, CpuBytes: null, ExpertsOffloaded: false, confidence, nativeQuantFormat);
+            return new MemoryFitEstimate
+            {
+                Fits = true,
+                EstimatedBytes = residentEstimatedBytes,
+                HeadroomBytes = residentHeadroomBytes,
+                Mode = mode,
+                MoeVerdict = MoeFitVerdict.FitsResident,
+                GpuBytes = null,
+                CpuBytes = null,
+                ExpertsOffloaded = false,
+                Confidence = confidence,
+                NativeQuantFormat = nativeQuantFormat
+            };
         }
 
         // Resident estimate exceeds the budget — only MoE models on a GPU node can retry via expert offload
@@ -170,21 +181,35 @@ public sealed class MemoryFitEstimator
 
             if (gpuBytes <= budgetBytes && cpuBytes <= profile.AvailableRamBytes)
             {
-                return new MemoryFitEstimate(Fits: true,
-                    EstimatedBytes: gpuBytes + cpuBytes,
-                    HeadroomBytes: budgetBytes - gpuBytes,
-                    mode,
-                    MoeFitVerdict.FitsWithExpertOffload,
-                    gpuBytes,
-                    cpuBytes,
-                    ExpertsOffloaded: true,
-                    confidence,
-                    nativeQuantFormat);
+                return new MemoryFitEstimate
+                {
+                    Fits = true,
+                    EstimatedBytes = gpuBytes + cpuBytes,
+                    HeadroomBytes = budgetBytes - gpuBytes,
+                    Mode = mode,
+                    MoeVerdict = MoeFitVerdict.FitsWithExpertOffload,
+                    GpuBytes = gpuBytes,
+                    CpuBytes = cpuBytes,
+                    ExpertsOffloaded = true,
+                    Confidence = confidence,
+                    NativeQuantFormat = nativeQuantFormat
+                };
             }
         }
 
-        return new MemoryFitEstimate(Fits: false, residentEstimatedBytes, residentHeadroomBytes, mode, MoeFitVerdict.DoesNotFit,
-            GpuBytes: null, CpuBytes: null, ExpertsOffloaded: false, confidence, nativeQuantFormat);
+        return new MemoryFitEstimate
+        {
+            Fits = false,
+            EstimatedBytes = residentEstimatedBytes,
+            HeadroomBytes = residentHeadroomBytes,
+            Mode = mode,
+            MoeVerdict = MoeFitVerdict.DoesNotFit,
+            GpuBytes = null,
+            CpuBytes = null,
+            ExpertsOffloaded = false,
+            Confidence = confidence,
+            NativeQuantFormat = nativeQuantFormat
+        };
     }
 
     /// <summary>

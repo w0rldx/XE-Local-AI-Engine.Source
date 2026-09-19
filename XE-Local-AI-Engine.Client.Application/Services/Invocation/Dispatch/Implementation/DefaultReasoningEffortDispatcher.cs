@@ -157,14 +157,17 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
         var fastModel = swap.FastModel!;
         var capabilities = await _modelCapabilityResolver.ResolveAsync(fastModel, cancellationToken);
 
-        return new ReasoningDispatchDecision(tier,
-            fastModel,
-            ResolveEffort(capabilities.SupportsThinking, tier),
-            MaxOutputTokens: null,
-            capabilities.SupportsThinking,
-            capabilities.ReasoningBudgetEnforceable,
-            tierReason,
-            swap.Reservation);
+        return new ReasoningDispatchDecision
+        {
+            Tier = tier,
+            Model = fastModel,
+            Effort = ResolveEffort(capabilities.SupportsThinking, tier),
+            MaxOutputTokens = null,
+            SupportsThinking = capabilities.SupportsThinking,
+            ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable,
+            ReasonCode = tierReason,
+            CapacityReservation = swap.Reservation
+        };
     }
 
     /// <summary>
@@ -259,7 +262,7 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
                 return SwapResolution.Refused(ReasoningDispatchReasons.FastModelNotLocal);
             }
 
-            var capacity = await _capacityService.DecideAsync(new CapacityRequest(fastModel, ModelRole.Chat), cancellationToken);
+            var capacity = await _capacityService.DecideAsync(new CapacityRequest { ModelName = fastModel, Role = ModelRole.Chat }, cancellationToken);
             return capacity.Verdict switch
             {
                 // A fresh launch was admitted, so no process for the fast key exists to be profiling-owned. The
@@ -315,14 +318,17 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
     /// </summary>
     private static ReasoningDispatchDecision Decide(ReasoningDispatchRequest request, ReasoningTier tier, string reasonCode)
     {
-        return new ReasoningDispatchDecision(tier,
-            request.ResolvedModel,
-            ResolveEffort(request.SupportsThinking, tier),
-            MaxOutputTokens: null,
-            request.SupportsThinking,
-            request.ReasoningBudgetEnforceable,
-            reasonCode,
-            CapacityReservation: null);
+        return new ReasoningDispatchDecision
+        {
+            Tier = tier,
+            Model = request.ResolvedModel,
+            Effort = ResolveEffort(request.SupportsThinking, tier),
+            MaxOutputTokens = null,
+            SupportsThinking = request.SupportsThinking,
+            ReasoningBudgetEnforceable = request.ReasoningBudgetEnforceable,
+            ReasonCode = reasonCode,
+            CapacityReservation = null
+        };
     }
 
     /// <summary>

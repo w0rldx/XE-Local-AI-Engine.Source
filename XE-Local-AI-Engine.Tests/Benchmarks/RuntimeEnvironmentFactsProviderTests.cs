@@ -196,7 +196,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
                        InferenceBackend = "cuda",
                        GpuExpected = true,
                        CpuFallback = false,
-                       Devices = [new RuntimeAuditDevice("NVIDIA GeForce RTX 5090", 32L * 1024 * 1024 * 1024, 30L * 1024 * 1024 * 1024)]
+                       Devices = [new RuntimeAuditDevice { Name = "NVIDIA GeForce RTX 5090", TotalBytes = 32L * 1024 * 1024 * 1024, FreeBytes = 30L * 1024 * 1024 * 1024 }]
                    }));
 
         return new RuntimeEnvironmentFactsProvider(binaryManager,

@@ -25,15 +25,20 @@ public enum CapacityVerdict
 ///     For cloud Allow, QueueSameModel and every reject, <see cref="Reservation" /> is <see langword="null" /> (nothing
 ///     to release).
 /// </summary>
-/// <param name="Verdict">The admission verdict.</param>
-/// <param name="Reason">Sanitized, user-safe reason string (constant; never a path/secret).</param>
-/// <param name="OllamaEvictionWarning">Whether loading this model on Ollama may evict a different running model.</param>
-/// <param name="Reservation">
-///     The composite launch-admission/ledger reservation to release on child exit (local Allow only);
-///     <see langword="null" /> otherwise. Disposing it is idempotent.
-/// </param>
-public sealed record CapacityDecision(
-    CapacityVerdict Verdict,
-    string Reason,
-    bool OllamaEvictionWarning,
-    IDisposable? Reservation = null);
+public sealed class CapacityDecision
+{
+    /// <summary>The admission verdict.</summary>
+    public required CapacityVerdict Verdict { get; init; }
+
+    /// <summary>Sanitized, user-safe reason string (constant; never a path/secret).</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>Whether loading this model on Ollama may evict a different running model.</summary>
+    public required bool OllamaEvictionWarning { get; init; }
+
+    /// <summary>
+    ///     The composite launch-admission/ledger reservation to release on child exit (local Allow only);
+    ///     <see langword="null" /> otherwise. Disposing it is idempotent.
+    /// </summary>
+    public IDisposable? Reservation { get; init; }
+}

@@ -67,40 +67,46 @@ internal static class SchedulerMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new ScheduledJobManagementInput(request.TemplateId,
-            request.DisplayName,
-            request.Description,
-            request.ScheduleKind.ToPersistence(),
-            request.CronExpression,
-            request.IntervalSeconds,
-            request.RepeatCount,
-            request.StartAtUtc,
-            request.EndAtUtc,
-            request.TimeZoneId,
-            request.MisfirePolicy.ToPersistence(),
-            request.PreventOverlap,
-            request.MaxRuntimeSeconds,
-            request.Parameters);
+        return new ScheduledJobManagementInput
+        {
+            TemplateId = request.TemplateId,
+            DisplayName = request.DisplayName,
+            Description = request.Description,
+            ScheduleKind = request.ScheduleKind.ToPersistence(),
+            CronExpression = request.CronExpression,
+            IntervalSeconds = request.IntervalSeconds,
+            RepeatCount = request.RepeatCount,
+            StartAtUtc = request.StartAtUtc,
+            EndAtUtc = request.EndAtUtc,
+            TimeZoneId = request.TimeZoneId,
+            MisfirePolicy = request.MisfirePolicy.ToPersistence(),
+            PreventOverlap = request.PreventOverlap,
+            MaxRuntimeSeconds = request.MaxRuntimeSeconds,
+            Parameters = request.Parameters
+        };
     }
 
     public static ScheduledJobManagementInput ToInput(this UpdateScheduledJobRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new ScheduledJobManagementInput(request.TemplateId,
-            request.DisplayName,
-            request.Description,
-            request.ScheduleKind.ToPersistence(),
-            request.CronExpression,
-            request.IntervalSeconds,
-            request.RepeatCount,
-            request.StartAtUtc,
-            request.EndAtUtc,
-            request.TimeZoneId,
-            request.MisfirePolicy.ToPersistence(),
-            request.PreventOverlap,
-            request.MaxRuntimeSeconds,
-            request.Parameters);
+        return new ScheduledJobManagementInput
+        {
+            TemplateId = request.TemplateId,
+            DisplayName = request.DisplayName,
+            Description = request.Description,
+            ScheduleKind = request.ScheduleKind.ToPersistence(),
+            CronExpression = request.CronExpression,
+            IntervalSeconds = request.IntervalSeconds,
+            RepeatCount = request.RepeatCount,
+            StartAtUtc = request.StartAtUtc,
+            EndAtUtc = request.EndAtUtc,
+            TimeZoneId = request.TimeZoneId,
+            MisfirePolicy = request.MisfirePolicy.ToPersistence(),
+            PreventOverlap = request.PreventOverlap,
+            MaxRuntimeSeconds = request.MaxRuntimeSeconds,
+            Parameters = request.Parameters
+        };
     }
 
     public static ScheduledJobRunResponse ToResponse(this ScheduledJobRunRecord record)

@@ -176,6 +176,6 @@ internal sealed class GraphWorkflowInlineExecutor
                 .Order(StringComparer.Ordinal)
                 // A satisfied edge means a succeeded source, so the document is there; the fallback is what an
                 // executor that wrote no output would leave, and the composer reads an empty string as a JSON null.
-                .Select(key => new GraphWorkflowUpstreamDocument(key, byKey[key].OutputJson ?? string.Empty))
+                .Select(key => new GraphWorkflowUpstreamDocument { NodeKey = key, OutputDocumentJson = byKey[key].OutputJson ?? string.Empty })
     ];
 }

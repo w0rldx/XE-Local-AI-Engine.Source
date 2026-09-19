@@ -30,7 +30,7 @@ public sealed class WorkSessionServiceTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
-        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Runtime research", "Explain the inference path.", AgentWorkSessionKind.Research, agentId));
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel { Title = "Runtime research", Objective = "Explain the inference path.", Kind = AgentWorkSessionKind.Research, AgentDefinitionId = agentId });
 
         AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status);
         AssertEx.Equal(expected: 9, created.MaxStepsPerRun, "The step budget is the node's effective option, so the page can render 'step N of M'.");
@@ -48,12 +48,12 @@ public sealed class WorkSessionServiceTests
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
 
-        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Kind check", "Prove the discriminator.", AgentWorkSessionKind.Research, agentId));
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel { Title = "Kind check", Objective = "Prove the discriminator.", Kind = AgentWorkSessionKind.Research, AgentDefinitionId = agentId });
 
         AssertEx.NotNull(await chat.GetConversationAsync(created.ConversationId),
             "A by-id read stays unfiltered — the session's own transcript reader depends on it.");
 
-        var listed = (await chat.ListConversationsAsync(new NodeChatListConversationsRequest(IncludeArchived: true)))
+        var listed = (await chat.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true }))
                      .Select(static summary => summary.ConversationId)
                      .ToArray();
         AssertEx.False(listed.Contains(created.ConversationId),
@@ -75,20 +75,26 @@ public sealed class WorkSessionServiceTests
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-                                          service.CreateAsync(new CreateWorkSessionRequestModel("t",
-                                              "o",
-                                              AgentWorkSessionKind.General,
-                                              listed,
-                                              new WorkSessionRuntimeOverride("a-model-nobody-listed", ReasoningEffort: null))));
+                                          service.CreateAsync(new CreateWorkSessionRequestModel
+                                          {
+                                              Title = "t",
+                                              Objective = "o",
+                                              Kind = AgentWorkSessionKind.General,
+                                              AgentDefinitionId = listed,
+                                              Runtime = new WorkSessionRuntimeOverride { ModelProfile = "a-model-nobody-listed", ReasoningEffort = null }
+                                          }));
 
         // The refusal names the model the session would have run on, not the agent's own.
         AssertEx.Contains(rejection.Message, "a-model-nobody-listed");
 
-        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("t",
-                                       "o",
-                                       AgentWorkSessionKind.General,
-                                       unlisted,
-                                       new WorkSessionRuntimeOverride("tool-capable-model", "high")));
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel
+        {
+            Title = "t",
+            Objective = "o",
+            Kind = AgentWorkSessionKind.General,
+            AgentDefinitionId = unlisted,
+            Runtime = new WorkSessionRuntimeOverride { ModelProfile = "tool-capable-model", ReasoningEffort = "high" }
+        });
 
         AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status, "an override onto a listed model admits a session the agent's own pin would have been refused for.");
     }
@@ -101,7 +107,7 @@ public sealed class WorkSessionServiceTests
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-                                          service.CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, Guid.NewGuid())));
+                                          service.CreateAsync(new CreateWorkSessionRequestModel { Title = "t", Objective = "o", Kind = AgentWorkSessionKind.General, AgentDefinitionId = Guid.NewGuid() }));
 
         AssertEx.Contains(rejection.Message, "could not be found");
     }
@@ -117,7 +123,7 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                           scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)));
+                                               .CreateAsync(new CreateWorkSessionRequestModel { Title = "t", Objective = "o", Kind = AgentWorkSessionKind.General, AgentDefinitionId = agentId }));
 
         AssertEx.Contains(rejection.Message, "cannot call tools");
     }
@@ -135,7 +141,7 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                           scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)));
+                                               .CreateAsync(new CreateWorkSessionRequestModel { Title = "t", Objective = "o", Kind = AgentWorkSessionKind.General, AgentDefinitionId = agentId }));
 
         AssertEx.Contains(rejection.Message, "tool-capable model list");
         // The operator has to be told WHICH model to add, not merely that one is missing.
@@ -162,14 +168,14 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-                                          service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, unlistedAgentId)));
+                                          service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = null, AgentDefinitionId = unlistedAgentId }));
 
         AssertEx.Contains(rejection.Message, "tool-capable model list");
         AssertEx.Equal(seeded.AgentDefinitionId,
             (await service.GetAsync(sessionId)).AgentDefinitionId,
             "The refused repoint left the session on the agent it had.");
 
-        var repointed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, listedAgentId));
+        var repointed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = null, AgentDefinitionId = listedAgentId });
         AssertEx.Equal(listedAgentId, repointed.AgentDefinitionId, "A listed model still repoints.");
     }
 
@@ -182,7 +188,7 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                               scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                   .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.Development, agentId)));
+                                   .CreateAsync(new CreateWorkSessionRequestModel { Title = "t", Objective = "o", Kind = AgentWorkSessionKind.Development, AgentDefinitionId = agentId }));
     }
 
     [Test]
@@ -194,7 +200,7 @@ public sealed class WorkSessionServiceTests
         var unknown = Guid.NewGuid();
 
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetAsync(unknown));
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.UpdateAsync(unknown, new UpdateWorkSessionRequestModel("t", null, null)));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.UpdateAsync(unknown, new UpdateWorkSessionRequestModel { Title = "t", Objective = null, AgentDefinitionId = null }));
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.DeleteAsync(unknown));
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.StartAsync(unknown));
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.PostFollowUpAsync(unknown, "hello"));
@@ -213,9 +219,9 @@ public sealed class WorkSessionServiceTests
 
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                              service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, "A different objective", null)));
+                              service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = null, Objective = "A different objective", AgentDefinitionId = null }));
 
-        var renamed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel("Renamed mid-run", null, null));
+        var renamed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel { Title = "Renamed mid-run", Objective = null, AgentDefinitionId = null });
         AssertEx.Equal("Renamed mid-run", renamed.Title, "A title never changes what the running step sees.");
     }
 

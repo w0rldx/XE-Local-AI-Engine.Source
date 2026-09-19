@@ -27,13 +27,20 @@ public enum DraftMode
 ///     the skill's body depending on which method is called. The existing fields are read only in
 ///     <see cref="DraftMode.Improve" />.
 /// </summary>
-public sealed record ConfigDraftRequest(
-    DraftMode Mode,
-    string ModelName,
-    string Brief,
-    string? ExistingName = null,
-    string? ExistingDescription = null,
-    string? ExistingContent = null);
+public sealed class ConfigDraftRequest
+{
+    public required DraftMode Mode { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required string Brief { get; init; }
+
+    public string? ExistingName { get; init; }
+
+    public string? ExistingDescription { get; init; }
+
+    public string? ExistingContent { get; init; }
+}
 
 /// <summary>
 ///     A normalized draft. Every field has already been trimmed, clamped to its entity cap, and — for skills — re-validated
@@ -41,15 +48,24 @@ public sealed record ConfigDraftRequest(
 ///     <see cref="ContentHash" /> are stamped server-side and travel back with the save so the save path can compute
 ///     <c>wasEdited</c> (see <see cref="DraftContentHash" /> for the canonical form both sides must agree on).
 /// </summary>
-public sealed record ConfigDraft(
-    string Name,
-    string Description,
-    string Content,
-    string? Rationale,
-    IReadOnlyList<string> Assumptions,
-    double Confidence,
-    DateTimeOffset GeneratedAtUtc,
-    string ContentHash);
+public sealed class ConfigDraft
+{
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string Content { get; init; }
+
+    public required string? Rationale { get; init; }
+
+    public required IReadOnlyList<string> Assumptions { get; init; }
+
+    public required double Confidence { get; init; }
+
+    public required DateTimeOffset GeneratedAtUtc { get; init; }
+
+    public required string ContentHash { get; init; }
+}
 
 /// <summary>
 ///     Why a draft did not happen. The endpoint layer maps these to status codes: <see cref="ModelNotEligible" /> and

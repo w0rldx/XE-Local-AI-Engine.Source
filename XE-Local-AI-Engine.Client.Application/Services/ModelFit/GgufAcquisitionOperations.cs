@@ -21,22 +21,37 @@ public enum GgufAcquisitionPhase
     Committing = 7
 }
 
-public sealed record GgufAcquisitionStatus(
-    Guid OperationId,
-    GgufAcquisitionOperationKind OperationKind,
-    string ModelName,
-    GgufAcquisitionPhase Phase,
-    long? CompletedBytes,
-    long? TotalBytes,
-    DateTimeOffset StartedAtUtc,
-    DateTimeOffset UpdatedAtUtc,
-    string? ErrorCode,
-    string? SanitizedError);
+public sealed record GgufAcquisitionStatus
+{
+    public required Guid OperationId { get; init; }
 
-public sealed record GgufAcquisitionRegistration(
-    GgufAcquisitionStatus Status,
-    bool AlreadyInFlight,
-    CancellationToken CancellationToken);
+    public required GgufAcquisitionOperationKind OperationKind { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required GgufAcquisitionPhase Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required DateTimeOffset StartedAtUtc { get; init; }
+
+    public required DateTimeOffset UpdatedAtUtc { get; init; }
+
+    public required string? ErrorCode { get; init; }
+
+    public required string? SanitizedError { get; init; }
+}
+
+public sealed class GgufAcquisitionRegistration
+{
+    public required GgufAcquisitionStatus Status { get; init; }
+
+    public required bool AlreadyInFlight { get; init; }
+
+    public required CancellationToken CancellationToken { get; init; }
+}
 
 public interface IGgufAcquisitionOperationRegistry
 {
@@ -109,27 +124,30 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
                 && IsActive(existing.Phase)
                 && _cancellations.TryGetValue(existingId, out var existingCancellation))
             {
-                return new GgufAcquisitionRegistration(existing, AlreadyInFlight: true, existingCancellation.Token);
+                return new GgufAcquisitionRegistration { Status = existing, AlreadyInFlight = true, CancellationToken = existingCancellation.Token };
             }
 
             var operationId = Guid.NewGuid();
             var cancellation = new CancellationTokenSource();
             var now = NextTimestamp();
-            var status = new GgufAcquisitionStatus(operationId,
-                operationKind,
-                normalizedName,
-                GgufAcquisitionPhase.Validating,
-                CompletedBytes: null,
-                totalBytes,
-                now,
-                now,
-                ErrorCode: null,
-                SanitizedError: null);
+            var status = new GgufAcquisitionStatus
+            {
+                OperationId = operationId,
+                OperationKind = operationKind,
+                ModelName = normalizedName,
+                Phase = GgufAcquisitionPhase.Validating,
+                CompletedBytes = null,
+                TotalBytes = totalBytes,
+                StartedAtUtc = now,
+                UpdatedAtUtc = now,
+                ErrorCode = null,
+                SanitizedError = null
+            };
             _statuses[operationId] = status;
             _cancellations[operationId] = cancellation;
             if (_active.TryAdd(activeKey, operationId))
             {
-                return new GgufAcquisitionRegistration(status, AlreadyInFlight: false, cancellation.Token);
+                return new GgufAcquisitionRegistration { Status = status, AlreadyInFlight = false, CancellationToken = cancellation.Token };
             }
 
             _statuses.TryRemove(operationId, out _);
@@ -207,16 +225,19 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
         }
 
         var now = NextTimestamp();
-        var status = new GgufAcquisitionStatus(Guid.NewGuid(),
-            operationKind,
-            modelName.Trim(),
-            phase,
-            completedBytes,
-            totalBytes,
-            now,
-            now,
-            errorCode,
-            sanitizedError);
+        var status = new GgufAcquisitionStatus
+        {
+            OperationId = Guid.NewGuid(),
+            OperationKind = operationKind,
+            ModelName = modelName.Trim(),
+            Phase = phase,
+            CompletedBytes = completedBytes,
+            TotalBytes = totalBytes,
+            StartedAtUtc = now,
+            UpdatedAtUtc = now,
+            ErrorCode = errorCode,
+            SanitizedError = sanitizedError
+        };
         _statuses[status.OperationId] = status;
         PruneTerminals();
         return status;

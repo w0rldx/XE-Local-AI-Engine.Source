@@ -93,7 +93,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
     }
 
     private static KnowledgeQueryEmbeddingCacheEntry Entry(ReadOnlyMemory<float> vector, string identity) =>
-        new(vector, identity);
+        new() { Vector = vector, VectorIdentity = identity };
 
     private static IOptions<KnowledgeBaseOptions> Options(int maxEntries, int ttlSeconds)
     {

@@ -14,9 +14,15 @@ internal sealed record DevelopmentReviewReport(
     Guid ValidationArtifactId,
     long CompletedAtUtc);
 
-internal sealed record DevelopmentReviewerAttemptResult(
-    Guid AttemptId,
-    Guid ArtifactId,
-    DevelopmentReviewDisposition Disposition,
-    DevelopmentTaskStatus TaskStatus,
-    string SubjectHash);
+internal sealed class DevelopmentReviewerAttemptResult
+{
+    public required Guid AttemptId { get; init; }
+
+    public required Guid ArtifactId { get; init; }
+
+    public required DevelopmentReviewDisposition Disposition { get; init; }
+
+    public required DevelopmentTaskStatus TaskStatus { get; init; }
+
+    public required string SubjectHash { get; init; }
+}

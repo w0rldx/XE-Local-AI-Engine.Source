@@ -50,9 +50,9 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(context, [new FtsSearchHit(chunkId, documentId, 1.0)]);
+        var service = CreateSearchService(context, [new FtsSearchHit { ChunkId = chunkId, DocumentId = documentId, Bm25Score = 1.0 }]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         var hit = result.Results[0];
@@ -73,9 +73,9 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var service = CreateSearchService(context, [new FtsSearchHit(chunkId, documentId, 1.0)]);
+        var service = CreateSearchService(context, [new FtsSearchHit { ChunkId = chunkId, DocumentId = documentId, Bm25Score = 1.0 }]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         var hit = result.Results[0];

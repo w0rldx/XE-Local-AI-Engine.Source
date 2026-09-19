@@ -41,7 +41,7 @@ internal static class ProcessAudioCaptureCandidates
         return
         [
             .. activeByProcessId
-               .Select(entry => new ProcessAudioCaptureCandidate(entry.Key, resolveName(entry.Key), entry.Value))
+               .Select(entry => new ProcessAudioCaptureCandidate { ProcessId = entry.Key, Name = resolveName(entry.Key), HasAudio = entry.Value })
                .OrderBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
                .ThenBy(candidate => candidate.ProcessId)
         ];

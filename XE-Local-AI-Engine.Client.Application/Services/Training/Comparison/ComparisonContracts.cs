@@ -1,15 +1,24 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
 /// <summary>One sample kind's two accuracies and the difference between them.</summary>
-public sealed record ComparisonKindDeltaV1(
-    string Kind,
-    int BaseTotal,
-    int BasePassed,
-    int TunedTotal,
-    int TunedPassed,
-    double BaseAccuracy,
-    double TunedAccuracy,
-    double AccuracyDelta);
+public sealed record ComparisonKindDeltaV1
+{
+    public required string Kind { get; init; }
+
+    public required int BaseTotal { get; init; }
+
+    public required int BasePassed { get; init; }
+
+    public required int TunedTotal { get; init; }
+
+    public required int TunedPassed { get; init; }
+
+    public required double BaseAccuracy { get; init; }
+
+    public required double TunedAccuracy { get; init; }
+
+    public required double AccuracyDelta { get; init; }
+}
 
 /// <summary>
 ///     The optional throughput/quality pairing, read straight off two benchmark runs. Read-only: nothing here starts,
@@ -83,33 +92,55 @@ public sealed record TrainingComparisonDeltasV1
 }
 
 /// <summary>
-///     What the operator asked to benchmark. The <paramref name="CoreTask" /> is REQUIRED and comes from the operator:
+///     What the operator asked to benchmark. The <see cref="CoreTask" /> is REQUIRED and comes from the operator:
 ///     a comparison's evaluation prompt is a scoring-harness input, not a benchmark task, and silently reusing it would
 ///     produce a benchmark of the wrong thing.
 /// </summary>
-public sealed record CreateBenchmarkFromComparisonCommand(
-    Guid ComparisonId,
-    string CoreTask,
-    int ContextTokens,
-    Guid AgentDefinitionId,
-    string? Name = null,
-    string? KvCacheType = null,
-    int RepeatCount = 1,
-    bool Warmup = false);
+public sealed record CreateBenchmarkFromComparisonCommand
+{
+    public required Guid ComparisonId { get; init; }
 
-/// <param name="BaseRunIds">The base model's runs, in the order they were enqueued. The tuned group follows them.</param>
-public sealed record ComparisonBenchmarkHandoff(
-    Guid ProjectId,
-    string BaseModelName,
-    string TunedModelName,
-    IReadOnlyList<Guid> BaseRunIds,
-    IReadOnlyList<Guid> TunedRunIds);
+    public required string CoreTask { get; init; }
+
+    public required int ContextTokens { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? KvCacheType { get; init; }
+
+    public int RepeatCount { get; init; } = 1;
+
+    public bool Warmup { get; init; }
+}
+
+public sealed class ComparisonBenchmarkHandoff
+{
+    public required Guid ProjectId { get; init; }
+
+    public required string BaseModelName { get; init; }
+
+    public required string TunedModelName { get; init; }
+
+    /// <summary>The base model's runs, in the order they were enqueued. The tuned group follows them.</summary>
+    public required IReadOnlyList<Guid> BaseRunIds { get; init; }
+
+    public required IReadOnlyList<Guid> TunedRunIds { get; init; }
+}
 
 /// <summary>What the operator asked to compare. The benchmark ids are optional and validated to exist before binding.</summary>
-public sealed record CreateComparisonCommand(
-    string Name,
-    Guid BaseEvaluationRunId,
-    Guid TunedEvaluationRunId,
-    Guid? BaseBenchmarkRunId = null,
-    Guid? TunedBenchmarkRunId = null,
-    Guid? TrainingRunId = null);
+public sealed class CreateComparisonCommand
+{
+    public required string Name { get; init; }
+
+    public required Guid BaseEvaluationRunId { get; init; }
+
+    public required Guid TunedEvaluationRunId { get; init; }
+
+    public Guid? BaseBenchmarkRunId { get; init; }
+
+    public Guid? TunedBenchmarkRunId { get; init; }
+
+    public Guid? TrainingRunId { get; init; }
+}

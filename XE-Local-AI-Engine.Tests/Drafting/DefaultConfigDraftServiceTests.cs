@@ -420,7 +420,7 @@ public sealed class DefaultConfigDraftServiceTests
 
     private static ConfigDraftRequest Request(string brief, DraftMode mode = DraftMode.Create, string? existingContent = null)
     {
-        return new ConfigDraftRequest(mode, LlamaModel, brief, ExistingContent: existingContent);
+        return new ConfigDraftRequest { Mode = mode, ModelName = LlamaModel, Brief = brief, ExistingContent = existingContent };
     }
 
     private static ModelClassificationRecord Classification(ModelKind kind)

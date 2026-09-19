@@ -154,16 +154,19 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
         };
 
     private static KnowledgeSearchHit Hit(Guid documentId, string title, string content) =>
-        new(documentId,
-            Guid.NewGuid(),
-            title,
-            title,
-            content,
-            "knowledge-base",
-            1d,
-            0,
-            KnowledgeDocumentStatus.Indexed,
-            ServingLastKnownGood: false);
+        new()
+        {
+            DocumentId = documentId,
+            ChunkId = Guid.NewGuid(),
+            Title = title,
+            Section = title,
+            Content = content,
+            Source = "knowledge-base",
+            Score = 1d,
+            ChunkIndex = 0,
+            DocumentStatus = KnowledgeDocumentStatus.Indexed,
+            ServingLastKnownGood = false
+        };
 
     private static void AssertClose(double expected, double actual) =>
         AssertEx.True(Math.Abs(expected - actual) < 1e-12, $"Expected {expected:R}, actual {actual:R}.");
@@ -176,6 +179,6 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
             _hitsByQuery = hitsByQuery;
 
         public Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken) =>
-            Task.FromResult(new KnowledgeSearchResult(_hitsByQuery[request.Query]));
+            Task.FromResult(new KnowledgeSearchResult { Results = _hitsByQuery[request.Query] });
     }
 }

@@ -365,7 +365,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 TargetStatus = GraphWorkflowNodeRunStatus.Pending,
                 IncrementAttempt = true,
                 EventType = GraphWorkflowEventTypes.NodeRetried,
-                DetailJson = JsonSerializer.Serialize(new RetryDetail(nodeRun.FailureClass.ToString(), nodeRun.Attempt, nodeRun.Error), JsonOptions)
+                DetailJson = JsonSerializer.Serialize(new RetryDetail { FailureClass = nodeRun.FailureClass.ToString(), Attempt = nodeRun.Attempt, Reason = nodeRun.Error }, JsonOptions)
             },
                                cancellationToken);
             spent++;
@@ -876,5 +876,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     ///     What a re-attempt records about the failure it is re-attempting. The row has cleared those fields, so this
     ///     event is the only place they survive.
     /// </summary>
-    private sealed record RetryDetail(string FailureClass, int Attempt, string? Reason);
+    private sealed record RetryDetail
+    {
+        public required string FailureClass { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string? Reason { get; init; }
+    }
 }

@@ -111,14 +111,17 @@ public sealed class StartBenchmarkRunEndpoint : Endpoint<StartBenchmarkRunReques
         {
             // The FIRST run of the group is the response: it is the one that starts, so it is the one an operator's
             // live pane should open on. The rest are reachable through its repeatGroupId.
-            var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
-                                         req.ModelName,
-                                         req.ExpectedProjectVersion,
-                                         kvCacheType,
-                                         req.RepeatCount,
-                                         req.Warmup,
-                                         req.RepeatMode,
-                                         req.AnswerVarianceTemperature), scope: null, ct);
+            var created = await _runs.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = req.ProjectId,
+                PrimaryModelName = req.ModelName,
+                ExpectedProjectVersion = req.ExpectedProjectVersion,
+                KvCacheType = kvCacheType,
+                RepeatCount = req.RepeatCount,
+                Warmup = req.Warmup,
+                RepeatMode = req.RepeatMode,
+                AnswerVarianceTemperature = req.AnswerVarianceTemperature
+            }, scope: null, ct);
             await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail()));
         }
         catch (KeyNotFoundException exception)
@@ -168,13 +171,16 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
             return;
         }
 
-        var result = await _batches.StartAsync(new BenchmarkRunBatchRequest(req.ProjectId,
-                                       req.ExpectedProjectVersion,
-                                       [.. req.Items.Select(static item => new BenchmarkRunBatchItem(item.ModelName, item.KvCacheType))],
-                                       req.RepeatCount,
-                                       req.Warmup,
-                                       req.RepeatMode,
-                                       req.AnswerVarianceTemperature), ct);
+        var result = await _batches.StartAsync(new BenchmarkRunBatchRequest
+        {
+            ProjectId = req.ProjectId,
+            ExpectedProjectVersion = req.ExpectedProjectVersion,
+            Items = [.. req.Items.Select(static item => new BenchmarkRunBatchItem { ModelName = item.ModelName, KvCacheType = item.KvCacheType })],
+            RepeatCount = req.RepeatCount,
+            Warmup = req.Warmup,
+            RepeatMode = req.RepeatMode,
+            AnswerVarianceTemperature = req.AnswerVarianceTemperature
+        }, ct);
         await Send.OkAsync(new StartBenchmarkRunBatchResponse
                   {
                       ProjectVersion = result.ProjectVersion,

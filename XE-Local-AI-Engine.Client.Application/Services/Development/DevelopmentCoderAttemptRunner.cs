@@ -7,13 +7,20 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
-internal sealed record DevelopmentCoderAttemptResult(
-    Guid AttemptId,
-    string BaseCommit,
-    string SubjectHash,
-    string PatchHash,
-    string ManifestHash,
-    IReadOnlyList<string> ChangedFiles);
+internal sealed class DevelopmentCoderAttemptResult
+{
+    public required Guid AttemptId { get; init; }
+
+    public required string BaseCommit { get; init; }
+
+    public required string SubjectHash { get; init; }
+
+    public required string PatchHash { get; init; }
+
+    public required string ManifestHash { get; init; }
+
+    public required IReadOnlyList<string> ChangedFiles { get; init; }
+}
 
 internal interface IDevelopmentCoderAttemptRunner
 {
@@ -128,12 +135,15 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 OutputTokens = model.OutputTokens
             },
                                 CancellationToken.None);
-            return new DevelopmentCoderAttemptResult(snapshot.AttemptId,
-                evidence.BaseCommit,
-                evidence.SubjectHash,
-                evidence.PatchHash,
-                evidence.ManifestHash,
-                evidence.ChangedFiles.Select(static item => item.Path).ToArray());
+            return new DevelopmentCoderAttemptResult
+            {
+                AttemptId = snapshot.AttemptId,
+                BaseCommit = evidence.BaseCommit,
+                SubjectHash = evidence.SubjectHash,
+                PatchHash = evidence.PatchHash,
+                ManifestHash = evidence.ManifestHash,
+                ChangedFiles = evidence.ChangedFiles.Select(static item => item.Path).ToArray()
+            };
         }
         catch (Exception exception)
         {
@@ -340,8 +350,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         var currentDiff = await tools.GetDiffAsync(cancellationToken);
         return await _cloudContext.CreateAsync(snapshot,
             [
-                new DevelopmentCloudContextExcerpt("workspace-files.txt", files),
-                new DevelopmentCloudContextExcerpt("workspace-diff.patch", currentDiff)
+                new DevelopmentCloudContextExcerpt { RelativePath = "workspace-files.txt", Content = files },
+                new DevelopmentCloudContextExcerpt { RelativePath = "workspace-diff.patch", Content = currentDiff }
             ],
             cancellationToken: cancellationToken);
     }

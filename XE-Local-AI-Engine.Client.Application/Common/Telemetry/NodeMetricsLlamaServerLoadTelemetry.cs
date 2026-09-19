@@ -53,7 +53,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
             else
             {
                 _lastReadyLoads[key] =
-                    new LlamaServerVramAtLoad(observation.GlobalFreeVramBytesAtLoad, observation.AdmittedVramBytes);
+                    new LlamaServerVramAtLoad { GlobalFreeVramBytesAtLoad = observation.GlobalFreeVramBytesAtLoad, AdmittedVramBytes = observation.AdmittedVramBytes };
             }
         }
 
@@ -149,4 +149,9 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
 ///     gate measured just before admitting the load, and the GPU bytes it reserved for that process. Either half can be
 ///     <see langword="null" /> on its own — a CPU-only or non-NVIDIA host has no global-free figure to read.
 /// </summary>
-internal sealed record LlamaServerVramAtLoad(long? GlobalFreeVramBytesAtLoad, long? AdmittedVramBytes);
+internal sealed class LlamaServerVramAtLoad
+{
+    public required long? GlobalFreeVramBytesAtLoad { get; init; }
+
+    public required long? AdmittedVramBytes { get; init; }
+}

@@ -36,7 +36,7 @@ internal sealed class DevWorkflowGraphCache
 
         var graph = DevWorkflowGraph.Parse(run.GraphJson);
         _ = Interlocked.Increment(ref _parseCount);
-        _entries[run.Id] = new CacheEntry(run.GraphRevision, graph);
+        _entries[run.Id] = new CacheEntry { Revision = run.GraphRevision, Graph = graph };
         return graph;
     }
 
@@ -44,5 +44,10 @@ internal sealed class DevWorkflowGraphCache
     public void Forget(Guid runId) =>
         _entries.TryRemove(runId, out _);
 
-    private sealed record CacheEntry(int Revision, DevWorkflowGraph Graph);
+    private sealed record CacheEntry
+    {
+        public required int Revision { get; init; }
+
+        public required DevWorkflowGraph Graph { get; init; }
+    }
 }

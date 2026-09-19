@@ -43,7 +43,9 @@ internal static class CompactionContextResolver
             new KeyValuePair<string, string?>("source", "conversation-compaction-summary")
         ]);
 
-        return new CompactionAnchor(new ConversationMessageDto
+        return new CompactionAnchor
+        {
+            Summary = new ConversationMessageDto
             {
                 Id = Guid.NewGuid(),
                 Role = MessageRole.User,
@@ -53,7 +55,8 @@ internal static class CompactionContextResolver
                           + fencedSummary,
                 SortOrder = sortOrder
             },
-            coveredSequence);
+            CoveredSequence = coveredSequence
+        };
     }
 }
 
@@ -61,4 +64,9 @@ internal static class CompactionContextResolver
 ///     The synthetic summary message a compacted conversation sends in place of its covered history, plus the anchor
 ///     sequence it covers — every verbatim message at or below it is dropped from the sent context.
 /// </summary>
-internal sealed record CompactionAnchor(ConversationMessageDto Summary, int CoveredSequence);
+internal sealed class CompactionAnchor
+{
+    public required ConversationMessageDto Summary { get; init; }
+
+    public required int CoveredSequence { get; init; }
+}

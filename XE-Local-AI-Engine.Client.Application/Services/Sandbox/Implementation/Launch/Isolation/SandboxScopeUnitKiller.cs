@@ -28,7 +28,12 @@ internal interface ISandboxScopeUnitKiller
 ///         command is unrecoverable, while leaving an orphan costs one <c>RuntimeMaxSec</c> of runtime.
 ///     </para>
 /// </summary>
-internal sealed record SandboxScopeUnitStatus(string UnitName, TimeSpan? ActiveFor);
+internal sealed class SandboxScopeUnitStatus
+{
+    public required string UnitName { get; init; }
+
+    public required TimeSpan? ActiveFor { get; init; }
+}
 
 /// <summary>
 ///     The kill authority for an isolated command: <c>systemctl --user kill --kill-whom=cgroup --signal=SIGKILL
@@ -158,7 +163,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
 
         var ages = ReadActiveDurations(names);
 
-        return [.. names.Select(name => new SandboxScopeUnitStatus(name, ages.TryGetValue(name, out var age) ? age : null))];
+        return [.. names.Select(name => new SandboxScopeUnitStatus { UnitName = name, ActiveFor = ages.TryGetValue(name, out var age) ? age : null })];
     }
 
     /// <summary>

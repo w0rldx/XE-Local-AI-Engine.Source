@@ -46,18 +46,18 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         if (!_inFlight.TryAdd(modelName, cts))
         {
             cts.Dispose();
-            return new ImageModelDownloadTicket(modelName, AlreadyInFlight: true);
+            return new ImageModelDownloadTicket { ModelName = modelName, AlreadyInFlight = true };
         }
 
         // Publish Running before the transfer starts so a poll landing between accept and the first byte callback sees
         // the download rather than an empty registry.
-        _status[modelName] = new ImageModelDownloadStatus(modelName, ImageModelDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
+        _status[modelName] = new ImageModelDownloadStatus { ModelName = modelName, Phase = ImageModelDownloadPhase.Running, CompletedBytes = null, TotalBytes = null, SanitizedError = null };
 
         // Hand the detached run the TOKEN, not the source. The source stays owned by the _inFlight entry (Cancel reads
         // it there, the run disposes it from there), which keeps a disposable out of an unawaited task's arguments —
         // the shape CA2025 rejects, because in the general case the caller's `using` would dispose it mid-flight.
         _ = RunDownloadAsync(modelName, request, cts.Token);
-        return new ImageModelDownloadTicket(modelName, AlreadyInFlight: false);
+        return new ImageModelDownloadTicket { ModelName = modelName, AlreadyInFlight = false };
     }
 
     /// <inheritdoc />
@@ -106,11 +106,14 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
             _ = await _modelStore.EnsureModelAsync(request, progress, ct);
 
             var last = _status.TryGetValue(modelName, out var snapshot) ? snapshot : null;
-            _status[modelName] = new ImageModelDownloadStatus(modelName,
-                ImageModelDownloadPhase.Completed,
-                last?.CompletedBytes ?? last?.TotalBytes,
-                last?.TotalBytes,
-                SanitizedError: null);
+            _status[modelName] = new ImageModelDownloadStatus
+            {
+                ModelName = modelName,
+                Phase = ImageModelDownloadPhase.Completed,
+                CompletedBytes = last?.CompletedBytes ?? last?.TotalBytes,
+                TotalBytes = last?.TotalBytes,
+                SanitizedError = null
+            };
             _logger.LogInformation("Image model download completed for {ModelName}.", modelName);
         }
         catch (OperationCanceledException)
@@ -153,11 +156,7 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
     private void ReportRunningProgress(string modelName, PullProgress update)
     {
         _ = _status.AddOrUpdate(modelName,
-            key => new ImageModelDownloadStatus(key, ImageModelDownloadPhase.Running, update.CompletedBytes, update.TotalBytes, SanitizedError: null)
-            {
-                PartIndex = update.PartIndex,
-                PartCount = update.PartCount
-            },
+            key => new ImageModelDownloadStatus { ModelName = key, Phase = ImageModelDownloadPhase.Running, CompletedBytes = update.CompletedBytes, TotalBytes = update.TotalBytes, SanitizedError = null, PartIndex = update.PartIndex, PartCount = update.PartCount },
             (_, existing) => existing.Phase != ImageModelDownloadPhase.Running
                 ? existing
                 : existing with
@@ -171,6 +170,6 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
 
     private void SetTerminal(string modelName, ImageModelDownloadPhase phase, string? sanitizedError)
     {
-        _status[modelName] = new ImageModelDownloadStatus(modelName, phase, CompletedBytes: null, TotalBytes: null, sanitizedError);
+        _status[modelName] = new ImageModelDownloadStatus { ModelName = modelName, Phase = phase, CompletedBytes = null, TotalBytes = null, SanitizedError = sanitizedError };
     }
 }

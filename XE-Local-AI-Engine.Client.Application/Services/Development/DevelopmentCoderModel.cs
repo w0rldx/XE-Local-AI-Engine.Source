@@ -9,16 +9,25 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
-internal sealed record DevelopmentCoderSubmission(
-    string Summary,
-    IReadOnlyList<string> ChangedFiles,
-    IReadOnlyList<string> CommandIds,
-    string? Notes);
+internal sealed class DevelopmentCoderSubmission
+{
+    public required string Summary { get; init; }
 
-internal sealed record DevelopmentCoderModelResult(
-    DevelopmentCoderSubmission Submission,
-    long? InputTokens,
-    long? OutputTokens);
+    public required IReadOnlyList<string> ChangedFiles { get; init; }
+
+    public required IReadOnlyList<string> CommandIds { get; init; }
+
+    public required string? Notes { get; init; }
+}
+
+internal sealed class DevelopmentCoderModelResult
+{
+    public required DevelopmentCoderSubmission Submission { get; init; }
+
+    public required long? InputTokens { get; init; }
+
+    public required long? OutputTokens { get; init; }
+}
 
 internal interface IDevelopmentCoderModel
 {
@@ -207,12 +216,15 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
                 cancellationToken);
         }
 
-        return new DevelopmentCoderModelResult(gateway.Submission
+        return new DevelopmentCoderModelResult
+        {
+            Submission = gateway.Submission
                                                ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
                                                    "The Development coder stopped without calling submit_implementation, so the attempt produced no evidence to validate. "
                                                    + "Any workspace changes it made are preserved; re-run the task, or use a model that reliably closes with a tool call."),
-            inputTokens,
-            outputTokens);
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens
+        };
     }
 
     /// <summary>
@@ -335,10 +347,13 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
                     "The Development coder's submit_implementation call had an empty summary. The summary is the operator-facing record of what changed.");
             }
 
-            Submission = new DevelopmentCoderSubmission(summary,
-                changedFiles ?? [],
-                commandIds ?? [],
-                notes);
+            Submission = new DevelopmentCoderSubmission
+            {
+                Summary = summary,
+                ChangedFiles = changedFiles ?? [],
+                CommandIds = commandIds ?? [],
+                Notes = notes
+            };
             _liveProgress?.ToolCompleted("submit_implementation");
             return "typed implementation submission accepted";
         }

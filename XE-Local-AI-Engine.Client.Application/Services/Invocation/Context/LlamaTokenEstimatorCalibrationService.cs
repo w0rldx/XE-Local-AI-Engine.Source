@@ -88,7 +88,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             if (!_targets.TryGetValue(modelName, out var target)
                 || target.BaseAddress != llamaServerBaseAddress)
             {
-                target = new CalibrationTarget(llamaServerBaseAddress, ++_generation, DateTimeOffset.MinValue, false);
+                target = new CalibrationTarget { BaseAddress = llamaServerBaseAddress, Generation = ++_generation, NextDueUtc = DateTimeOffset.MinValue, InFlight = false };
                 _targets[modelName] = target;
             }
 
@@ -347,7 +347,16 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                || (IPAddress.TryParse(address.Host, out var parsed) && IPAddress.IsLoopback(parsed));
     }
 
-    private sealed record CalibrationTarget(Uri BaseAddress, long Generation, DateTimeOffset NextDueUtc, bool InFlight);
+    private sealed record CalibrationTarget
+    {
+        public required Uri BaseAddress { get; init; }
+
+        public required long Generation { get; init; }
+
+        public required DateTimeOffset NextDueUtc { get; init; }
+
+        public required bool InFlight { get; init; }
+    }
 
     private readonly record struct CalibrationWork(string ModelName, Uri BaseAddress, long Generation);
 

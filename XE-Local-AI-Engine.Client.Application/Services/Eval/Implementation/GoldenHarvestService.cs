@@ -61,7 +61,7 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
         var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken);
         if (agent is null)
         {
-            return new GoldenHarvestOutcome(AgentExists: false, ThumbsUpScanned: 0, CreatedCount: 0, DuplicateCount: 0, SkippedCount: 0);
+            return new GoldenHarvestOutcome { AgentExists = false, ThumbsUpScanned = 0, CreatedCount = 0, DuplicateCount = 0, SkippedCount = 0 };
         }
 
         var sources = await _sourceStore.ListThumbsUpSourcesAsync(agentId, _options.MaxThumbsUpScan, cancellationToken);
@@ -110,24 +110,30 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
             }
         }
 
-        return new GoldenHarvestOutcome(AgentExists: true,
-            sources.Count,
-            created,
-            duplicate,
-            skipped);
+        return new GoldenHarvestOutcome
+        {
+            AgentExists = true,
+            ThumbsUpScanned = sources.Count,
+            CreatedCount = created,
+            DuplicateCount = duplicate,
+            SkippedCount = skipped
+        };
     }
 
     private static GoldenConversationCreateInput BuildCandidate(Guid agentId, HarvestCandidateSource source, string firstUserTurnText)
     {
-        return new GoldenConversationCreateInput(agentId,
-            BuildTitle(source, firstUserTurnText),
-            SerializeTurns(source.PriorTurns),
-            Assertion: null,
-            Truncate(RubricSeed + source.ApprovedAnswerText, MaxRubricLength),
-            Enabled: false,
-            GoldenConversationSource.Harvested,
-            source.MessageId,
-            source.ConversationId);
+        return new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = agentId,
+            Title = BuildTitle(source, firstUserTurnText),
+            InputTurns = SerializeTurns(source.PriorTurns),
+            Assertion = null,
+            Rubric = Truncate(RubricSeed + source.ApprovedAnswerText, MaxRubricLength),
+            Enabled = false,
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = source.MessageId,
+            SourceConversationId = source.ConversationId
+        };
     }
 
     private static string BuildTitle(HarvestCandidateSource source, string firstUserTurnText)
@@ -138,7 +144,7 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
 
     private static string SerializeTurns(IReadOnlyList<HarvestTurn> priorTurns)
     {
-        var payload = priorTurns.Select(static turn => new GoldenTurnPayload(turn.Role, turn.Text)).ToArray();
+        var payload = priorTurns.Select(static turn => new GoldenTurnPayload { Role = turn.Role, Text = turn.Text }).ToArray();
         return JsonSerializer.Serialize(payload, InputTurnsSerializerOptions);
     }
 
@@ -169,5 +175,10 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
     }
 
     /// <summary>STJ payload for one serialized input turn — positional record so Web defaults emit camelCase {role,text}.</summary>
-    private sealed record GoldenTurnPayload(string Role, string Text);
+    private sealed record GoldenTurnPayload
+    {
+        public required string Role { get; init; }
+
+        public required string Text { get; init; }
+    }
 }

@@ -167,10 +167,10 @@ internal sealed class IntegrationInvokeHarness
             executionCount);
 
     public IntegrationCallerIdentity Caller(string keyPrefix = KeyPrefix) =>
-        new(PrincipalId, keyPrefix);
+        new() { PrincipalId = PrincipalId, KeyPrefix = keyPrefix };
 
     public static IntegrationInputDto Text(string text) =>
-        new(IntegrationInputKinds.Text, text, Label: null, Json: null);
+        new() { Kind = IntegrationInputKinds.Text, Text = text, Label = null, Json = null };
 
     public IReadOnlyList<NodeChatCreateConversationRequest> CapturedConversations() =>
     [
@@ -236,12 +236,15 @@ internal sealed class IntegrationInvokeHarness
             keyPrefix = strangerPrefix;
         }
 
-        return new IntegrationAcceptRequest(triggerName,
-            principalId ?? PrincipalId,
-            keyPrefix,
-            requestId ?? Guid.NewGuid(),
-            sessionId,
-            inputs ?? [Text("do the thing")],
-            rawBody ?? Encoding.UTF8.GetBytes("""{"inputs":[]}"""));
+        return new IntegrationAcceptRequest
+        {
+            TriggerName = triggerName,
+            PrincipalId = principalId ?? PrincipalId,
+            KeyPrefix = keyPrefix,
+            RequestId = requestId ?? Guid.NewGuid(),
+            SessionId = sessionId,
+            Inputs = inputs ?? [Text("do the thing")],
+            RawBody = rawBody ?? Encoding.UTF8.GetBytes("""{"inputs":[]}""")
+        };
     }
 }

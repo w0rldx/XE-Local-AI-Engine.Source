@@ -43,13 +43,22 @@ public sealed class BenchmarkRuntimeSnapshotTests
     {
         var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
         var model = CreateModel();
-        var snapshot = factory.Create(new BenchmarkRuntimeSnapshotInput(Guid.NewGuid(), Guid.NewGuid(), 4, "exact task", 4096,
-            CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: false)]),
-            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false,
+        var snapshot = factory.Create(new BenchmarkRuntimeSnapshotInput
+        {
+            ProjectId = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentVersion = 4,
+            CoreTask = "exact task",
+            RequestedContextTokens = 4096,
+            ResolvedRuntime = CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: false)]),
+            PrimaryRuntime = new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 4096, null, null, null, null, null, false,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
-            BenchmarkFrozenPolicies.DeterministicSampling(),
-            model,
-            new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null), "test", 123));
+            PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(),
+            PrimaryModel = model,
+            Dependencies = new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null),
+            ApplicationVersion = "test",
+            CreatedAtUtc = 123
+        });
 
         var payload = factory.Serialize(snapshot);
         var roundTrip = factory.Deserialize(payload);
@@ -60,20 +69,23 @@ public sealed class BenchmarkRuntimeSnapshotTests
         var tampered = Encoding.UTF8.GetString(payload).Replace("exact task", "other task", StringComparison.Ordinal);
         _ = AssertEx.Throws<BenchmarkSnapshotException>(() => factory.Deserialize(Encoding.UTF8.GetBytes(tampered)));
 
-        _ = AssertEx.Throws<BenchmarkSnapshotException>(() => factory.Create(new BenchmarkRuntimeSnapshotInput(Guid.NewGuid(),
-            Guid.NewGuid(),
-            4,
-            "exact task",
-            4096,
-            CreateRuntime([]),
+        _ = AssertEx.Throws<BenchmarkSnapshotException>(() => factory.Create(new BenchmarkRuntimeSnapshotInput
+        {
+            ProjectId = Guid.NewGuid(),
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentVersion = 4,
+            CoreTask = "exact task",
+            RequestedContextTokens = 4096,
+            ResolvedRuntime = CreateRuntime([]),
             // A frozen runtime whose context is smaller than the benchmark requires can never replay the measurement.
-            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 2048, null, null, null, null, null, false,
+            PrimaryRuntime = new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cpu, 2048, null, null, null, null, null, false,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
-            BenchmarkFrozenPolicies.DeterministicSampling(),
-            model,
-            new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null),
-            "test",
-            123)));
+            PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(),
+            PrimaryModel = model,
+            Dependencies = new BenchmarkFreezeDependencySetV1("agent", "playbook", "skills", "tools", "runtime", null),
+            ApplicationVersion = "test",
+            CreatedAtUtc = 123
+        }));
     }
 
     private static ResolvedAgentRuntime CreateRuntime(IReadOnlyList<AllowedToolDto> tools) =>

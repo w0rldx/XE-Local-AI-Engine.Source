@@ -132,19 +132,23 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
             activity?.SetStatus(ActivityStatusCode.Ok);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)
-                ? new StructuredAgentResult(Success: false, string.Empty, "The teacher returned an empty completion.")
-                : new StructuredAgentResult(Success: true, text, null);
+                ? new StructuredAgentResult { Success = false, Text = string.Empty, FailureReason = "The teacher returned an empty completion." }
+                : new StructuredAgentResult { Success = true, Text = text, FailureReason = null };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // The turn deadline fired, not the caller: a per-sample failure with a reason the operator can act on.
-            return new StructuredAgentResult(Success: false, string.Empty,
-                $"The teacher did not answer within {_turnTimeout.TotalSeconds:0} seconds.");
+            return new StructuredAgentResult
+            {
+                Success = false,
+                Text = string.Empty,
+                FailureReason = $"The teacher did not answer within {_turnTimeout.TotalSeconds:0} seconds."
+            };
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not TrainingValidationException)
         {
             // One turn's transport/model failure is a per-sample failure, never the run's.
-            return new StructuredAgentResult(Success: false, string.Empty, TrainingAiClientPolicy.TranslateProviderFailure(activity, exception));
+            return new StructuredAgentResult { Success = false, Text = string.Empty, FailureReason = TrainingAiClientPolicy.TranslateProviderFailure(activity, exception) };
         }
     }
 

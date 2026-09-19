@@ -8,17 +8,23 @@ using System.Net;
 ///     pure function of its inputs: <c>System.Net.NetworkInformation</c> describes only the interfaces THIS machine
 ///     has, and the rules for the machines it is not have to be testable rather than reasoned about.
 /// </summary>
-/// <param name="IsUp">Whether the interface is operationally up.</param>
-/// <param name="IsLoopback">Whether the interface is the loopback interface.</param>
-/// <param name="IsTunnel">Whether the interface is a tunnel or dial-up link, which no container network reaches back through.</param>
-/// <param name="HasGateway">Whether the interface has at least one gateway address, i.e. whether it routes off this machine.</param>
-/// <param name="UnicastAddresses">Every unicast address assigned to the interface, in both families.</param>
-public sealed record HostInterfaceSnapshot(
-    bool IsUp,
-    bool IsLoopback,
-    bool IsTunnel,
-    bool HasGateway,
-    IReadOnlyList<IPAddress> UnicastAddresses);
+public sealed class HostInterfaceSnapshot
+{
+    /// <summary>Whether the interface is operationally up.</summary>
+    public required bool IsUp { get; init; }
+
+    /// <summary>Whether the interface is the loopback interface.</summary>
+    public required bool IsLoopback { get; init; }
+
+    /// <summary>Whether the interface is a tunnel or dial-up link, which no container network reaches back through.</summary>
+    public required bool IsTunnel { get; init; }
+
+    /// <summary>Whether the interface has at least one gateway address, i.e. whether it routes off this machine.</summary>
+    public required bool HasGateway { get; init; }
+
+    /// <summary>Every unicast address assigned to the interface, in both families.</summary>
+    public required IReadOnlyList<IPAddress> UnicastAddresses { get; init; }
+}
 
 /// <summary>
 ///     Where the bridge listens, and the string an application container is given to reach it. The two are NOT the

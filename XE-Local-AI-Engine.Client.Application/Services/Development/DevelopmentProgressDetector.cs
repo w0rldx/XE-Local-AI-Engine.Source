@@ -221,7 +221,7 @@ public sealed class DevelopmentProgressDetector
         string fingerprint,
         int count,
         string message) =>
-        new(category, fingerprint, count, Now, message);
+        new() { Category = category, Fingerprint = fingerprint, Count = count, OccurredAtUtc = Now, Message = message };
 
     private long Now => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 

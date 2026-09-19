@@ -137,12 +137,15 @@ public sealed class ComparisonReportService : IComparisonReportService
                                                               && item.SourceArtifactId == tunedArtifact?.Id);
 
         var reason = UnavailableReason(run.LinkedInstalledModelName, tunedModelName);
-        return new ComparisonSuggestion(trainingRunId,
-            run.LinkedInstalledModelName,
-            tunedModelName,
-            baseEvaluation?.Id,
-            tunedEvaluation?.Id,
-            reason);
+        return new ComparisonSuggestion
+        {
+            TrainingRunId = trainingRunId,
+            BaseModelName = run.LinkedInstalledModelName,
+            TunedModelName = tunedModelName,
+            BaseEvaluationRunId = baseEvaluation?.Id,
+            TunedEvaluationRunId = tunedEvaluation?.Id,
+            UnavailableReason = reason
+        };
     }
 
     /// <summary>
@@ -264,8 +267,17 @@ public sealed class ComparisonReportService : IComparisonReportService
                                    var right = tunedTally.TryGetValue(kind, out var other) ? other : new TrainingEvaluationKindTally(0, 0);
                                    var leftAccuracy = Accuracy(left.Passed, left.Total);
                                    var rightAccuracy = Accuracy(right.Passed, right.Total);
-                                   return new ComparisonKindDeltaV1(kind, left.Total, left.Passed, right.Total, right.Passed,
-                                       leftAccuracy, rightAccuracy, rightAccuracy - leftAccuracy);
+                                   return new ComparisonKindDeltaV1
+                                   {
+                                       Kind = kind,
+                                       BaseTotal = left.Total,
+                                       BasePassed = left.Passed,
+                                       TunedTotal = right.Total,
+                                       TunedPassed = right.Passed,
+                                       BaseAccuracy = leftAccuracy,
+                                       TunedAccuracy = rightAccuracy,
+                                       AccuracyDelta = rightAccuracy - leftAccuracy
+                                   };
                                })
                                .ToArray();
 

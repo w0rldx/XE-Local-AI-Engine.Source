@@ -73,7 +73,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             if (activeSource == source)
             {
-                return new GgufDownloadTicket(active.ModelName, AlreadyInFlight: true, active.OperationId);
+                return new GgufDownloadTicket { ModelName = active.ModelName, AlreadyInFlight = true, OperationId = active.OperationId };
             }
 
             throw new GgufAcquisitionConflictException();
@@ -96,13 +96,13 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                     reservation.Lease,
                     ct);
                 BroadcastStatus(completed, isInitialOrTerminal: true);
-                return new GgufDownloadTicket(completed.ModelName, AlreadyInFlight: false, completed.OperationId);
+                return new GgufDownloadTicket { ModelName = completed.ModelName, AlreadyInFlight = false, OperationId = completed.OperationId };
             }
 
             var registration = _operations.Start(AcquisitionKind.Download, reservation.Identity.CanonicalModelName, totalBytes);
             if (registration.AlreadyInFlight)
             {
-                return new GgufDownloadTicket(registration.Status.ModelName, AlreadyInFlight: true, registration.Status.OperationId);
+                return new GgufDownloadTicket { ModelName = registration.Status.ModelName, AlreadyInFlight = true, OperationId = registration.Status.OperationId };
             }
 
             var lease = reservation.TransferLease();
@@ -113,7 +113,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 source,
                 lease,
                 registration.CancellationToken);
-            return new GgufDownloadTicket(registration.Status.ModelName, AlreadyInFlight: false, registration.Status.OperationId);
+            return new GgufDownloadTicket { ModelName = registration.Status.ModelName, AlreadyInFlight = false, OperationId = registration.Status.OperationId };
         }
     }
 
@@ -137,20 +137,29 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         _operations.List(AcquisitionKind.Download).Select(MapStatus).OfType<GgufDownloadStatus>().ToArray();
 
     private static GgufAcquisitionIntent ToIntent(ResolvedGgufDownload source) =>
-        new(PreflightKind.Download,
-            source.ModelBaseName,
-            source.CanonicalQuant,
-            source.Projector is null
+        new()
+        {
+            OperationKind = PreflightKind.Download,
+            ModelBaseName = source.ModelBaseName,
+            Quantization = source.CanonicalQuant,
+            Projector = source.Projector is null
                 ? null
-                : new GgufProjectorAcquisitionMetadata(source.Projector.SourceDisplayName,
-                    source.Projector.SourceSha256,
-                    source.Projector.SourceSizeBytes),
-            new GgufDownloadAcquisitionMetadata(source.RepoId,
-                source.ResolvedRevision,
-                source.SourceDisplayName,
-                source.SourceSizeBytes,
-                source.SourceSha256,
-                source.Role));
+                : new GgufProjectorAcquisitionMetadata
+                {
+                    SourceDisplayName = source.Projector.SourceDisplayName,
+                    DeclaredSha256 = source.Projector.SourceSha256,
+                    DeclaredSizeBytes = source.Projector.SourceSizeBytes
+                },
+            Download = new GgufDownloadAcquisitionMetadata
+            {
+                RepoId = source.RepoId,
+                ResolvedRevision = source.ResolvedRevision,
+                SourceDisplayName = source.SourceDisplayName,
+                DeclaredSizeBytes = source.SourceSizeBytes,
+                DeclaredSha256 = source.SourceSha256,
+                Role = source.Role
+            }
+        };
 
     /// <summary>
     ///     Adds the just-installed model to the tool-capable allow-list when its GGUF chat template advertises tool
@@ -559,16 +568,19 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             GgufAcquisitionPhase.Failed => GgufDownloadPhase.Failed,
             _ => GgufDownloadPhase.Running
         };
-        return new GgufDownloadStatus(status.ModelName,
-            legacyPhase,
-            status.CompletedBytes,
-            status.TotalBytes,
-            status.SanitizedError,
-            status.OperationId,
-            status.OperationKind.ToString(),
-            status.StartedAtUtc,
-            status.UpdatedAtUtc,
-            status.ErrorCode);
+        return new GgufDownloadStatus
+        {
+            ModelName = status.ModelName,
+            Phase = legacyPhase,
+            CompletedBytes = status.CompletedBytes,
+            TotalBytes = status.TotalBytes,
+            SanitizedError = status.SanitizedError,
+            OperationId = status.OperationId,
+            OperationKind = status.OperationKind.ToString(),
+            StartedAtUtc = status.StartedAtUtc,
+            UpdatedAtUtc = status.UpdatedAtUtc,
+            ErrorCode = status.ErrorCode
+        };
     }
 
     private static bool IsActive(GgufAcquisitionPhase phase) =>

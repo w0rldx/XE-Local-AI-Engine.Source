@@ -374,32 +374,38 @@ public sealed class ConversationContextBuilderTests
         IReadOnlyList<NodeChatPersistedMessageDto> messages,
         string? compactionSummary = null,
         int? coversToSequence = null) =>
-        new(conversationId,
-            "integration session",
-            UserId: null,
-            CreatedAtUtc: 1,
-            LastSeenUtc: 1,
-            Purged: false,
-            messages,
-            CompactionSummary: compactionSummary,
-            CompactionSummaryCoversToSequence: coversToSequence);
+        new()
+        {
+            ConversationId = conversationId,
+            Title = "integration session",
+            UserId = null,
+            CreatedAtUtc = 1,
+            LastSeenUtc = 1,
+            Purged = false,
+            Messages = messages,
+            CompactionSummary = compactionSummary,
+            CompactionSummaryCoversToSequence = coversToSequence
+        };
 
     private static NodeChatPersistedMessageDto Message(Guid conversationId,
         int sequence,
         string role,
         string content,
         string? status = null) =>
-        new(Guid.NewGuid(),
-            conversationId,
-            RequestId: null,
-            sequence,
-            role,
-            content,
-            Reasoning: null,
-            status ?? NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: sequence + 1,
-            UpdatedAtUtc: sequence + 1,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        new()
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            RequestId = null,
+            Sequence = sequence,
+            Role = role,
+            Content = content,
+            Reasoning = null,
+            Status = status ?? NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = sequence + 1,
+            UpdatedAtUtc = sequence + 1,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
 }

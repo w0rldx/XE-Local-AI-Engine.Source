@@ -75,46 +75,85 @@ public interface IKnowledgeDocumentCatalogService
 ///     the document is Indexed but was embedded with a model other than the currently resolved one, so the UI can offer a
 ///     reindex.
 /// </summary>
-public sealed record KnowledgeDocumentSummary(
-    Guid DocumentId,
-    string DisplayName,
-    KnowledgeDocumentStatus Status,
-    string? FailureReason,
-    int ChunkCount,
-    string EmbeddingModel,
-    bool StaleModel,
-    long SizeBytes,
-    long CreatedAtUtc,
-    string CollectionId = KnowledgeCollectionScope.DefaultId,
-    string? SourcePath = null,
-    string SourceKind = "upload");
+public sealed class KnowledgeDocumentSummary
+{
+    public required Guid DocumentId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public required string? FailureReason { get; init; }
+
+    public required int ChunkCount { get; init; }
+
+    public required string EmbeddingModel { get; init; }
+
+    public required bool StaleModel { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;
+
+    public string? SourcePath { get; init; }
+
+    public string SourceKind { get; init; } = "upload";
+}
 
 /// <summary>One document's full detail plus its ordered chunks, for the detail drawer.</summary>
-public sealed record KnowledgeDocumentDetail(
-    Guid DocumentId,
-    string DisplayName,
-    KnowledgeDocumentStatus Status,
-    string? FailureReason,
-    int ChunkCount,
-    string EmbeddingModel,
-    bool StaleModel,
-    long SizeBytes,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    IReadOnlyList<KnowledgeDocumentChunkView> Chunks,
-    string CollectionId = KnowledgeCollectionScope.DefaultId,
-    string? SourcePath = null,
-    string SourceKind = "upload");
+public sealed record KnowledgeDocumentDetail
+{
+    public required Guid DocumentId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public required string? FailureReason { get; init; }
+
+    public required int ChunkCount { get; init; }
+
+    public required string EmbeddingModel { get; init; }
+
+    public required bool StaleModel { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required IReadOnlyList<KnowledgeDocumentChunkView> Chunks { get; init; }
+
+    public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;
+
+    public string? SourcePath { get; init; }
+
+    public string SourceKind { get; init; } = "upload";
+}
 
 /// <summary>A single chunk view for the detail drawer: its global order, heading trail, and plaintext content.</summary>
-public sealed record KnowledgeDocumentChunkView(
-    int ChunkIndex,
-    string? HeadingPath,
-    string Content,
-    int? PageNumber = null,
-    int StartOffset = 0,
-    int EndOffset = 0,
-    string ContentKind = "text",
-    string? SourcePath = null,
-    string? Language = null,
-    string? Symbol = null);
+public sealed class KnowledgeDocumentChunkView
+{
+    public required int ChunkIndex { get; init; }
+
+    public required string? HeadingPath { get; init; }
+
+    public required string Content { get; init; }
+
+    public int? PageNumber { get; init; }
+
+    public int StartOffset { get; init; }
+
+    public int EndOffset { get; init; }
+
+    public string ContentKind { get; init; } = "text";
+
+    public string? SourcePath { get; init; }
+
+    public string? Language { get; init; }
+
+    public string? Symbol { get; init; }
+}

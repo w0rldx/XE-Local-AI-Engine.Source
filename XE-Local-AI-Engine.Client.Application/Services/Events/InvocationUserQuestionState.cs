@@ -6,9 +6,15 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 ///     request id, because a client that reconnects mid-turn cannot render an answerable prompt from an id alone.
 ///     That is what makes the reconnect replay possible — see <c>InvocationResumeRegistry</c>.
 /// </summary>
-public sealed record InvocationUserQuestionState(
-    string RequestId,
-    string CallId,
-    string ToolName,
-    IReadOnlyList<UserQuestionSpec> Questions,
-    DateTimeOffset RequestedAt);
+public sealed class InvocationUserQuestionState
+{
+    public required string RequestId { get; init; }
+
+    public required string CallId { get; init; }
+
+    public required string ToolName { get; init; }
+
+    public required IReadOnlyList<UserQuestionSpec> Questions { get; init; }
+
+    public required DateTimeOffset RequestedAt { get; init; }
+}

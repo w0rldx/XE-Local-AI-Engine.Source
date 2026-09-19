@@ -41,7 +41,7 @@ internal static class DevWorkflowRunSeeds
 
         // The operator's request has to reach the first agent, and there is no run-level input column: every ENTRY node
         // run is seeded with it, and the objective composer renders it at the top.
-        var entryInput = JsonSerializer.Serialize(new EntryInput(workItem.Request, inputsJson), JsonOptions);
+        var entryInput = JsonSerializer.Serialize(new EntryInput { WorkItemRequest = workItem.Request, InputsJson = inputsJson }, JsonOptions);
         var seeds = graph.Nodes.Values.Where(node => !graph.TemplateKeys.Contains(node.NodeKey))
                          .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
                          .Select(node => new DevWorkflowNodeRunSeed
@@ -65,5 +65,10 @@ internal static class DevWorkflowRunSeeds
             : seeds;
     }
 
-    private sealed record EntryInput(string WorkItemRequest, string? InputsJson);
+    private sealed record EntryInput
+    {
+        public required string WorkItemRequest { get; init; }
+
+        public required string? InputsJson { get; init; }
+    }
 }

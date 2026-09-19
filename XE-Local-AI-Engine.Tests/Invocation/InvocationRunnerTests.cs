@@ -4925,7 +4925,7 @@ public sealed class InvocationRunnerTests
         string reasonCode,
         IDisposable? reservation = null)
     {
-        return new ReasoningDispatchDecision(tier, model, effort, MaxOutputTokens: null, SupportsThinking: true, ReasoningBudgetEnforceable: true, reasonCode, reservation);
+        return new ReasoningDispatchDecision { Tier = tier, Model = model, Effort = effort, MaxOutputTokens = null, SupportsThinking = true, ReasoningBudgetEnforceable = true, ReasonCode = reasonCode, CapacityReservation = reservation };
     }
 
     /// <summary>

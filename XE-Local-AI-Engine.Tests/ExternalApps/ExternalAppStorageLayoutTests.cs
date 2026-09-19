@@ -392,7 +392,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
             _instanceId,
             "install-1",
             new Dictionary<string, string>(StringComparer.Ordinal),
-            new ResolvedContainerIdentity(1234, 5678),
+            new ResolvedContainerIdentity { UserId = 1234, GroupId = 5678 },
             [],
             layout.Describe(_instanceId));
     }

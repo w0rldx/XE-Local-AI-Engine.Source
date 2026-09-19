@@ -43,7 +43,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var repositories = Substitute.For<IDevelopmentRepositoryBindingService>();
         repositories.ResolveFolderAsync(selectedFolderId, Arg.Any<CancellationToken>())
-                    .Returns(new DevelopmentRepositoryBinding(Guid.Empty, selectedFolderId, "widget", _root, "identity"));
+                    .Returns(new DevelopmentRepositoryBinding { ProjectId = Guid.Empty, SelectedFolderId = selectedFolderId, Alias = "widget", RepositoryRoot = _root, RepositoryIdentityHash = "identity" });
         var inputs = new List<KnowledgeDocumentInput>();
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
@@ -51,7 +51,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
                  {
                      var input = call.ArgAt<KnowledgeDocumentInput>(0);
                      inputs.Add(input);
-                     return new KnowledgeDocumentAddResult(input.DocumentId, WasInserted: true);
+                     return new KnowledgeDocumentAddResult { DocumentId = input.DocumentId, WasInserted = true };
                  });
         var dispatcher = new AcceptingDispatcher();
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
@@ -99,10 +99,10 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var repositories = Substitute.For<IDevelopmentRepositoryBindingService>();
         repositories.ResolveFolderAsync(selectedFolderId, Arg.Any<CancellationToken>())
-                    .Returns(new DevelopmentRepositoryBinding(Guid.Empty, selectedFolderId, "existing", _root, "identity"));
+                    .Returns(new DevelopmentRepositoryBinding { ProjectId = Guid.Empty, SelectedFolderId = selectedFolderId, Alias = "existing", RepositoryRoot = _root, RepositoryIdentityHash = "identity" });
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
-                 .Returns(new KnowledgeDocumentAddResult(documentId, WasInserted: false));
+                 .Returns(new KnowledgeDocumentAddResult { DocumentId = documentId, WasInserted = false });
         var dispatcher = Substitute.For<IKnowledgeIngestionDispatcher>();
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
         catalog.GetStatusAsync(documentId, Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Indexed);
@@ -138,7 +138,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var repositories = RepositoryBinding(selectedFolderId);
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
-                 .Returns(new KnowledgeDocumentAddResult(existingId, WasInserted: false, WasUpdated: true));
+                 .Returns(new KnowledgeDocumentAddResult { DocumentId = existingId, WasInserted = false, WasUpdated = true });
         var dispatcher = new AcceptingDispatcher();
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
         // Indexed, not Pending: a changed repository file is the one case where an already-indexed document MUST be
@@ -166,7 +166,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var repositories = RepositoryBinding(selectedFolderId);
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
-                 .Returns(call => new KnowledgeDocumentAddResult(call.Arg<KnowledgeDocumentInput>().DocumentId, WasInserted: true));
+                 .Returns(call => new KnowledgeDocumentAddResult { DocumentId = call.Arg<KnowledgeDocumentInput>().DocumentId, WasInserted = true });
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
         catalog.GetStatusAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Pending);
         catalog.ListAsync("REPO", "repository", selectedFolderId.ToString("N"), Arg.Any<CancellationToken>())
@@ -202,7 +202,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var otherDocumentId = Guid.NewGuid();
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
-                 .Returns(call => new KnowledgeDocumentAddResult(call.Arg<KnowledgeDocumentInput>().DocumentId, WasInserted: true));
+                 .Returns(call => new KnowledgeDocumentAddResult { DocumentId = call.Arg<KnowledgeDocumentInput>().DocumentId, WasInserted = true });
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
         catalog.GetStatusAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(KnowledgeDocumentStatus.Pending);
         catalog.ListAsync("SHARED", "repository", selectedFolderId.ToString("N"), Arg.Any<CancellationToken>())
@@ -266,7 +266,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>())
-                 .Returns(call => new KnowledgeDocumentAddResult(call.Arg<KnowledgeDocumentInput>().DocumentId, WasInserted: true));
+                 .Returns(call => new KnowledgeDocumentAddResult { DocumentId = call.Arg<KnowledgeDocumentInput>().DocumentId, WasInserted = true });
         var dispatcher = Substitute.For<IKnowledgeIngestionDispatcher>();
         dispatcher.EnqueueAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                   .Returns(KnowledgeIngestionEnqueueResult.QueueFull);
@@ -326,7 +326,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     {
         var repositories = Substitute.For<IDevelopmentRepositoryBindingService>();
         repositories.ResolveFolderAsync(selectedFolderId, Arg.Any<CancellationToken>())
-                    .Returns(new DevelopmentRepositoryBinding(Guid.Empty, selectedFolderId, "repository", _root, "identity"));
+                    .Returns(new DevelopmentRepositoryBinding { ProjectId = Guid.Empty, SelectedFolderId = selectedFolderId, Alias = "repository", RepositoryRoot = _root, RepositoryIdentityHash = "identity" });
         return repositories;
     }
 
@@ -353,18 +353,21 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
 
     private static KnowledgeDocumentSummary Summary(Guid documentId, string sourcePath, string sourceKind = "repository")
     {
-        return new KnowledgeDocumentSummary(documentId,
-            sourcePath,
-            KnowledgeDocumentStatus.Indexed,
-            FailureReason: null,
-            ChunkCount: 1,
-            EmbeddingModel: "nomic-embed-text",
-            StaleModel: false,
-            SizeBytes: 1,
-            CreatedAtUtc: 1,
-            CollectionId: "REPO",
-            SourcePath: sourcePath,
-            SourceKind: sourceKind);
+        return new KnowledgeDocumentSummary
+        {
+            DocumentId = documentId,
+            DisplayName = sourcePath,
+            Status = KnowledgeDocumentStatus.Indexed,
+            FailureReason = null,
+            ChunkCount = 1,
+            EmbeddingModel = "nomic-embed-text",
+            StaleModel = false,
+            SizeBytes = 1,
+            CreatedAtUtc = 1,
+            CollectionId = "REPO",
+            SourcePath = sourcePath,
+            SourceKind = sourceKind
+        };
     }
 
     private sealed class AcceptingDispatcher : IKnowledgeIngestionDispatcher

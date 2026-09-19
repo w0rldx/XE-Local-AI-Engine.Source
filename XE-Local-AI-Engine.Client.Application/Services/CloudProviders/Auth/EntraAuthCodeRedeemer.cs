@@ -35,6 +35,6 @@ public sealed class EntraAuthCodeRedeemer : IEntraAuthCodeRedeemer
                               .WithPkceCodeVerifier(codeVerifier)
                               .ExecuteAsync(cancellationToken);
 
-        return new EntraAuthCodeRedemptionResult(app, result.Account);
+        return new EntraAuthCodeRedemptionResult { ConfidentialClientApplication = app, Account = result.Account };
     }
 }

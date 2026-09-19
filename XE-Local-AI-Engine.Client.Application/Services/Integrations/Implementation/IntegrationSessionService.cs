@@ -119,7 +119,7 @@ public sealed class IntegrationSessionService
 
         if (session.Status != IntegrationSessionStatus.Active)
         {
-            return new IntegrationSessionGateResult(IntegrationAcceptOutcome.SessionClosed, Existing: null, SessionClosedMessage);
+            return new IntegrationSessionGateResult { Outcome = IntegrationAcceptOutcome.SessionClosed, Existing = null, Message = SessionClosedMessage };
         }
 
         // Inside the caller's gate, so no second accept can read this count and then write a second seed into the same
@@ -127,7 +127,7 @@ public sealed class IntegrationSessionService
         var active = await _executions.CountActiveBySessionAsync(id, cancellationToken);
         return active == 0
             ? Accepted(session)
-            : new IntegrationSessionGateResult(IntegrationAcceptOutcome.SessionBusy, Existing: null, SessionBusyMessage);
+            : new IntegrationSessionGateResult { Outcome = IntegrationAcceptOutcome.SessionBusy, Existing = null, Message = SessionBusyMessage };
     }
 
     /// <summary>One session for the operator, unscoped: an operator is not acting as an integrator.</summary>
@@ -238,10 +238,10 @@ public sealed class IntegrationSessionService
     public static string BusyMessage => BusyDeleteMessage;
 
     private static IntegrationSessionGateResult Accepted(IntegrationSessionSnapshot? existing) =>
-        new(IntegrationAcceptOutcome.Accepted, existing, "Accepted.");
+        new() { Outcome = IntegrationAcceptOutcome.Accepted, Existing = existing, Message = "Accepted." };
 
     /// <summary>Unknown, foreign-principal, allowlist-excluded and another trigger's session are ONE answer.</summary>
-    private static IntegrationSessionGateResult Masked => new(IntegrationAcceptOutcome.SessionNotFound, Existing: null, SessionNotFoundMessage);
+    private static IntegrationSessionGateResult Masked => new() { Outcome = IntegrationAcceptOutcome.SessionNotFound, Existing = null, Message = SessionNotFoundMessage };
 
     /// <summary>
     ///     The masked answer, and the gate entry the accept path minted for an id with NO row behind it. Without this an
@@ -271,15 +271,18 @@ public sealed class IntegrationSessionService
     }
 
     private static IntegrationSessionDto ToDto(IntegrationSessionSnapshot session, string triggerName) =>
-        new(session.Id,
-            session.TriggerId,
-            triggerName,
-            session.PrincipalId,
-            session.AgentDefinitionId,
-            session.Status,
-            session.CreatedAtUtc,
-            session.LastActivityUtc,
-            session.ExecutionCount);
+        new()
+        {
+            Id = session.Id,
+            TriggerId = session.TriggerId,
+            TriggerName = triggerName,
+            PrincipalId = session.PrincipalId,
+            AgentDefinitionId = session.AgentDefinitionId,
+            Status = session.Status,
+            CreatedAtUtc = session.CreatedAtUtc,
+            LastActivityUtc = session.LastActivityUtc,
+            ExecutionCount = session.ExecutionCount
+        };
 
     /// <summary>
     ///     Best effort, exactly as the work-session delete is: the rows are already gone or about to be, and a failed
@@ -289,9 +292,12 @@ public sealed class IntegrationSessionService
     {
         try
         {
-            _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId,
-                                          _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                                          PurgeImmediately: true),
+            _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+            {
+                ConversationId = conversationId,
+                DeletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                PurgeImmediately = true
+            },
                                       CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)

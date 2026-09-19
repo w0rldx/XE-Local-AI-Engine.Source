@@ -242,7 +242,7 @@ public sealed class DevWorkflowToolExecutorTests
             Attempt = 1
         };
         var project = Project(DevelopmentProjectId);
-        var binding = new DevelopmentRepositoryBinding(DevelopmentProjectId, project.SelectedFolderId!.Value, "repo", "/tmp/repo", project.RepositoryIdentityHash);
+        var binding = new DevelopmentRepositoryBinding { ProjectId = DevelopmentProjectId, SelectedFolderId = project.SelectedFolderId!.Value, Alias = "repo", RepositoryRoot = "/tmp/repo", RepositoryIdentityHash = project.RepositoryIdentityHash };
         var node = DevWorkflowGraph.Parse(DevWorkflowGraphs.SingleTool).Nodes["validate"];
 
         var attemptOne = DevWorkflowToolCommands.Synthesize(project, node, run, first, binding);

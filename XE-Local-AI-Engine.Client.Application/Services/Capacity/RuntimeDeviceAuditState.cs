@@ -6,7 +6,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     A single GPU device the SELECTED llama.cpp runtime enumerated (name + total / free VRAM in bytes where the build
 ///     prints them). Surfaced on the node runtime-audit state so the operator can see what the runtime actually found.
 /// </summary>
-public sealed record RuntimeAuditDevice(string Name, long? TotalBytes, long? FreeBytes);
+public sealed class RuntimeAuditDevice
+{
+    public required string Name { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required long? FreeBytes { get; init; }
+}
 
 /// <summary>
 ///     The node-level runtime device audit: whether the SELECTED inference runtime is actually using the GPU

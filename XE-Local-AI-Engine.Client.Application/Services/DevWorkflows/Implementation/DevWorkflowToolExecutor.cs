@@ -142,10 +142,13 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                      run,
                                      nodeRun,
                                      nodeRuns,
-                                     new DevWorkflowFailure(DevWorkflowFailureClasses.Interrupted,
-                                         StoppedReason(graph, nodeRun, "The host stopped"),
-                                         Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
-                                         DevWorkflowOutcomes.Interrupted),
+                                     new DevWorkflowFailure
+                                     {
+                                         FailureClass = DevWorkflowFailureClasses.Interrupted,
+                                         SanitizedReason = StoppedReason(graph, nodeRun, "The host stopped"),
+                                         OutputJson = Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
+                                         Outcome = DevWorkflowOutcomes.Interrupted
+                                     },
                                      cancellationToken);
         }
 
@@ -246,10 +249,13 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                  run,
                                  nodeRun,
                                  nodeRuns,
-                                 new DevWorkflowFailure(failureClass,
-                                     result.SanitizedReason ?? "This node run's validation commands did not pass.",
-                                     Output(nodeRun, failureClass, result),
-                                     failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null),
+                                 new DevWorkflowFailure
+                                 {
+                                     FailureClass = failureClass,
+                                     SanitizedReason = result.SanitizedReason ?? "This node run's validation commands did not pass.",
+                                     OutputJson = Output(nodeRun, failureClass, result),
+                                     Outcome = failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null
+                                 },
                                  cancellationToken);
     }
 
@@ -376,7 +382,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     private InFlight Start(DevWorkflowRunSnapshot run, DevWorkflowGraphNode node, DevWorkflowNodeRunSnapshot nodeRun)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-        return new InFlight(cancellation, RunAsync(run, node, nodeRun, cancellation.Token), nodeRun.Attempt);
+        return new InFlight { Cancellation = cancellation, Work = RunAsync(run, node, nodeRun, cancellation.Token), Attempt = nodeRun.Attempt };
     }
 
     private async Task<DevWorkflowToolRun> RunAsync(DevWorkflowRunSnapshot run,
@@ -453,16 +459,19 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             : $"{what} while this node run was running its validation commands.";
 
     private static DevWorkflowToolRun Refused(string failureClass, string sanitizedReason) =>
-        new(Passed: false,
-            failureClass,
-            FailureCode: null,
-            sanitizedReason,
-            CommandsRun: 0,
-            CommandsFailed: 0,
-            TestsPassed: null,
-            TestsFailed: null,
-            ReadOnlyMemory<byte>.Empty,
-            []);
+        new()
+        {
+            Passed = false,
+            FailureClass = failureClass,
+            FailureCode = null,
+            SanitizedReason = sanitizedReason,
+            CommandsRun = 0,
+            CommandsFailed = 0,
+            TestsPassed = null,
+            TestsFailed = null,
+            Report = ReadOnlyMemory<byte>.Empty,
+            SecretPaths = []
+        };
 
     private static async Task<int> RunningAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
@@ -503,7 +512,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             EventType = DevWorkflowEventTypes.WorkspaceSecretsDetected,
             NodeRunId = nodeRun.Id,
             OperationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace-secrets"),
-            DetailJson = JsonSerializer.Serialize(new SecretsDetail(result.SecretPaths), JsonOptions)
+            DetailJson = JsonSerializer.Serialize(new SecretsDetail { Paths = result.SecretPaths }, JsonOptions)
         },
                            cancellationToken);
     }
@@ -607,15 +616,18 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     ///     evidence lives in the report artifact.
     /// </summary>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, string? failureClass, DevWorkflowToolRun? run) =>
-        JsonSerializer.Serialize(new ToolOutput(run is { Passed: true } ? DevWorkflowNodeOutputStatuses.Succeeded : DevWorkflowNodeOutputStatuses.Failed,
-                nodeRun.Attempt,
-                failureClass,
-                run?.Passed ?? false,
-                run?.FailureCode,
-                run?.CommandsRun ?? 0,
-                run?.CommandsFailed ?? 0,
-                run?.TestsPassed,
-                run?.TestsFailed),
+        JsonSerializer.Serialize(new ToolOutput
+        {
+            Status = run is { Passed: true } ? DevWorkflowNodeOutputStatuses.Succeeded : DevWorkflowNodeOutputStatuses.Failed,
+            Attempt = nodeRun.Attempt,
+            FailureClass = failureClass,
+            Passed = run?.Passed ?? false,
+            FailureCode = run?.FailureCode,
+            CommandsRun = run?.CommandsRun ?? 0,
+            CommandsFailed = run?.CommandsFailed ?? 0,
+            TestsPassed = run?.TestsPassed,
+            TestsFailed = run?.TestsFailed
+        },
             JsonOptions);
 
     /// <summary>Awaits a detached pass without letting its outcome escape; the poll is what reads that.</summary>
@@ -636,18 +648,38 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     ///     the fix loop can re-attempt a node run this lane is driving, and an answer about the attempt before is not an
     ///     answer about this one.
     /// </summary>
-    private sealed record InFlight(CancellationTokenSource Cancellation, Task<DevWorkflowToolRun> Work, int Attempt);
+    private sealed record InFlight
+    {
+        public required CancellationTokenSource Cancellation { get; init; }
 
-    private sealed record SecretsDetail(IReadOnlyList<string> Paths);
+        public required Task<DevWorkflowToolRun> Work { get; init; }
 
-    private sealed record ToolOutput(
-        string Status,
-        int Attempt,
-        string? FailureClass,
-        bool Passed,
-        string? FailureCode,
-        int CommandsRun,
-        int CommandsFailed,
-        int? TestsPassed,
-        int? TestsFailed);
+        public required int Attempt { get; init; }
+    }
+
+    private sealed record SecretsDetail
+    {
+        public required IReadOnlyList<string> Paths { get; init; }
+    }
+
+    private sealed record ToolOutput
+    {
+        public required string Status { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string? FailureClass { get; init; }
+
+        public required bool Passed { get; init; }
+
+        public required string? FailureCode { get; init; }
+
+        public required int CommandsRun { get; init; }
+
+        public required int CommandsFailed { get; init; }
+
+        public required int? TestsPassed { get; init; }
+
+        public required int? TestsFailed { get; init; }
+    }
 }

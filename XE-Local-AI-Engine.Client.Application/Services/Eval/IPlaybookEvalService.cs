@@ -26,4 +26,11 @@ public interface IPlaybookEvalService
 ///     was produced, and <see cref="Action" /> carries the updated action record (now bearing the recorded EvalResult)
 ///     so the endpoint maps the response directly — no second, unscoped re-fetch.
 /// </summary>
-public sealed record PlaybookEvalOutcome(bool ActionFound, PlaybookEvalResult? Result, PlaybookActionRecord? Action = null);
+public sealed class PlaybookEvalOutcome
+{
+    public required bool ActionFound { get; init; }
+
+    public required PlaybookEvalResult? Result { get; init; }
+
+    public PlaybookActionRecord? Action { get; init; }
+}

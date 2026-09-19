@@ -19,25 +19,42 @@ public enum ProviderMapDisposition
     ConflictingProvider
 }
 
-public sealed record GgufAcquisitionIntent(
-    GgufAcquisitionOperationKind OperationKind,
-    string ModelBaseName,
-    string Quantization,
-    GgufProjectorAcquisitionMetadata? Projector = null,
-    GgufDownloadAcquisitionMetadata? Download = null);
+public sealed record GgufAcquisitionIntent
+{
+    public required GgufAcquisitionOperationKind OperationKind { get; init; }
 
-public sealed record GgufDownloadAcquisitionMetadata(
-    string RepoId,
-    string ResolvedRevision,
-    string SourceDisplayName,
-    long DeclaredSizeBytes,
-    string? DeclaredSha256,
-    GgufRole Role);
+    public required string ModelBaseName { get; init; }
 
-public sealed record GgufProjectorAcquisitionMetadata(
-    string SourceDisplayName,
-    string DeclaredSha256,
-    long DeclaredSizeBytes);
+    public required string Quantization { get; init; }
+
+    public GgufProjectorAcquisitionMetadata? Projector { get; init; }
+
+    public GgufDownloadAcquisitionMetadata? Download { get; init; }
+}
+
+public sealed record GgufDownloadAcquisitionMetadata
+{
+    public required string RepoId { get; init; }
+
+    public required string ResolvedRevision { get; init; }
+
+    public required string SourceDisplayName { get; init; }
+
+    public required long DeclaredSizeBytes { get; init; }
+
+    public required string? DeclaredSha256 { get; init; }
+
+    public required GgufRole Role { get; init; }
+}
+
+public sealed class GgufProjectorAcquisitionMetadata
+{
+    public required string SourceDisplayName { get; init; }
+
+    public required string DeclaredSha256 { get; init; }
+
+    public required long DeclaredSizeBytes { get; init; }
+}
 
 public enum GgufAcquisitionDisposition
 {
@@ -48,21 +65,35 @@ public enum GgufAcquisitionDisposition
     Available
 }
 
-public sealed record ResolvedGgufAcquisitionIdentity(
-    string CanonicalModelName,
-    string ModelReservationKey,
-    string CanonicalQuantization,
-    string FinalFileName,
-    string RelativeGgufPath,
-    string RelativeSidecarPath,
-    string? ProjectorFileName,
-    string? ProjectorRelativePath);
+public sealed class ResolvedGgufAcquisitionIdentity
+{
+    public required string CanonicalModelName { get; init; }
 
-public sealed record GgufAcquisitionState(
-    GgufAcquisitionDisposition Disposition,
-    ProviderMapDisposition ProviderMapDisposition,
-    string? ConflictingProvider = null,
-    Guid? ActiveOperationId = null);
+    public required string ModelReservationKey { get; init; }
+
+    public required string CanonicalQuantization { get; init; }
+
+    public required string FinalFileName { get; init; }
+
+    public required string RelativeGgufPath { get; init; }
+
+    public required string RelativeSidecarPath { get; init; }
+
+    public required string? ProjectorFileName { get; init; }
+
+    public required string? ProjectorRelativePath { get; init; }
+}
+
+public sealed class GgufAcquisitionState
+{
+    public required GgufAcquisitionDisposition Disposition { get; init; }
+
+    public required ProviderMapDisposition ProviderMapDisposition { get; init; }
+
+    public string? ConflictingProvider { get; init; }
+
+    public Guid? ActiveOperationId { get; init; }
+}
 
 public interface IGgufAcquisitionPreflight
 {
@@ -103,14 +134,17 @@ public sealed class GgufAcquisitionIdentityResolver
         ValidateDownloadMetadata(intent);
         ValidateProjectorMetadata(intent);
         var projectorFileName = intent.Projector is not null ? $"{slug}-projector-{identityHash}.gguf" : null;
-        return new ResolvedGgufAcquisitionIdentity(canonicalModelName,
-            reservationKey,
-            quantization,
-            fileName,
-            fileName,
-            $"{fileName}.xe-model.json",
-            projectorFileName,
-            projectorFileName);
+        return new ResolvedGgufAcquisitionIdentity
+        {
+            CanonicalModelName = canonicalModelName,
+            ModelReservationKey = reservationKey,
+            CanonicalQuantization = quantization,
+            FinalFileName = fileName,
+            RelativeGgufPath = fileName,
+            RelativeSidecarPath = $"{fileName}.xe-model.json",
+            ProjectorFileName = projectorFileName,
+            ProjectorRelativePath = projectorFileName
+        };
     }
 
     private static void ValidateDownloadMetadata(GgufAcquisitionIntent intent)
@@ -248,15 +282,15 @@ public sealed class GgufAcquisitionPreflight : IGgufAcquisitionPreflight
         var identity = _identityResolver.Resolve(intent);
         var members = new List<IntendedInstalledModelMember>
         {
-            new(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
-            new(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
+            new() { RelativePath = identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight },
+            new() { RelativePath = identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }
         };
         if (identity.ProjectorRelativePath is not null)
         {
-            members.Add(new IntendedInstalledModelMember(identity.ProjectorRelativePath, InstalledModelPhysicalMemberRole.Projector));
+            members.Add(new IntendedInstalledModelMember { RelativePath = identity.ProjectorRelativePath, Role = InstalledModelPhysicalMemberRole.Projector });
         }
 
-        var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(identity.CanonicalModelName, InstalledModelMutationKind.Acquire, members),
+        var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest { ModelName = identity.CanonicalModelName, Kind = InstalledModelMutationKind.Acquire, IntendedMembers = members },
             cancellationToken);
         try
         {

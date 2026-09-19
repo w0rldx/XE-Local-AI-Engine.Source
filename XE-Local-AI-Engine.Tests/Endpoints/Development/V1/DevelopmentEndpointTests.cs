@@ -172,7 +172,7 @@ public sealed class DevelopmentEndpointTests
         const string HostPath = "/secret/operator/repository";
         var service = Substitute.For<IDevelopmentManagementService>();
         service.RegisterRepositoryAsync("repository", HostPath, Arg.Any<CancellationToken>())
-               .Returns(new DevelopmentRepositoryReference("44444444-4444-4444-4444-444444444444", "repository", "Available"));
+               .Returns(new DevelopmentRepositoryReference { Id = "44444444-4444-4444-4444-444444444444", Alias = "repository", Availability = "Available" });
         await using var factory = EnabledFactory(service);
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/development/repositories")
@@ -360,7 +360,9 @@ public sealed class DevelopmentEndpointTests
         };
 
     private static DevelopmentProjectAggregate ProjectAggregate(Guid projectId) =>
-        new(new DevelopmentProjectSnapshot
+        new()
+        {
+            Project = new DevelopmentProjectSnapshot
         {
             Id = projectId,
             Objective = "objective",
@@ -382,13 +384,16 @@ public sealed class DevelopmentEndpointTests
             Version = 1,
             CommandProfileJson = null
         },
-            [],
-            []);
+            Tasks = [],
+            Events = []
+        };
 
     internal static DevelopmentTaskAggregate TaskAggregate(Guid projectId,
         Guid taskId,
         IReadOnlyList<DevelopmentAttemptSnapshot> attempts) =>
-        new(new DevelopmentTaskSnapshot
+        new()
+        {
+            Task = new DevelopmentTaskSnapshot
         {
             Id = taskId,
             ProjectId = projectId,
@@ -405,6 +410,7 @@ public sealed class DevelopmentEndpointTests
             UpdatedAtUtc = 1,
             Version = 1
         },
-            attempts,
-            []);
+            Attempts = attempts,
+            Artifacts = []
+        };
 }

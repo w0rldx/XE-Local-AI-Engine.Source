@@ -123,10 +123,13 @@ internal sealed class BaseArtifactDownloadCoordinator : IDisposable
         var directory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifactId);
         try
         {
-            var progress = new Progress<PullProgress>(value => download.Progress = new BaseArtifactProgressView(value.CompletedBytes ?? 0,
-                value.TotalBytes,
-                value.PartIndex ?? 0,
-                value.PartCount ?? manifest.Files.Count));
+            var progress = new Progress<PullProgress>(value => download.Progress = new BaseArtifactProgressView
+            {
+                CompletedBytes = value.CompletedBytes ?? 0,
+                TotalBytes = value.TotalBytes,
+                FileIndex = value.PartIndex ?? 0,
+                FileCount = value.PartCount ?? manifest.Files.Count
+            });
 
             var completed = await _checkpointStore
                                   .DownloadAsync(manifest, directory, progress, download.Cancellation.Token);

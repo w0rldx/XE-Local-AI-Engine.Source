@@ -55,9 +55,9 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         // provider's mount broker, which sweeps these targets together with every engine-generated mount target — an
         // unbounded list that a fixed set of pairwise calls could never cover.
         if (FindOverlap([
-                new ContainerMountTarget(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
-                new ContainerMountTarget(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
-                new ContainerMountTarget(nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
+                new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget), Path = options.WorkspaceMountTarget },
+                new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.ScratchMountTarget), Path = options.ScratchMountTarget },
+                new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.TempMountTarget), Path = options.TempMountTarget }
             ]) is { } collision)
         {
             failures.Add($"'{collision.Second.Name}' ('{collision.Second.Path}') and '{collision.First.Name}' ('{collision.First.Path}') must not "
@@ -151,7 +151,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
             {
                 if (Overlaps(targets[outer].Path, targets[inner].Path))
                 {
-                    return new ContainerMountOverlap(targets[outer], targets[inner]);
+                    return new ContainerMountOverlap { First = targets[outer], Second = targets[inner] };
                 }
             }
         }

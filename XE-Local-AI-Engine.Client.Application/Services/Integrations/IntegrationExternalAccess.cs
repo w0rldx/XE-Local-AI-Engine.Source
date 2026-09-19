@@ -10,8 +10,12 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 ///     ownership question keys on; <see cref="KeyPrefix" /> names WHICH of that integrator's credentials made the call,
 ///     which is what lets the allowlist on that one credential still bind after the invocation.
 /// </summary>
-public sealed record IntegrationCallerIdentity(Guid PrincipalId, string KeyPrefix)
+public sealed class IntegrationCallerIdentity
 {
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
     /// <summary>
     ///     Reads the identity off an authenticated principal, failing CLOSED on a missing or duplicated claim rather
     ///     than taking the first of several. A duplicated claim is not a shape this node's own handler can produce, so
@@ -31,7 +35,7 @@ public sealed record IntegrationCallerIdentity(Guid PrincipalId, string KeyPrefi
             return null;
         }
 
-        return string.IsNullOrWhiteSpace(prefixes[0]) ? null : new IntegrationCallerIdentity(principalId, prefixes[0]);
+        return string.IsNullOrWhiteSpace(prefixes[0]) ? null : new IntegrationCallerIdentity { PrincipalId = principalId, KeyPrefix = prefixes[0] };
     }
 }
 
@@ -46,10 +50,14 @@ public enum IntegrationAccessOutcome
 }
 
 /// <summary>The resolved row, populated only for <see cref="IntegrationAccessOutcome.Allowed" />.</summary>
-public sealed record IntegrationAccessResult(
-    IntegrationAccessOutcome Outcome,
-    IntegrationExecutionSnapshot? Execution,
-    IntegrationSessionSnapshot? Session);
+public sealed class IntegrationAccessResult
+{
+    public required IntegrationAccessOutcome Outcome { get; init; }
+
+    public required IntegrationExecutionSnapshot? Execution { get; init; }
+
+    public required IntegrationSessionSnapshot? Session { get; init; }
+}
 
 /// <summary>
 ///     The ONE authorisation rule for every external route that addresses an execution or a session, written once so
@@ -94,7 +102,7 @@ public sealed class IntegrationExternalAccess
         var allowed = await AllowsAsync(caller, execution?.TriggerId ?? Guid.Empty, cancellationToken);
 
         return execution is not null && execution.PrincipalId == caller.PrincipalId && allowed
-            ? new IntegrationAccessResult(IntegrationAccessOutcome.Allowed, execution, Session: null)
+            ? new IntegrationAccessResult { Outcome = IntegrationAccessOutcome.Allowed, Execution = execution, Session = null }
             : Masked;
     }
 
@@ -114,12 +122,12 @@ public sealed class IntegrationExternalAccess
         var allowed = await AllowsAsync(caller, session?.TriggerId ?? Guid.Empty, cancellationToken);
 
         return session is not null && allowed
-            ? new IntegrationAccessResult(IntegrationAccessOutcome.Allowed, Execution: null, session)
+            ? new IntegrationAccessResult { Outcome = IntegrationAccessOutcome.Allowed, Execution = null, Session = session }
             : Masked;
     }
 
     /// <summary>Unknown, foreign, revoked and out-of-allowlist are indistinguishable, on purpose.</summary>
-    private static IntegrationAccessResult Masked => new(IntegrationAccessOutcome.Masked, Execution: null, Session: null);
+    private static IntegrationAccessResult Masked => new() { Outcome = IntegrationAccessOutcome.Masked, Execution = null, Session = null };
 
     private async Task<bool> AllowsAsync(IntegrationCallerIdentity caller, Guid triggerId, CancellationToken cancellationToken)
     {

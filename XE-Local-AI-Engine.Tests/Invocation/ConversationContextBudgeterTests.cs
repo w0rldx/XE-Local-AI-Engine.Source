@@ -107,7 +107,7 @@ public sealed class ConversationContextBudgeterTests
                                                                                .WithUserMessage("u0")
                                                                                .WithToolExchangeMessage("a0",
                                                                                    sortOrder: 1,
-                                                                                   new ConversationToolExchange("call-1", "search", "{}", "old result", IsError: false))
+                                                                                   new ConversationToolExchange { CallId = "call-1", Name = "search", ArgumentsJson = "{}", Result = "old result", IsError = false })
                                                                                .Build());
 
         var messages = new List<ChatMessage>(replayed)

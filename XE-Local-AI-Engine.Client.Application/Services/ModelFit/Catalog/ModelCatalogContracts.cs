@@ -92,8 +92,13 @@ public enum ModelCatalogSource
 ///     The catalog currently in effect plus its provenance. <see cref="FetchedAtUtc" /> is <see langword="null" /> only
 ///     for <see cref="ModelCatalogSource.Bundled" />.
 /// </summary>
-public sealed record ModelCatalogSnapshot(
-    ModelCatalogDocument Document,
-    ModelCatalogSource Source,
-    DateTimeOffset? FetchedAtUtc,
-    string? SourceUrl);
+public sealed class ModelCatalogSnapshot
+{
+    public required ModelCatalogDocument Document { get; init; }
+
+    public required ModelCatalogSource Source { get; init; }
+
+    public required DateTimeOffset? FetchedAtUtc { get; init; }
+
+    public required string? SourceUrl { get; init; }
+}

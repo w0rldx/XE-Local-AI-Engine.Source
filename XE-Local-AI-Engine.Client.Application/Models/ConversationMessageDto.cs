@@ -39,18 +39,23 @@ public sealed record ConversationMessageDto
 ///     One completed tool call and its result, replayed into the model context as a
 ///     <c>FunctionCallContent</c> / <c>FunctionResultContent</c> pair.
 /// </summary>
-/// <param name="CallId">The provider's tool-call id, which correlates the call with its result.</param>
-/// <param name="Name">The tool name.</param>
-/// <param name="ArgumentsJson">
-///     The raw argument JSON the call carried, or null when the provider gave none or it was never recorded.
-/// </param>
-/// <param name="Result">
-///     The result text as the tool returned it, already excerpted to the historical tool-result budget.
-/// </param>
-/// <param name="IsError">
-///     Whether the tool failed. The text is replayed either way, because the model acted on it either way.
-/// </param>
-public sealed record ConversationToolExchange(string CallId, string Name, string? ArgumentsJson, string? Result, bool IsError);
+public sealed class ConversationToolExchange
+{
+    /// <summary>The provider's tool-call id, which correlates the call with its result.</summary>
+    public required string CallId { get; init; }
+
+    /// <summary>The tool name.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The raw argument JSON the call carried, or null when the provider gave none or it was never recorded.</summary>
+    public required string? ArgumentsJson { get; init; }
+
+    /// <summary>The result text as the tool returned it, already excerpted to the historical tool-result budget.</summary>
+    public required string? Result { get; init; }
+
+    /// <summary>Whether the tool failed. The text is replayed either way, because the model acted on it either way.</summary>
+    public required bool IsError { get; init; }
+}
 
 /// <summary>
 ///     One image attached to a turn: its IANA media type (e.g. <c>image/png</c>) and raw decoded bytes. Bytes ride as
@@ -58,4 +63,9 @@ public sealed record ConversationToolExchange(string CallId, string Name, string
 ///     <c>EncryptedConversationMessageDto</c>, and the exact shape Microsoft.Extensions.AI <c>DataContent</c> consumes);
 ///     a <c>byte[]</c> converts implicitly, so callers passing an array are unaffected.
 /// </summary>
-public sealed record ConversationImagePart(string MediaType, ReadOnlyMemory<byte> Data);
+public sealed class ConversationImagePart
+{
+    public required string MediaType { get; init; }
+
+    public required ReadOnlyMemory<byte> Data { get; init; }
+}

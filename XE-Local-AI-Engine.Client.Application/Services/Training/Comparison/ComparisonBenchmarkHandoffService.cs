@@ -120,11 +120,14 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
         }
 
         var started = await _freeze.CommitAsync(plans, cancellationToken);
-        return new ComparisonBenchmarkHandoff(project.Id,
-            baseModelName,
-            tunedModelName,
-            [.. started[0].Select(static run => run.Id)],
-            [.. started[1].Select(static run => run.Id)]);
+        return new ComparisonBenchmarkHandoff
+        {
+            ProjectId = project.Id,
+            BaseModelName = baseModelName,
+            TunedModelName = tunedModelName,
+            BaseRunIds = [.. started[0].Select(static run => run.Id)],
+            TunedRunIds = [.. started[1].Select(static run => run.Id)]
+        };
     }
 
     /// <summary>
@@ -142,11 +145,14 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
             return match;
         }
 
-        return await _projects.CreateAsync(new BenchmarkProjectDraft(Guid.Empty,
-                                  Disambiguate(name, existing),
-                                  command.CoreTask,
-                                  command.ContextTokens,
-                                  command.AgentDefinitionId), cancellationToken);
+        return await _projects.CreateAsync(new BenchmarkProjectDraft
+        {
+            Id = Guid.Empty,
+            Name = Disambiguate(name, existing),
+            CoreTask = command.CoreTask,
+            ContextTokens = command.ContextTokens,
+            AgentDefinitionId = command.AgentDefinitionId
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -198,12 +204,15 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
     {
         try
         {
-            return await _freeze.FreezeAsync(new BenchmarkRunStartRequest(projectId,
-                                    modelName,
-                                    expectedVersion,
-                                    kvCacheType,
-                                    command.RepeatCount,
-                                    command.Warmup), scope, cancellationToken);
+            return await _freeze.FreezeAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = projectId,
+                PrimaryModelName = modelName,
+                ExpectedProjectVersion = expectedVersion,
+                KvCacheType = kvCacheType,
+                RepeatCount = command.RepeatCount,
+                Warmup = command.Warmup
+            }, scope, cancellationToken);
         }
         catch (KeyNotFoundException)
         {

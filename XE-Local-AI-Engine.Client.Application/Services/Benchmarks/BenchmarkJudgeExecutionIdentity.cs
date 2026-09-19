@@ -7,13 +7,17 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>One GPU as the execution identity records it. Driver version is included when present, never required.</summary>
-public sealed record BenchmarkJudgeExecutionGpuV1(
-    [property: JsonPropertyOrder(0)]
-    string Name,
-    [property: JsonPropertyOrder(1)]
-    long? TotalBytes,
-    [property: JsonPropertyOrder(2)]
-    string? DriverVersion);
+public sealed class BenchmarkJudgeExecutionGpuV1
+{
+    [JsonPropertyOrder(0)]
+    public required string Name { get; init; }
+
+    [JsonPropertyOrder(1)]
+    public required long? TotalBytes { get; init; }
+
+    [JsonPropertyOrder(2)]
+    public required string? DriverVersion { get; init; }
+}
 
 /// <summary>
 ///     A stable, versioned projection of what a judging actually executed on: the effective launch receipt plus the
@@ -34,46 +38,65 @@ public sealed record BenchmarkJudgeExecutionGpuV1(
 ///         a content-addressed bundle identity computed at install time, swapped in as a v2 field.
 ///     </para>
 /// </remarks>
-public sealed record BenchmarkJudgeExecutionIdentityV1(
-    [property: JsonPropertyOrder(0)]
-    int SchemaVersion,
-    [property: JsonPropertyOrder(1)]
-    string ExecutableSha256,
-    [property: JsonPropertyOrder(2)]
-    string ExecutableVersion,
-    [property: JsonPropertyOrder(3)]
-    string Variant,
-    [property: JsonPropertyOrder(4)]
-    string EffectiveBackend,
-    [property: JsonPropertyOrder(5)]
-    string EffectiveLaunchIdentity,
-    [property: JsonPropertyOrder(6)]
-    string RuntimeBundleIdentity,
-    [property: JsonPropertyOrder(7)]
-    string LlamaRuntimeVersion,
-    [property: JsonPropertyOrder(8)]
-    string LlamaRuntimeProvenance,
-    [property: JsonPropertyOrder(9)]
-    string? LlamaRuntimeSourceCommit,
-    [property: JsonPropertyOrder(10)]
-    string OsDescription,
-    [property: JsonPropertyOrder(11)]
-    string Arch,
-    [property: JsonPropertyOrder(12)]
-    string PlacementOutcome,
-    [property: JsonPropertyOrder(13)]
-    int? PlacementOffloaded,
-    [property: JsonPropertyOrder(14)]
-    int? PlacementTotal,
-    [property: JsonPropertyOrder(15)]
-    IReadOnlyList<BenchmarkJudgeExecutionGpuV1> Gpus,
-    [property: JsonPropertyOrder(16)]
-    string? CpuModel,
-    [property: JsonPropertyOrder(17)]
-    int? LogicalCores,
-    [property: JsonPropertyOrder(18)]
-    long? RamBytes)
+public sealed class BenchmarkJudgeExecutionIdentityV1
 {
+    [JsonPropertyOrder(0)]
+    public required int SchemaVersion { get; init; }
+
+    [JsonPropertyOrder(1)]
+    public required string ExecutableSha256 { get; init; }
+
+    [JsonPropertyOrder(2)]
+    public required string ExecutableVersion { get; init; }
+
+    [JsonPropertyOrder(3)]
+    public required string Variant { get; init; }
+
+    [JsonPropertyOrder(4)]
+    public required string EffectiveBackend { get; init; }
+
+    [JsonPropertyOrder(5)]
+    public required string EffectiveLaunchIdentity { get; init; }
+
+    [JsonPropertyOrder(6)]
+    public required string RuntimeBundleIdentity { get; init; }
+
+    [JsonPropertyOrder(7)]
+    public required string LlamaRuntimeVersion { get; init; }
+
+    [JsonPropertyOrder(8)]
+    public required string LlamaRuntimeProvenance { get; init; }
+
+    [JsonPropertyOrder(9)]
+    public required string? LlamaRuntimeSourceCommit { get; init; }
+
+    [JsonPropertyOrder(10)]
+    public required string OsDescription { get; init; }
+
+    [JsonPropertyOrder(11)]
+    public required string Arch { get; init; }
+
+    [JsonPropertyOrder(12)]
+    public required string PlacementOutcome { get; init; }
+
+    [JsonPropertyOrder(13)]
+    public required int? PlacementOffloaded { get; init; }
+
+    [JsonPropertyOrder(14)]
+    public required int? PlacementTotal { get; init; }
+
+    [JsonPropertyOrder(15)]
+    public required IReadOnlyList<BenchmarkJudgeExecutionGpuV1> Gpus { get; init; }
+
+    [JsonPropertyOrder(16)]
+    public required string? CpuModel { get; init; }
+
+    [JsonPropertyOrder(17)]
+    public required int? LogicalCores { get; init; }
+
+    [JsonPropertyOrder(18)]
+    public required long? RamBytes { get; init; }
+
     public const int CurrentSchemaVersion = 1;
 }
 
@@ -139,7 +162,7 @@ public static class BenchmarkJudgeExecutionKey
         }
 
         var placement = receipt.Placement;
-        var gpus = hardware.Gpus.Select(static gpu => new BenchmarkJudgeExecutionGpuV1(gpu.Name, gpu.TotalBytes, gpu.DriverVersion))
+        var gpus = hardware.Gpus.Select(static gpu => new BenchmarkJudgeExecutionGpuV1 { Name = gpu.Name, TotalBytes = gpu.TotalBytes, DriverVersion = gpu.DriverVersion })
                            .OrderBy(static gpu => gpu.Name, StringComparer.Ordinal)
                            .ThenBy(static gpu => gpu.TotalBytes)
                            .ToArray();
@@ -153,25 +176,28 @@ public static class BenchmarkJudgeExecutionKey
             return null;
         }
 
-        return new BenchmarkJudgeExecutionIdentityV1(BenchmarkJudgeExecutionIdentityV1.CurrentSchemaVersion,
-            executableSha,
-            executableVersion,
-            BenchmarkLaunchBackend.VariantName(receipt.Variant),
-            backend,
-            receipt.LaunchProjection.ComputeIdentity(),
-            bundle.Identity,
-            llamaRuntime.Version,
-            llamaRuntime.Provenance,
-            llamaRuntime.SourceCommit,
-            hardware.OsDescription,
-            hardware.Arch,
-            placement.Outcome.ToString(),
-            isCpuVariant ? null : placement.OffloadedLayers,
-            isCpuVariant ? null : placement.TotalLayers,
-            gpus,
-            hardware.CpuModel,
-            hardware.LogicalCores,
-            hardware.RamBytes);
+        return new BenchmarkJudgeExecutionIdentityV1
+        {
+            SchemaVersion = BenchmarkJudgeExecutionIdentityV1.CurrentSchemaVersion,
+            ExecutableSha256 = executableSha,
+            ExecutableVersion = executableVersion,
+            Variant = BenchmarkLaunchBackend.VariantName(receipt.Variant),
+            EffectiveBackend = backend,
+            EffectiveLaunchIdentity = receipt.LaunchProjection.ComputeIdentity(),
+            RuntimeBundleIdentity = bundle.Identity,
+            LlamaRuntimeVersion = llamaRuntime.Version,
+            LlamaRuntimeProvenance = llamaRuntime.Provenance,
+            LlamaRuntimeSourceCommit = llamaRuntime.SourceCommit,
+            OsDescription = hardware.OsDescription,
+            Arch = hardware.Arch,
+            PlacementOutcome = placement.Outcome.ToString(),
+            PlacementOffloaded = isCpuVariant ? null : placement.OffloadedLayers,
+            PlacementTotal = isCpuVariant ? null : placement.TotalLayers,
+            Gpus = gpus,
+            CpuModel = hardware.CpuModel,
+            LogicalCores = hardware.LogicalCores,
+            RamBytes = hardware.RamBytes
+        };
     }
 
     /// <summary>

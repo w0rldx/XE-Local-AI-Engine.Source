@@ -160,7 +160,7 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         // Compose the DURABLE payload first, then measure IT — not the raw payload. The event's column is capped and
         // encrypted, so a payload just under the limit plus its wrapper plus a nonce and auth tag would overrun a bound
         // this handler claims to respect.
-        var detailJson = JsonSerializer.Serialize(new EmitOutputEnvelope(contentType, payload), SerializerOptions);
+        var detailJson = JsonSerializer.Serialize(new EmitOutputEnvelope { ContentType = contentType, Payload = payload }, SerializerOptions);
         var plaintextBytes = (long)Encoding.UTF8.GetByteCount(detailJson);
         if (plaintextBytes > _options.MaxOutputBytes)
         {
@@ -210,13 +210,16 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         }
 
         var occurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var emitted = new IntegrationStreamEvent(IntegrationStreamEventTypes.ExternalOutput,
-            sequence,
-            execution.Id,
-            sessionId,
-            occurredAtUtc,
-            contentType,
-            payload);
+        var emitted = new IntegrationStreamEvent
+        {
+            Type = IntegrationStreamEventTypes.ExternalOutput,
+            Sequence = sequence,
+            ExecutionId = execution.Id,
+            SessionId = sessionId,
+            OccurredAtUtc = occurredAtUtc,
+            ContentType = contentType,
+            Payload = payload
+        };
 
         bool recorded;
         try
@@ -269,9 +272,12 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
     ///     composed ONCE and both the cap check and the row use the same string, so the number checked and the number
     ///     stored cannot disagree.
     /// </summary>
-    private sealed record EmitOutputEnvelope(
-        [property: JsonPropertyName("contentType")]
-        string ContentType,
-        [property: JsonPropertyName("payload")]
-        JsonElement Payload);
+    private sealed record EmitOutputEnvelope
+    {
+        [JsonPropertyName("contentType")]
+        public required string ContentType { get; init; }
+
+        [JsonPropertyName("payload")]
+        public required JsonElement Payload { get; init; }
+    }
 }

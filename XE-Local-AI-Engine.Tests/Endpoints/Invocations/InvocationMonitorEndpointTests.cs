@@ -40,21 +40,24 @@ public sealed class InvocationMonitorEndpointTests
             LastUpdatedAt = FrozenNow,
             StreamedChunkCount = 2,
             StreamedThinkingChunkCount = 1,
-            PendingApproval = new InvocationApprovalState("approval-1", "Approve tool call", FrozenNow)
+            PendingApproval = new InvocationApprovalState { RequestId = "approval-1", Description = "Approve tool call", RequestedAt = FrozenNow }
         });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);
         history.Snapshot().Returns([
-            new InvocationHistoryEntry(historyInvocationId,
-                Guid.Parse("44444444-4444-4444-4444-444444444444"),
-                InvocationStatus.Failed,
-                "qwen3:0.6b",
-                FrozenNow.AddMinutes(-5),
-                FrozenNow.AddMinutes(-4),
-                "Bearer super-secret-token api_key=abc123",
-                FailureCategory.AgentRuntime,
-                StreamedChunkCount: 3,
-                StreamedThinkingChunkCount: 2)
+            new InvocationHistoryEntry
+            {
+                InvocationId = historyInvocationId,
+                ConversationId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                Status = InvocationStatus.Failed,
+                ModelUsed = "qwen3:0.6b",
+                StartedAt = FrozenNow.AddMinutes(-5),
+                CompletedAt = FrozenNow.AddMinutes(-4),
+                Error = "Bearer super-secret-token api_key=abc123",
+                FailureCategory = FailureCategory.AgentRuntime,
+                StreamedChunkCount = 3,
+                StreamedThinkingChunkCount = 2
+            }
         ]);
         await using var factory = CreateFactory(dispatcher, history);
         using var client = factory.CreateClient();
@@ -94,16 +97,19 @@ public sealed class InvocationMonitorEndpointTests
             Status = InvocationStatus.Running,
             StartedAt = FrozenNow.AddSeconds(-10),
             LastUpdatedAt = FrozenNow,
-            PendingQuestion = new InvocationUserQuestionState("question-1",
-                "call-1",
-                "ask_user",
-                [
+            PendingQuestion = new InvocationUserQuestionState
+            {
+                RequestId = "question-1",
+                CallId = "call-1",
+                ToolName = "ask_user",
+                Questions = [
                     new UserQuestionSpec("Auth", "Which auth method?", MultiSelect: false, [
                         new UserQuestionOption("OAuth device flow", Description: null, Recommended: true),
                         new UserQuestionOption("Personal access token", Description: null, Recommended: false)
                     ])
                 ],
-                FrozenNow)
+                RequestedAt = FrozenNow
+            }
         });
         var history = Substitute.For<IInvocationHistory>();
         history.Capacity.Returns(50);

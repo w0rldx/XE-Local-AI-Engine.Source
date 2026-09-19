@@ -40,13 +40,16 @@ public sealed class ModelFitMapperKvQuantTests
 
     private static ModelFitLatestRecommendationsView CreateView(ModelFitRecommendationRecord record)
     {
-        return new ModelFitLatestRecommendationsView(Guid.NewGuid(),
-            ModelFitRunStatus.Succeeded,
-            ApprovedImageId: "advisor",
-            UseCase: "coding",
-            ProviderName: "advisor",
-            CompletedAtUtc: 0L,
-            Recommendations: [record]);
+        return new ModelFitLatestRecommendationsView
+        {
+            SnapshotId = Guid.NewGuid(),
+            Status = ModelFitRunStatus.Succeeded,
+            ApprovedImageId = "advisor",
+            UseCase = "coding",
+            ProviderName = "advisor",
+            CompletedAtUtc = 0L,
+            Recommendations = [record]
+        };
     }
 
     [Test]

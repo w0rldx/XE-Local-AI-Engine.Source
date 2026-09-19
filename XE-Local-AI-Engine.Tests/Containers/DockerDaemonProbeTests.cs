@@ -50,8 +50,11 @@ public sealed class DockerDaemonProbeTests
         // shared, and which an operator is shown when a daemon is later substituted — would claim engine
         // configuration named a socket that DOCKER_HOST or the platform default actually named.
         var (client, store) = Doubles();
-        var resolved = new DockerDaemonEndpoint(new Uri("unix:///fake-probe-from-docker-host.sock"),
-            DockerDaemonEndpointSource.DockerHostEnvironmentVariable);
+        var resolved = new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///fake-probe-from-docker-host.sock"),
+            Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable
+        };
 
         var outcome = await RunAsync(client, store, resolvedEndpoint: resolved);
 
@@ -180,8 +183,11 @@ public sealed class DockerDaemonProbeTests
         await RunAsync(client, store);
         client.Identity = client.Identity with
         {
-            Endpoint = new DockerDaemonEndpoint(new Uri("unix:///run/user/1000/docker.sock"),
-                DockerDaemonEndpointSource.UserRuntimeUnixSocket)
+            Endpoint = new DockerDaemonEndpoint
+            {
+                Uri = new Uri("unix:///run/user/1000/docker.sock"),
+                Source = DockerDaemonEndpointSource.UserRuntimeUnixSocket
+            }
         };
 
         var outcome = await RunAsync(client, store);
@@ -621,19 +627,19 @@ public sealed class DockerDaemonProbeTests
 
     private static (FakeDockerRuntimeClient Client, InMemoryDaemonAttestationStore Store) Doubles()
     {
-        var endpoint = new DockerDaemonEndpoint(new Uri(ConfiguredEndpoint), DockerDaemonEndpointSource.Configuration);
+        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(ConfiguredEndpoint), Source = DockerDaemonEndpointSource.Configuration };
         var client = new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity("daemon-alpha", "99.0.0", "1.99", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
+            new DockerDaemonIdentity { DaemonId = "daemon-alpha", ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = endpoint, IsRootless = false, SupportsSeccomp = true });
 
         return (client, new InMemoryDaemonAttestationStore());
     }
 
     private static FakeDockerRuntimeClient ClientFor(string daemonId)
     {
-        var endpoint = new DockerDaemonEndpoint(new Uri(ConfiguredEndpoint), DockerDaemonEndpointSource.Configuration);
+        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(ConfiguredEndpoint), Source = DockerDaemonEndpointSource.Configuration };
 
         return new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity(daemonId, "99.0.0", "1.99", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
+            new DockerDaemonIdentity { DaemonId = daemonId, ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = endpoint, IsRootless = false, SupportsSeccomp = true });
     }
 
     /// <summary>

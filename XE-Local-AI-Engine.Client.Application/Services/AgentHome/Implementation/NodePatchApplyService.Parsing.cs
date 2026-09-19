@@ -139,7 +139,7 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
             }
 
-            allAliasResults.Add(new BodyAliasPath(prefix, alias, relative));
+            allAliasResults.Add(new BodyAliasPath { Prefix = prefix, Alias = alias, Relative = relative });
         }
 
         // All paths in the block must belong to the same alias (cross-alias rename/copy is a path-escape vector).
@@ -313,7 +313,14 @@ internal sealed partial class NodePatchApplyService
     private sealed record AliasPath(string Alias, string Relative);
 
     // A body path after the split, still carrying the prefix so the destination side can be told from the source side.
-    private sealed record BodyAliasPath(string Prefix, string Alias, string Relative);
+    private sealed record BodyAliasPath
+    {
+        public required string Prefix { get; init; }
+
+        public required string Alias { get; init; }
+
+        public required string Relative { get; init; }
+    }
 
     private sealed record ParsedBlock
     {

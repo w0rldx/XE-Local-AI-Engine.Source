@@ -39,17 +39,20 @@ internal sealed class InvocationHistory : IInvocationHistory
             return;
         }
 
-        var entry = new InvocationHistoryEntry(state.InvocationId,
-            state.ConversationId,
-            state.Status,
-            state.ModelUsed,
-            state.StartedAt,
-            state.CompletedAt ?? _timeProvider.GetUtcNow(),
-            state.Error,
-            state.FailureCategory,
-            state.StreamedChunkCount,
-            state.StreamedThinkingChunkCount,
-            state.TraceId);
+        var entry = new InvocationHistoryEntry
+        {
+            InvocationId = state.InvocationId,
+            ConversationId = state.ConversationId,
+            Status = state.Status,
+            ModelUsed = state.ModelUsed,
+            StartedAt = state.StartedAt,
+            CompletedAt = state.CompletedAt ?? _timeProvider.GetUtcNow(),
+            Error = state.Error,
+            FailureCategory = state.FailureCategory,
+            StreamedChunkCount = state.StreamedChunkCount,
+            StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
+            TraceId = state.TraceId
+        };
 
         lock (_syncRoot)
         {

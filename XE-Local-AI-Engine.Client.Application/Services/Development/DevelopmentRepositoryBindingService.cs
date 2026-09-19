@@ -44,8 +44,8 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
     {
         var canonicalRoot = ResolveCanonicalRoot(hostPath);
         await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken);
-        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration(displayAlias, canonicalRoot, SelectedFolderMode.Copy), cancellationToken);
-        return new DevelopmentRepositoryReference(reference.Id, reference.Alias, "Available");
+        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration { Alias = displayAlias, HostPath = canonicalRoot, Mode = SelectedFolderMode.Copy }, cancellationToken);
+        return new DevelopmentRepositoryReference { Id = reference.Id, Alias = reference.Alias, Availability = "Available" };
     }
 
     public async Task<IReadOnlyList<DevelopmentRepositoryReference>> ListAsync(CancellationToken cancellationToken = default)
@@ -66,7 +66,7 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
                 availability = "Unavailable";
             }
 
-            result.Add(new DevelopmentRepositoryReference(reference.Id, reference.Alias, availability));
+            result.Add(new DevelopmentRepositoryReference { Id = reference.Id, Alias = reference.Alias, Availability = availability });
         }
 
         return result;
@@ -88,11 +88,14 @@ internal sealed class DevelopmentRepositoryBindingService : IDevelopmentReposito
 
         var canonicalRoot = ResolveCanonicalRoot(selected.HostPath);
         await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken);
-        return new DevelopmentRepositoryBinding(Guid.Empty,
-            selected.Id,
-            selected.Alias,
-            canonicalRoot,
-            DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRoot));
+        return new DevelopmentRepositoryBinding
+        {
+            ProjectId = Guid.Empty,
+            SelectedFolderId = selected.Id,
+            Alias = selected.Alias,
+            RepositoryRoot = canonicalRoot,
+            RepositoryIdentityHash = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRoot)
+        };
     }
 
     public async Task<DevelopmentRepositoryBinding> ResolveProjectAsync(Guid projectId,

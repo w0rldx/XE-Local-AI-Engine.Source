@@ -65,11 +65,14 @@ internal sealed class PreOwnershipTerminalizationGuard : IAsyncDisposable
             // the one live path that writes a terminal without an atomic envelope, self-healing only at the next
             // restart's reconcile. There is no InvocationState here, so invocation id / tokens / duration / model are
             // unknown and omitted; the terminal status (derived from the winning row) carries the interrupted outcome.
-            await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(_correlation,
-                    NodeChatMessageStatusValues.Interrupted,
-                    _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                    Error: PreOwnershipInterruptedError,
-                    Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId())),
+            await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+            {
+                Correlation = _correlation,
+                Status = NodeChatMessageStatusValues.Interrupted,
+                UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                Error = PreOwnershipInterruptedError,
+                Envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() }
+            },
                 CancellationToken.None);
         }
         catch (Exception exception)

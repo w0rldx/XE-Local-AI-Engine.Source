@@ -301,11 +301,14 @@ public sealed class InferenceProfileService : IInferenceProfileService
                                 completedAtUtc: completedAtUtc,
                                 ct);
 
-        return new BenchmarkResult(metrics.Success,
-            metrics.Success ? null : metrics.FailureReason,
-            snapshot.Id,
-            metrics,
-            ToView(profile));
+        return new BenchmarkResult
+        {
+            Success = metrics.Success,
+            FailureReason = metrics.Success ? null : metrics.FailureReason,
+            SnapshotId = snapshot.Id,
+            Metrics = metrics,
+            Profile = ToView(profile)
+        };
     }
 
     /// <inheritdoc />
@@ -423,17 +426,20 @@ public sealed class InferenceProfileService : IInferenceProfileService
     {
         var quant = string.IsNullOrWhiteSpace(metadata.QuantType) ? UnknownQuant : metadata.QuantType;
         var ctxSize = draft?.CtxSize ?? ClampToInt(metadata.ContextLength) ?? DefaultExploreCtxSize;
-        var fingerprint = await _launchPolicyFingerprintProvider.CaptureAsync(new InferenceProfileFingerprintInput(modelName,
-                (int)role,
-                backend,
-                modelFilePath,
-                ctxSize,
-                draft?.NGpuLayers,
-                draft?.TensorSplit,
-                draft?.OverrideTensor,
-                draft?.KvTypeK,
-                draft?.KvTypeV,
-                draft?.FlashAttn ?? false),
+        var fingerprint = await _launchPolicyFingerprintProvider.CaptureAsync(new InferenceProfileFingerprintInput
+        {
+            ModelName = modelName,
+            Role = (int)role,
+            Backend = backend,
+            ModelFilePath = modelFilePath,
+            CtxSize = ctxSize,
+            NGpuLayers = draft?.NGpuLayers,
+            TensorSplit = draft?.TensorSplit,
+            OverrideTensor = draft?.OverrideTensor,
+            KvTypeK = draft?.KvTypeK,
+            KvTypeV = draft?.KvTypeV,
+            FlashAttn = draft?.FlashAttn ?? false
+        },
             ct);
 
         return new InferenceProfileInput
@@ -565,30 +571,33 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
     private static InferenceProfileView ToView(InferenceProfileRecord record)
     {
-        return new InferenceProfileView(record.Id,
-            record.ModelName,
-            record.Role,
-            record.Backend,
-            record.LlamacppBuild,
-            record.Quant,
-            record.CtxSize,
-            record.NGpuLayers,
-            record.TensorSplit,
-            record.OverrideTensor,
-            record.KvTypeK,
-            record.KvTypeV,
-            record.FlashAttn,
-            record.NParams,
-            record.IsMoe,
-            record.ExpertCount,
-            record.Status.ToString(),
-            record.BenchmarkSnapshotId,
-            record.CreatedAtUtc,
-            record.UpdatedAtUtc,
-            record.LaunchPolicyFingerprintVersion,
-            record.LaunchPolicyFingerprint,
-            record.GlobalFreeVramAtFreezeBytes,
-            record.ProcessBudgetVramAtFreezeBytes);
+        return new InferenceProfileView
+        {
+            Id = record.Id,
+            ModelName = record.ModelName,
+            Role = record.Role,
+            Backend = record.Backend,
+            LlamacppBuild = record.LlamacppBuild,
+            Quant = record.Quant,
+            CtxSize = record.CtxSize,
+            NGpuLayers = record.NGpuLayers,
+            TensorSplit = record.TensorSplit,
+            OverrideTensor = record.OverrideTensor,
+            KvTypeK = record.KvTypeK,
+            KvTypeV = record.KvTypeV,
+            FlashAttn = record.FlashAttn,
+            NParams = record.NParams,
+            IsMoe = record.IsMoe,
+            ExpertCount = record.ExpertCount,
+            Status = record.Status.ToString(),
+            BenchmarkSnapshotId = record.BenchmarkSnapshotId,
+            CreatedAtUtc = record.CreatedAtUtc,
+            UpdatedAtUtc = record.UpdatedAtUtc,
+            LaunchPolicyFingerprintVersion = record.LaunchPolicyFingerprintVersion,
+            LaunchPolicyFingerprint = record.LaunchPolicyFingerprint,
+            GlobalFreeVramAtFreezeBytes = record.GlobalFreeVramAtFreezeBytes,
+            ProcessBudgetVramAtFreezeBytes = record.ProcessBudgetVramAtFreezeBytes
+        };
     }
 
     private static int? ClampToInt(long? value)

@@ -44,20 +44,23 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Title", UserId = "user", CreatedAtUtc = 1000 });
         var fileId = Guid.NewGuid();
         var content = Encoding.UTF8.GetBytes("PLAINTEXT-FILE-BODY-4815162342-should-be-encrypted");
 
-        var info = await store.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
-            fileId,
-            OriginalFileName,
-            "application/pdf",
-            "PDF",
-            content.Length,
-            content,
-            DocumentExtractionStatus.Extracted,
-            ExtractedMarkdown,
-            ExtractedMarkdown.Length), CancellationToken.None);
+        var info = await store.AddAsync(new ConversationUploadedFileInput
+        {
+            ConversationId = conversation.ConversationId,
+            FileId = fileId,
+            OriginalFileName = OriginalFileName,
+            MimeType = "application/pdf",
+            Extension = "PDF",
+            SizeBytes = content.Length,
+            Content = content,
+            ExtractionStatus = DocumentExtractionStatus.Extracted,
+            ExtractedMarkdown = ExtractedMarkdown,
+            ExtractedChars = ExtractedMarkdown.Length
+        }, CancellationToken.None);
 
         AssertEx.Equal(fileId, info.FileId);
         AssertEx.Equal(OriginalFileName, info.OriginalFileName);
@@ -99,7 +102,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Title", UserId = "user", CreatedAtUtc = 1000 });
         var fileId = Guid.NewGuid();
         var pixels = new byte[]
         {
@@ -118,16 +121,19 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         };
 
         // Exactly what the upload endpoint constructs for an image: Image status, no extracted Markdown, raw bytes.
-        var info = await store.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
-            fileId,
-            "photo.png",
-            "image/png",
-            ".png",
-            pixels.Length,
-            pixels,
-            DocumentExtractionStatus.Image,
-            ExtractedMarkdown: null,
-            ExtractedChars: null), CancellationToken.None);
+        var info = await store.AddAsync(new ConversationUploadedFileInput
+        {
+            ConversationId = conversation.ConversationId,
+            FileId = fileId,
+            OriginalFileName = "photo.png",
+            MimeType = "image/png",
+            Extension = ".png",
+            SizeBytes = pixels.Length,
+            Content = pixels,
+            ExtractionStatus = DocumentExtractionStatus.Image,
+            ExtractedMarkdown = null,
+            ExtractedChars = null
+        }, CancellationToken.None);
 
         AssertEx.Equal(DocumentExtractionStatus.Image, info.ExtractionStatus);
 
@@ -160,7 +166,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Title", UserId = "user", CreatedAtUtc = 1000 });
         await AddSampleFileAsync(store, conversation.ConversationId, "alpha.txt");
         await AddSampleFileAsync(store, conversation.ConversationId, "beta.txt");
 
@@ -168,7 +174,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         AssertEx.True(Directory.Exists(conversationDirectory), "Upload directory should exist before delete.");
         AssertEx.Equal(expected: 2, (await store.ListAsync(conversation.ConversationId, CancellationToken.None)).Count);
 
-        _ = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 2000, PurgeImmediately: true));
+        _ = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversation.ConversationId, DeletedAtUtc = 2000, PurgeImmediately = true });
 
         AssertEx.Empty(await store.ListAsync(conversation.ConversationId, CancellationToken.None));
         AssertEx.False(Directory.Exists(conversationDirectory), "Upload directory should be removed after purge.");
@@ -185,7 +191,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Title", UserId = "user", CreatedAtUtc = 1000 });
         await AddSampleFileAsync(store, conversation.ConversationId, "notes.txt");
         await AddSampleFileAsync(store, conversation.ConversationId, "summary.txt");
 
@@ -243,16 +249,19 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
     private static async Task AddSampleFileAsync(IConversationUploadedFileStore store, Guid conversationId, string fileName)
     {
         var content = Encoding.UTF8.GetBytes("body-of-" + fileName);
-        _ = await store.AddAsync(new ConversationUploadedFileInput(conversationId,
-            Guid.NewGuid(),
-            fileName,
-            "text/plain",
-            ".txt",
-            content.Length,
-            content,
-            DocumentExtractionStatus.Extracted,
-            ExtractedMarkdown,
-            ExtractedMarkdown.Length), CancellationToken.None);
+        _ = await store.AddAsync(new ConversationUploadedFileInput
+        {
+            ConversationId = conversationId,
+            FileId = Guid.NewGuid(),
+            OriginalFileName = fileName,
+            MimeType = "text/plain",
+            Extension = ".txt",
+            SizeBytes = content.Length,
+            Content = content,
+            ExtractionStatus = DocumentExtractionStatus.Extracted,
+            ExtractedMarkdown = ExtractedMarkdown,
+            ExtractedChars = ExtractedMarkdown.Length
+        }, CancellationToken.None);
     }
 
     private static ConversationUploadedFileStore CreateStore(ServiceProvider provider, string uploadRoot, INodeSqliteKeyHolder keyHolder)

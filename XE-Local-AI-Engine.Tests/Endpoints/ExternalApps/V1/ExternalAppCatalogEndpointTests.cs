@@ -464,7 +464,7 @@ public sealed class ExternalAppCatalogEndpointTests
                 .Returns(ExternalAppEndpointPayloads.Resolution());
 
         var reconciler = Substitute.For<IExternalAppStartupReconciler>();
-        reconciler.ReconcileAsync(Arg.Any<CancellationToken>()).Returns(new ExternalAppReconcileSummary(3, 1, 0, 2, 1));
+        reconciler.ReconcileAsync(Arg.Any<CancellationToken>()).Returns(new ExternalAppReconcileSummary { RowsInspected = 3, RowsChanged = 1, OrphansRemoved = 0, ForeignInstallContainers = 2, RowsSkippedBusy = 1 });
 
         await using var factory = Factory(resolver: resolver, reconciler: reconciler);
 
@@ -490,7 +490,7 @@ public sealed class ExternalAppCatalogEndpointTests
         resolver.ConfirmDaemonIdentityAsync("daemon-abc", Arg.Any<CancellationToken>()).Returns(ExternalAppEndpointPayloads.Resolution());
 
         var reconciler = Substitute.For<IExternalAppStartupReconciler>();
-        reconciler.ReconcileAsync(Arg.Any<CancellationToken>()).Returns(new ExternalAppReconcileSummary(4, 2, 0, 0, 1));
+        reconciler.ReconcileAsync(Arg.Any<CancellationToken>()).Returns(new ExternalAppReconcileSummary { RowsInspected = 4, RowsChanged = 2, OrphansRemoved = 0, ForeignInstallContainers = 0, RowsSkippedBusy = 1 });
 
         await using var factory = Factory(resolver: resolver, reconciler: reconciler);
 
@@ -581,8 +581,11 @@ public sealed class ExternalAppCatalogEndpointTests
 
         var catalog = Substitute.For<IApplicationCatalogProvider>();
         catalog.RefreshAsync(Arg.Any<CancellationToken>())
-               .Returns(new ExternalAppCatalogRefreshResult(ExternalAppEndpointPayloads.CatalogSnapshot(ExternalAppCatalogSource.RemoteLastGood, Failure),
-                   Failure));
+               .Returns(new ExternalAppCatalogRefreshResult
+               {
+                   Snapshot = ExternalAppEndpointPayloads.CatalogSnapshot(ExternalAppCatalogSource.RemoteLastGood, Failure),
+                   FailureMessage = Failure
+               });
 
         var apps = Substitute.For<IExternalAppService>();
         apps.ListAsync(Arg.Any<CancellationToken>()).Returns([]);

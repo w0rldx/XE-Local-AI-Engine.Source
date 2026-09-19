@@ -34,10 +34,13 @@ public sealed class StartGgufImportEndpoint : Endpoint<StartGgufImportRequest, G
             return;
         }
 
-        var ticket = await _coordinator.StartAsync(new StartGgufImportCommand(req.SourcePath,
-            req.PreviewToken,
-            req.ModelBaseName,
-            req.Quantization), ct);
+        var ticket = await _coordinator.StartAsync(new StartGgufImportCommand
+        {
+            SourcePath = req.SourcePath,
+            PreviewToken = req.PreviewToken,
+            ModelBaseName = req.ModelBaseName,
+            Quantization = req.Quantization
+        }, ct);
         await Send.ResultAsync(Results.Accepted(value: new GgufAcquisitionTicketResponse
         {
             OperationId = ticket.OperationId,

@@ -287,7 +287,7 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             RegisteredHostPath = hostPath;
-            return Task.FromResult(new DevelopmentRepositoryReference(Guid.NewGuid().ToString(), displayAlias, "Available"));
+            return Task.FromResult(new DevelopmentRepositoryReference { Id = Guid.NewGuid().ToString(), Alias = displayAlias, Availability = "Available" });
         }
 
         public Task<IReadOnlyList<DevelopmentRepositoryReference>> ListAsync(CancellationToken cancellationToken = default) =>

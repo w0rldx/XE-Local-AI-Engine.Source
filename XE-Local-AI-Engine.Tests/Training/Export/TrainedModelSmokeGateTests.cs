@@ -23,9 +23,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class TrainedModelSmokeGateTests
 {
-    private static readonly TrainingArtifactRecordView MergedArtifact = new("/staged/merged-Q4_K_M.gguf", BaseModelFilePath: null);
+    private static readonly TrainingArtifactRecordView MergedArtifact = new() { ArtifactPath = "/staged/merged-Q4_K_M.gguf", BaseModelFilePath = null };
 
-    private static readonly TrainingArtifactRecordView AdapterArtifact = new("/staged/adapter-F16.gguf", "/models/base.gguf");
+    private static readonly TrainingArtifactRecordView AdapterArtifact = new() { ArtifactPath = "/staged/adapter-F16.gguf", BaseModelFilePath = "/models/base.gguf" };
 
     [Test]
     public async Task Smoke_WhenTheModelEmitsAValidToolCall_Passes()

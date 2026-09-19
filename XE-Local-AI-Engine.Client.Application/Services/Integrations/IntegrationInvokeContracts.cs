@@ -8,7 +8,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     <see cref="Text" /> carries a text input's content and <see cref="Json" /> the RAW JSON TEXT of a json input —
 ///     raw text rather than a <c>JsonElement</c> so nothing downstream depends on a document the request owns.
 /// </summary>
-public sealed record IntegrationInputDto(IntegrationInputKinds Kind, string? Text, string? Label, string? Json);
+public sealed class IntegrationInputDto
+{
+    public required IntegrationInputKinds Kind { get; init; }
+
+    public required string? Text { get; init; }
+
+    public required string? Label { get; init; }
+
+    public required string? Json { get; init; }
+}
 
 /// <summary>
 ///     Everything the accept path needs. <see cref="RawBody" /> is the exact bytes the handler read off the wire,
@@ -20,14 +29,22 @@ public sealed record IntegrationInputDto(IntegrationInputKinds Kind, string? Tex
 ///         credential was used.
 ///     </para>
 /// </summary>
-public sealed record IntegrationAcceptRequest(
-    string TriggerName,
-    Guid PrincipalId,
-    string KeyPrefix,
-    Guid RequestId,
-    Guid? SessionId,
-    IReadOnlyList<IntegrationInputDto> Inputs,
-    ReadOnlyMemory<byte> RawBody);
+public sealed class IntegrationAcceptRequest
+{
+    public required string TriggerName { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required Guid? SessionId { get; init; }
+
+    public required IReadOnlyList<IntegrationInputDto> Inputs { get; init; }
+
+    public required ReadOnlyMemory<byte> RawBody { get; init; }
+}
 
 /// <summary>
 ///     What an accept decided. There is deliberately no <c>TriggerForbidden</c>: a key that is not allowlisted for the
@@ -76,12 +93,18 @@ public enum IntegrationAcceptOutcome
 ///     for <see cref="IntegrationAcceptOutcome.Accepted" /> and <see cref="IntegrationAcceptOutcome.Duplicate" /> and
 ///     are null otherwise — a rejection tells the caller nothing about rows it does not own.
 /// </summary>
-public sealed record IntegrationAcceptResult(
-    IntegrationAcceptOutcome Outcome,
-    Guid? ExecutionId,
-    Guid? SessionId,
-    IntegrationExecutionStatus? Status,
-    string Message);
+public sealed class IntegrationAcceptResult
+{
+    public required IntegrationAcceptOutcome Outcome { get; init; }
+
+    public required Guid? ExecutionId { get; init; }
+
+    public required Guid? SessionId { get; init; }
+
+    public required IntegrationExecutionStatus? Status { get; init; }
+
+    public required string Message { get; init; }
+}
 
 /// <summary>
 ///     The CLOSED failure vocabulary. Ten values and no more — an eleventh is a bug, not an extension point — and every
@@ -157,10 +180,24 @@ public sealed record IntegrationInvokeRequest(Guid? RequestId, Guid? SessionId, 
 ///     answers after a restart or after the live buffer dropped the run, which is what makes a 410 on the stream a
 ///     detour rather than a dead end.
 /// </summary>
-public sealed record IntegrationExecutionLinks(string Self, string Events);
+public sealed class IntegrationExecutionLinks
+{
+    public required string Self { get; init; }
+
+    public required string Events { get; init; }
+}
 
 /// <summary>The 202 body: enough to poll, and nothing about rows the caller does not own.</summary>
-public sealed record IntegrationAcceptResponse(Guid ExecutionId, Guid SessionId, string Status, IntegrationExecutionLinks Links);
+public sealed class IntegrationAcceptResponse
+{
+    public required Guid ExecutionId { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required IntegrationExecutionLinks Links { get; init; }
+}
 
 /// <summary>
 ///     The status GET body.
@@ -170,26 +207,43 @@ public sealed record IntegrationAcceptResponse(Guid ExecutionId, Guid SessionId,
 ///         <c>0</c> until the built-in output tool ships, which is the true answer rather than a placeholder.
 ///     </para>
 /// </summary>
-public sealed record IntegrationExecutionStatusResponse(
-    Guid ExecutionId,
-    Guid SessionId,
-    string Status,
-    string? FailureCategory,
-    string? FailureSummary,
-    long ReceivedAtUnixMs,
-    long? StartedAtUnixMs,
-    long? EndedAtUnixMs,
-    int OutputCount,
-    IntegrationExecutionLinks Links);
+public sealed class IntegrationExecutionStatusResponse
+{
+    public required Guid ExecutionId { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required string? FailureSummary { get; init; }
+
+    public required long ReceivedAtUnixMs { get; init; }
+
+    public required long? StartedAtUnixMs { get; init; }
+
+    public required long? EndedAtUnixMs { get; init; }
+
+    public required int OutputCount { get; init; }
+
+    public required IntegrationExecutionLinks Links { get; init; }
+}
 
 /// <summary>
 ///     The external session GET body. Deliberately thin: a session id, the trigger NAME an integrator addresses, the
 ///     status, and the two activity counters. It carries no principal, no key prefix and no conversation id — an
 ///     integrator needs none of them, and each would be a fact about the node it should not learn.
 /// </summary>
-public sealed record IntegrationSessionStatusResponse(
-    Guid SessionId,
-    string TriggerName,
-    string Status,
-    int ExecutionCount,
-    long LastActivityUtc);
+public sealed class IntegrationSessionStatusResponse
+{
+    public required Guid SessionId { get; init; }
+
+    public required string TriggerName { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int ExecutionCount { get; init; }
+
+    public required long LastActivityUtc { get; init; }
+}

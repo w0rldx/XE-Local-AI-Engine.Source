@@ -242,13 +242,16 @@ public sealed class IntegrationExecutionEventBufferReadTests
         await AssertStaysAtAsync(reader, expected: 1,
             "A reader that yielded N+1 would advance past N and lose the committed event forever, with no gap to report it.");
 
-        buffer.Publish(new IntegrationStreamEvent(IntegrationStreamEventTypes.ExternalOutput,
-            reserved,
-            executionId,
-            Guid.NewGuid(),
-            OccurredAtUtc: 1,
-            "application/json",
-            Payload: null));
+        buffer.Publish(new IntegrationStreamEvent
+        {
+            Type = IntegrationStreamEventTypes.ExternalOutput,
+            Sequence = reserved,
+            ExecutionId = executionId,
+            SessionId = Guid.NewGuid(),
+            OccurredAtUtc = 1,
+            ContentType = "application/json",
+            Payload = null
+        });
         _ = Append(buffer, executionId, IntegrationStreamEventTypes.ExecutionCompleted);
         await reader.Completion.WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -504,7 +507,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
         buffer.Append(executionId, Guid.NewGuid(), type, contentType: null, payload: null);
 
     private static IntegrationStreamEvent Event(Guid executionId, long sequence, string type) =>
-        new(type, sequence, executionId, Guid.NewGuid(), OccurredAtUtc: 1, ContentType: null, Payload: null);
+        new() { Type = type, Sequence = sequence, ExecutionId = executionId, SessionId = Guid.NewGuid(), OccurredAtUtc = 1, ContentType = null, Payload = null };
 
     private static IntegrationExecutionEventBuffer CreateBuffer(int capacity = 2048,
         int maxBytes = 4 * 1024 * 1024,

@@ -158,13 +158,13 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken);
         if (pending is null)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.NotFound, Record = null };
         }
 
         // No eval since authoring/edit → promotion is not yet provable. (UpdateSuggestedAsync clears EvalResult on edit.)
         if (string.IsNullOrWhiteSpace(pending.EvalResult))
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRequired, Record = null };
         }
 
         PlaybookEvalResult? evalResult;
@@ -175,25 +175,25 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         catch (JsonException)
         {
             // A result we cannot read cannot prove no-regression; require a fresh eval rather than promote blindly.
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRequired, Record = null };
         }
 
         if (evalResult is null)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRequired, Record = null };
         }
 
         // Staleness backstop behind clear-on-edit: the recorded pass must be for the action's current content snapshot.
         if (evalResult.ActionVersionAtEval != pending.Version)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalStale, Record = null };
         }
 
         // Completeness: a run that evaluated only a subset of the enabled golden cases (the per-run cap truncated the
         // set) cannot prove no-regression across the whole suite, so a subset pass never authorizes promotion.
         if (evalResult.GoldenCaseCount < evalResult.GoldenCaseTotal)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalIncomplete, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalIncomplete, Record = null };
         }
 
         // Fingerprint: the recorded eval must reflect the CURRENT behaviour-affecting context. Recompute the fingerprint
@@ -204,7 +204,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (owningAgent is null)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.NotFound, Record = null };
         }
 
         var enabledActions = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
@@ -222,12 +222,12 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             modelIdentity.Token);
         if (!string.Equals(currentFingerprint, evalResult.EvaluationFingerprint, StringComparison.Ordinal))
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalStale, Record = null };
         }
 
         if (!evalResult.Passed)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRegressed, Record = null };
         }
 
         // Absolute quality floor (defense in depth). The eval writer already folds this into Passed, but a
@@ -236,7 +236,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         // authorize a promotion even if Passed was recorded true.
         if (evalResult.CandidatePassCount <= 0)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
+            return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRegressed, Record = null };
         }
 
         // Atomic promote under optimistic-concurrency + cap guards. The validated snapshot's Version is threaded so the
@@ -248,12 +248,12 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         var commit = await _store.PromoteSuggestedIfCurrentAsync(id, pending.Version, _actionOptions.MaxEnabledActions, pending.EvalResult, cancellationToken);
         return commit.Status switch
         {
-            PlaybookPromotionCommitStatus.Committed => new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, commit.Record),
-            PlaybookPromotionCommitStatus.CapReached => new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, Record: null),
+            PlaybookPromotionCommitStatus.Committed => new PlaybookPromotionResult { Status = PlaybookPromotionStatus.Promoted, Record = commit.Record },
+            PlaybookPromotionCommitStatus.CapReached => new PlaybookPromotionResult { Status = PlaybookPromotionStatus.CapReached, Record = null },
             // A version/state mismatch means a concurrent edit/promote changed the row after the eval evidence was
             // validated; surface the existing stale-eval conflict so the operator re-runs the eval on the current snapshot.
-            PlaybookPromotionCommitStatus.VersionConflict => new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null),
-            _ => new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null)
+            PlaybookPromotionCommitStatus.VersionConflict => new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalStale, Record = null },
+            _ => new PlaybookPromotionResult { Status = PlaybookPromotionStatus.NotFound, Record = null }
         };
     }
 

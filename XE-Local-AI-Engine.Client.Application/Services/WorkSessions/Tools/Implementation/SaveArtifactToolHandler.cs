@@ -92,14 +92,17 @@ internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtif
             }
             catch (FormatException)
             {
-                return new WorkSessionToolOutcome($"{ToolName} argument 'base64' was not valid base64.");
+                return new WorkSessionToolOutcome { Message = $"{ToolName} argument 'base64' was not valid base64." };
             }
         }
 
         if (content.Length > Options.MaxArtifactBytes)
         {
-            return new WorkSessionToolOutcome(string.Create(CultureInfo.InvariantCulture,
-                $"{ToolName} content is {content.Length} bytes, over this node's {Options.MaxArtifactBytes}-byte limit. Save a shorter artifact, or split it."));
+            return new WorkSessionToolOutcome
+            {
+                Message = string.Create(CultureInfo.InvariantCulture,
+                $"{ToolName} content is {content.Length} bytes, over this node's {Options.MaxArtifactBytes}-byte limit. Save a shorter artifact, or split it.")
+            };
         }
 
         var artifactId = Guid.NewGuid();
@@ -137,8 +140,11 @@ internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtif
             }
         }
 
-        return new WorkSessionToolOutcome(string.Create(CultureInfo.InvariantCulture, $"Saved artifact '{request.Name}' ({written.ByteCount} bytes)."),
-            result.Sequence,
-            WorkSessionChangeKind.Artifact);
+        return new WorkSessionToolOutcome
+        {
+            Message = string.Create(CultureInfo.InvariantCulture, $"Saved artifact '{request.Name}' ({written.ByteCount} bytes)."),
+            Sequence = result.Sequence,
+            Kind = WorkSessionChangeKind.Artifact
+        };
     }
 }

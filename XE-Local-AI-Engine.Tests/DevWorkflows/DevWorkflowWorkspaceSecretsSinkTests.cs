@@ -109,7 +109,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, sink);
 
-        var session = await provider.PrepareAsync(snapshot, new DevelopmentRepositoryBinding(projectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity));
+        var session = await provider.PrepareAsync(snapshot, new DevelopmentRepositoryBinding { ProjectId = projectId, SelectedFolderId = snapshot.SelectedFolderId!.Value, Alias = "repository", RepositoryRoot = repository, RepositoryIdentityHash = identity });
 
         AssertEx.True(Directory.Exists(session.HostWorktreePath), session.HostWorktreePath);
         AssertEx.Equal(expected: 1, sink.Recorded.Count, "a committed credential must reach the sink, or this test never exercised the blocked call.");

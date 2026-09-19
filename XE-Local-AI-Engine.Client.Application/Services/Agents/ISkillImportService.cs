@@ -110,52 +110,90 @@ public sealed class SkillImportOptions
 ///     The dry-run report the operator approves. <see cref="Token" /> is a short-lived, single-use handle to the
 ///     materialised payload behind this report — the payload phase 2 persists verbatim.
 /// </summary>
-/// <param name="Token">Handle for <see cref="ISkillImportService.CommitAsync" />. Expires; consumed on a successful commit.</param>
-/// <param name="SourceUri">Provenance as it will be persisted: the literal <c>upload</c>, or <c>github:owner/repo</c>.</param>
-/// <param name="Skills">Every skill discovered in the source, ordered by name.</param>
-/// <param name="Warnings">Source-level notes that block nothing (e.g. a frontmatter name that disagreed with its directory).</param>
-public sealed record SkillImportPreview(Guid Token, string SourceUri, IReadOnlyList<SkillImportCandidate> Skills, IReadOnlyList<string> Warnings);
+public sealed class SkillImportPreview
+{
+    /// <summary>Handle for <see cref="ISkillImportService.CommitAsync" />. Expires; consumed on a successful commit.</summary>
+    public required Guid Token { get; init; }
+
+    /// <summary>Provenance as it will be persisted: the literal <c>upload</c>, or <c>github:owner/repo</c>.</summary>
+    public required string SourceUri { get; init; }
+
+    /// <summary>Every skill discovered in the source, ordered by name.</summary>
+    public required IReadOnlyList<SkillImportCandidate> Skills { get; init; }
+
+    /// <summary>Source-level notes that block nothing (e.g. a frontmatter name that disagreed with its directory).</summary>
+    public required IReadOnlyList<string> Warnings { get; init; }
+}
 
 /// <summary>
 ///     One discovered skill, exactly as it would be written. <see cref="Body" /> and <see cref="Resources" /> are
 ///     carried so the operator reviews the real content and so phase 2 has nothing left to re-derive.
 /// </summary>
-/// <param name="Name">The skill name that will be persisted — the containing directory name when the source had one.</param>
-/// <param name="RefusedScripts">Script files found and dropped. Listed because an operator should see what a skill expected to run.</param>
-/// <param name="ConflictsWithExistingSkill">A skill with this name (NOCASE) is already in the library; the commit's conflict resolution decides.</param>
-/// <param name="Problems">Non-empty means this skill cannot be imported at all. Messages never echo untrusted content.</param>
-public sealed record SkillImportCandidate(
-    string Name,
-    string Description,
-    string Body,
-    string? License,
-    string? Compatibility,
-    string? AllowedTools,
-    IReadOnlyDictionary<string, string>? Metadata,
-    int BodySizeBytes,
-    int BodyLineCount,
-    IReadOnlyList<SkillImportResource> Resources,
-    IReadOnlyList<string> RefusedScripts,
-    bool ConflictsWithExistingSkill,
-    IReadOnlyList<string> Problems)
+public sealed class SkillImportCandidate
 {
+    /// <summary>The skill name that will be persisted — the containing directory name when the source had one.</summary>
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string Body { get; init; }
+
+    public required string? License { get; init; }
+
+    public required string? Compatibility { get; init; }
+
+    public required string? AllowedTools { get; init; }
+
+    public required IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    public required int BodySizeBytes { get; init; }
+
+    public required int BodyLineCount { get; init; }
+
+    public required IReadOnlyList<SkillImportResource> Resources { get; init; }
+
+    /// <summary>Script files found and dropped. Listed because an operator should see what a skill expected to run.</summary>
+    public required IReadOnlyList<string> RefusedScripts { get; init; }
+
+    /// <summary>A skill with this name (NOCASE) is already in the library; the commit's conflict resolution decides.</summary>
+    public required bool ConflictsWithExistingSkill { get; init; }
+
+    /// <summary>Non-empty means this skill cannot be imported at all. Messages never echo untrusted content.</summary>
+    public required IReadOnlyList<string> Problems { get; init; }
+
     /// <summary>True when nothing blocks this skill from being persisted.</summary>
     public bool CanImport => Problems.Count == 0;
 }
 
 /// <summary>One bundled file that passed the extension allowlist, the name charset guard and UTF-8 validation.</summary>
-public sealed record SkillImportResource(string Name, string Description, string MediaType, string Content, int SizeBytes);
+public sealed class SkillImportResource
+{
+    public required string Name { get; init; }
 
-/// <summary>Phase 2 input: which skills from <paramref name="Token" />'s report to write, and the operator's explicit consent.</summary>
-/// <param name="Acknowledged">
-///     Must be <c>true</c>. An import that is not explicitly acknowledged fails and writes nothing — the operator is
-///     confirming they read a preview of third-party instructions that will run with their agent's tool access.
-/// </param>
-public sealed record SkillImportCommitRequest(
-    Guid Token,
-    IReadOnlyList<string> SkillNames,
-    SkillImportConflictResolution ConflictResolution = SkillImportConflictResolution.Skip,
-    bool Acknowledged = false);
+    public required string Description { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string Content { get; init; }
+
+    public required int SizeBytes { get; init; }
+}
+
+/// <summary>Phase 2 input: which skills from <see cref="Token" />'s report to write, and the operator's explicit consent.</summary>
+public sealed class SkillImportCommitRequest
+{
+    public required Guid Token { get; init; }
+
+    public required IReadOnlyList<string> SkillNames { get; init; }
+
+    public SkillImportConflictResolution ConflictResolution { get; init; }
+
+    /// <summary>
+    ///     Must be <c>true</c>. An import that is not explicitly acknowledged fails and writes nothing — the operator is
+    ///     confirming they read a preview of third-party instructions that will run with their agent's tool access.
+    /// </summary>
+    public bool Acknowledged { get; init; }
+}
 
 /// <summary>What to do when the library already holds a skill with the imported name.</summary>
 public enum SkillImportConflictResolution
@@ -168,10 +206,20 @@ public enum SkillImportConflictResolution
 }
 
 /// <summary>Per-skill outcome of a commit.</summary>
-public sealed record SkillImportResult(IReadOnlyList<SkillImportOutcome> Outcomes);
+public sealed class SkillImportResult
+{
+    public required IReadOnlyList<SkillImportOutcome> Outcomes { get; init; }
+}
 
-/// <summary>What happened to one selected skill. <paramref name="Reason" /> is operator-safe and echoes no imported content.</summary>
-public sealed record SkillImportOutcome(string Name, SkillImportStatus Status, string? Reason = null);
+/// <summary>What happened to one selected skill. <see cref="Reason" /> is operator-safe and echoes no imported content.</summary>
+public sealed class SkillImportOutcome
+{
+    public required string Name { get; init; }
+
+    public required SkillImportStatus Status { get; init; }
+
+    public string? Reason { get; init; }
+}
 
 /// <summary>Terminal state of one skill in a commit.</summary>
 public enum SkillImportStatus

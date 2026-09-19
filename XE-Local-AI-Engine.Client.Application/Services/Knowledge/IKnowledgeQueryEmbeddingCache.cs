@@ -25,4 +25,9 @@ public interface IKnowledgeQueryEmbeddingCache
 ///     A cached transformed vector plus its exact canonical model/algorithm/version/width identity. The lookup key uses
 ///     the policy family because native width is not known until after the provider's first generation.
 /// </summary>
-public sealed record KnowledgeQueryEmbeddingCacheEntry(ReadOnlyMemory<float> Vector, string VectorIdentity);
+public sealed class KnowledgeQueryEmbeddingCacheEntry
+{
+    public required ReadOnlyMemory<float> Vector { get; init; }
+
+    public required string VectorIdentity { get; init; }
+}

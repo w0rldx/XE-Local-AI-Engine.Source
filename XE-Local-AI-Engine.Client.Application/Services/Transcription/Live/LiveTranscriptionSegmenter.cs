@@ -5,21 +5,39 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>One durable piece of transcript. Times are milliseconds from the start of the session's audio.</summary>
-/// <param name="Channel">Which lane produced it.</param>
-/// <param name="StartMs">Segment start in session audio time.</param>
-/// <param name="EndMs">Segment end in session audio time.</param>
-/// <param name="Text">The trimmed text.</param>
-/// <param name="Confidence">The model's confidence, passed through untouched from the provider.</param>
-public sealed record LiveCommit(TranscriptChannel Channel, long StartMs, long EndMs, string Text, double? Confidence);
+public sealed class LiveCommit
+{
+    /// <summary>Which lane produced it.</summary>
+    public required TranscriptChannel Channel { get; init; }
+
+    /// <summary>Segment start in session audio time.</summary>
+    public required long StartMs { get; init; }
+
+    /// <summary>Segment end in session audio time.</summary>
+    public required long EndMs { get; init; }
+
+    /// <summary>The trimmed text.</summary>
+    public required string Text { get; init; }
+
+    /// <summary>The model's confidence, passed through untouched from the provider.</summary>
+    public required double? Confidence { get; init; }
+}
 
 /// <summary>What one call into a lane produced.</summary>
-/// <param name="Partial">The provisional text after this call: the returned segments that are not yet durable.</param>
-/// <param name="Commits">The segments that became durable during this call, in commit order.</param>
-/// <param name="DetectedLanguage">
-///     The language code this call learned, or <see langword="null" /> when it learned none. It is reported once,
-///     on the call that first sees it; <see cref="LiveTranscriptionSegmenter.DetectedLanguageCode" /> holds it after.
-/// </param>
-public sealed record LiveTick(string Partial, IReadOnlyList<LiveCommit> Commits, string? DetectedLanguage);
+public sealed class LiveTick
+{
+    /// <summary>The provisional text after this call: the returned segments that are not yet durable.</summary>
+    public required string Partial { get; init; }
+
+    /// <summary>The segments that became durable during this call, in commit order.</summary>
+    public required IReadOnlyList<LiveCommit> Commits { get; init; }
+
+    /// <summary>
+    ///     The language code this call learned, or <see langword="null" /> when it learned none. It is reported once,
+    ///     on the call that first sees it; <see cref="LiveTranscriptionSegmenter.DetectedLanguageCode" /> holds it after.
+    /// </summary>
+    public required string? DetectedLanguage { get; init; }
+}
 
 /// <summary>
 ///     A lane stopped making progress: repeated submissions at the same boundary neither committed anything nor
@@ -193,7 +211,7 @@ public sealed class LiveTranscriptionSegmenter
             remaining = remaining[takeBytes..];
         }
 
-        return new LiveTick(_partial, commits, learnedLanguage);
+        return new LiveTick { Partial = _partial, Commits = commits, DetectedLanguage = learnedLanguage };
     }
 
     /// <summary>Finalizes the lane: one last submission with the tail guard suspended, so the retained audio commits.</summary>
@@ -207,7 +225,7 @@ public sealed class LiveTranscriptionSegmenter
     {
         var commits = new List<LiveCommit>();
         var learnedLanguage = await SubmitAsync(atCap: false, flush: true, commits, cancellationToken);
-        return new LiveTick(_partial, commits, learnedLanguage);
+        return new LiveTick { Partial = _partial, Commits = commits, DetectedLanguage = learnedLanguage };
     }
 
     private async ValueTask<string?> SubmitAsync(bool atCap, bool flush, List<LiveCommit> commits, CancellationToken cancellationToken)
@@ -312,7 +330,7 @@ public sealed class LiveTranscriptionSegmenter
                 continue;
             }
 
-            commits.Add(new LiveCommit(_channel, segment.StartMs, segment.EndMs, segment.Text, segment.Confidence));
+            commits.Add(new LiveCommit { Channel = _channel, StartMs = segment.StartMs, EndMs = segment.EndMs, Text = segment.Text, Confidence = segment.Confidence });
             watermarkMs = Math.Max(watermarkMs, segment.EndMs);
             committedEndMs = watermarkMs;
         }

@@ -32,4 +32,11 @@ public enum TutorialStatus
 /// <summary>
 ///     One recorded tour outcome: which tour, how it ended, and when.
 /// </summary>
-public sealed record TutorialStateEntry(string Key, TutorialStatus Status, DateTime AtUtc);
+public sealed class TutorialStateEntry
+{
+    public required string Key { get; init; }
+
+    public required TutorialStatus Status { get; init; }
+
+    public required DateTime AtUtc { get; init; }
+}

@@ -49,8 +49,17 @@ public interface IContextExpansionService
 public readonly record struct KnowledgeNeighborAnchor(Guid DocumentId, int ChunkIndex);
 
 /// <summary>A chunk returned by context expansion, in document order.</summary>
-/// <param name="ChunkId">Stable chunk identifier.</param>
-/// <param name="ChunkIndex">Global order of this chunk within the document.</param>
-/// <param name="Content">Plaintext chunk content.</param>
-/// <param name="HeadingPath">The "H1 &gt; H2" heading trail, or <see langword="null" /> when there is none.</param>
-public sealed record KnowledgeNeighborChunk(Guid ChunkId, int ChunkIndex, string Content, string? HeadingPath);
+public sealed class KnowledgeNeighborChunk
+{
+    /// <summary>Stable chunk identifier.</summary>
+    public required Guid ChunkId { get; init; }
+
+    /// <summary>Global order of this chunk within the document.</summary>
+    public required int ChunkIndex { get; init; }
+
+    /// <summary>Plaintext chunk content.</summary>
+    public required string Content { get; init; }
+
+    /// <summary>The "H1 &gt; H2" heading trail, or <see langword="null" /> when there is none.</summary>
+    public required string? HeadingPath { get; init; }
+}

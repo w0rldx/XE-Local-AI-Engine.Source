@@ -125,14 +125,17 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
     {
         var documentId = Guid.NewGuid();
         var content = Encoding.UTF8.GetBytes(text);
-        var result = await store.AddAsync(new KnowledgeDocumentInput(documentId,
-                "notes.txt",
-                "text/plain",
-                ".txt",
-                content.Length,
-                Convert.ToHexString(SHA256.HashData(content)),
-                content,
-                "nomic-embed-text"),
+        var result = await store.AddAsync(new KnowledgeDocumentInput
+            {
+                DocumentId = documentId,
+                OriginalFileName = "notes.txt",
+                MimeType = "text/plain",
+                Extension = ".txt",
+                SizeBytes = content.Length,
+                ContentHash = Convert.ToHexString(SHA256.HashData(content)),
+                Content = content,
+                EmbeddingModel = "nomic-embed-text"
+            },
             CancellationToken.None);
 
         AssertEx.True(result.WasInserted, "Precondition: the control document must be inserted with its blob.");

@@ -19,14 +19,37 @@ public enum ToolInvocationOutcomeKind
 }
 
 /// <summary>One invocation's verdict. <see cref="Reason" /> is structural and never echoes an argument value.</summary>
-public sealed record ToolInvocationOutcome(ToolInvocationOutcomeKind Kind, string? Result, string Reason);
+public sealed class ToolInvocationOutcome
+{
+    public required ToolInvocationOutcomeKind Kind { get; init; }
+
+    public required string? Result { get; init; }
+
+    public required string Reason { get; init; }
+}
 
 /// <summary>A tool this service would actually invoke, with the raw JSON-schema text it validates against.</summary>
-public sealed record InvocableToolDescriptor(string Name, string Description, string ParameterSchema);
+public sealed class InvocableToolDescriptor
+{
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string ParameterSchema { get; init; }
+}
 
 /// <summary>The calling node run, for logging and correlation.</summary>
-/// <param name="Timeout">Hard budget for the whole call, including argument validation.</param>
-public sealed record ToolInvocationContext(Guid RunId, Guid NodeRunId, string NodeKey, TimeSpan Timeout);
+public sealed class ToolInvocationContext
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    /// <summary>Hard budget for the whole call, including argument validation.</summary>
+    public required TimeSpan Timeout { get; init; }
+}
 
 /// <summary>
 ///     Invokes ONE named engine tool in-process, enforcing the whole invocation envelope inside itself so no caller can

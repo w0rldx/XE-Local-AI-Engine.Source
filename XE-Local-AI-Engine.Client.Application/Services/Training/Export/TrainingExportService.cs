@@ -118,8 +118,11 @@ public sealed class TrainingExportService : ITrainingExportService
         ArgumentNullException.ThrowIfNull(request);
         if (request.Kind == TrainingArtifactKind.HfAdapterDir)
         {
-            return new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
-                "The trainer's own adapter directory is not an export target.");
+            return new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.RunNotExportable,
+                Reason = "The trainer's own adapter directory is not an export target."
+            };
         }
 
         var quantization = request.Kind == TrainingArtifactKind.MergedGguf
@@ -127,14 +130,20 @@ public sealed class TrainingExportService : ITrainingExportService
             : TrainingExportQuantizations.Float16;
         if (quantization is null)
         {
-            return new TrainingExportStart(TrainingExportStartOutcome.UnsupportedQuantization,
-                "The requested quantization is not supported by this export.");
+            return new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.UnsupportedQuantization,
+                Reason = "The requested quantization is not supported by this export."
+            };
         }
 
         if (_runtime.ResolveInterpreterPath() is not { } interpreter || _runtime.GetStatus().Phase != TrainingRuntimePhase.Ready)
         {
-            return new TrainingExportStart(TrainingExportStartOutcome.RuntimeUnavailable,
-                "The Python training runtime is not installed.");
+            return new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.RuntimeUnavailable,
+                Reason = "The Python training runtime is not installed."
+            };
         }
 
         var (plan, planRefusal) = await BuildPlanAsync(runId, request.Kind, quantization, cancellationToken);
@@ -148,7 +157,7 @@ public sealed class TrainingExportService : ITrainingExportService
         var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export);
         if (activity is null)
         {
-            return new TrainingExportStart(TrainingExportStartOutcome.Busy, "Training or another export is already running.");
+            return new TrainingExportStart { Outcome = TrainingExportStartOutcome.Busy, Reason = "Training or another export is already running." };
         }
 
         ILlamaServerRuntimeMutationLease? lease = null;
@@ -165,14 +174,17 @@ public sealed class TrainingExportService : ITrainingExportService
         if (lease is null)
         {
             activity.Dispose();
-            return new TrainingExportStart(TrainingExportStartOutcome.Busy,
-                "A model is loaded. Eject it and try the export again.");
+            return new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.Busy,
+                Reason = "A model is loaded. Eject it and try the export again."
+            };
         }
 
         // Detached on purpose: the endpoint answers 202 and the operator follows the export on the run hub. The
         // request's own token is NOT flowed in — it dies with the HTTP response, which would kill the export.
         InFlight = Task.Run(() => RunPipelineAsync(plan!, interpreter, activity, lease), CancellationToken.None);
-        return new TrainingExportStart(TrainingExportStartOutcome.Accepted);
+        return new TrainingExportStart { Outcome = TrainingExportStartOutcome.Accepted };
     }
 
     public async Task<IReadOnlyList<TrainingArtifactRecord>> ListArtifactsAsync(Guid runId, CancellationToken cancellationToken = default)
@@ -276,36 +288,48 @@ public sealed class TrainingExportService : ITrainingExportService
         var run = await store.GetAsync(runId, cancellationToken);
         if (run is null || run.Status != TrainingRunStatus.Succeeded)
         {
-            return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
-                "Only a run that finished successfully can be exported."));
+            return new PlanOrRefusal(Value: null, new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.RunNotExportable,
+                Reason = "Only a run that finished successfully can be exported."
+            });
         }
 
         var artifacts = await store.ListArtifactsAsync(runId, cancellationToken);
         if (artifacts.FirstOrDefault(item => item.Kind == TrainingArtifactKind.HfAdapterDir) is not { } adapter
             || !Directory.Exists(adapter.Path))
         {
-            return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
-                "The run has no staged adapter to export."));
+            return new PlanOrRefusal(Value: null, new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.RunNotExportable,
+                Reason = "The run has no staged adapter to export."
+            });
         }
 
         if (artifacts.Any(item => item.Kind == kind && item.CommittedModelName is not null))
         {
-            return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
-                "This export was already promoted. Delete the registered model first."));
+            return new PlanOrRefusal(Value: null, new TrainingExportStart
+            {
+                Outcome = TrainingExportStartOutcome.RunNotExportable,
+                Reason = "This export was already promoted. Delete the registered model first."
+            });
         }
 
         var staged = _workspace.StagedDirectory(runId);
         var fileName = kind == TrainingArtifactKind.MergedGguf
             ? TrainingExportPaths.MergedGgufName(quantization)
             : TrainingExportPaths.AdapterGgufName();
-        return new PlanOrRefusal(new ExportPlan(runId,
-                kind,
-                quantization,
-                adapter.Path,
-                BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
-                staged,
-                Path.Combine(staged, fileName),
-                run.LinkedInstalledModelName),
+        return new PlanOrRefusal(new ExportPlan
+        {
+            RunId = runId,
+            Kind = kind,
+            Quantization = quantization,
+            AdapterDirectory = adapter.Path,
+            BaseCheckpointDirectory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, run.BaseArtifactId),
+            StagedDirectory = staged,
+            OutputPath = Path.Combine(staged, fileName),
+            LinkedInstalledModelName = run.LinkedInstalledModelName
+        },
             Refusal: null);
     }
 
@@ -351,7 +375,7 @@ public sealed class TrainingExportService : ITrainingExportService
             }
 
             Publish(plan.RunId, "smoke", null);
-            var view = new TrainingArtifactRecordView(plan.OutputPath, await ResolveBaseModelPathAsync(scope, plan, cancellationToken));
+            var view = new TrainingArtifactRecordView { ArtifactPath = plan.OutputPath, BaseModelFilePath = await ResolveBaseModelPathAsync(scope, plan, cancellationToken) };
             var result = await _smokeGate.RunAsync(view, cancellationToken);
             _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, CancellationToken.None);
             Publish(plan.RunId, result.State == TrainingArtifactSmokeState.Passed ? "ready" : "smokeFailed", result.Reason);
@@ -626,7 +650,7 @@ public sealed class TrainingExportService : ITrainingExportService
 
         if (artifact.Kind != TrainingArtifactKind.AdapterGguf)
         {
-            return new TrainingArtifactRecordView(artifact.Path, BaseModelFilePath: null);
+            return new TrainingArtifactRecordView { ArtifactPath = artifact.Path, BaseModelFilePath = null };
         }
 
         var run = await store.GetAsync(artifact.RunId, cancellationToken);
@@ -639,7 +663,7 @@ public sealed class TrainingExportService : ITrainingExportService
         var models = scope.ServiceProvider.GetRequiredService<IGgufModelStore>();
         var basePath = await models.ResolveModelFilePathAsync(baseModel, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The installed base model this adapter applies to is no longer available.");
-        return new TrainingArtifactRecordView(artifact.Path, basePath);
+        return new TrainingArtifactRecordView { ArtifactPath = artifact.Path, BaseModelFilePath = basePath };
     }
 
     private async Task<string> WriteExportJobAsync(ExportPlan plan, CancellationToken cancellationToken)
@@ -683,7 +707,7 @@ public sealed class TrainingExportService : ITrainingExportService
     }
 
     private void Publish(Guid runId, string phase, string? message) =>
-        _ = _events.Append(runId, TrainingRunEventKind.Export, new TrainingRunPayload(Phase: phase, Message: message));
+        _ = _events.Append(runId, TrainingRunEventKind.Export, new TrainingRunPayload { Phase = phase, Message = message });
 
     private static string Describe(Exception exception) =>
         exception switch
@@ -714,15 +738,24 @@ public sealed class TrainingExportService : ITrainingExportService
     }
 
     /// <summary>Everything the pipeline needs, resolved once before any exclusivity is taken.</summary>
-    private sealed record ExportPlan(
-        Guid RunId,
-        TrainingArtifactKind Kind,
-        string Quantization,
-        string AdapterDirectory,
-        string BaseCheckpointDirectory,
-        string StagedDirectory,
-        string OutputPath,
-        string? LinkedInstalledModelName);
+    private sealed record ExportPlan
+    {
+        public required Guid RunId { get; init; }
+
+        public required TrainingArtifactKind Kind { get; init; }
+
+        public required string Quantization { get; init; }
+
+        public required string AdapterDirectory { get; init; }
+
+        public required string BaseCheckpointDirectory { get; init; }
+
+        public required string StagedDirectory { get; init; }
+
+        public required string OutputPath { get; init; }
+
+        public required string? LinkedInstalledModelName { get; init; }
+    }
 
     // The outcome of planning an export: exactly one side is set — a plan the pipeline can run, or the refusal to
     // return to the caller. A refusal happens before any exclusivity is taken, so it has nothing to clean up.

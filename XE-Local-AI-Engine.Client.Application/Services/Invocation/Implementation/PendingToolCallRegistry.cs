@@ -26,8 +26,13 @@ public sealed class PendingToolCallRegistry
 ///     A tool call awaiting an out-of-stream answer: first the approval decision (when the call is approval-gated),
 ///     then the tool result itself.
 /// </summary>
-public sealed record PendingToolCall(
-    Guid InvocationId,
-    DateTimeOffset CreatedAt,
-    TaskCompletionSource<bool> ApprovalCompletion,
-    TaskCompletionSource<ToolCallResultEvent> ResultCompletion);
+public sealed class PendingToolCall
+{
+    public required Guid InvocationId { get; init; }
+
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    public required TaskCompletionSource<bool> ApprovalCompletion { get; init; }
+
+    public required TaskCompletionSource<ToolCallResultEvent> ResultCompletion { get; init; }
+}

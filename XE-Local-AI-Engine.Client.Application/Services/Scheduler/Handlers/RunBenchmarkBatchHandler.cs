@@ -133,24 +133,27 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
     public string TemplateId => TemplateIdValue;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateIdValue,
-        "Run a benchmark matrix",
-        "Enqueues a model × KV-cache matrix against one benchmark project on a schedule. Skips the fire when the project already has work queued.",
-        ParameterSchemaJson,
-        DefaultParametersJson,
-        [ScheduleKind.Cron, ScheduleKind.OneShot, ScheduleKind.SimpleInterval, ScheduleKind.Manual],
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new()
+    {
+        TemplateId = TemplateIdValue,
+        DisplayName = "Run a benchmark matrix",
+        Description = "Enqueues a model × KV-cache matrix against one benchmark project on a schedule. Skips the fire when the project already has work queued.",
+        ParameterSchema = ParameterSchemaJson,
+        DefaultParameters = DefaultParametersJson,
+        SupportedScheduleKinds = [ScheduleKind.Cron, ScheduleKind.OneShot, ScheduleKind.SimpleInterval, ScheduleKind.Manual],
         // An overnight matrix is the point, so Cron is pre-selected; OneShot covers "tonight only".
-        ScheduleKind.Cron,
+        DefaultScheduleKind = ScheduleKind.Cron,
         // A matrix missed while the node was off must not fire the moment it comes back — it would land in the middle of
         // whatever the operator is doing on the GPU. The next scheduled slot is soon enough.
-        SchedulerMisfirePolicy.SkipMissed,
+        DefaultMisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
         // No template default: the fire only ENQUEUES, so it is bounded by its own per-cell freeze budget rather than by
         // the length of the runs it queues. Leaving this blank keeps the node-level ceiling in charge.
-        DefaultMaxRuntimeSeconds: null,
-        AllowManualTrigger: true,
+        DefaultMaxRuntimeSeconds = null,
+        AllowManualTrigger = true,
         // Locked decision: an AI agent may schedule a saved-agent run; it may not schedule GPU-hours.
-        AllowAgentCreation: false,
-        HistoryDetailLevel.Detailed);
+        AllowAgentCreation = false,
+        HistoryDetailLevel = HistoryDetailLevel.Detailed
+    };
 
     public async Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {
@@ -227,12 +230,15 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
             try
             {
-                var created = await freezeService.StartAsync(new BenchmarkRunStartRequest(parameters.ProjectId,
-                                                     modelName,
-                                                     expectedVersion,
-                                                     kvCacheType,
-                                                     parameters.RepeatCount,
-                                                     parameters.Warmup), freezeScope, cancellationToken);
+                var created = await freezeService.StartAsync(new BenchmarkRunStartRequest
+                {
+                    ProjectId = parameters.ProjectId,
+                    PrimaryModelName = modelName,
+                    ExpectedProjectVersion = expectedVersion,
+                    KvCacheType = kvCacheType,
+                    RepeatCount = parameters.RepeatCount,
+                    Warmup = parameters.Warmup
+                }, freezeScope, cancellationToken);
                 expectedVersion += created.Count;
                 runsCreated += created.Count;
                 cellsStarted++;
@@ -391,15 +397,20 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
             throw new ScheduledJobValidationException($"The scheduled matrix expands to {cells.Length.ToString(CultureInfo.InvariantCulture)} cells, past the {MaxCells}-cell ceiling.");
         }
 
-        return new RunBenchmarkBatchParameters(projectId, cells, repeatCount, dto.Warmup ?? false);
+        return new RunBenchmarkBatchParameters { ProjectId = projectId, Cells = cells, RepeatCount = repeatCount, Warmup = dto.Warmup ?? false };
     }
 
     /// <summary>Validated, code-facing parameters for one <c>run-benchmark-batch</c> fire, matrix already expanded.</summary>
-    private sealed record RunBenchmarkBatchParameters(
-        Guid ProjectId,
-        IReadOnlyList<(string Model, string? KvCacheType)> Cells,
-        int RepeatCount,
-        bool Warmup);
+    private sealed record RunBenchmarkBatchParameters
+    {
+        public required Guid ProjectId { get; init; }
+
+        public required IReadOnlyList<(string Model, string? KvCacheType)> Cells { get; init; }
+
+        public required int RepeatCount { get; init; }
+
+        public required bool Warmup { get; init; }
+    }
 
     /// <summary>Decrypted-parameter wire shape for the <c>run-benchmark-batch</c> template.</summary>
     private sealed record RunBenchmarkBatchParametersDto

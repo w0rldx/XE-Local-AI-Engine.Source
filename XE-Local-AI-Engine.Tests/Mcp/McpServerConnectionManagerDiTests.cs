@@ -100,7 +100,7 @@ public sealed class McpServerConnectionManagerDiTests
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity("owner", "node"));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
         }
     }
 }

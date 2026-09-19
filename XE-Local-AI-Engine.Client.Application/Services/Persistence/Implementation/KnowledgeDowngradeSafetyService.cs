@@ -42,7 +42,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         await connection.OpenAsync(cancellationToken);
         if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken))
         {
-            return new KnowledgeDowngradePreflightResult(false, true, 0, 0, 0, []);
+            return new KnowledgeDowngradePreflightResult { CollectionMigrationApplied = false, IsCompatible = true, ConflictGroupCount = 0, ConflictingDocumentCount = 0, MinimumDocumentsToRemove = 0, Conflicts = [] };
         }
 
         return await ReadConflictsAsync(connection, cancellationToken);
@@ -74,7 +74,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
             var preflight = await PreflightArtifactAsync(destinationPath, cancellationToken);
             var bytes = new FileInfo(destinationPath).Length;
             var sha256 = await HashFileAsync(destinationPath, cancellationToken);
-            return new KnowledgeDowngradeExportResult(destinationPath, bytes, sha256, preflight);
+            return new KnowledgeDowngradeExportResult { ArtifactPath = destinationPath, ArtifactBytes = bytes, ArtifactSha256 = sha256, Preflight = preflight };
         }
         catch
         {
@@ -90,7 +90,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         await connection.OpenAsync(cancellationToken);
         if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken))
         {
-            return new KnowledgeDowngradePreflightResult(false, true, 0, 0, 0, []);
+            return new KnowledgeDowngradePreflightResult { CollectionMigrationApplied = false, IsCompatible = true, ConflictGroupCount = 0, ConflictingDocumentCount = 0, MinimumDocumentsToRemove = 0, Conflicts = [] };
         }
 
         return await ReadConflictsAsync(connection, cancellationToken);
@@ -153,18 +153,21 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         }
 
         var conflictingDocumentCount = groups.Sum(static group => group.DocumentIdentifiers.Count);
-        return new KnowledgeDowngradePreflightResult(true,
-            groups.Count == 0,
-            groups.Count,
-            conflictingDocumentCount,
-            conflictingDocumentCount - groups.Count,
-            groups);
+        return new KnowledgeDowngradePreflightResult
+        {
+            CollectionMigrationApplied = true,
+            IsCompatible = groups.Count == 0,
+            ConflictGroupCount = groups.Count,
+            ConflictingDocumentCount = conflictingDocumentCount,
+            MinimumDocumentsToRemove = conflictingDocumentCount - groups.Count,
+            Conflicts = groups
+        };
     }
 
     private static void AddConflict(List<KnowledgeDowngradeConflict> groups, IReadOnlyList<string> documentIdentifiers)
     {
         var conflictId = string.Create(CultureInfo.InvariantCulture, $"conflict-{groups.Count + 1:D6}");
-        groups.Add(new KnowledgeDowngradeConflict(conflictId, documentIdentifiers));
+        groups.Add(new KnowledgeDowngradeConflict { ConflictId = conflictId, DocumentIdentifiers = documentIdentifiers });
     }
 
     private static string ToOpaqueDocumentIdentifier(string documentId)

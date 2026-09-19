@@ -275,11 +275,14 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         };
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository) =>
-        new(snapshot.ProjectId,
-            snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
-            "repository",
-            repository,
-            snapshot.RepositoryIdentityHash);
+        new()
+        {
+            ProjectId = snapshot.ProjectId,
+            SelectedFolderId = snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
+            Alias = "repository",
+            RepositoryRoot = repository,
+            RepositoryIdentityHash = snapshot.RepositoryIdentityHash
+        };
 
     /// <summary>
     ///     Records what the provider ASKED for. The warm restore's properties are properties of create requests and of
@@ -326,9 +329,12 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
                 WorkingRoot = root,
                 Mounts =
                 [
-                    .. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding(Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
-                        Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
-                        mount.ReadOnly))
+                    .. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding
+                    {
+                        HostPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
+                        SandboxPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
+                        ReadOnly = mount.ReadOnly
+                    })
                 ]
             });
         }

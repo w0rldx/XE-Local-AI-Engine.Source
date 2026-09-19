@@ -143,7 +143,7 @@ public sealed class LocalModelProxyInboundAuthTests
         apiKeyService.GetAsync(Arg.Any<CancellationToken>())
                      .Returns(storedKey is null
                          ? (LocalModelProxyApiKeyView?)null
-                         : new LocalModelProxyApiKeyView("xeprx_valid", DateTimeOffset.UnixEpoch, LastUsedAt: null));
+                         : new LocalModelProxyApiKeyView { Prefix = "xeprx_valid", CreatedAt = DateTimeOffset.UnixEpoch, LastUsedAt = null });
 
         return new TestServerWebAppFactory
         {

@@ -24,9 +24,15 @@ public interface IPlaybookAnalysisAgent
 ///     deduped, and shown with provenance. <see cref="SourceFeedbackIds" /> is the evidence the service validates
 ///     against the aggregate it handed the agent (an action citing ids the aggregate does not contain is rejected).
 /// </summary>
-public sealed record ProposedPlaybookAction(
-    string Behavior,
-    string? TriggerCondition,
-    string? Scope,
-    IReadOnlyList<Guid> SourceFeedbackIds,
-    double Confidence);
+public sealed class ProposedPlaybookAction
+{
+    public required string Behavior { get; init; }
+
+    public required string? TriggerCondition { get; init; }
+
+    public required string? Scope { get; init; }
+
+    public required IReadOnlyList<Guid> SourceFeedbackIds { get; init; }
+
+    public required double Confidence { get; init; }
+}

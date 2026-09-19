@@ -32,8 +32,8 @@ public sealed class SandboxIsolatedChainTests
         {
             ReadOnlyTrees =
             [
-                new SandboxIsolatedTreeBinding(FileDescriptor: 30, "/opt/xe/venv"),
-                new SandboxIsolatedTreeBinding(FileDescriptor: 31, "/opt/xe/cpython")
+                new SandboxIsolatedTreeBinding { FileDescriptor = 30, Path = "/opt/xe/venv" },
+                new SandboxIsolatedTreeBinding { FileDescriptor = 31, Path = "/opt/xe/cpython" }
             ]
         };
 
@@ -59,8 +59,8 @@ public sealed class SandboxIsolatedChainTests
         {
             UsrMergeEntries =
             [
-                new SandboxUsrMergeEntry("/bin", SandboxUsrMergeAction.ReadOnlyBind, Target: null),
-                new SandboxUsrMergeEntry("/lib", SandboxUsrMergeAction.ReadOnlyBind, Target: null)
+                new SandboxUsrMergeEntry { Path = "/bin", Action = SandboxUsrMergeAction.ReadOnlyBind, Target = null },
+                new SandboxUsrMergeEntry { Path = "/lib", Action = SandboxUsrMergeAction.ReadOnlyBind, Target = null }
             ]
         };
 
@@ -154,7 +154,7 @@ public sealed class SandboxIsolatedChainTests
         // would produce a jail whose system tree is not the one the rule describes.
         AssertEx.Throws<SandboxIsolationUnavailableException>(() => SandboxUsrMergeLayout.Resolve(path =>
             string.Equals(path, "/bin", StringComparison.Ordinal)
-                ? new SandboxPathShape(Exists: true, IsSymbolicLink: true, IsDirectory: true, "/opt/bin")
+                ? new SandboxPathShape { Exists = true, IsSymbolicLink = true, IsDirectory = true, CanonicalPath = "/opt/bin" }
                 : Absent()));
 
         await Task.CompletedTask;
@@ -210,7 +210,7 @@ public sealed class SandboxIsolatedChainTests
 
     private static SandboxPathShape Absent()
     {
-        return new SandboxPathShape(Exists: false, IsSymbolicLink: false, IsDirectory: false, CanonicalPath: null);
+        return new SandboxPathShape { Exists = false, IsSymbolicLink = false, IsDirectory = false, CanonicalPath = null };
     }
 
     private static SandboxIsolatedChainInputs UsrMergedInputs()
@@ -226,8 +226,8 @@ public sealed class SandboxIsolatedChainTests
             GroupId = 1000,
             UsrMergeEntries =
             [
-                new SandboxUsrMergeEntry("/bin", SandboxUsrMergeAction.Symlink, "usr/bin"),
-                new SandboxUsrMergeEntry("/lib64", SandboxUsrMergeAction.Symlink, "usr/lib64")
+                new SandboxUsrMergeEntry { Path = "/bin", Action = SandboxUsrMergeAction.Symlink, Target = "usr/bin" },
+                new SandboxUsrMergeEntry { Path = "/lib64", Action = SandboxUsrMergeAction.Symlink, Target = "usr/lib64" }
             ],
             PasswdDescriptor = 10,
             GroupDescriptor = 11,

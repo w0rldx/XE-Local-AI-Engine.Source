@@ -117,8 +117,8 @@ public sealed class DatasetGenerationQueueTests
     {
         var datasetId = Guid.NewGuid();
         var buffer = new DatasetGenerationEventBuffer(Options.Create(new DatasetGenerationEventBufferOptions()));
-        _ = buffer.Append(datasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload(State: "Generating"));
-        var second = buffer.Append(datasetId, DatasetGenerationEventKind.SampleAdded, new DatasetGenerationPayload(Completed: 1, Total: 4));
+        _ = buffer.Append(datasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload { State = "Generating" });
+        var second = buffer.Append(datasetId, DatasetGenerationEventKind.SampleAdded, new DatasetGenerationPayload { Completed = 1, Total = 4 });
 
         var replay = buffer.Replay(datasetId, afterSequence: 1);
         AssertEx.False(replay.ResetRequired);
@@ -138,7 +138,7 @@ public sealed class DatasetGenerationQueueTests
         }));
         for (var index = 0; index < 5; index++)
         {
-            _ = buffer.Append(datasetId, DatasetGenerationEventKind.Progress, new DatasetGenerationPayload(Completed: index));
+            _ = buffer.Append(datasetId, DatasetGenerationEventKind.Progress, new DatasetGenerationPayload { Completed = index });
         }
 
         AssertEx.True(buffer.Replay(datasetId, afterSequence: 0).ResetRequired, "A cursor older than the retained window forces a reset.");

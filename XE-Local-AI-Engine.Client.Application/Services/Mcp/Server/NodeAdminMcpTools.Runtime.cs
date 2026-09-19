@@ -16,7 +16,7 @@ public sealed partial class NodeAdminMcpTools
         {
             var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken);
             var runtime = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken);
-            return new McpNodeStatusResponse(GetVersion(), GetProcessUptimeSeconds(), settings.DefaultModelName, runtime.RunningProcessCount);
+            return new McpNodeStatusResponse { Version = GetVersion(), UptimeSeconds = GetProcessUptimeSeconds(), DefaultModelName = settings.DefaultModelName, LoadedProcessCount = runtime.RunningProcessCount };
         });
 
     [McpServerTool(Name = "get_runtime_status")]
@@ -25,12 +25,15 @@ public sealed partial class NodeAdminMcpTools
         InvokeAuditedAsync("get_runtime_status", [], async () =>
         {
             var status = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken);
-            return new McpRuntimeStatusResponse(status.Installed?.Tag,
-                status.RecommendedTag,
-                status.UpstreamLatestTag,
-                status.UpdateAvailable,
-                status.IsOffline,
-                status.RunningProcessCount);
+            return new McpRuntimeStatusResponse
+            {
+                InstalledTag = status.Installed?.Tag,
+                RecommendedTag = status.RecommendedTag,
+                UpstreamLatestTag = status.UpstreamLatestTag,
+                UpdateAvailable = status.UpdateAvailable,
+                IsOffline = status.IsOffline,
+                LoadedProcessCount = status.RunningProcessCount
+            };
         });
 
     [McpServerTool(Name = "start_runtime_acquisition")]
@@ -45,14 +48,19 @@ public sealed partial class NodeAdminMcpTools
         {
             if (!TryParseVariant(variant, out var parsedVariant))
             {
-                return new McpRuntimeAcquisitionStartResponse("rejected", null, McpAdminToolFailureCodes.InvalidVariant,
-                    "Variant must be cpu, cuda, vulkan, or omitted.");
+                return new McpRuntimeAcquisitionStartResponse
+                {
+                    Status = "rejected",
+                    Variant = null,
+                    FailureCode = McpAdminToolFailureCodes.InvalidVariant,
+                    DisplayMessage = "Variant must be cpu, cuda, vulkan, or omitted."
+                };
             }
 
             var result = await _runtimeAdministrationService.StartAcquisitionAsync(parsedVariant, cancellationToken);
             return result.Accepted
-                ? new McpRuntimeAcquisitionStartResponse("accepted", result.Variant)
-                : new McpRuntimeAcquisitionStartResponse("busy", result.Variant, McpAdminToolFailureCodes.Busy, result.DisplayMessage);
+                ? new McpRuntimeAcquisitionStartResponse { Status = "accepted", Variant = result.Variant }
+                : new McpRuntimeAcquisitionStartResponse { Status = "busy", Variant = result.Variant, FailureCode = McpAdminToolFailureCodes.Busy, DisplayMessage = result.DisplayMessage };
         }, static response => response.FailureCode is not null);
     }
 

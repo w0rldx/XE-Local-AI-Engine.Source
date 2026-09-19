@@ -307,7 +307,7 @@ public sealed class BenchmarkJudgeExecutorTests
             capacity,
             Substitute.For<IWorkerEventDispatcher>(),
             runner,
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 5, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 5, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
 
@@ -343,7 +343,7 @@ public sealed class BenchmarkJudgeExecutorTests
             capacity,
             Substitute.For<IWorkerEventDispatcher>(),
             runner,
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 3, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 3, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
 
@@ -443,7 +443,7 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             cancellations,
             new StubEnvironmentFacts(),
-            new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
             Substitute.For<IBenchmarkPythonTestsVerifier>(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
@@ -774,7 +774,7 @@ public sealed class BenchmarkJudgeExecutorTests
             Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(),
             supervisor,
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 2, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 2, RunId = run.Id, Kind = BenchmarkWorkKind.Judge, Attempt = 1, Version = 2, Run = run, JudgeAttemptId = AttemptId }, CancellationToken.None);
 
@@ -829,7 +829,7 @@ public sealed class BenchmarkJudgeExecutorTests
             new StubEnvironmentFacts(),
             // Default: decide ONCE and never wait, so the tests that assert the rejection path stay instant. Tests
             // about the wait itself pass their own budget with a zero interval.
-            admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            admissionRetry ?? new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
             pythonTests ?? Substitute.For<IBenchmarkPythonTestsVerifier>(),
             logger ?? NullLogger<BenchmarkJudgeExecutor>.Instance);
 
@@ -1137,16 +1137,19 @@ public sealed class BenchmarkJudgeExecutorTests
         public TrackingDisposable Reservation { get; } = new();
 
         public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
-            Task.FromResult(new CapacityDecision(Next(), "capacity", false));
+            Task.FromResult(new CapacityDecision { Verdict = Next(), Reason = "capacity", OllamaEvictionWarning = false });
 
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
         {
             LastRequest = request;
             var verdict = Next();
-            return Task.FromResult(new CapacityDecision(verdict,
-                "capacity",
-                false,
-                verdict == CapacityVerdict.Allow ? Reservation : null));
+            return Task.FromResult(new CapacityDecision
+            {
+                Verdict = verdict,
+                Reason = "capacity",
+                OllamaEvictionWarning = false,
+                Reservation = verdict == CapacityVerdict.Allow ? Reservation : null
+            });
         }
 
         private CapacityVerdict Next()

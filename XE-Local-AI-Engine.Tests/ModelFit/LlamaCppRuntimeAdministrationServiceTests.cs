@@ -196,16 +196,19 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             AssertEx.False(names.Overlaps(forbidden), $"{view.Name} must not expose runtime paths or hashes.");
         }
 
-        var json = JsonSerializer.Serialize(new LlamaCppInstalledRuntimeView("b1",
-            "asset.zip",
-            "cpu",
-            1,
-            true,
-            "repository",
-            "commit",
-            0,
-            "requested",
-            0));
+        var json = JsonSerializer.Serialize(new LlamaCppInstalledRuntimeView
+        {
+            Tag = "b1",
+            Asset = "asset.zip",
+            Variant = "cpu",
+            InstalledAtUnixTimeMilliseconds = 1,
+            IsSourceBuild = true,
+            SourceRepository = "repository",
+            SourceCommit = "commit",
+            SourceRevisionMode = 0,
+            SourceRequestedCommit = "requested",
+            SourceSelection = 0
+        });
         foreach (var forbiddenName in forbidden)
         {
             AssertEx.False(json.Contains(forbiddenName, StringComparison.OrdinalIgnoreCase));

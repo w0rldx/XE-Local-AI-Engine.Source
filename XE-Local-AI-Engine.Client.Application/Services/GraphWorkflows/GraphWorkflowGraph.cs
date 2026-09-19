@@ -365,14 +365,17 @@ internal sealed class GraphWorkflowGraph
         List<GraphWorkflowValidationError> errors)
     {
         var isWorkNode = kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool;
-        return new GraphWorkflowGraphNode(nodeKey,
-            kind,
-            OptionalString(element, "label") ?? nodeKey,
-            Collect(errors, nodeKey, () => OptionalEnum(element, "joinPolicy", nodeKey, GraphWorkflowJoinPolicy.All), GraphWorkflowJoinPolicy.All),
-            Collect(errors, nodeKey, () => OptionalPositiveInt(element, "maxAttempts", nodeKey), null) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
-            Collect(errors, nodeKey, () => OptionalPositiveInt(element, "timeoutSeconds", nodeKey), null),
-            Collect(errors, nodeKey, () => ParsePosition(element, nodeKey), null),
-            Collect<GraphWorkflowNodeConfig>(errors, nodeKey, () => ParseConfig(element, nodeKey, kind), new GraphWorkflowEmptyConfig()));
+        return new GraphWorkflowGraphNode
+        {
+            NodeKey = nodeKey,
+            Kind = kind,
+            Label = OptionalString(element, "label") ?? nodeKey,
+            JoinPolicy = Collect(errors, nodeKey, () => OptionalEnum(element, "joinPolicy", nodeKey, GraphWorkflowJoinPolicy.All), GraphWorkflowJoinPolicy.All),
+            MaxAttempts = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "maxAttempts", nodeKey), null) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
+            TimeoutSeconds = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "timeoutSeconds", nodeKey), null),
+            Position = Collect(errors, nodeKey, () => ParsePosition(element, nodeKey), null),
+            Config = Collect<GraphWorkflowNodeConfig>(errors, nodeKey, () => ParseConfig(element, nodeKey, kind), new GraphWorkflowEmptyConfig())
+        };
     }
 
     /// <summary>
@@ -393,7 +396,7 @@ internal sealed class GraphWorkflowGraph
             throw new GraphWorkflowValidationException($"The 'position' on node '{nodeKey}' must be an object carrying a numeric 'x' and 'y'.");
         }
 
-        return new GraphWorkflowPosition(xValue, yValue);
+        return new GraphWorkflowPosition { X = xValue, Y = yValue };
     }
 
     private static GraphWorkflowNodeConfig ParseConfig(JsonElement element, string nodeKey, GraphWorkflowNodeKind kind)

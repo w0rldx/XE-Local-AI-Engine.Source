@@ -21,7 +21,12 @@ public enum NodeSettingsField
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>
-public sealed record NodeSettingsValidationError(NodeSettingsField Field, string Message);
+public sealed class NodeSettingsValidationError
+{
+    public required NodeSettingsField Field { get; init; }
+
+    public required string Message { get; init; }
+}
 
 /// <summary>
 ///     Cross-field save policy for node settings. It runs on the MERGED result (stored settings + the incoming partial
@@ -53,8 +58,11 @@ public static class NodeSettingsPolicy
         {
             return
             [
-                new NodeSettingsValidationError(NodeSettingsField.SpeculativeDraftModelName,
-                    "Speculative decoding is set to a draft model mode, but no draft model was selected.")
+                new NodeSettingsValidationError
+                {
+                    Field = NodeSettingsField.SpeculativeDraftModelName,
+                    Message = "Speculative decoding is set to a draft model mode, but no draft model was selected."
+                }
             ];
         }
 
@@ -65,8 +73,11 @@ public static class NodeSettingsPolicy
         {
             return
             [
-                new NodeSettingsValidationError(NodeSettingsField.KeepModelWarmModelName,
-                    "Keep model warm is enabled, but no model was selected.")
+                new NodeSettingsValidationError
+                {
+                    Field = NodeSettingsField.KeepModelWarmModelName,
+                    Message = "Keep model warm is enabled, but no model was selected."
+                }
             ];
         }
 
@@ -80,8 +91,11 @@ public static class NodeSettingsPolicy
             {
                 return
                 [
-                    new NodeSettingsValidationError(NodeSettingsField.LlamaMaxLoadedProcesses,
-                        "A fast model for automatic reasoning effort requires at least two loaded-process slots, because it runs alongside the conversation's own model.")
+                    new NodeSettingsValidationError
+                    {
+                        Field = NodeSettingsField.LlamaMaxLoadedProcesses,
+                        Message = "A fast model for automatic reasoning effort requires at least two loaded-process slots, because it runs alongside the conversation's own model."
+                    }
                 ];
             }
         }
@@ -97,8 +111,11 @@ public static class NodeSettingsPolicy
         {
             return
             [
-                new NodeSettingsValidationError(NodeSettingsField.LlamaMaxLoadedProcesses,
-                    "Keep model warm requires at least two loaded-process slots so another local model can still be admitted.")
+                new NodeSettingsValidationError
+                {
+                    Field = NodeSettingsField.LlamaMaxLoadedProcesses,
+                    Message = "Keep model warm requires at least two loaded-process slots so another local model can still be admitted."
+                }
             ];
         }
 
@@ -112,8 +129,11 @@ public static class NodeSettingsPolicy
         {
             return
             [
-                new NodeSettingsValidationError(NodeSettingsField.KeepModelWarmIntervalSeconds,
-                    "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live.")
+                new NodeSettingsValidationError
+                {
+                    Field = NodeSettingsField.KeepModelWarmIntervalSeconds,
+                    Message = "The keep-model-warm interval must be shorter than the llama.cpp idle time-to-live."
+                }
             ];
         }
 

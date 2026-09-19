@@ -2,11 +2,16 @@ namespace XE_Local_AI_Engine.Client.Services.Models;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-public sealed record CommittedModelDeletion(
-    Guid OperationId,
-    string RequestedModelName,
-    IReadOnlyList<string> RemovedModelNames,
-    GgufDeletionStageReceipt StageReceipt);
+public sealed record CommittedModelDeletion
+{
+    public required Guid OperationId { get; init; }
+
+    public required string RequestedModelName { get; init; }
+
+    public required IReadOnlyList<string> RemovedModelNames { get; init; }
+
+    public required GgufDeletionStageReceipt StageReceipt { get; init; }
+}
 
 public interface ILocalModelDeletionCoordinator
 {

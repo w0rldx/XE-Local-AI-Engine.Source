@@ -173,7 +173,7 @@ internal static class DevelopmentWorkspaceGitConfig
             var value = line[(separator + 1)..].Trim();
             if (ResolvePreservedSection(section, key) is { } canonicalSection)
             {
-                entries.Add(new PreservedEntry(canonicalSection, subsection, key, value));
+                entries.Add(new PreservedEntry { Section = canonicalSection, Subsection = subsection, Key = key, Value = value });
             }
         }
 
@@ -237,5 +237,14 @@ internal static class DevelopmentWorkspaceGitConfig
         return builder.ToString();
     }
 
-    private sealed record PreservedEntry(string Section, string? Subsection, string Key, string Value);
+    private sealed record PreservedEntry
+    {
+        public required string Section { get; init; }
+
+        public required string? Subsection { get; init; }
+
+        public required string Key { get; init; }
+
+        public required string Value { get; init; }
+    }
 }

@@ -15,7 +15,12 @@ public enum AppUpdateReleaseTrack
 ///     consume public GitHub releases anonymously, while Velopack independently selects the OS package channel from the
 ///     installed package metadata.
 /// </summary>
-public sealed record AppUpdateSourcePolicy(string GitHubRepositoryUrl, bool IncludePrereleases);
+public sealed class AppUpdateSourcePolicy
+{
+    public required string GitHubRepositoryUrl { get; init; }
+
+    public required bool IncludePrereleases { get; init; }
+}
 
 /// <summary>
 ///     Public update-feed configuration baked into the artifact. <see cref="ReleaseTrack" /> controls stable versus RC
@@ -41,7 +46,7 @@ public sealed class AppUpdateChannelOptions
     /// <summary>The validated anonymous source policy, or <see langword="null" /> for an unbaked build.</summary>
     public AppUpdateSourcePolicy? SourcePolicy =>
         IsConfigured
-            ? new AppUpdateSourcePolicy(GitHubRepositoryUrl.TrimEnd('/'), ReleaseTrack == AppUpdateReleaseTrack.Rc)
+            ? new AppUpdateSourcePolicy { GitHubRepositoryUrl = GitHubRepositoryUrl.TrimEnd('/'), IncludePrereleases = ReleaseTrack == AppUpdateReleaseTrack.Rc }
             : null;
 
     private static bool IsGitHubRepositoryUrl(string value)

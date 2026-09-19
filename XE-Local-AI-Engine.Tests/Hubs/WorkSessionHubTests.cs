@@ -148,27 +148,30 @@ public sealed class WorkSessionHubTests
     {
         var service = Substitute.For<IWorkSessionService>();
         service.GetAsync(SessionId, Arg.Any<CancellationToken>())
-               .Returns(new WorkSessionDetail(SessionId,
-                   "title",
-                   "objective",
-                   AgentWorkSessionKind.Research,
-                   AgentWorkSessionStatus.Running,
-                   Guid.NewGuid(),
-                   Guid.NewGuid(),
-                   CurrentTaskId,
-                   StepCount: 3,
-                   MaxStepsPerRun: 25,
-                   LastCheckpointId: null,
-                   LastSequence: 9,
-                   Version: 2,
-                   CreatedUtc: 1,
-                   UpdatedUtc: 2));
+               .Returns(new WorkSessionDetail
+               {
+                   Id = SessionId,
+                   Title = "title",
+                   Objective = "objective",
+                   Kind = AgentWorkSessionKind.Research,
+                   Status = AgentWorkSessionStatus.Running,
+                   AgentDefinitionId = Guid.NewGuid(),
+                   ConversationId = Guid.NewGuid(),
+                   CurrentTaskId = CurrentTaskId,
+                   StepCount = 3,
+                   MaxStepsPerRun = 25,
+                   LastCheckpointId = null,
+                   LastSequence = 9,
+                   Version = 2,
+                   CreatedUtc = 1,
+                   UpdatedUtc = 2
+               });
         service.ListEventsAsync(SessionId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(events ?? []);
         return service;
     }
 
     private static WorkSessionEventDto Event(long sequence) =>
-        new(Guid.NewGuid(), sequence, Step: 1, "step.started", DetailJson: null, Outcome: null, OccurredUtc: 10, OperationId: null);
+        new() { Id = Guid.NewGuid(), Sequence = sequence, Step = 1, EventType = "step.started", DetailJson = null, Outcome = null, OccurredUtc = 10, OperationId = null };
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",

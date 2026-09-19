@@ -41,11 +41,14 @@ internal sealed partial class ExternalAppService
     ///     Diffing the manifest against it yields every name it DOES grant, which is what "the whole effective
     ///     permission set" means without a second derivation that could disagree with <c>Diff</c>.
     /// </summary>
-    private static readonly ExternalAppEffectivePermissions NoPermissions = new(Internet: false,
-        LocalNetwork: false,
-        "none",
-        "none",
-        new Dictionary<string, ExternalAppServicePermissions>(StringComparer.Ordinal));
+    private static readonly ExternalAppEffectivePermissions NoPermissions = new()
+    {
+        Internet = false,
+        LocalNetwork = false,
+        HostFiles = "none",
+        Gpu = "none",
+        Services = new Dictionary<string, ExternalAppServicePermissions>(StringComparer.Ordinal)
+    };
 
     private readonly ExternalAppInstanceGate _gate;
     private readonly string _installId;
@@ -327,19 +330,22 @@ internal sealed partial class ExternalAppService
         var known = catalogVersions.TryGetValue(row.ApplicationId, out var available);
         var updateAvailable = known && available > row.ManifestVersion;
 
-        return new ExternalAppInstanceSummary(row.Id,
-            row.ApplicationId,
-            row.DisplayName,
-            row.ManifestVersion,
-            row.Status,
-            row.DesiredState,
-            row.FailureCategory,
-            row.FailureSummary,
-            updateAvailable,
-            updateAvailable ? available : null,
-            !known,
-            row.UpdatedAtUtc,
-            row.Version);
+        return new ExternalAppInstanceSummary
+        {
+            Id = row.Id,
+            ApplicationId = row.ApplicationId,
+            DisplayName = row.DisplayName,
+            ManifestVersion = row.ManifestVersion,
+            Status = row.Status,
+            DesiredState = row.DesiredState,
+            FailureCategory = row.FailureCategory,
+            FailureSummary = row.FailureSummary,
+            UpdateAvailable = updateAvailable,
+            AvailableManifestVersion = updateAvailable ? available : null,
+            CatalogMissing = !known,
+            UpdatedAtUtc = row.UpdatedAtUtc,
+            Version = row.Version
+        };
     }
 
     private static ExternalAppInstanceDetail ToDetail(ExternalAppInstanceSnapshot row, ExternalAppInstanceSummary summary)
@@ -354,19 +360,22 @@ internal sealed partial class ExternalAppService
             return Unreadable(row, summary);
         }
 
-        return new ExternalAppInstanceDetail(summary,
-            Sanitize(manifest),
-            manifest.TestedVersion,
-            MaskVariables(manifest, ParseVariables(row.VariablesJson)),
-            ExternalAppPublishedPorts.Parse(row.PublishedPortsJson),
-            row.RuntimeProvider,
-            row.RuntimeOverride,
-            row.StoragePath,
-            row.LastSequence,
-            row.NeedsRecreate,
-            row.InstalledAtUtc,
-            row.StartedAtUtc,
-            row.StoppedAtUtc);
+        return new ExternalAppInstanceDetail
+        {
+            Summary = summary,
+            Manifest = Sanitize(manifest),
+            TestedVersion = manifest.TestedVersion,
+            MaskedVariables = MaskVariables(manifest, ParseVariables(row.VariablesJson)),
+            PublishedPorts = ExternalAppPublishedPorts.Parse(row.PublishedPortsJson),
+            RuntimeProvider = row.RuntimeProvider,
+            RuntimeOverride = row.RuntimeOverride,
+            StoragePath = row.StoragePath,
+            LastSequence = row.LastSequence,
+            NeedsRecreate = row.NeedsRecreate,
+            InstalledAtUtc = row.InstalledAtUtc,
+            StartedAtUtc = row.StartedAtUtc,
+            StoppedAtUtc = row.StoppedAtUtc
+        };
     }
 
     /// <summary>
@@ -401,25 +410,28 @@ internal sealed partial class ExternalAppService
             [],
             []);
 
-        return new ExternalAppInstanceDetail(summary with
+        return new ExternalAppInstanceDetail
+        {
+            Summary = summary with
             {
                 // Content-free by construction, and carried on the members the surface already renders a failure
                 // banner from, so the marker needs no second wire field nobody else reads.
                 FailureCategory = ExternalAppFailureCategory.Unknown,
                 FailureSummary = UnreadableManifestSummary
             },
-            manifest,
-            TestedVersion: null,
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            ExternalAppPublishedPorts.Parse(row.PublishedPortsJson),
-            row.RuntimeProvider,
-            row.RuntimeOverride,
-            row.StoragePath,
-            row.LastSequence,
-            row.NeedsRecreate,
-            row.InstalledAtUtc,
-            row.StartedAtUtc,
-            row.StoppedAtUtc);
+            Manifest = manifest,
+            TestedVersion = null,
+            MaskedVariables = new Dictionary<string, string>(StringComparer.Ordinal),
+            PublishedPorts = ExternalAppPublishedPorts.Parse(row.PublishedPortsJson),
+            RuntimeProvider = row.RuntimeProvider,
+            RuntimeOverride = row.RuntimeOverride,
+            StoragePath = row.StoragePath,
+            LastSequence = row.LastSequence,
+            NeedsRecreate = row.NeedsRecreate,
+            InstalledAtUtc = row.InstalledAtUtc,
+            StartedAtUtc = row.StartedAtUtc,
+            StoppedAtUtc = row.StoppedAtUtc
+        };
     }
 
     /// <summary>
@@ -623,16 +635,22 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>The three per-scope dependencies every entry point and every pipeline resolves, resolved in one place.</summary>
-    private sealed record ScopedServices(
-        IExternalAppInstanceStore Store,
-        IApplicationCatalogProvider Catalog,
-        IContainerRuntimeResolver Resolver)
+    private sealed record ScopedServices
     {
+        public required IExternalAppInstanceStore Store { get; init; }
+
+        public required IApplicationCatalogProvider Catalog { get; init; }
+
+        public required IContainerRuntimeResolver Resolver { get; init; }
+
         public static ScopedServices From(IServiceProvider provider)
         {
-            return new ScopedServices(provider.GetRequiredService<IExternalAppInstanceStore>(),
-                provider.GetRequiredService<IApplicationCatalogProvider>(),
-                provider.GetRequiredService<IContainerRuntimeResolver>());
+            return new ScopedServices
+            {
+                Store = provider.GetRequiredService<IExternalAppInstanceStore>(),
+                Catalog = provider.GetRequiredService<IApplicationCatalogProvider>(),
+                Resolver = provider.GetRequiredService<IContainerRuntimeResolver>()
+            };
         }
     }
 

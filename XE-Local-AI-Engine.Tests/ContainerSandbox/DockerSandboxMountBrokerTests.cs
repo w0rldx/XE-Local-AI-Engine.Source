@@ -250,11 +250,11 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
         // Directly, because the sweep is the part that stops being correct when a third target is added by hand: the
         // colliding pair here is (second, third), which no (first, N) comparison reaches.
         AssertEx.Null(ContainerSandboxOptionsValidator.FindOverlap([
-            new ContainerMountTarget("a", "/workspace"), new ContainerMountTarget("b", "/scratch"), new ContainerMountTarget("c", "/xe-runtime")
+            new ContainerMountTarget { Name = "a", Path = "/workspace" }, new ContainerMountTarget { Name = "b", Path = "/scratch" }, new ContainerMountTarget { Name = "c", Path = "/xe-runtime" }
         ]));
 
         var collision = ContainerSandboxOptionsValidator.FindOverlap([
-            new ContainerMountTarget("a", "/workspace"), new ContainerMountTarget("b", "/xe-runtime"), new ContainerMountTarget("c", "/xe-runtime/home")
+            new ContainerMountTarget { Name = "a", Path = "/workspace" }, new ContainerMountTarget { Name = "b", Path = "/xe-runtime" }, new ContainerMountTarget { Name = "c", Path = "/xe-runtime/home" }
         ]);
 
         AssertEx.NotNull(collision, "the third pair was not swept.");
@@ -265,8 +265,11 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
     private (DockerSandboxRuntimeProvider Provider, FakeDockerRuntimeClient Client, string Workspace) CreateProvider()
     {
         var workspace = CreateDirectory("workspace");
-        var client = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///fake.sock"),
-            DockerDaemonEndpointSource.Configuration));
+        var client = new FakeDockerRuntimeClient(new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///fake.sock"),
+            Source = DockerDaemonEndpointSource.Configuration
+        });
 
         var provider = new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new SingleClientFactory(client),

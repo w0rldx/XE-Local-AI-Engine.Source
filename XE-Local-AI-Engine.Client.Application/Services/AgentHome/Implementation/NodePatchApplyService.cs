@@ -427,7 +427,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         var subPatch = string.Concat(blocks.Select(block => block.Text));
         var files = blocks.SelectMany(block => block.Files).ToArray();
-        return new AliasPlan(alias, resolvedRoot, subPatch, files);
+        return new AliasPlan { Alias = alias, ResolvedRoot = resolvedRoot, SubPatch = subPatch, Files = files };
     }
 
     private static bool EscapesViaReparsePoint(string resolvedRoot, string candidate)
@@ -508,7 +508,16 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     [GeneratedRegex(@"agenthome-apply-[0-9a-fA-F]{32}\.patch", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex TempPatchFilenameRegex();
 
-    private sealed record AliasPlan(string Alias, string ResolvedRoot, string SubPatch, IReadOnlyList<PatchApplyFileEntry> Files);
+    private sealed record AliasPlan
+    {
+        public required string Alias { get; init; }
+
+        public required string ResolvedRoot { get; init; }
+
+        public required string SubPatch { get; init; }
+
+        public required IReadOnlyList<PatchApplyFileEntry> Files { get; init; }
+    }
 
     private sealed record ApplyPlan
     {

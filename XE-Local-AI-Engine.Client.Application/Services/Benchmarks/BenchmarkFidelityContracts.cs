@@ -166,7 +166,7 @@ public static class BenchmarkFidelityCorpus
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var stream = File.OpenRead(path);
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(stream));
-        return new BenchmarkFidelityCorpusFile(path, sha256, string.Create(CultureInfo.InvariantCulture, $"{CorpusName}@{sha256[..12]}"));
+        return new BenchmarkFidelityCorpusFile { Path = path, Sha256 = sha256, CorpusId = string.Create(CultureInfo.InvariantCulture, $"{CorpusName}@{sha256[..12]}") };
     }
 
     private static BenchmarkFidelityCorpusFile Load()
@@ -193,11 +193,18 @@ public static class BenchmarkFidelityCorpus
     }
 }
 
-/// <param name="CorpusId">
-///     <c>wikitext2-raw-test@&lt;sha256-12&gt;</c>, stored beside every perplexity number so two of them are only ever
-///     compared when they scored the same bytes.
-/// </param>
-public sealed record BenchmarkFidelityCorpusFile(string Path, string Sha256, string CorpusId);
+public sealed class BenchmarkFidelityCorpusFile
+{
+    public required string Path { get; init; }
+
+    public required string Sha256 { get; init; }
+
+    /// <summary>
+    ///     <c>wikitext2-raw-test@&lt;sha256-12&gt;</c>, stored beside every perplexity number so two of them are only ever
+    ///     compared when they scored the same bytes.
+    /// </summary>
+    public required string CorpusId { get; init; }
+}
 
 /// <summary>
 ///     Whether a run's KL-divergence numbers may be shown. Their own vocabulary rather than a boolean, because

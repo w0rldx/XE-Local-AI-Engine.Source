@@ -6,16 +6,24 @@ internal sealed partial class SubAgentSpawnService
     {
         if (workspaceId is not { } id)
         {
-            return new WorkspaceOpenOutcome(Session: null, Failure: null);
+            return new WorkspaceOpenOutcome { Session = null, Failure = null };
         }
 
         var opened = await _mcpWorkspaceSessionFactory.OpenAsync(id, cancellationToken);
         return opened.Session is { } session
-            ? new WorkspaceOpenOutcome(session, Failure: null)
-            : new WorkspaceOpenOutcome(Session: null,
-                Failure: SpawnOutcome.Rejected(opened.FailureCode ?? McpExecutionFailureCodes.WorkspacePreparationFailed,
-                    opened.DisplayMessage));
+            ? new WorkspaceOpenOutcome { Session = session, Failure = null }
+            : new WorkspaceOpenOutcome
+            {
+                Session = null,
+                Failure = SpawnOutcome.Rejected(opened.FailureCode ?? McpExecutionFailureCodes.WorkspacePreparationFailed,
+                    opened.DisplayMessage)
+            };
     }
 
-    private sealed record WorkspaceOpenOutcome(IMcpWorkspaceExecutionSession? Session, SpawnOutcome? Failure);
+    private sealed record WorkspaceOpenOutcome
+    {
+        public required IMcpWorkspaceExecutionSession? Session { get; init; }
+
+        public required SpawnOutcome? Failure { get; init; }
+    }
 }

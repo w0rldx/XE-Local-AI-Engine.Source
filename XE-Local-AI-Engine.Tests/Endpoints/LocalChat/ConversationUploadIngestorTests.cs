@@ -60,7 +60,7 @@ public sealed class ConversationUploadIngestorTests
     {
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.ExtractAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new DocumentExtractionResult(DocumentExtractionStatus.Extracted, "# hi", ExtractedChars: 4, Error: null)));
+                 .Returns(Task.FromResult(new DocumentExtractionResult { Status = DocumentExtractionStatus.Extracted, Markdown = "# hi", ExtractedChars = 4, Error = null }));
         var store = Substitute.For<IConversationUploadedFileStore>();
         ConversationUploadedFileInput? captured = null;
         store.AddAsync(Arg.Do<ConversationUploadedFileInput>(input => captured = input), Arg.Any<CancellationToken>())
@@ -82,7 +82,7 @@ public sealed class ConversationUploadIngestorTests
     {
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.ExtractAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new DocumentExtractionResult(DocumentExtractionStatus.Extracted, "x", ExtractedChars: 1, Error: null)));
+                 .Returns(Task.FromResult(new DocumentExtractionResult { Status = DocumentExtractionStatus.Extracted, Markdown = "x", ExtractedChars = 1, Error = null }));
         var store = Substitute.For<IConversationUploadedFileStore>();
         ConversationUploadedFileInput? captured = null;
         store.AddAsync(Arg.Do<ConversationUploadedFileInput>(input => captured = input), Arg.Any<CancellationToken>())
@@ -122,14 +122,17 @@ public sealed class ConversationUploadIngestorTests
 
     private static ConversationUploadedFileInfo ToInfo(ConversationUploadedFileInput input)
     {
-        return new ConversationUploadedFileInfo(input.FileId,
-            input.ConversationId,
-            input.OriginalFileName,
-            input.MimeType,
-            input.Extension,
-            input.SizeBytes,
-            input.ExtractionStatus,
-            input.ExtractedChars,
-            CreatedAtUtc: 0);
+        return new ConversationUploadedFileInfo
+        {
+            FileId = input.FileId,
+            ConversationId = input.ConversationId,
+            OriginalFileName = input.OriginalFileName,
+            MimeType = input.MimeType,
+            Extension = input.Extension,
+            SizeBytes = input.SizeBytes,
+            ExtractionStatus = input.ExtractionStatus,
+            ExtractedChars = input.ExtractedChars,
+            CreatedAtUtc = 0
+        };
     }
 }

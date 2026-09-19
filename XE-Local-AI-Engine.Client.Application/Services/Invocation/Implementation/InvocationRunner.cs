@@ -264,7 +264,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
                                     stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
                                     stream?.UsageSnapshot is { } turnUsage
-                                        ? new TurnUsageTotals(turnUsage.InputTokens, turnUsage.OutputTokens, turnUsage.TotalTokens, turnUsage.ReasoningTokens)
+                                        ? new TurnUsageTotals { InputTokens = turnUsage.InputTokens, OutputTokens = turnUsage.OutputTokens, TotalTokens = turnUsage.TotalTokens, ReasoningTokens = turnUsage.ReasoningTokens }
                                         : null);
             }
             catch (Exception exception)
@@ -687,19 +687,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         finally
         {
-            var efficiencyRecord = new InvocationEfficiencyRecord(package.InvocationId,
-                invocationOutcome ?? "failed",
-                stream?.ProviderTag ?? "unknown",
-                package.OrchestrationSpec is not null,
-                Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds,
-                context.PreRunDurationMs,
-                context.QueueDurationMs,
-                stream?.ModelReadinessDurationMs,
-                stream?.FirstOutputLatencyMs,
-                stream?.UsageSnapshot?.InputTokens,
-                stream?.UsageSnapshot?.OutputTokens,
-                stream?.UsageSnapshot?.ReasoningTokens,
-                providerBudget.CaptureEfficiencySnapshot());
+            var efficiencyRecord = new InvocationEfficiencyRecord
+            {
+                InvocationId = package.InvocationId,
+                Outcome = invocationOutcome ?? "failed",
+                Provider = stream?.ProviderTag ?? "unknown",
+                Orchestration = package.OrchestrationSpec is not null,
+                TotalDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds,
+                PreRunDurationMs = context.PreRunDurationMs,
+                QueueDurationMs = context.QueueDurationMs,
+                ModelReadinessDurationMs = stream?.ModelReadinessDurationMs,
+                FirstOutputLatencyMs = stream?.FirstOutputLatencyMs,
+                InputTokens = stream?.UsageSnapshot?.InputTokens,
+                OutputTokens = stream?.UsageSnapshot?.OutputTokens,
+                ReasoningTokens = stream?.UsageSnapshot?.ReasoningTokens,
+                ProviderEfficiency = providerBudget.CaptureEfficiencySnapshot()
+            };
             TryRecordInvocationEfficiency(efficiencyRecord, turnActivity);
 
             _apiToolCallBridge.CleanupStaleToolCalls(_maxPendingToolCallAge);

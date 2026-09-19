@@ -151,9 +151,12 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
             RepositoryIdentityHash: seed.RepositoryIdentityHash);
 
     private static DevelopmentRepositoryBinding Repository(DevelopmentCreateProjectCommand seed) =>
-        new(seed.ProjectId,
-            seed.SelectedFolderId,
-            "repository",
-            "repo",
-            seed.RepositoryIdentityHash);
+        new()
+        {
+            ProjectId = seed.ProjectId,
+            SelectedFolderId = seed.SelectedFolderId,
+            Alias = "repository",
+            RepositoryRoot = "repo",
+            RepositoryIdentityHash = seed.RepositoryIdentityHash
+        };
 }

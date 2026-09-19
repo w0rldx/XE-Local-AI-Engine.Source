@@ -47,14 +47,31 @@ public sealed record GeneratedImageMetadata
 }
 
 /// <summary>The persisted metadata for one generated image blob (bytes live encrypted on disk).</summary>
-public sealed record GeneratedImageInfo(
-    Guid ImageId,
-    Guid JobId,
-    string MimeType,
-    int Width,
-    int Height,
-    long SizeBytes,
-    long CreatedAtUtc);
+public sealed class GeneratedImageInfo
+{
+    public required Guid ImageId { get; init; }
+
+    public required Guid JobId { get; init; }
+
+    public required string MimeType { get; init; }
+
+    public required int Width { get; init; }
+
+    public required int Height { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>Decrypted image bytes plus the MIME type, returned by the retrieve path.</summary>
-public sealed record GeneratedImageContent(ReadOnlyMemory<byte> Bytes, string MimeType, int Width, int Height);
+public sealed class GeneratedImageContent
+{
+    public required ReadOnlyMemory<byte> Bytes { get; init; }
+
+    public required string MimeType { get; init; }
+
+    public required int Width { get; init; }
+
+    public required int Height { get; init; }
+}

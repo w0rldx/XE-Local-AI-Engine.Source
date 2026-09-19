@@ -221,7 +221,7 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
     {
         try
         {
-            return await _preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import, modelName.Trim(), quantization),
+            return await _preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent { OperationKind = GgufAcquisitionOperationKind.Import, ModelBaseName = modelName.Trim(), Quantization = quantization },
                                        cancellationToken);
         }
         catch (ArgumentException exception)

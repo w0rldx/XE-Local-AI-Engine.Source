@@ -188,10 +188,13 @@ public sealed class ContextExpansionService : IContextExpansionService
                 var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken)
                     ? null
                     : reader.GetString(3);
-                rows.Add(new KnowledgeNeighborChunk(Guid.Parse(reader.GetString(0)),
-                    reader.GetInt32(1),
-                    reader.GetString(2),
-                    headingPath));
+                rows.Add(new KnowledgeNeighborChunk
+                {
+                    ChunkId = Guid.Parse(reader.GetString(0)),
+                    ChunkIndex = reader.GetInt32(1),
+                    Content = reader.GetString(2),
+                    HeadingPath = headingPath
+                });
             }
         }
 
@@ -237,10 +240,13 @@ public sealed class ContextExpansionService : IContextExpansionService
             var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken)
                 ? null
                 : reader.GetString(3);
-            neighbors.Add(new KnowledgeNeighborChunk(Guid.Parse(reader.GetString(0)),
-                reader.GetInt32(1),
-                reader.GetString(2),
-                headingPath));
+            neighbors.Add(new KnowledgeNeighborChunk
+            {
+                ChunkId = Guid.Parse(reader.GetString(0)),
+                ChunkIndex = reader.GetInt32(1),
+                Content = reader.GetString(2),
+                HeadingPath = headingPath
+            });
         }
 
         return neighbors;

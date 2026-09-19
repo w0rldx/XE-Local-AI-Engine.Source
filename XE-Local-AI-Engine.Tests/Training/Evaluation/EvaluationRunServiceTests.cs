@@ -28,7 +28,7 @@ public sealed class EvaluationRunServiceTests
     {
         var harness = Harness.Create(datasetFingerprint: "v1:" + new string('b', count: 64));
 
-        _ = await harness.Service.CreateAsync(new CreateEvaluationCommand(RunId, EvaluationTarget.Base));
+        _ = await harness.Service.CreateAsync(new CreateEvaluationCommand { TrainingRunId = RunId, Target = EvaluationTarget.Base });
 
         var enqueued = AssertEx.NotNull(harness.Enqueued);
         AssertEx.Equal(FrozenFingerprint, enqueued.DatasetContentFingerprint);
@@ -41,7 +41,7 @@ public sealed class EvaluationRunServiceTests
     {
         var harness = Harness.Create(datasetFingerprint: FrozenFingerprint);
 
-        _ = await harness.Service.CreateAsync(new CreateEvaluationCommand(RunId, EvaluationTarget.Base));
+        _ = await harness.Service.CreateAsync(new CreateEvaluationCommand { TrainingRunId = RunId, Target = EvaluationTarget.Base });
 
         var enqueued = AssertEx.NotNull(harness.Enqueued, "A matching fingerprint must reach the store.");
         AssertEx.Equal(FrozenFingerprint, enqueued.DatasetContentFingerprint);
@@ -56,7 +56,7 @@ public sealed class EvaluationRunServiceTests
         var harness = Harness.Create(datasetFingerprint: FrozenFingerprint);
 
         var exception = await AssertEx.ThrowsAsync<EvaluationRejectedException>(() =>
-            harness.Service.CreateAsync(new CreateEvaluationCommand(RunId, EvaluationTarget.Undefined)));
+            harness.Service.CreateAsync(new CreateEvaluationCommand { TrainingRunId = RunId, Target = EvaluationTarget.Undefined }));
 
         AssertEx.Contains(exception.Message, "target is required", StringComparison.OrdinalIgnoreCase);
         _ = await harness.Evaluations.DidNotReceiveWithAnyArgs()

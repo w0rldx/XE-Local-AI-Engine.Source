@@ -5,7 +5,14 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 /// <summary>One pairwise judging's parsed output, in the PRESENTATION order the judge was shown.</summary>
-public sealed record BenchmarkPairwiseResultV1(int SchemaVersion, string Verdict, string Rationale);
+public sealed class BenchmarkPairwiseResultV1
+{
+    public required int SchemaVersion { get; init; }
+
+    public required string Verdict { get; init; }
+
+    public required string Rationale { get; init; }
+}
 
 /// <summary>
 ///     The pairwise verdict schema, in the same two shapes the pointwise one ships in: the bounded copy that goes into
@@ -132,7 +139,7 @@ public static class BenchmarkPairwiseResultParser
             var rationale = root.TryGetProperty("rationale", out var rationaleElement) ? rationaleElement.GetString()?.Trim() : null;
             return rationale is null || rationale.Length == 0 || rationale.Length > BenchmarkPairwiseOutputSchemaV1.MaximumRationaleLength
                 ? throw new JsonException()
-                : new BenchmarkPairwiseResultV1(schemaVersion, verdict, rationale);
+                : new BenchmarkPairwiseResultV1 { SchemaVersion = schemaVersion, Verdict = verdict, Rationale = rationale };
         }
         catch (JsonException)
         {

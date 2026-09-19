@@ -116,7 +116,7 @@ internal static class DevWorkflowStateMachine
     ///     matters.
     /// </summary>
     public static string GateOutputJson(DevWorkflowDecisionKind decision) =>
-        JsonSerializer.Serialize(new GateOutput(DevWorkflowNodeOutputStatuses.Succeeded, decision.ToString()), JsonOptions);
+        JsonSerializer.Serialize(new GateOutput { Status = DevWorkflowNodeOutputStatuses.Succeeded, Decision = decision.ToString() }, JsonOptions);
 
     /// <summary>
     ///     Every answer a human gate SUCCEEDS on — the three that part company in the graph rather than on the row. What
@@ -1004,5 +1004,10 @@ internal static class DevWorkflowStateMachine
         }
     }
 
-    private sealed record GateOutput(string Status, string Decision);
+    private sealed record GateOutput
+    {
+        public required string Status { get; init; }
+
+        public required string Decision { get; init; }
+    }
 }

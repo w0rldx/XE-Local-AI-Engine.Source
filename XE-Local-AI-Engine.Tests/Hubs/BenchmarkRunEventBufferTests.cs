@@ -22,7 +22,7 @@ public sealed class BenchmarkRunEventBufferTests
         var runId = Guid.NewGuid();
         for (var index = 0; index < 8; index++)
         {
-            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: $"chunk-{index}"));
+            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = $"chunk-{index}" });
         }
 
         var retained = buffer.Replay(runId, afterSequence: 3, runVersion: 1);
@@ -47,7 +47,7 @@ public sealed class BenchmarkRunEventBufferTests
         // room for exactly 3 of the 10 published events, with slack for the sequence number growing a digit.
         var runId = Guid.NewGuid();
         var payload = new string('a', 256);
-        var probeBytes = JsonSerializer.SerializeToUtf8Bytes(new BenchmarkRunStreamEvent { RunId = runId, Sequence = 1, Kind = BenchmarkRunStreamEventKind.OutputDelta, Payload = new BenchmarkRunStreamPayload(Content: payload) },
+        var probeBytes = JsonSerializer.SerializeToUtf8Bytes(new BenchmarkRunStreamEvent { RunId = runId, Sequence = 1, Kind = BenchmarkRunStreamEventKind.OutputDelta, Payload = new BenchmarkRunStreamPayload { Content = payload } },
             ProbeJsonOptions).Length;
         var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions
         {
@@ -55,7 +55,7 @@ public sealed class BenchmarkRunEventBufferTests
         }));
         for (var index = 0; index < 10; index++)
         {
-            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: payload));
+            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = payload });
         }
 
         var tail = buffer.Replay(runId, afterSequence: 7, runVersion: 1);
@@ -86,13 +86,13 @@ public sealed class BenchmarkRunEventBufferTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        _ = buffer.Append(first, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "primary"));
+        _ = buffer.Append(first, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "primary" });
         buffer.EvictPlaintext(first);
         buffer.BeginActivePhase(first, persistedSequence: 1);
-        _ = buffer.Append(first, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "judge"));
+        _ = buffer.Append(first, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "judge" });
         buffer.EvictPlaintext(first);
 
-        _ = buffer.Append(second, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "primary"));
+        _ = buffer.Append(second, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "primary" });
         buffer.EvictPlaintext(second);
 
         // The tombstone is what turns a late subscriber's replay into a reset rather than into silence, so its

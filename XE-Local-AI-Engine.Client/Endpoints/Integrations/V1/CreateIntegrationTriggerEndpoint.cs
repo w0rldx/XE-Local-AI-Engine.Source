@@ -35,14 +35,17 @@ public sealed class CreateIntegrationTriggerEndpoint : Endpoint<CreateIntegratio
         // fallback keeps the decoder as the single source of the mapping rather than duplicating it.
         var acceptedInputKinds = IntegrationMapper.FromWireInputKinds(req.AcceptedInputKinds).GetValueOrDefault();
 
-        var result = await _triggerService.CreateAsync(new IntegrationTriggerCreateInput(req.Name,
-                                                  req.DisplayName,
-                                                  req.Description,
-                                                  req.Enabled,
-                                                  req.TargetKind,
-                                                  req.TargetAgentDefinitionId,
-                                                  req.SessionPolicy,
-                                                  acceptedInputKinds),
+        var result = await _triggerService.CreateAsync(new IntegrationTriggerCreateInput
+        {
+            Name = req.Name,
+            DisplayName = req.DisplayName,
+            Description = req.Description,
+            Enabled = req.Enabled,
+            TargetKind = req.TargetKind,
+            TargetAgentDefinitionId = req.TargetAgentDefinitionId,
+            SessionPolicy = req.SessionPolicy,
+            AcceptedInputKinds = acceptedInputKinds
+        },
                                               ct);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)

@@ -4,15 +4,24 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>Transport-neutral, bounded input for informational AI-drafting provenance.</summary>
-public sealed record GenerationMetadataInput(
-    string? Model,
-    DraftMode Mode,
-    string? UserBrief,
-    string? Rationale,
-    IReadOnlyList<string>? Assumptions,
-    double Confidence,
-    long GeneratedAtUtc,
-    string? DraftContentHash);
+public sealed class GenerationMetadataInput
+{
+    public required string? Model { get; init; }
+
+    public required DraftMode Mode { get; init; }
+
+    public required string? UserBrief { get; init; }
+
+    public required string? Rationale { get; init; }
+
+    public required IReadOnlyList<string>? Assumptions { get; init; }
+
+    public required double Confidence { get; init; }
+
+    public required long GeneratedAtUtc { get; init; }
+
+    public required string? DraftContentHash { get; init; }
+}
 
 /// <summary>Transport-neutral projection of persisted AI-drafting provenance.</summary>
 public sealed record GenerationMetadataView(

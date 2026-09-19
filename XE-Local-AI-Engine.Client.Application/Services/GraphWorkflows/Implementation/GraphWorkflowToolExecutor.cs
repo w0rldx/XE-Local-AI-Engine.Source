@@ -313,7 +313,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // The graph author's own budget, which the service enforces as a hard deadline over the whole call — argument
         // validation included — so the dispatcher's expiry stage stays a backstop rather than a race with the answer.
         var timeout = TimeSpan.FromSeconds(node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds);
-        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext(runId, nodeRunId, node.NodeKey, timeout), cancellationToken);
+        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext { RunId = runId, NodeRunId = nodeRunId, NodeKey = node.NodeKey, Timeout = timeout }, cancellationToken);
     }
 
     /// <summary>

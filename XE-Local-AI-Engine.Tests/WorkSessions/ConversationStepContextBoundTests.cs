@@ -609,16 +609,22 @@ public sealed class ConversationStepContextBoundTests
         {
             var messageId = Guid.NewGuid();
             var requestId = Guid.NewGuid();
-            _ = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId,
-                                     Guid.NewGuid(),
-                                     new string('u', contentChars),
-                                     CreatedAtUtc: turn));
-            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: turn));
-            _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(conversationId, messageId, requestId),
-                                     NodeChatMessageStatusValues.Completed,
-                                     UpdatedAtUtc: turn,
-                                     new string('a', contentChars),
-                                     new string('r', contentChars)));
+            _ = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+            {
+                ConversationId = conversationId,
+                MessageId = Guid.NewGuid(),
+                Content = new string('u', contentChars),
+                CreatedAtUtc = turn
+            });
+            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = turn });
+            _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+            {
+                Correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId),
+                Status = NodeChatMessageStatusValues.Completed,
+                UpdatedAtUtc = turn,
+                Content = new string('a', contentChars),
+                Reasoning = new string('r', contentChars)
+            });
         }
     }
 
@@ -650,30 +656,36 @@ public sealed class ConversationStepContextBoundTests
     }
 
     private static NodeChatConversationDto Conversation(IReadOnlyList<NodeChatPersistedMessageDto> messages, string? summary = null, int? coversToSequence = null) =>
-        new(ConversationId: Guid.NewGuid(),
-            Title: null,
-            UserId: null,
-            CreatedAtUtc: 0,
-            LastSeenUtc: 0,
-            Purged: false,
-            Messages: messages,
-            CompactionSummary: summary,
-            CompactionSummaryCoversToSequence: coversToSequence);
+        new()
+        {
+            ConversationId = Guid.NewGuid(),
+            Title = null,
+            UserId = null,
+            CreatedAtUtc = 0,
+            LastSeenUtc = 0,
+            Purged = false,
+            Messages = messages,
+            CompactionSummary = summary,
+            CompactionSummaryCoversToSequence = coversToSequence
+        };
 
     private static NodeChatPersistedMessageDto Message(int sequence, string role, string content, string? reasoning = null) =>
-        new(Guid.NewGuid(),
-            ConversationId: Guid.NewGuid(),
-            RequestId: null,
-            sequence,
-            role,
-            content,
-            reasoning,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: sequence,
-            UpdatedAtUtc: sequence,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        new()
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            RequestId = null,
+            Sequence = sequence,
+            Role = role,
+            Content = content,
+            Reasoning = reasoning,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = sequence,
+            UpdatedAtUtc = sequence,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
 
     /// <summary>Records every compaction the loop asks for, including the keep window it asked with.</summary>
     private sealed class RecordingCompactionService : IConversationCompactionService
@@ -693,7 +705,7 @@ public sealed class ConversationStepContextBoundTests
             CancellationToken cancellationToken = default)
         {
             Calls.Add((conversationId, recentMessagesToKeepVerbatim, SendsSoFar?.Invoke() ?? 0));
-            return Task.FromResult(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact));
+            return Task.FromResult(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact });
         }
     }
 }

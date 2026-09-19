@@ -384,8 +384,8 @@ public sealed class ImageJobCoordinatorTests
         var coordinator = Substitute.For<IImageJobCoordinator>();
         coordinator.SnapshotBufferedEvents(jobId).Returns(new[]
         {
-            new ImageJobBufferedEvent(ImageJobHubEvents.StatusChanged, event0),
-            new ImageJobBufferedEvent(ImageJobHubEvents.StatusChanged, event1)
+            new ImageJobBufferedEvent { MethodName = ImageJobHubEvents.StatusChanged, Payload = event0 },
+            new ImageJobBufferedEvent { MethodName = ImageJobHubEvents.StatusChanged, Payload = event1 }
         });
 
         var groups = Substitute.For<IGroupManager>();
@@ -795,7 +795,7 @@ public sealed class ImageJobCoordinatorTests
         public Task<GeneratedImageInfo> AddAsync(Guid jobId, Guid imageId, ReadOnlyMemory<byte> pngBytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken)
         {
             Added[imageId] = jobId;
-            return Task.FromResult(new GeneratedImageInfo(imageId, jobId, metadata.MimeType, metadata.Width, metadata.Height, pngBytes.Length, CreatedAtUtc: 0));
+            return Task.FromResult(new GeneratedImageInfo { ImageId = imageId, JobId = jobId, MimeType = metadata.MimeType, Width = metadata.Width, Height = metadata.Height, SizeBytes = pngBytes.Length, CreatedAtUtc = 0 });
         }
 
         public Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken)

@@ -64,6 +64,6 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
 
         // No sequence is published: the session is not finished until the supervisor closes it, and announcing a change
         // now would put the UI ahead of the truth.
-        return new WorkSessionToolOutcome("The work session will close at the end of this turn. Say anything else you still need to say now.");
+        return new WorkSessionToolOutcome { Message = "The work session will close at the end of this turn. Say anything else you still need to say now." };
     }
 }

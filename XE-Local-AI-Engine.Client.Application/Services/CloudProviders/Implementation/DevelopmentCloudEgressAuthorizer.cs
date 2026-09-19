@@ -66,14 +66,17 @@ public sealed class DevelopmentCloudEgressAuthorizer : ICloudEgressAuthorizer
                || !string.Equals(bundle.ModelId, request.ModelId, StringComparison.Ordinal),
             "The selected cloud provider or model does not match the approved Development cloud context.");
 
-        _auditSink.Record(new DevelopmentCloudEgressAudit(envelope.ProjectId,
-            envelope.TaskId,
-            envelope.AttemptId,
-            request.ProviderName,
-            request.ModelId!,
-            envelope.AuthorizedBundleId!,
-            envelope.AuthorizedBundleHash!,
-            now));
+        _auditSink.Record(new DevelopmentCloudEgressAudit
+        {
+            ProjectId = envelope.ProjectId,
+            TaskId = envelope.TaskId,
+            AttemptId = envelope.AttemptId,
+            ProviderName = request.ProviderName,
+            ModelId = request.ModelId!,
+            BundleId = envelope.AuthorizedBundleId!,
+            BundleHash = envelope.AuthorizedBundleHash!,
+            AuthorizedAt = now
+        });
     }
 
     private static void Reject(bool condition, string reason)

@@ -350,7 +350,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             var results = new VectorSearchHit[_count];
             for (var i = 0; i < _count; i++)
             {
-                results[i] = new VectorSearchHit(kept[i].ChunkId, kept[i].DocumentId, kept[i].Score);
+                results[i] = new VectorSearchHit { ChunkId = kept[i].ChunkId, DocumentId = kept[i].DocumentId, Score = kept[i].Score };
             }
 
             return results;

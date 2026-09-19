@@ -153,7 +153,7 @@ public sealed class WorkSessionStateBlockTests
         IReadOnlyList<WorkSessionFindingSnapshot>? findings = null,
         IReadOnlyList<WorkSessionArtifactSnapshot>? artifacts = null,
         WorkSessionCheckpointSnapshot? checkpoint = null) =>
-        new(Session(), tasks ?? [], findings ?? [], artifacts ?? [], checkpoint);
+        new() { Session = Session(), Tasks = tasks ?? [], Findings = findings ?? [], Artifacts = artifacts ?? [], LastCheckpoint = checkpoint };
 
     private static AgentWorkSessionSnapshot Session() =>
         new()

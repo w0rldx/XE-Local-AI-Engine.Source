@@ -54,7 +54,7 @@ public sealed class CreateWorkSessionEndpoint : Endpoint<CreateWorkSessionReques
         // Safe to parse rather than TryParse: the validator has already refused anything that is not General or
         // Research, and it runs before the handler.
         var kind = Enum.Parse<AgentWorkSessionKind>(req.Kind, ignoreCase: true);
-        var created = await _service.CreateAsync(new CreateWorkSessionRequestModel(req.Title, req.Objective, kind, req.AgentDefinitionId), ct);
+        var created = await _service.CreateAsync(new CreateWorkSessionRequestModel { Title = req.Title, Objective = req.Objective, Kind = kind, AgentDefinitionId = req.AgentDefinitionId }, ct);
         await Send.CreatedAtAsync<GetWorkSessionEndpoint>(new
             {
                 sessionId = created.Id
@@ -116,7 +116,7 @@ public sealed class UpdateWorkSessionEndpoint : Endpoint<UpdateWorkSessionReques
         // An omitted member is forwarded as null, which the service reads as "leave it alone" — a PATCH that only
         // renames must not blank the objective it never mentioned.
         var updated = await _service.UpdateAsync(req.SessionId,
-                                        new UpdateWorkSessionRequestModel(req.Title, req.Objective, req.AgentDefinitionId),
+                                        new UpdateWorkSessionRequestModel { Title = req.Title, Objective = req.Objective, AgentDefinitionId = req.AgentDefinitionId },
                                         ct);
         await Send.OkAsync(updated.ToResponse(), ct);
     }

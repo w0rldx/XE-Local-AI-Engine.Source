@@ -37,7 +37,7 @@ public sealed class KeyedCompositeLockDomain
         }
 
         var normalizedKeys = ModelCoordinationKeys.NormalizeSet(keys);
-        var ownership = new OwnershipToken(Guid.NewGuid());
+        var ownership = new OwnershipToken { Value = Guid.NewGuid() };
         CurrentOwnership.Value = ownership;
         lock (_gate)
         {
@@ -56,7 +56,7 @@ public sealed class KeyedCompositeLockDomain
                 {
                     var registration = (CancellationState)state!;
                     registration.Domain.Cancel(registration.Waiter, registration.Token);
-                }, new CancellationState(this, waiter, cancellationToken));
+                }, new CancellationState { Domain = this, Waiter = waiter, Token = cancellationToken });
             }
 
             return AwaitWaiterAsync(waiter);
@@ -205,9 +205,19 @@ public sealed class KeyedCompositeLockDomain
         public CancellationTokenRegistration CancellationRegistration { get; set; }
     }
 
-    private sealed record CancellationState(KeyedCompositeLockDomain Domain, Waiter Waiter, CancellationToken Token);
+    private sealed record CancellationState
+    {
+        public required KeyedCompositeLockDomain Domain { get; init; }
 
-    internal sealed record OwnershipToken(Guid Value);
+        public required Waiter Waiter { get; init; }
+
+        public required CancellationToken Token { get; init; }
+    }
+
+    internal sealed class OwnershipToken
+    {
+        public required Guid Value { get; init; }
+    }
 }
 
 public sealed class ModelCoordinationLockLease : IAsyncDisposable

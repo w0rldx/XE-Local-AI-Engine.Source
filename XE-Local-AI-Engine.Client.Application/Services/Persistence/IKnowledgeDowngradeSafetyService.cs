@@ -20,20 +20,37 @@ public interface IKnowledgeDowngradeSafetyService
 }
 
 /// <summary>Read-only downgrade compatibility report.</summary>
-public sealed record KnowledgeDowngradePreflightResult(
-    bool CollectionMigrationApplied,
-    bool IsCompatible,
-    int ConflictGroupCount,
-    int ConflictingDocumentCount,
-    int MinimumDocumentsToRemove,
-    IReadOnlyList<KnowledgeDowngradeConflict> Conflicts);
+public sealed class KnowledgeDowngradePreflightResult
+{
+    public required bool CollectionMigrationApplied { get; init; }
+
+    public required bool IsCompatible { get; init; }
+
+    public required int ConflictGroupCount { get; init; }
+
+    public required int ConflictingDocumentCount { get; init; }
+
+    public required int MinimumDocumentsToRemove { get; init; }
+
+    public required IReadOnlyList<KnowledgeDowngradeConflict> Conflicts { get; init; }
+}
 
 /// <summary>A duplicate legacy hash group described only by opaque document identifiers.</summary>
-public sealed record KnowledgeDowngradeConflict(string ConflictId, IReadOnlyList<string> DocumentIdentifiers);
+public sealed class KnowledgeDowngradeConflict
+{
+    public required string ConflictId { get; init; }
+
+    public required IReadOnlyList<string> DocumentIdentifiers { get; init; }
+}
 
 /// <summary>Explicit database export plus the compatibility report captured immediately before it.</summary>
-public sealed record KnowledgeDowngradeExportResult(
-    string ArtifactPath,
-    long ArtifactBytes,
-    string ArtifactSha256,
-    KnowledgeDowngradePreflightResult Preflight);
+public sealed class KnowledgeDowngradeExportResult
+{
+    public required string ArtifactPath { get; init; }
+
+    public required long ArtifactBytes { get; init; }
+
+    public required string ArtifactSha256 { get; init; }
+
+    public required KnowledgeDowngradePreflightResult Preflight { get; init; }
+}

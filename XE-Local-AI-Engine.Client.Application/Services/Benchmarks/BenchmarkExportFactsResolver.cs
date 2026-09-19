@@ -4,15 +4,20 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-public sealed record BenchmarkFidelityDisplayFacts(string? ExpectedKldDigest)
+public sealed class BenchmarkFidelityDisplayFacts
 {
+    public required string? ExpectedKldDigest { get; init; }
+
     public static BenchmarkFidelityDisplayFacts FromProject(BenchmarkProjectRecord? project) =>
-        new(project is { FidelityKldEnabled: true, FidelityKldBaseFingerprint: { Length: > 0 } fingerprint }
+        new()
+        {
+            ExpectedKldDigest = project is { FidelityKldEnabled: true, FidelityKldBaseFingerprint: { Length: > 0 } fingerprint }
             ? BenchmarkKldCacheKey.Create(fingerprint,
                                       BenchmarkFidelityCorpus.Require().Sha256,
                                       BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks))
                                   .Digest
-            : null);
+            : null
+        };
 }
 
 public interface IBenchmarkExportFactsResolver
@@ -83,6 +88,6 @@ internal sealed class BenchmarkExportFactsResolver : IBenchmarkExportFactsResolv
             }
         }
 
-        return new BenchmarkExportRunFacts(buildCommit, gpuInfo, modelFilename, modelSize, gpuLayers);
+        return new BenchmarkExportRunFacts { BuildCommit = buildCommit, GpuInfo = gpuInfo, ModelFilename = modelFilename, ModelSizeBytes = modelSize, GpuLayers = gpuLayers };
     }
 }

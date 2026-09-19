@@ -17,15 +17,23 @@ internal enum DevelopmentReviewDisposition
 
 internal sealed record DevelopmentReviewFinding(string Category, string Summary);
 
-internal sealed record DevelopmentReviewerSubmission(
-    DevelopmentReviewDisposition Disposition,
-    string Summary,
-    IReadOnlyList<DevelopmentReviewFinding> Findings);
+internal sealed record DevelopmentReviewerSubmission
+{
+    public required DevelopmentReviewDisposition Disposition { get; init; }
 
-internal sealed record DevelopmentReviewerModelResult(
-    DevelopmentReviewerSubmission Submission,
-    long? InputTokens,
-    long? OutputTokens);
+    public required string Summary { get; init; }
+
+    public required IReadOnlyList<DevelopmentReviewFinding> Findings { get; init; }
+}
+
+internal sealed class DevelopmentReviewerModelResult
+{
+    public required DevelopmentReviewerSubmission Submission { get; init; }
+
+    public required long? InputTokens { get; init; }
+
+    public required long? OutputTokens { get; init; }
+}
 
 internal interface IDevelopmentReviewerModel
 {
@@ -200,12 +208,15 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
             providerCalls,
             "reviewer");
 
-        return new DevelopmentReviewerModelResult(gateway.Submission
+        return new DevelopmentReviewerModelResult
+        {
+            Submission = gateway.Submission
                                                   ?? throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.MissingSubmission,
                                                       "The Development reviewer stopped without calling submit_review, so the round produced no disposition. "
                                                       + "Re-run the review, or use a model that reliably closes with a tool call."),
-            inputTokens,
-            outputTokens);
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens
+        };
     }
 
     /// <summary>
@@ -328,7 +339,7 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
                 throw new InvalidOperationException("A changes-requested review requires at least one bounded finding.");
             }
 
-            Submission = new DevelopmentReviewerSubmission(parsed, summary, boundedFindings);
+            Submission = new DevelopmentReviewerSubmission { Disposition = parsed, Summary = summary, Findings = boundedFindings };
             _liveProgress?.ToolCompleted("submit_review");
             return "typed review submission accepted";
         }

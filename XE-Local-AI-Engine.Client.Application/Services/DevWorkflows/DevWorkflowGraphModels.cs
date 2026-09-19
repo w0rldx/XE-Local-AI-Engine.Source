@@ -50,7 +50,16 @@ internal enum DevWorkflowEffectScope
 }
 
 /// <summary>The decomposition template a node expands into. All four fields are load-bearing.</summary>
-internal sealed record DevWorkflowMaterialization(string TemplateNodeKey, DevWorkflowArtifactKind ArtifactKind, string JoinNodeKey, int MaxChildren);
+internal sealed class DevWorkflowMaterialization
+{
+    public required string TemplateNodeKey { get; init; }
+
+    public required DevWorkflowArtifactKind ArtifactKind { get; init; }
+
+    public required string JoinNodeKey { get; init; }
+
+    public required int MaxChildren { get; init; }
+}
 
 /// <summary>
 ///     One node of the parsed graph. Only what the runtime reads; unknown properties survive in the stored blob either
@@ -68,25 +77,44 @@ internal sealed record DevWorkflowMaterialization(string TemplateNodeKey, DevWor
 ///         so a graph does not become unsaveable because a model was uninstalled after it was authored.
 ///     </para>
 /// </summary>
-internal sealed record DevWorkflowGraphNode(
-    string NodeKey,
-    DevWorkflowNodeType NodeType,
-    string Label,
-    Guid? AgentDefinitionId,
-    string? AgentSeedSlug,
-    string? Instructions,
-    IReadOnlyList<string> ValidationCommandIds,
-    DevWorkflowJoinPolicy JoinPolicy,
-    int MaxAttempts,
-    int RetryDelaySeconds,
-    int? NodeTimeoutSeconds,
-    string? RetryTarget,
-    DevWorkflowMaterialization? Materialization,
-    DevWorkflowToolMode ToolMode,
-    string? ModelProfile,
-    string? ReasoningEffort,
-    IReadOnlySet<DevWorkflowNodeEffect> RequiredCapabilities,
-    int? MaxLoopIterations);
+internal sealed class DevWorkflowGraphNode
+{
+    public required string NodeKey { get; init; }
+
+    public required DevWorkflowNodeType NodeType { get; init; }
+
+    public required string Label { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required string? AgentSeedSlug { get; init; }
+
+    public required string? Instructions { get; init; }
+
+    public required IReadOnlyList<string> ValidationCommandIds { get; init; }
+
+    public required DevWorkflowJoinPolicy JoinPolicy { get; init; }
+
+    public required int MaxAttempts { get; init; }
+
+    public required int RetryDelaySeconds { get; init; }
+
+    public required int? NodeTimeoutSeconds { get; init; }
+
+    public required string? RetryTarget { get; init; }
+
+    public required DevWorkflowMaterialization? Materialization { get; init; }
+
+    public required DevWorkflowToolMode ToolMode { get; init; }
+
+    public required string? ModelProfile { get; init; }
+
+    public required string? ReasoningEffort { get; init; }
+
+    public required IReadOnlySet<DevWorkflowNodeEffect> RequiredCapabilities { get; init; }
+
+    public required int? MaxLoopIterations { get; init; }
+}
 
 internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowCondition? Condition)
 {

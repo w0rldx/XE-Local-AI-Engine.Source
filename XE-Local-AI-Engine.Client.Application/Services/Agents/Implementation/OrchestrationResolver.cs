@@ -163,13 +163,16 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ? null
             : firstCloudParticipant.Definition.ModelProfile ?? activeModelId;
 
-        return OrchestrationResolution.Compiled(new ResolvedOrchestration(spec,
-            orchestrator.Instructions,
-            orchestrator.ModelProfile,
-            orchestrator.ReasoningEffort,
-            orchestrator.Version,
-            AnyParticipantIsCloud: firstCloudParticipant is not null,
-            firstCloudParticipantModel));
+        return OrchestrationResolution.Compiled(new ResolvedOrchestration
+        {
+            Spec = spec,
+            ResolvedSystemPrompt = orchestrator.Instructions,
+            ModelProfile = orchestrator.ModelProfile,
+            ReasoningEffort = orchestrator.ReasoningEffort,
+            AgentDefinitionVersion = orchestrator.Version,
+            AnyParticipantIsCloud = firstCloudParticipant is not null,
+            FirstCloudParticipantModel = firstCloudParticipantModel
+        });
     }
 
     /// <summary>
@@ -219,11 +222,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             // allow-list above; this call supplies the thinking bit and the cloud-locality bit from one lookup.
             var participantCapabilities = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken);
             var (supportsThinking, _, participantIsCloud) = participantCapabilities;
-            capable[participant.Id] = new ResolvedParticipant(participant,
-                resolvedInstructions,
-                supportsThinking,
-                participantIsCloud,
-                participantCapabilities.ReasoningBudgetEnforceable);
+            capable[participant.Id] = new ResolvedParticipant
+            {
+                Definition = participant,
+                ResolvedInstructions = resolvedInstructions,
+                SupportsThinking = supportsThinking,
+                IsCloud = participantIsCloud,
+                ReasoningBudgetEnforceable = participantCapabilities.ReasoningBudgetEnforceable
+            };
         }
 
         return capable;
@@ -389,10 +395,16 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     effective model's provider locality (<see cref="IsCloud" />). All are resolved during the async participant
     ///     load so the synchronous <see cref="ToSpecParticipant" /> stays query-free.
     /// </summary>
-    private sealed record ResolvedParticipant(
-        AgentDefinitionRecord Definition,
-        string ResolvedInstructions,
-        bool SupportsThinking,
-        bool IsCloud,
-        bool ReasoningBudgetEnforceable);
+    private sealed record ResolvedParticipant
+    {
+        public required AgentDefinitionRecord Definition { get; init; }
+
+        public required string ResolvedInstructions { get; init; }
+
+        public required bool SupportsThinking { get; init; }
+
+        public required bool IsCloud { get; init; }
+
+        public required bool ReasoningBudgetEnforceable { get; init; }
+    }
 }

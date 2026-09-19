@@ -42,10 +42,17 @@ public interface IEmbeddingModelResolver
 ///     that was merely a fallback — rather than an actually-resolved installed model — would misclassify every document
 ///     as stale during a transient provider outage instead of leaving their status untouched.
 /// </summary>
-/// <param name="Name">The model name to hand to the embedding generator.</param>
-/// <param name="IsConfident">Whether an installed model was actually matched (as opposed to a bare fallback).</param>
-/// <param name="RevisionFingerprint">Content-free fingerprint of the matched immutable installed-inventory record.</param>
-public sealed record EmbeddingModelResolution(string Name, bool IsConfident, string RevisionFingerprint = "unresolved");
+public sealed class EmbeddingModelResolution
+{
+    /// <summary>The model name to hand to the embedding generator.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Whether an installed model was actually matched (as opposed to a bare fallback).</summary>
+    public required bool IsConfident { get; init; }
+
+    /// <summary>Content-free fingerprint of the matched immutable installed-inventory record.</summary>
+    public string RevisionFingerprint { get; init; } = "unresolved";
+}
 
 /// <inheritdoc />
 public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
@@ -74,7 +81,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             // Provider process down / transport error / unmapped provider. Keep the configured name so the caller's
             // existing graceful "embedding model not available" path fires unchanged. No model or chunk text is involved.
             // NOT confident: no installed model was actually matched, so this must never be treated as a vector identity.
-            return new EmbeddingModelResolution(configuredName, IsConfident: false);
+            return new EmbeddingModelResolution { Name = configuredName, IsConfident = false };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -83,7 +90,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             // token was NOT the one that fired, this is a timeout, so degrade to the configured name like the other
             // transport failures above. A genuine caller cancellation (cancellationToken.IsCancellationRequested is
             // true) falls through this filter and rethrows, propagating as normal.
-            return new EmbeddingModelResolution(configuredName, IsConfident: false);
+            return new EmbeddingModelResolution { Name = configuredName, IsConfident = false };
         }
 
         // (1) Exact configured name is installed → keep it (an Ollama node with nomic-embed-text is unaffected).
@@ -106,7 +113,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         }
 
         // (3) Nothing installed matches → keep the configured name, NOT confident (graceful failure downstream).
-        return new EmbeddingModelResolution(configuredName, IsConfident: false);
+        return new EmbeddingModelResolution { Name = configuredName, IsConfident = false };
     }
 
     private static EmbeddingModelResolution CreateConfidentResolution(string resolvedName, LocalModelDescriptor descriptor)
@@ -121,8 +128,11 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         var material = string.Create(CultureInfo.InvariantCulture,
             $"inventory-v1\n{descriptor.ProviderName}\n{resolvedName}\n{immutableRevision}");
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(material));
-        return new EmbeddingModelResolution(resolvedName,
-            IsConfident: true,
-            $"inventory-v1:{Convert.ToHexStringLower(digest)}");
+        return new EmbeddingModelResolution
+        {
+            Name = resolvedName,
+            IsConfident = true,
+            RevisionFingerprint = $"inventory-v1:{Convert.ToHexStringLower(digest)}"
+        };
     }
 }

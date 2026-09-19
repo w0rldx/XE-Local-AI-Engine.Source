@@ -32,11 +32,25 @@ internal interface IMemorySemanticDeduplicator
 /// <summary>An existing live (Suggested/Enabled) memory to compare candidates against. <see cref="Id" />/
 ///     <see cref="Version" /> key its RAM-only cached embedding; <see cref="Scope" /> confines the comparison to the same
 ///     scope; <see cref="Behavior" /> is the text embedded.</summary>
-internal sealed record MemoryDedupExisting(Guid Id, int Version, MemoryScope Scope, string Behavior);
+internal sealed class MemoryDedupExisting
+{
+    public required Guid Id { get; init; }
+
+    public required int Version { get; init; }
+
+    public required MemoryScope Scope { get; init; }
+
+    public required string Behavior { get; init; }
+}
 
 /// <summary>A lexically-surviving candidate to test for semantic duplication. <see cref="Behavior" /> is the (already
 ///     secret-redacted) text embedded; <see cref="Scope" /> confines the comparison to same-scope memories.</summary>
-internal sealed record MemoryDedupCandidate(MemoryScope Scope, string Behavior);
+internal sealed class MemoryDedupCandidate
+{
+    public required MemoryScope Scope { get; init; }
+
+    public required string Behavior { get; init; }
+}
 
 /// <summary>
 ///     Outcome of one <see cref="IMemorySemanticDeduplicator.FindSemanticDuplicatesAsync" /> call.
@@ -45,8 +59,12 @@ internal sealed record MemoryDedupCandidate(MemoryScope Scope, string Behavior);
 ///     <see cref="Applied" /> is <c>false</c> the caller keeps every candidate — the lexical-only fallback that guarantees
 ///     no candidate is dropped during a provider outage.
 /// </summary>
-internal sealed record MemorySemanticDedupResult(bool Applied, IReadOnlySet<int> DuplicateIndexes)
+internal sealed class MemorySemanticDedupResult
 {
+    public required bool Applied { get; init; }
+
+    public required IReadOnlySet<int> DuplicateIndexes { get; init; }
+
     /// <summary>The "did not run" result: no candidate is a semantic duplicate; the caller keeps them all.</summary>
-    public static MemorySemanticDedupResult NotApplied { get; } = new(Applied: false, new HashSet<int>());
+    public static MemorySemanticDedupResult NotApplied { get; } = new() { Applied = false, DuplicateIndexes = new HashSet<int>() };
 }

@@ -153,7 +153,7 @@ public sealed class StartGgufDownloadEndpointTests
         public Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
         {
             LastRequest = request;
-            return Task.FromResult(new GgufDownloadTicket("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", AlreadyInFlight: false, Guid.NewGuid()));
+            return Task.FromResult(new GgufDownloadTicket { ModelName = "bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", AlreadyInFlight = false, OperationId = Guid.NewGuid() });
         }
 
         public bool Cancel(string modelName)

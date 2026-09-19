@@ -68,15 +68,24 @@ internal static class SandboxProviderSelector
     /// </summary>
     private static readonly SandboxBackend[] ByAscendingPrivilege =
     [
-        new(FakeSandboxRuntimeProvider.Name,
-            SandboxToolchainSource.HostToolchain,
-            static services => services.GetService<FakeSandboxRuntimeProvider>()),
-        new(ProcessSandboxRuntimeProvider.Name,
-            SandboxToolchainSource.HostToolchain,
-            static services => services.GetService<ProcessSandboxRuntimeProvider>()),
-        new(DockerSandboxRuntimeProvider.Name,
-            SandboxToolchainSource.EngineApprovedImage,
-            static services => services.GetService<DockerSandboxRuntimeProvider>())
+        new()
+        {
+            Name = FakeSandboxRuntimeProvider.Name,
+            Toolchain = SandboxToolchainSource.HostToolchain,
+            Locate = static services => services.GetService<FakeSandboxRuntimeProvider>()
+        },
+        new()
+        {
+            Name = ProcessSandboxRuntimeProvider.Name,
+            Toolchain = SandboxToolchainSource.HostToolchain,
+            Locate = static services => services.GetService<ProcessSandboxRuntimeProvider>()
+        },
+        new()
+        {
+            Name = DockerSandboxRuntimeProvider.Name,
+            Toolchain = SandboxToolchainSource.EngineApprovedImage,
+            Locate = static services => services.GetService<DockerSandboxRuntimeProvider>()
+        }
     ];
 
     /// <summary>
@@ -339,11 +348,14 @@ internal static class SandboxProviderSelector
     ///     probe a backend it is about to reject on that axis; <c>SandboxSubstrateSelectionArchitectureTests</c>
     ///     asserts the two never drift.
     /// </summary>
-    private sealed record SandboxBackend(
-        string Name,
-        SandboxToolchainSource Toolchain,
-        Func<IServiceProvider, ISandboxRuntimeProvider?> Locate)
+    private sealed record SandboxBackend
     {
+        public required string Name { get; init; }
+
+        public required SandboxToolchainSource Toolchain { get; init; }
+
+        public required Func<IServiceProvider, ISandboxRuntimeProvider?> Locate { get; init; }
+
         public bool Matches(string providerName)
         {
             return string.Equals(Name, providerName, StringComparison.OrdinalIgnoreCase);

@@ -35,7 +35,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: true);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Temp chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId));
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Temp chat", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = agentId });
 
         AssertEx.True(created.MemoryExcluded, "A new conversation bound to a default-temporary agent should inherit MemoryExcluded=true.");
 
@@ -50,7 +50,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: false);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Normal chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId));
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Normal chat", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = agentId });
 
         AssertEx.False(created.MemoryExcluded, "A new conversation bound to a non-temporary agent should default to MemoryExcluded=false.");
     }
@@ -61,7 +61,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         await using var provider = await BuildProviderAsync("unbound-default.sqlite");
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound chat", "node", CreatedAtUtc: 10));
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Unbound chat", UserId = "node", CreatedAtUtc = 10 });
 
         AssertEx.False(created.MemoryExcluded, "An unbound conversation defaults to MemoryExcluded=false.");
     }
@@ -72,7 +72,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         await using var provider = await BuildProviderAsync("toggle-roundtrip.sqlite");
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle chat", "node", CreatedAtUtc: 10));
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Toggle chat", UserId = "node", CreatedAtUtc = 10 });
         AssertEx.False(created.MemoryExcluded, "A fresh unbound conversation starts non-temporary.");
 
         // No per-conversation override PATCH endpoint is exposed. This test writes the column directly to prove the read

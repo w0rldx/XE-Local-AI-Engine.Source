@@ -701,8 +701,11 @@ public sealed class ContainerRuntimeFakeContractTests
     /// <summary>A daemon holding nothing, for the tests whose subject is the pull or the network create itself.</summary>
     private static FakeDockerRuntimeClient EmptyDaemon()
     {
-        return new FakeDockerRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///fake-runtime.sock"),
-            DockerDaemonEndpointSource.Configuration));
+        return new FakeDockerRuntimeClient(new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///fake-runtime.sock"),
+            Source = DockerDaemonEndpointSource.Configuration
+        });
     }
 
     private static Dictionary<string, string> Labels()

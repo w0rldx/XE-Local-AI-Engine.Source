@@ -43,7 +43,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private static readonly IReadOnlyDictionary<string, AgentHomeCommandDescriptor> ProfileCommands =
         new Dictionary<string, AgentHomeCommandDescriptor>(StringComparer.Ordinal)
         {
-            ["dotnet-agent-home"] = new("dotnet", ["--version"])
+            ["dotnet-agent-home"] = new() { Executable = "dotnet", Arguments = ["--version"] }
         };
 
     private readonly ComputeOptions _ceilingDefaults;
@@ -233,7 +233,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 foldersToCopy =
                 [
                     .. resolvedFolders,
-                    new ResolvedSelectedFolder(Guid.NewGuid(), AttachmentsFolderAlias, attachmentsSnapshot.HostPath, SelectedFolderMode.Copy)
+                    new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = AttachmentsFolderAlias, HostPath = attachmentsSnapshot.HostPath, Mode = SelectedFolderMode.Copy }
                 ];
 
                 // Capture the workspace-relative staged paths before the snapshot is disposed, so the chat agent-mode
@@ -705,5 +705,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     }
 
     /// <summary>The executable and arguments for a runtime profile's in-sandbox command.</summary>
-    private sealed record AgentHomeCommandDescriptor(string Executable, IReadOnlyList<string> Arguments);
+    private sealed record AgentHomeCommandDescriptor
+    {
+        public required string Executable { get; init; }
+
+        public required IReadOnlyList<string> Arguments { get; init; }
+    }
 }

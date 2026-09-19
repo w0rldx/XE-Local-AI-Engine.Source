@@ -939,7 +939,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var findings = await store.ListFindingsAsync(sessionId, sinceSequence: 0, CancellationToken.None);
         var artifacts = await store.ListArtifactsAsync(sessionId, sinceSequence: 0, CancellationToken.None);
         var checkpoint = await store.GetLatestCheckpointAsync(sessionId, CancellationToken.None);
-        return new WorkSessionState(session, tasks, findings, artifacts, checkpoint);
+        return new WorkSessionState { Session = session, Tasks = tasks, Findings = findings, Artifacts = artifacts, LastCheckpoint = checkpoint };
     }
 
     private enum StepOutcome

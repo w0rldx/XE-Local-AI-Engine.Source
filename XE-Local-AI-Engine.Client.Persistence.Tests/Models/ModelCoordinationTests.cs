@@ -102,8 +102,8 @@ public sealed class ModelCoordinationTests
     public void DeterministicIdentity_MatchesGoldenAndCaseVariantsShareReservation()
     {
         var resolver = CreateIdentityResolver();
-        var lower = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import, "foo", "Q4_K_M"));
-        var upper = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Download, "FOO", "q4_k_m"));
+        var lower = resolver.Resolve(new GgufAcquisitionIntent { OperationKind = GgufAcquisitionOperationKind.Import, ModelBaseName = "foo", Quantization = "Q4_K_M" });
+        var upper = resolver.Resolve(new GgufAcquisitionIntent { OperationKind = GgufAcquisitionOperationKind.Download, ModelBaseName = "FOO", Quantization = "q4_k_m" });
 
         AssertEx.Equal("foo:Q4_K_M", lower.CanonicalModelName);
         AssertEx.Equal("foo-Q4_K_M-849525de9efce6742c0cf2b6.gguf", lower.FinalFileName);
@@ -116,9 +116,12 @@ public sealed class ModelCoordinationTests
     public void DeterministicIdentity_SlugIsContainedAndBounded()
     {
         var resolver = CreateIdentityResolver();
-        var identity = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
-            new string('A', 90),
-            "F16"));
+        var identity = resolver.Resolve(new GgufAcquisitionIntent
+        {
+            OperationKind = GgufAcquisitionOperationKind.Import,
+            ModelBaseName = new string('A', 90),
+            Quantization = "F16"
+        });
 
         AssertEx.False(identity.FinalFileName.Contains("..", StringComparison.Ordinal));
         AssertEx.Equal(expected: 72, identity.FinalFileName[..identity.FinalFileName.IndexOf("-F16-", StringComparison.Ordinal)].Length);
@@ -128,17 +131,23 @@ public sealed class ModelCoordinationTests
     public void DeterministicIdentity_ProjectorMetadataIsDownloadOnlyAndProducesReservedPath()
     {
         var resolver = CreateIdentityResolver();
-        var projector = new GgufProjectorAcquisitionMetadata("mmproj-model.gguf", new string('a', 64), DeclaredSizeBytes: 42);
-        var download = resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Download,
-            "foo",
-            "Q4_K_M",
-            projector));
+        var projector = new GgufProjectorAcquisitionMetadata { SourceDisplayName = "mmproj-model.gguf", DeclaredSha256 = new string('a', 64), DeclaredSizeBytes = 42 };
+        var download = resolver.Resolve(new GgufAcquisitionIntent
+        {
+            OperationKind = GgufAcquisitionOperationKind.Download,
+            ModelBaseName = "foo",
+            Quantization = "Q4_K_M",
+            Projector = projector
+        });
 
         AssertEx.Equal("foo-projector-849525de9efce6742c0cf2b6.gguf", download.ProjectorRelativePath);
-        _ = AssertEx.Throws<ArgumentException>(() => resolver.Resolve(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import,
-            "foo",
-            "Q4_K_M",
-            projector)));
+        _ = AssertEx.Throws<ArgumentException>(() => resolver.Resolve(new GgufAcquisitionIntent
+        {
+            OperationKind = GgufAcquisitionOperationKind.Import,
+            ModelBaseName = "foo",
+            Quantization = "Q4_K_M",
+            Projector = projector
+        }));
     }
 
     [Test]

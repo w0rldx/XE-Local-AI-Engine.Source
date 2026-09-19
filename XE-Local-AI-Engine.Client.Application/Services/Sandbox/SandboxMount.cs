@@ -69,7 +69,14 @@ public sealed record SandboxMount
 ///     What a mount actually became, reported back on <see cref="SandboxHandle" /> so a caller can answer "what is this
 ///     host path called inside the sandbox?" without knowing which provider answered.
 /// </summary>
-/// <param name="HostPath">The canonical host path that was requested.</param>
-/// <param name="SandboxPath">The path that names those same bytes from inside the sandbox.</param>
-/// <param name="ReadOnly">Whether the mount is read-only inside the sandbox.</param>
-public sealed record SandboxMountBinding(string HostPath, string SandboxPath, bool ReadOnly);
+public sealed class SandboxMountBinding
+{
+    /// <summary>The canonical host path that was requested.</summary>
+    public required string HostPath { get; init; }
+
+    /// <summary>The path that names those same bytes from inside the sandbox.</summary>
+    public required string SandboxPath { get; init; }
+
+    /// <summary>Whether the mount is read-only inside the sandbox.</summary>
+    public required bool ReadOnly { get; init; }
+}

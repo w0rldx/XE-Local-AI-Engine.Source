@@ -145,7 +145,7 @@ public sealed class DockerSandboxOrphanSweepTests
     {
         var sandboxId = Guid.NewGuid().ToString("N")[..32];
         var specification = DockerSandboxHardening.BuildSpecification(DockerSandboxHardeningTests.Options(),
-            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+            new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
             "xe-dev-" + sandboxId,
             sandboxId,
             installId,
@@ -157,7 +157,7 @@ public sealed class DockerSandboxOrphanSweepTests
     private static async Task<string> SeedContainerAsync(FakeDockerRuntimeClient client, IReadOnlyDictionary<string, string> labels)
     {
         var specification = DockerSandboxHardening.BuildSpecification(DockerSandboxHardeningTests.Options(),
-                new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+                new ResolvedContainerIdentity { UserId = 1000, GroupId = 1000 },
                 "someone-elses-container",
                 "sandbox-x",
                 "install-x",
@@ -174,8 +174,11 @@ public sealed class DockerSandboxOrphanSweepTests
         var nodeRoot = Path.Combine(Path.GetTempPath(), "xe-container-sweep-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(nodeRoot);
 
-        var client = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///fake.sock"),
-            DockerDaemonEndpointSource.Configuration));
+        var client = new FakeDockerRuntimeClient(new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///fake.sock"),
+            Source = DockerDaemonEndpointSource.Configuration
+        });
 
         var provider = new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new SweepClientFactory(client),

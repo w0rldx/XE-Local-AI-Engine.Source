@@ -79,7 +79,7 @@ internal static partial class DeploymentPlanner
             services.Add(new ServiceDeployment(service.Name,
                 specification.Name,
                 specification,
-                [.. service.DependsOn.Select(static dependency => new ServiceDependency(dependency.Service, string.Equals(dependency.Condition, HealthyCondition, StringComparison.Ordinal)))],
+                [.. service.DependsOn.Select(static dependency => new ServiceDependency { Service = dependency.Service, RequiresHealthy = string.Equals(dependency.Condition, HealthyCondition, StringComparison.Ordinal) })],
                 [.. publications.Select(static publication => publication.ContainerPort)]));
         }
 
@@ -426,4 +426,9 @@ internal sealed record ServiceDeployment(
 ///     A start-ordering edge. <see cref="RequiresHealthy" /> rather than the manifest's condition string, so the
 ///     waiter branches on a boolean it cannot mistype.
 /// </summary>
-internal sealed record ServiceDependency(string Service, bool RequiresHealthy);
+internal sealed class ServiceDependency
+{
+    public required string Service { get; init; }
+
+    public required bool RequiresHealthy { get; init; }
+}

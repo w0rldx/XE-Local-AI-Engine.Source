@@ -83,11 +83,14 @@ public static class TrainingFootprintEstimator
         // The fail-safe floor: the frozen 4-bit weights plus a CUDA context have to be resident no matter what the
         // rest of the formula says, so a shape this estimator could not read still cannot produce a tiny answer.
         gpuBytes = Math.Max(gpuBytes, (long)(parameterCount * QuantizedBytesPerParameter) + CudaContextOverheadBytes);
-        return new TrainingFootprintEstimate(gpuBytes,
-            HostRamBytes,
-            parameterCount,
-            trainable,
-            parameterCount >= ExperimentalParameterThreshold);
+        return new TrainingFootprintEstimate
+        {
+            GpuBytes = gpuBytes,
+            RamBytes = HostRamBytes,
+            ParameterCount = parameterCount,
+            TrainableParameterCount = trainable,
+            Experimental = parameterCount >= ExperimentalParameterThreshold
+        };
     }
 
     /// <summary>

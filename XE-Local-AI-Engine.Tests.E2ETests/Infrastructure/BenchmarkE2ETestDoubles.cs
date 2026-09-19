@@ -130,12 +130,15 @@ public static class BenchmarkE2ETestDoubles
                 "f16",
                 FlashAttention: false,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
-            return Task.FromResult(new BenchmarkJudgeRuntimeResolution(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
+            return Task.FromResult(new BenchmarkJudgeRuntimeResolution
+            {
+                Runtime = new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
                     SnapshotV1,
                     policy.RequestedContextTokens,
                     runtime,
                     BenchmarkFrozenPolicies.DeterministicSampling()),
-                new BenchmarkRunLaunchIntent { Variant = "cpu", KvCacheType = "f16", KvCacheTypeSource = "auto", KvAutoReason = "cpu-variant", FlashAttentionMode = "off", IntendedLaunchIdentity = "e2e-intended-identity", IntendedExecutableSha256 = null }));
+                Intent = new BenchmarkRunLaunchIntent { Variant = "cpu", KvCacheType = "f16", KvCacheTypeSource = "auto", KvAutoReason = "cpu-variant", FlashAttentionMode = "off", IntendedLaunchIdentity = "e2e-intended-identity", IntendedExecutableSha256 = null }
+            });
         }
     }
 
@@ -160,19 +163,22 @@ public static class BenchmarkE2ETestDoubles
         {
             var definitions = await _agentDefinitions.ListAsync(cancellationToken);
             return definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single)
-                              .Select(static definition => new BenchmarkEligibleAgent(definition.Id, definition.Name, definition.Version))
+                              .Select(static definition => new BenchmarkEligibleAgent { Id = definition.Id, Name = definition.Name, Version = definition.Version })
                               .ToArray();
         }
 
         public Task<IReadOnlyList<BenchmarkEligibleModel>> ListEligibleModelsAsync(int? contextTokens,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<BenchmarkEligibleModel>>([
-                new BenchmarkEligibleModel(ModelName,
-                    MaxContextTokens: 32768,
-                    EffectiveContextTokens: null,
-                    LocalModelOrigin.Imported,
-                    ModelContentFingerprint,
-                    SupportsTools: false)
+                new BenchmarkEligibleModel
+                {
+                    ModelName = ModelName,
+                    MaxContextTokens = 32768,
+                    EffectiveContextTokens = null,
+                    Origin = LocalModelOrigin.Imported,
+                    ModelContentFingerprint = ModelContentFingerprint,
+                    SupportsTools = false
+                }
             ]);
     }
 }

@@ -197,26 +197,29 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             await captureResources(ct);
         }
 
-        return new InferenceBenchmarkMetrics(Success: true,
-            FailureReason: null,
-            TokensPerSecond: MedianNullable(passes.Select(static pass => pass.TokensPerSecond)),
-            PpTokensPerSecond: MedianNullable(passes.Select(static pass => pass.PpTokensPerSecond)),
-            TtftMs: MedianNullable(passes.Select(static pass => (double?)pass.TtftMs)),
-            TotalLatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
-            CacheHitRate: MedianNullable(passes.Select(static pass => pass.CacheHitRate)),
-            ToolLoopMs: MedianNullable(passes.Select(static pass => pass.ToolLoopMs)),
-            VramLoadBytes: null,
-            VramAfterBytes: null,
-            Runs: measuredRuns,
-            RawJson: passes[^1].RawMetrics,
-            Role: ModelRole.Chat.ToString(),
-            P50LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
-            P95LatencyMs: Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.95d),
-            RequestsProcessingAtLastScrape: passes[^1].RequestsProcessingAtLastScrape,
-            RequestsDeferredAtLastScrape: passes[^1].RequestsDeferredAtLastScrape,
-            ContextTokensHighWatermark: MaxNullableDouble(passes.Select(static pass => pass.ContextTokensHighWatermark)),
-            AverageBusySlotsPerDecode: MedianNullable(passes.Select(static pass => pass.AverageBusySlotsPerDecode)),
-            WarmPromptTimings: passes.Select(static pass => pass.WarmPromptTimings).ToArray());
+        return new InferenceBenchmarkMetrics
+        {
+            Success = true,
+            FailureReason = null,
+            TokensPerSecond = MedianNullable(passes.Select(static pass => pass.TokensPerSecond)),
+            PpTokensPerSecond = MedianNullable(passes.Select(static pass => pass.PpTokensPerSecond)),
+            TtftMs = MedianNullable(passes.Select(static pass => (double?)pass.TtftMs)),
+            TotalLatencyMs = Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
+            CacheHitRate = MedianNullable(passes.Select(static pass => pass.CacheHitRate)),
+            ToolLoopMs = MedianNullable(passes.Select(static pass => pass.ToolLoopMs)),
+            VramLoadBytes = null,
+            VramAfterBytes = null,
+            Runs = measuredRuns,
+            RawJson = passes[^1].RawMetrics,
+            Role = ModelRole.Chat.ToString(),
+            P50LatencyMs = Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.50d),
+            P95LatencyMs = Percentile(passes.Select(static pass => pass.TotalLatencyMs).ToArray(), 0.95d),
+            RequestsProcessingAtLastScrape = passes[^1].RequestsProcessingAtLastScrape,
+            RequestsDeferredAtLastScrape = passes[^1].RequestsDeferredAtLastScrape,
+            ContextTokensHighWatermark = MaxNullableDouble(passes.Select(static pass => pass.ContextTokensHighWatermark)),
+            AverageBusySlotsPerDecode = MedianNullable(passes.Select(static pass => pass.AverageBusySlotsPerDecode)),
+            WarmPromptTimings = passes.Select(static pass => pass.WarmPromptTimings).ToArray()
+        };
     }
 
     private async Task<ChatPassMetrics> RunChatPassAsync(LlamaServerEndpoint endpoint,
@@ -282,18 +285,21 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var afterAll = await ScrapeMetricsAsync(metricsUri, ct);
         totalStopwatch.Stop();
 
-        return new ChatPassMetrics(DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
-            DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric),
-            coldStage.TtftMs,
-            totalStopwatch.Elapsed.TotalMilliseconds,
-            DeriveCacheHitRate(warmStage.Timings),
-            toolLoopMs,
-            afterAll,
-            TryParsePromMetric(afterAll, RequestsProcessingMetric),
-            TryParsePromMetric(afterAll, RequestsDeferredMetric),
-            TryParsePromMetric(afterAll, ContextTokensHighWatermarkMetric),
-            TryParsePromMetric(afterAll, BusySlotsPerDecodeMetric),
-            warmStage.Timings);
+        return new ChatPassMetrics
+        {
+            TokensPerSecond = DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
+            PpTokensPerSecond = DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric),
+            TtftMs = coldStage.TtftMs,
+            TotalLatencyMs = totalStopwatch.Elapsed.TotalMilliseconds,
+            CacheHitRate = DeriveCacheHitRate(warmStage.Timings),
+            ToolLoopMs = toolLoopMs,
+            RawMetrics = afterAll,
+            RequestsProcessingAtLastScrape = TryParsePromMetric(afterAll, RequestsProcessingMetric),
+            RequestsDeferredAtLastScrape = TryParsePromMetric(afterAll, RequestsDeferredMetric),
+            ContextTokensHighWatermark = TryParsePromMetric(afterAll, ContextTokensHighWatermarkMetric),
+            AverageBusySlotsPerDecode = TryParsePromMetric(afterAll, BusySlotsPerDecodeMetric),
+            WarmPromptTimings = warmStage.Timings
+        };
     }
 
     private async Task<InferenceBenchmarkMetrics> RunEmbeddingAsync(LlamaServerEndpoint endpoint,
@@ -368,27 +374,30 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var totalSeconds = latencies.Sum() / 1000d;
         var success = allFinite && deterministic;
 
-        return new InferenceBenchmarkMetrics(Success: success,
-            FailureReason: success ? null : "Embedding benchmark output failed finite-value or deterministic-equivalence checks.",
-            TokensPerSecond: null,
-            PpTokensPerSecond: DeriveRate(baselineMetrics, afterMetrics, PromptTokensMetric, PromptSecondsMetric),
-            TtftMs: null,
-            TotalLatencyMs: latencies.Sum(),
-            CacheHitRate: null,
-            ToolLoopMs: null,
-            VramLoadBytes: null,
-            VramAfterBytes: null,
-            Runs: measuredRuns,
-            RawJson: afterMetrics,
-            Role: ModelRole.Embedding.ToString(),
-            ItemsPerSecond: Throughput(inputs.Count * measuredRuns, totalSeconds),
-            InputTokensPerSecond: CounterThroughput(baselineMetrics, afterMetrics, PromptTokensMetric, totalSeconds),
-            P50LatencyMs: Percentile(latencies, 0.50d),
-            P95LatencyMs: Percentile(latencies, 0.95d),
-            BatchSize: inputs.Count,
-            OutputDimension: dimensions,
-            ValuesFinite: allFinite,
-            DeterministicOutput: deterministic);
+        return new InferenceBenchmarkMetrics
+        {
+            Success = success,
+            FailureReason = success ? null : "Embedding benchmark output failed finite-value or deterministic-equivalence checks.",
+            TokensPerSecond = null,
+            PpTokensPerSecond = DeriveRate(baselineMetrics, afterMetrics, PromptTokensMetric, PromptSecondsMetric),
+            TtftMs = null,
+            TotalLatencyMs = latencies.Sum(),
+            CacheHitRate = null,
+            ToolLoopMs = null,
+            VramLoadBytes = null,
+            VramAfterBytes = null,
+            Runs = measuredRuns,
+            RawJson = afterMetrics,
+            Role = ModelRole.Embedding.ToString(),
+            ItemsPerSecond = Throughput(inputs.Count * measuredRuns, totalSeconds),
+            InputTokensPerSecond = CounterThroughput(baselineMetrics, afterMetrics, PromptTokensMetric, totalSeconds),
+            P50LatencyMs = Percentile(latencies, 0.50d),
+            P95LatencyMs = Percentile(latencies, 0.95d),
+            BatchSize = inputs.Count,
+            OutputDimension = dimensions,
+            ValuesFinite = allFinite,
+            DeterministicOutput = deterministic
+        };
     }
 
     private async Task<InferenceBenchmarkMetrics> RunRerankerAsync(LlamaServerEndpoint endpoint,
@@ -461,27 +470,30 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var totalSeconds = latencies.Sum() / 1000d;
         var success = allFinite && deterministic;
 
-        return new InferenceBenchmarkMetrics(Success: success,
-            FailureReason: success ? null : "Reranker benchmark output failed finite-score or deterministic-order checks.",
-            TokensPerSecond: null,
-            PpTokensPerSecond: DeriveRate(baselineMetrics, afterMetrics, PromptTokensMetric, PromptSecondsMetric),
-            TtftMs: null,
-            TotalLatencyMs: latencies.Sum(),
-            CacheHitRate: null,
-            ToolLoopMs: null,
-            VramLoadBytes: null,
-            VramAfterBytes: null,
-            Runs: measuredRuns,
-            RawJson: afterMetrics,
-            Role: ModelRole.Reranker.ToString(),
-            ItemsPerSecond: Throughput(documents.Count * measuredRuns, totalSeconds),
-            InputTokensPerSecond: CounterThroughput(baselineMetrics, afterMetrics, PromptTokensMetric, totalSeconds),
-            P50LatencyMs: Percentile(latencies, 0.50d),
-            P95LatencyMs: Percentile(latencies, 0.95d),
-            BatchSize: documents.Count,
-            OutputDimension: null,
-            ValuesFinite: allFinite,
-            DeterministicOutput: deterministic);
+        return new InferenceBenchmarkMetrics
+        {
+            Success = success,
+            FailureReason = success ? null : "Reranker benchmark output failed finite-score or deterministic-order checks.",
+            TokensPerSecond = null,
+            PpTokensPerSecond = DeriveRate(baselineMetrics, afterMetrics, PromptTokensMetric, PromptSecondsMetric),
+            TtftMs = null,
+            TotalLatencyMs = latencies.Sum(),
+            CacheHitRate = null,
+            ToolLoopMs = null,
+            VramLoadBytes = null,
+            VramAfterBytes = null,
+            Runs = measuredRuns,
+            RawJson = afterMetrics,
+            Role = ModelRole.Reranker.ToString(),
+            ItemsPerSecond = Throughput(documents.Count * measuredRuns, totalSeconds),
+            InputTokensPerSecond = CounterThroughput(baselineMetrics, afterMetrics, PromptTokensMetric, totalSeconds),
+            P50LatencyMs = Percentile(latencies, 0.50d),
+            P95LatencyMs = Percentile(latencies, 0.95d),
+            BatchSize = documents.Count,
+            OutputDimension = null,
+            ValuesFinite = allFinite,
+            DeterministicOutput = deterministic
+        };
     }
 
     private static InferenceBenchmarkMetrics ApplyResourceEvidence(InferenceBenchmarkMetrics metrics,
@@ -712,7 +724,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             timings = LlamaServerGenerationTimings.TryRead(update.RawRepresentation) ?? timings;
         }
 
-        return new StreamStageResult(firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, builder.ToString(), timings);
+        return new StreamStageResult { TtftMs = firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, Text = builder.ToString(), Timings = timings };
     }
 
     private async Task<string?> ScrapeMetricsAsync(Uri metricsUri, CancellationToken ct)
@@ -771,20 +783,40 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         return delta >= 0 ? delta : afterValue;
     }
 
-    private sealed record ChatPassMetrics(
-        double? TokensPerSecond,
-        double? PpTokensPerSecond,
-        double TtftMs,
-        double TotalLatencyMs,
-        double? CacheHitRate,
-        double? ToolLoopMs,
-        string? RawMetrics,
-        double? RequestsProcessingAtLastScrape,
-        double? RequestsDeferredAtLastScrape,
-        double? ContextTokensHighWatermark,
-        double? AverageBusySlotsPerDecode,
-        LlamaServerGenerationTimings? WarmPromptTimings);
+    private sealed record ChatPassMetrics
+    {
+        public required double? TokensPerSecond { get; init; }
+
+        public required double? PpTokensPerSecond { get; init; }
+
+        public required double TtftMs { get; init; }
+
+        public required double TotalLatencyMs { get; init; }
+
+        public required double? CacheHitRate { get; init; }
+
+        public required double? ToolLoopMs { get; init; }
+
+        public required string? RawMetrics { get; init; }
+
+        public required double? RequestsProcessingAtLastScrape { get; init; }
+
+        public required double? RequestsDeferredAtLastScrape { get; init; }
+
+        public required double? ContextTokensHighWatermark { get; init; }
+
+        public required double? AverageBusySlotsPerDecode { get; init; }
+
+        public required LlamaServerGenerationTimings? WarmPromptTimings { get; init; }
+    }
 
     // One streamed stage of the benchmark: the time to the first update, full text, and latest timing snapshot.
-    private sealed record StreamStageResult(double TtftMs, string Text, LlamaServerGenerationTimings? Timings);
+    private sealed record StreamStageResult
+    {
+        public required double TtftMs { get; init; }
+
+        public required string Text { get; init; }
+
+        public required LlamaServerGenerationTimings? Timings { get; init; }
+    }
 }

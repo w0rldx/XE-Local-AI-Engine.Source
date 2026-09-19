@@ -5,10 +5,14 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record DevelopmentPatchPreview(
-    DevelopmentApprovedApplySubject Subject,
-    string Patch,
-    IReadOnlyList<DevelopmentChangedFile> ChangedFiles);
+internal sealed class DevelopmentPatchPreview
+{
+    public required DevelopmentApprovedApplySubject Subject { get; init; }
+
+    public required string Patch { get; init; }
+
+    public required IReadOnlyList<DevelopmentChangedFile> ChangedFiles { get; init; }
+}
 
 internal interface IDevelopmentApplyService
 {
@@ -126,9 +130,12 @@ internal sealed class DevelopmentApplyService : IDevelopmentApplyService
             project.BaseBranch,
             current.PatchArtifact.ByteCount,
             current.ManifestArtifact.ByteCount);
-        return new DevelopmentPatchPreview(subject,
-            Encoding.UTF8.GetString(current.Patch.Span),
-            current.Current.ChangedFiles);
+        return new DevelopmentPatchPreview
+        {
+            Subject = subject,
+            Patch = Encoding.UTF8.GetString(current.Patch.Span),
+            ChangedFiles = current.Current.ChangedFiles
+        };
     }
 
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid taskId,

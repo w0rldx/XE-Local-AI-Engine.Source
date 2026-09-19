@@ -62,13 +62,16 @@ public sealed class ModelFitQueryService : IModelFitQueryService
         var recommendations = await _recommendationStore.ListForSnapshotAsync(summary.Id, cancellationToken);
         recommendations = await ApplyNodeInstallStateAsync(recommendations, cancellationToken);
 
-        return new ModelFitLatestRecommendationsView(summary.Id,
-            summary.Status,
-            summary.ApprovedImageId,
-            summary.UseCase,
-            summary.ProviderName,
-            summary.CompletedAtUtc,
-            recommendations);
+        return new ModelFitLatestRecommendationsView
+        {
+            SnapshotId = summary.Id,
+            Status = summary.Status,
+            ApprovedImageId = summary.ApprovedImageId,
+            UseCase = summary.UseCase,
+            ProviderName = summary.ProviderName,
+            CompletedAtUtc = summary.CompletedAtUtc,
+            Recommendations = recommendations
+        };
     }
 
     /// <summary>

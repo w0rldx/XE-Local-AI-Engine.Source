@@ -416,7 +416,7 @@ public sealed class ImageJobEndpointTests
                             .Skip(offset)
                             .Take(limit)
                             .ToArray();
-            return Task.FromResult(new ImageJobPage(page, _jobs.Count));
+            return Task.FromResult(new ImageJobPage { Items = page, TotalCount = _jobs.Count });
         }
 
         public Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken)

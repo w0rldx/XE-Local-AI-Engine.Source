@@ -40,12 +40,15 @@ public sealed class CreateTrainingRunEndpoint : Endpoint<CreateTrainingRunReques
         // family: VersionConflict — the stale confirmation dialog ExpectedDatasetVersion exists to catch —
         // DatasetNotReady and BaseArtifactNotReady leave through TrainingExceptionHandler as a 409
         // TrainingErrorResponse, which is why this route declares both statuses.
-        var run = await _runs.CreateAsync(new CreateTrainingRunCommand(req.DatasetId,
-                                     req.ExpectedDatasetVersion,
-                                     req.BaseArtifactId,
-                                     req.LicenseConfirmed,
-                                     req.Options?.ToDomain(),
-                                     req.LinkedModelName),
+        var run = await _runs.CreateAsync(new CreateTrainingRunCommand
+        {
+            DatasetId = req.DatasetId,
+            ExpectedDatasetVersion = req.ExpectedDatasetVersion,
+            BaseArtifactId = req.BaseArtifactId,
+            LicenseConfirmed = req.LicenseConfirmed,
+            Options = req.Options?.ToDomain(),
+            LinkedModelName = req.LinkedModelName
+        },
                                  ct);
         await Send.OkAsync(run.ToResponse(), ct);
     }

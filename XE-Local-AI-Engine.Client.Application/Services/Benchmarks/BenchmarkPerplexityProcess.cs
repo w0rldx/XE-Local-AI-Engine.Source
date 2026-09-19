@@ -18,11 +18,16 @@ public interface IBenchmarkPerplexityRunner
     Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken);
 }
 
-/// <param name="Output">
-///     stdout and stderr interleaved, bounded to the tail. llama.cpp prints its progress and its final estimate on
-///     stderr, so splitting the streams would throw away the only line that matters.
-/// </param>
-public sealed record BenchmarkPerplexityProcessResult(int ExitCode, string Output);
+public sealed class BenchmarkPerplexityProcessResult
+{
+    public required int ExitCode { get; init; }
+
+    /// <summary>
+    ///     stdout and stderr interleaved, bounded to the tail. llama.cpp prints its progress and its final estimate on
+    ///     stderr, so splitting the streams would throw away the only line that matters.
+    /// </summary>
+    public required string Output { get; init; }
+}
 
 public sealed class BenchmarkPerplexityRunner : IBenchmarkPerplexityRunner
 {
@@ -84,7 +89,7 @@ public sealed class BenchmarkPerplexityRunner : IBenchmarkPerplexityRunner
         await process.WaitForExitAsync(CancellationToken.None);
         lock (sink)
         {
-            return new BenchmarkPerplexityProcessResult(process.ExitCode, output.ToString());
+            return new BenchmarkPerplexityProcessResult { ExitCode = process.ExitCode, Output = output.ToString() };
         }
     }
 
@@ -202,7 +207,7 @@ public static partial class BenchmarkPerplexityOutputParser
         }
 
         var agreement = Value(SameTopTokenPattern, output);
-        return new BenchmarkKldReading(mean, Value(KldP99Pattern, output), agreement is { } percent ? percent / 100.0 : null);
+        return new BenchmarkKldReading { Mean = mean, P99 = Value(KldP99Pattern, output), TopTokenAgreement = agreement is { } percent ? percent / 100.0 : null };
     }
 
     /// <summary>The last <paramref name="characters" /> of the child's output, for an operator-safe failure reason.</summary>
@@ -220,7 +225,7 @@ public static partial class BenchmarkPerplexityOutputParser
         }
 
         return TryParseInvariant(match.Groups["mean"].Value) is { } mean && TryParseInvariant(match.Groups["error"].Value) is { } standardError
-            ? new BenchmarkPerplexityReading(mean, standardError)
+            ? new BenchmarkPerplexityReading { Mean = mean, StandardError = standardError }
             : null;
     }
 
@@ -231,6 +236,18 @@ public static partial class BenchmarkPerplexityOutputParser
         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
 }
 
-public sealed record BenchmarkPerplexityReading(double Mean, double StandardError);
+public sealed class BenchmarkPerplexityReading
+{
+    public required double Mean { get; init; }
 
-public sealed record BenchmarkKldReading(double Mean, double? P99, double? TopTokenAgreement);
+    public required double StandardError { get; init; }
+}
+
+public sealed class BenchmarkKldReading
+{
+    public required double Mean { get; init; }
+
+    public required double? P99 { get; init; }
+
+    public required double? TopTokenAgreement { get; init; }
+}

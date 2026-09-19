@@ -29,11 +29,19 @@ public interface IModelFitQueryService
 ///     output, stderr excerpt or detailed diagnostics (those are reachable only through the explicit operator-diagnostics
 ///     store read, never through this query surface).
 /// </summary>
-public sealed record ModelFitLatestRecommendationsView(
-    Guid SnapshotId,
-    ModelFitRunStatus Status,
-    string ApprovedImageId,
-    string? UseCase,
-    string ProviderName,
-    long? CompletedAtUtc,
-    IReadOnlyList<ModelFitRecommendationRecord> Recommendations);
+public sealed class ModelFitLatestRecommendationsView
+{
+    public required Guid SnapshotId { get; init; }
+
+    public required ModelFitRunStatus Status { get; init; }
+
+    public required string ApprovedImageId { get; init; }
+
+    public required string? UseCase { get; init; }
+
+    public required string ProviderName { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required IReadOnlyList<ModelFitRecommendationRecord> Recommendations { get; init; }
+}

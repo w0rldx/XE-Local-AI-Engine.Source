@@ -130,9 +130,12 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
         var thumbprint = Convert.ToHexString(SHA256.HashData(certificate.RawData));
         var subjectCommonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
 
-        return new CertificatePin(thumbprint,
-            _timeProvider.GetUtcNow(),
-            string.IsNullOrWhiteSpace(subjectCommonName) ? certificate.Subject : subjectCommonName);
+        return new CertificatePin
+        {
+            Sha256Thumbprint = thumbprint,
+            PinnedAtUtc = _timeProvider.GetUtcNow(),
+            SubjectCommonName = string.IsNullOrWhiteSpace(subjectCommonName) ? certificate.Subject : subjectCommonName
+        };
     }
 
     private static string Serialize(CertificatePin pin)
@@ -167,7 +170,7 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
             return null;
         }
 
-        return new CertificatePin(parts[0], pinnedAtUtc, parts[2]);
+        return new CertificatePin { Sha256Thumbprint = parts[0], PinnedAtUtc = pinnedAtUtc, SubjectCommonName = parts[2] };
     }
 
     private void ApplyPlatformFileSecurity()

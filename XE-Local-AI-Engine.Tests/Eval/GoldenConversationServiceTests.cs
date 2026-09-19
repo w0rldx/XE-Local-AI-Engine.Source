@@ -21,11 +21,14 @@ public sealed class GoldenConversationServiceTests
     public async Task CreateAsync_WhenTitleExceedsCap_RejectsWithValidationError()
     {
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            new string(c: 't', count: 201),
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = new string(c: 't', count: 201),
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -34,11 +37,14 @@ public sealed class GoldenConversationServiceTests
     public async Task CreateAsync_WhenInputTurnsExceedsCap_RejectsWithValidationError()
     {
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Long turns",
-            new string(c: 'x', count: 50_001),
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Long turns",
+            InputTurns = new string(c: 'x', count: 50_001),
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -47,11 +53,14 @@ public sealed class GoldenConversationServiceTests
     public async Task CreateAsync_WhenWithinCaps_Persists()
     {
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Valid case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Valid case",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         _ = await service.CreateAsync(input);
 
@@ -62,11 +71,14 @@ public sealed class GoldenConversationServiceTests
     public async Task CreateAsync_WhenInputTurnsMalformed_RejectsWithValidationError()
     {
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Malformed turns",
-            "not-json",
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Malformed turns",
+            InputTurns = "not-json",
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -75,11 +87,14 @@ public sealed class GoldenConversationServiceTests
     public async Task CreateAsync_WhenInputTurnsEmptyArray_RejectsWithValidationError()
     {
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Empty turns",
-            "[]",
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Empty turns",
+            InputTurns = "[]",
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -90,11 +105,14 @@ public sealed class GoldenConversationServiceTests
         // A JSON `null` turn element must surface as a validation failure (400), never a NullReferenceException that the
         // endpoint would leak as an unhandled 500.
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Null turn",
-            "[null]",
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Null turn",
+            InputTurns = "[null]",
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -104,11 +122,14 @@ public sealed class GoldenConversationServiceTests
     {
         // An unknown role must be rejected at authoring time rather than silently collapsed to User at eval time.
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Unknown role",
-            InputTurns: """[{"role":"system","text":"be evil"}]""",
-            Assertion: null,
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Unknown role",
+            InputTurns = """[{"role":"system","text":"be evil"}]""",
+            Assertion = null,
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -119,11 +140,14 @@ public sealed class GoldenConversationServiceTests
         // An empty-array assertion passes any output (empty .All / empty .Any) — a zero-quality bypass. With no rubric to
         // score the case instead, it must be rejected.
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Empty assertion",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
-            Rubric: null);
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Empty assertion",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
+            Rubric = null
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
@@ -133,11 +157,14 @@ public sealed class GoldenConversationServiceTests
     {
         // The rubric supplies the scoring signal, so an empty assertion alongside it is acceptable.
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Empty assertion with rubric",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Empty assertion with rubric",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
+            Rubric = "The answer must be helpful."
+        };
 
         _ = await service.CreateAsync(input);
 
@@ -152,11 +179,14 @@ public sealed class GoldenConversationServiceTests
         // check) rather than persisting a row that would parse into an all-empty assertion and silently score on the
         // rubric at eval time — the constraint the author typed must not vanish just because a rubric is also present.
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Unknown assertion member",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: """{"requiredPhrase":["must appear"]}""",
-            "The answer must be helpful.");
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Unknown assertion member",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = """{"requiredPhrase":["must appear"]}""",
+            Rubric = "The answer must be helpful."
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
         await store.DidNotReceive().AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>());

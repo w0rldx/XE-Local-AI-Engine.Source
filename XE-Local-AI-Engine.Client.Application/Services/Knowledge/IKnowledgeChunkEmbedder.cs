@@ -34,7 +34,14 @@ public interface IKnowledgeChunkEmbedder
     }
 }
 
-public sealed record KnowledgeEmbeddingDescriptor(string ResolvedModel, string VectorIdentity, int Dimension);
+public sealed class KnowledgeEmbeddingDescriptor
+{
+    public required string ResolvedModel { get; init; }
+
+    public required string VectorIdentity { get; init; }
+
+    public required int Dimension { get; init; }
+}
 
 /// <summary>
 ///     The embedding blobs for a set of chunks plus the RESOLVED embedding model name that produced them and the vector
@@ -43,12 +50,17 @@ public sealed record KnowledgeEmbeddingDescriptor(string ResolvedModel, string V
 ///     the name they are keyed under; the dimension is stamped on each vector row alongside it. Dimension is derived from
 ///     the vectors themselves — no static config constant — so any model's native width is honored.
 /// </summary>
-/// <param name="Vectors">One little-endian <c>float32</c> embedding blob per input chunk, aligned by index.</param>
-/// <param name="ResolvedModel">The model name the resolver selected on the embedding provider for this operation.</param>
-/// <param name="VectorIdentity">Canonical resolved-model + transform algorithm/version + width identity.</param>
-/// <param name="Dimension">The <c>float32</c> vector width every blob in <see cref="Vectors" /> was produced at; <c>0</c> for empty input.</param>
-public sealed record KnowledgeEmbeddingResult(
-    IReadOnlyList<byte[]> Vectors,
-    string ResolvedModel,
-    string VectorIdentity,
-    int Dimension);
+public sealed class KnowledgeEmbeddingResult
+{
+    /// <summary>One little-endian <c>float32</c> embedding blob per input chunk, aligned by index.</summary>
+    public required IReadOnlyList<byte[]> Vectors { get; init; }
+
+    /// <summary>The model name the resolver selected on the embedding provider for this operation.</summary>
+    public required string ResolvedModel { get; init; }
+
+    /// <summary>Canonical resolved-model + transform algorithm/version + width identity.</summary>
+    public required string VectorIdentity { get; init; }
+
+    /// <summary>The <c>float32</c> vector width every blob in <see cref="Vectors" /> was produced at; <c>0</c> for empty input.</summary>
+    public required int Dimension { get; init; }
+}

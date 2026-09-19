@@ -65,13 +65,16 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         var sessions = await _store.ListAsync(cancellationToken);
         return
         [
-            .. sessions.Select(static session => new WorkSessionSummary(session.Id,
-                session.Title,
-                session.Kind,
-                session.Status,
-                session.AgentDefinitionId,
-                session.StepCount,
-                session.UpdatedAtUtc))
+            .. sessions.Select(static session => new WorkSessionSummary
+            {
+                Id = session.Id,
+                Title = session.Title,
+                Kind = session.Kind,
+                Status = session.Status,
+                AgentDefinitionId = session.AgentDefinitionId,
+                StepCount = session.StepCount,
+                UpdatedUtc = session.UpdatedAtUtc
+            })
         ];
     }
 
@@ -92,12 +95,15 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, model.Runtime?.ModelProfile, cancellationToken);
 
-        var conversation = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(title,
-                                                     UserId: null,
-                                                     _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                                                     NodeChatOriginValues.Local,
-                                                     model.AgentDefinitionId,
-                                                     NodeConversationKind.WorkSession),
+        var conversation = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = title,
+            UserId = null,
+            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            Origin = NodeChatOriginValues.Local,
+            AgentDefinitionId = model.AgentDefinitionId,
+            Kind = NodeConversationKind.WorkSession
+        },
                                                  cancellationToken);
 
         try
@@ -169,7 +175,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         Guid agentDefinitionId,
         WorkSessionRuntimeOverride? runtime,
         CancellationToken cancellationToken) =>
-        CreateAsync(new CreateWorkSessionRequestModel(title, objective, AgentWorkSessionKind.Workflow, agentDefinitionId, runtime), cancellationToken);
+        CreateAsync(new CreateWorkSessionRequestModel { Title = title, Objective = objective, Kind = AgentWorkSessionKind.Workflow, AgentDefinitionId = agentDefinitionId, Runtime = runtime }, cancellationToken);
 
     Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime, CancellationToken cancellationToken) =>
         BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: true, runtime, cancellationToken);
@@ -226,10 +232,13 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         }
 
         var messageId = Guid.NewGuid();
-        _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(session.ConversationId,
-                                      messageId,
-                                      text.Trim(),
-                                      _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+        _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = session.ConversationId,
+            MessageId = messageId,
+            Content = text.Trim(),
+            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        },
                                   cancellationToken);
 
         // A paused or interrupted session picks the follow-up up by resuming: it rides the next step's history like any
@@ -262,16 +271,19 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         var tasks = await _store.ListTasksAsync(sessionId, sinceSequence, cancellationToken);
         return
         [
-            .. tasks.Select(static task => new WorkSessionTaskDto(task.Id,
-                task.ParentTaskId,
-                task.Sequence,
-                task.Title,
-                task.Detail,
-                task.Status,
-                task.BlockedReason,
-                task.Origin,
-                task.CreatedStep,
-                task.UpdatedStep))
+            .. tasks.Select(static task => new WorkSessionTaskDto
+            {
+                Id = task.Id,
+                ParentTaskId = task.ParentTaskId,
+                Sequence = task.Sequence,
+                Title = task.Title,
+                Detail = task.Detail,
+                Status = task.Status,
+                BlockedReason = task.BlockedReason,
+                Origin = task.Origin,
+                CreatedStep = task.CreatedStep,
+                UpdatedStep = task.UpdatedStep
+            })
         ];
     }
 
@@ -280,14 +292,17 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         var findings = await _store.ListFindingsAsync(sessionId, sinceSequence, cancellationToken);
         return
         [
-            .. findings.Select(static finding => new WorkSessionFindingDto(finding.Id,
-                finding.TaskId,
-                finding.Sequence,
-                finding.Kind,
-                finding.Text,
-                finding.SourceRef,
-                finding.CreatedStep,
-                finding.Superseded))
+            .. findings.Select(static finding => new WorkSessionFindingDto
+            {
+                Id = finding.Id,
+                TaskId = finding.TaskId,
+                Sequence = finding.Sequence,
+                Kind = finding.Kind,
+                Text = finding.Text,
+                SourceRef = finding.SourceRef,
+                CreatedStep = finding.CreatedStep,
+                Superseded = finding.Superseded
+            })
         ];
     }
 
@@ -302,12 +317,15 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         var checkpoints = await _store.ListCheckpointsAsync(sessionId, sinceSequence, cancellationToken);
         return
         [
-            .. checkpoints.Select(static checkpoint => new WorkSessionCheckpointDto(checkpoint.Id,
-                checkpoint.Sequence,
-                checkpoint.Step,
-                checkpoint.Summary,
-                checkpoint.StateJson,
-                checkpoint.CreatedAtUtc))
+            .. checkpoints.Select(static checkpoint => new WorkSessionCheckpointDto
+            {
+                Id = checkpoint.Id,
+                Sequence = checkpoint.Sequence,
+                Step = checkpoint.Step,
+                Summary = checkpoint.Summary,
+                StateJson = checkpoint.StateJson,
+                CreatedUtc = checkpoint.CreatedAtUtc
+            })
         ];
     }
 
@@ -318,14 +336,17 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         return
         [
             .. events.Take(clamped)
-                     .Select(static entry => new WorkSessionEventDto(entry.Id,
-                         entry.Sequence,
-                         entry.Step,
-                         entry.EventType,
-                         entry.DetailJson,
-                         entry.Outcome,
-                         entry.OccurredAtUtc,
-                         entry.OperationId))
+                     .Select(static entry => new WorkSessionEventDto
+                     {
+                         Id = entry.Id,
+                         Sequence = entry.Sequence,
+                         Step = entry.Step,
+                         EventType = entry.EventType,
+                         DetailJson = entry.DetailJson,
+                         Outcome = entry.Outcome,
+                         OccurredUtc = entry.OccurredAtUtc,
+                         OperationId = entry.OperationId
+                     })
         ];
     }
 
@@ -349,7 +370,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
-        return new WorkSessionArtifactContent(ToDto(artifact), content, isBase64);
+        return new WorkSessionArtifactContent { Artifact = ToDto(artifact), Content = content, IsBase64 = isBase64 };
     }
 
     /// <summary>
@@ -502,9 +523,12 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     {
         try
         {
-            _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId,
-                                          _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                                          PurgeImmediately: true),
+            _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest
+            {
+                ConversationId = conversationId,
+                DeletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                PurgeImmediately = true
+            },
                                       CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
@@ -541,32 +565,38 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     }
 
     private WorkSessionDetail ToDetail(AgentWorkSessionSnapshot session) =>
-        new(session.Id,
-            session.Title,
-            session.Objective,
-            session.Kind,
-            session.Status,
-            session.AgentDefinitionId,
-            session.ConversationId,
-            session.CurrentTaskId,
-            session.StepCount,
-            _options.MaxStepsPerRun,
-            session.LastCheckpointId,
-            session.LastSequence,
-            session.Version,
-            session.CreatedAtUtc,
-            session.UpdatedAtUtc);
+        new()
+        {
+            Id = session.Id,
+            Title = session.Title,
+            Objective = session.Objective,
+            Kind = session.Kind,
+            Status = session.Status,
+            AgentDefinitionId = session.AgentDefinitionId,
+            ConversationId = session.ConversationId,
+            CurrentTaskId = session.CurrentTaskId,
+            StepCount = session.StepCount,
+            MaxStepsPerRun = _options.MaxStepsPerRun,
+            LastCheckpointId = session.LastCheckpointId,
+            LastSequence = session.LastSequence,
+            Version = session.Version,
+            CreatedUtc = session.CreatedAtUtc,
+            UpdatedUtc = session.UpdatedAtUtc
+        };
 
     private static WorkSessionArtifactDto ToDto(WorkSessionArtifactSnapshot artifact) =>
-        new(artifact.Id,
-            artifact.Sequence,
-            artifact.Kind,
-            artifact.Name,
-            artifact.MediaType,
-            artifact.ContentSha256,
-            artifact.SizeBytes,
-            artifact.IsValid,
-            artifact.CreatedStep);
+        new()
+        {
+            Id = artifact.Id,
+            Sequence = artifact.Sequence,
+            Kind = artifact.Kind,
+            Name = artifact.Name,
+            MediaType = artifact.MediaType,
+            ContentSha256 = artifact.ContentSha256,
+            SizeBytes = artifact.SizeBytes,
+            IsValid = artifact.IsValid,
+            CreatedStep = artifact.CreatedStep
+        };
 
     private static string Require(string? value, string field, int maximumLength)
     {

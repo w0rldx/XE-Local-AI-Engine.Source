@@ -27,7 +27,14 @@ public interface IFtsSearch
 }
 
 /// <summary>One lexical match: the chunk, its owning document, and its BM25 score (lower is a better match in FTS5).</summary>
-/// <param name="ChunkId">Stable chunk identifier.</param>
-/// <param name="DocumentId">Owning document identifier.</param>
-/// <param name="Bm25Score">The FTS5 BM25 relevance score; more-negative values rank higher.</param>
-public sealed record FtsSearchHit(Guid ChunkId, Guid DocumentId, double Bm25Score);
+public sealed class FtsSearchHit
+{
+    /// <summary>Stable chunk identifier.</summary>
+    public required Guid ChunkId { get; init; }
+
+    /// <summary>Owning document identifier.</summary>
+    public required Guid DocumentId { get; init; }
+
+    /// <summary>The FTS5 BM25 relevance score; more-negative values rank higher.</summary>
+    public required double Bm25Score { get; init; }
+}

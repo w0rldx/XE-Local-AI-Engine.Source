@@ -58,7 +58,7 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         StubPersistence(persistence);
         var pump = Substitute.For<INodeChatInvocationPump>();
         pump.FlushDeltaAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<InvocationState>(), Arg.Any<NodeChatPumpCursor>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted: null, ContentDelta: null, ReasoningDelta: null));
+            .Returns(callInfo => new NodeChatPumpFlushResult { Cursor = callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted = null, ContentDelta = null, ReasoningDelta = null });
         var coordinator = new NodeChatRemotePersistenceCoordinator(persistence, pump, TimeProvider.System);
         var package = RuntimePackageBuilder.Valid().WithUserMessage("q").Build();
 
@@ -102,19 +102,22 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         StubPersistence(persistence);
         // The assistant placeholder was terminalized (e.g. an early cancel) before the coordinator could mark it streaming,
         // so the guarded streaming mark is a no-op and reports the true terminal status. BeginAsync must abort honestly.
-        var cancelledRow = new NodeChatPersistedMessageDto(Guid.NewGuid(),
-            Guid.NewGuid(),
-            RequestId: null,
-            Sequence: 1,
-            "assistant",
-            string.Empty,
-            Reasoning: null,
-            NodeChatMessageStatusValues.Cancelled,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        var cancelledRow = new NodeChatPersistedMessageDto
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            RequestId = null,
+            Sequence = 1,
+            Role = "assistant",
+            Content = string.Empty,
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Cancelled,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
         persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(cancelledRow);
         var pump = Substitute.For<INodeChatInvocationPump>();
         var coordinator = new NodeChatRemotePersistenceCoordinator(persistence, pump, TimeProvider.System);
@@ -127,20 +130,23 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
 
     private static void StubPersistence(INodeChatPersistenceService persistence)
     {
-        var conversation = new NodeChatConversationDto(Guid.NewGuid(), "t", UserId: null, CreatedAtUtc: 1, LastSeenUtc: 1, Purged: false, []);
-        var message = new NodeChatPersistedMessageDto(Guid.NewGuid(),
-            Guid.NewGuid(),
-            RequestId: null,
-            Sequence: 1,
-            "assistant",
-            string.Empty,
-            Reasoning: null,
-            NodeChatMessageStatusValues.Pending,
-            CreatedAtUtc: 1,
-            UpdatedAtUtc: 1,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        var conversation = new NodeChatConversationDto { ConversationId = Guid.NewGuid(), Title = "t", UserId = null, CreatedAtUtc = 1, LastSeenUtc = 1, Purged = false, Messages = [] };
+        var message = new NodeChatPersistedMessageDto
+        {
+            MessageId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            RequestId = null,
+            Sequence = 1,
+            Role = "assistant",
+            Content = string.Empty,
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Pending,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
 
         persistence.EnsureConversationAsync(Arg.Any<NodeChatEnsureConversationRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(message);

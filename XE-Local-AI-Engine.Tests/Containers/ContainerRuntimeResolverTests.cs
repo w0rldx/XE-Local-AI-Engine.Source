@@ -205,7 +205,7 @@ public sealed class ContainerRuntimeResolverTests
         // The refusal must happen before a client exists, not merely before a container is created: nothing about this
         // node — not a socket path, not a label, not a probe — may be transmitted to a daemon on another host. Both
         // sources are covered because DOCKER_HOST is the one an operator sets without touching engine configuration.
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint(new Uri(endpoint), source));
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = source });
 
         var resolution = await harness.Resolver.ResolveAsync();
 
@@ -236,7 +236,7 @@ public sealed class ContainerRuntimeResolverTests
         // this refusal a query string on it would reach a READY resolution and be rendered on the runtime card.
         const string Sentinel = "sekrit-9f3a";
         var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint(new Uri(raw), DockerDaemonEndpointSource.DockerHostEnvironmentVariable));
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint { Uri = new Uri(raw), Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable });
 
         var resolution = await harness.Resolver.ResolveAsync();
         var failure = await AssertEx.ThrowsAsync<ContainerRuntimeUnavailableException>(() => harness.Resolver.CreateRuntimeAsync());
@@ -269,7 +269,7 @@ public sealed class ContainerRuntimeResolverTests
     [Arguments("npipe://./pipe/docker_engine", DockerDaemonEndpointSource.WindowsNamedPipe)]
     public async Task AUnixOrNamedPipeEndpoint_IsAccepted(string endpoint, DockerDaemonEndpointSource source)
     {
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint(new Uri(endpoint), source));
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint { Uri = new Uri(endpoint), Source = source });
 
         var resolution = await harness.Resolver.ResolveAsync();
 
@@ -427,8 +427,11 @@ public sealed class ContainerRuntimeResolverTests
         // The resolver settles the endpoint and hands it to the shared probe. If it restated the result as a string
         // the probe would re-run discovery, read it back as an explicit setting, and write Configuration into the
         // pin — the pin an operator is later shown when the daemon that answers is not the one this node approved.
-        var harness = new Harness(endpoint: new DockerDaemonEndpoint(new Uri(LocalEndpoint),
-            DockerDaemonEndpointSource.DockerHostEnvironmentVariable));
+        var harness = new Harness(endpoint: new DockerDaemonEndpoint
+        {
+            Uri = new Uri(LocalEndpoint),
+            Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable
+        });
 
         var resolution = await harness.Resolver.ResolveAsync();
 
@@ -525,9 +528,9 @@ public sealed class ContainerRuntimeResolverTests
             DockerDaemonEndpoint? endpoint = null,
             int resolutionCacheSeconds = 30)
         {
-            Endpoint = endpoint ?? new DockerDaemonEndpoint(new Uri(LocalEndpoint), DockerDaemonEndpointSource.Configuration);
+            Endpoint = endpoint ?? new DockerDaemonEndpoint { Uri = new Uri(LocalEndpoint), Source = DockerDaemonEndpointSource.Configuration };
             Client = new FakeDockerRuntimeClient(Endpoint,
-                new DockerDaemonIdentity("daemon-alpha", "99.0.0", "1.99", "1.40", "linux", Endpoint, IsRootless: true, SupportsSeccomp: true));
+                new DockerDaemonIdentity { DaemonId = "daemon-alpha", ServerVersion = "99.0.0", ApiVersion = "1.99", MinimumApiVersion = "1.40", OperatingSystem = "linux", Endpoint = Endpoint, IsRootless = true, SupportsSeccomp = true });
             Factory = new RecordingContainerRuntimeFactory(Client);
             AttestationStore = new InMemoryDaemonAttestationStore();
 

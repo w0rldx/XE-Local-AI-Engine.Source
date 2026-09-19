@@ -276,7 +276,7 @@ internal sealed class SandboxLifecycleRegistry
         var bindings = new List<SandboxMountBinding>();
         if (request.TrustedHostWorkspace is not null)
         {
-            bindings.Add(new SandboxMountBinding(jailDirectory, jailDirectory, ReadOnly: false));
+            bindings.Add(new SandboxMountBinding { HostPath = jailDirectory, SandboxPath = jailDirectory, ReadOnly = false });
         }
 
         foreach (var mount in request.Mounts ?? [])
@@ -292,7 +292,7 @@ internal sealed class SandboxLifecycleRegistry
                 throw new DirectoryNotFoundException($"The engine-generated sandbox mount source '{mount.HostPath}' does not exist.");
             }
 
-            bindings.Add(new SandboxMountBinding(canonical, canonical, mount.ReadOnly));
+            bindings.Add(new SandboxMountBinding { HostPath = canonical, SandboxPath = canonical, ReadOnly = mount.ReadOnly });
         }
 
         return bindings;

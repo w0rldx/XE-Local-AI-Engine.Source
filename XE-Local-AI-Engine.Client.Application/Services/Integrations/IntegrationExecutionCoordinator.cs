@@ -639,24 +639,27 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
         var messageId = Guid.NewGuid();
         var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>()
-                              .Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-                                  session.ConversationId,
-                                  resolved.ResolvedSystemPrompt,
-                                  conversationContext,
-                                  effectiveModel,
-                                  resolved.AgentDefinitionVersion,
-                                  LocalChatLoopbackDefaults.ClientNodeId,
-                                  offeredTools,
-                                  RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-                                  Timeouts: new TimeoutSettings
+                              .Build(new LocalChatRuntimePackageRequest
+                              {
+                                  InvocationId = Guid.NewGuid(),
+                                  ConversationId = session.ConversationId,
+                                  ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+                                  ConversationContext = conversationContext,
+                                  ModelProfile = effectiveModel,
+                                  AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+                                  ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+                                  AllowedTools = offeredTools,
+                                  RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+                                  Timeouts = new TimeoutSettings
                                   {
                                       InvocationTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
                                   },
-                                  ReasoningEffort: resolved.ReasoningEffort,
-                                  SupportsThinking: supportsThinking,
-                                  ReasoningBudgetEnforceable: capabilities.ReasoningBudgetEnforceable,
-                                  Skills: resolved.Skills,
-                                  IsUnattended: true));
+                                  ReasoningEffort = resolved.ReasoningEffort,
+                                  SupportsThinking = supportsThinking,
+                                  ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable,
+                                  Skills = resolved.Skills,
+                                  IsUnattended = true
+                              });
 
         // 6. Subscribe BEFORE the lease. This is the ONE subscription lifetime for the whole run: it cannot miss a
         //    terminal report, and it closes in step 10's finally after the drain and after the terminal append, so no
@@ -946,14 +949,17 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = started.Sequence, EventType = started.Type, DetailJson = null, OccurredAtUtc = started.OccurredAtUtc }, runToken);
 
             var correlation = new NodeChatMessageCorrelation(session.ConversationId, messageId, executionId);
-            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(session.ConversationId,
-                                         messageId,
-                                         executionId,
-                                         startedAtUtc,
-                                         effectiveModel,
-                                         MetadataJson: null,
-                                         NodeChatOriginValues.Local,
-                                         session.AgentDefinitionId),
+            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+            {
+                ConversationId = session.ConversationId,
+                MessageId = messageId,
+                RequestId = executionId,
+                CreatedAtUtc = startedAtUtc,
+                Model = effectiveModel,
+                MetadataJson = null,
+                Origin = NodeChatOriginValues.Local,
+                AgentDefinitionId = session.AgentDefinitionId
+            },
                                      runToken);
 
             // 8. Run.
@@ -1018,10 +1024,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             failureSummary ??= "The invocation returned without reporting a terminal state.";
             // Tools can have run before the runner went silent, so this branch persists the parts too.
             _ = await services.GetRequiredService<INodeChatPersistenceService>()
-                              .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                                      NodeChatMessageStatusValues.Failed,
-                                      NowUnixMilliseconds(),
-                                      Parts: parts.HasParts ? parts.Snapshot() : null),
+                              .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+                              {
+                                  Correlation = correlation,
+                                  Status = NodeChatMessageStatusValues.Failed,
+                                  UpdatedAtUtc = NowUnixMilliseconds(),
+                                  Parts = parts.HasParts ? parts.Snapshot() : null
+                              },
                                   CancellationToken.None);
         }
         else
@@ -1071,23 +1080,26 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // The trailing telemetry members mirror NodeChatInvocationPump.TerminalizeAsync: an integration run is the
             // same turn measured the same way, so leaving them unset made this surface the one path whose rows carry no
             // warm time, no tool-schema estimate and the LAST round's tokens where every other row carries the turn's.
-            var envelope = new AgentRunEnvelopeMetadata(state.InvocationId,
-                durationMs,
-                state.FailureCategory?.ToString(),
-                state.StreamedChunkCount,
-                state.StreamedThinkingChunkCount,
-                Activity.Current?.TraceId.ToString(),
-                state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
-                provider,
-                ToolSchemaTokens: state.ToolSchemaTokens,
-                MaxToolSchemaTokens: state.MaxToolSchemaTokens,
-                DispatchedTier: state.DispatchedTier,
-                AuthoredEffort: state.AuthoredEffort,
-                ModelReadinessMs: state.ModelReadinessMs,
-                TurnInputTokens: state.TurnInputTokens,
-                TurnOutputTokens: state.TurnOutputTokens,
-                TurnTotalTokens: state.TurnTotalTokens,
-                TurnReasoningTokens: state.TurnReasoningTokens);
+            var envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = state.InvocationId,
+                DurationMs = durationMs,
+                FailureCategory = state.FailureCategory?.ToString(),
+                ContentChunkCount = state.StreamedChunkCount,
+                ReasoningChunkCount = state.StreamedThinkingChunkCount,
+                TraceId = Activity.Current?.TraceId.ToString(),
+                StartedAtUtc = state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
+                Provider = provider,
+                ToolSchemaTokens = state.ToolSchemaTokens,
+                MaxToolSchemaTokens = state.MaxToolSchemaTokens,
+                DispatchedTier = state.DispatchedTier,
+                AuthoredEffort = state.AuthoredEffort,
+                ModelReadinessMs = state.ModelReadinessMs,
+                TurnInputTokens = state.TurnInputTokens,
+                TurnOutputTokens = state.TurnOutputTokens,
+                TurnTotalTokens = state.TurnTotalTokens,
+                TurnReasoningTokens = state.TurnReasoningTokens
+            };
 
             // Carried to the terminal event: `execution.completed` is `{tokens?, durationMs}`, and this is the one
             // place both numbers exist.
@@ -1095,21 +1107,24 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             context.TotalTokens = state.TotalTokens;
 
             _ = await services.GetRequiredService<INodeChatPersistenceService>()
-                              .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                                      terminalStatus,
-                                      NowUnixMilliseconds(),
-                                      state.StreamedContent,
-                                      Reasoning: null,
-                                      // A cancelled turn persists NO error text: a cancel is an outcome, not a failure.
-                                      terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error,
-                                      state.ModelUsed ?? effectiveModel,
-                                      state.InputTokens,
-                                      state.OutputTokens,
-                                      state.TotalTokens,
-                                      state.ReasoningTokens,
-                                      Parts: parts.HasParts ? parts.Snapshot() : null,
-                                      state.GenerationDurationMs,
-                                      envelope),
+                              .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+                              {
+                                  Correlation = correlation,
+                                  Status = terminalStatus,
+                                  UpdatedAtUtc = NowUnixMilliseconds(),
+                                  Content = state.StreamedContent,
+                                  Reasoning = null,
+                                  // A cancelled turn persists NO error text: a cancel is an outcome, not a failure.
+                                  Error = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error,
+                                  Model = state.ModelUsed ?? effectiveModel,
+                                  InputCount = state.InputTokens,
+                                  OutputCount = state.OutputTokens,
+                                  TotalCount = state.TotalTokens,
+                                  ReasoningCount = state.ReasoningTokens,
+                                  Parts = parts.HasParts ? parts.Snapshot() : null,
+                                  GenerationDurationMs = state.GenerationDurationMs,
+                                  Envelope = envelope
+                              },
                                   CancellationToken.None);
         }
 

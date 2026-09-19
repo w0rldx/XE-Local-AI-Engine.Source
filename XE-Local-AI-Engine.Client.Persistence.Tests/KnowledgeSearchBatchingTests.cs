@@ -60,16 +60,16 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         // BM25 is more-negative-for-stronger, so the rank order A, missing, B, C descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkA, documentA, -4.0),
-            new(missingChunk, documentA, -3.0),
-            new(chunkB, documentA, -2.0),
-            new(chunkC, documentB, -1.0)
+            new() { ChunkId = chunkA, DocumentId = documentA, Bm25Score = -4.0 },
+            new() { ChunkId = missingChunk, DocumentId = documentA, Bm25Score = -3.0 },
+            new() { ChunkId = chunkB, DocumentId = documentA, Bm25Score = -2.0 },
+            new() { ChunkId = chunkC, DocumentId = documentB, Bm25Score = -1.0 }
         };
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, DegradedProviderResolver());
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 5 }, CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(3, orderedChunkIds.Count);
@@ -107,7 +107,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         };
 
         // BM25 is more-negative-for-stronger: the best-first rank order maps to descending (more-negative) scores.
-        var ftsHits = ftsRanked.Select((id, index) => new FtsSearchHit(id, documentA, index - ftsRanked.Count)).ToList();
+        var ftsHits = ftsRanked.Select((id, index) => new FtsSearchHit { ChunkId = id, DocumentId = documentA, Bm25Score = index - ftsRanked.Count }).ToList();
         var vectorSearch = Substitute.For<IVectorSearch>();
         vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(),
                         Arg.Any<string>(),
@@ -117,12 +117,12 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
                         Arg.Any<Guid?>(),
                         Arg.Any<string>(),
                         Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(vectorRanked.Select((id, index) => new VectorSearchHit(id, documentA, 1.0f - (index * 0.1f))).ToList()));
+                    .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(vectorRanked.Select((id, index) => new VectorSearchHit { ChunkId = id, DocumentId = documentA, Score = 1.0f - (index * 0.1f) }).ToList()));
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, ResolvingProviderResolver(), vectorSearch);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 5 }, CancellationToken.None);
 
         var baseline = new ReciprocalRankFusion().Fuse([ftsRanked, vectorRanked]).Select(entry => entry.ChunkId).ToList();
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
@@ -157,15 +157,15 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         // BM25 is more-negative-for-stronger, so the rank order A, B, C descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkA, document, -4.0),
-            new(chunkB, document, -3.0),
-            new(chunkC, document, -2.0)
+            new() { ChunkId = chunkA, DocumentId = document, Bm25Score = -4.0 },
+            new() { ChunkId = chunkB, DocumentId = document, Bm25Score = -3.0 },
+            new() { ChunkId = chunkC, DocumentId = document, Bm25Score = -2.0 }
         };
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, DegradedProviderResolver());
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "the query", Limit = 5 }, CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(2, orderedChunkIds.Count);

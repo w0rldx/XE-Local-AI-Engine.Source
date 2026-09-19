@@ -87,7 +87,7 @@ internal sealed class RecordingBuffer : IIntegrationExecutionEventBuffer
         lock (_gate)
         {
             _sequence++;
-            var appended = new IntegrationStreamEvent(type, _sequence, executionId, sessionId, OccurredAtUtc: 0, contentType, payload);
+            var appended = new IntegrationStreamEvent { Type = type, Sequence = _sequence, ExecutionId = executionId, SessionId = sessionId, OccurredAtUtc = 0, ContentType = contentType, Payload = payload };
             Published.Add(appended);
             return appended;
         }

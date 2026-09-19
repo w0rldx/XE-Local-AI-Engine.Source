@@ -10,14 +10,28 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>One saved Open Canvas workflow, decrypted, waiting for the Graph Workflow tables to exist.</summary>
-public sealed record CanvasWorkflowImportCandidate(Guid Id, string Name, string GraphJson, long CreatedAtUtc);
+public sealed class CanvasWorkflowImportCandidate
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string GraphJson { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Everything the pre-migration read found. <see cref="FailedCount" /> is the rows that could not be decrypted or
 ///     did not parse as JSON at all: they are unrecoverable once the drop migration commits, so they are counted and
 ///     named in the log rather than passed on.
 /// </summary>
-public sealed record CanvasWorkflowImportSnapshot(IReadOnlyList<CanvasWorkflowImportCandidate> Candidates, int FailedCount);
+public sealed class CanvasWorkflowImportSnapshot
+{
+    public required IReadOnlyList<CanvasWorkflowImportCandidate> Candidates { get; init; }
+
+    public required int FailedCount { get; init; }
+}
 
 /// <summary>
 ///     The one-shot conversion of saved Open Canvas (Preview) workflows into Graph Workflow definitions, run once at
@@ -79,7 +93,7 @@ public static class CanvasWorkflowImport
                                     .ToListAsync(cancellationToken);
         if (tables.Count == 0)
         {
-            return new CanvasWorkflowImportSnapshot([], FailedCount: 0);
+            return new CanvasWorkflowImportSnapshot { Candidates = [], FailedCount = 0 };
         }
 
         var rows = await dbContext.Database
@@ -106,7 +120,7 @@ public static class CanvasWorkflowImport
                 // and parses, so a failure here means the row was already damaged before this slice touched it.
                 JsonDocument.Parse(plaintext).Dispose();
 
-                candidates.Add(new CanvasWorkflowImportCandidate(row.Id, row.Name ?? string.Empty, plaintext, row.CreatedAtUtc));
+                candidates.Add(new CanvasWorkflowImportCandidate { Id = row.Id, Name = row.Name ?? string.Empty, GraphJson = plaintext, CreatedAtUtc = row.CreatedAtUtc });
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -119,7 +133,7 @@ public static class CanvasWorkflowImport
             }
         }
 
-        return new CanvasWorkflowImportSnapshot(candidates, failed);
+        return new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = failed };
     }
 
     /// <summary>
@@ -259,16 +273,18 @@ public static class CanvasWorkflowImport
         }
 
         var mappedEdges = MapEdges(edges, elided, keyByCanvasId, pauseKeys, nodeByKey, used, reasons);
-        return new ImportMapResult(new JsonObject
+        return new ImportMapResult
+        {
+            Document = new JsonObject
             {
                 ["schemaVersion"] = 1,
                 ["nodes"] = mappedNodes,
                 ["edges"] = mappedEdges
             },
-
             // Deduplicated: one dropped-edge complaint says as much as twenty, and this text reaches a 1024-character
             // description column.
-            [.. reasons.Distinct(StringComparer.Ordinal)]);
+            Reasons = [.. reasons.Distinct(StringComparer.Ordinal)]
+        };
     }
 
     /// <summary>
@@ -914,4 +930,9 @@ public static class CanvasWorkflowImport
 ///     What the mapper made of one canvas graph. <see cref="Reasons" /> is what it could not translate faithfully —
 ///     empty for a graph that came across whole.
 /// </summary>
-internal sealed record ImportMapResult(JsonNode Document, IReadOnlyList<string> Reasons);
+internal sealed class ImportMapResult
+{
+    public required JsonNode Document { get; init; }
+
+    public required IReadOnlyList<string> Reasons { get; init; }
+}

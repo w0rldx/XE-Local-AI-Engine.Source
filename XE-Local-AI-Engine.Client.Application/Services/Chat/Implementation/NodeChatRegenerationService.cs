@@ -275,32 +275,35 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, requestId, runCancellation.Token, cancellationToken)
                 : null;
 
-            var package = _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
-                conversationId,
-                resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(_localChatOptions.Value),
-                BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
-                resolution.EffectiveModel,
-                resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
-                LocalChatLoopbackDefaults.ClientNodeId,
-                allowedTools,
-                RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-                Timeouts: new TimeoutSettings
+            var package = _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest
+            {
+                InvocationId = requestId,
+                ConversationId = conversationId,
+                ResolvedSystemPrompt = resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(_localChatOptions.Value),
+                ConversationContext = BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
+                ModelProfile = resolution.EffectiveModel,
+                AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
+                ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+                AllowedTools = allowedTools,
+                RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+                Timeouts = new TimeoutSettings
                 {
                     InvocationTimeoutSeconds = runtimeNodeSettings.MaxMessageRequestTimeoutSeconds
                 },
-                ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
-                OrchestrationSpec: orchestration?.Spec,
-                SupportsThinking: resolution.SupportsThinking,
+                ReasoningEffort = resolved?.ReasoningEffort ?? reasoningEffort,
+                OrchestrationSpec = orchestration?.Spec,
+                SupportsThinking = resolution.SupportsThinking,
                 // Per-turn sampling overrides, carried exactly as the send path carries them so a regenerated turn
                 // reruns under the same knobs the original send used. Null keeps the package byte-identical to today.
-                SamplingOptions: samplingOptions,
-                Skills: resolved?.Skills,
-                CustomTools: resolved?.CustomTools,
-                ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable,
+                SamplingOptions = samplingOptions,
+                Skills = resolved?.Skills,
+                CustomTools = resolved?.CustomTools,
+                ReasoningBudgetEnforceable = resolution.ReasoningBudgetEnforceable,
                 // Carried exactly as the send path carries it, so a regenerated turn sees the same tool array.
-                DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false,
+                DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
                 // Carried exactly as the send path carries it: false = pinned, so no dispatcher model swap.
-                AllowAutoModelSwap: resolution.AllowAutoModelSwap));
+                AllowAutoModelSwap = resolution.AllowAutoModelSwap
+            });
 
             // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
             // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A
@@ -390,7 +393,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // DTO read first would still carry a synopsis the database no longer has — and BuildRegenerationContext would
         // splice that stale summary in AND drop the verbatim messages it claims to cover.
         var persistedSelectedPath = requestedSelectedPath is not null
-            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken)
+            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = conversationId, SelectedPath = requestedSelectedPath, UpdatedAtUtc = NowUnixMilliseconds() }, cancellationToken)
             : null;
 
         var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken)
@@ -401,7 +404,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         // Same precedence as the send path: a request-supplied selection is persisted and used; otherwise the
         // already-persisted conversation selection drives the pre-cutoff context.
-        return new RegenerationTurnLoad(conversation, persistedSelectedPath ?? conversation.SelectedPath, original);
+        return new RegenerationTurnLoad { Conversation = conversation, SelectedPath = persistedSelectedPath ?? conversation.SelectedPath, Original = original };
     }
 
     // Reuses the backend mint: creates the sibling placeholder (pending, shared variant_group_id, parent copied from the
@@ -416,21 +419,24 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         string? reasoningEffort,
         CancellationToken cancellationToken)
     {
-        var variant = await _persistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversationId,
-                              originalMessageId,
-                              newMessageId,
-                              requestId,
-                              startedAtUtc,
-                              // Stamp the variant with the model that will actually rerun (agent pin when honored, the
-                              // original turn's explicit pick when it suppressed the pin, else the local-default) — not
-                              // the raw original model — so the variant's attribution matches the rerun.
-                              resolution.EffectiveModel,
-                              AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
-                              AgentName: resolution.Resolved?.AgentName,
-                              // Persist the effort that actually drives this regenerated variant — an agent's pinned
-                              // effort wins over the regenerate request's selection (same precedence as the runtime
-                              // package built for the rerun). Survives reload off the metadata blob.
-                              ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? reasoningEffort),
+        var variant = await _persistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
+        {
+            ConversationId = conversationId,
+            OriginalMessageId = originalMessageId,
+            NewMessageId = newMessageId,
+            RequestId = requestId,
+            CreatedAtUtc = startedAtUtc,
+            // Stamp the variant with the model that will actually rerun (agent pin when honored, the
+            // original turn's explicit pick when it suppressed the pin, else the local-default) — not
+            // the raw original model — so the variant's attribution matches the rerun.
+            Model = resolution.EffectiveModel,
+            AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
+            AgentName = resolution.Resolved?.AgentName,
+            // Persist the effort that actually drives this regenerated variant — an agent's pinned
+            // effort wins over the regenerate request's selection (same precedence as the runtime
+            // package built for the rerun). Survives reload off the metadata blob.
+            ReasoningEffort = resolution.Resolved?.ReasoningEffort ?? reasoningEffort
+        },
                           cancellationToken)
                       ?? throw new NodeChatMessageNotFoundException(originalMessageId);
 
@@ -727,7 +733,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     {
         return BuildRegenerationContext(conversation, original, selectedPath, knowledgeContext: null, applyCompaction: false)
                .Where(static message => message.Role == MessageRole.User && !string.IsNullOrWhiteSpace(message.Content))
-               .Select(static message => new MemoryExtractionTurn(message.Content))
+               .Select(static message => new MemoryExtractionTurn { Content = message.Content })
                .ToArray();
     }
 
@@ -859,5 +865,12 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
     // The conversation this regenerate reruns, the variant branch that shapes its history, and the assistant turn being
     // replaced. Mirrors the send path's ChatTurnLoad, plus the original the cutoff anchors on.
-    private sealed record RegenerationTurnLoad(NodeChatConversationDto Conversation, IReadOnlyDictionary<Guid, Guid>? SelectedPath, NodeChatPersistedMessageDto Original);
+    private sealed record RegenerationTurnLoad
+    {
+        public required NodeChatConversationDto Conversation { get; init; }
+
+        public required IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
+
+        public required NodeChatPersistedMessageDto Original { get; init; }
+    }
 }

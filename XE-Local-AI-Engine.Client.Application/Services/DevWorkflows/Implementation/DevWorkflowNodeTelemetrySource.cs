@@ -210,11 +210,14 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         }
 
         // Re-capped after the union, because each step was bounded on its own and a session runs many steps.
-        return new StepTotals(providerCalls,
-            estimatedInputTokens,
-            toolCalls,
-            toolSchemaTokens,
-            [.. toolNames.Take(ProviderCallBudget.MaxDistinctToolNames)]);
+        return new StepTotals
+        {
+            ProviderCalls = providerCalls,
+            EstimatedInputTokens = estimatedInputTokens,
+            ToolCalls = toolCalls,
+            ToolSchemaTokens = toolSchemaTokens,
+            ToolNames = [.. toolNames.Take(ProviderCallBudget.MaxDistinctToolNames)]
+        };
     }
 
     /// <summary>
@@ -263,7 +266,7 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
             }
         }
 
-        return new EnvelopeTotals(inputTokens, outputTokens, reasoningTokens, agentTurnMs, modelReadinessMs, servedModelName);
+        return new EnvelopeTotals { InputTokens = inputTokens, OutputTokens = outputTokens, ReasoningTokens = reasoningTokens, AgentTurnMs = agentTurnMs, ModelReadinessMs = modelReadinessMs, ServedModelName = servedModelName };
     }
 
     /// <summary>A name as the column can hold it, or null when there was none to hold.</summary>
@@ -329,18 +332,31 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
     private static int? Add(int? total, int? term) =>
         term is { } value ? (total ?? 0) + value : total;
 
-    private sealed record StepTotals(
-        int? ProviderCalls,
-        long? EstimatedInputTokens,
-        int? ToolCalls,
-        long? ToolSchemaTokens,
-        IReadOnlyList<string> ToolNames);
+    private sealed record StepTotals
+    {
+        public required int? ProviderCalls { get; init; }
 
-    private sealed record EnvelopeTotals(
-        long? InputTokens,
-        long? OutputTokens,
-        long? ReasoningTokens,
-        long? AgentTurnMs,
-        long? ModelReadinessMs,
-        string? ServedModelName);
+        public required long? EstimatedInputTokens { get; init; }
+
+        public required int? ToolCalls { get; init; }
+
+        public required long? ToolSchemaTokens { get; init; }
+
+        public required IReadOnlyList<string> ToolNames { get; init; }
+    }
+
+    private sealed record EnvelopeTotals
+    {
+        public required long? InputTokens { get; init; }
+
+        public required long? OutputTokens { get; init; }
+
+        public required long? ReasoningTokens { get; init; }
+
+        public required long? AgentTurnMs { get; init; }
+
+        public required long? ModelReadinessMs { get; init; }
+
+        public required string? ServedModelName { get; init; }
+    }
 }

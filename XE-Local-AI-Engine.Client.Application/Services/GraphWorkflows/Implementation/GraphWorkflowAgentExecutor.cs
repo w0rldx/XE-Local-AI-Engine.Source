@@ -22,14 +22,22 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     What one agent turn cost, as the node run's output document reports it. Every member is nullable because the
 ///     runner reports what its provider gave it and no provider reports all of them.
 /// </summary>
-internal sealed record GraphWorkflowAgentUsage(
-    int? InputTokens,
-    int? OutputTokens,
-    int? TotalTokens,
-    int? ReasoningTokens,
-    long? DurationMs,
-    string? FinishReason,
-    string? Model);
+internal sealed class GraphWorkflowAgentUsage
+{
+    public required int? InputTokens { get; init; }
+
+    public required int? OutputTokens { get; init; }
+
+    public required int? TotalTokens { get; init; }
+
+    public required int? ReasoningTokens { get; init; }
+
+    public required long? DurationMs { get; init; }
+
+    public required string? FinishReason { get; init; }
+
+    public required string? Model { get; init; }
+}
 
 /// <summary>
 ///     What one agent turn came to. It is a RESULT and not a row: the lane produces it off the tick, and the poll is
@@ -39,13 +47,20 @@ internal sealed record GraphWorkflowAgentUsage(
 ///         faulted would leave the poll rethrowing on every tick forever, about work that is long over.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowAgentTurn(
-    bool Succeeded,
-    GraphWorkflowFailureClass FailureClass,
-    string? SanitizedReason,
-    string Text,
-    JsonElement? Json,
-    GraphWorkflowAgentUsage? Usage);
+internal sealed class GraphWorkflowAgentTurn
+{
+    public required bool Succeeded { get; init; }
+
+    public required GraphWorkflowFailureClass FailureClass { get; init; }
+
+    public required string? SanitizedReason { get; init; }
+
+    public required string Text { get; init; }
+
+    public required JsonElement? Json { get; init; }
+
+    public required GraphWorkflowAgentUsage? Usage { get; init; }
+}
 
 /// <summary>
 ///     The <c>Agent</c> lane: a headless saved-agent invocation, driven off the tick through
@@ -604,31 +619,32 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             SortOrder = 0
         };
 
-        return packageBuilder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            Guid.NewGuid(),
-            resolved.ResolvedSystemPrompt,
-            [seedTurn],
-
+        return packageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+            ConversationContext = [seedTurn],
             // Always the effective model, never resolved.ModelProfile: this node's own choice is what step 3 gated and
             // what the offer was built against, and binding the pin instead would run the turn on an ungated model.
-            effectiveModel,
-            resolved.AgentDefinitionVersion,
-            LocalChatLoopbackDefaults.ClientNodeId,
-            offeredTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: new TimeoutSettings
+            ModelProfile = effectiveModel,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = offeredTools,
+            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds
             },
-            ReasoningEffort: reasoningEffort,
-
+            ReasoningEffort = reasoningEffort,
             // Threaded rather than defaulted: the builder defaults SupportsThinking to true, so omitting these claims a
             // capability the model may not have.
-            SupportsThinking: capabilities.SupportsThinking,
-            Skills: resolved.Skills,
-            IsUnattended: true,
-            ResponseJsonSchema: config.ResponseJsonSchema,
-            ReasoningBudgetEnforceable: capabilities.ReasoningBudgetEnforceable));
+            SupportsThinking = capabilities.SupportsThinking,
+            Skills = resolved.Skills,
+            IsUnattended = true,
+            ResponseJsonSchema = config.ResponseJsonSchema,
+            ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable
+        });
     }
 
     /// <summary>
@@ -663,17 +679,20 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         }
 
         var text = terminal.StreamedContent;
-        var usage = new GraphWorkflowAgentUsage(terminal.InputTokens,
-            terminal.OutputTokens,
-            terminal.TotalTokens,
-            terminal.ReasoningTokens,
-            terminal.GenerationDurationMs,
-            terminal.FinishReason,
-            terminal.ModelUsed);
+        var usage = new GraphWorkflowAgentUsage
+        {
+            InputTokens = terminal.InputTokens,
+            OutputTokens = terminal.OutputTokens,
+            TotalTokens = terminal.TotalTokens,
+            ReasoningTokens = terminal.ReasoningTokens,
+            DurationMs = terminal.GenerationDurationMs,
+            FinishReason = terminal.FinishReason,
+            Model = terminal.ModelUsed
+        };
 
         if (config.ResponseJsonSchema is null)
         {
-            return new GraphWorkflowAgentTurn(Succeeded: true, GraphWorkflowFailureClass.None, SanitizedReason: null, text, Json: null, usage);
+            return new GraphWorkflowAgentTurn { Succeeded = true, FailureClass = GraphWorkflowFailureClass.None, SanitizedReason = null, Text = text, Json = null, Usage = usage };
         }
 
         try
@@ -684,7 +703,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 return SchemaFailure(terminal.FinishReason);
             }
 
-            return new GraphWorkflowAgentTurn(Succeeded: true, GraphWorkflowFailureClass.None, SanitizedReason: null, text, parsed.RootElement.Clone(), usage);
+            return new GraphWorkflowAgentTurn { Succeeded = true, FailureClass = GraphWorkflowFailureClass.None, SanitizedReason = null, Text = text, Json = parsed.RootElement.Clone(), Usage = usage };
         }
         catch (JsonException)
         {
@@ -708,7 +727,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         Failure(GraphWorkflowFailureClass.ValidationFailed, reason);
 
     private static GraphWorkflowAgentTurn Failure(GraphWorkflowFailureClass failureClass, string reason) =>
-        new(Succeeded: false, failureClass, GraphWorkflowStateMachine.Bounded(reason, GraphWorkflowStateMachine.MaxTerminalReason), Text: string.Empty, Json: null, Usage: null);
+        new() { Succeeded = false, FailureClass = failureClass, SanitizedReason = GraphWorkflowStateMachine.Bounded(reason, GraphWorkflowStateMachine.MaxTerminalReason), Text = string.Empty, Json = null, Usage = null };
 
     /// <summary>
     ///     The seed user turn's content: the node's instructions, followed by the upstream documents when the node asks
@@ -937,11 +956,18 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
     /// <summary>The Agent <c>output</c> shape, per the binding document contract.</summary>
     private static JsonElement Output(GraphWorkflowAgentTurn turn) =>
-        JsonSerializer.SerializeToElement(new AgentOutputPayload(turn.Text, turn.Json, turn.Usage), JsonOptions);
+        JsonSerializer.SerializeToElement(new AgentOutputPayload { Text = turn.Text, Json = turn.Json, Usage = turn.Usage }, JsonOptions);
 
     /// <summary>Tells the runner to unwind a turn. A cancel for an invocation it no longer knows about is a no-op.</summary>
     private void CancelInvocation(Guid invocationId) =>
         _invocationRunner.Cancel(invocationId);
 
-    private sealed record AgentOutputPayload(string Text, JsonElement? Json, GraphWorkflowAgentUsage? Usage);
+    private sealed record AgentOutputPayload
+    {
+        public required string Text { get; init; }
+
+        public required JsonElement? Json { get; init; }
+
+        public required GraphWorkflowAgentUsage? Usage { get; init; }
+    }
 }

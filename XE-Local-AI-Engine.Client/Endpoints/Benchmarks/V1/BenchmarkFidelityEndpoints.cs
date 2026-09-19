@@ -96,10 +96,13 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint : Endpoint<UpdateBenc
         ArgumentNullException.ThrowIfNull(req);
         var change = await _projects.UpdateFidelityAsync(req.ProjectId,
                                         req.ExpectedVersion,
-                                        new BenchmarkProjectFidelitySettings(req.FidelityEnabled,
-                                            req.FidelityKldEnabled,
-                                            req.FidelityChunks,
-                                            req.FidelityKldBaseModelName),
+                                        new BenchmarkProjectFidelitySettings
+                                        {
+                                            Enabled = req.FidelityEnabled,
+                                            KldEnabled = req.FidelityKldEnabled,
+                                            Chunks = req.FidelityChunks,
+                                            KldBaseModelName = req.FidelityKldBaseModelName
+                                        },
                                         req.MeasureExisting,
                                         ct);
         var runCount = await _records.CountRunsAsync(req.ProjectId, ct);

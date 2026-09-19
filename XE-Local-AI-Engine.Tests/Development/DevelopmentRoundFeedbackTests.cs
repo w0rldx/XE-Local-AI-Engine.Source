@@ -53,12 +53,15 @@ public sealed class DevelopmentRoundFeedbackTests
     [Test]
     public void AReviewersChangeRequestCarriesItsFindingsIntoTheNextRoundsPrompt()
     {
-        var reason = DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.ChangesRequested,
-            "The patch does not cover the failing case.",
-            [
+        var reason = DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission
+        {
+            Disposition = DevelopmentReviewDisposition.ChangesRequested,
+            Summary = "The patch does not cover the failing case.",
+            Findings = [
                 new DevelopmentReviewFinding("correctness", "ParseBound returns the low bound when the range is inverted."),
                 new DevelopmentReviewFinding("tests", "No test covers an inverted range.")
-            ]));
+            ]
+        });
 
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(reason),
             Session(),
@@ -75,7 +78,7 @@ public sealed class DevelopmentRoundFeedbackTests
     public void WithNoFindings_AReviewersChangeRequestFallsBackToTheFixedSentence()
     {
         AssertEx.Equal("The independent reviewer requested changes.",
-            DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.ChangesRequested, "Summary", [])));
+            DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission { Disposition = DevelopmentReviewDisposition.ChangesRequested, Summary = "Summary", Findings = [] }));
     }
 
     /// <summary>
@@ -363,14 +366,16 @@ public sealed class DevelopmentRoundFeedbackTests
             CompletedAtUtc: 0);
 
     private static DevelopmentWorkspaceSession Session() =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "0123456789abcdef0123456789abcdef01234567",
-            "identity",
-            "/worktree",
-            "/runtime",
-            new SandboxHandle
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            BaseCommit = "0123456789abcdef0123456789abcdef01234567",
+            RepositoryIdentityHash = "identity",
+            HostWorktreePath = "/worktree",
+            RuntimePath = "/runtime",
+            SandboxHandle = new SandboxHandle
             {
                 ProviderName = "test",
                 SandboxId = "sandbox-1",
@@ -384,7 +389,8 @@ public sealed class DevelopmentRoundFeedbackTests
                 },
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = 1
-            });
+            }
+        };
 
     private static DevelopmentExecutionSnapshot Snapshot(string? previousRoundFeedback,
         string? workflowPolicyText = null,

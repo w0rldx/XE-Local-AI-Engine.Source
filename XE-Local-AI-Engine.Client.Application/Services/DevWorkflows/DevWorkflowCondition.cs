@@ -27,8 +27,14 @@ internal enum DevWorkflowConditionOperator
 ///         interface and nothing else changes.
 ///     </para>
 /// </summary>
-internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOperator Operator, JsonElement Value)
+internal sealed record DevWorkflowCondition
 {
+    public required string Path { get; init; }
+
+    public required DevWorkflowConditionOperator Operator { get; init; }
+
+    public required JsonElement Value { get; init; }
+
     /// <summary>
     ///     Whether the edge carrying <paramref name="condition" /> fires. A null condition is unconditional.
     ///     <para>
@@ -194,7 +200,7 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
         var value = element.TryGetProperty("value", out var valueElement) ? valueElement.Clone() : default;
         if (op is DevWorkflowConditionOperator.Exists or DevWorkflowConditionOperator.NotExists)
         {
-            return new DevWorkflowCondition(path, op, value);
+            return new DevWorkflowCondition { Path = path, Operator = op, Value = value };
         }
 
         if (value.ValueKind == JsonValueKind.Undefined)
@@ -222,6 +228,6 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
                                                      + "Booleans compare for equality only, so this edge could never fire.");
         }
 
-        return new DevWorkflowCondition(path, op, value);
+        return new DevWorkflowCondition { Path = path, Operator = op, Value = value };
     }
 }

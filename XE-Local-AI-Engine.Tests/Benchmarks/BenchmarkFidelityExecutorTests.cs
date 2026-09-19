@@ -372,7 +372,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         {
             var capacity = Substitute.For<ICapacityService>();
             _ = capacity.DecideAsync(Arg.Do<CapacityRequest>(request => CapacityRequests.Add(request)), Arg.Any<CancellationToken>())
-                        .Returns(new CapacityDecision(CapacityVerdict.Allow, "allowed", OllamaEvictionWarning: false));
+                        .Returns(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "allowed", OllamaEvictionWarning = false });
             return capacity;
         }
 
@@ -388,7 +388,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 Options.Create(new BenchmarkKldCacheOptions()),
                 new StubEnvironment(),
                 new BenchmarkCancellationRegistry(),
-                new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+                new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
                 NullLogger<BenchmarkFidelityExecutor>.Instance,
                 measurementTimeout);
 
@@ -576,7 +576,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken);
             }
 
-            return new BenchmarkPerplexityProcessResult(0, _output());
+            return new BenchmarkPerplexityProcessResult { ExitCode = 0, Output = _output() };
         }
     }
 

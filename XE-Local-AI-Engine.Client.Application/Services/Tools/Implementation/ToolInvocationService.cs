@@ -69,7 +69,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
         // Step 1a. Blank first, which is also what keeps the registry lookups below from throwing on an empty name.
         if (string.IsNullOrWhiteSpace(toolName))
         {
-            return new ToolInvocationOutcome(ToolInvocationOutcomeKind.UnknownTool, null, "The node names no tool.");
+            return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.UnknownTool, Result = null, Reason = "The node names no tool." };
         }
 
         // The deadline is its OWN source rather than a CancelAfter on the linked budget, and the catch below is why:
@@ -106,19 +106,19 @@ internal sealed class ToolInvocationService : IToolInvocationService
                                                             && string.Equals(candidate.Source, BuiltinSource, StringComparison.Ordinal));
             if (entry is null)
             {
-                return new ToolInvocationOutcome(ToolInvocationOutcomeKind.UnknownTool, null, $"'{toolName}' is not a built-in tool on this node.");
+                return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.UnknownTool, Result = null, Reason = $"'{toolName}' is not a built-in tool on this node." };
             }
 
             // Steps 2-5: risk class, composed approval, executable resolution, structural approval floor.
             if (TryAdmit(entry, out var executable) is { } refusal)
             {
-                return new ToolInvocationOutcome(ToolInvocationOutcomeKind.NotInvocable, null, refusal);
+                return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.NotInvocable, Result = null, Reason = refusal };
             }
 
             // Step 6. Parse the arguments into a bag the validator and the function both read.
             if (!TryParseArguments(argumentsJson, out var arguments, out var parseError))
             {
-                return new ToolInvocationOutcome(ToolInvocationOutcomeKind.InvalidArguments, null, parseError);
+                return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.InvalidArguments, Result = null, Reason = parseError };
             }
 
             // Step 7. The same validator, schema and strictness the registry's own wrapper applies — run BEFORE the
@@ -127,7 +127,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
             var validation = ToolArgumentValidator.CoerceAndValidate(executable.JsonSchema, arguments!, rejectUnknownProperties: true);
             if (!validation.IsValid)
             {
-                return new ToolInvocationOutcome(ToolInvocationOutcomeKind.InvalidArguments, null, validation.Reason ?? $"The arguments for '{entry.Name}' are invalid.");
+                return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.InvalidArguments, Result = null, Reason = validation.Reason ?? $"The arguments for '{entry.Name}' are invalid." };
             }
 
             // Step 8. Whatever is left of the budget armed above — the validation this call has already done came out
@@ -139,10 +139,10 @@ internal sealed class ToolInvocationService : IToolInvocationService
             // Pre-validation cannot reach that branch, so the result is inspected before it counts as a success.
             if (TryReadRepairReason(result) is { } repairReason)
             {
-                return new ToolInvocationOutcome(ToolInvocationOutcomeKind.InvalidArguments, null, repairReason);
+                return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.InvalidArguments, Result = null, Reason = repairReason };
             }
 
-            return new ToolInvocationOutcome(ToolInvocationOutcomeKind.Executed, result, "read-local");
+            return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Executed, Result = result, Reason = "read-local" };
         }
         catch (OperationCanceledException)
         {
@@ -150,8 +150,8 @@ internal sealed class ToolInvocationService : IToolInvocationService
             // a spent budget is a timeout however many other tokens have fired since, and the two answers are not
             // interchangeable — a timeout is re-attempted and a cancellation is not.
             return deadline.IsCancellationRequested
-                ? new ToolInvocationOutcome(ToolInvocationOutcomeKind.Timeout, null, $"'{toolName}' exceeded the node's time budget.")
-                : new ToolInvocationOutcome(ToolInvocationOutcomeKind.Cancelled, null, $"The invocation of '{toolName}' was cancelled.");
+                ? new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Timeout, Result = null, Reason = $"'{toolName}' exceeded the node's time budget." }
+                : new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Cancelled, Result = null, Reason = $"The invocation of '{toolName}' was cancelled." };
         }
         catch (Exception exception)
         {
@@ -174,7 +174,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
                     context.RunId);
             }
 
-            return new ToolInvocationOutcome(ToolInvocationOutcomeKind.Faulted, null, $"'{toolName}' threw during invocation.");
+            return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Faulted, Result = null, Reason = $"'{toolName}' threw during invocation." };
         }
     }
 
@@ -195,7 +195,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
                 continue;
             }
 
-            invocable.Add(new InvocableToolDescriptor(entry.Name, entry.Description, executable.JsonSchema.GetRawText()));
+            invocable.Add(new InvocableToolDescriptor { Name = entry.Name, Description = entry.Description, ParameterSchema = executable.JsonSchema.GetRawText() });
         }
 
         return invocable;

@@ -161,11 +161,14 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         }
 
         public override Task<DevelopmentRepositoryBinding> ResolveProjectAsync(Guid projectId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DevelopmentRepositoryBinding(projectId,
-                DevelopmentTestFixture.SelectedFolderId,
-                "fixture",
-                _repositoryRoot,
-                "repository-hash"));
+            Task.FromResult(new DevelopmentRepositoryBinding
+            {
+                ProjectId = projectId,
+                SelectedFolderId = DevelopmentTestFixture.SelectedFolderId,
+                Alias = "fixture",
+                RepositoryRoot = _repositoryRoot,
+                RepositoryIdentityHash = "repository-hash"
+            });
     }
 
     private sealed class UnavailableRepositoryBindings : StubRepositoryBindingsBase

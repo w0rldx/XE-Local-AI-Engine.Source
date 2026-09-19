@@ -18,12 +18,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         see it: the row honestly reads <c>Queued</c> until the work holds whatever node-wide slot it needs.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowInFlight<TResult>(
-    CancellationTokenSource Cancellation,
-    Task<TResult> Work,
-    int Attempt,
-    Guid InvocationId,
-    StrongBox<bool> LeaseAcquired);
+internal sealed class GraphWorkflowInFlight<TResult>
+{
+    public required CancellationTokenSource Cancellation { get; init; }
+
+    public required Task<TResult> Work { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required Guid InvocationId { get; init; }
+
+    public required StrongBox<bool> LeaseAcquired { get; init; }
+}
 
 /// <summary>
 ///     The in-flight registry every graph-workflow lane is built out of: a bounded number of node runs may hold a slot
@@ -101,7 +107,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         // The box is the lane's to make and the work's to flip: it is the only thing the poll can read about a turn
         // that has started but does not yet hold the node-wide slot it is waiting for.
         var leaseAcquired = new StrongBox<bool>(value: false);
-        var flight = new GraphWorkflowInFlight<TResult>(cancellation, RunAsync(work, leaseAcquired, cancellation.Token), attempt, invocationId, leaseAcquired);
+        var flight = new GraphWorkflowInFlight<TResult> { Cancellation = cancellation, Work = RunAsync(work, leaseAcquired, cancellation.Token), Attempt = attempt, InvocationId = invocationId, LeaseAcquired = leaseAcquired };
         if (_inflight.TryAdd(nodeRunId, flight))
         {
             return flight;

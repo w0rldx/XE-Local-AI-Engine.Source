@@ -44,11 +44,19 @@ internal static class ComputeRefusalCodes
 ///         reason the boundary is one method with two projections rather than two entry points.
 ///     </para>
 /// </summary>
-internal sealed record ComputeExecutionOutcome(bool Ran, string? RefusalCode, string? RefusalMessage, SandboxCommandResult? Result)
+internal sealed class ComputeExecutionOutcome
 {
+    public required bool Ran { get; init; }
+
+    public required string? RefusalCode { get; init; }
+
+    public required string? RefusalMessage { get; init; }
+
+    public required SandboxCommandResult? Result { get; init; }
+
     public static ComputeExecutionOutcome Refused(string refusalCode, string refusalMessage) =>
-        new(Ran: false, refusalCode, refusalMessage, Result: null);
+        new() { Ran = false, RefusalCode = refusalCode, RefusalMessage = refusalMessage, Result = null };
 
     public static ComputeExecutionOutcome Executed(SandboxCommandResult result) =>
-        new(Ran: true, RefusalCode: null, RefusalMessage: null, result);
+        new() { Ran = true, RefusalCode = null, RefusalMessage = null, Result = result };
 }

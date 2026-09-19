@@ -689,14 +689,16 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             Environment.SetEnvironmentVariable("PATH", fakeBin + Path.PathSeparator + originalPath);
             using var sandbox = CreateSandbox();
             var service = new DevelopmentPatchEvidenceService(Options.Create(OptionsValue()));
-            var session = new DevelopmentWorkspaceSession(Guid.NewGuid(),
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                "base",
-                "identity",
-                repository,
-                runtime,
-                new SandboxHandle
+            var session = new DevelopmentWorkspaceSession
+            {
+                ProjectId = Guid.NewGuid(),
+                TaskId = Guid.NewGuid(),
+                AttemptId = Guid.NewGuid(),
+                BaseCommit = "base",
+                RepositoryIdentityHash = "identity",
+                HostWorktreePath = repository,
+                RuntimePath = runtime,
+                SandboxHandle = new SandboxHandle
                 {
                     ProviderName = "process",
                     SandboxId = Guid.NewGuid().ToString("N"),
@@ -710,7 +712,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                     },
                     CreatedAt = DateTimeOffset.UtcNow,
                     ManifestVersion = 1
-                });
+                }
+            };
             using var cancelled = new CancellationTokenSource();
             await cancelled.CancelAsync();
 
@@ -1056,7 +1059,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 var artifactId = call.ArgAt<Guid>(1);
                 var content = call.ArgAt<ReadOnlyMemory<byte>>(2);
                 contents[artifactId] = Encoding.UTF8.GetString(content.Span);
-                return new DevelopmentArtifactBlobWriteResult($"{snapshot.ProjectId:N}/{artifactId:N}", "HASH-" + artifactId.ToString("N"), content.Length);
+                return new DevelopmentArtifactBlobWriteResult { OpaqueReference = $"{snapshot.ProjectId:N}/{artifactId:N}", ContentHash = "HASH-" + artifactId.ToString("N"), ByteCount = content.Length };
             });
 
         using var sandbox = CreateSandbox();
@@ -1123,9 +1126,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
         blob.WriteAsync(snapshot.ProjectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
-            .Returns(call => new DevelopmentArtifactBlobWriteResult($"{snapshot.ProjectId:N}/{call.ArgAt<Guid>(1):N}",
-                "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
-                call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
+            .Returns(call => new DevelopmentArtifactBlobWriteResult
+            {
+                OpaqueReference = $"{snapshot.ProjectId:N}/{call.ArgAt<Guid>(1):N}",
+                ContentHash = "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
+                ByteCount = call.ArgAt<ReadOnlyMemory<byte>>(2).Length
+            });
 
         using var sandbox = CreateSandbox();
         var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
@@ -1185,9 +1191,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 // The real blob store honours its token. Substituting that here is what makes the test fail when the
                 // prompt write is handed the attempt's deadline instead of CancellationToken.None.
                 call.ArgAt<CancellationToken>(3).ThrowIfCancellationRequested();
-                return new DevelopmentArtifactBlobWriteResult($"{snapshot.ProjectId:N}/{call.ArgAt<Guid>(1):N}",
-                    "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
-                    call.ArgAt<ReadOnlyMemory<byte>>(2).Length);
+                return new DevelopmentArtifactBlobWriteResult
+                {
+                    OpaqueReference = $"{snapshot.ProjectId:N}/{call.ArgAt<Guid>(1):N}",
+                    ContentHash = "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
+                    ByteCount = call.ArgAt<ReadOnlyMemory<byte>>(2).Length
+                };
             });
 
         using var sandbox = CreateSandbox();
@@ -1359,9 +1368,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
         blob.WriteAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
-            .Returns(call => new DevelopmentArtifactBlobWriteResult($"{call.ArgAt<Guid>(0):N}/{call.ArgAt<Guid>(1):N}",
-                "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
-                call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
+            .Returns(call => new DevelopmentArtifactBlobWriteResult
+            {
+                OpaqueReference = $"{call.ArgAt<Guid>(0):N}/{call.ArgAt<Guid>(1):N}",
+                ContentHash = "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
+                ByteCount = call.ArgAt<ReadOnlyMemory<byte>>(2).Length
+            });
 
         using var sandbox = CreateSandbox();
         var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
@@ -1488,11 +1500,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository) =>
-        new(snapshot.ProjectId,
-            snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
-            "repository",
-            repository,
-            snapshot.RepositoryIdentityHash);
+        new()
+        {
+            ProjectId = snapshot.ProjectId,
+            SelectedFolderId = snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
+            Alias = "repository",
+            RepositoryRoot = repository,
+            RepositoryIdentityHash = snapshot.RepositoryIdentityHash
+        };
 
     private async Task<string> CreateRepositoryAsync()
     {
@@ -1611,12 +1626,18 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             ArgumentNullException.ThrowIfNull(tools);
             _ = await tools.WriteFileAsync("tests/FeatureTests.cs", "// nothing to see here\n", cancellationToken);
-            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Made the tests pass.",
-                    ["tests/FeatureTests.cs"],
-                    [],
-                    Notes: null),
-                InputTokens: 10,
-                OutputTokens: 20);
+            return new DevelopmentCoderModelResult
+            {
+                Submission = new DevelopmentCoderSubmission
+            {
+                Summary = "Made the tests pass.",
+                ChangedFiles = ["tests/FeatureTests.cs"],
+                CommandIds = [],
+                Notes = null
+            },
+                InputTokens = 10,
+                OutputTokens = 20
+            };
         }
     }
 
@@ -1665,9 +1686,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 _ = await tools.WriteFileAsync(path, content, cancellationToken);
             }
 
-            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Scripted attempt.", _changedFiles, [], Notes: null),
-                InputTokens: 10,
-                OutputTokens: 20);
+            return new DevelopmentCoderModelResult
+            {
+                Submission = new DevelopmentCoderSubmission { Summary = "Scripted attempt.", ChangedFiles = _changedFiles, CommandIds = [], Notes = null },
+                InputTokens = 10,
+                OutputTokens = 20
+            };
         }
     }
 
@@ -1684,12 +1708,18 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             _ = await tools.WriteFileAsync("feature.txt", "implemented\n", cancellationToken);
             _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus, cancellationToken);
-            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented bounded feature.",
-                    ["feature.txt"],
-                    [DevelopmentCommandIds.GitStatus],
-                    Notes: null),
-                InputTokens: 10,
-                OutputTokens: 20);
+            return new DevelopmentCoderModelResult
+            {
+                Submission = new DevelopmentCoderSubmission
+            {
+                Summary = "Implemented bounded feature.",
+                ChangedFiles = ["feature.txt"],
+                CommandIds = [DevelopmentCommandIds.GitStatus],
+                Notes = null
+            },
+                InputTokens = 10,
+                OutputTokens = 20
+            };
         }
     }
 

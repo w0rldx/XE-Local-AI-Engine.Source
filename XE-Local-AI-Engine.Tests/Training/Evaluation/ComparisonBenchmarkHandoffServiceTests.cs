@@ -229,7 +229,7 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
     }
 
     private static CreateBenchmarkFromComparisonCommand Command() =>
-        new(ComparisonId, CoreTask, ContextTokens: 8192, AgentDefinitionId, "Tuned vs base", "q8_0", RepeatCount: 2);
+        new() { ComparisonId = ComparisonId, CoreTask = CoreTask, ContextTokens = 8192, AgentDefinitionId = AgentDefinitionId, Name = "Tuned vs base", KvCacheType = "q8_0", RepeatCount = 2 };
 
     private static BenchmarkProjectRecord Project(Guid id, string name, long version, string coreTask = CoreTask, int contextTokens = 8192) =>
         new()
@@ -306,9 +306,12 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
                           throw failure;
                       }
 
-                      return Task.FromResult(new BenchmarkFrozenRunPlan(request.ProjectId,
-                          request.ExpectedProjectVersion,
-                          [.. Enumerable.Range(0, request.RepeatCount).Select(_ => FrozenCommand(request))]));
+                      return Task.FromResult(new BenchmarkFrozenRunPlan
+                      {
+                          ProjectId = request.ProjectId,
+                          ExpectedProjectVersion = request.ExpectedProjectVersion,
+                          Commands = [.. Enumerable.Range(0, request.RepeatCount).Select(_ => FrozenCommand(request))]
+                      });
                   });
             Freeze.CommitAsync(Arg.Any<IReadOnlyList<BenchmarkFrozenRunPlan>>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo =>

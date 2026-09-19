@@ -121,16 +121,19 @@ public sealed class ScheduledJobTemplateRegistryTests
         public StubHandler(string templateId, string displayName)
         {
             TemplateId = templateId;
-            Descriptor = new(templateId,
-                displayName,
-                "Stub handler for registry tests.",
-                ParameterSchema: null,
-                DefaultParameters: null,
-                [ScheduleKind.OneShot],
-                ScheduleKind.OneShot,
-                SchedulerMisfirePolicy.Smart,
-                DefaultMaxRuntimeSeconds: null,
-                AllowManualTrigger: false);
+            Descriptor = new()
+            {
+                TemplateId = templateId,
+                DisplayName = displayName,
+                Description = "Stub handler for registry tests.",
+                ParameterSchema = null,
+                DefaultParameters = null,
+                SupportedScheduleKinds = [ScheduleKind.OneShot],
+                DefaultScheduleKind = ScheduleKind.OneShot,
+                DefaultMisfirePolicy = SchedulerMisfirePolicy.Smart,
+                DefaultMaxRuntimeSeconds = null,
+                AllowManualTrigger = false
+            };
         }
 
         public string TemplateId { get; }

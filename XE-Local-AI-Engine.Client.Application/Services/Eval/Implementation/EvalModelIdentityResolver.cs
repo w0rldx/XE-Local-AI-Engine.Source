@@ -64,7 +64,7 @@ internal sealed class EvalModelIdentityResolver : IEvalModelIdentityResolver
                     ? $"gguf-sha256:{entry.Sha256}"
                     : string.Create(CultureInfo.InvariantCulture,
                         $"gguf-rev:{entry.SourceRevision}:size:{entry.SizeBytes}:dl:{entry.DownloadedAtUtc.ToUnixTimeMilliseconds()}");
-                return new EvalModelIdentity(token, IsVerified: true);
+                return new EvalModelIdentity { Token = token, IsVerified = true };
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -83,7 +83,7 @@ internal sealed class EvalModelIdentityResolver : IEvalModelIdentityResolver
             var classification = await _classificationStore.GetByNameAsync(modelName, cancellationToken);
             if (classification is not null && !string.IsNullOrWhiteSpace(classification.Digest))
             {
-                return new EvalModelIdentity($"ollama-digest:{classification.Digest}", IsVerified: true);
+                return new EvalModelIdentity { Token = $"ollama-digest:{classification.Digest}", IsVerified = true };
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

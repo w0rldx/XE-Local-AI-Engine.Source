@@ -35,32 +35,35 @@ internal sealed class FeedbackInsightsService : IFeedbackInsightsService
         var byTool = aggregate.ByTool.Select(BuildToolBreakdown).ToArray();
         var exemplars = aggregate.Exemplars.Select(BuildExemplar).ToArray();
 
-        return new FeedbackInsightsResult(aggregate.AgentDefinitionId,
-            aggregate.AgentName,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            MinOccurrenceThreshold,
-            BuildOverall(aggregate.UpCount, aggregate.DownCount),
-            byTool,
-            exemplars);
+        return new FeedbackInsightsResult
+        {
+            AgentDefinitionId = aggregate.AgentDefinitionId,
+            AgentName = aggregate.AgentName,
+            GeneratedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            MinOccurrenceThreshold = MinOccurrenceThreshold,
+            Overall = BuildOverall(aggregate.UpCount, aggregate.DownCount),
+            ByTool = byTool,
+            Exemplars = exemplars
+        };
     }
 
     private static OverallFeedback BuildOverall(int up, int down)
     {
         var total = up + down;
-        return new OverallFeedback(total, up, down, DownRate(down, total), total >= MinOccurrenceThreshold);
+        return new OverallFeedback { Total = total, Up = up, Down = down, DownRate = DownRate(down, total), MeetsThreshold = total >= MinOccurrenceThreshold };
     }
 
     private static ToolFeedbackBreakdown BuildToolBreakdown(ToolFeedbackCount tool)
     {
         var total = tool.UpCount + tool.DownCount;
-        return new ToolFeedbackBreakdown(tool.ToolName, total, tool.UpCount, tool.DownCount, DownRate(tool.DownCount, total), total >= MinOccurrenceThreshold);
+        return new ToolFeedbackBreakdown { ToolName = tool.ToolName, Total = total, Up = tool.UpCount, Down = tool.DownCount, DownRate = DownRate(tool.DownCount, total), MeetsThreshold = total >= MinOccurrenceThreshold };
     }
 
     private static FeedbackExemplarView BuildExemplar(FeedbackExemplar exemplar)
     {
         var truncated = exemplar.Comment.Length > MaxExemplarCommentLength;
         var comment = truncated ? Truncate(exemplar.Comment) : exemplar.Comment;
-        return new FeedbackExemplarView(exemplar.Rating, comment, exemplar.MessageId, exemplar.ConversationId, exemplar.CreatedAtUtc, truncated);
+        return new FeedbackExemplarView { Rating = exemplar.Rating, Comment = comment, MessageId = exemplar.MessageId, ConversationId = exemplar.ConversationId, CreatedAtUtc = exemplar.CreatedAtUtc, Truncated = truncated };
     }
 
     private static string Truncate(string comment)

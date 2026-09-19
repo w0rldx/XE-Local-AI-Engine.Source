@@ -67,7 +67,7 @@ public sealed class BenchmarkRunExecutorTests
             new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
             Substitute.For<IBenchmarkPairwisePlanner>(),
-            new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
             NullLogger<BenchmarkRunExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
@@ -250,13 +250,16 @@ public sealed class BenchmarkRunExecutorTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         await using var assignment = new TrackingAsyncDisposable();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
-        var throughput = new InvocationThroughput(TimeToFirstTokenMs: 180.25,
-            PromptTokens: 123,
-            PromptMs: 456.5,
-            GenerationTokens: 89,
-            GenerationMs: 1011.5,
-            CachedPromptTokens: 7,
-            SegmentCount: 2);
+        var throughput = new InvocationThroughput
+        {
+            TimeToFirstTokenMs = 180.25,
+            PromptTokens = 123,
+            PromptMs = 456.5,
+            GenerationTokens = 89,
+            GenerationMs = 1011.5,
+            CachedPromptTokens = 7,
+            SegmentCount = 2
+        };
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
               .Returns(async call =>
@@ -611,7 +614,7 @@ public sealed class BenchmarkRunExecutorTests
             runner,
             new BenchmarkCancellationRegistry(),
             PassthroughSupervisor(),
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 5, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 5, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
@@ -1062,7 +1065,7 @@ public sealed class BenchmarkRunExecutorTests
         var supervisor = RefusingSupervisor(refusals: 1);
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
             new BenchmarkCancellationRegistry(), supervisor,
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 2, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
@@ -1095,7 +1098,7 @@ public sealed class BenchmarkRunExecutorTests
         var supervisor = RefusingSupervisor(refusals: int.MaxValue);
         var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 2, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
@@ -1133,7 +1136,7 @@ public sealed class BenchmarkRunExecutorTests
         var supervisor = RefusingSupervisor(refusals: int.MaxValue);
         var executor = Executor(store, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(),
             Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
-            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 3, TimeSpan.Zero));
+            admissionRetry: new BenchmarkAdmissionRetry { MaxRetries = 3, Interval = TimeSpan.Zero });
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork { QueueSequence = 1, RunId = run.Id, Kind = BenchmarkWorkKind.Primary, Attempt = 1, Version = 2, Run = run }, CancellationToken.None);
 
@@ -1277,7 +1280,7 @@ public sealed class BenchmarkRunExecutorTests
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
             pairwisePlanner ?? Substitute.For<IBenchmarkPairwisePlanner>(),
             // Default: decide ONCE and never wait, so every test but the wait tests stays instant.
-            admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            admissionRetry ?? new BenchmarkAdmissionRetry { MaxRetries = 0, Interval = TimeSpan.Zero },
             logger ?? NullLogger<BenchmarkRunExecutor>.Instance);
 
     private static InvocationState State(Guid invocationId,
@@ -1492,16 +1495,19 @@ public sealed class BenchmarkRunExecutorTests
         public TrackingDisposable Reservation { get; } = new();
 
         public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
-            DecideAsync(new CapacityRequest(modelName, role), ct);
+            DecideAsync(new CapacityRequest { ModelName = modelName, Role = role }, ct);
 
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
         {
             DecisionCount++;
             var verdict = _verdicts.Count > 1 ? _verdicts.Dequeue() : _verdicts.Peek();
-            return Task.FromResult(new CapacityDecision(verdict,
-                "capacity",
-                false,
-                verdict == CapacityVerdict.Allow ? Reservation : null));
+            return Task.FromResult(new CapacityDecision
+            {
+                Verdict = verdict,
+                Reason = "capacity",
+                OllamaEvictionWarning = false,
+                Reservation = verdict == CapacityVerdict.Allow ? Reservation : null
+            });
         }
     }
 
@@ -1522,7 +1528,7 @@ public sealed class BenchmarkRunExecutorTests
         public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct)
         {
             DecisionCount++;
-            return Task.FromResult(new CapacityDecision(CapacityVerdict.Allow, "allowed", false));
+            return Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "allowed", OllamaEvictionWarning = false });
         }
 
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
@@ -1531,7 +1537,7 @@ public sealed class BenchmarkRunExecutorTests
             EnvironmentCapturesAtDecision = _environmentFacts?.Captures ?? 0;
             LastRequest = request;
             Reservation = new TrackingDisposable();
-            return Task.FromResult(new CapacityDecision(CapacityVerdict.Allow, "allowed", false, Reservation));
+            return Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "allowed", OllamaEvictionWarning = false, Reservation = Reservation });
         }
     }
 

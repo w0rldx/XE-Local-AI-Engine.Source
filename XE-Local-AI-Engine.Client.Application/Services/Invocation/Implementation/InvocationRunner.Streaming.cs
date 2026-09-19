@@ -129,13 +129,16 @@ public sealed partial class InvocationRunner
         /// <summary>The terminal throughput snapshot, or null when the turn produced no measurement at all.</summary>
         public InvocationThroughput? ToThroughput()
         {
-            var throughput = new InvocationThroughput(FirstOutputLatencyMs,
-                PromptTokens,
-                PromptMs,
-                GenerationTokens,
-                GenerationMs,
-                CachedPromptTokens,
-                SegmentCount);
+            var throughput = new InvocationThroughput
+            {
+                TimeToFirstTokenMs = FirstOutputLatencyMs,
+                PromptTokens = PromptTokens,
+                PromptMs = PromptMs,
+                GenerationTokens = GenerationTokens,
+                GenerationMs = GenerationMs,
+                CachedPromptTokens = CachedPromptTokens,
+                SegmentCount = SegmentCount
+            };
             return throughput.IsEmpty ? null : throughput;
         }
 
@@ -297,8 +300,16 @@ public sealed partial class InvocationRunner
         }
     }
 
-    internal sealed record UsageSnapshot(int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? TotalTokens)
+    internal sealed class UsageSnapshot
     {
+        public required int? InputTokens { get; init; }
+
+        public required int? OutputTokens { get; init; }
+
+        public required int? ReasoningTokens { get; init; }
+
+        public required int? TotalTokens { get; init; }
+
         public static UsageSnapshot From(UsageDetails usage)
         {
             var inputTokens = ToNullableInt(usage.InputTokenCount);
@@ -312,7 +323,7 @@ public sealed partial class InvocationRunner
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
                               ?? SumIfAny(inputTokens, outputTokens);
 
-            return new UsageSnapshot(inputTokens, outputTokens, reasoningTokens, totalTokens);
+            return new UsageSnapshot { InputTokens = inputTokens, OutputTokens = outputTokens, ReasoningTokens = reasoningTokens, TotalTokens = totalTokens };
         }
 
         /// <summary>
@@ -327,10 +338,13 @@ public sealed partial class InvocationRunner
                 return round;
             }
 
-            return new UsageSnapshot(Add(total.InputTokens, round.InputTokens),
-                Add(total.OutputTokens, round.OutputTokens),
-                Add(total.ReasoningTokens, round.ReasoningTokens),
-                Add(total.TotalTokens, round.TotalTokens));
+            return new UsageSnapshot
+            {
+                InputTokens = Add(total.InputTokens, round.InputTokens),
+                OutputTokens = Add(total.OutputTokens, round.OutputTokens),
+                ReasoningTokens = Add(total.ReasoningTokens, round.ReasoningTokens),
+                TotalTokens = Add(total.TotalTokens, round.TotalTokens)
+            };
         }
 
         public Dictionary<string, long> ToTokenCounts()

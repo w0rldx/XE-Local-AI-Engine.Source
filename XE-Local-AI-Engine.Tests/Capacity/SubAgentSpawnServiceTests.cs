@@ -465,14 +465,17 @@ public sealed class SubAgentSpawnServiceTests
     {
         using var harness = new Harness();
         harness.AllowLocal();
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "bare instructions",
-            AgentDefinitionId: null,
-            AgentDefinitionVersion: null,
-            AllowedTools: [],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "bare instructions",
+            AgentDefinitionId = null,
+            AgentDefinitionVersion = null,
+            AllowedTools = [],
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
@@ -491,14 +494,17 @@ public sealed class SubAgentSpawnServiceTests
     {
         using var harness = new Harness();
         harness.AllowLocal();
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "general instructions without skill discovery",
-            AgentDefinitionId: Guid.NewGuid(),
-            AgentDefinitionVersion: 4,
-            AllowedTools: [],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "general instructions without skill discovery",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 4,
+            AllowedTools = [],
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
@@ -523,13 +529,14 @@ public sealed class SubAgentSpawnServiceTests
                    Arg.Any<McpInboundExecutionContext>(),
                    Arg.Any<Guid>())
                .Returns(AIFunctionFactory.Create((string input) => input, "read_file"));
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "agentic instructions",
-            AgentDefinitionId: Guid.NewGuid(),
-            AgentDefinitionVersion: 4,
-            AllowedTools:
-            [
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "agentic instructions",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 4,
+            AllowedTools = [
                 McpTool("read_file") with
                 {
                     Category = ToolCategory.WriteExecute,
@@ -537,8 +544,9 @@ public sealed class SubAgentSpawnServiceTests
                 },
                 McpTool("list_files")
             ],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         var requestId = Guid.NewGuid();
         var service = harness.Build();
 
@@ -546,7 +554,7 @@ public sealed class SubAgentSpawnServiceTests
         var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
         {
             AgentKey = "General",
-            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
             ExecutionRequestId = requestId
         }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
 
@@ -575,28 +583,30 @@ public sealed class SubAgentSpawnServiceTests
         var customInner = AIFunctionFactory.Create(() => events.Add("inner"), "custom__weather");
         harness.CustomToolCatalog.Set("custom__weather", new ApprovalRequiredAIFunction(customInner));
         harness.UseAgenticToolAdapter(new McpAgenticToolAdapter(audit, NullLogger<McpAgenticToolAdapter>.Instance));
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "agentic custom tool instructions",
-            AgentDefinitionId: Guid.NewGuid(),
-            AgentDefinitionVersion: 4,
-            AllowedTools:
-            [
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "agentic custom tool instructions",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 4,
+            AllowedTools = [
                 McpTool("custom__weather") with
                 {
                     Category = ToolCategory.WriteExecute,
                     RequiresApproval = true
                 }
             ],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         var requestId = Guid.NewGuid();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
         var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
         {
             AgentKey = "General",
-            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+            InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
             ExecutionRequestId = requestId
         }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
         var executable = (AIFunction)harness.ChatClient.LastTools.Single(static tool => tool.Name == "custom__weather");
@@ -623,25 +633,28 @@ public sealed class SubAgentSpawnServiceTests
         {
             using var harness = new Harness();
             harness.AllowLocal();
-            harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-                Model,
-                "agentic custom tool instructions",
-                Guid.NewGuid(),
-                AgentDefinitionVersion: 1,
-                [
+            harness.ResolveMcpBinding(new McpExecutionBinding
+            {
+                BindingFingerprint = "fingerprint",
+                ModelId = Model,
+                Instructions = "agentic custom tool instructions",
+                AgentDefinitionId = Guid.NewGuid(),
+                AgentDefinitionVersion = 1,
+                AllowedTools = [
                     McpTool(name) with
                     {
                         RequiresApproval = true
                     }
                 ],
-                ReasoningEffort: null,
-                SupportsThinking: false));
+                ReasoningEffort = null,
+                SupportsThinking = false
+            });
             using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
 
             var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
             {
                 AgentKey = "General",
-                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
                 ExecutionRequestId = Guid.NewGuid()
             }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
 
@@ -674,20 +687,23 @@ public sealed class SubAgentSpawnServiceTests
         {
             using var harness = new Harness();
             harness.AllowLocal();
-            harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-                Model,
-                "agentic instructions",
-                Guid.NewGuid(),
-                AgentDefinitionVersion: 1,
-                tools,
-                ReasoningEffort: null,
-                SupportsThinking: false));
+            harness.ResolveMcpBinding(new McpExecutionBinding
+            {
+                BindingFingerprint = "fingerprint",
+                ModelId = Model,
+                Instructions = "agentic instructions",
+                AgentDefinitionId = Guid.NewGuid(),
+                AgentDefinitionVersion = 1,
+                AllowedTools = tools,
+                ReasoningEffort = null,
+                SupportsThinking = false
+            });
             using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
 
             var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
             {
                 AgentKey = "General",
-                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+                InboundContext = new McpInboundExecutionContext { Scope = McpServerApiKeyScope.Agentic, KeyPrefix = "xemcp_abc123" },
                 ExecutionRequestId = Guid.NewGuid()
             }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
 
@@ -705,19 +721,21 @@ public sealed class SubAgentSpawnServiceTests
     {
         using var harness = new Harness();
         harness.AllowLocal();
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "coder instructions",
-            AgentDefinitionId: Guid.NewGuid(),
-            AgentDefinitionVersion: 2,
-            AllowedTools:
-            [
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "coder instructions",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 2,
+            AllowedTools = [
                 McpTool("list_files"),
                 McpTool("read_file"),
                 McpTool("search_text")
             ],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         using var workspaceSession = new TrackingWorkspaceSession();
         harness.WorkspaceSessionFactory.Result = McpWorkspaceExecutionSessionOpenResult.Success(workspaceSession);
         var service = harness.Build();
@@ -763,19 +781,21 @@ public sealed class SubAgentSpawnServiceTests
     {
         using var harness = new Harness(includeSearchText: false);
         harness.AllowLocal();
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "coder instructions",
-            AgentDefinitionId: Guid.NewGuid(),
-            AgentDefinitionVersion: 2,
-            AllowedTools:
-            [
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "coder instructions",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 2,
+            AllowedTools = [
                 McpTool("list_files"),
                 McpTool("read_file"),
                 McpTool("search_text")
             ],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
@@ -794,20 +814,22 @@ public sealed class SubAgentSpawnServiceTests
     {
         using var harness = new Harness();
         harness.AllowLocal();
-        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
-            Model,
-            "coder instructions",
-            AgentDefinitionId: Guid.NewGuid(),
-            AgentDefinitionVersion: 2,
-            AllowedTools:
-            [
+        harness.ResolveMcpBinding(new McpExecutionBinding
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "coder instructions",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 2,
+            AllowedTools = [
                 McpTool("list_files"),
                 McpTool("list_files"),
                 McpTool("read_file"),
                 McpTool("search_text")
             ],
-            ReasoningEffort: null,
-            SupportsThinking: false));
+            ReasoningEffort = null,
+            SupportsThinking = false
+        });
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
@@ -865,7 +887,7 @@ public sealed class SubAgentSpawnServiceTests
         await decisionEntered.Task;
 
         AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
-        decision.SetResult(new CapacityDecision(CapacityVerdict.RejectInsufficient, "Insufficient capacity.", OllamaEvictionWarning: false));
+        decision.SetResult(new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "Insufficient capacity.", OllamaEvictionWarning = false });
         _ = await pending;
     }
 
@@ -1355,24 +1377,30 @@ public sealed class SubAgentSpawnServiceTests
     // A bare model binding: no agent definition, no tools, no workspace — the shortest path from SpawnForMcpAsync to
     // the inner run, used by the deadline tests that only care about how the run ends.
     private static McpExecutionBinding BareBinding() =>
-        new("fingerprint",
-            Model,
-            "bare instructions",
-            AgentDefinitionId: null,
-            AgentDefinitionVersion: null,
-            AllowedTools: [],
-            ReasoningEffort: null,
-            SupportsThinking: false);
+        new()
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "bare instructions",
+            AgentDefinitionId = null,
+            AgentDefinitionVersion = null,
+            AllowedTools = [],
+            ReasoningEffort = null,
+            SupportsThinking = false
+        };
 
     private static McpExecutionBinding WorkspaceCoderBinding() =>
-        new("fingerprint",
-            Model,
-            "coder instructions",
-            Guid.NewGuid(),
-            AgentDefinitionVersion: 1,
-            AllowedTools: [McpTool("list_files"), McpTool("read_file"), McpTool("search_text")],
-            ReasoningEffort: null,
-            SupportsThinking: false);
+        new()
+        {
+            BindingFingerprint = "fingerprint",
+            ModelId = Model,
+            Instructions = "coder instructions",
+            AgentDefinitionId = Guid.NewGuid(),
+            AgentDefinitionVersion = 1,
+            AllowedTools = [McpTool("list_files"), McpTool("read_file"), McpTool("search_text")],
+            ReasoningEffort = null,
+            SupportsThinking = false
+        };
 
     // Assembles the spawn service over a mocked capacity verdict + a real SpawnSerializer + a gateable RecordingChatClient.
     private sealed class Harness : IDisposable
@@ -1659,26 +1687,26 @@ public sealed class SubAgentSpawnServiceTests
             var reservation = new TrackingDisposable(() => _reservationDisposed = true);
 #pragma warning restore CA2000
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision(CapacityVerdict.Allow, "Capacity available.", OllamaEvictionWarning: false, reservation));
+                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = reservation });
         }
 
         public void AllowCloud()
         {
             // Cloud Allow carries a null reservation (no local cost).
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision(CapacityVerdict.Allow, "Cloud provider selected; no local capacity required.", OllamaEvictionWarning: false));
+                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Cloud provider selected; no local capacity required.", OllamaEvictionWarning = false });
         }
 
         public void QueueSameModel()
         {
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision(CapacityVerdict.QueueSameModel, "Model already running; the spawn will share that process.", OllamaEvictionWarning: false));
+                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.QueueSameModel, Reason = "Model already running; the spawn will share that process.", OllamaEvictionWarning = false });
         }
 
         public void RejectInsufficient()
         {
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => new CapacityDecision(CapacityVerdict.RejectInsufficient, "Insufficient capacity: not enough free memory for another model.", OllamaEvictionWarning: false));
+                     .Returns(_ => new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = "Insufficient capacity: not enough free memory for another model.", OllamaEvictionWarning = false });
         }
 
         public void DelayCapacity(TaskCompletionSource entered, TaskCompletionSource<CapacityDecision> decision)

@@ -33,20 +33,31 @@ public interface IModelFitRefreshService
 ///     <see cref="QuantOverride" /> replaces the default <c>Q4_K_M</c> quant when supplied; <see cref="CtxTarget" />
 ///     overrides the context window the KV-cache fit is sized against.
 /// </summary>
-public sealed record ModelFitRefreshRequest(
-    ModelFitOperation Operation,
-    string? UseCase,
-    int Limit,
-    string? QuantOverride = null,
-    int? CtxTarget = null);
+public sealed class ModelFitRefreshRequest
+{
+    public required ModelFitOperation Operation { get; init; }
+
+    public required string? UseCase { get; init; }
+
+    public required int Limit { get; init; }
+
+    public string? QuantOverride { get; init; }
+
+    public int? CtxTarget { get; init; }
+}
 
 /// <summary>
 ///     Outcome of a model-fit refresh. <see cref="SanitizedError" /> is an operator-safe one-liner that never carries
 ///     secrets or raw utility output; <see cref="SnapshotId" /> is <c>null</c> only when the refresh failed pre-run
 ///     validation (validator rejection) before any snapshot row was created.
 /// </summary>
-public sealed record ModelFitRefreshResult(
-    Guid? SnapshotId,
-    ModelFitRunStatus Status,
-    int RecommendationCount,
-    string? SanitizedError);
+public sealed class ModelFitRefreshResult
+{
+    public required Guid? SnapshotId { get; init; }
+
+    public required ModelFitRunStatus Status { get; init; }
+
+    public required int RecommendationCount { get; init; }
+
+    public required string? SanitizedError { get; init; }
+}

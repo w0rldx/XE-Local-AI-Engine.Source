@@ -5,10 +5,14 @@ namespace XE_Local_AI_Engine.Client.Services.Agents;
 ///     <see cref="Imported" /> (a new seeded row was created), <see cref="SkippedExisting" /> (already seeded, left
 ///     untouched), or <see cref="Unknown" /> (not in the catalog, no row written).
 /// </summary>
-public sealed record AgentTemplateImportResult(
-    IReadOnlyList<string> Imported,
-    IReadOnlyList<string> SkippedExisting,
-    IReadOnlyList<string> Unknown);
+public sealed class AgentTemplateImportResult
+{
+    public required IReadOnlyList<string> Imported { get; init; }
+
+    public required IReadOnlyList<string> SkippedExisting { get; init; }
+
+    public required IReadOnlyList<string> Unknown { get; init; }
+}
 
 /// <summary>
 ///     Idempotent, additive importer for the curated starter-pack templates. Maps each requested template to an

@@ -369,7 +369,7 @@ public sealed class ModelFitRefreshServiceTests
         var advisor = BuildAdvisor(snapshotStore, new InMemoryModelFitRecommendationStore(),
             Substitute.For<IHuggingFaceGgufDiscovery>(), GpuProfile(64 * Gb));
 
-        var result = await advisor.RefreshAsync(new ModelFitRefreshRequest(ModelFitOperation.Benchmark, "coding", Limit: 5),
+        var result = await advisor.RefreshAsync(new ModelFitRefreshRequest { Operation = ModelFitOperation.Benchmark, UseCase = "coding", Limit = 5 },
             reportProgress: null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
@@ -503,7 +503,7 @@ public sealed class ModelFitRefreshServiceTests
 
     private static ModelFitRefreshRequest Request(string? quantOverride = null)
     {
-        return new ModelFitRefreshRequest(ModelFitOperation.Recommend, "coding", Limit: 5, quantOverride);
+        return new ModelFitRefreshRequest { Operation = ModelFitOperation.Recommend, UseCase = "coding", Limit = 5, QuantOverride = quantOverride };
     }
 
     private static ModelFitRefreshService BuildAdvisor(InMemoryModelFitSnapshotStore snapshotStore,

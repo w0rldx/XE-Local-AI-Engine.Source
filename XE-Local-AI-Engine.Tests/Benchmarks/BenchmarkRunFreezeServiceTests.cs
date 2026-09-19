@@ -861,23 +861,32 @@ public sealed class BenchmarkRunFreezeServiceTests
         public List<BenchmarkRuntimeSnapshotInput> SnapshotInputs { get; } = [];
 
         public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            (await _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, kvCacheType)))[0];
+            (await _service.StartAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version, KvCacheType = kvCacheType }))[0];
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
-            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount, warmup));
+            _service.StartAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version, KvCacheType = null, RepeatCount = repeatCount, Warmup = warmup });
 
         public Task<BenchmarkFrozenRunPlan> FreezeAsync(BenchmarkFreezeScope scope) =>
-            _service.FreezeAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);
+            _service.FreezeAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version }, scope);
 
         public Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans) =>
             _service.CommitAsync(plans);
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkFreezeScope scope) =>
-            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);
+            _service.StartAsync(new BenchmarkRunStartRequest { ProjectId = _project.Id, PrimaryModelName = _primaryModel, ExpectedProjectVersion = _project.Version }, scope);
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, double? temperature = null) =>
-            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount,
-                Warmup: false, mode, temperature));
+            _service.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version,
+                KvCacheType = null,
+                RepeatCount = repeatCount,
+                Warmup = false,
+                RepeatMode = mode,
+                AnswerVarianceTemperature = temperature
+            });
 
         private static BenchmarkProjectRecord Project(Guid id,
             Guid agentId,

@@ -99,7 +99,7 @@ public sealed class DatasetDefinitionServiceTests
     }
 
     private static DatasetDefinitionDraft Draft(DatasetDefinitionBodyV1 body) =>
-        new("definition", body);
+        new() { Name = "definition", Body = body };
 
     private static DatasetDefinitionBodyV1 Body() =>
         new()

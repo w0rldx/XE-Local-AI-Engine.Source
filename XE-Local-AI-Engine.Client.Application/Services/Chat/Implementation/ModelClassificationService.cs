@@ -147,11 +147,14 @@ internal sealed class ModelClassificationService : IModelClassificationService
     private ModelClassificationResult ToResult(ModelClassificationRecord record)
     {
         var effectiveKind = record.OverrideKind ?? record.DetectedKind;
-        return new ModelClassificationResult(record.ModelName,
-            effectiveKind,
-            record.DetectedKind,
-            DeserializeCapabilities(record.DetectedCapabilitiesJson),
-            record.OverrideKind is not null);
+        return new ModelClassificationResult
+        {
+            ModelName = record.ModelName,
+            Kind = effectiveKind,
+            DetectedKind = record.DetectedKind,
+            Capabilities = DeserializeCapabilities(record.DetectedCapabilitiesJson),
+            IsOverridden = record.OverrideKind is not null
+        };
     }
 
     private IReadOnlyList<string> DeserializeCapabilities(string? capabilitiesJson)

@@ -34,36 +34,53 @@ public interface IMemoryExtractionService
 ///     <see cref="MemoryScope.Failure" /> eligibility), the link ids, and the temp-chat flag. Message content is held
 ///     only in memory for the model call and the dedup compare — it is NEVER written to the execution log.
 /// </summary>
-public sealed record MemoryExtractionRunInput(
-    Guid AgentDefinitionId,
-    Guid ConversationId,
-    Guid AssistantMessageId,
-    IReadOnlyList<MemoryExtractionTurn> UserTurns,
-    string AssistantResponse,
-    bool Failed,
-    string? Error,
-    bool MemoryExcluded);
+public sealed record MemoryExtractionRunInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid AssistantMessageId { get; init; }
+
+    public required IReadOnlyList<MemoryExtractionTurn> UserTurns { get; init; }
+
+    public required string AssistantResponse { get; init; }
+
+    public required bool Failed { get; init; }
+
+    public required string? Error { get; init; }
+
+    public required bool MemoryExcluded { get; init; }
+}
 
 /// <summary>A single user turn handed to the extraction model (role is implied — these are the user side only).</summary>
-public sealed record MemoryExtractionTurn(string Content);
+public sealed class MemoryExtractionTurn
+{
+    public required string Content { get; init; }
+}
 
 /// <summary>The result of an extraction run. Counts let callers/tests see what was proposed vs kept vs filtered.</summary>
-public sealed record MemoryExtractionOutcome(
-    bool MemoryExcluded,
-    bool ModelConfigured,
-    IReadOnlyList<PlaybookActionRecord> CreatedCandidates,
-    int ProposedCount,
-    int DuplicateCount)
+public sealed class MemoryExtractionOutcome
 {
+    public required bool MemoryExcluded { get; init; }
+
+    public required bool ModelConfigured { get; init; }
+
+    public required IReadOnlyList<PlaybookActionRecord> CreatedCandidates { get; init; }
+
+    public required int ProposedCount { get; init; }
+
+    public required int DuplicateCount { get; init; }
+
     /// <summary>The short-circuit result for a temporary (memory-excluded) conversation: nothing proposed, nothing kept.</summary>
     public static MemoryExtractionOutcome SuppressedByTempChat()
     {
-        return new MemoryExtractionOutcome(MemoryExcluded: true, ModelConfigured: false, [], ProposedCount: 0, DuplicateCount: 0);
+        return new MemoryExtractionOutcome { MemoryExcluded = true, ModelConfigured = false, CreatedCandidates = [], ProposedCount = 0, DuplicateCount = 0 };
     }
 
     /// <summary>The short-circuit result when no node-local extraction model is configured (the CI-safe disabled gate).</summary>
     public static MemoryExtractionOutcome NoModelConfigured()
     {
-        return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: false, [], ProposedCount: 0, DuplicateCount: 0);
+        return new MemoryExtractionOutcome { MemoryExcluded = false, ModelConfigured = false, CreatedCandidates = [], ProposedCount = 0, DuplicateCount = 0 };
     }
 }

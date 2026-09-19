@@ -32,7 +32,7 @@ public sealed class ManagedWorkSessionArtifactBlobStore : IWorkSessionArtifactBl
         CancellationToken cancellationToken = default)
     {
         var written = await _blobs.WriteAsync(sessionId, artifactId, content, cancellationToken);
-        return new WorkSessionArtifactBlobWriteResult(written.OpaqueReference, written.ContentHash, written.ByteCount);
+        return new WorkSessionArtifactBlobWriteResult { OpaqueReference = written.OpaqueReference, ContentHash = written.ContentHash, ByteCount = written.ByteCount };
     }
 
     public async Task<WorkSessionArtifactBlobReadResult> ReadAsync(Guid sessionId,
@@ -42,7 +42,7 @@ public sealed class ManagedWorkSessionArtifactBlobStore : IWorkSessionArtifactBl
         CancellationToken cancellationToken = default)
     {
         var read = await _blobs.ReadAsync(sessionId, artifactId, expectedHash, expectedByteCount, cancellationToken);
-        return new WorkSessionArtifactBlobReadResult(Map(read.Status), read.Content);
+        return new WorkSessionArtifactBlobReadResult { Status = Map(read.Status), Content = read.Content };
     }
 
     public void Delete(Guid sessionId, Guid artifactId)

@@ -262,13 +262,17 @@ public sealed class RuntimePackageValidatorTests
                     SortOrder = 0,
                     Images =
                     [
-                        new ConversationImagePart("image/png", new byte[]
+                        new ConversationImagePart
+                        {
+                            MediaType = "image/png",
+                            Data = new byte[]
                         {
                             0x89,
                             0x50,
                             0x4E,
                             0x47
-                        })
+                        }
+                        }
                     ]
                 }
             ]
@@ -295,7 +299,7 @@ public sealed class RuntimePackageValidatorTests
                     Role = MessageRole.Assistant,
                     Content = "   ",
                     SortOrder = 0,
-                    ToolExchanges = [new ConversationToolExchange("call-1", "save_artifact", "{}", "saved", IsError: false)]
+                    ToolExchanges = [new ConversationToolExchange { CallId = "call-1", Name = "save_artifact", ArgumentsJson = "{}", Result = "saved", IsError = false }]
                 }
             ]
         };

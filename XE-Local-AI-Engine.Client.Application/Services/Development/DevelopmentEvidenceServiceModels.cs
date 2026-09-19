@@ -2,14 +2,25 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record DevelopmentEvidenceSet(
-    DevelopmentPatchEvidence Current,
-    DevelopmentArtifactSnapshot PatchArtifact,
-    DevelopmentArtifactSnapshot ManifestArtifact,
-    ReadOnlyMemory<byte> Patch,
-    ReadOnlyMemory<byte> Manifest);
+internal sealed class DevelopmentEvidenceSet
+{
+    public required DevelopmentPatchEvidence Current { get; init; }
 
-internal sealed record DevelopmentPreparedArtifact(Guid ArtifactId, DevelopmentAttachArtifactCommand Attachment);
+    public required DevelopmentArtifactSnapshot PatchArtifact { get; init; }
+
+    public required DevelopmentArtifactSnapshot ManifestArtifact { get; init; }
+
+    public required ReadOnlyMemory<byte> Patch { get; init; }
+
+    public required ReadOnlyMemory<byte> Manifest { get; init; }
+}
+
+internal sealed class DevelopmentPreparedArtifact
+{
+    public required Guid ArtifactId { get; init; }
+
+    public required DevelopmentAttachArtifactCommand Attachment { get; init; }
+}
 
 /// <summary>
 ///     An artifact row paired with what was read out of it — raw bytes, or a report deserialized from them. The row

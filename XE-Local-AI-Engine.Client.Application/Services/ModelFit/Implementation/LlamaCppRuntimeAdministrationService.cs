@@ -73,27 +73,33 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             ? await ComputeFreshSnapshotAsync(recommendedTag, installed?.Tag, cancellationToken)
             : current;
 
-        return new LlamaCppRuntimeStatus(installed is null ? null : ToView(installed),
-            recommendedTag,
-            snapshot.UpstreamLatestTag,
-            snapshot.UpdateAvailable,
-            snapshot.IsOffline,
-            _processSupervisor.CountRunningProcesses(),
-            snapshot.CheckedAtUtc);
+        return new LlamaCppRuntimeStatus
+        {
+            Installed = installed is null ? null : ToView(installed),
+            RecommendedTag = recommendedTag,
+            UpstreamLatestTag = snapshot.UpstreamLatestTag,
+            UpdateAvailable = snapshot.UpdateAvailable,
+            IsOffline = snapshot.IsOffline,
+            RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+            CheckedAtUtc = snapshot.CheckedAtUtc
+        };
     }
 
     public LlamaCppRuntimeAcquisitionStatus GetAcquisitionStatus()
     {
         var current = _acquisitionStatus.Current;
-        return new LlamaCppRuntimeAcquisitionStatus(current.Sequence,
-            current.Phase,
-            current.Variant,
-            current.Tag,
-            current.CompletedBytes,
-            current.TotalBytes,
-            current.StepIndex,
-            current.StepCount,
-            current.SanitizedError);
+        return new LlamaCppRuntimeAcquisitionStatus
+        {
+            Sequence = current.Sequence,
+            Phase = current.Phase,
+            Variant = current.Variant,
+            Tag = current.Tag,
+            CompletedBytes = current.CompletedBytes,
+            TotalBytes = current.TotalBytes,
+            StepIndex = current.StepIndex,
+            StepCount = current.StepCount,
+            SanitizedError = current.SanitizedError
+        };
     }
 
     public async Task<LlamaCppRuntimeMutationResult> EnsureAsync(GpuVariant variant,
@@ -207,11 +213,14 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
                 await admission.Lease.DisposeAsync();
             }
 
-            return new LlamaCppRuntimeAcquisitionStartResult(false,
-                ToWireString(selectedVariant),
-                LlamaCppRuntimeAdministrationFailure.Busy,
-                admission.BlockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change.",
-                admission.RunningProcessCount);
+            return new LlamaCppRuntimeAcquisitionStartResult
+            {
+                Accepted = false,
+                Variant = ToWireString(selectedVariant),
+                Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+                DisplayMessage = admission.BlockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change.",
+                RunningProcessCount = admission.RunningProcessCount
+            };
         }
 
         Task ownedTask;
@@ -222,25 +231,31 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         }
 
         _ = ObserveOwnedAcquisitionAsync(ownedTask, selectedVariant);
-        return new LlamaCppRuntimeAcquisitionStartResult(true,
-            ToWireString(selectedVariant),
-            LlamaCppRuntimeAdministrationFailure.None,
-            DisplayMessage: null);
+        return new LlamaCppRuntimeAcquisitionStartResult
+        {
+            Accepted = true,
+            Variant = ToWireString(selectedVariant),
+            Failure = LlamaCppRuntimeAdministrationFailure.None,
+            DisplayMessage = null
+        };
     }
 
     private async Task<PrebuiltMutationAdmission> TryAcquirePrebuiltMutationAsync(CancellationToken cancellationToken)
     {
         if (await _nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
-            return new PrebuiltMutationAdmission(null, _processSupervisor.CountRunningProcesses(), KeepModelWarmBlockedMessage);
+            return new PrebuiltMutationAdmission { Lease = null, RunningProcessCount = _processSupervisor.CountRunningProcesses(), BlockedMessage = KeepModelWarmBlockedMessage };
         }
 
         var lease = await _processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
         if (lease is null)
         {
-            return new PrebuiltMutationAdmission(null,
-                _processSupervisor.CountRunningProcesses(),
-                "The llama.cpp runtime is busy with another build or runtime change. Try again after it completes.");
+            return new PrebuiltMutationAdmission
+            {
+                Lease = null,
+                RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+                BlockedMessage = "The llama.cpp runtime is busy with another build or runtime change. Try again after it completes."
+            };
         }
 
         var transferred = false;
@@ -249,28 +264,37 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
             if (installed?.SourceBuildPath is { Length: > 0 })
             {
-                return new PrebuiltMutationAdmission(null,
-                    _processSupervisor.CountRunningProcesses(),
-                    "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
+                return new PrebuiltMutationAdmission
+                {
+                    Lease = null,
+                    RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+                    BlockedMessage = "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime."
+                };
             }
 
             if (_sourceBuildActivity.ActiveBuildId is not null)
             {
-                return new PrebuiltMutationAdmission(null,
-                    _processSupervisor.CountRunningProcesses(),
-                    "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime.");
+                return new PrebuiltMutationAdmission
+                {
+                    Lease = null,
+                    RunningProcessCount = _processSupervisor.CountRunningProcesses(),
+                    BlockedMessage = "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime."
+                };
             }
 
             var runningProcessCount = _processSupervisor.CountRunningProcesses();
             if (runningProcessCount > 0)
             {
-                return new PrebuiltMutationAdmission(null,
-                    runningProcessCount,
-                    "Stop or eject all running llama.cpp models before updating the runtime.");
+                return new PrebuiltMutationAdmission
+                {
+                    Lease = null,
+                    RunningProcessCount = runningProcessCount,
+                    BlockedMessage = "Stop or eject all running llama.cpp models before updating the runtime."
+                };
             }
 
             transferred = true;
-            return new PrebuiltMutationAdmission(lease, runningProcessCount, BlockedMessage: null);
+            return new PrebuiltMutationAdmission { Lease = lease, RunningProcessCount = runningProcessCount, BlockedMessage = null };
         }
         finally
         {
@@ -362,19 +386,22 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     }
 
     private static LlamaCppRuntimeBinaryView ToView(LlamaBinary binary) =>
-        new(binary.Version, ToWireString(binary.Variant), binary.IsPinnedFallback);
+        new() { Version = binary.Version, Variant = ToWireString(binary.Variant), IsPinnedFallback = binary.IsPinnedFallback };
 
     private static LlamaCppInstalledRuntimeView ToView(InstalledRuntimeState installed) =>
-        new(installed.Tag,
-            installed.Asset,
-            ToWireString(installed.Variant),
-            installed.InstalledAtUtc.ToUnixTimeMilliseconds(),
-            installed.SourceBuildPath is { Length: > 0 },
-            installed.SourceRepository,
-            installed.SourceCommit,
-            installed.SourceRevisionMode is null ? null : (int)installed.SourceRevisionMode.Value,
-            installed.SourceRequestedCommit,
-            installed.SourceSelection is null ? null : (int)installed.SourceSelection.Value);
+        new()
+        {
+            Tag = installed.Tag,
+            Asset = installed.Asset,
+            Variant = ToWireString(installed.Variant),
+            InstalledAtUnixTimeMilliseconds = installed.InstalledAtUtc.ToUnixTimeMilliseconds(),
+            IsSourceBuild = installed.SourceBuildPath is { Length: > 0 },
+            SourceRepository = installed.SourceRepository,
+            SourceCommit = installed.SourceCommit,
+            SourceRevisionMode = installed.SourceRevisionMode is null ? null : (int)installed.SourceRevisionMode.Value,
+            SourceRequestedCommit = installed.SourceRequestedCommit,
+            SourceSelection = installed.SourceSelection is null ? null : (int)installed.SourceSelection.Value
+        };
 
     private static string ToWireString(GpuVariant variant) =>
         variant switch
@@ -385,8 +412,12 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             _ => throw new ArgumentOutOfRangeException(nameof(variant), variant, "Unknown runtime variant.")
         };
 
-    private sealed record PrebuiltMutationAdmission(
-        ILlamaServerRuntimeMutationLease? Lease,
-        int RunningProcessCount,
-        string? BlockedMessage);
+    private sealed record PrebuiltMutationAdmission
+    {
+        public required ILlamaServerRuntimeMutationLease? Lease { get; init; }
+
+        public required int RunningProcessCount { get; init; }
+
+        public required string? BlockedMessage { get; init; }
+    }
 }

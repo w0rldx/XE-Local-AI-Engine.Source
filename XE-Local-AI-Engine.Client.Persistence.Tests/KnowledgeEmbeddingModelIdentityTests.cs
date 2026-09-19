@@ -211,7 +211,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, vectorSearch);
 
-        _ = await service.SearchAsync(new KnowledgeSearchRequest("a query", Limit: 5), CancellationToken.None);
+        _ = await service.SearchAsync(new KnowledgeSearchRequest { Query = "a query", Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(ResolvedGgufName, capturedModel);
         AssertEx.Equal(ResolvedVectorIdentity, capturedIdentity);
@@ -234,10 +234,10 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             EmptyVectorSearch(),
             ftsHits:
             [
-                new FtsSearchHit(chunkId, documentId, Bm25Score: -1.0)
+                new FtsSearchHit { ChunkId = chunkId, DocumentId = documentId, Bm25Score = -1.0 }
             ]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("legacy lexical content", Limit: 5), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "legacy lexical content", Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed, result.Results[0].DocumentStatus);
@@ -266,10 +266,10 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             providerResolver: unavailableProviderResolver,
             ftsHits:
             [
-                new FtsSearchHit(chunkId, documentId, Bm25Score: -1.0)
+                new FtsSearchHit { ChunkId = chunkId, DocumentId = documentId, Bm25Score = -1.0 }
             ]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("current lexical content", Limit: 5),
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "current lexical content", Limit = 5 },
             CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
@@ -295,8 +295,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new KnowledgeQueryEmbeddingCache(options, TimeProvider.System),
             options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None);
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = "repeat native query", Limit = 5 }, CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = "repeat native query", Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         await vectorSearch.Received(2)
@@ -328,8 +328,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new KnowledgeQueryEmbeddingCache(options, TimeProvider.System),
             options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None);
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = "repeat non-nomic query", Limit = 5 }, CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = "repeat non-nomic query", Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         await vectorSearch.Received(2)
@@ -352,20 +352,23 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
         });
-        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true, ResolvedRevisionFingerprint);
+        var resolution = new EmbeddingModelResolution { Name = ResolvedGgufName, IsConfident = true, RevisionFingerprint = ResolvedRevisionFingerprint };
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
         var cache = new KnowledgeQueryEmbeddingCache(options, TimeProvider.System);
         cache.Store(cacheFamily,
             query,
-            new KnowledgeQueryEmbeddingCacheEntry(new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
-                ResolvedNativeIdentity));
+            new KnowledgeQueryEmbeddingCacheEntry
+            {
+                Vector = new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
+                VectorIdentity = ResolvedNativeIdentity
+            });
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
         var vectorSearch = EmptyVectorSearch();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = query, Limit = 5 }, CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = query, Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The invalid record must be replaced by the generated vector.");
@@ -382,20 +385,23 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         {
             EmbeddingVectorMode = KnowledgeEmbeddingVectorMode.Native
         });
-        var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true, ResolvedRevisionFingerprint);
+        var resolution = new EmbeddingModelResolution { Name = ResolvedGgufName, IsConfident = true, RevisionFingerprint = ResolvedRevisionFingerprint };
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
         var cache = new KnowledgeQueryEmbeddingCache(options, TimeProvider.System);
         cache.Store(cacheFamily,
             query,
-            new KnowledgeQueryEmbeddingCacheEntry(new float[Dimensions],
-                $"different-model::native:v1:{Dimensions}"));
+            new KnowledgeQueryEmbeddingCacheEntry
+            {
+                Vector = new float[Dimensions],
+                VectorIdentity = $"different-model::native:v1:{Dimensions}"
+            });
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName));
         var vectorSearch = EmptyVectorSearch();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = query, Limit = 5 }, CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest { Query = query, Limit = 5 }, CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The wrong-identity record must be replaced.");
@@ -457,7 +463,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult(DocumentExtractionStatus.Extracted, BuildExtractedDocument(), Error: null)));
+                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult { Status = DocumentExtractionStatus.Extracted, Document = BuildExtractedDocument(), Error = null }));
 
         return new KnowledgeIngestionService(context,
             blobStore,

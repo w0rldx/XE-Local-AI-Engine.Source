@@ -69,7 +69,7 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
                 subject.RepositoryIdentityHash,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return new ResolvedApplyState(DevelopmentHostApplyState.Ambiguous, canonicalRoot, ReadOnlyMemory<byte>.Empty);
+            return new ResolvedApplyState { State = DevelopmentHostApplyState.Ambiguous, RepositoryRoot = canonicalRoot, Patch = ReadOnlyMemory<byte>.Empty };
         }
 
         var patch = await ReadArtifactAsync(subject.ProjectId,
@@ -95,7 +95,7 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             || !string.Equals(branch.StandardOutputText.Trim(), subject.BaseBranch, StringComparison.Ordinal)
             || !string.Equals(head.StandardOutputText.Trim(), subject.BaseCommit, StringComparison.OrdinalIgnoreCase))
         {
-            return new ResolvedApplyState(DevelopmentHostApplyState.Ambiguous, canonicalRoot, patch);
+            return new ResolvedApplyState { State = DevelopmentHostApplyState.Ambiguous, RepositoryRoot = canonicalRoot, Patch = patch };
         }
 
         var resultTree = await RunGitAsync(canonicalRoot, ["write-tree"], null, cancellationToken);
@@ -111,25 +111,28 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             if (appliedPatch.ExitCode == 0
                 && string.Equals(Hash(appliedPatch.StandardOutput), subject.PatchHash, StringComparison.OrdinalIgnoreCase))
             {
-                return new ResolvedApplyState(DevelopmentHostApplyState.ExactApprovedResultPresent, canonicalRoot, patch);
+                return new ResolvedApplyState { State = DevelopmentHostApplyState.ExactApprovedResultPresent, RepositoryRoot = canonicalRoot, Patch = patch };
             }
         }
 
         var status = await RunGitAsync(canonicalRoot, ["status", "--porcelain=v1", "--untracked-files=all"], null, cancellationToken);
         if (status.ExitCode != 0 || status.StandardOutput.Length != 0)
         {
-            return new ResolvedApplyState(DevelopmentHostApplyState.Ambiguous, canonicalRoot, patch);
+            return new ResolvedApplyState { State = DevelopmentHostApplyState.Ambiguous, RepositoryRoot = canonicalRoot, Patch = patch };
         }
 
         var check = await RunGitAsync(canonicalRoot,
             ["apply", "--check", "--whitespace=error-all", "-"],
             patch,
             cancellationToken);
-        return new ResolvedApplyState(check.ExitCode == 0
+        return new ResolvedApplyState
+        {
+            State = check.ExitCode == 0
                 ? DevelopmentHostApplyState.UnappliedBaseUnchanged
                 : DevelopmentHostApplyState.Ambiguous,
-            canonicalRoot,
-            patch);
+            RepositoryRoot = canonicalRoot,
+            Patch = patch
+        };
     }
 
     private async Task<ReadOnlyMemory<byte>> ReadArtifactAsync(Guid projectId,
@@ -225,9 +228,12 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             var outputTask = ReadBoundedAsync(process.StandardOutput.BaseStream, _options.MaxPatchBytes, timeout.Token);
             var errorTask = ReadBoundedAsync(process.StandardError.BaseStream, _options.MaxCommandOutputBytes, timeout.Token);
             await process.WaitForExitAsync(timeout.Token);
-            return new GitBytesResult(process.ExitCode,
-                await outputTask,
-                await errorTask);
+            return new GitBytesResult
+            {
+                ExitCode = process.ExitCode,
+                StandardOutput = await outputTask,
+                StandardError = await errorTask
+            };
         }
         catch
         {
@@ -280,13 +286,23 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(second)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private sealed record ResolvedApplyState(
-        DevelopmentHostApplyState State,
-        string RepositoryRoot,
-        ReadOnlyMemory<byte> Patch);
-
-    private sealed record GitBytesResult(int ExitCode, byte[] StandardOutput, byte[] StandardError)
+    private sealed record ResolvedApplyState
     {
+        public required DevelopmentHostApplyState State { get; init; }
+
+        public required string RepositoryRoot { get; init; }
+
+        public required ReadOnlyMemory<byte> Patch { get; init; }
+    }
+
+    private sealed record GitBytesResult
+    {
+        public required int ExitCode { get; init; }
+
+        public required byte[] StandardOutput { get; init; }
+
+        public required byte[] StandardError { get; init; }
+
         public string StandardOutputText => Encoding.UTF8.GetString(StandardOutput);
     }
 }

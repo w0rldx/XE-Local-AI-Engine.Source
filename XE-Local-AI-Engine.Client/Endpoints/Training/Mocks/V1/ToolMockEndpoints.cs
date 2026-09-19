@@ -80,7 +80,7 @@ public sealed class CreateToolMockEndpoint : Endpoint<CreateToolMockRequest, Too
 
     public override async Task HandleAsync(CreateToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.CreateAsync(new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct);
+        var record = await _mocks.CreateAsync(new ToolMockDraft { ToolName = req.ToolName, Body = req.Body, Enabled = req.Enabled }, ct);
         await Send.CreatedAtAsync<GetToolMockEndpoint>(new
                   {
                       mockId = record.Id
@@ -106,7 +106,7 @@ public sealed class UpdateToolMockEndpoint : Endpoint<UpdateToolMockRequest, Too
 
     public override async Task HandleAsync(UpdateToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct);
+        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft { ToolName = req.ToolName, Body = req.Body, Enabled = req.Enabled }, ct);
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

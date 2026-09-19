@@ -132,12 +132,17 @@ public interface ILiveAudioProducer
 }
 
 /// <summary>What a producer gets back: the token it stops on, and the handle that detaches it.</summary>
-/// <param name="ProducerToken">Cancelled as the first act of ending the session, before anything is flushed.</param>
-/// <param name="Detach">Disposed by a producer that stops on its own, so the session stops calling it.</param>
 [SuppressMessage("Design", "CA1068:CancellationToken parameters must come last",
     Justification =
         "A record's positional parameters are its properties, read by name; the token is what a producer reaches for first, and the trailing-parameter convention is about call sites that pass one through.")]
-public sealed record LiveProducerRegistration(CancellationToken ProducerToken, IDisposable Detach);
+public sealed class LiveProducerRegistration
+{
+    /// <summary>Cancelled as the first act of ending the session, before anything is flushed.</summary>
+    public required CancellationToken ProducerToken { get; init; }
+
+    /// <summary>Disposed by a producer that stops on its own, so the session stops calling it.</summary>
+    public required IDisposable Detach { get; init; }
+}
 
 /// <summary>Everything one live session runs under. One shape for the persisted and the persist-free case alike.</summary>
 public sealed record LiveSessionOptions

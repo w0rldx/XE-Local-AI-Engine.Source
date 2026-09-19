@@ -104,9 +104,9 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
     {
         var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
-        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("src/Lib/Feature.cs", "modified"),
-                new DevelopmentChangedFile("tests/Probe/NewFeatureTests.cs", "added"),
-                new DevelopmentChangedFile("tests/Probe/CopiedTests.cs", "copied", "tests/Probe/FeatureTests.cs")),
+        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "src/Lib/Feature.cs", ChangeType = "modified" },
+                new DevelopmentChangedFile { Path = "tests/Probe/NewFeatureTests.cs", ChangeType = "added" },
+                new DevelopmentChangedFile { Path = "tests/Probe/CopiedTests.cs", ChangeType = "copied", PreviousPath = "tests/Probe/FeatureTests.cs" }),
             profile);
 
         foreach (var destructive in new[]
@@ -119,7 +119,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         {
             var rejected = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
             {
-                DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("tests/Probe/FeatureTests.cs", destructive)), profile);
+                DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "tests/Probe/FeatureTests.cs", ChangeType = destructive }), profile);
                 return Task.CompletedTask;
             });
             AssertEx.Contains(rejected.Message, "test that existed at the base commit", StringComparison.Ordinal);
@@ -129,27 +129,30 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         // PREVIOUS path has to be checked even though the new one looks innocuous.
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
         {
-            DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("tests/Probe/Feature.txt", "renamed", "tests/Probe/FeatureTests.cs")),
+            DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "tests/Probe/Feature.txt", ChangeType = "renamed", PreviousPath = "tests/Probe/FeatureTests.cs" }),
                 profile);
             return Task.CompletedTask;
         });
 
         // A non-test file may be freely modified or deleted; the policy is about tests, not about change in general.
-        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("src/Lib/Feature.cs", "deleted")), profile);
+        DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile { Path = "src/Lib/Feature.cs", ChangeType = "deleted" }), profile);
     }
 
     private static DevelopmentPatchEvidence Evidence(params DevelopmentChangedFile[] changedFiles) =>
-        new("0000000000000000000000000000000000000000",
-            PatchHash: "patch",
-            ManifestHash: "manifest",
-            SubjectHash: "subject",
-            ExpectedResultHash: "expected",
-            PatchBytes: [1],
-            ManifestBytes: [1],
-            changedFiles);
+        new()
+        {
+            BaseCommit = "0000000000000000000000000000000000000000",
+            PatchHash = "patch",
+            ManifestHash = "manifest",
+            SubjectHash = "subject",
+            ExpectedResultHash = "expected",
+            PatchBytes = [1],
+            ManifestBytes = [1],
+            ChangedFiles = changedFiles
+        };
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repositoryRoot, string identity) =>
-        new(snapshot.ProjectId, snapshot.SelectedFolderId ?? Guid.NewGuid(), "fixture", repositoryRoot, identity);
+        new() { ProjectId = snapshot.ProjectId, SelectedFolderId = snapshot.SelectedFolderId ?? Guid.NewGuid(), Alias = "fixture", RepositoryRoot = repositoryRoot, RepositoryIdentityHash = identity };
 
     private static DevelopmentExecutionSnapshot Snapshot(string identityHash) =>
         new()

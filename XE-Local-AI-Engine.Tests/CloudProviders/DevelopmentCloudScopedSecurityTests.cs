@@ -23,14 +23,14 @@ public sealed class DevelopmentCloudScopedSecurityTests
     {
         var excerpts = new List<DevelopmentCloudContextExcerpt>
         {
-            new("src/Feature.cs", "sealed class Feature { }")
+            new() { RelativePath = "src/Feature.cs", Content = "sealed class Feature { }" }
         };
         var builder = new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now));
 
         var bundle = builder.Build(CreateBuildRequest(excerpts: excerpts));
         var originalHash = bundle.ContentHash;
-        excerpts[0] = new DevelopmentCloudContextExcerpt("src/Feature.cs", "mutated");
-        excerpts.Add(new DevelopmentCloudContextExcerpt("src/Extra.cs", "extra"));
+        excerpts[0] = new DevelopmentCloudContextExcerpt { RelativePath = "src/Feature.cs", Content = "mutated" };
+        excerpts.Add(new DevelopmentCloudContextExcerpt { RelativePath = "src/Extra.cs", Content = "extra" });
 
         AssertEx.Equal(expected: 1, bundle.Excerpts.Count);
         AssertEx.Equal("sealed class Feature { }", bundle.ReadResource("excerpt:src/Feature.cs"));
@@ -43,7 +43,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var builder = new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now), maximumBytes: 256, maximumEstimatedTokens: 256);
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.FromResult(builder.Build(
-            CreateBuildRequest(excerpts: [new DevelopmentCloudContextExcerpt("../secret.txt", "content")]))));
+            CreateBuildRequest(excerpts: [new DevelopmentCloudContextExcerpt { RelativePath = "../secret.txt", Content = "content" }]))));
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.FromResult(builder.Build(CreateBuildRequest(requirements: "password=not-a-real-secret"))));
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(builder.Build(CreateBuildRequest(requirements: new string('x', 512)))));
     }
@@ -260,7 +260,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var store = Substitute.For<IDevelopmentStore>();
         var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
         blob.WriteAsync(snapshot.ProjectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
-            .Returns(call => new DevelopmentArtifactBlobWriteResult("opaque/context", "BLOB-HASH", call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
+            .Returns(call => new DevelopmentArtifactBlobWriteResult { OpaqueReference = "opaque/context", ContentHash = "BLOB-HASH", ByteCount = call.ArgAt<ReadOnlyMemory<byte>>(2).Length });
         var builder = new CapturingContextBuilder(new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)));
         var service = new DevelopmentCloudAttemptContextService(builder,
             new DevelopmentCloudRoleRouteFactory(new DevelopmentCloudContextCatalog()),
@@ -273,7 +273,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             new FixedTimeProvider(Now));
 
         var context = await service.CreateAsync(snapshot,
-            [new DevelopmentCloudContextExcerpt("src/Feature.cs", "sealed class Feature { }")]);
+            [new DevelopmentCloudContextExcerpt { RelativePath = "src/Feature.cs", Content = "sealed class Feature { }" }]);
         return new CreatedContext(context, builder.Built, store);
     }
 
@@ -336,18 +336,21 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
     private static DevelopmentCloudContextBuildRequest CreateBuildRequest(IReadOnlyList<DevelopmentCloudContextExcerpt>? excerpts = null,
         string requirements = "Implement the bounded change") =>
-        new("bundle-1",
-            "project-1",
-            "task-1",
-            "attempt-1",
-            "fake-cloud",
-            "cloud-model",
-            requirements,
-            "All semantic tests pass",
-            "Use only approved context",
-            excerpts ?? [new DevelopmentCloudContextExcerpt("src/Feature.cs", "sealed class Feature { }")],
-            Now.AddMinutes(5),
-            "nonce-1");
+        new()
+        {
+            BundleId = "bundle-1",
+            ProjectId = "project-1",
+            TaskId = "task-1",
+            AttemptId = "attempt-1",
+            ProviderName = "fake-cloud",
+            ModelId = "cloud-model",
+            Requirements = requirements,
+            AcceptanceCriteria = "All semantic tests pass",
+            PolicyText = "Use only approved context",
+            Excerpts = excerpts ?? [new DevelopmentCloudContextExcerpt { RelativePath = "src/Feature.cs", Content = "sealed class Feature { }" }],
+            ExpiresAt = Now.AddMinutes(5),
+            Nonce = "nonce-1"
+        };
 
     private static CloudEgressAuthorizationRequest CreateAuthorizationRequest(DevelopmentCloudContextBundle bundle,
         string? mismatch = null)
@@ -367,10 +370,13 @@ public sealed class DevelopmentCloudScopedSecurityTests
                 _ => bundle.ExpiresAt
             },
             mismatch == "nonce" ? "other-nonce" : bundle.Nonce);
-        return new CloudEgressAuthorizationRequest(mismatch == "provider" ? "other-cloud" : bundle.ProviderName,
-            mismatch == "model" ? "other-model" : bundle.ModelId,
-            mismatch == "carrier" ? CloudEgressAuthorizationCarrierState.MalformedEnvelope : CloudEgressAuthorizationCarrierState.Valid,
-            envelope);
+        return new CloudEgressAuthorizationRequest
+        {
+            ProviderName = mismatch == "provider" ? "other-cloud" : bundle.ProviderName,
+            ModelId = mismatch == "model" ? "other-model" : bundle.ModelId,
+            CarrierState = mismatch == "carrier" ? CloudEgressAuthorizationCarrierState.MalformedEnvelope : CloudEgressAuthorizationCarrierState.Valid,
+            Envelope = envelope
+        };
     }
 
     private sealed class FixedTimeProvider : TimeProvider

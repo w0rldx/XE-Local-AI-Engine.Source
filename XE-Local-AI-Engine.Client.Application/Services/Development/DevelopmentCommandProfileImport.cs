@@ -56,7 +56,7 @@ internal static class DevelopmentCommandProfileImport
             throw new DevelopmentWorkspaceSecurityException("The repository command-profile import file is not valid JSON.");
         }
 
-        return new ImportedProfile(document, ComputeDigest(bytes));
+        return new ImportedProfile { Document = document, Digest = ComputeDigest(bytes) };
     }
 
     /// <summary>
@@ -95,5 +95,10 @@ internal static class DevelopmentCommandProfileImport
     ///     A repository's declared command profile plus the digest of the exact bytes it was read from — the digest
     ///     rides on the resolved profile so the workspace invariant can detect a command rewriting the file mid-attempt.
     /// </summary>
-    internal sealed record ImportedProfile(DevelopmentProfileImportDocument Document, string Digest);
+    internal sealed class ImportedProfile
+    {
+        public required DevelopmentProfileImportDocument Document { get; init; }
+
+        public required string Digest { get; init; }
+    }
 }

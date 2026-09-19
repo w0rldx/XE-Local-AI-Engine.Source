@@ -154,7 +154,9 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         LastLimit = limit;
         LastOffset = offset;
 
-        return Task.FromResult(new TranscriptionSessionPage([
+        return Task.FromResult(new TranscriptionSessionPage
+        {
+            Items = [
             new TranscriptionSessionSummaryView
             {
                 Id = Guid.NewGuid(),
@@ -167,7 +169,9 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
                 ConfigJson = "{\"languageMode\":\"auto\"}",
                 SegmentCount = 3
             }
-        ], TotalCount));
+        ],
+            TotalCount = TotalCount
+        });
     }
 
     public Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>

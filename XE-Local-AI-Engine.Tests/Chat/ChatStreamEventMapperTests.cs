@@ -454,20 +454,23 @@ public sealed class ChatStreamEventMapperTests
         int? inputCount,
         int? outputCount)
     {
-        return new NodeChatPersistedMessageDto(correlation.MessageId,
-            correlation.ConversationId,
-            correlation.RequestId,
-            Sequence: 1,
-            Role: "assistant",
-            Content: content,
-            Reasoning: reasoning,
-            Status: status,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            Model: model,
-            Error: null,
-            MetadataJson: null,
-            InputCount: inputCount,
-            OutputCount: outputCount);
+        return new NodeChatPersistedMessageDto
+        {
+            MessageId = correlation.MessageId,
+            ConversationId = correlation.ConversationId,
+            RequestId = correlation.RequestId,
+            Sequence = 1,
+            Role = "assistant",
+            Content = content,
+            Reasoning = reasoning,
+            Status = status,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            Model = model,
+            Error = null,
+            MetadataJson = null,
+            InputCount = inputCount,
+            OutputCount = outputCount
+        };
     }
 }

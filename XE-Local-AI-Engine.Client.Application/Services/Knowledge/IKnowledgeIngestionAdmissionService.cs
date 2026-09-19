@@ -28,8 +28,12 @@ public interface IKnowledgeIngestionAdmissionService
 ///     counts an <see cref="KnowledgeIngestionEnqueueResult.Accepted" /> answer; both callers treat
 ///     <see cref="QueueFull" /> as a retryable busy condition.
 /// </summary>
-public sealed record KnowledgeIngestionAdmissionResult(KnowledgeDocumentStatus Status, KnowledgeIngestionEnqueueResult? Enqueue)
+public sealed class KnowledgeIngestionAdmissionResult
 {
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public required KnowledgeIngestionEnqueueResult? Enqueue { get; init; }
+
     /// <summary>Whether the bounded ingestion queue rejected this admission.</summary>
     public bool QueueFull => Enqueue is KnowledgeIngestionEnqueueResult.QueueFull;
 }

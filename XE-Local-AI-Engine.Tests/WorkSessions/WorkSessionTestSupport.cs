@@ -331,7 +331,7 @@ internal static class WorkSessionTestSupport
     {
         await using var scope = services.CreateAsyncScope();
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                      .CreateConversationAsync(new NodeChatCreateConversationRequest("Seeded session", UserId: null, CreatedAtUtc: 0));
+                                      .CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Seeded session", UserId = null, CreatedAtUtc = 0 });
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         return await store.CreateAsync(new CreateWorkSessionCommand
         {

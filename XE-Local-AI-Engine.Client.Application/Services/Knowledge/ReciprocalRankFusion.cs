@@ -79,7 +79,7 @@ public sealed class ReciprocalRankFusion : IRankingFusionService
         return scores
                .OrderByDescending(pair => pair.Value)
                .ThenBy(pair => pair.Key)
-               .Select(pair => new RankFusionEntry(pair.Key, pair.Value))
+               .Select(pair => new RankFusionEntry { ChunkId = pair.Key, Score = pair.Value })
                .ToList();
     }
 

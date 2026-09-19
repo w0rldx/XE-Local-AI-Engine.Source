@@ -185,7 +185,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         var orphans = await RemoveOrphansAsync(store, runtime, byInstance, [.. rows.Select(static row => row.Id)], cancellationToken);
         var foreign = await CountForeignAsync(runtime, cancellationToken);
 
-        return new ExternalAppReconcileSummary(rows.Count, changed, orphans, foreign, skippedBusy, failed);
+        return new ExternalAppReconcileSummary { RowsInspected = rows.Count, RowsChanged = changed, OrphansRemoved = orphans, ForeignInstallContainers = foreign, RowsSkippedBusy = skippedBusy, RowsFailed = failed };
     }
 
     /// <summary>

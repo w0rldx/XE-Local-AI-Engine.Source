@@ -847,8 +847,11 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         var folder = await scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>()
-                                .RegisterAsync(new SelectedFolderRegistration($"devtask-{Guid.NewGuid():N}"[..20],
-                                    Path.Combine(Path.GetTempPath(), $"xe-devtask-{Guid.NewGuid():N}")));
+                                .RegisterAsync(new SelectedFolderRegistration
+                                {
+                                    Alias = $"devtask-{Guid.NewGuid():N}"[..20],
+                                    HostPath = Path.Combine(Path.GetTempPath(), $"xe-devtask-{Guid.NewGuid():N}")
+                                });
 
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();

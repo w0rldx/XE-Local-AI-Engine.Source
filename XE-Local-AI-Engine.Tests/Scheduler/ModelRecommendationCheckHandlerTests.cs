@@ -83,7 +83,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     public async Task ExecuteAsync_WhenOverridesSupplied_PassesQuantAndCtxToRefresh()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, RecommendationCount: 1, SanitizedError: null);
+        refresh.Result = new ModelFitRefreshResult { SnapshotId = Guid.NewGuid(), Status = ModelFitRunStatus.Succeeded, RecommendationCount = 1, SanitizedError = null };
 
         await handler.ExecuteAsync(Context(ValidParametersWithOverrides), CancellationToken.None);
 
@@ -96,7 +96,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     public async Task ExecuteAsync_WhenRefreshSucceeds_InvokesRefreshExactlyOnce()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, RecommendationCount: 3, SanitizedError: null);
+        refresh.Result = new ModelFitRefreshResult { SnapshotId = Guid.NewGuid(), Status = ModelFitRunStatus.Succeeded, RecommendationCount = 3, SanitizedError = null };
 
         await handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None);
 
@@ -111,7 +111,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     public async Task ExecuteAsync_WhenRefreshFailed_ThrowsScheduledJobExecutionExceptionWithSanitizedError()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, RecommendationCount: 0, "The approved image is disabled.");
+        refresh.Result = new ModelFitRefreshResult { SnapshotId = Guid.NewGuid(), Status = ModelFitRunStatus.Failed, RecommendationCount = 0, SanitizedError = "The approved image is disabled." };
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
@@ -124,7 +124,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     public async Task ExecuteAsync_WhenRefreshFailedWithNullSanitizedError_ThrowsStaticFallbackMessage()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, RecommendationCount: 0, SanitizedError: null);
+        refresh.Result = new ModelFitRefreshResult { SnapshotId = Guid.NewGuid(), Status = ModelFitRunStatus.Failed, RecommendationCount = 0, SanitizedError = null };
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
@@ -182,7 +182,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     {
         public int CallCount { get; private set; }
         public ModelFitRefreshRequest? LastRequest { get; private set; }
-        public ModelFitRefreshResult Result { get; set; } = new(Guid.NewGuid(), ModelFitRunStatus.Succeeded, RecommendationCount: 0, SanitizedError: null);
+        public ModelFitRefreshResult Result { get; set; } = new() { SnapshotId = Guid.NewGuid(), Status = ModelFitRunStatus.Succeeded, RecommendationCount = 0, SanitizedError = null };
         public bool ThrowCancellation { get; set; }
 
         public Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,

@@ -81,7 +81,7 @@ public sealed class NodeAgentMcpToolsTests
             Descriptor("unavailable", 30, isAvailable: false)
         ]);
         harness.NodeSettingsAdministration.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(
-            new NodeSettingsAgenticView("zeta-embed", null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null, null));
+            new NodeSettingsAgenticView { DefaultModelName = "zeta-embed", EnableTools = null, ToolCapableModels = null, HuggingFaceDefaultQuant = null, LlamaMaxLoadedProcesses = null, LlamaIdleTimeToLiveSeconds = null, KeepModelWarmEnabled = null, KeepModelWarmModelName = null, KeepModelWarmIntervalSeconds = null, MaxMessageRequestTimeoutSeconds = 600, ChatCacheReuse = null, SpeculativeMode = null, SpeculativeDraftModelName = null, SpeculativeDraftMaxTokens = null, SpeculativeDraftGpuLayers = null, KvCacheType = null, RerankerModelName = null, AutoEffortFastModelName = null });
 
         var models = await harness.Tools.ListModelsAsync(CancellationToken.None);
 
@@ -139,7 +139,7 @@ public sealed class NodeAgentMcpToolsTests
     {
         var harness = new Harness();
         var workspaceId = Guid.NewGuid().ToString("D");
-        harness.WorkspaceResolver.References = [new SelectedFolderReference(workspaceId, "engine")];
+        harness.WorkspaceResolver.References = [new SelectedFolderReference { Id = workspaceId, Alias = "engine" }];
 
         var response = await harness.Tools.ListWorkspacesAsync(CancellationToken.None);
         var json = JsonSerializer.Serialize(response);
@@ -158,9 +158,9 @@ public sealed class NodeAgentMcpToolsTests
         var harness = new Harness(maxListLimit: 2);
         harness.WorkspaceResolver.References =
         [
-            new SelectedFolderReference(Guid.NewGuid().ToString("D"), "one"),
-            new SelectedFolderReference(Guid.NewGuid().ToString("D"), "two"),
-            new SelectedFolderReference(Guid.NewGuid().ToString("D"), "three")
+            new SelectedFolderReference { Id = Guid.NewGuid().ToString("D"), Alias = "one" },
+            new SelectedFolderReference { Id = Guid.NewGuid().ToString("D"), Alias = "two" },
+            new SelectedFolderReference { Id = Guid.NewGuid().ToString("D"), Alias = "three" }
         ];
 
         var response = await harness.Tools.ListWorkspacesAsync(CancellationToken.None);
@@ -181,10 +181,13 @@ public sealed class NodeAgentMcpToolsTests
     {
         var harness = new Harness();
         var view = CreateRunView(McpAgentRunStatus.Queued);
-        harness.RunCoordinator.StartResult = new McpAgentRunStartResult(kind,
-            view,
-            kind is McpAgentRunStartKind.Accepted or McpAgentRunStartKind.Existing ? null : "bounded_failure",
-            "Stable response.");
+        harness.RunCoordinator.StartResult = new McpAgentRunStartResult
+        {
+            Kind = kind,
+            Run = view,
+            FailureCode = kind is McpAgentRunStartKind.Accepted or McpAgentRunStartKind.Existing ? null : "bounded_failure",
+            DisplayMessage = "Stable response."
+        };
 
         var response = await harness.Tools.StartAgentRunAsync(view.RequestId.ToString("D"),
             "inspect",
@@ -210,14 +213,17 @@ public sealed class NodeAgentMcpToolsTests
         var requestId = Guid.NewGuid();
         var workspaceId = Guid.NewGuid();
         using var source = new CancellationTokenSource();
-        harness.RunCoordinator.StartResult = new McpAgentRunStartResult(McpAgentRunStartKind.Accepted,
-            CreateRunView(McpAgentRunStatus.Queued) with
+        harness.RunCoordinator.StartResult = new McpAgentRunStartResult
+        {
+            Kind = McpAgentRunStartKind.Accepted,
+            Run = CreateRunView(McpAgentRunStatus.Queued) with
             {
                 RequestId = requestId,
                 WorkspaceId = workspaceId
             },
-            null,
-            "Accepted.");
+            FailureCode = null,
+            DisplayMessage = "Accepted."
+        };
 
         await harness.Tools.StartAgentRunAsync(requestId.ToString("D"),
             "inspect",
@@ -435,14 +441,17 @@ public sealed class NodeAgentMcpToolsTests
     {
         var harness = new Harness();
         var requestId = Guid.NewGuid();
-        harness.RunCoordinator.CancelResult = new McpAgentRunCancelResult(kind,
-            kind == McpAgentRunCancelKind.NotFound
+        harness.RunCoordinator.CancelResult = new McpAgentRunCancelResult
+        {
+            Kind = kind,
+            Run = kind == McpAgentRunCancelKind.NotFound
                 ? null
                 : CreateRunView(McpAgentRunStatus.Running) with
                 {
                     RequestId = requestId
                 },
-            "Stable cancellation response.");
+            DisplayMessage = "Stable cancellation response."
+        };
 
         var response = await harness.Tools.CancelAgentRunAsync(requestId.ToString("D"), CancellationToken.None);
 
@@ -465,9 +474,12 @@ public sealed class NodeAgentMcpToolsTests
     public async Task CancelAgentRunAsync_WhenStateConflicts_ReturnsStableFailureCode()
     {
         var harness = new Harness();
-        harness.RunCoordinator.CancelResult = new McpAgentRunCancelResult(McpAgentRunCancelKind.Conflict,
-            CreateRunView(McpAgentRunStatus.Running),
-            "State changed.");
+        harness.RunCoordinator.CancelResult = new McpAgentRunCancelResult
+        {
+            Kind = McpAgentRunCancelKind.Conflict,
+            Run = CreateRunView(McpAgentRunStatus.Running),
+            DisplayMessage = "State changed."
+        };
 
         var response = await harness.Tools.CancelAgentRunAsync(Guid.NewGuid().ToString("D"), CancellationToken.None);
 
@@ -864,22 +876,25 @@ public sealed class NodeAgentMcpToolsTests
     }
 
     private static McpAgentRunView CreateRunView(McpAgentRunStatus status) =>
-        new(Guid.NewGuid(),
-            status,
-            Version: 3,
-            McpAgentRunStopReason.None,
-            Model,
-            AgentDefinitionId: null,
-            WorkspaceId: null,
-            Result: null,
-            DisplayMessage: "Stable response.",
-            FailureCode: null,
-            CreatedAtUtc: 10,
-            ClaimedAtUtc: status == McpAgentRunStatus.Queued ? null : 20,
-            CompletedAtUtc: status is McpAgentRunStatus.Queued or McpAgentRunStatus.Running ? null : 30,
-            PayloadExpiresAtUtc: status is McpAgentRunStatus.Queued or McpAgentRunStatus.Running ? null : 86_400_030,
-            CompactedAtUtc: null,
-            PayloadExpired: false);
+        new()
+        {
+            RequestId = Guid.NewGuid(),
+            Status = status,
+            Version = 3,
+            StopReason = McpAgentRunStopReason.None,
+            ModelId = Model,
+            AgentDefinitionId = null,
+            WorkspaceId = null,
+            Result = null,
+            DisplayMessage = "Stable response.",
+            FailureCode = null,
+            CreatedAtUtc = 10,
+            ClaimedAtUtc = status == McpAgentRunStatus.Queued ? null : 20,
+            CompletedAtUtc = status is McpAgentRunStatus.Queued or McpAgentRunStatus.Running ? null : 30,
+            PayloadExpiresAtUtc = status is McpAgentRunStatus.Queued or McpAgentRunStatus.Running ? null : 86_400_030,
+            CompactedAtUtc = null,
+            PayloadExpired = false
+        };
 
     private static LocalModelDescriptor Descriptor(string name, long sizeBytes, bool isAvailable = true) =>
         new()
@@ -945,7 +960,7 @@ public sealed class NodeAgentMcpToolsTests
         public int CancelCallCount { get; private set; }
 
         public McpAgentRunCancelResult CancelResult { get; set; } =
-            new(McpAgentRunCancelKind.NotFound, null, "Run not found.");
+            new() { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." };
 
         public int GetCallCount { get; private set; }
 
@@ -966,7 +981,7 @@ public sealed class NodeAgentMcpToolsTests
         public int StartCallCount { get; private set; }
 
         public McpAgentRunStartResult StartResult { get; set; } =
-            new(McpAgentRunStartKind.Accepted, CreateRunView(McpAgentRunStatus.Queued), null, "Accepted.");
+            new() { Kind = McpAgentRunStartKind.Accepted, Run = CreateRunView(McpAgentRunStatus.Queued), FailureCode = null, DisplayMessage = "Accepted." };
 
         public Task<McpAgentRunCancelResult> CancelAsync(Guid requestId, CancellationToken cancellationToken)
         {

@@ -87,14 +87,17 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
 
         var (ollamaModels, classifications) = await ResolveOllamaModelsAsync(cancellationToken);
 
-        return new LocalModelCatalog(selectedModelName,
-            _localChatOptions.Value.DefaultModel,
-            ollamaModels,
-            classifications,
-            ggufModels,
-            hasCodexSession,
-            azureConnection,
-            externalModels);
+        return new LocalModelCatalog
+        {
+            SelectedModelName = selectedModelName,
+            ConfiguredDefaultModelName = _localChatOptions.Value.DefaultModel,
+            OllamaModels = ollamaModels,
+            Classifications = classifications,
+            InstalledGgufModels = ggufModels,
+            HasUsableCodexSession = hasCodexSession,
+            AzureFoundryConnection = azureConnection,
+            ExternalModels = externalModels
+        };
     }
 
     /// <inheritdoc />

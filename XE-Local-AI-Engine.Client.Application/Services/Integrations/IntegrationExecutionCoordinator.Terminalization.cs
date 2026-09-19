@@ -209,13 +209,16 @@ internal sealed partial class IntegrationExecutionCoordinator
                 return false;
             }
 
-            _buffer.Publish(new IntegrationStreamEvent(eventType,
-                sequence,
-                context.ExecutionId,
-                context.SessionId,
-                endedAtUtc,
-                ContentType: null,
-                payload));
+            _buffer.Publish(new IntegrationStreamEvent
+            {
+                Type = eventType,
+                Sequence = sequence,
+                ExecutionId = context.ExecutionId,
+                SessionId = context.SessionId,
+                OccurredAtUtc = endedAtUtc,
+                ContentType = null,
+                Payload = payload
+            });
             published = true;
             context.Version++;
             return true;

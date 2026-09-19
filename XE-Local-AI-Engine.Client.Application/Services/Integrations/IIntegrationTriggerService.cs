@@ -9,25 +9,42 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     present here and absent from <see cref="IntegrationTriggerUpdateInput" />: renaming a live trigger is a
 ///     delete-and-create decision, not an edit.
 /// </summary>
-public sealed record IntegrationTriggerCreateInput(
-    string Name,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    IntegrationTargetKind TargetKind,
-    Guid TargetAgentDefinitionId,
-    IntegrationSessionPolicy SessionPolicy,
-    IntegrationInputKinds AcceptedInputKinds);
+public sealed class IntegrationTriggerCreateInput
+{
+    public required string Name { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required IntegrationTargetKind TargetKind { get; init; }
+
+    public required Guid TargetAgentDefinitionId { get; init; }
+
+    public required IntegrationSessionPolicy SessionPolicy { get; init; }
+
+    public required IntegrationInputKinds AcceptedInputKinds { get; init; }
+}
 
 /// <summary>An optimistic update. <see cref="ExpectedVersion" /> is the caller's copy of the row's concurrency token.</summary>
-public sealed record IntegrationTriggerUpdateInput(
-    long ExpectedVersion,
-    string DisplayName,
-    string? Description,
-    bool Enabled,
-    Guid TargetAgentDefinitionId,
-    IntegrationSessionPolicy SessionPolicy,
-    IntegrationInputKinds AcceptedInputKinds);
+public sealed class IntegrationTriggerUpdateInput
+{
+    public required long ExpectedVersion { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required Guid TargetAgentDefinitionId { get; init; }
+
+    public required IntegrationSessionPolicy SessionPolicy { get; init; }
+
+    public required IntegrationInputKinds AcceptedInputKinds { get; init; }
+}
 
 /// <summary>
 ///     What a trigger write decided. Every non-<see cref="Saved" /> value maps to exactly one HTTP status at the
@@ -55,7 +72,14 @@ public enum IntegrationTriggerOutcome
 }
 
 /// <summary><see cref="Trigger" /> is non-null exactly when <see cref="Outcome" /> is <see cref="IntegrationTriggerOutcome.Saved" />.</summary>
-public sealed record IntegrationTriggerResult(IntegrationTriggerOutcome Outcome, IntegrationTriggerSnapshot? Trigger, string? Message);
+public sealed class IntegrationTriggerResult
+{
+    public required IntegrationTriggerOutcome Outcome { get; init; }
+
+    public required IntegrationTriggerSnapshot? Trigger { get; init; }
+
+    public required string? Message { get; init; }
+}
 
 /// <summary>
 ///     Trigger CRUD with the two checks a validator cannot make because they need the store: the target agent must

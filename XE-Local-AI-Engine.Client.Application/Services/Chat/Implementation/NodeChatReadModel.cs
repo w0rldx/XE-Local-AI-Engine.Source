@@ -109,23 +109,26 @@ internal sealed class NodeChatReadModel
                     ? compactionCoversToSequence
                     : null;
 
-                var dto = new NodeChatConversationDto(Guid.Parse(conversationReader.GetString(0)),
-                    DecryptTitle(titleBytes, dbContext, conversationId),
-                    await conversationReader.IsDBNullAsync(ordinal: 2, token) ? null : conversationReader.GetString(2),
-                    conversationReader.GetInt64(3),
-                    conversationReader.GetInt64(4),
-                    conversationReader.GetBoolean(5),
-                    await ReadMessagesAsync(dbContext, conversationId, token, omitNonUserPayloadsAtOrBelowSequence),
-                    conversationReader.GetString(6),
-                    conversationReader.GetBoolean(7),
-                    conversationReader.GetBoolean(8),
-                    await conversationReader.IsDBNullAsync(ordinal: 9, token) ? null : Guid.Parse(conversationReader.GetString(9)),
-                    DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token) ? null : conversationReader.GetString(10)),
-                    await conversationReader.IsDBNullAsync(ordinal: 11, token) ? null : Guid.Parse(conversationReader.GetString(11)),
-                    conversationReader.GetBoolean(12),
-                    compactionSummary,
-                    compactionCoversToSequence,
-                    await conversationReader.IsDBNullAsync(ordinal: 15, token) ? null : conversationReader.GetInt64(15));
+                var dto = new NodeChatConversationDto
+                {
+                    ConversationId = Guid.Parse(conversationReader.GetString(0)),
+                    Title = DecryptTitle(titleBytes, dbContext, conversationId),
+                    UserId = await conversationReader.IsDBNullAsync(ordinal: 2, token) ? null : conversationReader.GetString(2),
+                    CreatedAtUtc = conversationReader.GetInt64(3),
+                    LastSeenUtc = conversationReader.GetInt64(4),
+                    Purged = conversationReader.GetBoolean(5),
+                    Messages = await ReadMessagesAsync(dbContext, conversationId, token, omitNonUserPayloadsAtOrBelowSequence),
+                    Origin = conversationReader.GetString(6),
+                    IsPinned = conversationReader.GetBoolean(7),
+                    Archived = conversationReader.GetBoolean(8),
+                    BranchOfConversationId = await conversationReader.IsDBNullAsync(ordinal: 9, token) ? null : Guid.Parse(conversationReader.GetString(9)),
+                    SelectedPath = DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token) ? null : conversationReader.GetString(10)),
+                    AgentDefinitionId = await conversationReader.IsDBNullAsync(ordinal: 11, token) ? null : Guid.Parse(conversationReader.GetString(11)),
+                    MemoryExcluded = conversationReader.GetBoolean(12),
+                    CompactionSummary = compactionSummary,
+                    CompactionSummaryCoversToSequence = compactionCoversToSequence,
+                    CompactionSummaryUpdatedAtUtc = await conversationReader.IsDBNullAsync(ordinal: 15, token) ? null : conversationReader.GetInt64(15)
+                };
 
                 return dto;
             },

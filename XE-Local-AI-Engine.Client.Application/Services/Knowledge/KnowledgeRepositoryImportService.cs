@@ -128,18 +128,21 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             var normalizedSourcePath = NormalizeRelativePath(relativePath);
             admittedSourcePaths.Add(normalizedSourcePath);
             var documentId = Guid.NewGuid();
-            var input = new KnowledgeDocumentInput(documentId,
-                relativePath,
-                DefaultMimeType,
-                extension,
-                bytes.LongLength,
-                Convert.ToHexString(SHA256.HashData(bytes)),
-                bytes,
-                _options.EmbeddingModelName,
-                normalizedCollection,
-                normalizedSourcePath,
-                SourceKind,
-                repositorySourceId);
+            var input = new KnowledgeDocumentInput
+            {
+                DocumentId = documentId,
+                OriginalFileName = relativePath,
+                MimeType = DefaultMimeType,
+                Extension = extension,
+                SizeBytes = bytes.LongLength,
+                ContentHash = Convert.ToHexString(SHA256.HashData(bytes)),
+                Content = bytes,
+                EmbeddingModel = _options.EmbeddingModelName,
+                CollectionId = normalizedCollection,
+                SourcePath = normalizedSourcePath,
+                SourceKind = SourceKind,
+                SourceId = repositorySourceId
+            };
             var result = await _blobStore.AddAsync(input, cancellationToken);
             if (result.WasInserted)
             {
@@ -197,15 +200,18 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             }
         }
 
-        return new KnowledgeRepositoryImportResult(normalizedCollection,
-            files.Count,
-            added,
-            deduplicated,
-            enqueued,
-            skipped,
-            queueFull,
-            updated,
-            removed);
+        return new KnowledgeRepositoryImportResult
+        {
+            CollectionId = normalizedCollection,
+            DiscoveredFiles = files.Count,
+            AddedDocuments = added,
+            DeduplicatedDocuments = deduplicated,
+            EnqueuedDocuments = enqueued,
+            SkippedFiles = skipped,
+            QueueCapacityReached = queueFull,
+            UpdatedDocuments = updated,
+            RemovedDocuments = removed
+        };
     }
 
     private static async Task<IReadOnlyList<string>> ListRepositoryFilesAsync(string root, CancellationToken cancellationToken)

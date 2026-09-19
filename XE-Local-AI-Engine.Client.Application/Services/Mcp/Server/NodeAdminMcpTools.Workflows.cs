@@ -28,12 +28,15 @@ public sealed partial class NodeAdminMcpTools
                 var boundedLimit = ClampWorkflowListLimit(limit);
                 if (!_devWorkflowOptions.Enabled)
                 {
-                    return new McpWorkflowRunListResponse(McpAdminToolFailureCodes.NotAvailable,
-                        [],
-                        0,
-                        boundedLimit,
-                        McpAdminToolFailureCodes.NotAvailable,
-                        DevWorkflowsDisabledMessage);
+                    return new McpWorkflowRunListResponse
+                    {
+                        Status = McpAdminToolFailureCodes.NotAvailable,
+                        Runs = [],
+                        Count = 0,
+                        Limit = boundedLimit,
+                        FailureCode = McpAdminToolFailureCodes.NotAvailable,
+                        DisplayMessage = DevWorkflowsDisabledMessage
+                    };
                 }
 
                 DevWorkflowRunStatus? parsedStatus = null;
@@ -43,12 +46,15 @@ public sealed partial class NodeAdminMcpTools
                                               .FirstOrDefault(name => string.Equals(name, status, StringComparison.OrdinalIgnoreCase));
                     if (canonicalStatus is null || !Enum.TryParse(canonicalStatus, out DevWorkflowRunStatus value))
                     {
-                        return new McpWorkflowRunListResponse(McpAdminToolFailureCodes.InvalidStatus,
-                            [],
-                            0,
-                            boundedLimit,
-                            McpAdminToolFailureCodes.InvalidStatus,
-                            $"Cannot list: status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowRunStatus>())}.");
+                        return new McpWorkflowRunListResponse
+                        {
+                            Status = McpAdminToolFailureCodes.InvalidStatus,
+                            Runs = [],
+                            Count = 0,
+                            Limit = boundedLimit,
+                            FailureCode = McpAdminToolFailureCodes.InvalidStatus,
+                            DisplayMessage = $"Cannot list: status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowRunStatus>())}."
+                        };
                     }
 
                     parsedStatus = value;
@@ -73,7 +79,7 @@ public sealed partial class NodeAdminMcpTools
                                         item.LatestRunNodes.Total,
                                         item.LatestRunNodes.PendingDecisionCount))
                                     .ToArray();
-                return new McpWorkflowRunListResponse("ok", runs, runs.Length, boundedLimit);
+                return new McpWorkflowRunListResponse { Status = "ok", Runs = runs, Count = runs.Length, Limit = boundedLimit };
             }, static response => response.FailureCode is not null);
 
     [McpServerTool(Name = "get_workflow_run")]
@@ -88,18 +94,24 @@ public sealed partial class NodeAdminMcpTools
             {
                 if (!_devWorkflowOptions.Enabled)
                 {
-                    return new McpWorkflowRunGetResponse(McpAdminToolFailureCodes.NotAvailable,
-                        null,
-                        McpAdminToolFailureCodes.NotAvailable,
-                        DevWorkflowsDisabledMessage);
+                    return new McpWorkflowRunGetResponse
+                    {
+                        Status = McpAdminToolFailureCodes.NotAvailable,
+                        Run = null,
+                        FailureCode = McpAdminToolFailureCodes.NotAvailable,
+                        DisplayMessage = DevWorkflowsDisabledMessage
+                    };
                 }
 
                 if (!Guid.TryParseExact(run_id, "D", out var runId) || runId == Guid.Empty)
                 {
-                    return new McpWorkflowRunGetResponse(McpAdminToolFailureCodes.InvalidRequest,
-                        null,
-                        McpAdminToolFailureCodes.InvalidRequest,
-                        "Cannot get: provide a valid run UUID.");
+                    return new McpWorkflowRunGetResponse
+                    {
+                        Status = McpAdminToolFailureCodes.InvalidRequest,
+                        Run = null,
+                        FailureCode = McpAdminToolFailureCodes.InvalidRequest,
+                        DisplayMessage = "Cannot get: provide a valid run UUID."
+                    };
                 }
 
                 DevWorkflowRunDetail detail;
@@ -109,15 +121,17 @@ public sealed partial class NodeAdminMcpTools
                 }
                 catch (DevWorkflowNotFoundException)
                 {
-                    return new McpWorkflowRunGetResponse("not_found", null, McpAdminToolFailureCodes.RunNotFound, "Run not found.");
+                    return new McpWorkflowRunGetResponse { Status = "not_found", Run = null, FailureCode = McpAdminToolFailureCodes.RunNotFound, DisplayMessage = "Run not found." };
                 }
 
                 // Names only, over the summary projection that never decrypts a graph blob — the same read the run
                 // detail endpoint uses to label a run.
                 var definitions = await _devWorkflowStore.ListDefinitionsAsync(includeArchived: true, cancellationToken);
                 var run = detail.Run;
-                return new McpWorkflowRunGetResponse("ok",
-                    new McpWorkflowRunDetail(run.Id.ToString("D"),
+                return new McpWorkflowRunGetResponse
+                {
+                    Status = "ok",
+                    Run = new McpWorkflowRunDetail(run.Id.ToString("D"),
                         run.WorkItemId.ToString("D"),
                         definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name,
                         run.Status.ToString(),
@@ -131,12 +145,16 @@ public sealed partial class NodeAdminMcpTools
                         run.StartedAtUtc,
                         run.EndedAtUtc,
                         [
-                            .. detail.NodeRuns.Select(static nodeRun => new McpWorkflowNodeRunSummary(nodeRun.NodeKey,
-                                nodeRun.NodeType.ToString(),
-                                nodeRun.Status.ToString(),
-                                nodeRun.Attempt,
-                                nodeRun.MaxAttempts))
-                        ]));
+                            .. detail.NodeRuns.Select(static nodeRun => new McpWorkflowNodeRunSummary
+                            {
+                                NodeKey = nodeRun.NodeKey,
+                                NodeType = nodeRun.NodeType.ToString(),
+                                Status = nodeRun.Status.ToString(),
+                                Attempt = nodeRun.Attempt,
+                                MaxAttempts = nodeRun.MaxAttempts
+                            })
+                        ])
+                };
             }, static response => response.FailureCode is not null);
 
     private int ClampWorkflowListLimit(int? limit) =>

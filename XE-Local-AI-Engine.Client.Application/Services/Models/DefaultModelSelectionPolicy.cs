@@ -29,20 +29,20 @@ internal sealed class DefaultModelSelectionPolicy
     {
         if (string.IsNullOrWhiteSpace(modelName))
         {
-            return new(LocalModelAdministrationFailureCodes.InvalidModelName, "Model name is required.");
+            return new() { FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName, DisplayMessage = "Model name is required." };
         }
 
         var canonicalName = modelName.Trim();
         var validationError = _modelNameValidator.GetValidationError(canonicalName);
         if (validationError is not null)
         {
-            return new(LocalModelAdministrationFailureCodes.InvalidModelName, validationError);
+            return new() { FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName, DisplayMessage = validationError };
         }
 
         if (policy == LocalModelSelectionPolicy.InstalledLocalOnly
             && !await _ggufModelStore.ExistsAsync(canonicalName, cancellationToken))
         {
-            return new(LocalModelAdministrationFailureCodes.ModelNotInstalled, "The requested local model is not installed.");
+            return new() { FailureCode = LocalModelAdministrationFailureCodes.ModelNotInstalled, DisplayMessage = "The requested local model is not installed." };
         }
 
         return null;
@@ -60,4 +60,9 @@ internal sealed class DefaultModelSelectionPolicy
     }
 }
 
-internal sealed record DefaultModelSelectionValidation(string FailureCode, string DisplayMessage);
+internal sealed class DefaultModelSelectionValidation
+{
+    public required string FailureCode { get; init; }
+
+    public required string DisplayMessage { get; init; }
+}

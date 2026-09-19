@@ -170,17 +170,31 @@ internal static class InvocationEfficiencyTelemetry
 ///     Terminal numeric view of one invocation. <see cref="Provider" /> is the bounded provider category used for
 ///     telemetry dimensions; <see cref="ProviderEfficiency" /> contains the content-free provider/tool aggregates.
 /// </summary>
-internal sealed record InvocationEfficiencyRecord(
-    Guid InvocationId,
-    string Outcome,
-    string Provider,
-    bool Orchestration,
-    double TotalDurationMs,
-    double? PreRunDurationMs,
-    double? QueueDurationMs,
-    double? ModelReadinessDurationMs,
-    double? FirstOutputLatencyMs,
-    int? InputTokens,
-    int? OutputTokens,
-    int? ReasoningTokens,
-    ProviderCallEfficiencySnapshot ProviderEfficiency);
+internal sealed class InvocationEfficiencyRecord
+{
+    public required Guid InvocationId { get; init; }
+
+    public required string Outcome { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required bool Orchestration { get; init; }
+
+    public required double TotalDurationMs { get; init; }
+
+    public required double? PreRunDurationMs { get; init; }
+
+    public required double? QueueDurationMs { get; init; }
+
+    public required double? ModelReadinessDurationMs { get; init; }
+
+    public required double? FirstOutputLatencyMs { get; init; }
+
+    public required int? InputTokens { get; init; }
+
+    public required int? OutputTokens { get; init; }
+
+    public required int? ReasoningTokens { get; init; }
+
+    public required ProviderCallEfficiencySnapshot ProviderEfficiency { get; init; }
+}

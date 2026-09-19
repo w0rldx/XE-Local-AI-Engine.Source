@@ -59,9 +59,12 @@ internal sealed class ExternalAppStorageLayout
     public ExternalAppStoragePaths Describe(Guid instanceId)
     {
         var instanceRoot = Path.Combine(_root, FeatureDirectoryName, InstancesDirectoryName, instanceId.ToString("N", CultureInfo.InvariantCulture));
-        return new ExternalAppStoragePaths(instanceRoot,
-            Path.Combine(instanceRoot, VolumesDirectoryName),
-            Path.Combine(instanceRoot, FilesDirectoryName));
+        return new ExternalAppStoragePaths
+        {
+            InstanceRoot = instanceRoot,
+            VolumesRoot = Path.Combine(instanceRoot, VolumesDirectoryName),
+            FilesRoot = Path.Combine(instanceRoot, FilesDirectoryName)
+        };
     }
 
     /// <summary>
@@ -428,8 +431,14 @@ internal sealed class ExternalAppStorageLayout
 }
 
 /// <summary>Where one instance's per-service bind sources live on this host.</summary>
-internal sealed record ExternalAppStoragePaths(string InstanceRoot, string VolumesRoot, string FilesRoot)
+internal sealed class ExternalAppStoragePaths
 {
+    public required string InstanceRoot { get; init; }
+
+    public required string VolumesRoot { get; init; }
+
+    public required string FilesRoot { get; init; }
+
     /// <summary>The host directory behind one service's <c>storage[]</c> entry.</summary>
     public string VolumePath(string serviceName, string storageName)
     {

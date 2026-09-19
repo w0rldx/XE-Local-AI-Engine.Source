@@ -27,10 +27,14 @@ public enum DockerDaemonEndpointSource
 ///     A Docker daemon endpoint together with how it was arrived at. Both halves matter: the endpoint is what gets
 ///     connected to, and the source is what the operator is asked to judge when the attestation no longer matches.
 /// </summary>
-/// <param name="Uri">The endpoint URI (<c>unix://</c>, <c>npipe://</c> or <c>tcp://</c>).</param>
-/// <param name="Source">Which discovery step produced it.</param>
-public sealed record DockerDaemonEndpoint(Uri Uri, DockerDaemonEndpointSource Source)
+public sealed record DockerDaemonEndpoint
 {
+    /// <summary>The endpoint URI (<c>unix://</c>, <c>npipe://</c> or <c>tcp://</c>).</summary>
+    public required Uri Uri { get; init; }
+
+    /// <summary>Which discovery step produced it.</summary>
+    public required DockerDaemonEndpointSource Source { get; init; }
+
     /// <summary>What <see cref="Redact(string)" /> renders for a stored endpoint that is not an absolute URI.</summary>
     internal const string UnparsableEndpoint = "an endpoint that is not a URI";
 

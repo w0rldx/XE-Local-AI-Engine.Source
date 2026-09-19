@@ -71,7 +71,7 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
 
         var refusal = Refuse(cohort, succeeded);
         var fit = refusal is null
-            ? BenchmarkBradleyTerry.Fit([.. succeeded.Select(static comparison => new BenchmarkPairwiseVerdict(comparison.RunAId, comparison.RunBId, comparison.Verdict!))])
+            ? BenchmarkBradleyTerry.Fit([.. succeeded.Select(static comparison => new BenchmarkPairwiseVerdict { RunAId = comparison.RunAId, RunBId = comparison.RunBId, Verdict = comparison.Verdict! })])
             : null;
         var scores = ToScoreEntries(cohort, fit, refusal ?? fit?.Refusal);
         var command = new BenchmarkPairwiseFitCommand
@@ -83,10 +83,13 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             FitKey = fitKey,
             JudgeExecutionKey = cohort.ReferenceExecutionKey ?? string.Empty,
             ComparisonSetVersion = cohort.ComparisonSetVersion,
-            FittedSetJson = BenchmarkCanonicalJson.Serialize(succeeded.Select(static comparison => new FittedVerdict(comparison.RunAId,
-                comparison.RunBId,
-                comparison.Order,
-                comparison.Verdict!))),
+            FittedSetJson = BenchmarkCanonicalJson.Serialize(succeeded.Select(static comparison => new FittedVerdict
+            {
+                RunAId = comparison.RunAId,
+                RunBId = comparison.RunBId,
+                Order = comparison.Order,
+                Verdict = comparison.Verdict!
+            })),
             ScoresJson = BenchmarkCanonicalJson.Serialize(scores),
             // The shipped CHECK requires both to be positive, so a refusal records the sweep budget it exhausted and
             // the replicate budget it was configured with rather than a zero the row cannot hold.
@@ -202,5 +205,14 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         });
 
     /// <summary>One row of the auditable answer to "which verdicts produced this number".</summary>
-    private sealed record FittedVerdict(Guid RunAId, Guid RunBId, int Order, string Verdict);
+    private sealed record FittedVerdict
+    {
+        public required Guid RunAId { get; init; }
+
+        public required Guid RunBId { get; init; }
+
+        public required int Order { get; init; }
+
+        public required string Verdict { get; init; }
+    }
 }

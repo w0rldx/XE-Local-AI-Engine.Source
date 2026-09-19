@@ -10,14 +10,23 @@ public readonly record struct NodeChatPumpCursor(string Content, string Reasonin
 ///     Outcome of <c>NodeChatInvocationPump.FlushDeltaAsync</c>. When <see cref="Persisted" /> is null no
 ///     delta advanced and <see cref="Cursor" /> is unchanged.
 /// </summary>
-public sealed record NodeChatPumpFlushResult(
-    NodeChatPumpCursor Cursor,
-    NodeChatPersistedMessageDto? Persisted,
-    string? ContentDelta,
-    string? ReasoningDelta);
+public sealed class NodeChatPumpFlushResult
+{
+    public required NodeChatPumpCursor Cursor { get; init; }
+
+    public required NodeChatPersistedMessageDto? Persisted { get; init; }
+
+    public required string? ContentDelta { get; init; }
+
+    public required string? ReasoningDelta { get; init; }
+}
 
 /// <summary>Outcome of a terminalize call: the persisted terminal message plus the resolved status/event type.</summary>
-public sealed record NodeChatPumpTerminalResult(
-    NodeChatPersistedMessageDto Persisted,
-    string TerminalStatus,
-    string EventType);
+public sealed class NodeChatPumpTerminalResult
+{
+    public required NodeChatPersistedMessageDto Persisted { get; init; }
+
+    public required string TerminalStatus { get; init; }
+
+    public required string EventType { get; init; }
+}

@@ -112,7 +112,7 @@ public sealed class TranscriptionCaptureEndpointTests
         var source = new StubProcessAudioCaptureSource
         {
             IsSupported = true,
-            Candidates = [new ProcessAudioCaptureCandidate(1234, "chrome", HasAudio: true)]
+            Candidates = [new ProcessAudioCaptureCandidate { ProcessId = 1234, Name = "chrome", HasAudio = true }]
         };
         await using var factory = FactoryWith(source);
         using var client = factory.CreateClient();
@@ -217,15 +217,18 @@ public sealed class TranscriptionCaptureEndpointTests
         // that swapped them would report the VAD state as the capture capability and still pass a same-value test.
         var runtime = new StubTranscriptionRuntimeService
         {
-            Runtime = new TranscriptionRuntimeView(Enabled: true,
-                new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
-                new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false),
-                ManagedRuntime: null,
-                SelectedModelId: null,
-                "base",
-                IdleTimeoutMinutes: 15,
-                vadInstalled,
-                processCaptureSupported)
+            Runtime = new TranscriptionRuntimeView
+            {
+                Enabled = true,
+                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
+                Activity = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false),
+                ManagedRuntime = null,
+                SelectedModelId = null,
+                RecommendedModelId = "base",
+                IdleTimeoutMinutes = 15,
+                VadInstalled = vadInstalled,
+                ProcessCaptureSupported = processCaptureSupported
+            }
         };
 
         await using var factory = new TestServerWebAppFactory

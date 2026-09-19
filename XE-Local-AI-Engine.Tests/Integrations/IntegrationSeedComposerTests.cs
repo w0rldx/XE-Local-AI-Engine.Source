@@ -73,8 +73,8 @@ public sealed class IntegrationSeedComposerTests
     }
 
     private static IntegrationInputDto Text(string text) =>
-        new(IntegrationInputKinds.Text, text, Label: null, Json: null);
+        new() { Kind = IntegrationInputKinds.Text, Text = text, Label = null, Json = null };
 
     private static IntegrationInputDto Json(string json, string label) =>
-        new(IntegrationInputKinds.Json, Text: null, label, json);
+        new() { Kind = IntegrationInputKinds.Json, Text = null, Label = label, Json = json };
 }

@@ -64,20 +64,23 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = new ScheduledJobManagementInput(TestEchoScheduledJobHandler.Id,
-            "Bad kind",
-            Description: null,
-            ScheduleKind.SimpleInterval, // not in SupportedScheduleKinds
-            CronExpression: null,
-            IntervalSeconds: 60,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            Parameters: null);
+        var input = new ScheduledJobManagementInput
+        {
+            TemplateId = TestEchoScheduledJobHandler.Id,
+            DisplayName = "Bad kind",
+            Description = null,
+            ScheduleKind = ScheduleKind.SimpleInterval, // not in SupportedScheduleKinds
+            CronExpression = null,
+            IntervalSeconds = 60,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            Parameters = null
+        };
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
@@ -120,20 +123,23 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = new ScheduledJobManagementInput(SimpleIntervalOnlyHandler.Id,
-            "Bad interval",
-            Description: null,
-            ScheduleKind.SimpleInterval,
-            CronExpression: null,
-            IntervalSeconds: 0, // must be > 0
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            Parameters: null);
+        var input = new ScheduledJobManagementInput
+        {
+            TemplateId = SimpleIntervalOnlyHandler.Id,
+            DisplayName = "Bad interval",
+            Description = null,
+            ScheduleKind = ScheduleKind.SimpleInterval,
+            CronExpression = null,
+            IntervalSeconds = 0, // must be > 0
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            Parameters = null
+        };
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
@@ -147,20 +153,23 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = new ScheduledJobManagementInput(TestEchoScheduledJobHandler.Id,
-            "One-shot no start",
-            Description: null,
-            ScheduleKind.OneShot,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null, // required for OneShot
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            Parameters: null);
+        var input = new ScheduledJobManagementInput
+        {
+            TemplateId = TestEchoScheduledJobHandler.Id,
+            DisplayName = "One-shot no start",
+            Description = null,
+            ScheduleKind = ScheduleKind.OneShot,
+            CronExpression = null,
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null, // required for OneShot
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            Parameters = null
+        };
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
@@ -1124,40 +1133,46 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         bool preventOverlap = false,
         int? maxRuntimeSeconds = null)
     {
-        return new ScheduledJobManagementInput(templateId,
-            displayName,
-            Description: null,
-            ScheduleKind.Cron,
-            cronExpression,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            timeZoneId,
-            SchedulerMisfirePolicy.Smart,
-            preventOverlap,
-            maxRuntimeSeconds,
-            Parameters: null);
+        return new ScheduledJobManagementInput
+        {
+            TemplateId = templateId,
+            DisplayName = displayName,
+            Description = null,
+            ScheduleKind = ScheduleKind.Cron,
+            CronExpression = cronExpression,
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = timeZoneId,
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = preventOverlap,
+            MaxRuntimeSeconds = maxRuntimeSeconds,
+            Parameters = null
+        };
     }
 
     // Valid Manual input using the test.echo template (supports Manual). A Manual job carries no schedule fields.
     private static ScheduledJobManagementInput ManualInput(string displayName = "Test Manual Job",
         bool preventOverlap = false)
     {
-        return new ScheduledJobManagementInput(TestEchoScheduledJobHandler.Id,
-            displayName,
-            Description: null,
-            ScheduleKind.Manual,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            "UTC",
-            SchedulerMisfirePolicy.SkipMissed,
-            preventOverlap,
-            MaxRuntimeSeconds: null,
-            Parameters: null);
+        return new ScheduledJobManagementInput
+        {
+            TemplateId = TestEchoScheduledJobHandler.Id,
+            DisplayName = displayName,
+            Description = null,
+            ScheduleKind = ScheduleKind.Manual,
+            CronExpression = null,
+            IntervalSeconds = null,
+            RepeatCount = null,
+            StartAtUtc = null,
+            EndAtUtc = null,
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+            PreventOverlap = preventOverlap,
+            MaxRuntimeSeconds = null,
+            Parameters = null
+        };
     }
 
     // Polls a condition for up to ~5 s (Quartz fires off the trigger asynchronously). Returns true once it holds.
@@ -1199,16 +1214,19 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         public string TemplateId => Id;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(Id,
-            "Simple Interval (test)",
-            "Test handler that only supports SimpleInterval.",
-            ParameterSchema: null,
-            DefaultParameters: null,
-            [ScheduleKind.SimpleInterval],
-            ScheduleKind.SimpleInterval,
-            SchedulerMisfirePolicy.Smart,
-            DefaultMaxRuntimeSeconds: null,
-            AllowManualTrigger: false);
+        public ScheduledJobTemplateDescriptor Descriptor { get; } = new()
+        {
+            TemplateId = Id,
+            DisplayName = "Simple Interval (test)",
+            Description = "Test handler that only supports SimpleInterval.",
+            ParameterSchema = null,
+            DefaultParameters = null,
+            SupportedScheduleKinds = [ScheduleKind.SimpleInterval],
+            DefaultScheduleKind = ScheduleKind.SimpleInterval,
+            DefaultMisfirePolicy = SchedulerMisfirePolicy.Smart,
+            DefaultMaxRuntimeSeconds = null,
+            AllowManualTrigger = false
+        };
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

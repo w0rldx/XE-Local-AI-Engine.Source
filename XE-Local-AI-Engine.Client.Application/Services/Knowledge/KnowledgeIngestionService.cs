@@ -227,13 +227,16 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         // Stamp the RESOLVED model that actually produced the vectors (not the configured name) as both the document row's
         // embedding_model and every chunk-vector scope key, so a later same-dimension model swap makes stored-name differ
         // from the current resolved name → the catalog flags the document stale → the operator reindexes it.
-        var input = new KnowledgeIndexInput(documentId,
-            revision.ContentHash,
-            embeddingResult.ResolvedModel,
-            embeddingResult.VectorIdentity,
-            embeddingResult.Dimension,
-            chunking.Sections,
-            indexChunks);
+        var input = new KnowledgeIndexInput
+        {
+            DocumentId = documentId,
+            SourceContentHash = revision.ContentHash,
+            EmbeddingModel = embeddingResult.ResolvedModel,
+            VectorIdentity = embeddingResult.VectorIdentity,
+            VectorDimension = embeddingResult.Dimension,
+            Sections = chunking.Sections,
+            Chunks = indexChunks
+        };
 
         // The writer performs the final Indexed transition atomically. A false result means the document was deleted or
         // replaced mid-flight (the stale write was skipped); the dispatcher preserves any deferred replacement admission.
@@ -288,7 +291,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                                                    return generated.Vectors;
                                                },
                                                cancellationToken);
-        return new KnowledgeEmbeddingResult(vectors, descriptor.ResolvedModel, descriptor.VectorIdentity, descriptor.Dimension);
+        return new KnowledgeEmbeddingResult { Vectors = vectors, ResolvedModel = descriptor.ResolvedModel, VectorIdentity = descriptor.VectorIdentity, Dimension = descriptor.Dimension };
     }
 
     private static List<KnowledgeIndexChunk> BuildIndexChunks(IReadOnlyList<KnowledgeChunk> chunks, IReadOnlyList<byte[]> embeddings, int dimension)
@@ -297,22 +300,25 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         for (var index = 0; index < chunks.Count; index++)
         {
             var chunk = chunks[index];
-            indexChunks.Add(new KnowledgeIndexChunk(chunk.ChunkIndex,
-                chunk.SectionOrdinal,
-                chunk.Content,
-                chunk.HeadingPath,
-                chunk.TokenCount,
-                embeddings[index],
-                dimension,
-                chunk.PageNumber,
-                chunk.StartOffset,
-                chunk.EndOffset,
-                chunk.ContentKind,
-                chunk.SourcePath,
-                chunk.Language,
-                chunk.Symbol,
-                chunk.ContentHash,
-                chunk.EmbeddingInputHash));
+            indexChunks.Add(new KnowledgeIndexChunk
+            {
+                ChunkIndex = chunk.ChunkIndex,
+                SectionOrdinal = chunk.SectionOrdinal,
+                Content = chunk.Content,
+                HeadingPath = chunk.HeadingPath,
+                TokenCount = chunk.TokenCount,
+                Embedding = embeddings[index],
+                Dim = dimension,
+                PageNumber = chunk.PageNumber,
+                StartOffset = chunk.StartOffset,
+                EndOffset = chunk.EndOffset,
+                ContentKind = chunk.ContentKind,
+                SourcePath = chunk.SourcePath,
+                Language = chunk.Language,
+                Symbol = chunk.Symbol,
+                ContentHash = chunk.ContentHash,
+                EmbeddingInputHash = chunk.EmbeddingInputHash
+            });
         }
 
         return indexChunks;

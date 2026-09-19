@@ -177,13 +177,16 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
-            "Cite sources before answering.",
-            TriggerCondition: null,
-            "search",
-            Priority: 100,
-            [Guid.NewGuid()],
-            Confidence: 0.8d));
+        var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput
+        {
+            AgentDefinitionId = agentDefinitionId,
+            Behavior = "Cite sources before answering.",
+            TriggerCondition = null,
+            Scope = "search",
+            Priority = 100,
+            SourceFeedbackIds = [Guid.NewGuid()],
+            Confidence = 0.8d
+        });
         return created.Id;
     }
 

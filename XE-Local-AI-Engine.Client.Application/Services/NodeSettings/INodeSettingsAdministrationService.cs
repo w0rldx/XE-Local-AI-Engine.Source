@@ -45,31 +45,53 @@ public sealed record NodeSettingsAgenticPatch
     public string? AutoEffortFastModelName { get; init; }
 }
 
-public sealed record NodeSettingsAgenticView(
-    string? DefaultModelName,
-    bool? EnableTools,
-    IReadOnlyList<string>? ToolCapableModels,
-    string? HuggingFaceDefaultQuant,
-    int? LlamaMaxLoadedProcesses,
-    int? LlamaIdleTimeToLiveSeconds,
-    bool? KeepModelWarmEnabled,
-    string? KeepModelWarmModelName,
-    int? KeepModelWarmIntervalSeconds,
-    int MaxMessageRequestTimeoutSeconds,
-    int? ChatCacheReuse,
-    string? SpeculativeMode,
-    string? SpeculativeDraftModelName,
-    int? SpeculativeDraftMaxTokens,
-    int? SpeculativeDraftGpuLayers,
-    string? KvCacheType,
-    string? RerankerModelName,
-    string? AutoEffortFastModelName);
-
-public sealed record NodeSettingsAdministrationResult(
-    bool Updated,
-    StoredNodeSettings Settings,
-    IReadOnlyList<NodeSettingsValidationError> ValidationErrors)
+public sealed class NodeSettingsAgenticView
 {
+    public required string? DefaultModelName { get; init; }
+
+    public required bool? EnableTools { get; init; }
+
+    public required IReadOnlyList<string>? ToolCapableModels { get; init; }
+
+    public required string? HuggingFaceDefaultQuant { get; init; }
+
+    public required int? LlamaMaxLoadedProcesses { get; init; }
+
+    public required int? LlamaIdleTimeToLiveSeconds { get; init; }
+
+    public required bool? KeepModelWarmEnabled { get; init; }
+
+    public required string? KeepModelWarmModelName { get; init; }
+
+    public required int? KeepModelWarmIntervalSeconds { get; init; }
+
+    public required int MaxMessageRequestTimeoutSeconds { get; init; }
+
+    public required int? ChatCacheReuse { get; init; }
+
+    public required string? SpeculativeMode { get; init; }
+
+    public required string? SpeculativeDraftModelName { get; init; }
+
+    public required int? SpeculativeDraftMaxTokens { get; init; }
+
+    public required int? SpeculativeDraftGpuLayers { get; init; }
+
+    public required string? KvCacheType { get; init; }
+
+    public required string? RerankerModelName { get; init; }
+
+    public required string? AutoEffortFastModelName { get; init; }
+}
+
+public sealed class NodeSettingsAdministrationResult
+{
+    public required bool Updated { get; init; }
+
+    public required StoredNodeSettings Settings { get; init; }
+
+    public required IReadOnlyList<NodeSettingsValidationError> ValidationErrors { get; init; }
+
     /// <summary>
     ///     Whether the save was refused because the stored record kept changing under it, as opposed to being
     ///     rejected by validation. Both read as <see cref="Updated" /> <see langword="false" />, but a conflict carries
@@ -78,20 +100,17 @@ public sealed record NodeSettingsAdministrationResult(
     public bool Conflicted { get; init; }
 
     public static NodeSettingsAdministrationResult Saved(StoredNodeSettings settings) =>
-        new(true, settings, []);
+        new() { Updated = true, Settings = settings, ValidationErrors = [] };
 
     public static NodeSettingsAdministrationResult Rejected(StoredNodeSettings settings,
         IReadOnlyList<NodeSettingsValidationError> errors) =>
-        new(false, settings, errors);
+        new() { Updated = false, Settings = settings, ValidationErrors = errors };
 
     /// <summary>The save was abandoned unwritten after every attempt found the record changed. Named
     ///     <c>Conflict</c> rather than <c>Conflicted</c> only because a type cannot hold a method and a property of
     ///     the same name.</summary>
     public static NodeSettingsAdministrationResult Conflict(StoredNodeSettings latest) =>
-        new(false, latest, [])
-        {
-            Conflicted = true
-        };
+        new() { Updated = false, Settings = latest, ValidationErrors = [], Conflicted = true };
 }
 
 /// <summary>Transport-neutral field validation for the restricted agentic settings patch.</summary>
@@ -169,5 +188,5 @@ public static class NodeSettingsAgenticPatchValidation
         value >= minimum && value <= maximum;
 
     private static IReadOnlyList<NodeSettingsValidationError> Reject(NodeSettingsField field, string message) =>
-        [new NodeSettingsValidationError(field, message)];
+        [new NodeSettingsValidationError { Field = field, Message = message }];
 }

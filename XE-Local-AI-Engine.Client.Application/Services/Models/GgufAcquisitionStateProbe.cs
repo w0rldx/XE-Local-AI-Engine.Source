@@ -36,7 +36,7 @@ public sealed class GgufAcquisitionStateProbe
         var disposition = lease.Snapshot is null && HasDestinationCollision(identity)
             ? GgufAcquisitionDisposition.Conflict
             : GetDisposition(intent, identity, lease.Snapshot, mapDisposition);
-        return Task.FromResult(new GgufAcquisitionState(disposition, mapDisposition, mapping?.ProviderName));
+        return Task.FromResult(new GgufAcquisitionState { Disposition = disposition, ProviderMapDisposition = mapDisposition, ConflictingProvider = mapping?.ProviderName });
     }
 
     private bool HasDestinationCollision(ResolvedGgufAcquisitionIdentity identity)

@@ -95,17 +95,20 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
 
     private static InferenceProfileFingerprintInput ToInput(InferenceProfileRecord profile, string modelFilePath)
     {
-        return new InferenceProfileFingerprintInput(profile.ModelName,
-            profile.Role,
-            profile.Backend,
-            modelFilePath,
-            profile.CtxSize,
-            profile.NGpuLayers,
-            profile.TensorSplit,
-            profile.OverrideTensor,
-            profile.KvTypeK,
-            profile.KvTypeV,
-            profile.FlashAttn);
+        return new InferenceProfileFingerprintInput
+        {
+            ModelName = profile.ModelName,
+            Role = profile.Role,
+            Backend = profile.Backend,
+            ModelFilePath = modelFilePath,
+            CtxSize = profile.CtxSize,
+            NGpuLayers = profile.NGpuLayers,
+            TensorSplit = profile.TensorSplit,
+            OverrideTensor = profile.OverrideTensor,
+            KvTypeK = profile.KvTypeK,
+            KvTypeV = profile.KvTypeV,
+            FlashAttn = profile.FlashAttn
+        };
     }
 
     public async Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileFingerprintInput input, CancellationToken ct)
@@ -136,8 +139,11 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
             if (string.Equals(validationBefore, validationAfter, StringComparison.Ordinal))
             {
                 var boundValidationHash = BindValidationHash(strongHash, validationAfter);
-                return new LaunchPolicyFingerprint(CurrentVersion,
-                    string.Concat(strongHash, FingerprintSeparator, boundValidationHash));
+                return new LaunchPolicyFingerprint
+                {
+                    Version = CurrentVersion,
+                    Value = string.Concat(strongHash, FingerprintSeparator, boundValidationHash)
+                };
             }
         }
 
@@ -512,24 +518,33 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
             {
                 var guard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct);
                 return includeContentHashes
-                    ? new ModelContentIdentity("verified-registry-sha256", registrySha256, guard)
-                    : new ModelContentIdentity("validation-stamp-v1",
-                        RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, guard, registrySha256),
-                        guard);
+                    ? new ModelContentIdentity { Source = "verified-registry-sha256", ContentIdentity = registrySha256, GuardSha256 = guard }
+                    : new ModelContentIdentity
+                    {
+                        Source = "validation-stamp-v1",
+                        ContentIdentity = RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, guard, registrySha256),
+                        GuardSha256 = guard
+                    };
             }
         }
 
         if (includeContentHashes)
         {
-            return new ModelContentIdentity("memoized-local-file-sha256",
-                await _fileHashCache.GetSha256Async(file.FullName, ct),
-                GuardSha256: null);
+            return new ModelContentIdentity
+            {
+                Source = "memoized-local-file-sha256",
+                ContentIdentity = await _fileHashCache.GetSha256Async(file.FullName, ct),
+                GuardSha256 = null
+            };
         }
 
         var validationGuard = await _fileHashCache.GetGuardSha256Async(file.FullName, ct);
-        return new ModelContentIdentity("validation-stamp-v1",
-            RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, validationGuard, authoritySha256: null),
-            validationGuard);
+        return new ModelContentIdentity
+        {
+            Source = "validation-stamp-v1",
+            ContentIdentity = RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, validationGuard, authoritySha256: null),
+            GuardSha256 = validationGuard
+        };
     }
 
     private static bool PathsEqual(string left, string right)
@@ -580,5 +595,12 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
-    private sealed record ModelContentIdentity(string Source, string ContentIdentity, string? GuardSha256);
+    private sealed record ModelContentIdentity
+    {
+        public required string Source { get; init; }
+
+        public required string ContentIdentity { get; init; }
+
+        public required string? GuardSha256 { get; init; }
+    }
 }

@@ -331,14 +331,17 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         }
 
         var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct);
-        _hardwareAllocationContexts[key] = new HardwareAllocationContext(contentIdentity,
-            role,
-            variant,
-            profile,
-            facts,
-            processGpuBudget,
-            trainCeiling,
-            kvCacheQuant);
+        _hardwareAllocationContexts[key] = new HardwareAllocationContext
+        {
+            ContentIdentity = contentIdentity,
+            Role = role,
+            Variant = variant,
+            Profile = profile,
+            Facts = facts,
+            ProcessGpuBudget = processGpuBudget,
+            TrainCeiling = trainCeiling,
+            KvCacheQuant = kvCacheQuant
+        };
         var candidates = role == ModelRole.Chat
             ? LlamaServerLaunchPolicyOptions.ChatContextTiers
             : [_options.ContextTokensForRole(role)];
@@ -507,13 +510,16 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             profile,
             kvCacheQuantized: false,
             kvCacheQuant: kvCacheQuant,
-            moeFacts: new MoeFacts(ActiveParamCount: null, facts.ExpertCount, facts.ExpertUsedCount),
-            attention: new GgufAttentionShape(facts.AttentionKeyLength,
-                facts.AttentionValueLength,
-                facts.SlidingWindow,
-                facts.SlidingWindowPattern,
-                facts.AttentionKeyLengthMla,
-                facts.AttentionValueLengthMla),
+            moeFacts: new MoeFacts { ActiveParamCount = null, ExpertCount = facts.ExpertCount, ExpertUsedCount = facts.ExpertUsedCount },
+            attention: new GgufAttentionShape
+            {
+                KeyLength = facts.AttentionKeyLength,
+                ValueLength = facts.AttentionValueLength,
+                SlidingWindow = facts.SlidingWindow,
+                SlidingWindowPattern = facts.SlidingWindowPattern,
+                KeyLengthMla = facts.AttentionKeyLengthMla,
+                ValueLengthMla = facts.AttentionValueLengthMla
+            },
             nativeQuantFormat: QuantLadder.IsNativeFormat(quant));
     }
 
@@ -627,13 +633,22 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
     private readonly record struct EstimationContext(bool UseGpu, long GpuBudget, long RamBudget, HardwareProfile Profile);
 
-    private sealed record HardwareAllocationContext(
-        string ContentIdentity,
-        ModelRole Role,
-        GpuVariant Variant,
-        HardwareProfile Profile,
-        GgufModelFootprintFacts Facts,
-        long? ProcessGpuBudget,
-        int? TrainCeiling,
-        KvCacheQuant? KvCacheQuant);
+    private sealed record HardwareAllocationContext
+    {
+        public required string ContentIdentity { get; init; }
+
+        public required ModelRole Role { get; init; }
+
+        public required GpuVariant Variant { get; init; }
+
+        public required HardwareProfile Profile { get; init; }
+
+        public required GgufModelFootprintFacts Facts { get; init; }
+
+        public required long? ProcessGpuBudget { get; init; }
+
+        public required int? TrainCeiling { get; init; }
+
+        public required KvCacheQuant? KvCacheQuant { get; init; }
+    }
 }

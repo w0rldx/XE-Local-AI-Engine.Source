@@ -12,19 +12,31 @@ public static class LocalModelAdministrationFailureCodes
     public const string ModelNotInstalled = "model_not_installed";
 }
 
-public sealed record LocalModelDeletionResult(
-    bool Succeeded,
-    string? ModelName,
-    bool Deleted,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+public sealed class LocalModelDeletionResult
+{
+    public required bool Succeeded { get; init; }
 
-public sealed record LocalModelSelectionResult(
-    bool Succeeded,
-    string? SelectedModelName,
-    string? PreviousModelName,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+    public required string? ModelName { get; init; }
+
+    public required bool Deleted { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class LocalModelSelectionResult
+{
+    public required bool Succeeded { get; init; }
+
+    public required string? SelectedModelName { get; init; }
+
+    public required string? PreviousModelName { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
 
 /// <summary>Transport-neutral local-model deletion and default-selection application boundary.</summary>
 public interface ILocalModelAdministrationService

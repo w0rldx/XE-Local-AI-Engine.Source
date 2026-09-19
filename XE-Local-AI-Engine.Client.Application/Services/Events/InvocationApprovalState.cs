@@ -9,11 +9,14 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 ///         approval — which carries only an id and a description — still round-trips unchanged.
 ///     </para>
 /// </summary>
-public sealed record InvocationApprovalState(
-    string RequestId,
-    string Description,
-    DateTimeOffset RequestedAt)
+public sealed record InvocationApprovalState
 {
+    public required string RequestId { get; init; }
+
+    public required string Description { get; init; }
+
+    public required DateTimeOffset RequestedAt { get; init; }
+
     /// <summary>The tool-call id the approval belongs to, when known. Null for a platform-hub approval.</summary>
     public string? CallId { get; init; }
 

@@ -59,7 +59,7 @@ public sealed class NodeAuthService : INodeAuthService
                                            .AsNoTracking()
                                            .AnyAsync(user => user.SetupCompleted, cancellationToken);
 
-        return new NodeAuthStatus(!hasAdminUser, principal.Identity?.IsAuthenticated == true);
+        return new NodeAuthStatus { SetupRequired = !hasAdminUser, Authenticated = principal.Identity?.IsAuthenticated == true };
     }
 
     public async Task<NodeSetupResult> SetupAsync(string email, string password, CancellationToken cancellationToken)
@@ -72,7 +72,7 @@ public sealed class NodeAuthService : INodeAuthService
         {
             if (await HasCompletedSetupAsync(cancellationToken))
             {
-                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: true, []);
+                return new NodeSetupResult { Succeeded = false, AlreadyInitialized = true, Errors = [] };
             }
 
             await using var transaction = await _dbContext.Database
@@ -81,7 +81,7 @@ public sealed class NodeAuthService : INodeAuthService
             if (await HasCompletedSetupAsync(cancellationToken))
             {
                 await transaction.RollbackAsync(cancellationToken);
-                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: true, []);
+                return new NodeSetupResult { Succeeded = false, AlreadyInitialized = true, Errors = [] };
             }
 
             var normalizedEmail = email.Trim();
@@ -97,14 +97,14 @@ public sealed class NodeAuthService : INodeAuthService
             if (!createResult.Succeeded)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(createResult));
+                return new NodeSetupResult { Succeeded = false, AlreadyInitialized = false, Errors = ToErrorList(createResult) };
             }
 
             var roleResult = await _userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole);
             if (!roleResult.Succeeded)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(roleResult));
+                return new NodeSetupResult { Succeeded = false, AlreadyInitialized = false, Errors = ToErrorList(roleResult) };
             }
 
             // Written BEFORE the commit, and only when nothing has been chosen yet. The settings file cannot join the
@@ -125,7 +125,7 @@ public sealed class NodeAuthService : INodeAuthService
 
             await transaction.CommitAsync(cancellationToken);
             _logger.LogInformation("Node admin user created during first-run setup.");
-            return new NodeSetupResult(Succeeded: true, AlreadyInitialized: false, []);
+            return new NodeSetupResult { Succeeded = true, AlreadyInitialized = false, Errors = [] };
         }
         finally
         {
@@ -238,17 +238,17 @@ public sealed class NodeAuthService : INodeAuthService
         var user = await _userManager.GetUserAsync(principal);
         if (user is null)
         {
-            return new NodePasswordChangeResult(Succeeded: false, ["The current session is invalid."]);
+            return new NodePasswordChangeResult { Succeeded = false, Errors = ["The current session is invalid."] };
         }
 
         var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
         if (!result.Succeeded)
         {
-            return new NodePasswordChangeResult(Succeeded: false, ToErrorList(result));
+            return new NodePasswordChangeResult { Succeeded = false, Errors = ToErrorList(result) };
         }
 
         await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
-        return new NodePasswordChangeResult(Succeeded: true, []);
+        return new NodePasswordChangeResult { Succeeded = true, Errors = [] };
     }
 
     public async Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken)
@@ -260,8 +260,11 @@ public sealed class NodeAuthService : INodeAuthService
         var user = await ResolveLoginUserAsync(email: null, cancellationToken);
         if (user is null)
         {
-            return new NodePasswordChangeResult(Succeeded: false,
-                ["No administrator account exists. Complete first-run setup before resetting the password."]);
+            return new NodePasswordChangeResult
+            {
+                Succeeded = false,
+                Errors = ["No administrator account exists. Complete first-run setup before resetting the password."]
+            };
         }
 
         // RemovePassword + AddPassword is the no-old-password reset primitive (Identity has no token-less ResetPassword,
@@ -274,14 +277,14 @@ public sealed class NodeAuthService : INodeAuthService
         if (!removeResult.Succeeded)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return new NodePasswordChangeResult(Succeeded: false, ToErrorList(removeResult));
+            return new NodePasswordChangeResult { Succeeded = false, Errors = ToErrorList(removeResult) };
         }
 
         var addResult = await _userManager.AddPasswordAsync(user, newPassword);
         if (!addResult.Succeeded)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return new NodePasswordChangeResult(Succeeded: false, ToErrorList(addResult));
+            return new NodePasswordChangeResult { Succeeded = false, Errors = ToErrorList(addResult) };
         }
 
         // A forgotten password is often preceded by failed attempts that tripped the 5-strike lockout; clear it so the
@@ -294,7 +297,7 @@ public sealed class NodeAuthService : INodeAuthService
 
         _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
                            + "stamp invalidates existing access tokens.", user.Id);
-        return new NodePasswordChangeResult(Succeeded: true, []);
+        return new NodePasswordChangeResult { Succeeded = true, Errors = [] };
     }
 
     /// <summary>
@@ -338,7 +341,7 @@ public sealed class NodeAuthService : INodeAuthService
         });
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new NodeAuthTokenResult(Succeeded: true, accessToken, accessTokenExpiresAtUtc, refreshToken, refreshTokenExpiresAtUtc);
+        return new NodeAuthTokenResult { Succeeded = true, AccessToken = accessToken, AccessTokenExpiresAtUtc = accessTokenExpiresAtUtc, RefreshToken = refreshToken, RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc };
     }
 
     /// <summary>
@@ -396,12 +399,15 @@ public sealed class NodeAuthService : INodeAuthService
 
     private static NodeAuthTokenResult FailedTokenResult(int? lockedOutRetryAfterSeconds = null)
     {
-        return new NodeAuthTokenResult(Succeeded: false,
-            AccessToken: null,
-            AccessTokenExpiresAtUtc: null,
-            RefreshToken: null,
-            RefreshTokenExpiresAtUtc: null,
-            LockedOutRetryAfterSeconds: lockedOutRetryAfterSeconds);
+        return new NodeAuthTokenResult
+        {
+            Succeeded = false,
+            AccessToken = null,
+            AccessTokenExpiresAtUtc = null,
+            RefreshToken = null,
+            RefreshTokenExpiresAtUtc = null,
+            LockedOutRetryAfterSeconds = lockedOutRetryAfterSeconds
+        };
     }
 
     private static string GetSignInFailureReason(SignInResult result)

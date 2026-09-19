@@ -13,4 +13,9 @@ internal interface IAgentHomeIdentityProvider
 }
 
 /// <summary>The owner/node pair that scopes a node's AgentHome sandbox.</summary>
-internal sealed record AgentHomeOwnerIdentity(string OwnerUserId, string NodeId);
+internal sealed class AgentHomeOwnerIdentity
+{
+    public required string OwnerUserId { get; init; }
+
+    public required string NodeId { get; init; }
+}

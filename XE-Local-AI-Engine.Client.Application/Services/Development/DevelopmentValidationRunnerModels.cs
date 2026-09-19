@@ -69,9 +69,15 @@ internal static class DevelopmentValidationFailureCodes
 ///         agent optimizing for green would produce if unreadable meant "assume fine".
 ///     </para>
 /// </summary>
-internal sealed record DevelopmentValidationVerdict(bool Passed, string? FailureCode, string? FailureDetail)
+internal sealed class DevelopmentValidationVerdict
 {
-    private static readonly DevelopmentValidationVerdict Success = new(true, null, null);
+    public required bool Passed { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required string? FailureDetail { get; init; }
+
+    private static readonly DevelopmentValidationVerdict Success = new() { Passed = true, FailureCode = null, FailureDetail = null };
 
     public static DevelopmentValidationVerdict Evaluate(DevelopmentCommandProfile profile,
         IReadOnlyList<DevelopmentCommandEvidence> commands)
@@ -81,9 +87,12 @@ internal sealed record DevelopmentValidationVerdict(bool Passed, string? Failure
 
         if (commands.Count != profile.ValidationCommandIds.Count)
         {
-            return new DevelopmentValidationVerdict(false,
-                DevelopmentValidationFailureCodes.MissingCommandEvidence,
-                $"The profile declares {profile.ValidationCommandIds.Count} validation commands but {commands.Count} produced evidence.");
+            return new DevelopmentValidationVerdict
+            {
+                Passed = false,
+                FailureCode = DevelopmentValidationFailureCodes.MissingCommandEvidence,
+                FailureDetail = $"The profile declares {profile.ValidationCommandIds.Count} validation commands but {commands.Count} produced evidence."
+            };
         }
 
         foreach (var command in commands)
@@ -107,45 +116,65 @@ internal sealed record DevelopmentValidationVerdict(bool Passed, string? Failure
     {
         if (!command.Completed)
         {
-            return new DevelopmentValidationVerdict(false,
-                DevelopmentValidationFailureCodes.CommandDidNotComplete,
-                $"Command {command.CommandId} did not finish.");
+            return new DevelopmentValidationVerdict
+            {
+                Passed = false,
+                FailureCode = DevelopmentValidationFailureCodes.CommandDidNotComplete,
+                FailureDetail = $"Command {command.CommandId} did not finish."
+            };
         }
 
         if (command.TestOutcome is { } outcome)
         {
             if (!outcome.Parsed)
             {
-                return new DevelopmentValidationVerdict(false,
-                    DevelopmentValidationFailureCodes.TestResultsUnparsed,
-                    $"Command {command.CommandId} produced no readable test result ({outcome.ParseFailureCode}): {outcome.ParseFailureDetail}");
+                return new DevelopmentValidationVerdict
+                {
+                    Passed = false,
+                    FailureCode = DevelopmentValidationFailureCodes.TestResultsUnparsed,
+                    FailureDetail = $"Command {command.CommandId} produced no readable test result ({outcome.ParseFailureCode}): {outcome.ParseFailureDetail}"
+                };
             }
 
             if (outcome.Failed > 0)
             {
-                return new DevelopmentValidationVerdict(false,
-                    DevelopmentValidationFailureCodes.TestsFailed,
-                    $"Command {command.CommandId} reported {outcome.Failed} failing of {outcome.Executed} executed tests.");
+                return new DevelopmentValidationVerdict
+                {
+                    Passed = false,
+                    FailureCode = DevelopmentValidationFailureCodes.TestsFailed,
+                    FailureDetail = $"Command {command.CommandId} reported {outcome.Failed} failing of {outcome.Executed} executed tests."
+                };
             }
 
             if (outcome.Executed == 0)
             {
-                return new DevelopmentValidationVerdict(false,
-                    DevelopmentValidationFailureCodes.NoTestsExecuted,
-                    $"Command {command.CommandId} executed no tests ({outcome.Discovered} discovered). A change cannot be validated by a suite that ran nothing.");
+                return new DevelopmentValidationVerdict
+                {
+                    Passed = false,
+                    FailureCode = DevelopmentValidationFailureCodes.NoTestsExecuted,
+                    FailureDetail = $"Command {command.CommandId} executed no tests ({outcome.Discovered} discovered). A change cannot be validated by a suite that ran nothing."
+                };
             }
         }
 
         return command.ExitCode == 0
             ? null
-            : new DevelopmentValidationVerdict(false,
-                DevelopmentValidationFailureCodes.CommandFailed,
-                $"Command {command.CommandId} exited with code {command.ExitCode}.");
+            : new DevelopmentValidationVerdict
+            {
+                Passed = false,
+                FailureCode = DevelopmentValidationFailureCodes.CommandFailed,
+                FailureDetail = $"Command {command.CommandId} exited with code {command.ExitCode}."
+            };
     }
 }
 
-internal sealed record DevelopmentValidationResult(
-    Guid ArtifactId,
-    bool Passed,
-    DevelopmentTaskStatus TaskStatus,
-    string SubjectHash);
+internal sealed class DevelopmentValidationResult
+{
+    public required Guid ArtifactId { get; init; }
+
+    public required bool Passed { get; init; }
+
+    public required DevelopmentTaskStatus TaskStatus { get; init; }
+
+    public required string SubjectHash { get; init; }
+}

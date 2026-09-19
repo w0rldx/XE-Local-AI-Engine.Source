@@ -37,8 +37,14 @@ public sealed partial class NodeAdminMcpTools
             {
                 if (string.IsNullOrWhiteSpace(repo_id))
                 {
-                    return new McpModelPullStartResponse("rejected", null, null, McpAdminToolFailureCodes.InvalidRequest,
-                        "A repository id is required.");
+                    return new McpModelPullStartResponse
+                    {
+                        Status = "rejected",
+                        ModelName = null,
+                        OperationId = null,
+                        FailureCode = McpAdminToolFailureCodes.InvalidRequest,
+                        DisplayMessage = "A repository id is required."
+                    };
                 }
 
                 try
@@ -51,21 +57,27 @@ public sealed partial class NodeAdminMcpTools
                         Revision = NullIfWhiteSpace(revision),
                         IncludeProjector = include_projector
                     }, cancellationToken);
-                    return new McpModelPullStartResponse(ticket.AlreadyInFlight ? "already_in_flight" : "accepted",
-                        ticket.ModelName,
-                        ticket.OperationId == Guid.Empty ? null : ticket.OperationId.ToString("D"));
+                    return new McpModelPullStartResponse
+                    {
+                        Status = ticket.AlreadyInFlight ? "already_in_flight" : "accepted",
+                        ModelName = ticket.ModelName,
+                        OperationId = ticket.OperationId == Guid.Empty ? null : ticket.OperationId.ToString("D")
+                    };
                 }
                 catch (GgufAcquisitionConflictException exception)
                 {
-                    return new McpModelPullStartResponse("rejected", null, null, McpAdminToolFailureCodes.ModelPullConflict, exception.Message);
+                    return new McpModelPullStartResponse { Status = "rejected", ModelName = null, OperationId = null, FailureCode = McpAdminToolFailureCodes.ModelPullConflict, DisplayMessage = exception.Message };
                 }
                 catch (HuggingFaceDownloadException exception)
                 {
-                    return new McpModelPullStartResponse("rejected",
-                        null,
-                        null,
-                        McpAdminWireNames.DownloadErrorCode(exception.Reason),
-                        exception.Message);
+                    return new McpModelPullStartResponse
+                    {
+                        Status = "rejected",
+                        ModelName = null,
+                        OperationId = null,
+                        FailureCode = McpAdminWireNames.DownloadErrorCode(exception.Reason),
+                        DisplayMessage = exception.Message
+                    };
                 }
             },
             static response => response.FailureCode is not null);
@@ -81,27 +93,50 @@ public sealed partial class NodeAdminMcpTools
         {
             if (string.IsNullOrWhiteSpace(model_name))
             {
-                return Task.FromResult(new McpModelPullResponse("not_found", null, null, null, null, null, null,
-                    McpAdminToolFailureCodes.InvalidRequest, "A model name is required."));
+                return Task.FromResult(new McpModelPullResponse
+                {
+                    Status = "not_found",
+                    ModelName = null,
+                    Phase = null,
+                    CompletedBytes = null,
+                    TotalBytes = null,
+                    SanitizedError = null,
+                    OperationId = null,
+                    FailureCode = McpAdminToolFailureCodes.InvalidRequest,
+                    DisplayMessage = "A model name is required."
+                });
             }
 
             var status = _ggufDownloadCoordinator.GetStatus(model_name.Trim());
             if (status is null)
             {
-                return Task.FromResult(new McpModelPullResponse("not_found", null, null, null, null, null, null,
-                    McpAdminToolFailureCodes.ModelPullNotFound, "Model pull not found."));
+                return Task.FromResult(new McpModelPullResponse
+                {
+                    Status = "not_found",
+                    ModelName = null,
+                    Phase = null,
+                    CompletedBytes = null,
+                    TotalBytes = null,
+                    SanitizedError = null,
+                    OperationId = null,
+                    FailureCode = McpAdminToolFailureCodes.ModelPullNotFound,
+                    DisplayMessage = "Model pull not found."
+                });
             }
 
             var operationId = status.OperationId == Guid.Empty ? null : status.OperationId.ToString("D");
-            return Task.FromResult(new McpModelPullResponse("ok",
-                status.ModelName,
-                ToWirePhase(status.Phase),
-                status.CompletedBytes,
-                status.TotalBytes,
-                status.SanitizedError,
-                operationId,
-                status.Phase == GgufDownloadPhase.Failed ? McpAdminWireNames.DownloadErrorCode(status.ErrorCode) : null,
-                status.SanitizedError));
+            return Task.FromResult(new McpModelPullResponse
+            {
+                Status = "ok",
+                ModelName = status.ModelName,
+                Phase = ToWirePhase(status.Phase),
+                CompletedBytes = status.CompletedBytes,
+                TotalBytes = status.TotalBytes,
+                SanitizedError = status.SanitizedError,
+                OperationId = operationId,
+                FailureCode = status.Phase == GgufDownloadPhase.Failed ? McpAdminWireNames.DownloadErrorCode(status.ErrorCode) : null,
+                DisplayMessage = status.SanitizedError
+            });
         }, static response => response.FailureCode is not null);
     }
 
@@ -110,8 +145,11 @@ public sealed partial class NodeAdminMcpTools
 #pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public Task<McpModelPullCancelResponse> CancelModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name) =>
         InvokeAuditedAsync("cancel_model_pull", AuditArguments(("model_name", model_name)), () =>
-                Task.FromResult(new McpModelPullCancelResponse(!string.IsNullOrWhiteSpace(model_name)
-                                                               && _ggufDownloadCoordinator.Cancel(model_name.Trim()))),
+                Task.FromResult(new McpModelPullCancelResponse
+                {
+                    Cancelled = !string.IsNullOrWhiteSpace(model_name)
+                                                               && _ggufDownloadCoordinator.Cancel(model_name.Trim())
+                }),
             static response => !response.Cancelled);
 #pragma warning restore IDE1006
 
@@ -124,7 +162,7 @@ public sealed partial class NodeAdminMcpTools
         return await InvokeAuditedAsync("delete_model", AuditArguments(("model_name", model_name)), async () =>
         {
             var result = await _localModelAdministrationService.DeleteAsync(model_name, cancellationToken);
-            return new McpModelDeleteResponse(result.Deleted, result.ModelName, result.FailureCode, result.DisplayMessage);
+            return new McpModelDeleteResponse { Deleted = result.Deleted, ModelName = result.ModelName, FailureCode = result.FailureCode, DisplayMessage = result.DisplayMessage };
         }, static response => !response.Deleted);
     }
 
@@ -139,11 +177,14 @@ public sealed partial class NodeAdminMcpTools
             var result = await _localModelAdministrationService.SelectDefaultAsync(model_name,
                 LocalModelSelectionPolicy.InstalledLocalOnly,
                 cancellationToken);
-            return new McpDefaultModelResponse(result.Succeeded,
-                result.SelectedModelName,
-                result.PreviousModelName,
-                result.FailureCode,
-                result.DisplayMessage);
+            return new McpDefaultModelResponse
+            {
+                Updated = result.Succeeded,
+                SelectedModelName = result.SelectedModelName,
+                PreviousDefault = result.PreviousModelName,
+                FailureCode = result.FailureCode,
+                DisplayMessage = result.DisplayMessage
+            };
         }, static response => !response.Updated);
     }
 }

@@ -279,7 +279,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         // One over the cap, so truncation is observed rather than inferred from a full page.
         var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken);
         var page = events.Take(_options.EventReplayLimit).ToList();
-        return new GraphWorkflowRunEventPage(page, page.Count == 0 ? afterSeq : page[^1].Seq, events.Count > _options.EventReplayLimit);
+        return new GraphWorkflowRunEventPage { Events = page, LastSeq = page.Count == 0 ? afterSeq : page[^1].Seq, ReplayTruncated = events.Count > _options.EventReplayLimit };
     }
 
     /// <summary>
@@ -437,7 +437,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     {
         var run = await _store.GetRunAsync(runId, cancellationToken);
         var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
-        return new GraphWorkflowDecisionResult(decision, run.Status, nodeRun.Status);
+        return new GraphWorkflowDecisionResult { Decision = decision, RunStatus = run.Status, NodeRunStatus = nodeRun.Status };
     }
 
     /// <summary>
@@ -482,5 +482,5 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     }
 
     private async Task<GraphWorkflowRunDetail> ComposeAsync(GraphWorkflowRunSnapshot run, CancellationToken cancellationToken) =>
-        new(run, await _store.ListNodeRunsAsync(run.Id, cancellationToken));
+        new() { Run = run, NodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken) };
 }

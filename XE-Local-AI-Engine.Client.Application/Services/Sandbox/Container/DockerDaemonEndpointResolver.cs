@@ -62,17 +62,17 @@ internal static class DockerDaemonEndpointResolver
 
         if (TryParseEndpoint(configuredEndpoint, out var configured))
         {
-            return new DockerDaemonEndpoint(configured, DockerDaemonEndpointSource.Configuration);
+            return new DockerDaemonEndpoint { Uri = configured, Source = DockerDaemonEndpointSource.Configuration };
         }
 
         if (TryParseEndpoint(environmentReader(DockerHostVariable), out var fromEnvironment))
         {
-            return new DockerDaemonEndpoint(fromEnvironment, DockerDaemonEndpointSource.DockerHostEnvironmentVariable);
+            return new DockerDaemonEndpoint { Uri = fromEnvironment, Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable };
         }
 
         if (isWindows)
         {
-            return new DockerDaemonEndpoint(new Uri(WindowsNamedPipeEndpoint), DockerDaemonEndpointSource.WindowsNamedPipe);
+            return new DockerDaemonEndpoint { Uri = new Uri(WindowsNamedPipeEndpoint), Source = DockerDaemonEndpointSource.WindowsNamedPipe };
         }
 
         // The per-user socket is only preferred when the system-wide one is genuinely absent. Preferring it whenever
@@ -86,12 +86,12 @@ internal static class DockerDaemonEndpointResolver
                 var userSocket = Path.Combine(runtimeDirectory, "docker.sock");
                 if (fileExists(userSocket))
                 {
-                    return new DockerDaemonEndpoint(BuildUnixEndpoint(userSocket), DockerDaemonEndpointSource.UserRuntimeUnixSocket);
+                    return new DockerDaemonEndpoint { Uri = BuildUnixEndpoint(userSocket), Source = DockerDaemonEndpointSource.UserRuntimeUnixSocket };
                 }
             }
         }
 
-        return new DockerDaemonEndpoint(BuildUnixEndpoint(DefaultUnixSocketPath), DockerDaemonEndpointSource.DefaultUnixSocket);
+        return new DockerDaemonEndpoint { Uri = BuildUnixEndpoint(DefaultUnixSocketPath), Source = DockerDaemonEndpointSource.DefaultUnixSocket };
     }
 
     /// <summary>Production entry point: reads the real environment and filesystem.</summary>

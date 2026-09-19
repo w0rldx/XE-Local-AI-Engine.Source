@@ -79,7 +79,7 @@ internal static class GraphWorkflowStateMachine
     ///     the case that matters.
     /// </summary>
     public static string PauseOutputJson(GraphWorkflowDecisionKind decision) =>
-        JsonSerializer.Serialize(new PauseOutput(GraphWorkflowNodeOutputStatuses.Succeeded, new PauseDecision(decision.ToString())), JsonOptions);
+        JsonSerializer.Serialize(new PauseOutput { Status = GraphWorkflowNodeOutputStatuses.Succeeded, Output = new PauseDecision { Decision = decision.ToString() } }, JsonOptions);
 
     /// <summary>
     ///     Every answer a pause SUCCEEDS on — the ones that part company in the graph rather than on the row.
@@ -545,7 +545,15 @@ internal static class GraphWorkflowStateMachine
     ///     under <c>output</c> because that is where every kind's own payload sits, so an edge selects on
     ///     <c>output.decision</c>.
     /// </summary>
-    private sealed record PauseOutput(string Status, PauseDecision Output);
+    private sealed record PauseOutput
+    {
+        public required string Status { get; init; }
 
-    private sealed record PauseDecision(string Decision);
+        public required PauseDecision Output { get; init; }
+    }
+
+    private sealed record PauseDecision
+    {
+        public required string Decision { get; init; }
+    }
 }

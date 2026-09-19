@@ -15,20 +15,29 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         pass carries on, because one unjudgeable instance must not cost every later row its verdict.
 ///     </para>
 /// </summary>
-public sealed record ExternalAppReconcileSummary(
-    int RowsInspected,
-    int RowsChanged,
-    int OrphansRemoved,
-    int ForeignInstallContainers,
-    int RowsSkippedBusy,
-    int RowsFailed = 0)
+public sealed record ExternalAppReconcileSummary
 {
+    public required int RowsInspected { get; init; }
+
+    public required int RowsChanged { get; init; }
+
+    public required int OrphansRemoved { get; init; }
+
+    public required int ForeignInstallContainers { get; init; }
+
+    public required int RowsSkippedBusy { get; init; }
+
+    public int RowsFailed { get; init; }
+
     /// <summary>The pass that judged nothing: the feature is off, or no container runtime was ready.</summary>
-    public static ExternalAppReconcileSummary Nothing { get; } = new(RowsInspected: 0,
-        RowsChanged: 0,
-        OrphansRemoved: 0,
-        ForeignInstallContainers: 0,
-        RowsSkippedBusy: 0);
+    public static ExternalAppReconcileSummary Nothing { get; } = new()
+    {
+        RowsInspected = 0,
+        RowsChanged = 0,
+        OrphansRemoved = 0,
+        ForeignInstallContainers = 0,
+        RowsSkippedBusy = 0
+    };
 }
 
 /// <summary>

@@ -76,11 +76,11 @@ public sealed class DevelopmentDependencyManifestPolicyTests
     [Test]
     public void Evaluate_PassesASourceChangeAndNamesTheManifestItRejects()
     {
-        AssertEx.Null(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile("src/Lib/Feature.cs", "modified"),
-            new DevelopmentChangedFile("tests/Probe/NewFeatureTests.cs", "added"))));
+        AssertEx.Null(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile { Path = "src/Lib/Feature.cs", ChangeType = "modified" },
+            new DevelopmentChangedFile { Path = "tests/Probe/NewFeatureTests.cs", ChangeType = "added" })));
 
-        var verdict = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile("src/Lib/Feature.cs", "modified"),
-            new DevelopmentChangedFile("src/Lib/Lib.csproj", "modified"))));
+        var verdict = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile { Path = "src/Lib/Feature.cs", ChangeType = "modified" },
+            new DevelopmentChangedFile { Path = "src/Lib/Lib.csproj", ChangeType = "modified" })));
         AssertEx.False(verdict.Passed);
         AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, verdict.FailureCode);
         AssertEx.Contains(AssertEx.NotNull(verdict.FailureDetail), "src/Lib/Lib.csproj", StringComparison.Ordinal);
@@ -94,18 +94,21 @@ public sealed class DevelopmentDependencyManifestPolicyTests
     [Test]
     public void Evaluate_RejectsAnAddedManifestAndARenameOutOfTheSet()
     {
-        var added = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile("Directory.Packages.props", "added"))));
+        var added = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile { Path = "Directory.Packages.props", ChangeType = "added" })));
         AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, added.FailureCode);
 
         // The new path is innocuous; the PREVIOUS one is a manifest, and moving a manifest aside changes resolution
         // exactly as much as editing it.
-        var renamed = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile("src/Lib/Lib.csproj.bak",
-            "renamed",
-            "src/Lib/Lib.csproj"))));
+        var renamed = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile
+        {
+            Path = "src/Lib/Lib.csproj.bak",
+            ChangeType = "renamed",
+            PreviousPath = "src/Lib/Lib.csproj"
+        })));
         AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, renamed.FailureCode);
         AssertEx.Contains(AssertEx.NotNull(renamed.FailureDetail), "src/Lib/Lib.csproj", StringComparison.Ordinal);
 
-        var deleted = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile("packages.lock.json", "deleted"))));
+        var deleted = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(new DevelopmentChangedFile { Path = "packages.lock.json", ChangeType = "deleted" })));
         AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, deleted.FailureCode);
     }
 
@@ -118,7 +121,7 @@ public sealed class DevelopmentDependencyManifestPolicyTests
     public void Evaluate_BoundsTheOffendingPathListing()
     {
         var many = Enumerable.Range(0, 32)
-                             .Select(index => new DevelopmentChangedFile($"src/Project{index}/Project{index}.csproj", "modified"))
+                             .Select(index => new DevelopmentChangedFile { Path = $"src/Project{index}/Project{index}.csproj", ChangeType = "modified" })
                              .ToArray();
 
         var verdict = AssertEx.NotNull(DevelopmentDependencyManifestPolicy.Evaluate(Evidence(many)));
@@ -142,12 +145,15 @@ public sealed class DevelopmentDependencyManifestPolicyTests
     }
 
     private static DevelopmentPatchEvidence Evidence(params DevelopmentChangedFile[] changedFiles) =>
-        new("0000000000000000000000000000000000000000",
-            PatchHash: "patch",
-            ManifestHash: "manifest",
-            SubjectHash: "subject",
-            ExpectedResultHash: "expected",
-            PatchBytes: [],
-            ManifestBytes: [],
-            changedFiles);
+        new()
+        {
+            BaseCommit = "0000000000000000000000000000000000000000",
+            PatchHash = "patch",
+            ManifestHash = "manifest",
+            SubjectHash = "subject",
+            ExpectedResultHash = "expected",
+            PatchBytes = [],
+            ManifestBytes = [],
+            ChangedFiles = changedFiles
+        };
 }

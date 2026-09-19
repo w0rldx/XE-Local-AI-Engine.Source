@@ -301,29 +301,31 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
 
     private static IReadOnlyList<SandboxMountBinding> Mapped() =>
     [
-        new(HostWorkspace, "/workspace", ReadOnly: false),
-        new(HostRuntime + "/home", "/xe-runtime/home", ReadOnly: false),
-        new(HostRuntime + "/tmp", "/xe-runtime/tmp", ReadOnly: false),
-        new(HostRuntime + "/nuget", "/xe-runtime/nuget", ReadOnly: false),
-        new(HostRuntime + "/dotnet", "/xe-runtime/dotnet", ReadOnly: false)
+        new() { HostPath = HostWorkspace, SandboxPath = "/workspace", ReadOnly = false },
+        new() { HostPath = HostRuntime + "/home", SandboxPath = "/xe-runtime/home", ReadOnly = false },
+        new() { HostPath = HostRuntime + "/tmp", SandboxPath = "/xe-runtime/tmp", ReadOnly = false },
+        new() { HostPath = HostRuntime + "/nuget", SandboxPath = "/xe-runtime/nuget", ReadOnly = false },
+        new() { HostPath = HostRuntime + "/dotnet", SandboxPath = "/xe-runtime/dotnet", ReadOnly = false }
     ];
 
     private static IReadOnlyList<SandboxMountBinding> Identity() =>
     [
-        new(HostWorkspace, HostWorkspace, ReadOnly: false),
-        new(HostRuntime + "/home", HostRuntime + "/home", ReadOnly: false),
-        new(HostRuntime + "/nuget", HostRuntime + "/nuget", ReadOnly: false)
+        new() { HostPath = HostWorkspace, SandboxPath = HostWorkspace, ReadOnly = false },
+        new() { HostPath = HostRuntime + "/home", SandboxPath = HostRuntime + "/home", ReadOnly = false },
+        new() { HostPath = HostRuntime + "/nuget", SandboxPath = HostRuntime + "/nuget", ReadOnly = false }
     ];
 
     private static DevelopmentWorkspaceSession Session(IReadOnlyList<SandboxMountBinding> mounts) =>
-        new(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "0000000000000000000000000000000000000000",
-            "identity",
-            HostWorkspace,
-            HostRuntime,
-            new SandboxHandle
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid(),
+            BaseCommit = "0000000000000000000000000000000000000000",
+            RepositoryIdentityHash = "identity",
+            HostWorktreePath = HostWorkspace,
+            RuntimePath = HostRuntime,
+            SandboxHandle = new SandboxHandle
             {
                 ProviderName = "test",
                 SandboxId = "sandbox",
@@ -338,5 +340,6 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = 2,
                 Mounts = mounts
-            });
+            }
+        };
 }

@@ -20,24 +20,28 @@ public enum EntraDeviceCodeSignInState
 ///     An immutable snapshot of the current Entra ID device-code sign-in state for the status endpoint. Carries no
 ///     token material.
 /// </summary>
-public sealed record EntraDeviceCodeSignInStatus(
-    EntraDeviceCodeSignInState State,
-    string? UserCode,
-    string? VerificationUri,
-    DateTimeOffset? ExpiresAtUtc)
+public sealed class EntraDeviceCodeSignInStatus
 {
+    public required EntraDeviceCodeSignInState State { get; init; }
+
+    public required string? UserCode { get; init; }
+
+    public required string? VerificationUri { get; init; }
+
+    public required DateTimeOffset? ExpiresAtUtc { get; init; }
+
     /// <summary>Idle status used before any sign-in has been attempted.</summary>
-    public static EntraDeviceCodeSignInStatus None { get; } = new(EntraDeviceCodeSignInState.None, null, null, null);
+    public static EntraDeviceCodeSignInStatus None { get; } = new() { State = EntraDeviceCodeSignInState.None, UserCode = null, VerificationUri = null, ExpiresAtUtc = null };
 
     /// <summary>Terminal status after a sign-in succeeded and persisted a record.</summary>
-    public static EntraDeviceCodeSignInStatus Succeeded { get; } = new(EntraDeviceCodeSignInState.Succeeded, null, null, null);
+    public static EntraDeviceCodeSignInStatus Succeeded { get; } = new() { State = EntraDeviceCodeSignInState.Succeeded, UserCode = null, VerificationUri = null, ExpiresAtUtc = null };
 
     /// <summary>Terminal status after a sign-in failed, timed out, or was superseded.</summary>
-    public static EntraDeviceCodeSignInStatus Failed { get; } = new(EntraDeviceCodeSignInState.Failed, null, null, null);
+    public static EntraDeviceCodeSignInStatus Failed { get; } = new() { State = EntraDeviceCodeSignInState.Failed, UserCode = null, VerificationUri = null, ExpiresAtUtc = null };
 
     /// <summary>Builds the in-flight status carrying the user-facing code and verification URL.</summary>
     public static EntraDeviceCodeSignInStatus Pending(string userCode, string verificationUri, DateTimeOffset expiresAtUtc)
     {
-        return new EntraDeviceCodeSignInStatus(EntraDeviceCodeSignInState.Pending, userCode, verificationUri, expiresAtUtc);
+        return new EntraDeviceCodeSignInStatus { State = EntraDeviceCodeSignInState.Pending, UserCode = userCode, VerificationUri = verificationUri, ExpiresAtUtc = expiresAtUtc };
     }
 }

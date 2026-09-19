@@ -174,8 +174,13 @@ public sealed class EvaluationRunService : IEvaluationRunService
                 throw new EvaluationRejectedException("The tuned evaluation requires a completed staged GGUF from this run.");
             }
 
-            return new EvaluationTargetIdentity(Path.GetFileName(artifact.Path), artifact.Sha256,
-                EvaluationModelTargetKind.StagedTrainingArtifact, artifact.Id);
+            return new EvaluationTargetIdentity
+            {
+                ModelName = Path.GetFileName(artifact.Path),
+                Fingerprint = artifact.Sha256,
+                Kind = EvaluationModelTargetKind.StagedTrainingArtifact,
+                ArtifactId = artifact.Id
+            };
         }
 
         var selected = string.IsNullOrWhiteSpace(command.ModelNameOverride) ? run.LinkedInstalledModelName : command.ModelNameOverride.Trim();
@@ -184,15 +189,25 @@ public sealed class EvaluationRunService : IEvaluationRunService
         var installed = await _models.ListInstalledModelsAsync(cancellationToken);
         var descriptor = installed.FirstOrDefault(model => string.Equals(model.ModelName, modelName, StringComparison.Ordinal) && model.IsAvailable)
                          ?? throw new EvaluationRejectedException($"'{modelName}' is not an installed model on this node.");
-        return new EvaluationTargetIdentity(modelName, descriptor.ModelContentFingerprint,
-            EvaluationModelTargetKind.InstalledModel, ArtifactId: null);
+        return new EvaluationTargetIdentity
+        {
+            ModelName = modelName,
+            Fingerprint = descriptor.ModelContentFingerprint,
+            Kind = EvaluationModelTargetKind.InstalledModel,
+            ArtifactId = null
+        };
     }
 
-    private sealed record EvaluationTargetIdentity(
-        string ModelName,
-        string? Fingerprint,
-        EvaluationModelTargetKind Kind,
-        Guid? ArtifactId);
+    private sealed record EvaluationTargetIdentity
+    {
+        public required string ModelName { get; init; }
+
+        public required string? Fingerprint { get; init; }
+
+        public required EvaluationModelTargetKind Kind { get; init; }
+
+        public required Guid? ArtifactId { get; init; }
+    }
 
     private static T? Read<T>(ReadOnlyMemory<byte>? payload)
         where T : class

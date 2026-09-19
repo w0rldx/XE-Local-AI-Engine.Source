@@ -191,7 +191,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
             // Comment and payload are deliberately NOT compared: they are the free text around the act rather than the
             // act itself, and a client re-sending its request with a trimmed comment has still taken one decision.
-            return new DevWorkflowDecisionResult(await ComposeAsync(run, cancellationToken), recorded);
+            return new DevWorkflowDecisionResult { Detail = await ComposeAsync(run, cancellationToken), Decision = recorded };
         }
 
         var nodeRun = await _store.GetNodeRunAsync(nodeRunId, cancellationToken);
@@ -259,7 +259,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         var detail = await SignalAndComposeAsync(runId, cancellationToken);
         var settled = await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken)
                       ?? throw new DevWorkflowNotFoundException($"The decision recorded on run '{runId}' could not be read back.");
-        return new DevWorkflowDecisionResult(detail, settled);
+        return new DevWorkflowDecisionResult { Detail = detail, Decision = settled };
     }
 
     /// <summary>
@@ -353,17 +353,19 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     private async Task<DevWorkflowRunDetail> ComposeAsync(DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken);
-        return new DevWorkflowRunDetail(run,
-            nodeRuns,
-            nodeRuns.Count(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
-
+        return new DevWorkflowRunDetail
+        {
+            Run = run,
+            NodeRuns = nodeRuns,
+            PendingDecisionCount = nodeRuns.Count(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
             // The same rule the store's list counters use: the first node run, in sequence order, that a human has to
             // act on — a gate awaiting its answer or a node awaiting intervention, since Blocked folds in. A narrower
             // reading here would make the list page and the detail page disagree about the same run.
-            nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
+            BlockingGateNodeRunId = nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
                     .OrderBy(static nodeRun => nodeRun.Sequence)
                     .Select(static nodeRun => (Guid?)nodeRun.Id)
-                    .FirstOrDefault());
+                    .FirstOrDefault()
+        };
     }
 
     private async Task<DevWorkflowRunSnapshot?> TryReadAsync(Guid runId, CancellationToken cancellationToken)

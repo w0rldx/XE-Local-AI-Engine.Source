@@ -192,7 +192,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             Reason = fallbackText?.Reason,
             Remediation = fallbackText?.Remediation,
             BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant, inventory.RuntimeMissing) : null,
-            Devices = [.. inventory.Devices.Select(static device => new RuntimeAuditDevice(device.Name, device.TotalBytes, device.FreeBytes))]
+            Devices = [.. inventory.Devices.Select(static device => new RuntimeAuditDevice { Name = device.Name, TotalBytes = device.TotalBytes, FreeBytes = device.FreeBytes })]
         };
     }
 
@@ -264,7 +264,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             + "NVIDIA build is Vulkan, which needs a Vulkan ICD; if a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH "
             + "points to a valid GPU-capable binary.";
 
-        return new FallbackText(reason, Remediation);
+        return new FallbackText { Reason = reason, Remediation = Remediation };
     }
 
     private static string VendorName(GpuVendor vendor)
@@ -319,5 +319,10 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     private sealed record DeviceAuditComputation(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate, long SignalVersion);
 
     // Operator-facing prose for a detected CPU fallback: what happened, and what to do about it.
-    private sealed record FallbackText(string Reason, string? Remediation);
+    private sealed record FallbackText
+    {
+        public required string Reason { get; init; }
+
+        public required string? Remediation { get; init; }
+    }
 }

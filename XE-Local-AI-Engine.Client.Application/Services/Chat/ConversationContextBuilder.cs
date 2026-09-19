@@ -183,11 +183,14 @@ internal static class ConversationContextBuilder
                 continue;
             }
 
-            (exchanges ??= []).Add(new ConversationToolExchange(part.ToolCallId!,
-                part.Name ?? string.Empty,
-                part.Args,
-                ExcerptResult(part.Result, toolResultExcerptChars),
-                string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal)));
+            (exchanges ??= []).Add(new ConversationToolExchange
+            {
+                CallId = part.ToolCallId!,
+                Name = part.Name ?? string.Empty,
+                ArgumentsJson = part.Args,
+                Result = ExcerptResult(part.Result, toolResultExcerptChars),
+                IsError = string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal)
+            });
         }
 
         return exchanges;

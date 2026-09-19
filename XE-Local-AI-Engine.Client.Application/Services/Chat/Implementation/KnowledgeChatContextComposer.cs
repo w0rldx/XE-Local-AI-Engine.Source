@@ -115,7 +115,7 @@ internal static class KnowledgeChatContextComposer
             builder.Append("\n\n").Append(TruncationNotice);
         }
 
-        return new KnowledgeChatContext(builder.ToString(), sources);
+        return new KnowledgeChatContext { Context = builder.ToString(), Sources = sources };
     }
 }
 
@@ -123,4 +123,9 @@ internal static class KnowledgeChatContextComposer
 ///     The composed knowledge-base context for one plain-chat turn: the fenced prompt block and the ordered provenance
 ///     of the hits inlined into it (the render source for the "Sources" strip).
 /// </summary>
-internal sealed record KnowledgeChatContext(string Context, IReadOnlyList<NodeChatMessageSource> Sources);
+internal sealed class KnowledgeChatContext
+{
+    public required string Context { get; init; }
+
+    public required IReadOnlyList<NodeChatMessageSource> Sources { get; init; }
+}

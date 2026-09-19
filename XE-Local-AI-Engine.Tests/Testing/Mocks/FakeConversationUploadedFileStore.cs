@@ -25,15 +25,18 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         }
 
         var fileId = Guid.NewGuid();
-        files.Add(new StagedFile(new ConversationUploadedFileInfo(fileId,
-                conversationId,
-                originalFileName,
-                "text/markdown",
-                ".md",
-                extractedMarkdown.Length,
-                DocumentExtractionStatus.Extracted,
-                extractedMarkdown.Length,
-                CreatedAtUtc: 0),
+        files.Add(new StagedFile(new ConversationUploadedFileInfo
+        {
+            FileId = fileId,
+            ConversationId = conversationId,
+            OriginalFileName = originalFileName,
+            MimeType = "text/markdown",
+            Extension = ".md",
+            SizeBytes = extractedMarkdown.Length,
+            ExtractionStatus = DocumentExtractionStatus.Extracted,
+            ExtractedChars = extractedMarkdown.Length,
+            CreatedAtUtc = 0
+        },
             extractedMarkdown));
     }
 

@@ -63,25 +63,53 @@ public sealed record TrainingEvaluationExecutionProvenanceV1
 }
 
 /// <summary>What the operator asked to evaluate. The optional model name selects an installed base; tuned evaluation names a staged artifact.</summary>
-public sealed record CreateEvaluationCommand(Guid TrainingRunId, EvaluationTarget Target, string? ModelNameOverride = null, Guid? ArtifactId = null);
+public sealed class CreateEvaluationCommand
+{
+    public required Guid TrainingRunId { get; init; }
+
+    public required EvaluationTarget Target { get; init; }
+
+    public string? ModelNameOverride { get; init; }
+
+    public Guid? ArtifactId { get; init; }
+}
 
 /// <summary>What a comparison's create dialog needs to pre-fill itself from one training run.</summary>
-public sealed record ComparisonSuggestion(
-    Guid TrainingRunId,
-    string? BaseModelName,
-    string? TunedModelName,
-    Guid? BaseEvaluationRunId,
-    Guid? TunedEvaluationRunId,
-    string? UnavailableReason);
+public sealed class ComparisonSuggestion
+{
+    public required Guid TrainingRunId { get; init; }
+
+    public required string? BaseModelName { get; init; }
+
+    public required string? TunedModelName { get; init; }
+
+    public required Guid? BaseEvaluationRunId { get; init; }
+
+    public required Guid? TunedEvaluationRunId { get; init; }
+
+    public required string? UnavailableReason { get; init; }
+}
 
 /// <summary>
 ///     What one hold-out sample expects of the model. <see cref="ToolName" /> empty means the sample demonstrates a
 ///     no-tool answer, and the expectation inverts: the model passes by NOT calling anything.
 /// </summary>
-public sealed record EvaluationExpectation(string? ToolName, string? ArgumentsJson, string? ParameterSchema);
+public sealed class EvaluationExpectation
+{
+    public required string? ToolName { get; init; }
+
+    public required string? ArgumentsJson { get; init; }
+
+    public required string? ParameterSchema { get; init; }
+}
 
 /// <summary>One tool call the model actually produced, flattened to the two things the scorer compares.</summary>
-public sealed record EvaluationToolCall(string ToolName, string ArgumentsJson);
+public sealed class EvaluationToolCall
+{
+    public required string ToolName { get; init; }
+
+    public required string ArgumentsJson { get; init; }
+}
 
 /// <summary>A refusal the evaluation surface reports as a 4xx rather than a fault. Message is operator-facing.</summary>
 public sealed class EvaluationRejectedException : Exception

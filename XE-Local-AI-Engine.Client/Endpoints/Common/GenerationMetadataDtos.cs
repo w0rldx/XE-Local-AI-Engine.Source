@@ -137,12 +137,15 @@ internal static class GenerationProvenance
     }
 
     private static GenerationMetadataInput ToInput(this GenerationMetadata metadata) =>
-        new(metadata.Model,
-            metadata.Mode,
-            metadata.UserBrief,
-            metadata.Rationale,
-            metadata.Assumptions,
-            metadata.Confidence,
-            metadata.GeneratedAtUtc,
-            metadata.DraftContentHash);
+        new()
+        {
+            Model = metadata.Model,
+            Mode = metadata.Mode,
+            UserBrief = metadata.UserBrief,
+            Rationale = metadata.Rationale,
+            Assumptions = metadata.Assumptions,
+            Confidence = metadata.Confidence,
+            GeneratedAtUtc = metadata.GeneratedAtUtc,
+            DraftContentHash = metadata.DraftContentHash
+        };
 }

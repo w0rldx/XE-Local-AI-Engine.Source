@@ -30,36 +30,42 @@ internal sealed partial class ExternalAppService : IExternalAppService
             // 200, not 404. A blocked preview is renderable information — the dialog can say WHY there is nothing to
             // update to — where a mutating call against a manifest that no longer exists is not executable.
             var verdict = await _resourceGate.EvaluateAsync(installed, _layout.Root, cancellationToken);
-            return new UpdatePreview(row.ApplicationId,
-                instanceId,
-                row.ManifestVersion,
-                row.ManifestVersion,
-                installed.ManifestSha256,
-                installed.Variables,
-                MaskForTarget(installed, installed, stored),
-                [],
-                ExternalAppEffectivePermissions.From(installed),
-                verdict,
-                CanUpdate: false,
-                ExternalAppBlockedReason.CatalogMissing);
+            return new UpdatePreview
+            {
+                ApplicationId = row.ApplicationId,
+                InstanceId = instanceId,
+                CurrentManifestVersion = row.ManifestVersion,
+                TargetManifestVersion = row.ManifestVersion,
+                ManifestSha256 = installed.ManifestSha256,
+                Variables = installed.Variables,
+                CurrentValues = MaskForTarget(installed, installed, stored),
+                AddedPermissions = [],
+                EffectivePermissions = ExternalAppEffectivePermissions.From(installed),
+                ResourceVerdict = verdict,
+                CanUpdate = false,
+                BlockedReason = ExternalAppBlockedReason.CatalogMissing
+            };
         }
 
         var admission = await EvaluateTargetAsync(services, target, cancellationToken);
         var newer = target.ManifestVersion > row.ManifestVersion;
 
-        return new UpdatePreview(row.ApplicationId,
-            instanceId,
-            row.ManifestVersion,
-            target.ManifestVersion,
-            target.ManifestSha256,
-            target.Variables,
-            MaskForTarget(installed, target, stored),
-            ExternalAppEffectivePermissions.Diff(ExternalAppEffectivePermissions.From(installed), ExternalAppEffectivePermissions.From(target)),
-            ExternalAppEffectivePermissions.From(target),
-            admission.Resources,
-            newer && admission.BlockedReason is null,
+        return new UpdatePreview
+        {
+            ApplicationId = row.ApplicationId,
+            InstanceId = instanceId,
+            CurrentManifestVersion = row.ManifestVersion,
+            TargetManifestVersion = target.ManifestVersion,
+            ManifestSha256 = target.ManifestSha256,
+            Variables = target.Variables,
+            CurrentValues = MaskForTarget(installed, target, stored),
+            AddedPermissions = ExternalAppEffectivePermissions.Diff(ExternalAppEffectivePermissions.From(installed), ExternalAppEffectivePermissions.From(target)),
+            EffectivePermissions = ExternalAppEffectivePermissions.From(target),
+            ResourceVerdict = admission.Resources,
+            CanUpdate = newer && admission.BlockedReason is null,
             // "Already current" carries no blocked reason: nothing is wrong, and the two version members say it.
-            newer ? admission.BlockedReason : null);
+            BlockedReason = newer ? admission.BlockedReason : null
+        };
     }
 
     public async Task<ExternalAppInstanceSummary> UpdateAsync(Guid instanceId,
@@ -158,7 +164,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                 throw new ExternalAppConcurrencyException("The instance changed while this update was being admitted.");
             }
 
-            var context = new LifecycleContext(instanceId, cursor.Version, cursor.Sequence, admitted, row);
+            var context = new LifecycleContext { InstanceId = instanceId, Version = cursor.Version, Sequence = cursor.Sequence, Status = admitted, Row = row };
             if (!_runner.TryStart(instanceId,
                     ExternalAppOperationKind.Update,
                     lease,
@@ -248,8 +254,11 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
                         if (!result.Applied)
                         {
-                            throw new ExternalAppPipelineException(new ExternalAppFailure(ExternalAppFailureCategory.Unknown,
-                                "This application changed while it was being updated; nothing was started."));
+                            throw new ExternalAppPipelineException(new ExternalAppFailure
+                            {
+                                Category = ExternalAppFailureCategory.Unknown,
+                                Summary = "This application changed while it was being updated; nothing was started."
+                            });
                         }
 
                         cursor.Version = result.Version;
@@ -316,7 +325,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
         var hostPorts = target.Services
                               .SelectMany(service => service.Ports
                                                             .Where(static port => string.Equals(port.Role, UiPortRole, StringComparison.Ordinal))
-                                                            .Select(port => new ExternalAppHostPort(service.Name, port.ContainerPort, port.ContainerPort)))
+                                                            .Select(port => new ExternalAppHostPort { Service = service.Name, ContainerPort = port.ContainerPort, HostPort = port.ContainerPort }))
                               .ToList();
 
         try
@@ -340,11 +349,14 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
         // alreadyInstalled is false on purpose: this application IS installed, and that is the precondition of an
         // update rather than a reason to refuse one.
-        return new InstallAdmission(BlockingReason(alreadyInstalled: false, BridgeUnavailableFor(target), resolution, target, missing, resources),
-            resolution,
-            missing,
-            resources,
-            ExistingInstanceId: null);
+        return new InstallAdmission
+        {
+            BlockedReason = BlockingReason(alreadyInstalled: false, BridgeUnavailableFor(target), resolution, target, missing, resources),
+            Runtime = resolution,
+            MissingCapabilities = missing,
+            Resources = resources,
+            ExistingInstanceId = null
+        };
     }
 
     /// <summary>

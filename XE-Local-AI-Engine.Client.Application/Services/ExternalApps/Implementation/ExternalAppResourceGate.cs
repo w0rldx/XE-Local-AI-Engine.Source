@@ -49,33 +49,42 @@ internal sealed class ExternalAppResourceGate
 
         if (availableMemory < requiredMemory)
         {
-            return new ExternalAppResourceVerdict(Satisfied: false,
-                ExternalAppFailureCategory.InsufficientMemory,
-                requiredMemory,
-                availableMemory,
-                RequiredDiskBytes,
-                availableDisk,
-                Describe("memory", requiredMemory, availableMemory));
+            return new ExternalAppResourceVerdict
+            {
+                Satisfied = false,
+                FailureCategory = ExternalAppFailureCategory.InsufficientMemory,
+                RequiredMemoryBytes = requiredMemory,
+                AvailableMemoryBytes = availableMemory,
+                RequiredDiskBytes = RequiredDiskBytes,
+                AvailableDiskBytes = availableDisk,
+                Message = Describe("memory", requiredMemory, availableMemory)
+            };
         }
 
         if (availableDisk < RequiredDiskBytes)
         {
-            return new ExternalAppResourceVerdict(Satisfied: false,
-                ExternalAppFailureCategory.InsufficientDisk,
-                requiredMemory,
-                availableMemory,
-                RequiredDiskBytes,
-                availableDisk,
-                Describe("disk space", RequiredDiskBytes, availableDisk));
+            return new ExternalAppResourceVerdict
+            {
+                Satisfied = false,
+                FailureCategory = ExternalAppFailureCategory.InsufficientDisk,
+                RequiredMemoryBytes = requiredMemory,
+                AvailableMemoryBytes = availableMemory,
+                RequiredDiskBytes = RequiredDiskBytes,
+                AvailableDiskBytes = availableDisk,
+                Message = Describe("disk space", RequiredDiskBytes, availableDisk)
+            };
         }
 
-        return new ExternalAppResourceVerdict(Satisfied: true,
-            FailureCategory: null,
-            requiredMemory,
-            availableMemory,
-            RequiredDiskBytes,
-            availableDisk,
-            "This machine has the memory and disk this application asks for.");
+        return new ExternalAppResourceVerdict
+        {
+            Satisfied = true,
+            FailureCategory = null,
+            RequiredMemoryBytes = requiredMemory,
+            AvailableMemoryBytes = availableMemory,
+            RequiredDiskBytes = RequiredDiskBytes,
+            AvailableDiskBytes = availableDisk,
+            Message = "This machine has the memory and disk this application asks for."
+        };
     }
 
     /// <summary>

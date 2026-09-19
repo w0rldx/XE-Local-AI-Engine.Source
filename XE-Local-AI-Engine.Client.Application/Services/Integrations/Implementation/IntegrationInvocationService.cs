@@ -95,7 +95,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         //
         //    A PerInvocation accept and a NEW caller-managed session name no session, so they take no gate — nothing
         //    else can name a session that does not exist yet.
-        var caller = new IntegrationCallerIdentity(key.PrincipalId, request.KeyPrefix);
+        var caller = new IntegrationCallerIdentity { PrincipalId = key.PrincipalId, KeyPrefix = request.KeyPrefix };
         var gateLease = request.SessionId is { } gatedSessionId
             ? await _sessionGate.EnterAsync(gatedSessionId, cancellationToken)
             : null;
@@ -262,19 +262,22 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             // cap counts it against its principal until the next restart sweep.
             if (existingSession is null)
             {
-                _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(trigger.DisplayName,
-                                              UserId: null,
-                                              receivedAtUtc,
-                                              NodeChatOriginValues.Local,
-                                              trigger.TargetAgentDefinitionId,
-                                              NodeConversationKind.Integration,
-                                              conversationId),
+                _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+                {
+                    Title = trigger.DisplayName,
+                    UserId = null,
+                    CreatedAtUtc = receivedAtUtc,
+                    Origin = NodeChatOriginValues.Local,
+                    AgentDefinitionId = trigger.TargetAgentDefinitionId,
+                    Kind = NodeConversationKind.Integration,
+                    ConversationId = conversationId
+                },
                                           CancellationToken.None);
             }
 
             // The seed message id IS the execution id, so a continuation can address the seed turn with no lookup and
             // no extra column. One execution owns exactly one seed, so the ids cannot collide.
-            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, executionId, seed, receivedAtUtc), CancellationToken.None);
+            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = executionId, Content = seed, CreatedAtUtc = receivedAtUtc }, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -306,7 +309,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             return Rejected(IntegrationAcceptOutcome.QueueFull, "The node is at its concurrent execution limit.");
         }
 
-        return new IntegrationAcceptResult(IntegrationAcceptOutcome.Accepted, executionId, sessionId, IntegrationExecutionStatus.Accepted, "Accepted.");
+        return new IntegrationAcceptResult { Outcome = IntegrationAcceptOutcome.Accepted, ExecutionId = executionId, SessionId = sessionId, Status = IntegrationExecutionStatus.Accepted, Message = "Accepted." };
     }
 
     /// <summary>
@@ -345,13 +348,16 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 
             if (terminalized)
             {
-                _buffer.Publish(new IntegrationStreamEvent(IntegrationStreamEventTypes.ExecutionFailed,
-                    sequence,
-                    executionId,
-                    sessionId,
-                    endedAtUtc,
-                    ContentType: null,
-                    payload));
+                _buffer.Publish(new IntegrationStreamEvent
+                {
+                    Type = IntegrationStreamEventTypes.ExecutionFailed,
+                    Sequence = sequence,
+                    ExecutionId = executionId,
+                    SessionId = sessionId,
+                    OccurredAtUtc = endedAtUtc,
+                    ContentType = null,
+                    Payload = payload
+                });
                 resolved = true;
             }
         }
@@ -379,7 +385,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         }
 
         return CryptographicOperations.FixedTimeEquals(existing.RequestFingerprint.Span, fingerprint)
-            ? new IntegrationAcceptResult(IntegrationAcceptOutcome.Duplicate, existing.Id, existing.SessionId, existing.Status, "Duplicate request.")
+            ? new IntegrationAcceptResult { Outcome = IntegrationAcceptOutcome.Duplicate, ExecutionId = existing.Id, SessionId = existing.SessionId, Status = existing.Status, Message = "Duplicate request." }
             : Rejected(IntegrationAcceptOutcome.RequestConflict, "That request id was used with a different body.");
     }
 
@@ -424,5 +430,5 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     }
 
     private static IntegrationAcceptResult Rejected(IntegrationAcceptOutcome outcome, string message) =>
-        new(outcome, ExecutionId: null, SessionId: null, Status: null, message);
+        new() { Outcome = outcome, ExecutionId = null, SessionId = null, Status = null, Message = message };
 }

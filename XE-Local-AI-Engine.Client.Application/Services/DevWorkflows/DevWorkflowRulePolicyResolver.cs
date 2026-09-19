@@ -115,7 +115,7 @@ public static class DevWorkflowRulePolicyResolver
         try
         {
             return JsonSerializer.Deserialize<StoredScope>(scopeJson, JsonOptions) is { } scope
-                ? new DevWorkflowRuleSetScope(scope.ProjectIds ?? [], scope.NodeTypes ?? [])
+                ? new DevWorkflowRuleSetScope { ProjectIds = scope.ProjectIds ?? [], NodeTypes = scope.NodeTypes ?? [] }
                 : null;
         }
         catch (JsonException)
@@ -141,7 +141,12 @@ public static class DevWorkflowRulePolicyResolver
 }
 
 /// <summary>Where a rule set applies, with both axes present. An EMPTY axis matches everything.</summary>
-public sealed record DevWorkflowRuleSetScope(IReadOnlyList<Guid> ProjectIds, IReadOnlyList<string> NodeTypes);
+public sealed class DevWorkflowRuleSetScope
+{
+    public required IReadOnlyList<Guid> ProjectIds { get; init; }
+
+    public required IReadOnlyList<string> NodeTypes { get; init; }
+}
 
 /// <summary>
 ///     One rule set as a node-run records it: which document applied, under what name, at which exact text — and that

@@ -25,23 +25,47 @@ public interface INodeAuthService
     Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken);
 }
 
-public sealed record NodeAuthStatus(bool SetupRequired, bool Authenticated);
+public sealed class NodeAuthStatus
+{
+    public required bool SetupRequired { get; init; }
+
+    public required bool Authenticated { get; init; }
+}
 
 /// <summary>
-///     A token-issuing outcome. <paramref name="LockedOutRetryAfterSeconds" /> is set only on a login that Identity
+///     A token-issuing outcome. <see cref="LockedOutRetryAfterSeconds" /> is set only on a login that Identity
 ///     refused because the account is locked out, and carries the whole seconds still left on that lockout (at least
 ///     one). Every other failure leaves it <c>null</c>, so the transport cannot accidentally tell a wrong password
 ///     apart from a locked account.
 /// </summary>
-public sealed record NodeAuthTokenResult(
-    bool Succeeded,
-    string? AccessToken,
-    DateTime? AccessTokenExpiresAtUtc,
-    string? RefreshToken,
-    DateTime? RefreshTokenExpiresAtUtc,
-    int? LockedOutRetryAfterSeconds = null);
+public sealed class NodeAuthTokenResult
+{
+    public required bool Succeeded { get; init; }
 
-public sealed record NodeSetupResult(bool Succeeded, bool AlreadyInitialized, IReadOnlyList<string> Errors);
+    public required string? AccessToken { get; init; }
 
-public sealed record NodePasswordChangeResult(bool Succeeded, IReadOnlyList<string> Errors);
+    public required DateTime? AccessTokenExpiresAtUtc { get; init; }
+
+    public required string? RefreshToken { get; init; }
+
+    public required DateTime? RefreshTokenExpiresAtUtc { get; init; }
+
+    public int? LockedOutRetryAfterSeconds { get; init; }
+}
+
+public sealed class NodeSetupResult
+{
+    public required bool Succeeded { get; init; }
+
+    public required bool AlreadyInitialized { get; init; }
+
+    public required IReadOnlyList<string> Errors { get; init; }
+}
+
+public sealed class NodePasswordChangeResult
+{
+    public required bool Succeeded { get; init; }
+
+    public required IReadOnlyList<string> Errors { get; init; }
+}
 

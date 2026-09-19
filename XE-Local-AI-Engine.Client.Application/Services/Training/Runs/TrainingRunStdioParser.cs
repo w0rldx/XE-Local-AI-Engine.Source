@@ -18,21 +18,36 @@ public enum TrainingStdioEventKind
 ///     One parsed stdio line. Fields are shared across kinds rather than split into a type per event — the protocol is
 ///     seven flat messages, and a hierarchy would cost more than it explains.
 /// </summary>
-public sealed record TrainingStdioEvent(
-    TrainingStdioEventKind Kind,
-    int? ContractVersion = null,
-    string? Phase = null,
-    int? Step = null,
-    int? TotalSteps = null,
-    double? Epoch = null,
-    double? Loss = null,
-    double? LearningRate = null,
-    long? VramBytes = null,
-    string? ArtifactKind = null,
-    string? Path = null,
-    string? Category = null,
-    string? Message = null,
-    bool Cancelled = false);
+public sealed class TrainingStdioEvent
+{
+    public required TrainingStdioEventKind Kind { get; init; }
+
+    public int? ContractVersion { get; init; }
+
+    public string? Phase { get; init; }
+
+    public int? Step { get; init; }
+
+    public int? TotalSteps { get; init; }
+
+    public double? Epoch { get; init; }
+
+    public double? Loss { get; init; }
+
+    public double? LearningRate { get; init; }
+
+    public long? VramBytes { get; init; }
+
+    public string? ArtifactKind { get; init; }
+
+    public string? Path { get; init; }
+
+    public string? Category { get; init; }
+
+    public string? Message { get; init; }
+
+    public bool Cancelled { get; init; }
+}
 
 /// <summary>
 ///     Parses the trainer's JSON-lines protocol out of a stream that is NOT clean.
@@ -69,23 +84,32 @@ public static class TrainingRunStdioParser
 
             return name.GetString() switch
             {
-                "handshake" => new TrainingStdioEvent(TrainingStdioEventKind.Handshake, ReadInt(root, "contractVersion")),
-                "phase" => new TrainingStdioEvent(TrainingStdioEventKind.Phase, Phase: ReadString(root, "phase")),
-                "progress" => new TrainingStdioEvent(TrainingStdioEventKind.Progress,
-                    Step: ReadInt(root, "step"),
-                    TotalSteps: ReadInt(root, "totalSteps"),
-                    Epoch: ReadDouble(root, "epoch"),
-                    Loss: ReadDouble(root, "loss"),
-                    LearningRate: ReadDouble(root, "lr"),
-                    VramBytes: ReadLong(root, "vramBytes")),
-                "heartbeat" => new TrainingStdioEvent(TrainingStdioEventKind.Heartbeat, Phase: ReadString(root, "phase")),
-                "artifact" => new TrainingStdioEvent(TrainingStdioEventKind.Artifact,
-                    ArtifactKind: ReadString(root, "kind"),
-                    Path: ReadString(root, "path")),
-                "done" => new TrainingStdioEvent(TrainingStdioEventKind.Done, Cancelled: ReadBool(root, "cancelled")),
-                "error" => new TrainingStdioEvent(TrainingStdioEventKind.Error,
-                    Category: ReadString(root, "category"),
-                    Message: ReadString(root, "message")),
+                "handshake" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Handshake, ContractVersion = ReadInt(root, "contractVersion") },
+                "phase" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Phase, Phase = ReadString(root, "phase") },
+                "progress" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Progress,
+                    Step = ReadInt(root, "step"),
+                    TotalSteps = ReadInt(root, "totalSteps"),
+                    Epoch = ReadDouble(root, "epoch"),
+                    Loss = ReadDouble(root, "loss"),
+                    LearningRate = ReadDouble(root, "lr"),
+                    VramBytes = ReadLong(root, "vramBytes")
+                },
+                "heartbeat" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Heartbeat, Phase = ReadString(root, "phase") },
+                "artifact" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Artifact,
+                    ArtifactKind = ReadString(root, "kind"),
+                    Path = ReadString(root, "path")
+                },
+                "done" => new TrainingStdioEvent { Kind = TrainingStdioEventKind.Done, Cancelled = ReadBool(root, "cancelled") },
+                "error" => new TrainingStdioEvent
+                {
+                    Kind = TrainingStdioEventKind.Error,
+                    Category = ReadString(root, "category"),
+                    Message = ReadString(root, "message")
+                },
                 _ => null
             };
         }

@@ -227,18 +227,21 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             var refusal = timedOutAfterSeconds is null ? DevWorkflowFailureClasses.ToolCommandFailed : DevWorkflowFailureClasses.Timeout;
             var failureClass = passed ? null : refusal;
 
-            return new DevWorkflowToolRun(passed,
-                failureClass,
-                verdict.FailureCode,
-                timedOutAfterSeconds is { } seconds
+            return new DevWorkflowToolRun
+            {
+                Passed = passed,
+                FailureClass = failureClass,
+                FailureCode = verdict.FailureCode,
+                SanitizedReason = timedOutAfterSeconds is { } seconds
                     ? $"This node run did not finish its validation commands within the {seconds} seconds it was given."
                     : verdict.FailureDetail,
-                evidence.Length,
-                evidence.Count(static command => !command.Completed || command.ExitCode != 0),
-                tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
-                tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
-                Compose(verdict, profile, session, nodeRun, evidence, overlay.BasedOn),
-                secrets.Paths);
+                CommandsRun = evidence.Length,
+                CommandsFailed = evidence.Count(static command => !command.Completed || command.ExitCode != 0),
+                TestsPassed = tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
+                TestsFailed = tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
+                Report = Compose(verdict, profile, session, nodeRun, evidence, overlay.BasedOn),
+                SecretPaths = secrets.Paths
+            };
         }
     }
 
@@ -553,16 +556,19 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     }
 
     private static DevWorkflowToolRun Refused(string failureClass, string sanitizedReason, CollectingWorkspaceSecretsSink secrets) =>
-        new(Passed: false,
-            failureClass,
-            FailureCode: null,
-            sanitizedReason,
-            CommandsRun: 0,
-            CommandsFailed: 0,
-            TestsPassed: null,
-            TestsFailed: null,
-            ReadOnlyMemory<byte>.Empty,
-            secrets.Paths);
+        new()
+        {
+            Passed = false,
+            FailureClass = failureClass,
+            FailureCode = null,
+            SanitizedReason = sanitizedReason,
+            CommandsRun = 0,
+            CommandsFailed = 0,
+            TestsPassed = null,
+            TestsFailed = null,
+            Report = ReadOnlyMemory<byte>.Empty,
+            SecretPaths = secrets.Paths
+        };
 
     /// <summary>
     ///     The workflow's credential sink: it collects, and the dispatcher's tick records. Nothing detached writes.

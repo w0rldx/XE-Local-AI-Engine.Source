@@ -31,7 +31,7 @@ public sealed class BenchmarkTaskItemServiceTests
                  .Returns(call => Record(call.Arg<BenchmarkTaskItemInput>()));
         var service = new BenchmarkTaskItemService(store);
 
-        _ = await service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("  sort the list  "));
+        _ = await service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft { Prompt = "  sort the list  " });
 
         var input = AssertEx.NotNull(captured);
         AssertEx.Equal("  sort the list  ", JsonSerializer.Deserialize<string>(input.PromptJson.Span), "The prompt is stored verbatim, whitespace included.");
@@ -55,7 +55,7 @@ public sealed class BenchmarkTaskItemServiceTests
 
         _ = await service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
-            new BenchmarkTaskItemDraft("sort", ReferenceAnswer: " [1,2,3] ", VerifierConfig: config.RootElement));
+            new BenchmarkTaskItemDraft { Prompt = "sort", ReferenceAnswer = " [1,2,3] ", VerifierConfig = config.RootElement });
 
         var input = AssertEx.NotNull(captured);
         AssertEx.Equal("[1,2,3]", BenchmarkTaskItemService.DecodeOptional(input.ReferenceAnswerJson));
@@ -76,7 +76,7 @@ public sealed class BenchmarkTaskItemServiceTests
                                     .ToArray());
         var service = new BenchmarkTaskItemService(store);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("one more")));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft { Prompt = "one more" }));
 
         _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
             Arg.Any<CancellationToken>());
@@ -101,7 +101,7 @@ public sealed class BenchmarkTaskItemServiceTests
                      "invented"
                  })
         {
-            _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("probe", kind)),
+            _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft { Prompt = "probe", Kind = kind }),
                 $"'{kind}' must be refused for now.");
         }
 
@@ -116,8 +116,8 @@ public sealed class BenchmarkTaskItemServiceTests
         _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<BenchmarkTaskItemRecord>());
         var service = new BenchmarkTaskItemService(store);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("   ")));
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, Guid.NewGuid(), expectedVersion: 1, new BenchmarkTaskItemDraft("")));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft { Prompt = "   " }));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, Guid.NewGuid(), expectedVersion: 1, new BenchmarkTaskItemDraft { Prompt = "" }));
     }
 
     /// <summary>
@@ -136,7 +136,7 @@ public sealed class BenchmarkTaskItemServiceTests
 
         var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
-            new BenchmarkTaskItemDraft("sort", VerifierConfig: config.RootElement)));
+            new BenchmarkTaskItemDraft { Prompt = "sort", VerifierConfig = config.RootElement }));
 
         AssertEx.Contains(failure.Message, "correctnes", message: "The refusal names the criterion that matched nothing.");
         _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
@@ -157,7 +157,7 @@ public sealed class BenchmarkTaskItemServiceTests
 
         var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
             expectedProjectVersion: 1,
-            new BenchmarkTaskItemDraft("sort", VerifierConfig: config.RootElement)));
+            new BenchmarkTaskItemDraft { Prompt = "sort", VerifierConfig = config.RootElement }));
 
         AssertEx.Contains(failure.Message, "correctness");
         _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
@@ -177,7 +177,7 @@ public sealed class BenchmarkTaskItemServiceTests
         var service = new BenchmarkTaskItemService(store);
         using var config = JsonDocument.Parse("""{"correctness":{"expected":"[1,2,3]"}}""");
 
-        _ = await service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("sort", VerifierConfig: config.RootElement));
+        _ = await service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft { Prompt = "sort", VerifierConfig = config.RootElement });
 
         AssertEx.Equal("""{"correctness":{"expected":"[1,2,3]"}}""",
             Encoding.UTF8.GetString(AssertEx.NotNull(captured).VerifierConfigJson!.Value.Span));

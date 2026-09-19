@@ -62,18 +62,21 @@ public sealed class ModelFitMapperMetricsTests
 
     private static InferenceBenchmarkMetrics Metrics()
     {
-        return new InferenceBenchmarkMetrics(Success: true,
-            FailureReason: null,
-            TokensPerSecond: 42d,
-            PpTokensPerSecond: 800d,
-            TtftMs: 310d,
-            TotalLatencyMs: 12000d,
-            CacheHitRate: 0.5d,
-            ToolLoopMs: 900d,
-            VramLoadBytes: 20_000_000_000,
-            VramAfterBytes: 19_000_000_000,
-            Runs: 5,
-            RawJson: null,
-            Role: "Chat");
+        return new InferenceBenchmarkMetrics
+        {
+            Success = true,
+            FailureReason = null,
+            TokensPerSecond = 42d,
+            PpTokensPerSecond = 800d,
+            TtftMs = 310d,
+            TotalLatencyMs = 12000d,
+            CacheHitRate = 0.5d,
+            ToolLoopMs = 900d,
+            VramLoadBytes = 20_000_000_000,
+            VramAfterBytes = 19_000_000_000,
+            Runs = 5,
+            RawJson = null,
+            Role = "Chat"
+        };
     }
 }

@@ -437,14 +437,16 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     {
         var runtime = Path.Combine(_root, "runtime");
         Directory.CreateDirectory(runtime);
-        return new DevelopmentWorkspaceSession(ProjectId,
-            TaskId,
-            AttemptId: Guid.NewGuid(),
-            "BASECOMMIT",
-            "IDENTITY",
-            workspace,
-            runtime,
-            new SandboxHandle
+        return new DevelopmentWorkspaceSession
+        {
+            ProjectId = ProjectId,
+            TaskId = TaskId,
+            AttemptId = Guid.NewGuid(),
+            BaseCommit = "BASECOMMIT",
+            RepositoryIdentityHash = "IDENTITY",
+            HostWorktreePath = workspace,
+            RuntimePath = runtime,
+            SandboxHandle = new SandboxHandle
             {
                 ProviderName = "test",
                 SandboxId = "sandbox-1",
@@ -458,7 +460,8 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
                 },
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = 1
-            });
+            }
+        };
     }
 
     private static async Task<string> StatusAsync(string workspace)

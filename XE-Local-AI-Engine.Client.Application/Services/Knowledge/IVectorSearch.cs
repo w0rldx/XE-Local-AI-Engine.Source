@@ -45,7 +45,14 @@ public interface IVectorSearch
 }
 
 /// <summary>One semantic match: the chunk, its owning document, and its cosine-similarity score (higher is better).</summary>
-/// <param name="ChunkId">Stable chunk identifier.</param>
-/// <param name="DocumentId">Owning document identifier.</param>
-/// <param name="Score">Cosine similarity in [-1, 1]; higher ranks higher.</param>
-public sealed record VectorSearchHit(Guid ChunkId, Guid DocumentId, float Score);
+public sealed class VectorSearchHit
+{
+    /// <summary>Stable chunk identifier.</summary>
+    public required Guid ChunkId { get; init; }
+
+    /// <summary>Owning document identifier.</summary>
+    public required Guid DocumentId { get; init; }
+
+    /// <summary>Cosine similarity in [-1, 1]; higher ranks higher.</summary>
+    public required float Score { get; init; }
+}

@@ -145,23 +145,28 @@ public sealed class NodeAdminMcpToolsTests
     {
         var harness = new Harness();
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("model-a"));
-        harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus(
-            new LlamaCppInstalledRuntimeView("b7000", "runtime.zip", "cuda", 10, true, "/private/runtime", "secret-commit", 1, "requested", 2),
-            "b7001",
-            "b7002",
-            true,
-            false,
-            2,
-            CheckedAtUtc: null));
-        harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus(3,
-            "downloading",
-            "cuda",
-            "b7001",
-            10,
-            20,
-            1,
-            3,
-            "sanitized failure"));
+        harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus
+        {
+            Installed = new LlamaCppInstalledRuntimeView { Tag = "b7000", Asset = "runtime.zip", Variant = "cuda", InstalledAtUnixTimeMilliseconds = 10, IsSourceBuild = true, SourceRepository = "/private/runtime", SourceCommit = "secret-commit", SourceRevisionMode = 1, SourceRequestedCommit = "requested", SourceSelection = 2 },
+            RecommendedTag = "b7001",
+            UpstreamLatestTag = "b7002",
+            UpdateAvailable = true,
+            IsOffline = false,
+            RunningProcessCount = 2,
+            CheckedAtUtc = null
+        });
+        harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus
+        {
+            Sequence = 3,
+            Phase = "downloading",
+            Variant = "cuda",
+            Tag = "b7001",
+            CompletedBytes = 10,
+            TotalBytes = 20,
+            StepIndex = 1,
+            StepCount = 3,
+            SanitizedError = "sanitized failure"
+        });
 
         var node = await harness.Tools.GetStatusAsync(CancellationToken.None);
         var runtime = await harness.Tools.GetRuntimeStatusAsync(CancellationToken.None);
@@ -187,18 +192,21 @@ public sealed class NodeAdminMcpToolsTests
     {
         var harness = new Harness();
         var operationId = Guid.NewGuid();
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(true, "cuda", LlamaCppRuntimeAdministrationFailure.None, null));
-        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket("repo/model:Q4_K_M", false, operationId));
-        harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus("repo/model:Q4_K_M",
-            GgufDownloadPhase.Running,
-            10,
-            20,
-            null,
-            operationId));
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult { Accepted = true, Variant = "cuda", Failure = LlamaCppRuntimeAdministrationFailure.None, DisplayMessage = null });
+        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket { ModelName = "repo/model:Q4_K_M", AlreadyInFlight = false, OperationId = operationId });
+        harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus
+        {
+            ModelName = "repo/model:Q4_K_M",
+            Phase = GgufDownloadPhase.Running,
+            CompletedBytes = 10,
+            TotalBytes = 20,
+            SanitizedError = null,
+            OperationId = operationId
+        });
         harness.Download.Cancel("repo/model:Q4_K_M").Returns(true);
-        harness.Models.DeleteAsync("repo/model:Q4_K_M", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult(true, "repo/model:Q4_K_M", true));
+        harness.Models.DeleteAsync("repo/model:Q4_K_M", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult { Succeeded = true, ModelName = "repo/model:Q4_K_M", Deleted = true });
         harness.Models.SelectDefaultAsync("repo/model:Q4_K_M", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>())
-               .Returns(new LocalModelSelectionResult(true, "repo/model:Q4_K_M", "old"));
+               .Returns(new LocalModelSelectionResult { Succeeded = true, SelectedModelName = "repo/model:Q4_K_M", PreviousModelName = "old" });
 
         AssertEx.Equal("accepted", (await harness.Tools.StartRuntimeAcquisitionAsync(CancellationToken.None)).Status);
         AssertEx.Equal(McpAdminToolFailureCodes.InvalidVariant,
@@ -221,7 +229,7 @@ public sealed class NodeAdminMcpToolsTests
         var harness = new Harness();
         var requests = new List<GgufModelRequest>();
         harness.Download.StartAsync(Arg.Do<GgufModelRequest>(requests.Add), Arg.Any<CancellationToken>())
-               .Returns(new GgufDownloadTicket("repo/model:Q4_K_M", false, Guid.NewGuid()));
+               .Returns(new GgufDownloadTicket { ModelName = "repo/model:Q4_K_M", AlreadyInFlight = false, OperationId = Guid.NewGuid() });
 
         _ = await harness.Tools.StartModelPullAsync("repo/model", CancellationToken.None, quant: "Q4_K_M");
         _ = await harness.Tools.StartModelPullAsync("repo/model", CancellationToken.None, quant: "Q4_K_M", include_projector: false);
@@ -235,20 +243,23 @@ public sealed class NodeAdminMcpToolsTests
     public async Task MutationTools_MapApplicationRejectionsToStableFailureCodes()
     {
         var harness = new Harness();
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(false,
-            "cuda",
-            LlamaCppRuntimeAdministrationFailure.Busy,
-            "Runtime busy."));
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult
+        {
+            Accepted = false,
+            Variant = "cuda",
+            Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+            DisplayMessage = "Runtime busy."
+        });
         harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>())
                .Returns<Task<GgufDownloadTicket>>(_ => throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                    "Model source not found."));
         harness.Models.DeleteAsync("bad", Arg.Any<CancellationToken>()).Returns(
-            new LocalModelDeletionResult(false, null, false, LocalModelAdministrationFailureCodes.InvalidModelName, "Invalid model."));
+            new LocalModelDeletionResult { Succeeded = false, ModelName = null, Deleted = false, FailureCode = LocalModelAdministrationFailureCodes.InvalidModelName, DisplayMessage = "Invalid model." });
         harness.Models.SelectDefaultAsync("missing", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>()).Returns(
-            new LocalModelSelectionResult(false, null, null, LocalModelAdministrationFailureCodes.ModelNotInstalled, "Model not installed."));
+            new LocalModelSelectionResult { Succeeded = false, SelectedModelName = null, PreviousModelName = null, FailureCode = LocalModelAdministrationFailureCodes.ModelNotInstalled, DisplayMessage = "Model not installed." });
         harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>()).Returns(NodeSettingsAdministrationResult.Rejected(new StoredNodeSettings(),
         [
-            new NodeSettingsValidationError(NodeSettingsField.LlamaMaxLoadedProcesses, "Invalid process count.")
+            new NodeSettingsValidationError { Field = NodeSettingsField.LlamaMaxLoadedProcesses, Message = "Invalid process count." }
         ]));
 
         AssertEx.Equal(McpAdminToolFailureCodes.Busy,
@@ -279,12 +290,15 @@ public sealed class NodeAdminMcpToolsTests
     public async Task GetModelPull_MapsEveryTerminalCoordinatorFailureToStableWireCode(string internalCode, string expectedCode)
     {
         var harness = new Harness();
-        harness.Download.GetStatus("model").Returns(new GgufDownloadStatus("model",
-            GgufDownloadPhase.Failed,
-            1,
-            2,
-            "safe failure",
-            ErrorCode: internalCode));
+        harness.Download.GetStatus("model").Returns(new GgufDownloadStatus
+        {
+            ModelName = "model",
+            Phase = GgufDownloadPhase.Failed,
+            CompletedBytes = 1,
+            TotalBytes = 2,
+            SanitizedError = "safe failure",
+            ErrorCode = internalCode
+        });
 
         var result = await harness.Tools.GetModelPull("model");
 
@@ -352,7 +366,7 @@ public sealed class NodeAdminMcpToolsTests
         NodeSettingsAgenticPatch? capturedPatch = null;
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("current"));
         harness.Settings.ApplyAgenticPatchAsync(Arg.Do<NodeSettingsAgenticPatch>(patch => capturedPatch = patch), Arg.Any<CancellationToken>())
-               .Returns(new NodeSettingsAdministrationResult(true, new StoredNodeSettings(), []));
+               .Returns(new NodeSettingsAdministrationResult { Updated = true, Settings = new StoredNodeSettings(), ValidationErrors = [] });
         var record = AgentRecord();
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync("agent", Arg.Any<CancellationToken>()).Returns(record);
@@ -465,14 +479,17 @@ public sealed class NodeAdminMcpToolsTests
                    Version = 2
                });
         var tooLong = new string('x', ApplicationGenerationProvenance.MaxModelLength + 1);
-        var httpError = ApplicationGenerationProvenance.Validate(new GenerationMetadataInput(tooLong,
-            DraftMode.Create,
-            null,
-            null,
-            null,
-            0.5,
-            1,
-            null));
+        var httpError = ApplicationGenerationProvenance.Validate(new GenerationMetadataInput
+        {
+            Model = tooLong,
+            Mode = DraftMode.Create,
+            UserBrief = null,
+            Rationale = null,
+            Assumptions = null,
+            Confidence = 0.5,
+            GeneratedAtUtc = 1,
+            DraftContentHash = null
+        });
 
         var rejected = await harness.Tools.CreateAgentAsync("Agent",
             "Instructions",
@@ -586,34 +603,43 @@ public sealed class NodeAdminMcpToolsTests
         var record = AgentRecord();
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("model"));
         harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>())
-               .Returns(new NodeSettingsAdministrationResult(true, new StoredNodeSettings(), []));
-        harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus(Installed: null,
-            RecommendedTag: "b1",
-            UpstreamLatestTag: null,
-            UpdateAvailable: false,
-            IsOffline: false,
-            RunningProcessCount: 0,
-            CheckedAtUtc: null));
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(true, "cpu", LlamaCppRuntimeAdministrationFailure.None, null));
-        harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus(1,
-            "idle",
-            null,
-            null,
-            null,
-            null,
-            0,
-            0,
-            null));
-        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket("repo/model:Q4_K_M", false, Guid.NewGuid()));
-        harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus("repo/model:Q4_K_M",
-            GgufDownloadPhase.Running,
-            1,
-            2,
-            null));
+               .Returns(new NodeSettingsAdministrationResult { Updated = true, Settings = new StoredNodeSettings(), ValidationErrors = [] });
+        harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus
+        {
+            Installed = null,
+            RecommendedTag = "b1",
+            UpstreamLatestTag = null,
+            UpdateAvailable = false,
+            IsOffline = false,
+            RunningProcessCount = 0,
+            CheckedAtUtc = null
+        });
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult { Accepted = true, Variant = "cpu", Failure = LlamaCppRuntimeAdministrationFailure.None, DisplayMessage = null });
+        harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus
+        {
+            Sequence = 1,
+            Phase = "idle",
+            Variant = null,
+            Tag = null,
+            CompletedBytes = null,
+            TotalBytes = null,
+            StepIndex = 0,
+            StepCount = 0,
+            SanitizedError = null
+        });
+        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket { ModelName = "repo/model:Q4_K_M", AlreadyInFlight = false, OperationId = Guid.NewGuid() });
+        harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus
+        {
+            ModelName = "repo/model:Q4_K_M",
+            Phase = GgufDownloadPhase.Running,
+            CompletedBytes = 1,
+            TotalBytes = 2,
+            SanitizedError = null
+        });
         harness.Download.Cancel("repo/model:Q4_K_M").Returns(true);
-        harness.Models.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult(true, "repo/model:Q4_K_M", true));
+        harness.Models.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult { Succeeded = true, ModelName = "repo/model:Q4_K_M", Deleted = true });
         harness.Models.SelectDefaultAsync(Arg.Any<string>(), LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>())
-               .Returns(new LocalModelSelectionResult(true, "repo/model:Q4_K_M", "old"));
+               .Returns(new LocalModelSelectionResult { Succeeded = true, SelectedModelName = "repo/model:Q4_K_M", PreviousModelName = "old" });
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
@@ -774,7 +800,7 @@ public sealed class NodeAdminMcpToolsTests
     {
         var successLogger = new ThrowingLogger();
         var successful = new Harness(logger: successLogger);
-        successful.Models.DeleteAsync("model", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult(true, "model", true));
+        successful.Models.DeleteAsync("model", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult { Succeeded = true, ModelName = "model", Deleted = true });
 
         var result = await successful.Tools.DeleteModelAsync("model", CancellationToken.None);
 
@@ -981,7 +1007,9 @@ public sealed class NodeAdminMcpToolsTests
         };
 
     private static DevWorkflowRunDetail RunDetail() =>
-        new(new DevWorkflowRunSnapshot
+        new()
+        {
+            Run = new DevWorkflowRunSnapshot
         {
             Id = Guid.NewGuid(),
             WorkItemId = Guid.NewGuid(),
@@ -1000,9 +1028,10 @@ public sealed class NodeAdminMcpToolsTests
             UpdatedAtUtc = 10,
             Version = 1
         },
-            [NodeRun("plan", DevWorkflowNodeRunStatus.Succeeded), NodeRun("build", DevWorkflowNodeRunStatus.Running)],
-            1,
-            null);
+            NodeRuns = [NodeRun("plan", DevWorkflowNodeRunStatus.Succeeded), NodeRun("build", DevWorkflowNodeRunStatus.Running)],
+            PendingDecisionCount = 1,
+            BlockingGateNodeRunId = null
+        };
 
     // The switch throws on an unmapped member, and a validation error is the only thing that reaches it — so a new
     // whitelisted setting whose arm was forgotten turns an operator's rejection into a 500 on the one path that was
@@ -1075,7 +1104,7 @@ public sealed class NodeAdminMcpToolsTests
         };
 
     private static NodeSettingsAgenticView SettingsView(string model) =>
-        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null, null);
+        new() { DefaultModelName = model, EnableTools = null, ToolCapableModels = null, HuggingFaceDefaultQuant = null, LlamaMaxLoadedProcesses = null, LlamaIdleTimeToLiveSeconds = null, KeepModelWarmEnabled = null, KeepModelWarmModelName = null, KeepModelWarmIntervalSeconds = null, MaxMessageRequestTimeoutSeconds = 600, ChatCacheReuse = null, SpeculativeMode = null, SpeculativeDraftModelName = null, SpeculativeDraftMaxTokens = null, SpeculativeDraftGpuLayers = null, KvCacheType = null, RerankerModelName = null, AutoEffortFastModelName = null };
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>
         typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)

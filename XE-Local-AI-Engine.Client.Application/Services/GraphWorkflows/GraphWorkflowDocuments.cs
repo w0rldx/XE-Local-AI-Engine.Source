@@ -5,7 +5,12 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>One upstream node's full output document, keyed by the node it came from.</summary>
-internal sealed record GraphWorkflowUpstreamDocument(string NodeKey, string OutputDocumentJson);
+internal sealed class GraphWorkflowUpstreamDocument
+{
+    public required string NodeKey { get; init; }
+
+    public required string OutputDocumentJson { get; init; }
+}
 
 /// <summary>
 ///     An output document that would not fit. Its own type rather than a return code because every caller does the same
@@ -63,9 +68,9 @@ internal static class GraphWorkflowDocuments
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(node);
 
-        var unrouted = Serialize(new OutputDocument(status, attempt, Branch: null, output));
+        var unrouted = Serialize(new OutputDocument { Status = status, Attempt = attempt, Branch = null, Output = output });
         var branch = BranchOf(graph, node, unrouted);
-        var document = branch is null ? unrouted : Serialize(new OutputDocument(status, attempt, branch, output));
+        var document = branch is null ? unrouted : Serialize(new OutputDocument { Status = status, Attempt = attempt, Branch = branch, Output = output });
 
         // UTF-8 bytes, because that is what the column stores — a character count would let a document of astral-plane
         // text through at four times the cap it was measured against.
@@ -99,12 +104,12 @@ internal static class GraphWorkflowDocuments
             1 => ValueOf(upstream[0].OutputDocumentJson),
             _ => upstreamElement
         };
-        return Serialize(new InputDocument(new RunInput(ValueOf(runInputJson)), upstreamElement, input));
+        return Serialize(new InputDocument { Run = new RunInput { Input = ValueOf(runInputJson) }, Upstream = upstreamElement, Input = input });
     }
 
     /// <summary><c>Start</c>: the run's own input, handed to everything downstream.</summary>
     public static JsonElement StartOutput(string? runInputJson) =>
-        JsonSerializer.SerializeToElement(new StartOutputPayload(ValueOf(runInputJson)), JsonOptions);
+        JsonSerializer.SerializeToElement(new StartOutputPayload { Input = ValueOf(runInputJson) }, JsonOptions);
 
     /// <summary>
     ///     <c>Condition</c> and <c>Parallel</c>: a verbatim pass-through of the predecessor's <c>output</c>.
@@ -146,7 +151,7 @@ internal static class GraphWorkflowDocuments
     ///     </para>
     /// </summary>
     public static JsonElement PauseOutput(GraphWorkflowDecisionKind decision, string? comment, JsonElement? payload) =>
-        JsonSerializer.SerializeToElement(new PauseOutputPayload(decision.ToString(), comment, payload ?? NullValue), JsonOptions);
+        JsonSerializer.SerializeToElement(new PauseOutputPayload { Decision = decision.ToString(), Comment = comment, Payload = payload ?? NullValue }, JsonOptions);
 
     /// <summary>
     ///     <c>Tool</c>: the invocation's answer under <c>result</c>.
@@ -158,9 +163,12 @@ internal static class GraphWorkflowDocuments
     ///     </para>
     /// </summary>
     public static JsonElement ToolOutput(string? result) =>
-        JsonSerializer.SerializeToElement(new ToolOutputPayload(Read(result) is { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured
+        JsonSerializer.SerializeToElement(new ToolOutputPayload
+        {
+            Result = Read(result) is { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured
                 ? structured
-                : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)),
+                : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)
+        },
             JsonOptions);
 
     /// <summary>
@@ -202,7 +210,7 @@ internal static class GraphWorkflowDocuments
         var result = resultPath is null
             ? input ?? NullValue
             : Resolve(input, resultPath) ?? NullValue;
-        return JsonSerializer.SerializeToElement(new EndOutputPayload(outcome, result), JsonOptions);
+        return JsonSerializer.SerializeToElement(new EndOutputPayload { Outcome = outcome, Result = result }, JsonOptions);
     }
 
     /// <summary>
@@ -270,17 +278,54 @@ internal static class GraphWorkflowDocuments
     ///     The envelope every kind produces. <c>branch</c> is written even when it is null: a reader asking which way
     ///     the run went must be able to tell "no branch fired" from "this document predates branches".
     /// </summary>
-    private sealed record OutputDocument(string Status, int Attempt, string? Branch, JsonElement Output);
+    private sealed record OutputDocument
+    {
+        public required string Status { get; init; }
 
-    private sealed record InputDocument(RunInput Run, JsonElement Upstream, JsonElement Input);
+        public required int Attempt { get; init; }
 
-    private sealed record RunInput(JsonElement Input);
+        public required string? Branch { get; init; }
 
-    private sealed record StartOutputPayload(JsonElement Input);
+        public required JsonElement Output { get; init; }
+    }
 
-    private sealed record ToolOutputPayload(JsonElement Result);
+    private sealed record InputDocument
+    {
+        public required RunInput Run { get; init; }
 
-    private sealed record EndOutputPayload(string Outcome, JsonElement Result);
+        public required JsonElement Upstream { get; init; }
 
-    private sealed record PauseOutputPayload(string Decision, string? Comment, JsonElement Payload);
+        public required JsonElement Input { get; init; }
+    }
+
+    private sealed record RunInput
+    {
+        public required JsonElement Input { get; init; }
+    }
+
+    private sealed record StartOutputPayload
+    {
+        public required JsonElement Input { get; init; }
+    }
+
+    private sealed record ToolOutputPayload
+    {
+        public required JsonElement Result { get; init; }
+    }
+
+    private sealed record EndOutputPayload
+    {
+        public required string Outcome { get; init; }
+
+        public required JsonElement Result { get; init; }
+    }
+
+    private sealed record PauseOutputPayload
+    {
+        public required string Decision { get; init; }
+
+        public required string? Comment { get; init; }
+
+        public required JsonElement Payload { get; init; }
+    }
 }

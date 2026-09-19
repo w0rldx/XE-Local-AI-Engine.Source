@@ -598,19 +598,22 @@ public sealed class InferenceProfileServiceTests
 
     private static InferenceBenchmarkMetrics SuccessMetrics()
     {
-        return new InferenceBenchmarkMetrics(Success: true,
-            FailureReason: null,
-            TokensPerSecond: 42d,
-            PpTokensPerSecond: 100d,
-            TtftMs: 50d,
-            TotalLatencyMs: 500d,
-            CacheHitRate: 0.8d,
-            ToolLoopMs: 30d,
-            VramLoadBytes: 1000,
-            VramAfterBytes: 900,
-            Runs: 1,
-            RawJson: "raw-metrics",
-            DiagnosticsJson: """{"vram":{"globalFreeBytes":1000,"processBudgetBytes":1200}}""");
+        return new InferenceBenchmarkMetrics
+        {
+            Success = true,
+            FailureReason = null,
+            TokensPerSecond = 42d,
+            PpTokensPerSecond = 100d,
+            TtftMs = 50d,
+            TotalLatencyMs = 500d,
+            CacheHitRate = 0.8d,
+            ToolLoopMs = 30d,
+            VramLoadBytes = 1000,
+            VramAfterBytes = 900,
+            Runs = 1,
+            RawJson = "raw-metrics",
+            DiagnosticsJson = """{"vram":{"globalFreeBytes":1000,"processBudgetBytes":1200}}"""
+        };
     }
 
     private static HardwareProfile NvidiaProfile(long? availableVramBytes)
@@ -870,11 +873,17 @@ public sealed class InferenceProfileServiceTests
             ProfileStore.ListAsync(Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult<IReadOnlyList<InferenceProfileRecord>>([]));
             LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileFingerprintInput>(), Arg.Any<CancellationToken>())
-                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
-                                               "fingerprint")));
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint
+                                           {
+                                               Version = Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                               Value = "fingerprint"
+                                           }));
             LaunchPolicyFingerprintProvider.CaptureAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint(Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
-                                               "fingerprint")));
+                                           .Returns(Task.FromResult(new LaunchPolicyFingerprint
+                                           {
+                                               Version = Client.Services.Inference.LaunchPolicyFingerprintProvider.CurrentVersion,
+                                               Value = "fingerprint"
+                                           }));
             LaunchPolicyFingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(),
                                                Arg.Any<string>(),
                                                Arg.Any<CancellationToken>())

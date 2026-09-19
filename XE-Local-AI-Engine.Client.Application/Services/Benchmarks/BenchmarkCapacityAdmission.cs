@@ -16,12 +16,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     budgets would let one phase hold that admission for twice the configured maximum. A phase therefore takes one
 ///     <see cref="BenchmarkWaitBudget" /> before its admission and both waits draw their retries from it.
 /// </remarks>
-/// <param name="MaxRetries">Re-decisions after the first rejection. Total decisions = <c>MaxRetries + 1</c>.</param>
-/// <param name="Interval">Delay between decisions. A fresh decision re-probes free VRAM, so the wait is not a spin.</param>
-public sealed record BenchmarkAdmissionRetry(int MaxRetries, TimeSpan Interval)
+public sealed class BenchmarkAdmissionRetry
 {
+    /// <summary>Re-decisions after the first rejection. Total decisions = <c>MaxRetries + 1</c>.</summary>
+    public required int MaxRetries { get; init; }
+
+    /// <summary>Delay between decisions. A fresh decision re-probes free VRAM, so the wait is not a spin.</summary>
+    public required TimeSpan Interval { get; init; }
+
     /// <summary>24 retries × 5 s ⇒ up to two minutes, which covers a large model's VRAM release with room to spare.</summary>
-    public static BenchmarkAdmissionRetry Default { get; } = new(MaxRetries: 24, TimeSpan.FromSeconds(5));
+    public static BenchmarkAdmissionRetry Default { get; } = new() { MaxRetries = 24, Interval = TimeSpan.FromSeconds(5) };
 
     /// <summary>The wall-clock wait the caller is told about when the budget is exhausted.</summary>
     public TimeSpan Budget => MaxRetries * Interval;
@@ -59,12 +63,18 @@ internal sealed class BenchmarkWaitBudget
 }
 
 /// <summary>The per-call identity carried into the admission log line and the caller-facing failure message.</summary>
-internal sealed record BenchmarkAdmissionContext(
-    Guid RunId,
-    string Phase,
-    int RequestedContextTokens,
-    string KvCacheType,
-    string RejectedMessage);
+internal sealed class BenchmarkAdmissionContext
+{
+    public required Guid RunId { get; init; }
+
+    public required string Phase { get; init; }
+
+    public required int RequestedContextTokens { get; init; }
+
+    public required string KvCacheType { get; init; }
+
+    public required string RejectedMessage { get; init; }
+}
 
 /// <summary>The one admission path both benchmark executors take, so the wait and the log line cannot diverge.</summary>
 internal static class BenchmarkCapacityAdmission

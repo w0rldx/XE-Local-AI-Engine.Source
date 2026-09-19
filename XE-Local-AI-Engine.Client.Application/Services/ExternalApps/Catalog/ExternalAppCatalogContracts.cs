@@ -234,7 +234,12 @@ public sealed record ExternalAppCatalogSnapshot(
 ///     validation failed and the provider fell back. Both members are <see langword="null" />-free on success
 ///     (<see cref="FailureMessage" /> is <see langword="null" />).
 /// </summary>
-public sealed record ExternalAppCatalogRefreshResult(ExternalAppCatalogSnapshot Snapshot, string? FailureMessage);
+public sealed class ExternalAppCatalogRefreshResult
+{
+    public required ExternalAppCatalogSnapshot Snapshot { get; init; }
+
+    public required string? FailureMessage { get; init; }
+}
 
 /// <summary>
 ///     Computes the canonical fingerprint of an <see cref="ApplicationManifest" /> — the value carried in

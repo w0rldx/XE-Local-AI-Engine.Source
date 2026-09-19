@@ -112,7 +112,7 @@ public sealed class SandboxedMcpStdioTransportTests
             Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
 
-        var request = transport.BuildCreateRequest(new AgentHomeOwnerIdentity("owner", "node"));
+        var request = transport.BuildCreateRequest(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
 
         AssertEx.Equal(SandboxIsolationMode.Filesystem, request.Isolation);
         AssertEx.Equal(SandboxNetworkPolicy.None, request.NetworkPolicy);
@@ -559,7 +559,7 @@ public sealed class SandboxedMcpStdioTransportTests
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity("owner", "node"));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
         }
     }
 }

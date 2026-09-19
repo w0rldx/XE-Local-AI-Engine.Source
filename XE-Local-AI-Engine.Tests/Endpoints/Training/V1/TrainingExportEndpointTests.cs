@@ -56,7 +56,7 @@ public sealed class TrainingExportEndpointTests
     {
         await using var context = new Context();
         _ = context.Exports.StartExportAsync(RunId, Arg.Any<TrainingExportRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(new TrainingExportStart(TrainingExportStartOutcome.Accepted));
+                   .Returns(new TrainingExportStart { Outcome = TrainingExportStartOutcome.Accepted });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/runs/{RunId}/exports", new
         {
@@ -76,7 +76,7 @@ public sealed class TrainingExportEndpointTests
     {
         await using var context = new Context();
         _ = context.Exports.StartExportAsync(RunId, Arg.Any<TrainingExportRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(new TrainingExportStart(TrainingExportStartOutcome.Busy, "Training or another export is already running."));
+                   .Returns(new TrainingExportStart { Outcome = TrainingExportStartOutcome.Busy, Reason = "Training or another export is already running." });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/runs/{RunId}/exports", new
         {
@@ -95,7 +95,7 @@ public sealed class TrainingExportEndpointTests
     {
         await using var context = new Context();
         _ = context.Exports.StartExportAsync(RunId, Arg.Any<TrainingExportRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(new TrainingExportStart(TrainingExportStartOutcome.UnsupportedQuantization, "not supported"));
+                   .Returns(new TrainingExportStart { Outcome = TrainingExportStartOutcome.UnsupportedQuantization, Reason = "not supported" });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/runs/{RunId}/exports", new
         {
@@ -186,7 +186,7 @@ public sealed class TrainingExportEndpointTests
         // FastEndpoints demands a JSON body and answers a bodyless re-run with 415.
         await using var context = new Context();
         _ = context.Exports.RunSmokeAsync(ArtifactId, Arg.Any<CancellationToken>())
-                   .Returns(new TrainedModelSmokeResult(TrainingArtifactSmokeState.Passed, Reason: null));
+                   .Returns(new TrainedModelSmokeResult { State = TrainingArtifactSmokeState.Passed, Reason = null });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/artifacts/{ArtifactId}/smoke");
 

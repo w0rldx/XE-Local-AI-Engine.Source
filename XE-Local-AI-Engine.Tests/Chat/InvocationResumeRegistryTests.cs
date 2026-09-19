@@ -374,12 +374,7 @@ public sealed class InvocationResumeRegistryTests
         var conversationId = Guid.NewGuid();
 
         var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
-        parked.PendingApproval = new InvocationApprovalState("approval-1", "Run a command", DateTimeOffset.UtcNow)
-        {
-            CallId = "call-7",
-            ToolName = "run_command",
-            SessionScopeEligible = true
-        };
+        parked.PendingApproval = new InvocationApprovalState { RequestId = "approval-1", Description = "Run a command", RequestedAt = DateTimeOffset.UtcNow, CallId = "call-7", ToolName = "run_command", SessionScopeEligible = true };
         RaiseState(dispatcher, parked);
 
         var events = new List<ChatStreamEvent>();
@@ -414,7 +409,7 @@ public sealed class InvocationResumeRegistryTests
         var conversationId = Guid.NewGuid();
 
         var parked = NewState(invocationId, conversationId, InvocationStatus.Running, "thinking");
-        parked.PendingApproval = new InvocationApprovalState("approval-2", "Run a command", DateTimeOffset.UtcNow);
+        parked.PendingApproval = new InvocationApprovalState { RequestId = "approval-2", Description = "Run a command", RequestedAt = DateTimeOffset.UtcNow };
         RaiseState(dispatcher, parked);
 
         var events = new List<ChatStreamEvent>();
@@ -477,10 +472,12 @@ public sealed class InvocationResumeRegistryTests
 
     private static InvocationUserQuestionState NewQuestion(string requestId, string callId)
     {
-        return new InvocationUserQuestionState(requestId,
-            callId,
-            "ask_user",
-            [
+        return new InvocationUserQuestionState
+        {
+            RequestId = requestId,
+            CallId = callId,
+            ToolName = "ask_user",
+            Questions = [
                 new UserQuestionSpec("Auth",
                     "Which auth method?",
                     MultiSelect: false,
@@ -489,7 +486,8 @@ public sealed class InvocationResumeRegistryTests
                         new UserQuestionOption("API key", Description: null, Recommended: false)
                     ])
             ],
-            DateTimeOffset.UtcNow);
+            RequestedAt = DateTimeOffset.UtcNow
+        };
     }
 
     [Test]

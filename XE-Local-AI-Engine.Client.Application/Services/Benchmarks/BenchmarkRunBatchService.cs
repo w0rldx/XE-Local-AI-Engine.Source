@@ -57,18 +57,24 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
 
             try
             {
-                var created = await _runs.StartAsync(new BenchmarkRunStartRequest(request.ProjectId,
-                                             item.ModelName,
-                                             expectedVersion,
-                                             kvCacheType,
-                                             request.RepeatCount,
-                                             request.Warmup,
-                                             request.RepeatMode,
-                                             request.AnswerVarianceTemperature), scope, cancellationToken);
+                var created = await _runs.StartAsync(new BenchmarkRunStartRequest
+                {
+                    ProjectId = request.ProjectId,
+                    PrimaryModelName = item.ModelName,
+                    ExpectedProjectVersion = expectedVersion,
+                    KvCacheType = kvCacheType,
+                    RepeatCount = request.RepeatCount,
+                    Warmup = request.Warmup,
+                    RepeatMode = request.RepeatMode,
+                    AnswerVarianceTemperature = request.AnswerVarianceTemperature
+                }, scope, cancellationToken);
                 expectedVersion += created.Count;
-                started.Add(new BenchmarkRunBatchStartedItem(item.ModelName,
-                    kvCacheType,
-                    [.. created.Select(static run => run.Id)]));
+                started.Add(new BenchmarkRunBatchStartedItem
+                {
+                    ModelName = item.ModelName,
+                    KvCacheType = kvCacheType,
+                    RunIds = [.. created.Select(static run => run.Id)]
+                });
             }
             catch (Exception exception) when (IsWholeBatchFailure(exception))
             {
@@ -88,7 +94,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
             }
         }
 
-        return new BenchmarkRunBatchResult(expectedVersion, started, rejected);
+        return new BenchmarkRunBatchResult { ProjectVersion = expectedVersion, Started = started, Rejected = rejected };
     }
 
     private static bool IsWholeBatchFailure(Exception exception) =>
@@ -100,7 +106,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
             or NotSupportedException;
 
     private static BenchmarkRunBatchRejectedItem Reject(BenchmarkRunBatchItem item, Exception exception) =>
-        new(item.ModelName, item.KvCacheType, BenchmarkRunBatchRejectionKind.Failure, exception.Message, exception);
+        new() { ModelName = item.ModelName, KvCacheType = item.KvCacheType, Kind = BenchmarkRunBatchRejectionKind.Failure, Message = exception.Message, Failure = exception };
 
     private static void AddRemainingRejections(IReadOnlyList<BenchmarkRunBatchItem> items,
         int startIndex,
@@ -111,7 +117,7 @@ public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
         for (var index = startIndex; index < items.Count; index++)
         {
             var item = items[index];
-            rejected.Add(new BenchmarkRunBatchRejectedItem(item.ModelName, item.KvCacheType, kind, message));
+            rejected.Add(new BenchmarkRunBatchRejectedItem { ModelName = item.ModelName, KvCacheType = item.KvCacheType, Kind = kind, Message = message });
         }
     }
 }

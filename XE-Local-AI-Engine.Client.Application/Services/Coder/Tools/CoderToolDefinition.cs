@@ -84,9 +84,9 @@ internal static class CoderToolDefinition
     /// </summary>
     public static IReadOnlyList<CoderToolDescriptor> Descriptors { get; } =
     [
-        new CoderToolDescriptor(ListFilesToolName, ListFilesDescription, ListFilesParameterSchema),
-        new CoderToolDescriptor(ReadFileToolName, ReadFileDescription, ReadFileParameterSchema),
-        new CoderToolDescriptor(SearchTextToolName, SearchTextDescription, SearchTextParameterSchema)
+        new CoderToolDescriptor { Name = ListFilesToolName, Description = ListFilesDescription, ParameterSchema = ListFilesParameterSchema },
+        new CoderToolDescriptor { Name = ReadFileToolName, Description = ReadFileDescription, ParameterSchema = ReadFileParameterSchema },
+        new CoderToolDescriptor { Name = SearchTextToolName, Description = SearchTextDescription, ParameterSchema = SearchTextParameterSchema }
     ];
 }
 
@@ -96,8 +96,14 @@ internal static class CoderToolDefinition
 ///     tools and <see cref="Category" /> is always <see cref="ToolCategory.ReadLocal" /> (read-only, workspace-confined
 ///     file reads).
 /// </summary>
-internal sealed record CoderToolDescriptor(string Name, string Description, string ParameterSchema)
+internal sealed class CoderToolDescriptor
 {
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string ParameterSchema { get; init; }
+
     /// <summary>Coder read tools never require approval.</summary>
     public bool RequiresApproval { get; }
 

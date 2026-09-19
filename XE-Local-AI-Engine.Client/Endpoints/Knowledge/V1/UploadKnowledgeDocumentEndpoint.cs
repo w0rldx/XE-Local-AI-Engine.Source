@@ -104,15 +104,18 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
             return;
         }
 
-        var input = new KnowledgeDocumentInput(Guid.NewGuid(),
-            originalName,
-            string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
-            extension,
-            bytes.Length,
-            contentHash,
-            bytes,
-            _embeddingModel,
-            collectionId);
+        var input = new KnowledgeDocumentInput
+        {
+            DocumentId = Guid.NewGuid(),
+            OriginalFileName = originalName,
+            MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
+            Extension = extension,
+            SizeBytes = bytes.Length,
+            ContentHash = contentHash,
+            Content = bytes,
+            EmbeddingModel = _embeddingModel,
+            CollectionId = collectionId
+        };
 
         var result = await _blobStore.AddAsync(input, ct);
 

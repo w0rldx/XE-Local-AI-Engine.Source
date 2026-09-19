@@ -39,7 +39,7 @@ public sealed class StartTrainingExportEndpoint : Endpoint<StartTrainingExportRe
         var quantization = kind == TrainingArtifactKind.MergedGguf
             ? TrainingExportQuantizations.TryNormalize(req.QuantType) ?? req.QuantType ?? string.Empty
             : TrainingExportQuantizations.Float16;
-        var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest(kind, req.QuantType), ct);
+        var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest { Kind = kind, QuantType = req.QuantType }, ct);
         if (start.Outcome == TrainingExportStartOutcome.Accepted)
         {
             await Send.ResultAsync(TypedResults.Accepted((string?)null,

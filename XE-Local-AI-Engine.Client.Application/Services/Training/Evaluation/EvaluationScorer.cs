@@ -93,11 +93,11 @@ internal static class EvaluationScorer
         var toolParts = TrainingSampleParts.ToolCalls(content.Parts);
         if (toolParts is not [{ ToolName: { Length: > 0 } toolName } toolPart, ..])
         {
-            return new EvaluationExpectation(ToolName: null, ArgumentsJson: null, ParameterSchema: null);
+            return new EvaluationExpectation { ToolName = null, ArgumentsJson = null, ParameterSchema = null };
         }
 
         var snapshot = tools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
-        return new EvaluationExpectation(toolName, toolPart.Arguments, snapshot?.ParameterSchema);
+        return new EvaluationExpectation { ToolName = toolName, ArgumentsJson = toolPart.Arguments, ParameterSchema = snapshot?.ParameterSchema };
     }
 
     /// <summary>The user turn the model is asked to answer — the first user part of the frozen trajectory.</summary>

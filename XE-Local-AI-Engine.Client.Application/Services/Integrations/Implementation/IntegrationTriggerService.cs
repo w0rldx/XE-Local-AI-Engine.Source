@@ -48,7 +48,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
 
         if (await _triggers.GetByNameAsync(name, cancellationToken) is not null)
         {
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.NameConflict, Trigger: null, NameConflictMessage);
+            return new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.NameConflict, Trigger = null, Message = NameConflictMessage };
         }
 
         try
@@ -67,13 +67,13 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
             },
                                              cancellationToken);
 
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.Saved, created, Message: null);
+            return new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.Saved, Trigger = created, Message = null };
         }
         catch (DbUpdateException)
         {
             // The read above is not atomic with the insert. The unique index on the name is what actually decides the
             // race, and the loser must learn it lost as a 409 rather than as a 500.
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.NameConflict, Trigger: null, NameConflictMessage);
+            return new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.NameConflict, Trigger = null, Message = NameConflictMessage };
         }
     }
 
@@ -84,7 +84,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         var existing = await _triggers.GetByIdAsync(triggerId, cancellationToken);
         if (existing is null)
         {
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.NotFound, Trigger: null, Message: null);
+            return new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.NotFound, Trigger = null, Message = null };
         }
 
         var rejection = await RejectTargetAsync(input.TargetAgentDefinitionId, cancellationToken);
@@ -107,15 +107,18 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                                          cancellationToken);
         if (!updated)
         {
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.VersionConflict,
-                Trigger: null,
-                "The trigger changed since it was loaded. Reload it and try again.");
+            return new IntegrationTriggerResult
+            {
+                Outcome = IntegrationTriggerOutcome.VersionConflict,
+                Trigger = null,
+                Message = "The trigger changed since it was loaded. Reload it and try again."
+            };
         }
 
         var reloaded = await _triggers.GetByIdAsync(triggerId, cancellationToken);
         return reloaded is null
-            ? new IntegrationTriggerResult(IntegrationTriggerOutcome.NotFound, Trigger: null, Message: null)
-            : new IntegrationTriggerResult(IntegrationTriggerOutcome.Saved, reloaded, Message: null);
+            ? new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.NotFound, Trigger = null, Message = null }
+            : new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.Saved, Trigger = reloaded, Message = null };
     }
 
     public Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default) =>
@@ -133,7 +136,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         var definition = await _agents.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (definition is null)
         {
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.AgentMissing, Trigger: null, AgentMissingMessage);
+            return new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.AgentMissing, Trigger = null, Message = AgentMissingMessage };
         }
 
         // V1 is scoped to a saved SINGLE agent. The coordinator builds no OrchestrationSpec — it is byte-for-byte
@@ -142,7 +145,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         // the trigger was written.
         if (definition.Kind != AgentDefinitionKind.Single)
         {
-            return new IntegrationTriggerResult(IntegrationTriggerOutcome.TargetKindRejected, Trigger: null, OrchestratorMessage);
+            return new IntegrationTriggerResult { Outcome = IntegrationTriggerOutcome.TargetKindRejected, Trigger = null, Message = OrchestratorMessage };
         }
 
         return null;

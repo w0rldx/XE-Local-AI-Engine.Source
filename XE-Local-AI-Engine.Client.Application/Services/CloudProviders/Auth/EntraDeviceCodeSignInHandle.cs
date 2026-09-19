@@ -5,4 +5,11 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 ///     operator enters in a browser (any device). Contains no secrets — the token exchange completes in the
 ///     background and is observed via <see cref="IEntraDeviceCodeSignInCoordinator.GetStatus" />.
 /// </summary>
-public sealed record EntraDeviceCodeSignInHandle(string UserCode, string VerificationUri, DateTimeOffset ExpiresAtUtc);
+public sealed class EntraDeviceCodeSignInHandle
+{
+    public required string UserCode { get; init; }
+
+    public required string VerificationUri { get; init; }
+
+    public required DateTimeOffset ExpiresAtUtc { get; init; }
+}

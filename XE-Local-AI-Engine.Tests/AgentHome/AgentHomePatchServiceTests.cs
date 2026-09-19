@@ -237,7 +237,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
     private static ResolvedSelectedFolder Folder(string alias)
     {
-        return new ResolvedSelectedFolder(Guid.NewGuid(), alias, "/host/" + alias, SelectedFolderMode.Copy);
+        return new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = alias, HostPath = "/host/" + alias, Mode = SelectedFolderMode.Copy };
     }
 
     private static SandboxCreateRequest CreateRequest()

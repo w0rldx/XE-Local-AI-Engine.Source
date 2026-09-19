@@ -1,9 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>The accepted-download identity returned by <see cref="IWhisperModelDownloadCoordinator.Start" />.</summary>
-/// <param name="ModelId">The catalogue id the download is keyed by; poll its status by this.</param>
-/// <param name="AlreadyInFlight"><c>true</c> when an existing download was rejoined instead of started.</param>
-public sealed record WhisperModelDownloadTicket(string ModelId, bool AlreadyInFlight);
+public sealed class WhisperModelDownloadTicket
+{
+    /// <summary>The catalogue id the download is keyed by; poll its status by this.</summary>
+    public required string ModelId { get; init; }
+
+    /// <summary><c>true</c> when an existing download was rejoined instead of started.</summary>
+    public required bool AlreadyInFlight { get; init; }
+}
 
 /// <summary>Phase of a coordinated Whisper weight download.</summary>
 public enum WhisperModelDownloadPhase
@@ -25,13 +30,18 @@ public enum WhisperModelDownloadPhase
 ///     A sanitized snapshot of one coordinated download. Carries the catalogue id, the phase, byte counts and a
 ///     sanitized reason — never an absolute path, a URL, or a token.
 /// </summary>
-public sealed record WhisperModelDownloadStatus(
-    string ModelId,
-    WhisperModelDownloadPhase Phase,
-    long? CompletedBytes,
-    long? TotalBytes,
-    string? SanitizedError)
+public sealed record WhisperModelDownloadStatus
 {
+    public required string ModelId { get; init; }
+
+    public required WhisperModelDownloadPhase Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
     /// <summary>1-based index of the file currently transferring, or <see langword="null" /> before the first report.</summary>
     public int? PartIndex { get; init; }
 

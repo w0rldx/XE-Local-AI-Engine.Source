@@ -21,10 +21,17 @@ public interface IPlaybookAnalysisService
 }
 
 /// <summary>The result of an analysis run. The counts let the operator see what was proposed vs kept vs filtered.</summary>
-public sealed record PlaybookAnalysisOutcome(
-    bool AgentExists,
-    bool MeetsThreshold,
-    IReadOnlyList<PlaybookActionRecord> CreatedSuggestions,
-    int ProposedCount,
-    int RejectedCount,
-    int DuplicateCount);
+public sealed class PlaybookAnalysisOutcome
+{
+    public required bool AgentExists { get; init; }
+
+    public required bool MeetsThreshold { get; init; }
+
+    public required IReadOnlyList<PlaybookActionRecord> CreatedSuggestions { get; init; }
+
+    public required int ProposedCount { get; init; }
+
+    public required int RejectedCount { get; init; }
+
+    public required int DuplicateCount { get; init; }
+}

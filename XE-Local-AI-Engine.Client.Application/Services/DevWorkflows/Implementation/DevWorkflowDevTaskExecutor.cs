@@ -610,9 +610,12 @@ internal sealed class DevWorkflowDevTaskExecutor
                         run,
                         nodeRun,
                         nodeRuns,
-                        new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
-                            task.BlockedReason ?? "The development task this node run was implementing was blocked.",
-                            Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)),
+                        new DevWorkflowFailure
+                        {
+                            FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
+                            SanitizedReason = task.BlockedReason ?? "The development task this node run was implementing was blocked.",
+                            OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)
+                        },
                         cancellationToken);
 
             default:
@@ -895,9 +898,12 @@ internal sealed class DevWorkflowDevTaskExecutor
                     run,
                     nodeRun,
                     nodeRuns,
-                    new DevWorkflowFailure(DevWorkflowFailureClasses.Internal,
-                        "This node run's development task stopped on an unexpected error. The engine log has the detail.",
-                        Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)),
+                    new DevWorkflowFailure
+                    {
+                        FailureClass = DevWorkflowFailureClasses.Internal,
+                        SanitizedReason = "This node run's development task stopped on an unexpected error. The engine log has the detail.",
+                        OutputJson = Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)
+                    },
                     cancellationToken);
         }
     }
@@ -941,10 +947,13 @@ internal sealed class DevWorkflowDevTaskExecutor
                     run,
                     nodeRun,
                     nodeRuns,
-                    new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
-                        string.Create(CultureInfo.InvariantCulture,
+                    new DevWorkflowFailure
+                    {
+                        FailureClass = DevWorkflowFailureClasses.BudgetExhausted,
+                        SanitizedReason = string.Create(CultureInfo.InvariantCulture,
                             $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its rounds."),
-                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
+                        OutputJson = Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)
+                    },
                     cancellationToken);
         }
 
@@ -964,9 +973,12 @@ internal sealed class DevWorkflowDevTaskExecutor
                     run,
                     nodeRun,
                     nodeRuns,
-                    new DevWorkflowFailure(DevWorkflowFailureClasses.Configuration,
-                        $"Node '{failingNodeKey}' routed a failure here but left no validation report or failing counts to act on, so there is nothing to ask for a new round about.",
-                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.Configuration)),
+                    new DevWorkflowFailure
+                    {
+                        FailureClass = DevWorkflowFailureClasses.Configuration,
+                        SanitizedReason = $"Node '{failingNodeKey}' routed a failure here but left no validation report or failing counts to act on, so there is nothing to ask for a new round about.",
+                        OutputJson = Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.Configuration)
+                    },
                     cancellationToken);
         }
 
@@ -1278,9 +1290,12 @@ internal sealed class DevWorkflowDevTaskExecutor
             ? DevWorkflowFailureClasses.Policy
             : DevWorkflowFailureClasses.ProviderError;
         var failureClass = attempt.Status == DevelopmentAttemptStatus.Interrupted ? DevWorkflowFailureClasses.Interrupted : refused;
-        return new DevWorkflowFailure(failureClass,
-            attempt.TerminalReason ?? $"The development {attempt.Role} attempt this node run was driving did not succeed.",
-            Output(nodeRun, task, taskId, failureClass));
+        return new DevWorkflowFailure
+        {
+            FailureClass = failureClass,
+            SanitizedReason = attempt.TerminalReason ?? $"The development {attempt.Role} attempt this node run was driving did not succeed.",
+            OutputJson = Output(nodeRun, task, taskId, failureClass)
+        };
     }
 
     /// <summary>
@@ -1303,7 +1318,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                 run,
                 nodeRun,
                 nodeRuns,
-                new DevWorkflowFailure(failureClass, sanitizedReason, Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass)),
+                new DevWorkflowFailure { FailureClass = failureClass, SanitizedReason = sanitizedReason, OutputJson = Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass) },
                 cancellationToken);
 
     /// <summary>
@@ -1355,14 +1370,17 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     which is exactly why the node run names it.
     /// </summary>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, DevelopmentTaskSnapshot? task, Guid? taskId, string? failureClass) =>
-        JsonSerializer.Serialize(new DevTaskOutput(task is { Status: DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed }
+        JsonSerializer.Serialize(new DevTaskOutput
+        {
+            Status = task is { Status: DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed }
                     ? DevWorkflowNodeOutputStatuses.Succeeded
                     : DevWorkflowNodeOutputStatuses.Failed,
-                nodeRun.Attempt,
-                failureClass,
-                taskId,
-                task?.Status.ToString(),
-                task?.CurrentReviewRound),
+            Attempt = nodeRun.Attempt,
+            FailureClass = failureClass,
+            DevelopmentTaskId = taskId,
+            TaskStatus = task?.Status.ToString(),
+            ReviewRound = task?.CurrentReviewRound
+        },
             JsonOptions);
 
     /// <summary>
@@ -1371,11 +1389,18 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// </summary>
     private sealed record DevTaskBrief(string? Title, string? Requirements, string? AcceptanceCriteriaJson);
 
-    private sealed record DevTaskOutput(
-        string Status,
-        int Attempt,
-        string? FailureClass,
-        Guid? DevelopmentTaskId,
-        string? TaskStatus,
-        int? ReviewRound);
+    private sealed record DevTaskOutput
+    {
+        public required string Status { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string? FailureClass { get; init; }
+
+        public required Guid? DevelopmentTaskId { get; init; }
+
+        public required string? TaskStatus { get; init; }
+
+        public required int? ReviewRound { get; init; }
+    }
 }

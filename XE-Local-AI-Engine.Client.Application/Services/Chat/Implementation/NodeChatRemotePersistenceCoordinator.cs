@@ -37,11 +37,14 @@ public sealed class NodeChatRemotePersistenceCoordinator : INodeChatRemotePersis
 
         // Ensure the node-local conversation row exists for this platform conversation. Idempotent: an existing
         // row (any state) is returned as-is so a user-renamed/locally-created conv is never clobbered.
-        await _persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(package.ConversationId,
-                ResolveTitle(package),
-                package.ClientNodeId.ToString(),
-                nowUtc,
-                NodeChatOriginValues.Remote),
+        await _persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest
+        {
+            ConversationId = package.ConversationId,
+            Title = ResolveTitle(package),
+            UserId = package.ClientNodeId.ToString(),
+            CreatedAtUtc = nowUtc,
+            Origin = NodeChatOriginValues.Remote
+        },
             cancellationToken);
 
         // Node mints a FRESH assistant message id; RequestId == InvocationId so the run's state stream correlates.
@@ -53,11 +56,14 @@ public sealed class NodeChatRemotePersistenceCoordinator : INodeChatRemotePersis
         var userTurn = ResolveUserTurn(package);
         if (userTurn is not null)
         {
-            await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(package.ConversationId,
-                    Guid.NewGuid(),
-                    userTurn,
-                    nowUtc,
-                    Origin: NodeChatOriginValues.Remote),
+            await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+            {
+                ConversationId = package.ConversationId,
+                MessageId = Guid.NewGuid(),
+                Content = userTurn,
+                CreatedAtUtc = nowUtc,
+                Origin = NodeChatOriginValues.Remote
+            },
                 cancellationToken);
         }
 
@@ -67,12 +73,15 @@ public sealed class NodeChatRemotePersistenceCoordinator : INodeChatRemotePersis
         // there is nothing to attribute by without a server/envelope contract change. Feedback on these remote-origin
         // turns therefore aggregates as unbound, by design. (User-initiated Codex/cloud-model chat sends still attribute
         // correctly: those run through NodeChatStreamService, which resolves and stamps the effective agent id.)
-        await _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(package.ConversationId,
-                assistantMessageId,
-                package.InvocationId,
-                nowUtc,
-                package.ModelProfile,
-                Origin: NodeChatOriginValues.Remote),
+        await _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = package.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = package.InvocationId,
+            CreatedAtUtc = nowUtc,
+            Model = package.ModelProfile,
+            Origin = NodeChatOriginValues.Remote
+        },
             cancellationToken);
 
         // The streaming mark is guarded (StreamingSources): it is an atomic no-op if the row already left the

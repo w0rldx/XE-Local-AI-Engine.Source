@@ -370,14 +370,17 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                     }
                 ]);
 
-            var identity = new ResolvedGgufAcquisitionIdentity("tuned:Q4_K_M",
-                "tuned:q4_k_m",
-                kind == TrainingArtifactKind.AdapterGguf ? "F16" : "Q4_K_M",
-                "tuned-Q4_K_M-abc.gguf",
-                "tuned-Q4_K_M-abc.gguf",
-                "tuned-Q4_K_M-abc.gguf.xe-model.json",
-                ProjectorFileName: null,
-                ProjectorRelativePath: null);
+            var identity = new ResolvedGgufAcquisitionIdentity
+            {
+                CanonicalModelName = "tuned:Q4_K_M",
+                ModelReservationKey = "tuned:q4_k_m",
+                CanonicalQuantization = kind == TrainingArtifactKind.AdapterGguf ? "F16" : "Q4_K_M",
+                FinalFileName = "tuned-Q4_K_M-abc.gguf",
+                RelativeGgufPath = "tuned-Q4_K_M-abc.gguf",
+                RelativeSidecarPath = "tuned-Q4_K_M-abc.gguf.xe-model.json",
+                ProjectorFileName = null,
+                ProjectorRelativePath = null
+            };
             var preflight = Substitute.For<IGgufAcquisitionPreflight>();
             _ = preflight.ResolveAndReserveAsync(Arg.Any<GgufAcquisitionIntent>(), Arg.Any<CancellationToken>())
                          .Returns(Reservation(identity));

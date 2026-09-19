@@ -677,7 +677,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
             StartCalls.Add(request);
             var modelName = string.IsNullOrWhiteSpace(request.Quant) ? request.RepoId : GgufModelName.Format(request.RepoId, request.Quant);
-            return Task.FromResult(new GgufDownloadTicket(modelName, AlreadyInFlight: false));
+            return Task.FromResult(new GgufDownloadTicket { ModelName = modelName, AlreadyInFlight = false });
         }
 
         public bool Cancel(string modelName)
@@ -687,7 +687,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public GgufDownloadStatus? GetStatus(string modelName)
         {
-            return new GgufDownloadStatus(modelName, _terminalPhase, CompletedBytes: null, TotalBytes: null, _terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
+            return new GgufDownloadStatus { ModelName = modelName, Phase = _terminalPhase, CompletedBytes = null, TotalBytes = null, SanitizedError = _terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null };
         }
 
         public IReadOnlyList<GgufDownloadStatus> ListStatuses()

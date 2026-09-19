@@ -8,8 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed partial class SlashCommandService : ISlashCommandService
 {
-    private static readonly SlashCommandCatalogItem Ping = new(null, "ping", "Test the current chat agent.", "builtIn", SlashCommandActionType.SendPrompt,
-        "Respond with exactly PONG and nothing else.");
+    private static readonly SlashCommandCatalogItem Ping = new()
+    {
+        Id = null,
+        Name = "ping",
+        Description = "Test the current chat agent.",
+        Source = "builtIn",
+        ActionType = SlashCommandActionType.SendPrompt,
+        Prompt = "Respond with exactly PONG and nothing else."
+    };
 
     private readonly ISlashCommandStore _store;
 
@@ -99,7 +106,7 @@ internal sealed partial class SlashCommandService : ISlashCommandService
     }
 
     private static SlashCommandCatalogItem ToCatalogItem(SlashCommandRecord record) =>
-        new(record.Id, record.Name, record.Description, "custom", record.ActionType, record.Prompt);
+        new() { Id = record.Id, Name = record.Name, Description = record.Description, Source = "custom", ActionType = record.ActionType, Prompt = record.Prompt };
 
     private static bool IsUniqueNameViolation(DbUpdateException exception) =>
         exception.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 };

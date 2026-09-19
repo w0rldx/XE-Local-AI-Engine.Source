@@ -128,11 +128,20 @@ public sealed record TrainingSampleValidationV1
 }
 
 /// <summary>
-///     One layer's verdict. <paramref name="ScoredBy" /> carries provenance in the
+///     One layer's verdict. <see cref="ScoredBy" /> carries provenance in the
 ///     <c>DefaultPlaybookEvalJudge</c> style — "schema", "tool-name", "arguments", "execution", "critic:deterministic",
 ///     "critic:judge".
 /// </summary>
-public sealed record SampleValidationLayerResultV1(string Layer, bool Passed, string ScoredBy, string? Reason = null);
+public sealed class SampleValidationLayerResultV1
+{
+    public required string Layer { get; init; }
+
+    public required bool Passed { get; init; }
+
+    public required string ScoredBy { get; init; }
+
+    public string? Reason { get; init; }
+}
 
 /// <summary>Declarative mock body persisted (encrypted) in <see cref="ToolMockDefinition.MockJson" />.</summary>
 public sealed record ToolMockBodyV1
@@ -229,19 +238,51 @@ public enum DatasetExportFormat
 }
 
 /// <summary>One teacher turn. The seed is carried as a string for the same 2^53 precision reason the sampling DTO uses.</summary>
-public sealed record StructuredAgentRequest(
-    string ModelName,
-    string SystemInstructions,
-    string UserPrompt,
-    TeacherOutputMode OutputMode,
-    JsonElement ResponseSchema,
-    float Temperature,
-    string? Seed);
+public sealed record StructuredAgentRequest
+{
+    public required string ModelName { get; init; }
 
-public sealed record StructuredAgentResult(bool Success, string Text, string? FailureReason);
+    public required string SystemInstructions { get; init; }
 
-public sealed record DatasetDefinitionDraft(string Name, DatasetDefinitionBodyV1 Body);
+    public required string UserPrompt { get; init; }
 
-public sealed record ToolMockDraft(string ToolName, ToolMockBodyV1 Body, bool Enabled);
+    public required TeacherOutputMode OutputMode { get; init; }
 
-public sealed record ToolMockVerifyResult(ToolMockRecord Mock, ToolMockVerificationV1 Verification);
+    public required JsonElement ResponseSchema { get; init; }
+
+    public required float Temperature { get; init; }
+
+    public required string? Seed { get; init; }
+}
+
+public sealed class StructuredAgentResult
+{
+    public required bool Success { get; init; }
+
+    public required string Text { get; init; }
+
+    public required string? FailureReason { get; init; }
+}
+
+public sealed class DatasetDefinitionDraft
+{
+    public required string Name { get; init; }
+
+    public required DatasetDefinitionBodyV1 Body { get; init; }
+}
+
+public sealed class ToolMockDraft
+{
+    public required string ToolName { get; init; }
+
+    public required ToolMockBodyV1 Body { get; init; }
+
+    public required bool Enabled { get; init; }
+}
+
+public sealed class ToolMockVerifyResult
+{
+    public required ToolMockRecord Mock { get; init; }
+
+    public required ToolMockVerificationV1 Verification { get; init; }
+}

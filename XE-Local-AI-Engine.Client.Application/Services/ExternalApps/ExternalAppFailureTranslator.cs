@@ -45,7 +45,12 @@ public enum ExternalAppFailurePhase
 ///     is written to a database column and rendered in a browser, and a daemon message can carry the environment it
 ///     failed on.
 /// </remarks>
-public sealed record ExternalAppFailure(ExternalAppFailureCategory Category, string Summary);
+public sealed class ExternalAppFailure
+{
+    public required ExternalAppFailureCategory Category { get; init; }
+
+    public required string Summary { get; init; }
+}
 
 /// <summary>
 ///     Turns the exception a pipeline phase threw into a failure category. It keys on the PHASE, because daemon
@@ -69,44 +74,65 @@ public static class ExternalAppFailureTranslator
         // that was well formed but that what the daemon already holds makes unsafe.
         if (exception is ContainerPolicyException)
         {
-            return new ExternalAppFailure(ExternalAppFailureCategory.PolicyViolation, "The container runtime refused the request on policy grounds.");
+            return new ExternalAppFailure { Category = ExternalAppFailureCategory.PolicyViolation, Summary = "The container runtime refused the request on policy grounds." };
         }
 
         if (exception is ContainerRuntimeUnavailableException)
         {
-            return new ExternalAppFailure(ExternalAppFailureCategory.RuntimeUnavailable, "The container runtime is not available.");
+            return new ExternalAppFailure { Category = ExternalAppFailureCategory.RuntimeUnavailable, Summary = "The container runtime is not available." };
         }
 
         // ProbeFailed is the type's default, i.e. "no status was stated"; anything else is the daemon telling us it
         // cannot serve this engine at all, which is a runtime problem rather than this application's.
         if (exception is DockerRuntimeException { Status: not DockerDaemonPreflightStatus.ProbeFailed })
         {
-            return new ExternalAppFailure(ExternalAppFailureCategory.RuntimeUnavailable, "The container daemon is not usable.");
+            return new ExternalAppFailure { Category = ExternalAppFailureCategory.RuntimeUnavailable, Summary = "The container daemon is not usable." };
         }
 
         if (phase is ExternalAppFailurePhase.Create or ExternalAppFailurePhase.Start
             && plannedHostPorts is { Count: > 0 }
             && plannedHostPorts.Any(static port => !ExternalAppPortAllocator.IsBindable(port)))
         {
-            return new ExternalAppFailure(ExternalAppFailureCategory.PortUnavailable,
-                "A host port this application needs was taken by another process.");
+            return new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.PortUnavailable,
+                Summary = "A host port this application needs was taken by another process."
+            };
         }
 
         return phase switch
         {
-            ExternalAppFailurePhase.Resolution => new ExternalAppFailure(ExternalAppFailureCategory.RuntimeIncompatible,
-                "The container runtime does not offer everything this application requires."),
-            ExternalAppFailurePhase.Plan => new ExternalAppFailure(ExternalAppFailureCategory.ConfigurationMissing,
-                "This application cannot be configured as the catalog describes it."),
-            ExternalAppFailurePhase.Storage => new ExternalAppFailure(ExternalAppFailureCategory.StorageError,
-                "This application's storage could not be prepared."),
-            ExternalAppFailurePhase.Pull => new ExternalAppFailure(ExternalAppFailureCategory.ImagePullFailed,
-                "An image this application needs could not be pulled."),
-            ExternalAppFailurePhase.Verify => new ExternalAppFailure(ExternalAppFailureCategory.PolicyViolation,
-                "A container did not match the policy it was created with."),
-            ExternalAppFailurePhase.Wait => new ExternalAppFailure(ExternalAppFailureCategory.HealthCheckFailed,
-                "A service did not become ready."),
-            _ => new ExternalAppFailure(ExternalAppFailureCategory.Unknown, "This application could not be started.")
+            ExternalAppFailurePhase.Resolution => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.RuntimeIncompatible,
+                Summary = "The container runtime does not offer everything this application requires."
+            },
+            ExternalAppFailurePhase.Plan => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.ConfigurationMissing,
+                Summary = "This application cannot be configured as the catalog describes it."
+            },
+            ExternalAppFailurePhase.Storage => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.StorageError,
+                Summary = "This application's storage could not be prepared."
+            },
+            ExternalAppFailurePhase.Pull => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.ImagePullFailed,
+                Summary = "An image this application needs could not be pulled."
+            },
+            ExternalAppFailurePhase.Verify => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.PolicyViolation,
+                Summary = "A container did not match the policy it was created with."
+            },
+            ExternalAppFailurePhase.Wait => new ExternalAppFailure
+            {
+                Category = ExternalAppFailureCategory.HealthCheckFailed,
+                Summary = "A service did not become ready."
+            },
+            _ => new ExternalAppFailure { Category = ExternalAppFailureCategory.Unknown, Summary = "This application could not be started." }
         };
     }
 
@@ -115,15 +141,21 @@ public static class ExternalAppFailureTranslator
     {
         ArgumentNullException.ThrowIfNull(missing);
 
-        return new ExternalAppFailure(ExternalAppFailureCategory.RuntimeIncompatible,
-            $"The container runtime does not offer: {string.Join(", ", missing)}.");
+        return new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.RuntimeIncompatible,
+            Summary = $"The container runtime does not offer: {string.Join(", ", missing)}."
+        };
     }
 
     /// <summary>The refusal for <c>gpu: required</c>. No GPU device request is representable at this layer, by design.</summary>
     public static ExternalAppFailure ForGpuRequired()
     {
-        return new ExternalAppFailure(ExternalAppFailureCategory.GpuNotSupported,
-            "This application requires a GPU inside its container, which this engine does not pass through.");
+        return new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.GpuNotSupported,
+            Summary = "This application requires a GPU inside its container, which this engine does not pass through."
+        };
     }
 
     /// <summary>
@@ -143,11 +175,14 @@ public static class ExternalAppFailureTranslator
 
         if (violations.Count == 0)
         {
-            return new ExternalAppFailure(ExternalAppFailureCategory.PolicyViolation, $"Service '{serviceName}' failed verification.");
+            return new ExternalAppFailure { Category = ExternalAppFailureCategory.PolicyViolation, Summary = $"Service '{serviceName}' failed verification." };
         }
 
-        return new ExternalAppFailure(ExternalAppFailureCategory.PolicyViolation,
-            string.Create(CultureInfo.InvariantCulture,
-                $"Service '{serviceName}' failed {violations.Count} policy check(s); the node log names them."));
+        return new ExternalAppFailure
+        {
+            Category = ExternalAppFailureCategory.PolicyViolation,
+            Summary = string.Create(CultureInfo.InvariantCulture,
+                $"Service '{serviceName}' failed {violations.Count} policy check(s); the node log names them.")
+        };
     }
 }

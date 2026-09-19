@@ -89,7 +89,7 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         try
         {
             await GenerateAsync(work, generationToken);
-            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Ready)));
+            _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload { State = nameof(TrainingDatasetStatus.Ready) });
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, generationToken);
         }
         catch (OperationCanceledException) when (generationToken.IsCancellationRequested)
@@ -109,7 +109,7 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             _logger.LogError(exception, "Dataset generation failed for dataset {DatasetId}.", work.DatasetId);
             var reason = exception is TrainingStoreException ? exception.Message : "Dataset generation failed.";
             _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State,
-                new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Failed), Reason: reason));
+                new DatasetGenerationPayload { State = nameof(TrainingDatasetStatus.Failed), Reason = reason });
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None);
         }
         finally
@@ -142,21 +142,24 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         using var criticClient = await CreateCriticClientAsync(definition, cancellationToken);
 
         var systemInstructions = ComposeSystemInstructions(definition);
-        _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Generating)));
+        _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload { State = nameof(TrainingDatasetStatus.Generating) });
 
         for (var index = 0; index < plan.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var target = plan[index];
-            var request = new StructuredAgentRequest(definition.TeacherModelName,
-                systemInstructions,
-                ComposeUserPrompt(target, index),
-                definition.TeacherOutputMode,
-                RecordSchema,
-                definition.Temperature,
+            var request = new StructuredAgentRequest
+            {
+                ModelName = definition.TeacherModelName,
+                SystemInstructions = systemInstructions,
+                UserPrompt = ComposeUserPrompt(target, index),
+                OutputMode = definition.TeacherOutputMode,
+                ResponseSchema = RecordSchema,
+                Temperature = definition.Temperature,
                 // Per-sample determinism: base seed + sample index, computed as a long and only then formatted back to
                 // the string the seed field is carried as.
-                OffsetSeed(definition.BaseSeed, index));
+                Seed = OffsetSeed(definition.BaseSeed, index)
+            };
 
             var completion = await _runner.RunAsync(teacherClient, request, cancellationToken);
             if (!completion.Success)
@@ -166,7 +169,7 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
             }
 
             var outcome = await _pipeline.ValidateAsync(completion.Text,
-                                             new SampleValidationContext(definition, target.Kind, target.Label, RecordSchema, criticClient),
+                                             new SampleValidationContext { Definition = definition, Kind = target.Kind, RequestedLabel = target.Label, RecordSchema = RecordSchema, CriticChatClient = criticClient },
                                              cancellationToken);
             if (!outcome.Accepted || outcome.Content is null)
             {
@@ -189,18 +192,21 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
 
             _ = _events.Append(work.DatasetId,
                 append.Duplicate ? DatasetGenerationEventKind.Rejected : DatasetGenerationEventKind.SampleAdded,
-                new DatasetGenerationPayload(Completed: index + 1,
-                    Total: plan.Count,
-                    Kind: target.Kind,
-                    Label: outcome.Label.ToString(),
-                    Reason: append.Duplicate ? "duplicate" : null));
+                new DatasetGenerationPayload
+                {
+                    Completed = index + 1,
+                    Total = plan.Count,
+                    Kind = target.Kind,
+                    Label = outcome.Label.ToString(),
+                    Reason = append.Duplicate ? "duplicate" : null
+                });
         }
     }
 
     private async Task RejectAsync(Guid datasetId, string? reason, CancellationToken cancellationToken)
     {
         await _store.RecordRejectedSampleAsync(datasetId, cancellationToken);
-        _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload(Reason: reason));
+        _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload { Reason = reason });
         // The hub buffer is transient and evicted when the run terminalizes; the count survives but the reason would
         // not. Log it so a rejection stays diagnosable after the fact (invariant: fail-visible, never fail-silent).
         // Reasons are validator/transport messages, never sample content.

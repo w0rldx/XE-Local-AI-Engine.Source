@@ -103,16 +103,19 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
                 mimeType = string.IsNullOrWhiteSpace(clientContentType) ? DefaultMimeType : clientContentType;
             }
 
-            var input = new ConversationUploadedFileInput(conversationId,
-                Guid.NewGuid(),
-                originalFileName,
-                mimeType,
-                extension,
-                bytes.Length,
-                bytes,
-                status,
-                markdown,
-                extractedChars);
+            var input = new ConversationUploadedFileInput
+            {
+                ConversationId = conversationId,
+                FileId = Guid.NewGuid(),
+                OriginalFileName = originalFileName,
+                MimeType = mimeType,
+                Extension = extension,
+                SizeBytes = bytes.Length,
+                Content = bytes,
+                ExtractionStatus = status,
+                ExtractedMarkdown = markdown,
+                ExtractedChars = extractedChars
+            };
 
             return await _fileStore.AddAsync(input, cancellationToken);
         }

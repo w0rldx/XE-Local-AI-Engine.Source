@@ -178,13 +178,16 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
             var lease = await AcquireInstalledAsync(evaluation.ModelName,
                 evaluation.ModelContentFingerprint,
                 cancellationToken);
-            return new EvaluationExecutionTarget(lease.ModelFilePath,
-                AdapterPath: null,
-                ArtifactSha256: null,
-                ArtifactSizeBytes: null,
-                lease.ModelSha256,
-                lease.ModelSizeBytes,
-                lease);
+            return new EvaluationExecutionTarget
+            {
+                ModelPath = lease.ModelFilePath,
+                AdapterPath = null,
+                ArtifactSha256 = null,
+                ArtifactSizeBytes = null,
+                ExpectedModelSha256 = lease.ModelSha256,
+                ExpectedModelSizeBytes = lease.ModelSizeBytes,
+                InstalledLease = lease
+            };
         }
 
         var artifact = evaluation.SourceArtifactId is { } artifactId
@@ -220,13 +223,16 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
             var lease = await AcquireInstalledAsync(baseName, run.LinkedModelContentFingerprint, cancellationToken);
             modelPath = lease.ModelFilePath;
             adapterPath = artifact.Path;
-            return new EvaluationExecutionTarget(modelPath,
-                adapterPath,
-                artifactSha256,
-                artifact.SizeBytes,
-                lease.ModelSha256,
-                lease.ModelSizeBytes,
-                lease);
+            return new EvaluationExecutionTarget
+            {
+                ModelPath = modelPath,
+                AdapterPath = adapterPath,
+                ArtifactSha256 = artifactSha256,
+                ArtifactSizeBytes = artifact.SizeBytes,
+                ExpectedModelSha256 = lease.ModelSha256,
+                ExpectedModelSizeBytes = lease.ModelSizeBytes,
+                InstalledLease = lease
+            };
         }
         else
         {
@@ -234,13 +240,16 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
             adapterPath = null;
         }
 
-        return new EvaluationExecutionTarget(modelPath,
-            adapterPath,
-            artifactSha256,
-            artifact.SizeBytes,
-            ExpectedModelSha256: artifactSha256,
-            ExpectedModelSizeBytes: artifact.SizeBytes,
-            InstalledLease: null);
+        return new EvaluationExecutionTarget
+        {
+            ModelPath = modelPath,
+            AdapterPath = adapterPath,
+            ArtifactSha256 = artifactSha256,
+            ArtifactSizeBytes = artifact.SizeBytes,
+            ExpectedModelSha256 = artifactSha256,
+            ExpectedModelSizeBytes = artifact.SizeBytes,
+            InstalledLease = null
+        };
     }
 
     private static TrainingEvaluationExecutionProvenanceV1 ValidateExecutionEvidence(TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession> result,
@@ -370,15 +379,22 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         return lease;
     }
 
-    private sealed record EvaluationExecutionTarget(
-        string ModelPath,
-        string? AdapterPath,
-        string? ArtifactSha256,
-        long? ArtifactSizeBytes,
-        string ExpectedModelSha256,
-        long ExpectedModelSizeBytes,
-        ITrainingEvaluationInstalledModelLease? InstalledLease) : IAsyncDisposable
+    private sealed record EvaluationExecutionTarget : IAsyncDisposable
     {
+        public required string ModelPath { get; init; }
+
+        public required string? AdapterPath { get; init; }
+
+        public required string? ArtifactSha256 { get; init; }
+
+        public required long? ArtifactSizeBytes { get; init; }
+
+        public required string ExpectedModelSha256 { get; init; }
+
+        public required long ExpectedModelSizeBytes { get; init; }
+
+        public required ITrainingEvaluationInstalledModelLease? InstalledLease { get; init; }
+
         public ValueTask DisposeAsync() =>
             InstalledLease?.DisposeAsync() ?? ValueTask.CompletedTask;
     }
@@ -509,7 +525,7 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         var calls = response.Messages
                             .SelectMany(message => message.Contents)
                             .OfType<FunctionCallContent>()
-                            .Select(call => new EvaluationToolCall(call.Name, SerializeArguments(call.Arguments)))
+                            .Select(call => new EvaluationToolCall { ToolName = call.Name, ArgumentsJson = SerializeArguments(call.Arguments) })
                             .ToArray();
         return EvaluationScorer.Score(sampleId, sample.Kind, expectation, calls);
     }
@@ -570,7 +586,7 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         var offers = definition.Tools
                                .Select(tool => (AITool)new DeclaredOnlyAIFunction(tool.Name, tool.Description, tool.ParameterSchema))
                                .ToList();
-        return new EvaluationContext(byId, definition.Tools, offers, definition.SystemInstructions, definition.BaseSeed);
+        return new EvaluationContext { Samples = byId, Tools = definition.Tools, Offers = offers, SystemInstructions = definition.SystemInstructions, Seed = definition.BaseSeed };
     }
 
     private async Task TerminalizeAsync(TrainingEvaluationRecord evaluation, TrainingWorkStatus status, string? message)
@@ -593,12 +609,15 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
 
         _ = _events.Append(runId,
             kind,
-            new TrainingRunPayload(State: evaluation.Status.ToString(),
-                Step: evaluation.ScoredCount,
-                TotalSteps: evaluation.TotalCount,
-                Message: message,
-                EvaluationId: evaluation.Id,
-                PassedCount: evaluation.PassedCount));
+            new TrainingRunPayload
+            {
+                State = evaluation.Status.ToString(),
+                Step = evaluation.ScoredCount,
+                TotalSteps = evaluation.TotalCount,
+                Message = message,
+                EvaluationId = evaluation.Id,
+                PassedCount = evaluation.PassedCount
+            });
     }
 
     private static string SerializeArguments(IDictionary<string, object?>? arguments) =>
@@ -632,10 +651,16 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
     }
 
     /// <summary>Everything the scoring loop reads once and then reuses for every sample.</summary>
-    private sealed record EvaluationContext(
-        IReadOnlyDictionary<Guid, TrainingSampleRecord> Samples,
-        IReadOnlyList<DatasetToolSnapshotV1> Tools,
-        IList<AITool> Offers,
-        string SystemInstructions,
-        string? Seed);
+    private sealed record EvaluationContext
+    {
+        public required IReadOnlyDictionary<Guid, TrainingSampleRecord> Samples { get; init; }
+
+        public required IReadOnlyList<DatasetToolSnapshotV1> Tools { get; init; }
+
+        public required IList<AITool> Offers { get; init; }
+
+        public required string SystemInstructions { get; init; }
+
+        public required string? Seed { get; init; }
+    }
 }

@@ -59,46 +59,79 @@ public interface IInferenceProfileService
 ///     A node-local inference profile projected for transport. The local-only machine key is deliberately OMITTED (it
 ///     must never leave the box); <see cref="Status" /> is surfaced as its name rather than a raw enum value.
 /// </summary>
-public sealed record InferenceProfileView(
-    Guid Id,
-    string ModelName,
-    int Role,
-    string Backend,
-    string LlamacppBuild,
-    string Quant,
-    int CtxSize,
-    int? NGpuLayers,
-    string? TensorSplit,
-    string? OverrideTensor,
-    string? KvTypeK,
-    string? KvTypeV,
-    bool FlashAttn,
-    long? NParams,
-    bool IsMoe,
-    int? ExpertCount,
-    string Status,
-    Guid? BenchmarkSnapshotId,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    int? LaunchPolicyFingerprintVersion = null,
-    string? LaunchPolicyFingerprint = null,
-    long? GlobalFreeVramAtFreezeBytes = null,
-    long? ProcessBudgetVramAtFreezeBytes = null);
+public sealed class InferenceProfileView
+{
+    public required Guid Id { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required int Role { get; init; }
+
+    public required string Backend { get; init; }
+
+    public required string LlamacppBuild { get; init; }
+
+    public required string Quant { get; init; }
+
+    public required int CtxSize { get; init; }
+
+    public required int? NGpuLayers { get; init; }
+
+    public required string? TensorSplit { get; init; }
+
+    public required string? OverrideTensor { get; init; }
+
+    public required string? KvTypeK { get; init; }
+
+    public required string? KvTypeV { get; init; }
+
+    public required bool FlashAttn { get; init; }
+
+    public required long? NParams { get; init; }
+
+    public required bool IsMoe { get; init; }
+
+    public required int? ExpertCount { get; init; }
+
+    public required string Status { get; init; }
+
+    public required Guid? BenchmarkSnapshotId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public int? LaunchPolicyFingerprintVersion { get; init; }
+
+    public string? LaunchPolicyFingerprint { get; init; }
+
+    public long? GlobalFreeVramAtFreezeBytes { get; init; }
+
+    public long? ProcessBudgetVramAtFreezeBytes { get; init; }
+}
 
 /// <summary>Outcome of an explore run: the drafted profile, or a sanitized reason when the model was rejected.</summary>
-public sealed record ExploreResult(bool Success, string? FailureReason, InferenceProfileView? Profile, bool Skipped = false)
+public sealed class ExploreResult
 {
+    public required bool Success { get; init; }
+
+    public required string? FailureReason { get; init; }
+
+    public required InferenceProfileView? Profile { get; init; }
+
+    public bool Skipped { get; init; }
+
     /// <summary>A successful explore carrying the drafted profile.</summary>
     public static ExploreResult Ok(InferenceProfileView profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        return new ExploreResult(Success: true, FailureReason: null, profile);
+        return new ExploreResult { Success = true, FailureReason = null, Profile = profile };
     }
 
     /// <summary>A rejected explore carrying only the sanitized <paramref name="reason" />.</summary>
     public static ExploreResult Fail(string reason)
     {
-        return new ExploreResult(Success: false, reason, Profile: null);
+        return new ExploreResult { Success = false, FailureReason = reason, Profile = null };
     }
 
     /// <summary>
@@ -107,7 +140,7 @@ public sealed record ExploreResult(bool Success, string? FailureReason, Inferenc
     /// </summary>
     public static ExploreResult SkippedInUse(string reason)
     {
-        return new ExploreResult(Success: false, reason, Profile: null, Skipped: true);
+        return new ExploreResult { Success = false, FailureReason = reason, Profile = null, Skipped = true };
     }
 }
 
@@ -116,18 +149,24 @@ public sealed record ExploreResult(bool Success, string? FailureReason, Inferenc
 ///     <see cref="Success" /> mirrors the harness outcome (a failed harness leaves the snapshot Failed and the profile
 ///     un-frozen).
 /// </summary>
-public sealed record BenchmarkResult(
-    bool Success,
-    string? FailureReason,
-    Guid? SnapshotId,
-    InferenceBenchmarkMetrics? Metrics,
-    InferenceProfileView? Profile,
-    bool Skipped = false)
+public sealed class BenchmarkResult
 {
+    public required bool Success { get; init; }
+
+    public required string? FailureReason { get; init; }
+
+    public required Guid? SnapshotId { get; init; }
+
+    public required InferenceBenchmarkMetrics? Metrics { get; init; }
+
+    public required InferenceProfileView? Profile { get; init; }
+
+    public bool Skipped { get; init; }
+
     /// <summary>A failed benchmark carrying a sanitized reason and (when one was created) the snapshot id.</summary>
     public static BenchmarkResult Fail(string reason, Guid? snapshotId = null)
     {
-        return new BenchmarkResult(Success: false, reason, snapshotId, Metrics: null, Profile: null);
+        return new BenchmarkResult { Success = false, FailureReason = reason, SnapshotId = snapshotId, Metrics = null, Profile = null };
     }
 
     /// <summary>
@@ -136,23 +175,29 @@ public sealed record BenchmarkResult(
     /// </summary>
     public static BenchmarkResult SkippedInUse(string reason, Guid? snapshotId = null)
     {
-        return new BenchmarkResult(Success: false, reason, snapshotId, Metrics: null, Profile: null, Skipped: true);
+        return new BenchmarkResult { Success = false, FailureReason = reason, SnapshotId = snapshotId, Metrics = null, Profile = null, Skipped = true };
     }
 }
 
 /// <summary>Outcome of a freeze or invalidate transition: the updated profile, or a sanitized reason when it was rejected.</summary>
-public sealed record ProfileActionResult(bool Success, string? FailureReason, InferenceProfileView? Profile)
+public sealed class ProfileActionResult
 {
+    public required bool Success { get; init; }
+
+    public required string? FailureReason { get; init; }
+
+    public required InferenceProfileView? Profile { get; init; }
+
     /// <summary>A successful transition carrying the updated profile.</summary>
     public static ProfileActionResult Ok(InferenceProfileView profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        return new ProfileActionResult(Success: true, FailureReason: null, profile);
+        return new ProfileActionResult { Success = true, FailureReason = null, Profile = profile };
     }
 
     /// <summary>A rejected transition carrying only the sanitized <paramref name="reason" />.</summary>
     public static ProfileActionResult Fail(string reason)
     {
-        return new ProfileActionResult(Success: false, reason, Profile: null);
+        return new ProfileActionResult { Success = false, FailureReason = reason, Profile = null };
     }
 }

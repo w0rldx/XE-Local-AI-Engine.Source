@@ -158,42 +158,51 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
 
     /// <summary>A clean pass with a small report, which is what a green validation node looks like.</summary>
     public static DevWorkflowToolRun Passing(int commandsRun = 2, string report = """{"passed":true}""") =>
-        new(Passed: true,
-            FailureClass: null,
-            FailureCode: null,
-            SanitizedReason: null,
-            commandsRun,
-            CommandsFailed: 0,
-            TestsPassed: 12,
-            TestsFailed: 0,
-            Encoding.UTF8.GetBytes(report),
-            []);
+        new()
+        {
+            Passed = true,
+            FailureClass = null,
+            FailureCode = null,
+            SanitizedReason = null,
+            CommandsRun = commandsRun,
+            CommandsFailed = 0,
+            TestsPassed = 12,
+            TestsFailed = 0,
+            Report = Encoding.UTF8.GetBytes(report),
+            SecretPaths = []
+        };
 
     /// <summary>A failed verdict: the commands ran and the gate said no, which is the fix loop's fuel.</summary>
     public static DevWorkflowToolRun Failing(string failureCode = "tests_failed", int testsFailed = 3) =>
-        new(Passed: false,
-            DevWorkflowFailureClasses.ToolCommandFailed,
-            failureCode,
-            $"Command dotnet_test_release_no_build reported {testsFailed} failing of 15 executed tests.",
-            CommandsRun: 4,
-            CommandsFailed: 1,
-            TestsPassed: 12,
-            testsFailed,
-            Encoding.UTF8.GetBytes($$"""{"passed":false,"failureCode":"{{failureCode}}"}"""),
-            []);
+        new()
+        {
+            Passed = false,
+            FailureClass = DevWorkflowFailureClasses.ToolCommandFailed,
+            FailureCode = failureCode,
+            SanitizedReason = $"Command dotnet_test_release_no_build reported {testsFailed} failing of 15 executed tests.",
+            CommandsRun = 4,
+            CommandsFailed = 1,
+            TestsPassed = 12,
+            TestsFailed = testsFailed,
+            Report = Encoding.UTF8.GetBytes($$"""{"passed":false,"failureCode":"{{failureCode}}"}"""),
+            SecretPaths = []
+        };
 
     /// <summary>A pass that never got as far as a verdict, for one of the classes no retry can answer.</summary>
     public static DevWorkflowToolRun Refusing(string failureClass, string reason, params string[] secretPaths) =>
-        new(Passed: false,
-            failureClass,
-            FailureCode: null,
-            reason,
-            CommandsRun: 0,
-            CommandsFailed: 0,
-            TestsPassed: null,
-            TestsFailed: null,
-            ReadOnlyMemory<byte>.Empty,
-            secretPaths);
+        new()
+        {
+            Passed = false,
+            FailureClass = failureClass,
+            FailureCode = null,
+            SanitizedReason = reason,
+            CommandsRun = 0,
+            CommandsFailed = 0,
+            TestsPassed = null,
+            TestsFailed = null,
+            Report = ReadOnlyMemory<byte>.Empty,
+            SecretPaths = secretPaths
+        };
 
     /// <summary>One parked pass: when it started, and the handle that lets it finish.</summary>
     internal sealed class ToolHold

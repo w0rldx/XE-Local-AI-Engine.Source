@@ -276,13 +276,16 @@ public sealed class DevWorkflowRunEndpointTests
             Status = DevWorkflowNodeRunStatus.Pending,
             PendingDecisionKind = null
         };
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+        var runs = RunService(new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot() with
             {
                 GraphJson = DecompositionGraph
             },
-            [decompose, join],
-            PendingDecisionCount: 0,
-            BlockingGateNodeRunId: null));
+            NodeRuns = [decompose, join],
+            PendingDecisionCount = 0,
+            BlockingGateNodeRunId = null
+        });
         await using var factory = EnabledFactory(Store(), runs);
 
         using var response = await SendAsync(factory, "GET", Run);
@@ -366,13 +369,16 @@ public sealed class DevWorkflowRunEndpointTests
             Status = DevWorkflowNodeRunStatus.Pending,
             PendingDecisionKind = null
         };
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+        var runs = RunService(new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot() with
             {
                 GraphJson = DecompositionGraph
             },
-            [decompose, firstChildImplement, firstChildReview, secondChildImplement, secondChildReview, join],
-            PendingDecisionCount: 0,
-            BlockingGateNodeRunId: null));
+            NodeRuns = [decompose, firstChildImplement, firstChildReview, secondChildImplement, secondChildReview, join],
+            PendingDecisionCount = 0,
+            BlockingGateNodeRunId = null
+        });
         await using var factory = EnabledFactory(Store(), runs);
 
         using var response = await SendAsync(factory, "GET", Run);
@@ -443,13 +449,16 @@ public sealed class DevWorkflowRunEndpointTests
                            PendingDecisionKind = null
                        })
                        .ToList();
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+        var runs = RunService(new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot() with
             {
                 GraphJson = TwoDecompositions
             },
-            rows,
-            PendingDecisionCount: 0,
-            BlockingGateNodeRunId: null));
+            NodeRuns = rows,
+            PendingDecisionCount = 0,
+            BlockingGateNodeRunId = null
+        });
         await using var factory = EnabledFactory(Store(), runs);
 
         using var response = await SendAsync(factory, "GET", Run);
@@ -755,7 +764,7 @@ public sealed class DevWorkflowRunEndpointTests
             ToolCalls = 1,
             ProviderCalls = 2
         };
-        await using var factory = EnabledFactory(store, RunService(new DevWorkflowRunDetail(RunSnapshot(), [research, gate], PendingDecisionCount: 1, GateNodeRunId)));
+        await using var factory = EnabledFactory(store, RunService(new DevWorkflowRunDetail { Run = RunSnapshot(), NodeRuns = [research, gate], PendingDecisionCount = 1, BlockingGateNodeRunId = GateNodeRunId }));
 
         using var response = await SendAsync(factory, "GET", Run);
         var body = await response.Content.ReadAsStringAsync();
@@ -876,7 +885,7 @@ public sealed class DevWorkflowRunEndpointTests
         store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(mediaType: mediaType, sizeBytes: bytes.Length));
         var blobs = Substitute.For<IDevWorkflowArtifactBlobStore>();
         blobs.ReadAsync(RunId, ArtifactId, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(new DevWorkflowArtifactBlobReadResult(DevWorkflowArtifactReadStatus.Found, bytes));
+             .Returns(new DevWorkflowArtifactBlobReadResult { Status = DevWorkflowArtifactReadStatus.Found, Content = bytes });
         await using var factory = EnabledFactory(store, RunService(), blobs: blobs);
 
         using var response = await SendAsync(factory, "GET", ArtifactContent);
@@ -894,7 +903,7 @@ public sealed class DevWorkflowRunEndpointTests
         var store = Store();
         var blobs = Substitute.For<IDevWorkflowArtifactBlobStore>();
         blobs.ReadAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-             .Returns(new DevWorkflowArtifactBlobReadResult(DevWorkflowArtifactReadStatus.HashMismatch, ReadOnlyMemory<byte>.Empty));
+             .Returns(new DevWorkflowArtifactBlobReadResult { Status = DevWorkflowArtifactReadStatus.HashMismatch, Content = ReadOnlyMemory<byte>.Empty });
         await using var factory = EnabledFactory(store, RunService(), blobs: blobs);
 
         using var response = await SendAsync(factory, "GET", ArtifactContent);
@@ -1229,11 +1238,13 @@ public sealed class DevWorkflowRunEndpointTests
                                            {"from":"broken","to":"cascaded"},{"from":"cascaded","to":"join"}]}
                                  """;
 
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+        var runs = RunService(new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot() with
             {
                 GraphJson = SkipGraph
             },
-            [
+            NodeRuns = [
                 WorkNodeRun(1, "survey", DevWorkflowNodeRunStatus.Succeeded),
                 WorkNodeRun(2, "excused", DevWorkflowNodeRunStatus.Skipped),
                 WorkNodeRun(3, "broken", DevWorkflowNodeRunStatus.Failed),
@@ -1243,8 +1254,9 @@ public sealed class DevWorkflowRunEndpointTests
                     NodeType = DevWorkflowNodeType.Join
                 }
             ],
-            PendingDecisionCount: 0,
-            BlockingGateNodeRunId: null));
+            PendingDecisionCount = 0,
+            BlockingGateNodeRunId = null
+        });
         await using var factory = EnabledFactory(Store(), runs);
 
         using var response = await SendAsync(factory, "GET", Run);
@@ -1310,13 +1322,16 @@ public sealed class DevWorkflowRunEndpointTests
             MaterializedFromNodeRunId = retried.Id,
             MaterializationIndex = 2
         };
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+        var runs = RunService(new DevWorkflowRunDetail
+        {
+            Run = RunSnapshot() with
             {
                 GraphJson = RetryGraph
             },
-            [retried, untouched, unapplied, preUpgrade, widenedClone, untouchedClone],
-            PendingDecisionCount: 1,
-            BlockingGateNodeRunId: null));
+            NodeRuns = [retried, untouched, unapplied, preUpgrade, widenedClone, untouchedClone],
+            PendingDecisionCount = 1,
+            BlockingGateNodeRunId = null
+        });
         var store = Store();
         _ = store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                  .Returns([
@@ -1451,8 +1466,10 @@ public sealed class DevWorkflowRunEndpointTests
                 Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
-            .Returns(call => new DevWorkflowDecisionResult(composed,
-                new DevWorkflowDecisionSnapshot
+            .Returns(call => new DevWorkflowDecisionResult
+            {
+                Detail = composed,
+                Decision = new DevWorkflowDecisionSnapshot
                 {
                     Id = Guid.NewGuid(),
                     RunId = RunId,
@@ -1465,7 +1482,8 @@ public sealed class DevWorkflowRunEndpointTests
                     OperationId = call.ArgAt<Guid>(2),
                     Sequence = 21,
                     DecidedAtUtc = 99
-                }));
+                }
+            });
         return runs;
     }
 
@@ -1540,7 +1558,7 @@ public sealed class DevWorkflowRunEndpointTests
         };
 
         var waiting = gateStatus is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked;
-        return new DevWorkflowRunDetail(RunSnapshot(), [research, gate], waiting ? 1 : 0, waiting ? GateNodeRunId : null);
+        return new DevWorkflowRunDetail { Run = RunSnapshot(), NodeRuns = [research, gate], PendingDecisionCount = waiting ? 1 : 0, BlockingGateNodeRunId = waiting ? GateNodeRunId : null };
     }
 
     private static DevWorkflowRunSnapshot RunSnapshot() =>

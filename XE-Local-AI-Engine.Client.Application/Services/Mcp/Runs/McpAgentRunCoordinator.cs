@@ -180,7 +180,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
     {
         if (requestId == Guid.Empty)
         {
-            return new McpAgentRunCancelResult(McpAgentRunCancelKind.NotFound, null, "Run not found.");
+            return new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." };
         }
 
         try
@@ -190,7 +190,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                 var current = await _store.GetAsync(requestId, cancellationToken);
                 if (current is null)
                 {
-                    return new McpAgentRunCancelResult(McpAgentRunCancelKind.NotFound, null, "Run not found.");
+                    return new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." };
                 }
 
                 var stopped = await _store.RequestStopAsync(requestId,
@@ -220,7 +220,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
             }
 
             _metrics.RecordStop("user", "version_conflict");
-            return new McpAgentRunCancelResult(McpAgentRunCancelKind.Conflict, null, "Run state changed; read it and retry.");
+            return new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.Conflict, Run = null, DisplayMessage = "Run state changed; read it and retry." };
         }
         catch (Exception exception)
         {
@@ -240,14 +240,17 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         if (existing.PayloadExpired)
         {
             _metrics.RecordLifecycle("result_expired");
-            return new McpAgentRunStartResult(McpAgentRunStartKind.ResultExpired,
-                ToView(existing),
-                ResultExpiredCode,
-                "The retained result for this request has expired.");
+            return new McpAgentRunStartResult
+            {
+                Kind = McpAgentRunStartKind.ResultExpired,
+                Run = ToView(existing),
+                FailureCode = ResultExpiredCode,
+                DisplayMessage = "The retained result for this request has expired."
+            };
         }
 
         _metrics.RecordLifecycle("existing");
-        return new McpAgentRunStartResult(McpAgentRunStartKind.Existing, ToView(existing), null, "Existing run returned.");
+        return new McpAgentRunStartResult { Kind = McpAgentRunStartKind.Existing, Run = ToView(existing), FailureCode = null, DisplayMessage = "Existing run returned." };
     }
 
     private McpAgentRunStartResult MapAdmission(McpAgentRunAdmissionResult admission)
@@ -257,25 +260,31 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         {
             case McpAgentRunAdmissionKind.Accepted:
                 _metrics.RecordLifecycle("accepted");
-                return new McpAgentRunStartResult(McpAgentRunStartKind.Accepted, view, null, "Run accepted.");
+                return new McpAgentRunStartResult { Kind = McpAgentRunStartKind.Accepted, Run = view, FailureCode = null, DisplayMessage = "Run accepted." };
             case McpAgentRunAdmissionKind.Existing:
                 _metrics.RecordLifecycle("existing");
-                return new McpAgentRunStartResult(McpAgentRunStartKind.Existing, view, null, "Existing run returned.");
+                return new McpAgentRunStartResult { Kind = McpAgentRunStartKind.Existing, Run = view, FailureCode = null, DisplayMessage = "Existing run returned." };
             case McpAgentRunAdmissionKind.ResultExpired:
                 _metrics.RecordLifecycle("result_expired");
-                return new McpAgentRunStartResult(McpAgentRunStartKind.ResultExpired,
-                    view,
-                    ResultExpiredCode,
-                    "The retained result for this request has expired.");
+                return new McpAgentRunStartResult
+                {
+                    Kind = McpAgentRunStartKind.ResultExpired,
+                    Run = view,
+                    FailureCode = ResultExpiredCode,
+                    DisplayMessage = "The retained result for this request has expired."
+                };
             case McpAgentRunAdmissionKind.RequestIdConflict:
                 _metrics.RecordLifecycle("request_id_conflict");
                 return Reject(RequestIdConflictCode, "Cannot start: the request identifier belongs to a different request.");
             case McpAgentRunAdmissionKind.CapacityExceeded:
                 _metrics.RecordQuota(McpAgentRunText.ToLowercaseInvariant(admission.CapacityKind));
-                return new McpAgentRunStartResult(McpAgentRunStartKind.CapacityExceeded,
-                    null,
-                    CapacityExceededCode,
-                    "Cannot start: the durable run ledger is at capacity.");
+                return new McpAgentRunStartResult
+                {
+                    Kind = McpAgentRunStartKind.CapacityExceeded,
+                    Run = null,
+                    FailureCode = CapacityExceededCode,
+                    DisplayMessage = "Cannot start: the durable run ledger is at capacity."
+                };
             default:
                 return Reject(McpExecutionFailureCodes.InternalFailure, "Cannot start the run.");
         }
@@ -286,34 +295,37 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         var view = result.Run is null ? null : ToView(result.Run);
         return result.Kind switch
         {
-            McpAgentRunStopKind.Requested => new(McpAgentRunCancelKind.Requested, view, "Cancellation recorded."),
-            McpAgentRunStopKind.AlreadyRequested => new(McpAgentRunCancelKind.AlreadyRequested, view, "Cancellation was already recorded."),
-            McpAgentRunStopKind.AlreadyTerminal => new(McpAgentRunCancelKind.AlreadyTerminal, view, "Run is already terminal."),
-            McpAgentRunStopKind.NotFound => new(McpAgentRunCancelKind.NotFound, null, "Run not found."),
-            _ => new(McpAgentRunCancelKind.Conflict, view, "Run state changed; read it and retry.")
+            McpAgentRunStopKind.Requested => new() { Kind = McpAgentRunCancelKind.Requested, Run = view, DisplayMessage = "Cancellation recorded." },
+            McpAgentRunStopKind.AlreadyRequested => new() { Kind = McpAgentRunCancelKind.AlreadyRequested, Run = view, DisplayMessage = "Cancellation was already recorded." },
+            McpAgentRunStopKind.AlreadyTerminal => new() { Kind = McpAgentRunCancelKind.AlreadyTerminal, Run = view, DisplayMessage = "Run is already terminal." },
+            McpAgentRunStopKind.NotFound => new() { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." },
+            _ => new() { Kind = McpAgentRunCancelKind.Conflict, Run = view, DisplayMessage = "Run state changed; read it and retry." }
         };
     }
 
     internal static McpAgentRunView ToView(McpAgentRunRecord run) =>
-        new(run.RequestId,
-            run.Status,
-            run.Version,
-            run.StopReason,
-            run.ModelId,
-            run.AgentDefinitionId,
-            run.WorkspaceId,
-            run.Result,
-            run.DisplayMessage,
-            run.FailureCode,
-            run.CreatedAtUtc,
-            run.ClaimedAtUtc,
-            run.CompletedAtUtc,
-            run.PayloadExpiresAtUtc,
-            run.CompactedAtUtc,
-            run.PayloadExpired);
+        new()
+        {
+            RequestId = run.RequestId,
+            Status = run.Status,
+            Version = run.Version,
+            StopReason = run.StopReason,
+            ModelId = run.ModelId,
+            AgentDefinitionId = run.AgentDefinitionId,
+            WorkspaceId = run.WorkspaceId,
+            Result = run.Result,
+            DisplayMessage = run.DisplayMessage,
+            FailureCode = run.FailureCode,
+            CreatedAtUtc = run.CreatedAtUtc,
+            ClaimedAtUtc = run.ClaimedAtUtc,
+            CompletedAtUtc = run.CompletedAtUtc,
+            PayloadExpiresAtUtc = run.PayloadExpiresAtUtc,
+            CompactedAtUtc = run.CompactedAtUtc,
+            PayloadExpired = run.PayloadExpired
+        };
 
     private static McpAgentRunStartResult Reject(string failureCode, string displayMessage) =>
-        new(McpAgentRunStartKind.Rejected, null, failureCode, displayMessage);
+        new() { Kind = McpAgentRunStartKind.Rejected, Run = null, FailureCode = failureCode, DisplayMessage = displayMessage };
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;

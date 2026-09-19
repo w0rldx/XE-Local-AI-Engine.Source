@@ -159,7 +159,7 @@ public sealed class DevWorkflowRunComposerTests
             sessions ?? Substitute.For<IWorkSessionService>());
 
     private static DevWorkflowRunDetail Detail(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns) =>
-        new(Run(), nodeRuns, PendingDecisionCount: 0, BlockingGateNodeRunId: null);
+        new() { Run = Run(), NodeRuns = nodeRuns, PendingDecisionCount = 0, BlockingGateNodeRunId = null };
 
     private static DevWorkflowRunSnapshot Run() =>
         new()
@@ -289,19 +289,22 @@ public sealed class DevWorkflowRunComposerTests
         };
 
     private static WorkSessionDetail Session() =>
-        new(SessionId,
-            "Research",
-            "Find out.",
-            AgentWorkSessionKind.General,
-            AgentWorkSessionStatus.Running,
-            AgentId,
-            ConversationId,
-            CurrentTaskId: null,
-            StepCount: 1,
-            MaxStepsPerRun: 10,
-            LastCheckpointId: null,
-            LastSequence: 2,
-            Version: 1,
-            CreatedUtc: 1,
-            UpdatedUtc: 2);
+        new()
+        {
+            Id = SessionId,
+            Title = "Research",
+            Objective = "Find out.",
+            Kind = AgentWorkSessionKind.General,
+            Status = AgentWorkSessionStatus.Running,
+            AgentDefinitionId = AgentId,
+            ConversationId = ConversationId,
+            CurrentTaskId = null,
+            StepCount = 1,
+            MaxStepsPerRun = 10,
+            LastCheckpointId = null,
+            LastSequence = 2,
+            Version = 1,
+            CreatedUtc = 1,
+            UpdatedUtc = 2
+        };
 }

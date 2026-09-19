@@ -168,11 +168,14 @@ public static class ContainerBridgeEndpointResolver
                 addresses.Add(unicast.Address);
             }
 
-            snapshots.Add(new HostInterfaceSnapshot(networkInterface.OperationalStatus == OperationalStatus.Up,
-                networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback,
-                networkInterface.NetworkInterfaceType is NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp,
-                properties.GatewayAddresses.Count > 0,
-                addresses));
+            snapshots.Add(new HostInterfaceSnapshot
+            {
+                IsUp = networkInterface.OperationalStatus == OperationalStatus.Up,
+                IsLoopback = networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback,
+                IsTunnel = networkInterface.NetworkInterfaceType is NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp,
+                HasGateway = properties.GatewayAddresses.Count > 0,
+                UnicastAddresses = addresses
+            });
         }
 
         return snapshots;

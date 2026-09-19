@@ -46,7 +46,7 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
     public async Task<CommittedModelDeletion> CommitDeleteAsync(string modelName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(modelName, InstalledModelMutationKind.Delete), cancellationToken);
+        await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest { ModelName = modelName, Kind = InstalledModelMutationKind.Delete }, cancellationToken);
         var snapshot = lease.Snapshot ?? throw new KeyNotFoundException("The installed model was not found.");
         await EnsureNoDependentAdaptersAsync(snapshot, cancellationToken);
         var stagePlan = GgufDeletionStageReceipt.Create(ToProviderSnapshot(snapshot), Guid.NewGuid());
@@ -113,10 +113,13 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
                 ProviderMapReceipts = Array.AsReadOnly(mapReceipts.ToArray())
             };
             await _journals.WriteAsync(journal, cancellationToken);
-            return new CommittedModelDeletion(staged.OperationId,
-                modelName,
-                Array.AsReadOnly(staged.RemovalAliases.Select(static alias => alias.ModelName).ToArray()),
-                staged);
+            return new CommittedModelDeletion
+            {
+                OperationId = staged.OperationId,
+                RequestedModelName = modelName,
+                RemovedModelNames = Array.AsReadOnly(staged.RemovalAliases.Select(static alias => alias.ModelName).ToArray()),
+                StageReceipt = staged
+            };
         }
         catch
         {
@@ -152,11 +155,14 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
         {
             var aliasNames = journal.StageReceipt.RemovalAliases.Select(static alias => alias.ModelName).ToArray();
             var intendedMembers = journal.Snapshot.Members.Select(static member =>
-                new IntendedInstalledModelMember(member.RelativePath, member.Role)).ToArray();
-            await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(journal.RequestedModelName,
-                InstalledModelMutationKind.Delete,
-                intendedMembers,
-                aliasNames), cancellationToken);
+                new IntendedInstalledModelMember { RelativePath = member.RelativePath, Role = member.Role }).ToArray();
+            await using var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest
+            {
+                ModelName = journal.RequestedModelName,
+                Kind = InstalledModelMutationKind.Delete,
+                IntendedMembers = intendedMembers,
+                IntendedModelNames = aliasNames
+            }, cancellationToken);
             if (journal.Phase == DeletionJournalPhase.Committed)
             {
                 _providerResolver.InvalidateModelProviderMap();

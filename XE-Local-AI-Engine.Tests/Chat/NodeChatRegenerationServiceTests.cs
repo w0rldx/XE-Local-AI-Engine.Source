@@ -47,14 +47,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
@@ -200,15 +206,21 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     // Seeds a completed user + assistant turn and returns the ids needed to regenerate that assistant answer.
     private static async Task<(Guid ConversationId, Guid OriginalMessageId)> SeedRegeneratableTurnAsync(NodeChatPersistenceService persistence)
     {
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
 
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         return (conversation.ConversationId, originalId);
     }
@@ -322,14 +334,26 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         // The original assistant turn was produced by a Codex cloud model, so the regenerate resolves that cloud model.
         const string CloudModel = "gpt-5.5";
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "how do I restart the service?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "how do I restart the service?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             CloudModel));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "eject it",
-                             Model: CloudModel));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = CloudModel
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "eject it",
+            Model = CloudModel
+        });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -361,12 +385,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
         // Seed a completed local-default original turn: the placeholder + terminal carry NO model (request.Model null).
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = originalId, RequestId = originalCorrelation.RequestId, CreatedAtUtc = 12 });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
@@ -417,16 +441,22 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
         var agentDefinitionId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Bound regen", "node", CreatedAtUtc: 10, AgentDefinitionId: agentDefinitionId));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Bound regen", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = agentDefinitionId });
         AssertEx.Equal(agentDefinitionId, conversation.AgentDefinitionId!.Value);
 
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -493,14 +523,26 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
         var agentDefinitionId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Effective-model regen", "node", CreatedAtUtc: 10, AgentDefinitionId: agentDefinitionId));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Effective-model regen", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = agentDefinitionId });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             originalModel));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four",
-                             Model: originalModel));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = originalModel
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = originalModel
+        });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -565,20 +607,23 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var conversationAgentId = Guid.NewGuid();
         var originalTurnAgentId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Reuse original agent", "node", CreatedAtUtc: 10, AgentDefinitionId: conversationAgentId));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Reuse original agent", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = conversationAgentId });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
         // The original assistant turn carries its own agent attribution (stamped at its send time).
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
-                             originalId,
-                             originalCorrelation.RequestId,
-                             CreatedAtUtc: 12,
-                             "model-x",
-                             AgentDefinitionId: originalTurnAgentId,
-                             AgentName: "Original Agent"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x",
+            AgentDefinitionId = originalTurnAgentId,
+            AgentName = "Original Agent"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -638,14 +683,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
         var agentDefinitionId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Orchestrated regen", "node", CreatedAtUtc: 10, AgentDefinitionId: agentDefinitionId));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Orchestrated regen", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = agentDefinitionId });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -661,8 +712,16 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
-                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null)));
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
+                             {
+                                 Spec = spec,
+                                 ResolvedSystemPrompt = "Orchestrator prompt.",
+                                 ModelProfile = "qwen3:8b",
+                                 ReasoningEffort = null,
+                                 AgentDefinitionVersion = 4,
+                                 AnyParticipantIsCloud = false,
+                                 FirstCloudParticipantModel = null
+                             }));
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -707,14 +766,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
         var agentDefinitionId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Degraded regen", "node", CreatedAtUtc: 10, AgentDefinitionId: agentDefinitionId));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Degraded regen", UserId = "node", CreatedAtUtc = 10, AgentDefinitionId = agentDefinitionId });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -772,16 +837,22 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-unbound.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Unbound regen", UserId = "node", CreatedAtUtc = 10 });
         AssertEx.True(conversation.AgentDefinitionId is null, "The seeded conversation must be unbound.");
 
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
@@ -827,14 +898,26 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-tool-lifecycle.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is the weather?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is the weather?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "cloudy",
-                             Model: "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "cloudy",
+            Model = "model-x"
+        });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenToolEmittingRunner(dispatcher);
@@ -898,14 +981,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-node-timeout.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what time is it?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "noon", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "noon", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -959,14 +1048,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-offer-tools.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what time is it?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "noon", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "noon", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1022,14 +1117,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-no-offer-tools.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what time is it?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "noon", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "noon", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1078,15 +1179,21 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-variant-context.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
         var userMessageId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, "what is 2+2?", CreatedAtUtc: 11));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = userMessageId, Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         // First regenerate makes variant B (a sibling of the original whose parent is the ORIGINAL assistant turn).
         var dispatcher = new RegenRecordingDispatcher();
@@ -1157,7 +1264,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-late-sibling-anchor.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
         var conversationId = conversation.ConversationId;
 
         // U1 A1 U2 A2 U3 A3.
@@ -1193,12 +1300,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.True(lateSibling.VariantGroupId is not null, "A regenerated answer must join its original's variant group.");
 
         // Select the new sibling as the group's active revision, exactly as the UI does after a regenerate.
-        await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId,
-                             new Dictionary<Guid, Guid>
+        await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+        {
+            ConversationId = conversationId,
+            SelectedPath = new Dictionary<Guid, Guid>
                              {
                                  [lateSibling.VariantGroupId!.Value] = lateSiblingId
                              },
-                             UpdatedAtUtc: 20));
+            UpdatedAtUtc = 20
+        });
 
         var drained = 0;
         await foreach (var _ in service.RegenerateAsync(conversationId, answerThreeId))
@@ -1222,7 +1332,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static async Task<Guid> SeedUserTurnAsync(NodeChatPersistenceService persistence, Guid conversationId, string content, long createdAtUtc)
     {
         var messageId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, messageId, content, createdAtUtc));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = messageId, Content = content, CreatedAtUtc = createdAtUtc });
         return messageId;
     }
 
@@ -1230,8 +1340,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         var messageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversationId, messageId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, correlation.RequestId, createdAtUtc, "model-x"));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, createdAtUtc, content, Model: "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = correlation.RequestId, CreatedAtUtc = createdAtUtc, Model = "model-x" });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest { Correlation = correlation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = createdAtUtc, Content = content, Model = "model-x" });
         return messageId;
     }
 
@@ -1298,30 +1408,48 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-compaction.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
         var oldUserId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, oldUserId, "ancient question", CreatedAtUtc: 11));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = oldUserId, Content = "ancient question", CreatedAtUtc = 11 });
         var oldAssistantId = Guid.NewGuid();
         var oldCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, oldAssistantId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer",
-                             Model: "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = oldAssistantId,
+            RequestId = oldCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = oldCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "ancient answer",
+            Model = "model-x"
+        });
 
         var recentUserId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, recentUserId, "what is 2+2?", CreatedAtUtc: 14));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = recentUserId, Content = "what is 2+2?", CreatedAtUtc = 14 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 15,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 15,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 16, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 16, Content = "four", Model = "model-x" });
 
         // Compact everything up to (and including) the older assistant answer — the sequence the persistence layer
         // actually assigned it, so the test does not hard-code the numbering.
         var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId));
         var coveredSequence = seeded.Messages.Single(message => message.MessageId == oldAssistantId).Sequence;
-        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "ancient synopsis", coveredSequence, UpdatedAtUtc: 17));
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = conversation.ConversationId, Summary = "ancient synopsis", CoversToSequence = coveredSequence, UpdatedAtUtc = 17 });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1356,28 +1484,46 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-compaction-path-switch.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
         var oldUserId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, oldUserId, "ancient question", CreatedAtUtc: 11));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = oldUserId, Content = "ancient question", CreatedAtUtc = 11 });
         var oldAssistantId = Guid.NewGuid();
         var oldCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, oldAssistantId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, oldAssistantId, oldCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(oldCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "ancient answer",
-                             Model: "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = oldAssistantId,
+            RequestId = oldCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = oldCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "ancient answer",
+            Model = "model-x"
+        });
 
         var recentUserId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, recentUserId, "what is 2+2?", CreatedAtUtc: 14));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = recentUserId, Content = "what is 2+2?", CreatedAtUtc = 14 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 15,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 15,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 16, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 16, Content = "four", Model = "model-x" });
 
         var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId));
         var coveredSequence = seeded.Messages.Single(message => message.MessageId == oldAssistantId).Sequence;
-        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "ancient synopsis", coveredSequence, UpdatedAtUtc: 17));
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = conversation.ConversationId, Summary = "ancient synopsis", CoversToSequence = coveredSequence, UpdatedAtUtc = 17 });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1407,19 +1553,25 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-compaction-covers-cutoff.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
         var userMessageId = Guid.NewGuid();
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, "what is 2+2?", CreatedAtUtc: 11));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = userMessageId, Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var seeded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId));
         var userSequence = seeded.Messages.Single(message => message.MessageId == userMessageId).Sequence;
-        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversation.ConversationId, "covers everything", userSequence, UpdatedAtUtc: 14));
+        await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = conversation.ConversationId, Summary = "covers everything", CoversToSequence = userSequence, UpdatedAtUtc = 14 });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1445,14 +1597,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-reasoning.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1496,14 +1654,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-reasoning-default.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -1549,7 +1713,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
         var conversationId = Guid.NewGuid();
-        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId, "Remote", "client-node", CreatedAtUtc: 10, NodeChatOriginValues.Remote));
+        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest { ConversationId = conversationId, Title = "Remote", UserId = "client-node", CreatedAtUtc = 10, Origin = NodeChatOriginValues.Remote });
 
         var dispatcher = new RegenRecordingDispatcher();
         var service = new NodeChatRegenerationService(persistence,
@@ -1611,7 +1775,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("regeneration-missing-message.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
         var service = CreateMinimalRegenerationService(persistence);
 
         _ = await AssertEx.ThrowsAsync<NodeChatMessageNotFoundException>(async () =>
@@ -1664,15 +1828,27 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
         const string CodexModel = "gpt-5.5";
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Codex regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Codex regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
         // The original assistant turn was produced by the Codex cloud model, so the regenerate resolves that model.
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             CodexModel));
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four",
-                             Model: CodexModel));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = CodexModel
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = CodexModel
+        });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
@@ -1851,14 +2027,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     // model, so the regenerate resolves that model and does not touch the local-default resolver.
     private static async Task<(NodeChatConversationDto Conversation, Guid OriginalId)> SeedCompletedOriginalAsync(NodeChatPersistenceService persistence)
     {
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10));
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Regen", UserId = "node", CreatedAtUtc = 10 });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), Content = "what is 2+2?", CreatedAtUtc = 11 });
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
-                             "model-x"));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
         await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"));
+                             new NodeChatTerminalizeMessageRequest { Correlation = originalCorrelation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 13, Content = "four", Model = "model-x" });
         return (conversation, originalId);
     }
 
@@ -1954,13 +2136,13 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(new KnowledgeSearchResult(hits));
+                     .Returns(new KnowledgeSearchResult { Results = hits });
         return CreateScopeFactory(searchService);
     }
 
     private static KnowledgeSearchHit KnowledgeHit(string title, string content, double score)
     {
-        return new KnowledgeSearchHit(Guid.NewGuid(), Guid.NewGuid(), title, "Section", content, "knowledge-base", score, ChunkIndex: 0, KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false);
+        return new KnowledgeSearchHit { DocumentId = Guid.NewGuid(), ChunkId = Guid.NewGuid(), Title = title, Section = "Section", Content = content, Source = "knowledge-base", Score = score, ChunkIndex = 0, DocumentStatus = KnowledgeDocumentStatus.Indexed, ServingLastKnownGood = false };
     }
 
     // Builds a regeneration service wired with the given scope factory (KB retrieval path) and cloud-egress opt-in,
@@ -2027,7 +2209,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                    {
                        if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
                        {
-                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, ["completion", "tools", "thinking"], IsOverridden: false);
+                           map[modelName] = new ModelClassificationResult { ModelName = modelName, Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = ["completion", "tools", "thinking"], IsOverridden = false };
                        }
                    }
 

@@ -6,9 +6,12 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record DevelopmentCloudAttemptContext(
-    DevelopmentCloudRoleRoute Route,
-    Guid ArtifactId);
+internal sealed class DevelopmentCloudAttemptContext
+{
+    public required DevelopmentCloudRoleRoute Route { get; init; }
+
+    public required Guid ArtifactId { get; init; }
+}
 
 internal interface IDevelopmentCloudAttemptContextService
 {
@@ -69,18 +72,21 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
 
         var durationSeconds = Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
             _options.MaxAttemptDurationSeconds);
-        var bundle = _contextBuilder.Build(new DevelopmentCloudContextBuildRequest($"development-{snapshot.AttemptId:N}-{Guid.NewGuid():N}",
-            snapshot.ProjectId.ToString("D"),
-            snapshot.TaskId.ToString("D"),
-            snapshot.AttemptId.ToString("D"),
-            snapshot.Provider,
-            snapshot.ModelId,
-            snapshot.Requirements,
-            snapshot.AcceptanceCriteriaJson,
-            Policy(snapshot.WorkflowPolicyText),
-            excerpts,
-            _timeProvider.GetUtcNow().AddSeconds(durationSeconds + 60L),
-            Convert.ToHexString(RandomNumberGenerator.GetBytes(16))));
+        var bundle = _contextBuilder.Build(new DevelopmentCloudContextBuildRequest
+        {
+            BundleId = $"development-{snapshot.AttemptId:N}-{Guid.NewGuid():N}",
+            ProjectId = snapshot.ProjectId.ToString("D"),
+            TaskId = snapshot.TaskId.ToString("D"),
+            AttemptId = snapshot.AttemptId.ToString("D"),
+            ProviderName = snapshot.Provider,
+            ModelId = snapshot.ModelId,
+            Requirements = snapshot.Requirements,
+            AcceptanceCriteria = snapshot.AcceptanceCriteriaJson,
+            PolicyText = Policy(snapshot.WorkflowPolicyText),
+            Excerpts = excerpts,
+            ExpiresAt = _timeProvider.GetUtcNow().AddSeconds(durationSeconds + 60L),
+            Nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16))
+        });
 
         var content = JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -121,7 +127,7 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
         },
                             cancellationToken);
 
-        return new DevelopmentCloudAttemptContext(_routeFactory.Create(bundle), artifactId);
+        return new DevelopmentCloudAttemptContext { Route = _routeFactory.Create(bundle), ArtifactId = artifactId };
     }
 
     /// <summary>

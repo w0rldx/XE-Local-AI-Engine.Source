@@ -10,24 +10,40 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         runtime already holds that parsed.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowRunDetail(GraphWorkflowRunSnapshot Run, IReadOnlyList<GraphWorkflowNodeRunSnapshot> NodeRuns);
+public sealed class GraphWorkflowRunDetail
+{
+    public required GraphWorkflowRunSnapshot Run { get; init; }
+
+    public required IReadOnlyList<GraphWorkflowNodeRunSnapshot> NodeRuns { get; init; }
+}
 
 /// <summary>
 ///     One page of a run's event log. <see cref="ReplayTruncated" /> is OBSERVED rather than inferred: the page is read
 ///     one row over its limit, so a client that fell behind is told it was cut off instead of quietly handed a partial
 ///     log it would mistake for the whole one.
 /// </summary>
-public sealed record GraphWorkflowRunEventPage(IReadOnlyList<GraphWorkflowRunEventSnapshot> Events, long LastSeq, bool ReplayTruncated);
+public sealed class GraphWorkflowRunEventPage
+{
+    public required IReadOnlyList<GraphWorkflowRunEventSnapshot> Events { get; init; }
+
+    public required long LastSeq { get; init; }
+
+    public required bool ReplayTruncated { get; init; }
+}
 
 /// <summary>
 ///     What a decision left behind: the answer that now stands, and the CURRENT statuses of the run and of the pause it
 ///     answered. Current, not predicted — what follows a decision is the dispatcher's work on its own clock, so a
 ///     result promising <c>Running</c> would be describing a tick that has not happened.
 /// </summary>
-public sealed record GraphWorkflowDecisionResult(
-    GraphWorkflowDecisionKind Decision,
-    GraphWorkflowRunStatus RunStatus,
-    GraphWorkflowNodeRunStatus NodeRunStatus);
+public sealed class GraphWorkflowDecisionResult
+{
+    public required GraphWorkflowDecisionKind Decision { get; init; }
+
+    public required GraphWorkflowRunStatus RunStatus { get; init; }
+
+    public required GraphWorkflowNodeRunStatus NodeRunStatus { get; init; }
+}
 
 /// <summary>
 ///     Both ways a run command can lose, under one type because from the client's side they are one story — you are

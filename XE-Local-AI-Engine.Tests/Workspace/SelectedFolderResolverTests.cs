@@ -22,7 +22,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        var reference = await resolver.RegisterAsync(new SelectedFolderRegistration("Repo One!", TrustedHostPath));
+        var reference = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "Repo One!", HostPath = TrustedHostPath });
 
         AssertEx.Equal("repo-one", reference.Alias);
         AssertEx.True(Guid.TryParse(reference.Id, out _), "The reference id should be a GUID string.");
@@ -33,7 +33,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "relative/path")),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = "relative/path" }),
             "A relative host path should be rejected.");
 
         // A bad host path is an input problem, not a not-found or a conflict: the base type is what endpoints map to 400.
@@ -47,7 +47,7 @@ public sealed class SelectedFolderResolverTests
 
         // Still fully qualified on both platforms, so the '..' segment — not the qualification check — is what rejects it.
         var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", HostPath("trusted", "..", "etc", "passwd"))),
+            () => resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = HostPath("trusted", "..", "etc", "passwd") }),
             "A traversal host path should be rejected.");
 
         AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
@@ -58,7 +58,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("!!!", TrustedHostPath)),
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "!!!", HostPath = TrustedHostPath }),
             "An alias that normalizes to empty should be rejected.");
 
         AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
@@ -68,9 +68,9 @@ public sealed class SelectedFolderResolverTests
     public async Task RegisterAsync_WithDuplicateAlias_ThrowsConflict()
     {
         var resolver = CreateResolver();
-        _ = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
+        _ = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderConflictException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", HostPath("trusted", "host", "other"))),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderConflictException>(() => resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "Repo-One", HostPath = HostPath("trusted", "host", "other") }),
             "A colliding alias should be rejected after normalization, as a conflict rather than a plain input rejection.");
     }
 
@@ -79,7 +79,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = new SelectedFolderResolver(new ThrowingSelectedFolderStore(), NullLogger<SelectedFolderResolver>.Instance);
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderConflictException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath)),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderConflictException>(() => resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath }),
             "A unique-index violation surfacing from the store should be mapped to the same conflict as the pre-check.");
     }
 
@@ -108,7 +108,7 @@ public sealed class SelectedFolderResolverTests
     public async Task ResolveAsync_WithKnownId_ReturnsTrustedHostPath()
     {
         var resolver = CreateResolver();
-        var reference = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
+        var reference = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
 
         var resolved = await resolver.ResolveAsync(reference.Id);
 
@@ -121,7 +121,7 @@ public sealed class SelectedFolderResolverTests
     public async Task ListReferencesAsync_ExposesIdAndAliasOnly()
     {
         var resolver = CreateResolver();
-        _ = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
+        _ = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
 
         var references = await resolver.ListReferencesAsync();
 

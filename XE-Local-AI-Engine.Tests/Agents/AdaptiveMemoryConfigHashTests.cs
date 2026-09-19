@@ -123,15 +123,18 @@ public sealed class AdaptiveMemoryConfigHashTests
 
     private static LocalChatRuntimePackageRequest BuildRequest(ResolvedAgentRuntime resolved)
     {
-        return new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            resolved.ResolvedSystemPrompt,
-            [],
-            resolved.ModelProfile,
-            resolved.AgentDefinitionVersion,
-            AllowedTools: resolved.AllowedTools,
-            ReasoningEffort: resolved.ReasoningEffort,
-            Skills: resolved.Skills);
+        return new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+            ConversationContext = [],
+            ModelProfile = resolved.ModelProfile,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            AllowedTools = resolved.AllowedTools,
+            ReasoningEffort = resolved.ReasoningEffort,
+            Skills = resolved.Skills
+        };
     }
 
     private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store)

@@ -75,7 +75,14 @@ internal static class ExternalAppPortAllocator
 }
 
 /// <summary>One host port held for one published container port of one service.</summary>
-internal sealed record ExternalAppHostPort(string Service, int ContainerPort, int HostPort);
+internal sealed class ExternalAppHostPort
+{
+    public required string Service { get; init; }
+
+    public required int ContainerPort { get; init; }
+
+    public required int HostPort { get; init; }
+}
 
 /// <summary>
 ///     The host ports of one deployment attempt, each still bound by this process until it is released or the hold is
@@ -143,7 +150,7 @@ internal sealed class ExternalAppPortHold : IDisposable
                      ?? throw new InvalidOperationException($"No loopback host port could be reserved for service '{service}' port {containerPort.ToString(CultureInfo.InvariantCulture)}.");
 
         _listeners[Key(service, containerPort)] = socket;
-        _ports.Add(new ExternalAppHostPort(service, containerPort, ((IPEndPoint)socket.LocalEndPoint!).Port));
+        _ports.Add(new ExternalAppHostPort { Service = service, ContainerPort = containerPort, HostPort = ((IPEndPoint)socket.LocalEndPoint!).Port });
     }
 
     private static Socket? BindLoopback(int hostPort)

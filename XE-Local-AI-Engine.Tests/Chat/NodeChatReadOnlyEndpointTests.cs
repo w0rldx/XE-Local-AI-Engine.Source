@@ -169,11 +169,14 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
         var conversationId = Guid.NewGuid();
-        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId,
-                             "Platform conversation",
-                             "client-node",
-                             CreatedAtUtc: 10,
-                             NodeChatOriginValues.Remote));
+        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest
+        {
+            ConversationId = conversationId,
+            Title = "Platform conversation",
+            UserId = "client-node",
+            CreatedAtUtc = 10,
+            Origin = NodeChatOriginValues.Remote
+        });
         return conversationId;
     }
 

@@ -608,11 +608,14 @@ public sealed class LocalModelEndpointTests
     {
         var classificationService = Substitute.For<IModelClassificationService>();
         classificationService.SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind>(), Arg.Any<CancellationToken>())
-                             .Returns(new ModelClassificationResult("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
-                                 ModelKind.Chat,
-                                 ModelKind.Unknown,
-                                 [],
-                                 IsOverridden: true));
+                             .Returns(new ModelClassificationResult
+                             {
+                                 ModelName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                                 Kind = ModelKind.Chat,
+                                 DetectedKind = ModelKind.Unknown,
+                                 Capabilities = [],
+                                 IsOverridden = true
+                             });
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 
@@ -635,11 +638,14 @@ public sealed class LocalModelEndpointTests
     {
         var classificationService = Substitute.For<IModelClassificationService>();
         classificationService.ResetOverrideAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                             .Returns(new ModelClassificationResult("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
-                                 ModelKind.Unknown,
-                                 ModelKind.Unknown,
-                                 [],
-                                 IsOverridden: false));
+                             .Returns(new ModelClassificationResult
+                             {
+                                 ModelName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                                 Kind = ModelKind.Unknown,
+                                 DetectedKind = ModelKind.Unknown,
+                                 Capabilities = [],
+                                 IsOverridden = false
+                             });
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 
@@ -700,7 +706,7 @@ public sealed class LocalModelEndpointTests
             GgufRegistryAliasSetHash.ComputeV1([]),
             GgufPhysicalMemberSetHash.ComputeV1([]));
         coordinator.CommitDeleteAsync(modelName, Arg.Any<CancellationToken>())
-                   .Returns(new CommittedModelDeletion(receipt.OperationId, modelName, [modelName], receipt));
+                   .Returns(new CommittedModelDeletion { OperationId = receipt.OperationId, RequestedModelName = modelName, RemovedModelNames = [modelName], StageReceipt = receipt });
         return coordinator;
     }
 

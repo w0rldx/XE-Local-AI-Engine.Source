@@ -79,4 +79,9 @@ public sealed class ImageJobStatusHubEvent
 }
 
 /// <summary>One buffered event in a job's replay log: the SignalR method name and its seq-stamped payload.</summary>
-public sealed record ImageJobBufferedEvent(string MethodName, object Payload);
+public sealed class ImageJobBufferedEvent
+{
+    public required string MethodName { get; init; }
+
+    public required object Payload { get; init; }
+}

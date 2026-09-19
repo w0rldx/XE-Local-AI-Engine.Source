@@ -23,8 +23,10 @@ public sealed record GraphWorkflowValidationError(string? Key, string Message)
 ///         nothing useful to say about the rest of a graph nobody can walk.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowValidationResult(IReadOnlyList<GraphWorkflowValidationError> Errors)
+public sealed class GraphWorkflowValidationResult
 {
+    public required IReadOnlyList<GraphWorkflowValidationError> Errors { get; init; }
+
     /// <summary>
     ///     Things worth saying about a graph that is nonetheless fine. A warning NEVER blocks: a definition carrying
     ///     one saves, validates as <see cref="IsValid" />, and runs — which is why this is a second list rather than a
@@ -36,14 +38,11 @@ public sealed record GraphWorkflowValidationResult(IReadOnlyList<GraphWorkflowVa
     public bool IsValid => Errors.Count == 0;
 
     public static GraphWorkflowValidationResult Invalid(IReadOnlyList<GraphWorkflowValidationError> errors) =>
-        new(errors);
+        new() { Errors = errors };
 
     /// <summary>A clean report that still has something to say. Errors stay empty, so this is <see cref="IsValid" />.</summary>
     public static GraphWorkflowValidationResult ValidWith(IReadOnlyList<GraphWorkflowValidationError> warnings) =>
-        new([])
-        {
-            Warnings = warnings
-        };
+        new() { Errors = [], Warnings = warnings };
 }
 
 /// <summary>
@@ -56,12 +55,12 @@ public sealed class GraphWorkflowValidationException : InvalidOperationException
     /// <summary>A single whole-document or structural failure — the throw-first half of the rule set.</summary>
     public GraphWorkflowValidationException(string message)
         : base(message) =>
-        Result = new GraphWorkflowValidationResult([new GraphWorkflowValidationError(Key: null, message)]);
+        Result = new GraphWorkflowValidationResult { Errors = [new GraphWorkflowValidationError(Key: null, message)] };
 
     /// <summary>The same single failure, wrapping the parse or validation error that produced it.</summary>
     public GraphWorkflowValidationException(string message, Exception innerException)
         : base(message, innerException) =>
-        Result = new GraphWorkflowValidationResult([new GraphWorkflowValidationError(Key: null, message)]);
+        Result = new GraphWorkflowValidationResult { Errors = [new GraphWorkflowValidationError(Key: null, message)] };
 
     /// <summary>Every per-node and per-edge failure a structurally sound graph collected.</summary>
     public GraphWorkflowValidationException(GraphWorkflowValidationResult result)

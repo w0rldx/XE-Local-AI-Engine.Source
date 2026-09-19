@@ -201,4 +201,11 @@ internal sealed class AgentHomeBusyException : InvalidOperationException
 /// <summary>
 ///     Outcome of a host <c>git</c> invocation: exit code plus captured stdout/stderr.
 /// </summary>
-internal sealed record HostGitResult(int ExitCode, string StandardOutput, string StandardError);
+internal sealed class HostGitResult
+{
+    public required int ExitCode { get; init; }
+
+    public required string StandardOutput { get; init; }
+
+    public required string StandardError { get; init; }
+}

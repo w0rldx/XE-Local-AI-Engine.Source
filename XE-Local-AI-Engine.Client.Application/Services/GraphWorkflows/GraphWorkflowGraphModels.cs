@@ -4,7 +4,12 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>Where the editor drew a node. Authoring metadata the runtime never reads.</summary>
-internal sealed record GraphWorkflowPosition(double X, double Y);
+internal sealed class GraphWorkflowPosition
+{
+    public required double X { get; init; }
+
+    public required double Y { get; init; }
+}
 
 /// <summary>
 ///     The per-kind settings of one node. Discriminated rather than a bag, because a member that does nothing where it
@@ -47,15 +52,24 @@ internal sealed record GraphWorkflowEmptyConfig : GraphWorkflowNodeConfig;
 ///     One node of the parsed graph. Only what the runtime reads: unknown properties survive in the stored blob either
 ///     way — this projection is not a re-serialization of it.
 /// </summary>
-internal sealed record GraphWorkflowGraphNode(
-    string NodeKey,
-    GraphWorkflowNodeKind Kind,
-    string Label,
-    GraphWorkflowJoinPolicy JoinPolicy,
-    int MaxAttempts,
-    int? TimeoutSeconds,
-    GraphWorkflowPosition? Position,
-    GraphWorkflowNodeConfig Config);
+internal sealed class GraphWorkflowGraphNode
+{
+    public required string NodeKey { get; init; }
+
+    public required GraphWorkflowNodeKind Kind { get; init; }
+
+    public required string Label { get; init; }
+
+    public required GraphWorkflowJoinPolicy JoinPolicy { get; init; }
+
+    public required int MaxAttempts { get; init; }
+
+    public required int? TimeoutSeconds { get; init; }
+
+    public required GraphWorkflowPosition? Position { get; init; }
+
+    public required GraphWorkflowNodeConfig Config { get; init; }
+}
 
 /// <summary>
 ///     One edge. <see cref="Key" /> is its identity — required and unique, which is what makes PARALLEL edges

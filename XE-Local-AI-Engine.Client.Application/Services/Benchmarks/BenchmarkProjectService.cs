@@ -167,7 +167,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         {
             if (MatchesCurrentPolicy(draft, current))
             {
-                return new BenchmarkJudgePolicyChange(project, [], current!.CohortGeneration);
+                return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = [], CohortGeneration = current!.CohortGeneration };
             }
 
             throw new BenchmarkConflictException("RejudgeRequired");
@@ -178,17 +178,17 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         {
             if (current is null)
             {
-                return new BenchmarkJudgePolicyChange(project, [], null);
+                return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = [], CohortGeneration = null };
             }
 
             await _benchmarkStore.DisableJudgePolicyAsync(projectId, expectedVersion, cancellationToken);
-            return new BenchmarkJudgePolicyChange(await RequireProjectAsync(projectId, cancellationToken), [], null);
+            return new BenchmarkJudgePolicyChange { Project = await RequireProjectAsync(projectId, cancellationToken), EnqueuedRunIds = [], CohortGeneration = null };
         }
 
         var hash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy);
         if (current is not null && string.Equals(current.PolicyHash, hash, StringComparison.Ordinal))
         {
-            return new BenchmarkJudgePolicyChange(project, [], current.CohortGeneration);
+            return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = [], CohortGeneration = current.CohortGeneration };
         }
 
         await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken);
@@ -297,7 +297,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             _queueSignal?.Wake();
         }
 
-        return new BenchmarkJudgePolicyChange(project, activation.SucceededRunIds, activation.Revision.CohortGeneration);
+        return new BenchmarkJudgePolicyChange { Project = project, EnqueuedRunIds = activation.SucceededRunIds, CohortGeneration = activation.Revision.CohortGeneration };
     }
 
     private static BenchmarkJudgePolicyChangeInput? ToPolicyChange(BenchmarkJudgePolicyV1? policy) =>
@@ -318,16 +318,19 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         try
         {
             var resolution = await _judgeRuntimeResolver.ResolveAsync(policy, cancellationToken);
-            return new ResolvedJudgeRuntime(new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
-                null,
-                resolution.Intent);
+            return new ResolvedJudgeRuntime
+            {
+                RuntimeJson = new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
+                UnresolvedReason = null,
+                Intent = resolution.Intent
+            };
         }
         catch (Exception exception) when (exception is BenchmarkEligibilityException
                                               or BenchmarkUnsupportedKvCacheTypeException
                                               or BenchmarkSnapshotException
                                               or KeyNotFoundException)
         {
-            return new ResolvedJudgeRuntime(null, exception.Message, null);
+            return new ResolvedJudgeRuntime { RuntimeJson = null, UnresolvedReason = exception.Message, Intent = null };
         }
     }
 
@@ -617,5 +620,12 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         }
     }
 
-    private sealed record ResolvedJudgeRuntime(ReadOnlyMemory<byte>? RuntimeJson, string? UnresolvedReason, BenchmarkRunLaunchIntent? Intent);
+    private sealed record ResolvedJudgeRuntime
+    {
+        public required ReadOnlyMemory<byte>? RuntimeJson { get; init; }
+
+        public required string? UnresolvedReason { get; init; }
+
+        public required BenchmarkRunLaunchIntent? Intent { get; init; }
+    }
 }

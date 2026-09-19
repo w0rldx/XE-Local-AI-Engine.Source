@@ -326,14 +326,17 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         try
         {
-            var session = new DevelopmentWorkspaceSession(Guid.NewGuid(),
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                baseCommit,
-                "identity",
-                worktree,
-                runtimePath,
-                handle);
+            var session = new DevelopmentWorkspaceSession
+            {
+                ProjectId = Guid.NewGuid(),
+                TaskId = Guid.NewGuid(),
+                AttemptId = Guid.NewGuid(),
+                BaseCommit = baseCommit,
+                RepositoryIdentityHash = "identity",
+                HostWorktreePath = worktree,
+                RuntimePath = runtimePath,
+                SandboxHandle = handle
+            };
             var tools = new DevelopmentWorkspaceTools(sandbox, session, Options.Create(OptionsValue()), profile);
             foreach (var commandId in commandIds)
             {
@@ -375,11 +378,14 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 RequireEgressDenial = requireEgressDenial
             }));
         return await provider.PrepareAsync(snapshot,
-                                 new DevelopmentRepositoryBinding(snapshot.ProjectId,
-                                     snapshot.SelectedFolderId!.Value,
-                                     "repository",
-                                     repository,
-                                     identity));
+                                 new DevelopmentRepositoryBinding
+                                 {
+                                     ProjectId = snapshot.ProjectId,
+                                     SelectedFolderId = snapshot.SelectedFolderId!.Value,
+                                     Alias = "repository",
+                                     RepositoryRoot = repository,
+                                     RepositoryIdentityHash = identity
+                                 });
     }
 
     private static async Task CloneDetachedAsync(string repository, string worktree)
@@ -500,7 +506,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = [.. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding(mount.HostPath, mount.SandboxPath, mount.ReadOnly))]
+                Mounts = [.. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding { HostPath = mount.HostPath, SandboxPath = mount.SandboxPath, ReadOnly = mount.ReadOnly })]
             });
         }
 

@@ -79,11 +79,14 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
     private static ProposedPlaybookAction ToProposedAction(AnalysisProposal proposal)
     {
         // Pass the raw proposal through; the service validates evidence/confidence and rejects anything invalid.
-        return new ProposedPlaybookAction(proposal.Behavior ?? string.Empty,
-            proposal.TriggerCondition,
-            proposal.Scope,
-            proposal.SourceFeedbackIds is null ? [] : [.. proposal.SourceFeedbackIds],
-            proposal.Confidence);
+        return new ProposedPlaybookAction
+        {
+            Behavior = proposal.Behavior ?? string.Empty,
+            TriggerCondition = proposal.TriggerCondition,
+            Scope = proposal.Scope,
+            SourceFeedbackIds = proposal.SourceFeedbackIds is null ? [] : [.. proposal.SourceFeedbackIds],
+            Confidence = proposal.Confidence
+        };
     }
 
     private static object ToPromptModel(FeedbackInsightsResult aggregate)

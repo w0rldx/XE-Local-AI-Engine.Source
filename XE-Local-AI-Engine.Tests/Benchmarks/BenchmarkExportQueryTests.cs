@@ -27,7 +27,7 @@ public sealed class BenchmarkExportQueryTests
         var store = Store(Project(), summaries);
         store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns((BenchmarkJudgeAttemptRecord?)null);
         var resolver = Substitute.For<IBenchmarkExportFactsResolver>();
-        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts("expected"));
+        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts { ExpectedKldDigest = "expected" });
         resolver.ResolveRun(Arg.Any<BenchmarkRunRecord>()).Returns(BenchmarkExportRunFacts.Empty);
         var query = new BenchmarkExportQuery(store, resolver);
 
@@ -66,7 +66,7 @@ public sealed class BenchmarkExportQueryTests
         BenchmarkRunRecord[] summaries = [Run(1), Run(2)];
         var store = Store(Project(), summaries);
         var resolver = Substitute.For<IBenchmarkExportFactsResolver>();
-        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts("expected"));
+        resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts { ExpectedKldDigest = "expected" });
         var query = new BenchmarkExportQuery(store, resolver);
 
         var result = AssertEx.NotNull(await query.GetCsvAsync(ProjectId, CancellationToken.None));

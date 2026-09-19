@@ -176,9 +176,21 @@ public sealed class ChatTurnResolver
         // request for THAT model, so they clear the permission.
         var allowAutoModelSwap = !userPickedConcreteModel && resolved?.ModelProfile is null;
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision,
-            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud, reasoningBudgetEnforceable,
-            allowAutoModelSwap);
+        return new ChatTurnResolution
+        {
+            ActiveModel = activeModel,
+            EffectiveModel = effectiveModel,
+            Resolved = resolved,
+            OrchestrationOutcome = orchestration,
+            SupportsThinking = supportsThinking,
+            SupportsTools = supportsTools,
+            SupportsVision = supportsVision,
+            RequiresInstalledChatModel = requiresInstalledChatModel && effectiveModel is null,
+            ActiveModelIsCloud = activeModelIsCloud,
+            EffectiveModelIsCloud = effectiveModelIsCloud,
+            ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
+            AllowAutoModelSwap = allowAutoModelSwap
+        };
     }
 
     /// <summary>

@@ -80,7 +80,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult(DocumentExtractionStatus.Extracted, BuildExtractedDocument(), Error: null)));
+                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult { Status = DocumentExtractionStatus.Extracted, Document = BuildExtractedDocument(), Error = null }));
 
         var embedder = new KnowledgeChunkEmbedder(new ThrowingProviderResolver(),
             new EmbeddingModelResolver(options),

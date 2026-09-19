@@ -64,7 +64,7 @@ public sealed class CapacityService : ICapacityService
     /// <inheritdoc />
     public async Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct)
     {
-        return await DecideAsync(new CapacityRequest(modelName, role), ct);
+        return await DecideAsync(new CapacityRequest { ModelName = modelName, Role = role }, ct);
     }
 
     /// <inheritdoc />
@@ -90,7 +90,7 @@ public sealed class CapacityService : ICapacityService
         // and a local model must still be admitted on its own footprint even while Codex is signed in.
         if (_cloudFactory.IsCloudProviderSelected(modelName))
         {
-            return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowCloud, OllamaEvictionWarning: false);
+            return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = ReasonAllowCloud, OllamaEvictionWarning = false };
         }
 
         var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct);
@@ -98,7 +98,7 @@ public sealed class CapacityService : ICapacityService
         var isLlamaServer = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
         if (isLlamaServer && _externalEndpoints.Resolve(modelName, role) is not null)
         {
-            return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowExternal, OllamaEvictionWarning: false);
+            return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = ReasonAllowExternal, OllamaEvictionWarning = false };
         }
 
         // An operator-registered external OpenAI-compatible model runs entirely on someone else's hardware: the node
@@ -115,7 +115,7 @@ public sealed class CapacityService : ICapacityService
         if (string.Equals(providerName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
             || ExternalModelId.HasExternalScheme(modelName))
         {
-            return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowExternal, OllamaEvictionWarning: false);
+            return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = ReasonAllowExternal, OllamaEvictionWarning = false };
         }
 
         // Warm the runtime device audit OUTSIDE the decision gate. Its --list-devices probe is bounded and
@@ -136,7 +136,7 @@ public sealed class CapacityService : ICapacityService
         // Already running for this (model, role): serialize on that process; no fit math, no second load.
         if (running.Contains(new RunningKey(modelName, role)))
         {
-            return new CapacityDecision(CapacityVerdict.QueueSameModel, ReasonQueueSameModel, OllamaEvictionWarning: false);
+            return new CapacityDecision { Verdict = CapacityVerdict.QueueSameModel, Reason = ReasonQueueSameModel, OllamaEvictionWarning = false };
         }
 
         var ollamaWarning = isOllama && running.Count > 0;
@@ -145,7 +145,7 @@ public sealed class CapacityService : ICapacityService
             : new ProcessLaunchAdmissionSnapshot(new HashSet<ProcessLaunchAdmissionKey>(), HasRequestedKey: false, HasGlobalBlocker: false);
         if (launchSnapshot.HasRequestedKey || launchSnapshot.HasGlobalBlocker)
         {
-            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+            return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
         }
 
         // forceRefresh: an admission decision runs per model-load (rare, and already serialized under this gate), so it
@@ -168,7 +168,7 @@ public sealed class CapacityService : ICapacityService
                               .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct);
         if (!footprint.IsKnown)
         {
-            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectFootprintUnknown, ollamaWarning);
+            return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectFootprintUnknown, OllamaEvictionWarning = ollamaWarning };
         }
 
         // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap).
@@ -177,7 +177,7 @@ public sealed class CapacityService : ICapacityService
                                        .ToHashSet();
         if (activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
-            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectProcessCap, ollamaWarning);
+            return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectProcessCap, OllamaEvictionWarning = ollamaWarning };
         }
 
         var hasUnmeasuredGpuLoad = !runningSnapshot.IsKnown
@@ -189,7 +189,7 @@ public sealed class CapacityService : ICapacityService
         {
             if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
-                return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+                return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
             }
 
             // A caller that NAMED a required window launches AT that window (a benchmark replays its frozen -c), so a
@@ -200,7 +200,7 @@ public sealed class CapacityService : ICapacityService
             if (request.RequiredContextTokens is { } required
                 && downTiered.Admission?.Allocation.ProcessContextTokens < required)
             {
-                return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+                return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
             }
 
             footprint = downTiered;
@@ -209,7 +209,7 @@ public sealed class CapacityService : ICapacityService
         if (!_footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint)
             || !FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
-            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+            return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
         }
 
         // Publish only after the exact footprint is reserved. Registry failure disposes the tentative reservation before
@@ -222,7 +222,7 @@ public sealed class CapacityService : ICapacityService
 
         if (footprint.Admission is null || !reservation.TryAttach(_launchAdmissions, footprint.Admission))
         {
-            return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectByteBudget, ollamaWarning);
+            return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
         }
 
         return reservation.TransferToDecision(ollamaWarning);
@@ -359,10 +359,13 @@ public sealed class CapacityService : ICapacityService
 
         public CapacityDecision TransferToDecision(bool ollamaWarning)
         {
-            var decision = new CapacityDecision(CapacityVerdict.Allow,
-                ReasonAllow,
-                ollamaWarning,
-                _reservation);
+            var decision = new CapacityDecision
+            {
+                Verdict = CapacityVerdict.Allow,
+                Reason = ReasonAllow,
+                OllamaEvictionWarning = ollamaWarning,
+                Reservation = _reservation
+            };
             _reservation = null;
             return decision;
         }

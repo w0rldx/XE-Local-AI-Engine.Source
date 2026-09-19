@@ -10,14 +10,22 @@ public enum DatasetGenerationEventKind
     Rejected
 }
 
-public sealed record DatasetGenerationPayload(
-    string? State = null,
-    int? Completed = null,
-    int? Total = null,
-    string? Kind = null,
-    string? Label = null,
-    string? Reason = null,
-    long? DatasetVersion = null);
+public sealed class DatasetGenerationPayload
+{
+    public string? State { get; init; }
+
+    public int? Completed { get; init; }
+
+    public int? Total { get; init; }
+
+    public string? Kind { get; init; }
+
+    public string? Label { get; init; }
+
+    public string? Reason { get; init; }
+
+    public long? DatasetVersion { get; init; }
+}
 
 public sealed class DatasetGenerationEvent
 {
@@ -41,7 +49,14 @@ public sealed class DatasetGenerationEventArgs : EventArgs
     public DatasetGenerationEvent Event { get; }
 }
 
-public sealed record DatasetGenerationReplay(IReadOnlyList<DatasetGenerationEvent> Events, bool ResetRequired, long LatestSequence);
+public sealed class DatasetGenerationReplay
+{
+    public required IReadOnlyList<DatasetGenerationEvent> Events { get; init; }
+
+    public required bool ResetRequired { get; init; }
+
+    public required long LatestSequence { get; init; }
+}
 
 public interface IDatasetGenerationEventBuffer
 {
@@ -111,7 +126,7 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
         {
             if (!_datasets.TryGetValue(datasetId, out var state))
             {
-                return new DatasetGenerationReplay([], ResetRequired: false, LatestSequence: 0);
+                return new DatasetGenerationReplay { Events = [], ResetRequired = false, LatestSequence = 0 };
             }
 
             var firstRetained = state.Events.First?.Value.Sequence;
@@ -119,10 +134,13 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
                         || (firstRetained is { } first && afterSequence < first - 1)
                         || (firstRetained is null && state.HistoryTruncated && afterSequence < state.LatestSequence);
             return reset
-                ? new DatasetGenerationReplay([], ResetRequired: true, state.LatestSequence)
-                : new DatasetGenerationReplay(state.Events.Where(item => item.Sequence > afterSequence).ToArray(),
-                    ResetRequired: false,
-                    state.LatestSequence);
+                ? new DatasetGenerationReplay { Events = [], ResetRequired = true, LatestSequence = state.LatestSequence }
+                : new DatasetGenerationReplay
+                {
+                    Events = state.Events.Where(item => item.Sequence > afterSequence).ToArray(),
+                    ResetRequired = false,
+                    LatestSequence = state.LatestSequence
+                };
         }
     }
 

@@ -9,37 +9,62 @@ public interface IBenchmarkExportQuery
     Task<BenchmarkCsvExportQueryResult?> GetCsvAsync(Guid projectId, CancellationToken ct);
 }
 
-public sealed record BenchmarkJsonExportQueryResult(
-    BenchmarkProjectRecord Project,
-    IReadOnlyList<BenchmarkRunRecord> Summaries,
-    IReadOnlyList<BenchmarkExportRunQueryItem> Runs,
-    BenchmarkRankCohort? RankCohort,
-    BenchmarkJudgePolicyRevisionRecord? JudgePolicyRevision,
-    BenchmarkPairwiseFitRecord? PairwiseFit,
-    BenchmarkFidelityDisplayFacts Fidelity,
-    IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> Facts,
-    IReadOnlyList<BenchmarkTaskItemRecord> TaskItems,
-    BenchmarkCellPage Cells);
-
-public sealed record BenchmarkCsvExportQueryResult(
-    BenchmarkProjectRecord Project,
-    IReadOnlyList<BenchmarkRunRecord> Runs,
-    BenchmarkPairwiseFitRecord? PairwiseFit,
-    BenchmarkFidelityDisplayFacts Fidelity);
-
-public sealed record BenchmarkExportRunQueryItem(
-    BenchmarkRunRecord Summary,
-    BenchmarkRunRecord Full,
-    BenchmarkJudgeResultV2? Verdict);
-
-public sealed record BenchmarkExportRunFacts(
-    string? BuildCommit,
-    string? GpuInfo,
-    string? ModelFilename,
-    long? ModelSizeBytes,
-    int? GpuLayers)
+public sealed class BenchmarkJsonExportQueryResult
 {
-    public static BenchmarkExportRunFacts Empty { get; } = new(null, null, null, null, null);
+    public required BenchmarkProjectRecord Project { get; init; }
+
+    public required IReadOnlyList<BenchmarkRunRecord> Summaries { get; init; }
+
+    public required IReadOnlyList<BenchmarkExportRunQueryItem> Runs { get; init; }
+
+    public required BenchmarkRankCohort? RankCohort { get; init; }
+
+    public required BenchmarkJudgePolicyRevisionRecord? JudgePolicyRevision { get; init; }
+
+    public required BenchmarkPairwiseFitRecord? PairwiseFit { get; init; }
+
+    public required BenchmarkFidelityDisplayFacts Fidelity { get; init; }
+
+    public required IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> Facts { get; init; }
+
+    public required IReadOnlyList<BenchmarkTaskItemRecord> TaskItems { get; init; }
+
+    public required BenchmarkCellPage Cells { get; init; }
+}
+
+public sealed class BenchmarkCsvExportQueryResult
+{
+    public required BenchmarkProjectRecord Project { get; init; }
+
+    public required IReadOnlyList<BenchmarkRunRecord> Runs { get; init; }
+
+    public required BenchmarkPairwiseFitRecord? PairwiseFit { get; init; }
+
+    public required BenchmarkFidelityDisplayFacts Fidelity { get; init; }
+}
+
+public sealed class BenchmarkExportRunQueryItem
+{
+    public required BenchmarkRunRecord Summary { get; init; }
+
+    public required BenchmarkRunRecord Full { get; init; }
+
+    public required BenchmarkJudgeResultV2? Verdict { get; init; }
+}
+
+public sealed class BenchmarkExportRunFacts
+{
+    public required string? BuildCommit { get; init; }
+
+    public required string? GpuInfo { get; init; }
+
+    public required string? ModelFilename { get; init; }
+
+    public required long? ModelSizeBytes { get; init; }
+
+    public required int? GpuLayers { get; init; }
+
+    public static BenchmarkExportRunFacts Empty { get; } = new() { BuildCommit = null, GpuInfo = null, ModelFilename = null, ModelSizeBytes = null, GpuLayers = null };
 }
 
 internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
@@ -77,23 +102,26 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
                 continue;
             }
 
-            runs.Add(new BenchmarkExportRunQueryItem(summary, full, await ReadVerdictAsync(full, ct)));
+            runs.Add(new BenchmarkExportRunQueryItem { Summary = summary, Full = full, Verdict = await ReadVerdictAsync(full, ct) });
             if (firstOfMeasuredGroups.Contains(full.Id))
             {
                 facts[full.Id] = _factsResolver.ResolveRun(full);
             }
         }
 
-        return new BenchmarkJsonExportQueryResult(project,
-            page.Items,
-            runs,
-            page.RankCohort,
-            await _store.GetCurrentJudgePolicyRevisionAsync(projectId, ct),
-            await _store.GetActivePairwiseFitAsync(projectId, ct),
-            _factsResolver.ResolveProject(project),
-            facts,
-            await _store.ListTaskItemsAsync(projectId, ct),
-            await _store.ListCellsAsync(projectId, ct));
+        return new BenchmarkJsonExportQueryResult
+        {
+            Project = project,
+            Summaries = page.Items,
+            Runs = runs,
+            RankCohort = page.RankCohort,
+            JudgePolicyRevision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, ct),
+            PairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct),
+            Fidelity = _factsResolver.ResolveProject(project),
+            Facts = facts,
+            TaskItems = await _store.ListTaskItemsAsync(projectId, ct),
+            Cells = await _store.ListCellsAsync(projectId, ct)
+        };
     }
 
     public async Task<BenchmarkCsvExportQueryResult?> GetCsvAsync(Guid projectId, CancellationToken ct)
@@ -105,10 +133,13 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
         }
 
         var page = await _store.ListAllRunsAsync(projectId, ct);
-        return new BenchmarkCsvExportQueryResult(project,
-            page.Items,
-            await _store.GetActivePairwiseFitAsync(projectId, ct),
-            _factsResolver.ResolveProject(project));
+        return new BenchmarkCsvExportQueryResult
+        {
+            Project = project,
+            Runs = page.Items,
+            PairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct),
+            Fidelity = _factsResolver.ResolveProject(project)
+        };
     }
 
     private static HashSet<Guid> FirstOfMeasuredGroups(IReadOnlyList<BenchmarkRunRecord> runs) =>

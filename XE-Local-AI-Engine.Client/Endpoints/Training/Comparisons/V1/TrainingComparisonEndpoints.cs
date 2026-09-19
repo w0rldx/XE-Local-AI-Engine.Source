@@ -29,12 +29,15 @@ public sealed class CreateComparisonEndpoint : Endpoint<CreateComparisonRequest,
 
     public override async Task HandleAsync(CreateComparisonRequest req, CancellationToken ct)
     {
-        var created = await _comparisons.CreateAsync(new CreateComparisonCommand(req.Name,
-                                                req.BaseEvaluationRunId,
-                                                req.TunedEvaluationRunId,
-                                                req.BaseBenchmarkRunId,
-                                                req.TunedBenchmarkRunId,
-                                                req.TrainingRunId),
+        var created = await _comparisons.CreateAsync(new CreateComparisonCommand
+        {
+            Name = req.Name,
+            BaseEvaluationRunId = req.BaseEvaluationRunId,
+            TunedEvaluationRunId = req.TunedEvaluationRunId,
+            BaseBenchmarkRunId = req.BaseBenchmarkRunId,
+            TunedBenchmarkRunId = req.TunedBenchmarkRunId,
+            TrainingRunId = req.TrainingRunId
+        },
                                             ct);
         await Send.OkAsync(created.ToResponse(), ct);
     }

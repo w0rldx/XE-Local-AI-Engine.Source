@@ -58,22 +58,27 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
 
     private static KnowledgeIndexInput StaleInput(Guid documentId)
     {
-        return new KnowledgeIndexInput(documentId,
-            StaleContentHash,
-            "test-embedding-model",
-            "test-embedding-model::native:v1:1",
-            VectorDimension: 1,
-            Sections: [new KnowledgeChunkingSection(Ordinal: 0, Heading: null, Level: null)],
-            Chunks:
-            [
-                new KnowledgeIndexChunk(ChunkIndex: 0,
-                    SectionOrdinal: 0,
-                    Content: "content from the stale revision",
-                    HeadingPath: null,
-                    TokenCount: 6,
-                    Embedding: BitConverter.GetBytes(1F),
-                    Dim: 1)
-            ]);
+        return new KnowledgeIndexInput
+        {
+            DocumentId = documentId,
+            SourceContentHash = StaleContentHash,
+            EmbeddingModel = "test-embedding-model",
+            VectorIdentity = "test-embedding-model::native:v1:1",
+            VectorDimension = 1,
+            Sections = [new KnowledgeChunkingSection { Ordinal = 0, Heading = null, Level = null }],
+            Chunks = [
+                new KnowledgeIndexChunk
+                {
+                    ChunkIndex = 0,
+                    SectionOrdinal = 0,
+                    Content = "content from the stale revision",
+                    HeadingPath = null,
+                    TokenCount = 6,
+                    Embedding = BitConverter.GetBytes(1F),
+                    Dim = 1
+                }
+            ]
+        };
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service

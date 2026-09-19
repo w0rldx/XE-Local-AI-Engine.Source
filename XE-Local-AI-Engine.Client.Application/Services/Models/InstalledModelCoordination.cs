@@ -12,13 +12,23 @@ public enum InstalledModelMutationKind
     Replace
 }
 
-public sealed record IntendedInstalledModelMember(string RelativePath, InstalledModelPhysicalMemberRole Role);
+public sealed class IntendedInstalledModelMember
+{
+    public required string RelativePath { get; init; }
 
-public sealed record InstalledModelMutationRequest(
-    string ModelName,
-    InstalledModelMutationKind Kind,
-    IReadOnlyList<IntendedInstalledModelMember>? IntendedMembers = null,
-    IReadOnlyList<string>? IntendedModelNames = null);
+    public required InstalledModelPhysicalMemberRole Role { get; init; }
+}
+
+public sealed class InstalledModelMutationRequest
+{
+    public required string ModelName { get; init; }
+
+    public required InstalledModelMutationKind Kind { get; init; }
+
+    public IReadOnlyList<IntendedInstalledModelMember>? IntendedMembers { get; init; }
+
+    public IReadOnlyList<string>? IntendedModelNames { get; init; }
+}
 
 public sealed record InstalledModelSnapshot(
     string ModelName,
@@ -42,17 +52,23 @@ public sealed record InstalledModelSnapshot(
 ///     <see cref="IInstalledModelSnapshotCoordinator.AcquireReadSnapshotAsync" /> re-hashes every member file — minutes
 ///     per call on a real models directory.
 /// </summary>
-/// <param name="ModelContentFingerprint">
-///     The aggregate content identity the registry recorded at acquisition, or <see langword="null" /> for a legacy
-///     entry that predates the field. A caller that needs the identity itself must fall back to the verified snapshot
-///     for that one model.
-/// </param>
-public sealed record InstalledModelFacts(
-    string ModelName,
-    string ProviderName,
-    GgufRole Role,
-    LocalModelOrigin? Origin,
-    string? ModelContentFingerprint);
+public sealed class InstalledModelFacts
+{
+    public required string ModelName { get; init; }
+
+    public required string ProviderName { get; init; }
+
+    public required GgufRole Role { get; init; }
+
+    public required LocalModelOrigin? Origin { get; init; }
+
+    /// <summary>
+    ///     The aggregate content identity the registry recorded at acquisition, or <see langword="null" /> for a legacy
+    ///     entry that predates the field. A caller that needs the identity itself must fall back to the verified snapshot
+    ///     for that one model.
+    /// </summary>
+    public required string? ModelContentFingerprint { get; init; }
+}
 
 public interface IInstalledModelSnapshotCoordinator
 {
@@ -190,11 +206,14 @@ public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotC
 
         await using var inner = await _lockDomain.AcquireReadAsync(BuildExistingKeys(candidate), cancellationToken);
         var mapping = await ReadMappingAsync(inner, isMutation: false, candidate.ModelName, cancellationToken);
-        return new InstalledModelFacts(candidate.ModelName,
-            ResolveProviderName(mapping),
-            alias.RegistryValue.Role,
-            alias.RegistryValue.Origin,
-            alias.RegistryValue.ModelContentFingerprint);
+        return new InstalledModelFacts
+        {
+            ModelName = candidate.ModelName,
+            ProviderName = ResolveProviderName(mapping),
+            Role = alias.RegistryValue.Role,
+            Origin = alias.RegistryValue.Origin,
+            ModelContentFingerprint = alias.RegistryValue.ModelContentFingerprint
+        };
     }
 
     private static IReadOnlyList<string> BuildAcquisitionKeys(InstalledModelMutationRequest request)

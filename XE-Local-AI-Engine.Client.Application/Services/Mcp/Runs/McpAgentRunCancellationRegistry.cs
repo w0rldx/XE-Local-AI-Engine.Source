@@ -19,7 +19,7 @@ internal sealed class McpAgentRunCancellationRegistry
             return McpAgentRunRegistrationKind.ShuttingDown;
         }
 
-        var entry = new Entry(claimToken, version, new CancellationTokenSource());
+        var entry = new Entry { ClaimToken = claimToken, Version = version, Source = new CancellationTokenSource() };
         if (_entries.TryAdd(requestId, entry))
         {
             token = entry.Source.Token;
@@ -51,9 +51,12 @@ internal sealed class McpAgentRunCancellationRegistry
     }
 
     private IReadOnlyList<McpAgentRunCancellationHandle> Snapshot() =>
-        _entries.Select(static pair => new McpAgentRunCancellationHandle(pair.Key,
-                    pair.Value.ClaimToken,
-                    pair.Value.Version))
+        _entries.Select(static pair => new McpAgentRunCancellationHandle
+        {
+            RequestId = pair.Key,
+            ClaimToken = pair.Value.ClaimToken,
+            Version = pair.Value.Version
+        })
                 .ToArray();
 
     public void Remove(Guid requestId, Guid claimToken)
@@ -66,8 +69,14 @@ internal sealed class McpAgentRunCancellationRegistry
         }
     }
 
-    private sealed record Entry(Guid ClaimToken, long Version, CancellationTokenSource Source)
+    private sealed record Entry
     {
+        public required Guid ClaimToken { get; init; }
+
+        public required long Version { get; init; }
+
+        public required CancellationTokenSource Source { get; init; }
+
         public bool TryCancel()
         {
             try
@@ -94,7 +103,14 @@ internal sealed class McpAgentRunCancellationRegistry
     }
 }
 
-internal sealed record McpAgentRunCancellationHandle(Guid RequestId, Guid ClaimToken, long Version);
+internal sealed class McpAgentRunCancellationHandle
+{
+    public required Guid RequestId { get; init; }
+
+    public required Guid ClaimToken { get; init; }
+
+    public required long Version { get; init; }
+}
 
 internal enum McpAgentRunRegistrationKind
 {

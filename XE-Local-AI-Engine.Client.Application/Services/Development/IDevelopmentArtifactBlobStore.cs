@@ -9,12 +9,23 @@ public enum DevelopmentArtifactReadStatus
     HashMismatch
 }
 
-public sealed record DevelopmentArtifactBlobWriteResult(string OpaqueReference, string ContentHash, long ByteCount);
-
-public sealed record DevelopmentArtifactBlobReadResult(DevelopmentArtifactReadStatus Status, ReadOnlyMemory<byte> Content)
+public sealed record DevelopmentArtifactBlobWriteResult
 {
+    public required string OpaqueReference { get; init; }
+
+    public required string ContentHash { get; init; }
+
+    public required long ByteCount { get; init; }
+}
+
+public sealed class DevelopmentArtifactBlobReadResult
+{
+    public required DevelopmentArtifactReadStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte> Content { get; init; }
+
     public static DevelopmentArtifactBlobReadResult Failure(DevelopmentArtifactReadStatus status) =>
-        new(status, ReadOnlyMemory<byte>.Empty);
+        new() { Status = status, Content = ReadOnlyMemory<byte>.Empty };
 }
 
 public interface IDevelopmentArtifactBlobStore

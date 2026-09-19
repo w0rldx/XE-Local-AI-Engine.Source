@@ -54,11 +54,14 @@ internal static class DevelopmentDependencyManifestPolicy
             return null;
         }
 
-        return new DevelopmentValidationVerdict(false,
-            DevelopmentValidationFailureCodes.DependencyManifestChanged,
-            $"The attempt changed {Describe(offending)}. Development Mode restores dependencies from the base commit "
+        return new DevelopmentValidationVerdict
+        {
+            Passed = false,
+            FailureCode = DevelopmentValidationFailureCodes.DependencyManifestChanged,
+            FailureDetail = $"The attempt changed {Describe(offending)}. Development Mode restores dependencies from the base commit "
             + "before the attempt starts and runs the attempt itself with no network, so a changed dependency manifest "
-            + "cannot be resolved. Make the change without adding, removing or re-pinning a dependency.");
+            + "cannot be resolved. Make the change without adding, removing or re-pinning a dependency."
+        };
     }
 
     /// <summary>

@@ -194,11 +194,14 @@ public sealed partial class WorkerEventDispatcher
         UpdateCurrentInvocation(state =>
         {
             state.PendingToolCalls = [.. state.PendingToolCalls.Where(pendingToolCall => !string.Equals(pendingToolCall.RequestId, evt.RequestId, StringComparison.Ordinal))];
-            state.LastToolCallResult = new InvocationToolCallResultState(evt.RequestId,
-                string.IsNullOrWhiteSpace(evt.Error),
-                evt.Result,
-                evt.Error,
-                _timeProvider.GetUtcNow());
+            state.LastToolCallResult = new InvocationToolCallResultState
+            {
+                RequestId = evt.RequestId,
+                Succeeded = string.IsNullOrWhiteSpace(evt.Error),
+                Result = evt.Result,
+                Error = evt.Error,
+                ResolvedAt = _timeProvider.GetUtcNow()
+            };
         });
 
         _logger.LogDebug("Tool call result processing finished. RequestId={RequestId}", evt.RequestId);
@@ -289,7 +292,7 @@ public sealed partial class WorkerEventDispatcher
                 state.PendingApproval = null;
             }
 
-            state.LastApprovalResolution = new InvocationApprovalResolutionState(evt.RequestId, evt.Approved, _timeProvider.GetUtcNow());
+            state.LastApprovalResolution = new InvocationApprovalResolutionState { RequestId = evt.RequestId, Approved = evt.Approved, ResolvedAt = _timeProvider.GetUtcNow() };
         });
 
         _logger.LogDebug("Approval resolution processing finished. RequestId={RequestId}", evt.RequestId);

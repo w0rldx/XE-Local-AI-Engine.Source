@@ -87,11 +87,14 @@ public sealed class DevelopmentManagementServiceTests
         var supervisor = Substitute.For<IDevelopmentAttemptExecutionSupervisor>();
         var repositoryBindings = Substitute.For<IDevelopmentRepositoryBindingService>();
         repositoryBindings.ResolveProjectAsync(projectId, Arg.Any<CancellationToken>())
-                          .Returns(new DevelopmentRepositoryBinding(projectId,
-                              selectedFolderId,
-                              "repository",
-                              repositoryRoot,
-                              DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
+                          .Returns(new DevelopmentRepositoryBinding
+                          {
+                              ProjectId = projectId,
+                              SelectedFolderId = selectedFolderId,
+                              Alias = "repository",
+                              RepositoryRoot = repositoryRoot,
+                              RepositoryIdentityHash = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)
+                          });
         var service = CreateService(store, coordinator, supervisor, repositoryBindings);
 
         var result = await service.StartNextActionAsync(projectId,
@@ -144,17 +147,20 @@ public sealed class DevelopmentManagementServiceTests
             repositoryBindings: null,
             selectedFolderId: selectedFolderId);
         var operationId = Guid.Parse("8e9db44b-b50f-42c9-9bd0-3239af1eb5d8");
-        var input = new DevelopmentCreateProjectInput(operationId,
-            selectedFolderId,
-            "Implement the durable workflow",
-            "main",
-            "Implement task",
-            "Keep the operation idempotent",
-            "[]",
-            DevelopmentEgressPolicy.LocalOnly,
-            "coder-model",
-            "reviewer-model",
-            TrustedRepositoryAcknowledged: true);
+        var input = new DevelopmentCreateProjectInput
+        {
+            OperationId = operationId,
+            SelectedFolderId = selectedFolderId,
+            Objective = "Implement the durable workflow",
+            BaseBranch = "main",
+            TaskTitle = "Implement task",
+            Requirements = "Keep the operation idempotent",
+            AcceptanceCriteriaJson = "[]",
+            EgressPolicy = DevelopmentEgressPolicy.LocalOnly,
+            CoderModelId = "coder-model",
+            ReviewerModelId = "reviewer-model",
+            TrustedRepositoryAcknowledged = true
+        };
 
         var first = await service.CreateProjectAsync(input);
         var retry = await service.CreateProjectAsync(input);
@@ -313,11 +319,14 @@ public sealed class DevelopmentManagementServiceTests
 
         var repositoryBindings = Substitute.For<IDevelopmentRepositoryBindingService>();
         _ = repositoryBindings.ResolveProjectAsync(projectId, Arg.Any<CancellationToken>())
-                              .Returns(new DevelopmentRepositoryBinding(projectId,
-                                  selectedFolderId,
-                                  "repository",
-                                  repositoryRoot,
-                                  DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
+                              .Returns(new DevelopmentRepositoryBinding
+                              {
+                                  ProjectId = projectId,
+                                  SelectedFolderId = selectedFolderId,
+                                  Alias = "repository",
+                                  RepositoryRoot = repositoryRoot,
+                                  RepositoryIdentityHash = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)
+                              });
 
         return (store, coordinator, repositoryBindings, projectId, taskId);
     }
@@ -368,11 +377,14 @@ public sealed class DevelopmentManagementServiceTests
     {
         var repositoryBindings = Substitute.For<IDevelopmentRepositoryBindingService>();
         repositoryBindings.ResolveFolderAsync(selectedFolderId, Arg.Any<CancellationToken>())
-                          .Returns(new DevelopmentRepositoryBinding(Guid.Empty,
-                              selectedFolderId,
-                              "repository",
-                              Directory.GetCurrentDirectory(),
-                              "repository-hash"));
+                          .Returns(new DevelopmentRepositoryBinding
+                          {
+                              ProjectId = Guid.Empty,
+                              SelectedFolderId = selectedFolderId,
+                              Alias = "repository",
+                              RepositoryRoot = Directory.GetCurrentDirectory(),
+                              RepositoryIdentityHash = "repository-hash"
+                          });
         return repositoryBindings;
     }
 
@@ -437,7 +449,7 @@ public sealed class DevelopmentManagementServiceTests
     private sealed class GenericGitDetector : IDevelopmentCommandProfileDetector
     {
         public DevelopmentProfileDetection Detect(string repositoryRoot) =>
-            new(DevelopmentCommandProfileCatalog.GenericGit, BuildTarget: null, []);
+            new() { ProfileId = DevelopmentCommandProfileCatalog.GenericGit, BuildTarget = null, Candidates = [] };
     }
 
     private sealed class UnusedApplyService : IDevelopmentApplyService

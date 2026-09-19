@@ -28,79 +28,157 @@ public static class McpAdminToolFailureCodes
     public const string ValidationFailed = "validation_failed";
 }
 
-public sealed record McpNodeStatusResponse(string Version, long UptimeSeconds, string? DefaultModelName, int LoadedProcessCount);
+public sealed class McpNodeStatusResponse
+{
+    public required string Version { get; init; }
 
-public sealed record McpRuntimeStatusResponse(
-    string? InstalledTag,
-    string RecommendedTag,
-    string? UpstreamLatestTag,
-    bool UpdateAvailable,
-    bool IsOffline,
-    int LoadedProcessCount);
+    public required long UptimeSeconds { get; init; }
 
-public sealed record McpRuntimeAcquisitionStartResponse(
-    string Status,
-    string? Variant,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+    public required string? DefaultModelName { get; init; }
 
-public sealed record McpRuntimeAcquisitionResponse(
-    long Sequence,
-    string Phase,
-    string? Variant,
-    string? Tag,
-    long? CompletedBytes,
-    long? TotalBytes,
-    int StepIndex,
-    int StepCount,
-    string? SanitizedError);
+    public required int LoadedProcessCount { get; init; }
+}
 
-public sealed record McpModelPullStartResponse(
-    string Status,
-    string? ModelName,
-    string? OperationId,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+public sealed class McpRuntimeStatusResponse
+{
+    public required string? InstalledTag { get; init; }
 
-public sealed record McpModelPullResponse(
-    string Status,
-    string? ModelName,
-    string? Phase,
-    long? CompletedBytes,
-    long? TotalBytes,
-    string? SanitizedError,
-    string? OperationId,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+    public required string RecommendedTag { get; init; }
 
-public sealed record McpModelPullCancelResponse(bool Cancelled);
+    public required string? UpstreamLatestTag { get; init; }
 
-public sealed record McpModelDeleteResponse(
-    bool Deleted,
-    string? ModelName,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+    public required bool UpdateAvailable { get; init; }
 
-public sealed record McpDefaultModelResponse(
-    bool Updated,
-    string? SelectedModelName,
-    string? PreviousDefault,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+    public required bool IsOffline { get; init; }
 
-public sealed record McpNodeSettingsUpdateResponse(
-    bool Updated,
-    IReadOnlyList<string> RejectedFields,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+    public required int LoadedProcessCount { get; init; }
+}
 
-public sealed record McpAgentResponse(
-    string Status,
-    McpAgentDefinition? Agent,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+public sealed class McpRuntimeAcquisitionStartResponse
+{
+    public required string Status { get; init; }
 
-public sealed record McpAgentDeleteResponse(bool Deleted, string? FailureCode = null, string? DisplayMessage = null);
+    public required string? Variant { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpRuntimeAcquisitionResponse
+{
+    public required long Sequence { get; init; }
+
+    public required string Phase { get; init; }
+
+    public required string? Variant { get; init; }
+
+    public required string? Tag { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required int StepIndex { get; init; }
+
+    public required int StepCount { get; init; }
+
+    public required string? SanitizedError { get; init; }
+}
+
+public sealed class McpModelPullStartResponse
+{
+    public required string Status { get; init; }
+
+    public required string? ModelName { get; init; }
+
+    public required string? OperationId { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpModelPullResponse
+{
+    public required string Status { get; init; }
+
+    public required string? ModelName { get; init; }
+
+    public required string? Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required string? OperationId { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpModelPullCancelResponse
+{
+    public required bool Cancelled { get; init; }
+}
+
+public sealed class McpModelDeleteResponse
+{
+    public required bool Deleted { get; init; }
+
+    public required string? ModelName { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpDefaultModelResponse
+{
+    public required bool Updated { get; init; }
+
+    public required string? SelectedModelName { get; init; }
+
+    public required string? PreviousDefault { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpNodeSettingsUpdateResponse
+{
+    public required bool Updated { get; init; }
+
+    public required IReadOnlyList<string> RejectedFields { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpAgentResponse
+{
+    public required string Status { get; init; }
+
+    public required McpAgentDefinition? Agent { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
+
+public sealed class McpAgentDeleteResponse
+{
+    public required bool Deleted { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
 
 /// <summary>
 ///     One development-workflow run as an observing agent sees it: lifecycle metadata and node tallies, and nothing
@@ -119,16 +197,34 @@ public record McpWorkflowRunSummary(
     int PendingDecisionCount);
 
 /// <summary>Bounded run listing: one row per work item's latest run, matching the one existing REST list surface.</summary>
-public sealed record McpWorkflowRunListResponse(
-    string Status,
-    IReadOnlyList<McpWorkflowRunSummary> Runs,
-    int Count,
-    int Limit,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+public sealed class McpWorkflowRunListResponse
+{
+    public required string Status { get; init; }
+
+    public required IReadOnlyList<McpWorkflowRunSummary> Runs { get; init; }
+
+    public required int Count { get; init; }
+
+    public required int Limit { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
 
 /// <summary>One node run, reduced to the five fields that answer where a run stands and how hard a node tried.</summary>
-public sealed record McpWorkflowNodeRunSummary(string NodeKey, string NodeType, string Status, int Attempt, int MaxAttempts);
+public sealed class McpWorkflowNodeRunSummary
+{
+    public required string NodeKey { get; init; }
+
+    public required string NodeType { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required int MaxAttempts { get; init; }
+}
 
 /// <summary>
 ///     A single run's observation: the list row's own fields, why it ended if it has, and its node rows — FLAT, so a
@@ -159,11 +255,16 @@ public sealed record McpWorkflowRunDetail(
     TotalNodeCount,
     PendingDecisionCount);
 
-public sealed record McpWorkflowRunGetResponse(
-    string Status,
-    McpWorkflowRunDetail? Run,
-    string? FailureCode = null,
-    string? DisplayMessage = null);
+public sealed class McpWorkflowRunGetResponse
+{
+    public required string Status { get; init; }
+
+    public required McpWorkflowRunDetail? Run { get; init; }
+
+    public string? FailureCode { get; init; }
+
+    public string? DisplayMessage { get; init; }
+}
 
 public sealed record McpGenerationMetadataInput
 {
@@ -177,74 +278,109 @@ public sealed record McpGenerationMetadataInput
     public string? DraftContentHash { get; init; }
 }
 
-public sealed record McpGenerationMetadata(
-    string? Model,
-    string Mode,
-    string? UserBrief,
-    string? Rationale,
-    IReadOnlyList<string> Assumptions,
-    double Confidence,
-    long GeneratedAtUtc,
-    string? DraftContentHash,
-    long AcceptedAtUtc,
-    bool WasEdited)
+public sealed class McpGenerationMetadata
 {
+    public required string? Model { get; init; }
+
+    public required string Mode { get; init; }
+
+    public required string? UserBrief { get; init; }
+
+    public required string? Rationale { get; init; }
+
+    public required IReadOnlyList<string> Assumptions { get; init; }
+
+    public required double Confidence { get; init; }
+
+    public required long GeneratedAtUtc { get; init; }
+
+    public required string? DraftContentHash { get; init; }
+
+    public required long AcceptedAtUtc { get; init; }
+
+    public required bool WasEdited { get; init; }
+
     internal static McpGenerationMetadata FromView(GenerationMetadataView view) =>
-        new(view.Model,
-            view.Mode == DraftMode.Improve ? "improve" : "create",
-            view.UserBrief,
-            view.Rationale,
-            view.Assumptions,
-            view.Confidence,
-            view.GeneratedAtUtc,
-            view.DraftContentHash,
-            view.AcceptedAtUtc,
-            view.WasEdited);
+        new()
+        {
+            Model = view.Model,
+            Mode = view.Mode == DraftMode.Improve ? "improve" : "create",
+            UserBrief = view.UserBrief,
+            Rationale = view.Rationale,
+            Assumptions = view.Assumptions,
+            Confidence = view.Confidence,
+            GeneratedAtUtc = view.GeneratedAtUtc,
+            DraftContentHash = view.DraftContentHash,
+            AcceptedAtUtc = view.AcceptedAtUtc,
+            WasEdited = view.WasEdited
+        };
 }
 
-public sealed record McpAgentDefinition(
-    string Id,
-    string Name,
-    string? Description,
-    string Instructions,
-    string? ModelProfile,
-    string? ReasoningEffort,
-    string Kind,
-    IReadOnlyList<string> AllowedToolNames,
-    IReadOnlyDictionary<string, bool> ToolApprovals,
-    string? OrchestrationTopologyJson,
-    bool PlaybookEnabled,
-    IReadOnlyList<string> AllowedSkillIds,
-    bool DefaultTemporaryChat,
-    bool MemoryExtractionEnabled,
-    bool DisableBaseScaffold,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    McpGenerationMetadata? GenerationMetadata)
+public sealed class McpAgentDefinition
 {
+    public required string Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string Instructions { get; init; }
+
+    public required string? ModelProfile { get; init; }
+
+    public required string? ReasoningEffort { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required IReadOnlyList<string> AllowedToolNames { get; init; }
+
+    public required IReadOnlyDictionary<string, bool> ToolApprovals { get; init; }
+
+    public required string? OrchestrationTopologyJson { get; init; }
+
+    public required bool PlaybookEnabled { get; init; }
+
+    public required IReadOnlyList<string> AllowedSkillIds { get; init; }
+
+    public required bool DefaultTemporaryChat { get; init; }
+
+    public required bool MemoryExtractionEnabled { get; init; }
+
+    public required bool DisableBaseScaffold { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required McpGenerationMetadata? GenerationMetadata { get; init; }
+
     public static McpAgentDefinition FromRecord(AgentDefinitionRecord record) =>
-        new(record.Id.ToString("D"),
-            record.Name,
-            record.Description,
-            record.Instructions,
-            record.ModelProfile,
-            record.ReasoningEffort,
-            record.Kind == AgentDefinitionKind.Orchestrator ? "orchestrator" : "single",
-            record.AllowedToolNames,
-            record.ToolApprovals,
-            record.OrchestrationTopologyJson,
-            record.PlaybookEnabled,
-            (record.AllowedSkillIds ?? []).Select(static id => id.ToString("D")).ToArray(),
-            record.DefaultTemporaryChat,
-            record.MemoryExtractionEnabled,
-            record.DisableBaseScaffold,
-            record.Version,
-            record.CreatedAtUtc,
-            record.UpdatedAtUtc,
-            GenerationProvenance.FromPersistedJson(record.GenerationMetadataJson) is { } metadata
+        new()
+        {
+            Id = record.Id.ToString("D"),
+            Name = record.Name,
+            Description = record.Description,
+            Instructions = record.Instructions,
+            ModelProfile = record.ModelProfile,
+            ReasoningEffort = record.ReasoningEffort,
+            Kind = record.Kind == AgentDefinitionKind.Orchestrator ? "orchestrator" : "single",
+            AllowedToolNames = record.AllowedToolNames,
+            ToolApprovals = record.ToolApprovals,
+            OrchestrationTopologyJson = record.OrchestrationTopologyJson,
+            PlaybookEnabled = record.PlaybookEnabled,
+            AllowedSkillIds = (record.AllowedSkillIds ?? []).Select(static id => id.ToString("D")).ToArray(),
+            DefaultTemporaryChat = record.DefaultTemporaryChat,
+            MemoryExtractionEnabled = record.MemoryExtractionEnabled,
+            DisableBaseScaffold = record.DisableBaseScaffold,
+            Version = record.Version,
+            CreatedAtUtc = record.CreatedAtUtc,
+            UpdatedAtUtc = record.UpdatedAtUtc,
+            GenerationMetadata = GenerationProvenance.FromPersistedJson(record.GenerationMetadataJson) is { } metadata
                 ? McpGenerationMetadata.FromView(metadata)
-                : null);
+                : null
+        };
 }
 
 internal static class McpAdminWireNames
@@ -328,38 +464,44 @@ internal static class McpAdminWireNames
 internal static class McpAdminToolResponseMapper
 {
     public static McpRuntimeAcquisitionResponse ToResponse(this LlamaCppRuntimeAcquisitionStatus status) =>
-        new(status.Sequence,
-            status.Phase,
-            status.Variant,
-            status.Tag,
-            status.CompletedBytes,
-            status.TotalBytes,
-            status.StepIndex,
-            status.StepCount,
-            status.SanitizedError);
+        new()
+        {
+            Sequence = status.Sequence,
+            Phase = status.Phase,
+            Variant = status.Variant,
+            Tag = status.Tag,
+            CompletedBytes = status.CompletedBytes,
+            TotalBytes = status.TotalBytes,
+            StepIndex = status.StepIndex,
+            StepCount = status.StepCount,
+            SanitizedError = status.SanitizedError
+        };
 
     public static McpNodeSettingsUpdateResponse ToResponse(this NodeSettingsAdministrationResult result)
     {
         var fields = result.ValidationErrors.Select(static error => McpAdminWireNames.SettingsField(error.Field)).ToArray();
         if (result.Updated)
         {
-            return new McpNodeSettingsUpdateResponse(true, []);
+            return new McpNodeSettingsUpdateResponse { Updated = true, RejectedFields = [] };
         }
 
         // A conflict is not a rejection: it names no field, and the caller's own patch was valid. Told apart here so a
         // tool-using agent retries instead of "correcting" a field that was never the problem.
         if (result.Conflicted)
         {
-            return new McpNodeSettingsUpdateResponse(false,
-                [],
-                McpAdminToolFailureCodes.SettingsConflict,
-                "Node settings changed while this update was being validated. Nothing was written; read the settings again and retry.");
+            return new McpNodeSettingsUpdateResponse
+            {
+                Updated = false,
+                RejectedFields = [],
+                FailureCode = McpAdminToolFailureCodes.SettingsConflict,
+                DisplayMessage = "Node settings changed while this update was being validated. Nothing was written; read the settings again and retry."
+            };
         }
 
         var failureCode = fields.Length == 0 ? McpAdminToolFailureCodes.ValidationFailed : $"invalid_field:{fields[0]}";
         var displayMessage = result.ValidationErrors.Count == 0
             ? "The settings update was rejected."
             : result.ValidationErrors[0].Message;
-        return new McpNodeSettingsUpdateResponse(false, fields, failureCode, displayMessage);
+        return new McpNodeSettingsUpdateResponse { Updated = false, RejectedFields = fields, FailureCode = failureCode, DisplayMessage = displayMessage };
     }
 }

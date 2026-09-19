@@ -16,21 +16,32 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         other classes mean the pass never got as far as a verdict.
 ///     </para>
 /// </summary>
-internal sealed record DevWorkflowToolRun(
-    bool Passed,
-    string? FailureClass,
-    string? FailureCode,
-    string? SanitizedReason,
-    int CommandsRun,
-    int CommandsFailed,
-    int? TestsPassed,
-    int? TestsFailed,
-    ReadOnlyMemory<byte> Report,
+internal sealed record DevWorkflowToolRun
+{
+    public required bool Passed { get; init; }
+
+    public required string? FailureClass { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required string? SanitizedReason { get; init; }
+
+    public required int CommandsRun { get; init; }
+
+    public required int CommandsFailed { get; init; }
+
+    public required int? TestsPassed { get; init; }
+
+    public required int? TestsFailed { get; init; }
+
+    public required ReadOnlyMemory<byte> Report { get; init; }
+
     /// <summary>
     ///     The committed credential paths the prepared workspace carried, which the tick records as a run event. Carried
     ///     back rather than written where they are found, so the detached pass writes nothing at all.
     /// </summary>
-    IReadOnlyList<string> SecretPaths);
+    public required IReadOnlyList<string> SecretPaths { get; init; }
+}
 
 /// <summary>
 ///     The sandbox half of the tool lane: prepare a workspace for a node-run that has no Dev Mode task behind it, run

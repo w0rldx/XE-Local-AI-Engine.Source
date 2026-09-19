@@ -175,16 +175,22 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             // wait after it share this allowance rather than each taking a full one.
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                                                               new CapacityRequest(runtime.Model.ModelName,
-                                                                   ModelRole.Chat,
-                                                                   runtime.Runtime.ContextTokens,
-                                                                   PublishLaunchAdmission: false,
-                                                                   runtime.Runtime.KvTypeK),
-                                                               new BenchmarkAdmissionContext(work.RunId,
-                                                                   "comparison",
-                                                                   runtime.RequestedContextTokens,
-                                                                   runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                                                   CapacityRejectedMessage),
+                                                               new CapacityRequest
+                                                               {
+                                                                   ModelName = runtime.Model.ModelName,
+                                                                   Role = ModelRole.Chat,
+                                                                   RequiredContextTokens = runtime.Runtime.ContextTokens,
+                                                                   PublishLaunchAdmission = false,
+                                                                   KvCacheType = runtime.Runtime.KvTypeK
+                                                               },
+                                                               new BenchmarkAdmissionContext
+                                                               {
+                                                                   RunId = work.RunId,
+                                                                   Phase = "comparison",
+                                                                   RequestedContextTokens = runtime.RequestedContextTokens,
+                                                                   KvCacheType = runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                                   RejectedMessage = CapacityRejectedMessage
+                                                               },
                                                                waitBudget,
                                                                _logger,
                                                                token);
@@ -307,10 +313,12 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             BenchmarkPairwiseOutputSchemaV1.Json,
             firstTruncated,
             secondTruncated);
-        return _packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            BenchmarkPairwisePromptV1.SystemPromptFor(firstTruncated || secondTruncated),
-            [
+        return _packageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = BenchmarkPairwisePromptV1.SystemPromptFor(firstTruncated || secondTruncated),
+            ConversationContext = [
                 new ConversationMessageDto
                 {
                     Id = Guid.NewGuid(),
@@ -319,15 +327,16 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
                     SortOrder = 0
                 }
             ],
-            runtime.Model.ModelName,
-            AgentDefinitionVersion: 1,
-            ClientNodeId: LocalChatLoopbackDefaults.ClientNodeId,
-            AllowedTools: [],
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(),
-            SamplingOptions: BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
-            IsUnattended: true,
-            ResponseJsonSchema: PairwiseResponseFormatSchema));
+            ModelProfile = runtime.Model.ModelName,
+            AgentDefinitionVersion = 1,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = [],
+            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(),
+            SamplingOptions = BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
+            IsUnattended = true,
+            ResponseJsonSchema = PairwiseResponseFormatSchema
+        });
     }
 
     /// <inheritdoc cref="BenchmarkJudgeExecutor" />

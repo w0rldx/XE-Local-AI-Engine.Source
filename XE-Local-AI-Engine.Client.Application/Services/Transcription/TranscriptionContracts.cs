@@ -45,9 +45,14 @@ public sealed record CreateTranscriptionSessionInput
 }
 
 /// <summary>One page of transcription sessions.</summary>
-/// <param name="Items">The sessions on this page, newest first.</param>
-/// <param name="TotalCount">How many sessions exist in total, ignoring paging.</param>
-public sealed record TranscriptionSessionPage(IReadOnlyList<TranscriptionSessionSummaryView> Items, int TotalCount);
+public sealed class TranscriptionSessionPage
+{
+    /// <summary>The sessions on this page, newest first.</summary>
+    public required IReadOnlyList<TranscriptionSessionSummaryView> Items { get; init; }
+
+    /// <summary>How many sessions exist in total, ignoring paging.</summary>
+    public required int TotalCount { get; init; }
+}
 
 /// <summary>Which of the five ways a batch transcription can end actually happened.</summary>
 public enum TranscribeFileOutcome

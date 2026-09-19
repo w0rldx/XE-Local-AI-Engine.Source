@@ -70,7 +70,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             // caller (KnowledgeIngestionService) only reaches EmbedAsync with chunking.Chunks, and RunAsync marks a
             // zero-chunk document Failed before it ever calls EmbedAsync — so a document stamped via this branch can
             // never reach Indexed, and this placeholder name is never compared as a vector identity.
-            return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity, Dimension: 0);
+            return new KnowledgeEmbeddingResult { Vectors = [], ResolvedModel = _options.EmbeddingModelName, VectorIdentity = KnowledgeEmbeddingVectorPolicy.LegacyIdentity, Dimension = 0 };
         }
 
         var provider = ResolveProvider();
@@ -149,7 +149,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             }
         }
 
-        return new KnowledgeEmbeddingResult(blobs, embeddingModelName, vectorIdentity!, dimension);
+        return new KnowledgeEmbeddingResult { Vectors = blobs, ResolvedModel = embeddingModelName, VectorIdentity = vectorIdentity!, Dimension = dimension };
     }
 
     public async Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken)
@@ -194,7 +194,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             var identity = KnowledgeEmbeddingVectorPolicy.TryCreateExpectedIdentity(resolution, _options.EmbeddingVectorMode);
             return identity is null
                 ? null
-                : new KnowledgeEmbeddingDescriptor(resolution.Name, identity, KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth);
+                : new KnowledgeEmbeddingDescriptor { ResolvedModel = resolution.Name, VectorIdentity = identity, Dimension = KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth };
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {

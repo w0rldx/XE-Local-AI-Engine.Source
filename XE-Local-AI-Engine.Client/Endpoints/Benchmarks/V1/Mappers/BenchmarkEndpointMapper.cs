@@ -9,32 +9,41 @@ internal static class BenchmarkEndpointMapper
 {
     // An omitted rubric takes the default; an incomplete judge still fails validation exactly as it did before.
     public static BenchmarkProjectDraft ToDraft(this BenchmarkProjectMutationRequest request, Guid id) =>
-        new(id,
-            request.Name,
-            request.CoreTask,
-            request.ContextTokens,
-            request.AgentDefinitionId,
-            request.JudgeEnabled
-                ? new BenchmarkJudgePolicyDraft(request.JudgeModelName ?? string.Empty,
-                    request.JudgeContextTokens ?? 0,
-                    request.Rubric.ToRubric(),
-                    request.ReferenceAnswer)
+        new()
+        {
+            Id = id,
+            Name = request.Name,
+            CoreTask = request.CoreTask,
+            ContextTokens = request.ContextTokens,
+            AgentDefinitionId = request.AgentDefinitionId,
+            Judge = request.JudgeEnabled
+                ? new BenchmarkJudgePolicyDraft
+                {
+                    ModelName = request.JudgeModelName ?? string.Empty,
+                    ContextTokens = request.JudgeContextTokens ?? 0,
+                    Rubric = request.Rubric.ToRubric(),
+                    ReferenceAnswer = request.ReferenceAnswer
+                }
                 : null,
-            request.MaxOutputTokens,
-            request.InvocationTimeoutSeconds,
-            request.ReasoningBudgetTokens,
-            request.FidelityEnabled,
-            request.FidelityKldEnabled,
-            request.FidelityChunks,
-            request.FidelityKldBaseModelName);
+            MaxOutputTokens = request.MaxOutputTokens,
+            InvocationTimeoutSeconds = request.InvocationTimeoutSeconds,
+            ReasoningBudgetTokens = request.ReasoningBudgetTokens,
+            FidelityEnabled = request.FidelityEnabled,
+            FidelityKldEnabled = request.FidelityKldEnabled,
+            FidelityChunks = request.FidelityChunks,
+            FidelityKldBaseModelName = request.FidelityKldBaseModelName
+        };
 
     public static BenchmarkTaskItemDraft ToDraft(this BenchmarkTaskItemMutationRequest request) =>
-        new(request.Prompt,
-            request.Kind,
-            request.ReferenceAnswer,
-            request.VerifierConfig,
-            request.GeneratorConfig,
-            request.CountsTowardScore);
+        new()
+        {
+            Prompt = request.Prompt,
+            Kind = request.Kind,
+            ReferenceAnswer = request.ReferenceAnswer,
+            VerifierConfig = request.VerifierConfig,
+            GeneratorConfig = request.GeneratorConfig,
+            CountsTowardScore = request.CountsTowardScore
+        };
 
     public static BenchmarkTaskItemResponse ToResponse(this BenchmarkTaskItemRecord item) =>
         new()

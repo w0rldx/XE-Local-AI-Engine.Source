@@ -237,13 +237,16 @@ public sealed class IntegrationExecutionQueryService
                 return false;
             }
 
-            _buffer.Publish(new IntegrationStreamEvent(IntegrationStreamEventTypes.ExecutionCancelled,
-                sequence,
-                execution.Id,
-                execution.SessionId,
-                nowUnixMs,
-                ContentType: null,
-                Payload: null));
+            _buffer.Publish(new IntegrationStreamEvent
+            {
+                Type = IntegrationStreamEventTypes.ExecutionCancelled,
+                Sequence = sequence,
+                ExecutionId = execution.Id,
+                SessionId = execution.SessionId,
+                OccurredAtUtc = nowUnixMs,
+                ContentType = null,
+                Payload = null
+            });
             published = true;
             return true;
         }

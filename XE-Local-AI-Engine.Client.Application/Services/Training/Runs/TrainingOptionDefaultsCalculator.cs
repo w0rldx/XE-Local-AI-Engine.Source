@@ -83,7 +83,7 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
                 var estimate = TrainingFootprintEstimator.Estimate(parameterCount, config, candidate);
                 if (estimate.GpuBytes <= budget)
                 {
-                    return new TrainingRunDefaults(candidate, estimate, budget, profile.VramKnown, Fits: true, RejectionReason: null);
+                    return new TrainingRunDefaults { Options = candidate, Estimate = estimate, AvailableVramBytes = budget, VramKnown = profile.VramKnown, Fits = true, RejectionReason = null };
                 }
             }
         }
@@ -95,14 +95,17 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
             GradientAccumulationSteps = 8
         };
         var floor = TrainingFootprintEstimator.Estimate(parameterCount, config, smallest);
-        return new TrainingRunDefaults(smallest,
-            floor,
-            budget,
-            profile.VramKnown,
-            Fits: false,
-            RejectionReason: profile.VramKnown
+        return new TrainingRunDefaults
+        {
+            Options = smallest,
+            Estimate = floor,
+            AvailableVramBytes = budget,
+            VramKnown = profile.VramKnown,
+            Fits = false,
+            RejectionReason = profile.VramKnown
                 ? "This checkpoint does not fit the available VRAM even at the smallest sequence length and batch size."
-                : "No usable GPU was detected. Training requires CUDA VRAM this node can measure.");
+                : "No usable GPU was detected. Training requires CUDA VRAM this node can measure."
+        };
     }
 
     public async Task<TrainingRunDefaults> ResolveAsync(Guid baseArtifactId,
@@ -126,7 +129,7 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
                 $"The selected options need about {estimate.GpuBytes / (1024 * 1024)} MB of VRAM and only {budget / (1024 * 1024)} MB is available. Lower the sequence length or the batch size.");
         }
 
-        return new TrainingRunDefaults(requested, estimate, budget, profile.VramKnown, Fits: true, RejectionReason: null);
+        return new TrainingRunDefaults { Options = requested, Estimate = estimate, AvailableVramBytes = budget, VramKnown = profile.VramKnown, Fits = true, RejectionReason = null };
     }
 
     public async Task<TrainingFootprintEstimate> EstimateAsync(Guid baseArtifactId,

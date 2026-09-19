@@ -204,7 +204,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 inserted,
                 profile is { GpuAccelAvailable: true, VramKnown: true } ? "GPU" : "CPU");
 
-            return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Succeeded, inserted, SanitizedError: null);
+            return new ModelFitRefreshResult { SnapshotId = snapshotId, Status = ModelFitRunStatus.Succeeded, RecommendationCount = inserted, SanitizedError = null };
         }
         catch (OperationCanceledException)
         {
@@ -330,24 +330,27 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             ? new DateTimeOffset(parsed.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
             : default;
 
-        return new AdvisorRecommendation(entry.GgufRepo,
-            candidate.ModelName,
-            candidate.File.FileName,
-            candidate.File.Quant,
-            candidate.Estimate,
-            candidate.IsInstalled,
-            GgufPublisherTrust.IsTrustedPublisher(entry.GgufRepo),
-            Downloads: 0,
-            releaseDate,
-            section,
-            entry.Tier,
-            entry.Id,
-            entry.DisplayName,
-            entry.Notes,
-            candidate.KvQuantAdvisory,
-            candidate.KvBytesPerTokenAtCtx,
-            candidate.KvBytesPerTokenAtCtx is null ? null : KvCacheQuant.Q8_0,
-            candidate.AttentionArchTag);
+        return new AdvisorRecommendation
+        {
+            RepoId = entry.GgufRepo,
+            ModelName = candidate.ModelName,
+            FileName = candidate.File.FileName,
+            Quant = candidate.File.Quant,
+            Estimate = candidate.Estimate,
+            IsInstalled = candidate.IsInstalled,
+            IsTrustedPublisher = GgufPublisherTrust.IsTrustedPublisher(entry.GgufRepo),
+            Downloads = 0,
+            LastModified = releaseDate,
+            Section = section,
+            Tier = entry.Tier,
+            CatalogId = entry.Id,
+            CatalogDisplayName = entry.DisplayName,
+            CatalogNotes = entry.Notes,
+            KvQuantAdvisory = candidate.KvQuantAdvisory,
+            KvBytesPerTokenAtCtx = candidate.KvBytesPerTokenAtCtx,
+            KvBytesPerTokenQuant = candidate.KvBytesPerTokenAtCtx is null ? null : KvCacheQuant.Q8_0,
+            AttentionArchTag = candidate.AttentionArchTag
+        };
     }
 
     /// <summary>
@@ -581,16 +584,19 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         var (file, estimate) = selected;
         var modelName = GgufModelName.Format(repoId, file.Quant);
-        return new AdvisorRecommendation(repoId,
-            modelName,
-            file.FileName,
-            file.Quant,
-            estimate,
-            installedKeys.Contains(modelName),
-            summary.IsTrustedPublisher,
-            summary.Downloads,
-            summary.LastModified,
-            Section: "explore");
+        return new AdvisorRecommendation
+        {
+            RepoId = repoId,
+            ModelName = modelName,
+            FileName = file.FileName,
+            Quant = file.Quant,
+            Estimate = estimate,
+            IsInstalled = installedKeys.Contains(modelName),
+            IsTrustedPublisher = summary.IsTrustedPublisher,
+            Downloads = summary.Downloads,
+            LastModified = summary.LastModified,
+            Section = "explore"
+        };
     }
 
     private async Task<HashSet<string>> ListInstalledKeysAsync(CancellationToken cancellationToken)
@@ -755,7 +761,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     private static ModelFitRefreshResult Failed(Guid? snapshotId, string sanitizedError)
     {
-        return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, RecommendationCount: 0, sanitizedError);
+        return new ModelFitRefreshResult { SnapshotId = snapshotId, Status = ModelFitRunStatus.Failed, RecommendationCount = 0, SanitizedError = sanitizedError };
     }
 
     /// <summary>
@@ -764,43 +770,62 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     "newer model" recency signal). Downloads / trust / recency are ranking boosts carried from the search summary —
     ///     none excludes a candidate.
     /// </summary>
-    /// <param name="Section">
-    ///     Which recommendation section this row belongs to: <c>"recommended"</c> / <c>"canRun"</c> (catalog lane,
-    ///     primary) or <c>"explore"</c> (live Hugging Face discovery lane, secondary — the default for the pre-existing
-    ///     construction sites).
-    /// </param>
-    /// <param name="Tier">The catalog entry's editorial tier (S/A/B), or <see langword="null" /> for an explore-lane row.</param>
-    /// <param name="CatalogId">The catalog entry id, or <see langword="null" /> for an explore-lane row.</param>
-    /// <param name="CatalogDisplayName">The catalog entry's curated display name, or <see langword="null" /> for an explore-lane row.</param>
-    /// <param name="CatalogNotes">The catalog entry's optional user-facing note, or <see langword="null" /> when absent/not-catalog.</param>
-    /// <param name="KvQuantAdvisory">
-    ///     Advisory-only quantized-KV estimate for a catalog-lane row (<see langword="null" /> for an explore-lane row or
-    ///     when the header lacks the KV-sizing metadata). Never used for membership/ranking — see <see cref="KvQuantAdvisory" />.
-    /// </param>
-    /// <param name="KvBytesPerTokenAtCtx">
-    ///     KV-cache bytes per token of context at the run's context target, or <see langword="null" /> when the header
-    ///     cannot size the KV term. Always paired with <paramref name="KvBytesPerTokenQuant" />: unlabelled, the figure
-    ///     is ambiguous by a factor of two.
-    /// </param>
-    /// <param name="KvBytesPerTokenQuant">The element size <paramref name="KvBytesPerTokenAtCtx" /> was computed at (the chat launch default, <see cref="KvCacheQuant.Q8_0" />).</param>
-    /// <param name="AttentionArchTag">The candidate's attention shape as a stable lowercase token (<c>mla</c>/<c>swa</c>/<c>gqa</c>/<c>mha</c>).</param>
-    private sealed record AdvisorRecommendation(
-        string RepoId,
-        string ModelName,
-        string FileName,
-        string Quant,
-        MemoryFitEstimate Estimate,
-        bool IsInstalled,
-        bool IsTrustedPublisher,
-        long Downloads,
-        DateTimeOffset LastModified,
-        string Section = "explore",
-        string? Tier = null,
-        string? CatalogId = null,
-        string? CatalogDisplayName = null,
-        string? CatalogNotes = null,
-        KvQuantAdvisory? KvQuantAdvisory = null,
-        long? KvBytesPerTokenAtCtx = null,
-        KvCacheQuant? KvBytesPerTokenQuant = null,
-        string? AttentionArchTag = null);
+    private sealed record AdvisorRecommendation
+    {
+        public required string RepoId { get; init; }
+
+        public required string ModelName { get; init; }
+
+        public required string FileName { get; init; }
+
+        public required string Quant { get; init; }
+
+        public required MemoryFitEstimate Estimate { get; init; }
+
+        public required bool IsInstalled { get; init; }
+
+        public required bool IsTrustedPublisher { get; init; }
+
+        public required long Downloads { get; init; }
+
+        public required DateTimeOffset LastModified { get; init; }
+
+        /// <summary>
+        ///     Which recommendation section this row belongs to: <c>"recommended"</c> / <c>"canRun"</c> (catalog lane,
+        ///     primary) or <c>"explore"</c> (live Hugging Face discovery lane, secondary — the default for the pre-existing
+        ///     construction sites).
+        /// </summary>
+        public string Section { get; init; } = "explore";
+
+        /// <summary>The catalog entry's editorial tier (S/A/B), or <see langword="null" /> for an explore-lane row.</summary>
+        public string? Tier { get; init; }
+
+        /// <summary>The catalog entry id, or <see langword="null" /> for an explore-lane row.</summary>
+        public string? CatalogId { get; init; }
+
+        /// <summary>The catalog entry's curated display name, or <see langword="null" /> for an explore-lane row.</summary>
+        public string? CatalogDisplayName { get; init; }
+
+        /// <summary>The catalog entry's optional user-facing note, or <see langword="null" /> when absent/not-catalog.</summary>
+        public string? CatalogNotes { get; init; }
+
+        /// <summary>
+        ///     Advisory-only quantized-KV estimate for a catalog-lane row (<see langword="null" /> for an explore-lane row or
+        ///     when the header lacks the KV-sizing metadata). Never used for membership/ranking — see <see cref="KvQuantAdvisory" />.
+        /// </summary>
+        public KvQuantAdvisory? KvQuantAdvisory { get; init; }
+
+        /// <summary>
+        ///     KV-cache bytes per token of context at the run's context target, or <see langword="null" /> when the header
+        ///     cannot size the KV term. Always paired with <see cref="KvBytesPerTokenQuant" />: unlabelled, the figure
+        ///     is ambiguous by a factor of two.
+        /// </summary>
+        public long? KvBytesPerTokenAtCtx { get; init; }
+
+        /// <summary>The element size <see cref="KvBytesPerTokenAtCtx" /> was computed at (the chat launch default, <see cref="KvCacheQuant.Q8_0" />).</summary>
+        public KvCacheQuant? KvBytesPerTokenQuant { get; init; }
+
+        /// <summary>The candidate's attention shape as a stable lowercase token (<c>mla</c>/<c>swa</c>/<c>gqa</c>/<c>mha</c>).</summary>
+        public string? AttentionArchTag { get; init; }
+    }
 }

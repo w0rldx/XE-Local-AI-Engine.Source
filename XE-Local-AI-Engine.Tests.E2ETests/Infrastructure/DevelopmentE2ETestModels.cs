@@ -17,12 +17,18 @@ internal sealed class DevelopmentE2ECoderModel : IDevelopmentCoderModel
         liveProgress?.Output(new ChatResponseUpdate(ChatRole.Assistant, "Development E2E live output"));
         await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         _ = await tools.WriteFileAsync("feature.txt", "implemented by Development E2E\n", cancellationToken);
-        return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented the deterministic E2E feature file.",
-                ["feature.txt"],
-                [],
-                Notes: null),
-            InputTokens: 10,
-            OutputTokens: 10);
+        return new DevelopmentCoderModelResult
+        {
+            Submission = new DevelopmentCoderSubmission
+        {
+            Summary = "Implemented the deterministic E2E feature file.",
+            ChangedFiles = ["feature.txt"],
+            CommandIds = [],
+            Notes = null
+        },
+            InputTokens = 10,
+            OutputTokens = 10
+        };
     }
 }
 
@@ -37,10 +43,16 @@ internal sealed class DevelopmentE2EReviewerModel : IDevelopmentReviewerModel
         DevelopmentCloudRoleRoute? cloudRoute = null,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new DevelopmentReviewerModelResult(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.Approved,
-                "The validated E2E subject satisfies the acceptance criterion.",
-                []),
-            InputTokens: 10,
-            OutputTokens: 10));
+        return Task.FromResult(new DevelopmentReviewerModelResult
+        {
+            Submission = new DevelopmentReviewerSubmission
+        {
+            Disposition = DevelopmentReviewDisposition.Approved,
+            Summary = "The validated E2E subject satisfies the acceptance criterion.",
+            Findings = []
+        },
+            InputTokens = 10,
+            OutputTokens = 10
+        });
     }
 }

@@ -104,14 +104,17 @@ public sealed class DefaultMemoryExtractionAgentTests
 
     private static MemoryExtractionRunInput Run(bool failed = false)
     {
-        return new MemoryExtractionRunInput(Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            [new MemoryExtractionTurn("How do I add a feature?")],
-            "Use the shared helper.",
-            failed,
-            failed ? "tool-failed" : null,
-            MemoryExcluded: false);
+        return new MemoryExtractionRunInput
+        {
+            AgentDefinitionId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            AssistantMessageId = Guid.NewGuid(),
+            UserTurns = [new MemoryExtractionTurn { Content = "How do I add a feature?" }],
+            AssistantResponse = "Use the shared helper.",
+            Failed = failed,
+            Error = failed ? "tool-failed" : null,
+            MemoryExcluded = false
+        };
     }
 
     /// <summary>

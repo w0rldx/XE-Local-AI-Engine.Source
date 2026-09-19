@@ -57,14 +57,24 @@ public enum McpServerApiKeyScope
 ///     The credential as shown to the operator. Carries no secret by construction — the key is not recoverable from
 ///     the node — so this shape is safe to return from any Operator-gated surface.
 /// </summary>
-public sealed record McpServerApiKeyView(
-    string Prefix,
-    McpServerApiKeyScope Scope,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? LastUsedAt);
+public sealed class McpServerApiKeyView
+{
+    public required string Prefix { get; init; }
+
+    public required McpServerApiKeyScope Scope { get; init; }
+
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    public required DateTimeOffset? LastUsedAt { get; init; }
+}
 
 /// <summary>Trusted metadata produced by a successful, single-lookup key validation.</summary>
-public sealed record McpServerApiKeyValidation(McpServerApiKeyScope Scope, string Prefix);
+public sealed class McpServerApiKeyValidation
+{
+    public required McpServerApiKeyScope Scope { get; init; }
+
+    public required string Prefix { get; init; }
+}
 
 /// <summary>
 ///     A freshly minted credential: the one-time plaintext <see cref="Key" /> plus the metadata that will remain
@@ -72,4 +82,9 @@ public sealed record McpServerApiKeyValidation(McpServerApiKeyScope Scope, strin
 ///     is what stops the secret being returned from a retrieval path. Never log it, never persist it, never put it in
 ///     an audit record or an error body: once this value is dropped, the key is gone.
 /// </summary>
-public sealed record GeneratedMcpServerApiKey(string Key, McpServerApiKeyView View);
+public sealed class GeneratedMcpServerApiKey
+{
+    public required string Key { get; init; }
+
+    public required McpServerApiKeyView View { get; init; }
+}

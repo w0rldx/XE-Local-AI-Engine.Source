@@ -833,7 +833,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
             IReadOnlyList<SelectedFolderReference> references =
-                _folders.Values.Select(folder => new SelectedFolderReference(folder.Id.ToString(), folder.Alias)).ToList();
+                _folders.Values.Select(folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias }).ToList();
             return Task.FromResult(references);
         }
 
@@ -849,7 +849,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         public void Add(Guid id, string alias, string hostPath)
         {
-            _folders[id] = new ResolvedSelectedFolder(id, alias, hostPath, SelectedFolderMode.Copy);
+            _folders[id] = new ResolvedSelectedFolder { Id = id, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy };
         }
     }
 
@@ -857,7 +857,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity("owner-a", "node-1"));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-a", NodeId = "node-1" });
         }
     }
 }

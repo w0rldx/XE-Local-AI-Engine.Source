@@ -109,7 +109,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                 .Returns(_ =>
                 {
                     CapacityDecidedOrdinal = Next();
-                    return new CapacityDecision(CapacityVerdict.Allow, "Capacity available.", OllamaEvictionWarning: false, _reservation);
+                    return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = _reservation };
                 });
         Dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo => _leaseRequest = AcquireLeaseAsync(callInfo.Arg<CancellationToken>()));
@@ -641,31 +641,37 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             ];
         }
 
-        return new NodeChatConversationDto(ConversationId,
-            "sensor-ingest",
-            UserId: null,
-            CreatedAtUtc: 0,
-            LastSeenUtc: 0,
-            Purged: false,
-            messages,
-            CompactionSummary: CompactionSummary,
-            CompactionSummaryCoversToSequence: CompactionCoversToSequence);
+        return new NodeChatConversationDto
+        {
+            ConversationId = ConversationId,
+            Title = "sensor-ingest",
+            UserId = null,
+            CreatedAtUtc = 0,
+            LastSeenUtc = 0,
+            Purged = false,
+            Messages = messages,
+            CompactionSummary = CompactionSummary,
+            CompactionSummaryCoversToSequence = CompactionCoversToSequence
+        };
     }
 
     private static NodeChatPersistedMessageDto Message(Guid messageId, string role, string content) =>
-        new(messageId,
-            Guid.Empty,
-            RequestId: null,
-            Sequence: 0,
-            role,
-            content,
-            Reasoning: null,
-            NodeChatMessageStatusValues.Completed,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            Model: null,
-            Error: null,
-            MetadataJson: null);
+        new()
+        {
+            MessageId = messageId,
+            ConversationId = Guid.Empty,
+            RequestId = null,
+            Sequence = 0,
+            Role = role,
+            Content = content,
+            Reasoning = null,
+            Status = NodeChatMessageStatusValues.Completed,
+            CreatedAtUtc = 0,
+            UpdatedAtUtc = 0,
+            Model = null,
+            Error = null,
+            MetadataJson = null
+        };
 
     private AgentDefinitionRecord BuildDefinition() =>
         new()
@@ -748,6 +754,6 @@ internal sealed class RecordingCompactionService : IConversationCompactionServic
         CancellationToken cancellationToken = default)
     {
         Calls.Add((conversationId, recentMessagesToKeepVerbatim));
-        return Task.FromResult(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact));
+        return Task.FromResult(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact });
     }
 }

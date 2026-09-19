@@ -43,7 +43,7 @@ public sealed class McpInboundProtocolTests
         var workspaceId = Guid.NewGuid().ToString("D");
         var workspaces = new FakeSelectedFolderResolver
         {
-            References = [new SelectedFolderReference(workspaceId, "engine")]
+            References = [new SelectedFolderReference { Id = workspaceId, Alias = "engine" }]
         };
         await using var factory = CreateFactory(coordinator, workspaces);
         await using var client = await CreateClientAsync(factory);
@@ -223,7 +223,7 @@ public sealed class McpInboundProtocolTests
             Interlocked.Increment(ref _cancelCallCount);
             if (!_runs.TryGetValue(requestId, out var current))
             {
-                return Task.FromResult(new McpAgentRunCancelResult(McpAgentRunCancelKind.NotFound, null, "Run not found."));
+                return Task.FromResult(new McpAgentRunCancelResult { Kind = McpAgentRunCancelKind.NotFound, Run = null, DisplayMessage = "Run not found." });
             }
 
             var cancelled = current with
@@ -236,9 +236,12 @@ public sealed class McpInboundProtocolTests
                 DisplayMessage = "Cancellation requested."
             };
             _runs[requestId] = cancelled;
-            return Task.FromResult(new McpAgentRunCancelResult(McpAgentRunCancelKind.Requested,
-                cancelled,
-                "Cancellation requested."));
+            return Task.FromResult(new McpAgentRunCancelResult
+            {
+                Kind = McpAgentRunCancelKind.Requested,
+                Run = cancelled,
+                DisplayMessage = "Cancellation requested."
+            });
         }
 
         public Task<McpAgentRunView?> GetAsync(Guid requestId, CancellationToken cancellationToken)
@@ -261,34 +264,43 @@ public sealed class McpInboundProtocolTests
         public Task<McpAgentRunStartResult> StartAsync(McpAgentRunStartRequest request, CancellationToken cancellationToken)
         {
             LastStartRequest = request;
-            var run = new McpAgentRunView(request.RequestId,
-                McpAgentRunStatus.Queued,
-                Version: 0,
-                McpAgentRunStopReason.None,
-                request.Binding.ModelId ?? request.Binding.ModelOverrideId,
-                AgentDefinitionId: null,
-                request.WorkspaceId,
-                Result: null,
-                DisplayMessage: "Accepted for background execution.",
-                FailureCode: null,
-                CreatedAtUtc: 10,
-                ClaimedAtUtc: null,
-                CompletedAtUtc: null,
-                PayloadExpiresAtUtc: null,
-                CompactedAtUtc: null,
-                PayloadExpired: false);
+            var run = new McpAgentRunView
+            {
+                RequestId = request.RequestId,
+                Status = McpAgentRunStatus.Queued,
+                Version = 0,
+                StopReason = McpAgentRunStopReason.None,
+                ModelId = request.Binding.ModelId ?? request.Binding.ModelOverrideId,
+                AgentDefinitionId = null,
+                WorkspaceId = request.WorkspaceId,
+                Result = null,
+                DisplayMessage = "Accepted for background execution.",
+                FailureCode = null,
+                CreatedAtUtc = 10,
+                ClaimedAtUtc = null,
+                CompletedAtUtc = null,
+                PayloadExpiresAtUtc = null,
+                CompactedAtUtc = null,
+                PayloadExpired = false
+            };
             if (_runs.TryAdd(request.RequestId, run))
             {
-                return Task.FromResult(new McpAgentRunStartResult(McpAgentRunStartKind.Accepted,
-                    run,
-                    null,
-                    "Accepted for background execution."));
+                return Task.FromResult(new McpAgentRunStartResult
+                {
+                    Kind = McpAgentRunStartKind.Accepted,
+                    Run = run,
+                    FailureCode = null,
+                    DisplayMessage = "Accepted for background execution."
+                });
             }
 
-            return Task.FromResult(new McpAgentRunStartResult(McpAgentRunStartKind.Existing,
-                _runs[request.RequestId],
-                null,
-                "Existing run returned."));
+            return Task.FromResult(new McpAgentRunStartResult
+            {
+                Kind = McpAgentRunStartKind.Existing,
+                Run = _runs[request.RequestId],
+                FailureCode = null,
+                DisplayMessage = "Existing run returned."
+            });
         }
     }
 
@@ -323,17 +335,20 @@ public sealed class McpInboundProtocolTests
             throw new NotSupportedException("Protocol tests do not rotate credentials.");
 
         public Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<McpServerApiKeyView?>(new McpServerApiKeyView("xemcp_protocol",
-                _scope,
-                DateTimeOffset.UnixEpoch,
-                null));
+            Task.FromResult<McpServerApiKeyView?>(new McpServerApiKeyView
+            {
+                Prefix = "xemcp_protocol",
+                Scope = _scope,
+                CreatedAt = DateTimeOffset.UnixEpoch,
+                LastUsedAt = null
+            });
 
         public Task<bool> RevokeAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Protocol tests do not revoke credentials.");
 
         public Task<McpServerApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Equals(presented, _validKey, StringComparison.Ordinal)
-                ? new McpServerApiKeyValidation(_scope, "xemcp_protocol")
+                ? new McpServerApiKeyValidation { Scope = _scope, Prefix = "xemcp_protocol" }
                 : null);
     }
 }

@@ -54,12 +54,15 @@ public sealed class DraftAgentDefinitionEndpoint : Endpoint<DraftAgentDefinition
         }
 
         var result = await _configDraftService
-                           .DraftAgentDefinitionAsync(new ConfigDraftRequest(req.Mode,
-                                   req.ModelName!,
-                                   req.Brief!,
-                                   req.ExistingName,
-                                   req.ExistingDescription,
-                                   req.ExistingContent),
+                           .DraftAgentDefinitionAsync(new ConfigDraftRequest
+                           {
+                               Mode = req.Mode,
+                               ModelName = req.ModelName!,
+                               Brief = req.Brief!,
+                               ExistingName = req.ExistingName,
+                               ExistingDescription = req.ExistingDescription,
+                               ExistingContent = req.ExistingContent
+                           },
                                ct);
 
         if (result.Draft is not { } draft)

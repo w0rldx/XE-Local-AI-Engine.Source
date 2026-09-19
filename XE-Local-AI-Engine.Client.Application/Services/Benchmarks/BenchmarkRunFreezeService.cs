@@ -338,11 +338,14 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                                                        primaryModelName,
                                                        judgeModelName: null,
                                                        cancellationToken);
-            frozenItems.Add(new FrozenTaskItem(item,
-                itemCoreTask,
-                eligible,
-                new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName, judgeModelName: null),
-                dependencySet));
+            frozenItems.Add(new FrozenTaskItem
+            {
+                Item = item,
+                CoreTask = itemCoreTask,
+                Eligible = eligible,
+                Guard = new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName, judgeModelName: null),
+                Dependencies = dependencySet
+            });
         }
 
         // One snapshot per DISTINCT (item, sampling), memoized. Throughput mode has exactly one sampling, so a
@@ -361,18 +364,21 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                 return cached;
             }
 
-            var created = _snapshots.Serialize(_snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
-                definition.Id,
-                definition.Version,
-                item.CoreTask,
-                project.ContextTokens,
-                item.Eligible,
-                primaryLaunch.Runtime,
-                sampling,
-                primarySnapshot,
-                item.Dependencies,
-                GetApplicationVersion(),
-                createdAtUtc)));
+            var created = _snapshots.Serialize(_snapshots.Create(new BenchmarkRuntimeSnapshotInput
+            {
+                ProjectId = project.Id,
+                AgentDefinitionId = definition.Id,
+                AgentVersion = definition.Version,
+                CoreTask = item.CoreTask,
+                RequestedContextTokens = project.ContextTokens,
+                ResolvedRuntime = item.Eligible,
+                PrimaryRuntime = primaryLaunch.Runtime,
+                PrimarySampling = sampling,
+                PrimaryModel = primarySnapshot,
+                Dependencies = item.Dependencies,
+                ApplicationVersion = GetApplicationVersion(),
+                CreatedAtUtc = createdAtUtc
+            }));
             serializedSnapshots[key] = created;
             return created;
         }
@@ -435,7 +441,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                            TaskItemSetHash = project.TaskItemSetHash
                        }))
                        .ToArray();
-        return new BenchmarkFrozenRunPlan(project.Id, expectedProjectVersion, commands);
+        return new BenchmarkFrozenRunPlan { ProjectId = project.Id, ExpectedProjectVersion = expectedProjectVersion, Commands = commands };
     }
 
     /// <summary>
@@ -517,12 +523,18 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     ///     the dependency set captured from that resolution, and the guard that re-checks the set at commit. One per
     ///     item, because the task text is the resolver's retrieval query.
     /// </summary>
-    private sealed record FrozenTaskItem(
-        BenchmarkTaskItemRecord Item,
-        string CoreTask,
-        ResolvedAgentRuntime Eligible,
-        FreezeCommitGuard Guard,
-        BenchmarkFreezeDependencySetV1 Dependencies);
+    private sealed record FrozenTaskItem
+    {
+        public required BenchmarkTaskItemRecord Item { get; init; }
+
+        public required string CoreTask { get; init; }
+
+        public required ResolvedAgentRuntime Eligible { get; init; }
+
+        public required FreezeCommitGuard Guard { get; init; }
+
+        public required BenchmarkFreezeDependencySetV1 Dependencies { get; init; }
+    }
 
     private sealed class FreezeCommitGuard : IBenchmarkFreezeCommitGuard
     {

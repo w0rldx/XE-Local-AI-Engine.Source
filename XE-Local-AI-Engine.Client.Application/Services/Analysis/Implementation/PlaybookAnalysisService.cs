@@ -38,7 +38,7 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
         var insights = await _insightsService.GetAgentFeedbackInsightsAsync(agentDefinitionId, cancellationToken);
         if (insights is null)
         {
-            return new PlaybookAnalysisOutcome(AgentExists: false, MeetsThreshold: false, [], ProposedCount: 0, RejectedCount: 0, DuplicateCount: 0);
+            return new PlaybookAnalysisOutcome { AgentExists = false, MeetsThreshold = false, CreatedSuggestions = [], ProposedCount = 0, RejectedCount = 0, DuplicateCount = 0 };
         }
 
         // Never act on a single signal: if the aggregate is below the occurrence threshold, don't even invoke the
@@ -46,7 +46,7 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
         if (!insights.Overall.MeetsThreshold)
         {
             _logger.LogInformation("Skipping playbook analysis for agent {AgentId}: feedback below the occurrence threshold.", agentDefinitionId);
-            return new PlaybookAnalysisOutcome(AgentExists: true, MeetsThreshold: false, [], ProposedCount: 0, RejectedCount: 0, DuplicateCount: 0);
+            return new PlaybookAnalysisOutcome { AgentExists = true, MeetsThreshold = false, CreatedSuggestions = [], ProposedCount = 0, RejectedCount = 0, DuplicateCount = 0 };
         }
 
         var proposals = await _analysisAgent.ProposeAsync(insights, cancellationToken);
@@ -85,13 +85,16 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
                 continue;
             }
 
-            var record = await _playbookActionService.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
-                    proposal.Behavior,
-                    proposal.TriggerCondition,
-                    proposal.Scope,
-                    _options.SuggestionPriority,
-                    proposal.SourceFeedbackIds,
-                    proposal.Confidence),
+            var record = await _playbookActionService.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput
+            {
+                AgentDefinitionId = agentDefinitionId,
+                Behavior = proposal.Behavior,
+                TriggerCondition = proposal.TriggerCondition,
+                Scope = proposal.Scope,
+                Priority = _options.SuggestionPriority,
+                SourceFeedbackIds = proposal.SourceFeedbackIds,
+                Confidence = proposal.Confidence
+            },
                 cancellationToken);
 
             created.Add(record);
@@ -100,7 +103,7 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
         _logger.LogInformation("Playbook analysis for agent {AgentId}: proposed {Proposed}, kept {Kept}, rejected {Rejected}, duplicates {Duplicates}.",
             agentDefinitionId, proposals.Count, created.Count, rejected, duplicates);
 
-        return new PlaybookAnalysisOutcome(AgentExists: true, MeetsThreshold: true, created, proposals.Count, rejected, duplicates);
+        return new PlaybookAnalysisOutcome { AgentExists = true, MeetsThreshold = true, CreatedSuggestions = created, ProposedCount = proposals.Count, RejectedCount = rejected, DuplicateCount = duplicates };
     }
 
     private static bool IsValidProposal(ProposedPlaybookAction proposal, HashSet<Guid> evidenceIds)

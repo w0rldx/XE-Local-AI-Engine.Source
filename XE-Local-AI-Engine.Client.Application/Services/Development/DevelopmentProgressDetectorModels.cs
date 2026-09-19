@@ -21,9 +21,15 @@ public enum DevelopmentMeaningfulProgressKind
     ReviewFinding
 }
 
-public sealed record DevelopmentProgressWarning(
-    DevelopmentProgressWarningCategory Category,
-    string Fingerprint,
-    int Count,
-    long OccurredAtUtc,
-    string Message);
+public sealed class DevelopmentProgressWarning
+{
+    public required DevelopmentProgressWarningCategory Category { get; init; }
+
+    public required string Fingerprint { get; init; }
+
+    public required int Count { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public required string Message { get; init; }
+}

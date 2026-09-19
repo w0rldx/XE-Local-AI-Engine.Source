@@ -208,4 +208,13 @@ public interface IWorkerEventDispatcher
 ///     context actually HELD, and that is the occupancy the chat meter reads off the assistant message. Cost sums;
 ///     occupancy does not. These totals are persisted onto the run-envelope row instead.
 /// </summary>
-public sealed record TurnUsageTotals(int? InputTokens, int? OutputTokens, int? TotalTokens, int? ReasoningTokens);
+public sealed class TurnUsageTotals
+{
+    public required int? InputTokens { get; init; }
+
+    public required int? OutputTokens { get; init; }
+
+    public required int? TotalTokens { get; init; }
+
+    public required int? ReasoningTokens { get; init; }
+}

@@ -13,8 +13,14 @@ using System.Text.Json;
 ///         command line on the wire for no operator benefit.
 ///     </para>
 /// </summary>
-public sealed record DevelopmentProfileSummary(string ProfileId, string? BuildTarget, string Digest)
+public sealed class DevelopmentProfileSummary
 {
+    public required string ProfileId { get; init; }
+
+    public required string? BuildTarget { get; init; }
+
+    public required string Digest { get; init; }
+
     /// <summary>
     ///     Projects a stored profile, or null when the project has none or the stored bytes are unreadable.
     ///     <para>
@@ -35,7 +41,7 @@ public sealed record DevelopmentProfileSummary(string ProfileId, string? BuildTa
         try
         {
             var profile = DevelopmentCommandProfile.FromCanonicalJson(storedCommandProfileJson);
-            return new DevelopmentProfileSummary(profile.ProfileId, profile.BuildTarget, profile.ComputeDigest());
+            return new DevelopmentProfileSummary { ProfileId = profile.ProfileId, BuildTarget = profile.BuildTarget, Digest = profile.ComputeDigest() };
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
                                               or JsonException
@@ -50,10 +56,14 @@ public sealed record DevelopmentProfileSummary(string ProfileId, string? BuildTa
 ///     What profile detection proposes for a registered repository, before the operator confirms it. The public
 ///     counterpart of the internal detection record, for the confirmation step that crosses the API boundary.
 /// </summary>
-/// <param name="ProfileId">The code-owned profile id the repository looks like.</param>
-/// <param name="BuildTarget">The repository-relative solution or project file, null for <c>generic-git</c>.</param>
-/// <param name="Candidates">Every build target found, so the operator can choose a different one.</param>
-public sealed record DevelopmentProfileDetectionResult(
-    string ProfileId,
-    string? BuildTarget,
-    IReadOnlyList<string> Candidates);
+public sealed class DevelopmentProfileDetectionResult
+{
+    /// <summary>The code-owned profile id the repository looks like.</summary>
+    public required string ProfileId { get; init; }
+
+    /// <summary>The repository-relative solution or project file, null for <c>generic-git</c>.</summary>
+    public required string? BuildTarget { get; init; }
+
+    /// <summary>Every build target found, so the operator can choose a different one.</summary>
+    public required IReadOnlyList<string> Candidates { get; init; }
+}

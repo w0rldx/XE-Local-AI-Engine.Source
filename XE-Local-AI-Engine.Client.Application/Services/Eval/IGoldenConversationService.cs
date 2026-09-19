@@ -54,13 +54,23 @@ public interface IGoldenConversationService
 ///     <see cref="Source" />, <see cref="SourceMessageId" /> and <see cref="SourceConversationId" /> carry harvest
 ///     provenance; they default to a Manual case with no provenance so the manual create path keeps compiling unchanged.
 /// </summary>
-public sealed record GoldenConversationCreateInput(
-    Guid AgentDefinitionId,
-    string Title,
-    string InputTurns,
-    string? Assertion,
-    string? Rubric,
-    bool Enabled = true,
-    GoldenConversationSource Source = GoldenConversationSource.Manual,
-    Guid? SourceMessageId = null,
-    Guid? SourceConversationId = null);
+public sealed class GoldenConversationCreateInput
+{
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string InputTurns { get; init; }
+
+    public required string? Assertion { get; init; }
+
+    public required string? Rubric { get; init; }
+
+    public bool Enabled { get; init; } = true;
+
+    public GoldenConversationSource Source { get; init; }
+
+    public Guid? SourceMessageId { get; init; }
+
+    public Guid? SourceConversationId { get; init; }
+}

@@ -1520,11 +1520,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     private static DevelopmentRepositoryBinding Binding(DevelopmentCreateProjectCommand seed, string repository) =>
-        new(seed.ProjectId,
-            seed.SelectedFolderId,
-            "repository",
-            repository,
-            seed.RepositoryIdentityHash);
+        new()
+        {
+            ProjectId = seed.ProjectId,
+            SelectedFolderId = seed.SelectedFolderId,
+            Alias = "repository",
+            RepositoryRoot = repository,
+            RepositoryIdentityHash = seed.RepositoryIdentityHash
+        };
 
     private async Task<string> CreateRepositoryAsync()
     {
@@ -1673,12 +1676,18 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             _ = await tools.WriteFileAsync(_path, _content, cancellationToken);
-            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented feature file.",
-                    [_path],
-                    [],
-                    Notes: null),
-                InputTokens: 10,
-                OutputTokens: 10);
+            return new DevelopmentCoderModelResult
+            {
+                Submission = new DevelopmentCoderSubmission
+            {
+                Summary = "Implemented feature file.",
+                ChangedFiles = [_path],
+                CommandIds = [],
+                Notes = null
+            },
+                InputTokens = 10,
+                OutputTokens = 10
+            };
         }
     }
 
@@ -1692,11 +1701,17 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             DevelopmentAttemptLiveProgress? liveProgress = null,
             DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DevelopmentReviewerModelResult(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.Approved,
-                    "The exact validated subject satisfies the acceptance criterion.",
-                    []),
-                InputTokens: 10,
-                OutputTokens: 10));
+            Task.FromResult(new DevelopmentReviewerModelResult
+            {
+                Submission = new DevelopmentReviewerSubmission
+            {
+                Disposition = DevelopmentReviewDisposition.Approved,
+                Summary = "The exact validated subject satisfies the acceptance criterion.",
+                Findings = []
+            },
+                InputTokens = 10,
+                OutputTokens = 10
+            });
     }
 
     private sealed class ChangesRequestingReviewerModel : IDevelopmentReviewerModel
@@ -1709,11 +1724,17 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             DevelopmentAttemptLiveProgress? liveProgress = null,
             DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DevelopmentReviewerModelResult(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.ChangesRequested,
-                    "The implementation needs a correction.",
-                    [new DevelopmentReviewFinding("correctness", "The fixture reviewer requested a deterministic change.")]),
-                InputTokens: 10,
-                OutputTokens: 10));
+            Task.FromResult(new DevelopmentReviewerModelResult
+            {
+                Submission = new DevelopmentReviewerSubmission
+            {
+                Disposition = DevelopmentReviewDisposition.ChangesRequested,
+                Summary = "The implementation needs a correction.",
+                Findings = [new DevelopmentReviewFinding("correctness", "The fixture reviewer requested a deterministic change.")]
+            },
+                InputTokens = 10,
+                OutputTokens = 10
+            });
     }
 
     private sealed class CredentialLeakingReviewerModel : IDevelopmentReviewerModel
@@ -1726,11 +1747,17 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             DevelopmentAttemptLiveProgress? liveProgress = null,
             DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DevelopmentReviewerModelResult(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.Approved,
-                    "password=!Sensitive12345678",
-                    []),
-                InputTokens: 10,
-                OutputTokens: 10));
+            Task.FromResult(new DevelopmentReviewerModelResult
+            {
+                Submission = new DevelopmentReviewerSubmission
+            {
+                Disposition = DevelopmentReviewDisposition.Approved,
+                Summary = "password=!Sensitive12345678",
+                Findings = []
+            },
+                InputTokens = 10,
+                OutputTokens = 10
+            });
     }
 
     /// <summary>A reviewer that mis-spells the disposition once, reads what came back, and calls again correctly.</summary>

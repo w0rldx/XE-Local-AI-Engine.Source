@@ -77,37 +77,43 @@ public readonly record struct KvCacheFootprint(long BytesAtContext, double Bytes
 ///     (or an all-null record) to <see cref="MemoryFitEstimator.Estimate" /> preserves the legacy derived-head_dim,
 ///     no-sliding-window behavior exactly.
 /// </summary>
-/// <param name="KeyLength">
-///     <c>{arch}.attention.key_length</c> — the per-head key dimension (e.g. 128 on Qwen3, 256 on Gemma3), overriding the
-///     derived head_dim. Qwen3 pins head_dim independently of the embedding width, so the derivation under-estimates its KV.
-/// </param>
-/// <param name="ValueLength"><c>{arch}.attention.value_length</c> — the per-head value dimension.</param>
-/// <param name="SlidingWindow">
-///     <c>{arch}.attention.sliding_window</c> — the sliding-window size. A positive value marks interleaved sliding-window
-///     attention; the window-limited layers' KV cache is capped at this many positions instead of the full context.
-/// </param>
-/// <param name="SlidingWindowPattern">
-///     The global-attention stride: every Nth layer is full attention, the rest window-limited (6 for Gemma3's 5:1
-///     local:global pattern, 2 for Gemma2). Resolved from the header or a per-arch default; <see langword="null" /> leaves
-///     every layer full-attention (a conservative over-estimate).
-/// </param>
-/// <param name="KeyLengthMla">
-///     <c>{arch}.attention.key_length_mla</c> — the latent key dimension of Multi-head Latent Attention. Together with
-///     <paramref name="ValueLengthMla" /> it is llama.cpp's <c>is_mla()</c> test (both present and positive); under MLA
-///     the cache is a single latent K tensor per layer and NO V tensor is allocated at all.
-/// </param>
-/// <param name="ValueLengthMla">
-///     <c>{arch}.attention.value_length_mla</c> — the MLA latent value dimension. It takes part in detection only: no V
-///     cache exists under MLA, so it contributes no bytes.
-/// </param>
-public sealed record GgufAttentionShape(
-    long? KeyLength = null,
-    long? ValueLength = null,
-    long? SlidingWindow = null,
-    long? SlidingWindowPattern = null,
-    long? KeyLengthMla = null,
-    long? ValueLengthMla = null)
+public sealed class GgufAttentionShape
 {
+    /// <summary>
+    ///     <c>{arch}.attention.key_length</c> — the per-head key dimension (e.g. 128 on Qwen3, 256 on Gemma3), overriding the
+    ///     derived head_dim. Qwen3 pins head_dim independently of the embedding width, so the derivation under-estimates its KV.
+    /// </summary>
+    public long? KeyLength { get; init; }
+
+    /// <summary><c>{arch}.attention.value_length</c> — the per-head value dimension.</summary>
+    public long? ValueLength { get; init; }
+
+    /// <summary>
+    ///     <c>{arch}.attention.sliding_window</c> — the sliding-window size. A positive value marks interleaved sliding-window
+    ///     attention; the window-limited layers' KV cache is capped at this many positions instead of the full context.
+    /// </summary>
+    public long? SlidingWindow { get; init; }
+
+    /// <summary>
+    ///     The global-attention stride: every Nth layer is full attention, the rest window-limited (6 for Gemma3's 5:1
+    ///     local:global pattern, 2 for Gemma2). Resolved from the header or a per-arch default; <see langword="null" /> leaves
+    ///     every layer full-attention (a conservative over-estimate).
+    /// </summary>
+    public long? SlidingWindowPattern { get; init; }
+
+    /// <summary>
+    ///     <c>{arch}.attention.key_length_mla</c> — the latent key dimension of Multi-head Latent Attention. Together with
+    ///     <see cref="ValueLengthMla" /> it is llama.cpp's <c>is_mla()</c> test (both present and positive); under MLA
+    ///     the cache is a single latent K tensor per layer and NO V tensor is allocated at all.
+    /// </summary>
+    public long? KeyLengthMla { get; init; }
+
+    /// <summary>
+    ///     <c>{arch}.attention.value_length_mla</c> — the MLA latent value dimension. It takes part in detection only: no V
+    ///     cache exists under MLA, so it contributes no bytes.
+    /// </summary>
+    public long? ValueLengthMla { get; init; }
+
     /// <summary>
     ///     True when the header declares BOTH positive MLA lengths — llama.cpp's <c>is_mla()</c>. The single detection
     ///     authority; no architecture name is ever consulted.
@@ -120,14 +126,20 @@ public sealed record GgufAttentionShape(
 ///     (passing <see langword="null" /> to <see cref="MemoryFitEstimator.Estimate" />) preserves the pre-existing
 ///     dense-model estimate exactly.
 /// </summary>
-/// <param name="ActiveParamCount">
-///     Published/known active parameters per token (e.g. the "A3B" in "Qwen3.5-35B-A3B"), when available. Enables the
-///     precise expert-share approximation; when <see langword="null" /> a conservative default share is used instead.
-/// </param>
-/// <param name="ExpertCount">Total experts (GGUF <c>{arch}.expert_count</c>). A positive value marks the model as MoE.</param>
-/// <param name="ExpertUsedCount">Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), e.g. 2 of 8 for a top-2 gate.</param>
-public sealed record MoeFacts(long? ActiveParamCount, long? ExpertCount, long? ExpertUsedCount)
+public sealed class MoeFacts
 {
+    /// <summary>
+    ///     Published/known active parameters per token (e.g. the "A3B" in "Qwen3.5-35B-A3B"), when available. Enables the
+    ///     precise expert-share approximation; when <see langword="null" /> a conservative default share is used instead.
+    /// </summary>
+    public required long? ActiveParamCount { get; init; }
+
+    /// <summary>Total experts (GGUF <c>{arch}.expert_count</c>). A positive value marks the model as MoE.</summary>
+    public required long? ExpertCount { get; init; }
+
+    /// <summary>Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), e.g. 2 of 8 for a top-2 gate.</summary>
+    public required long? ExpertUsedCount { get; init; }
+
     /// <summary>True when <see cref="ExpertCount" /> is known and positive — a Mixture-of-Experts model.</summary>
     public bool IsMoe => ExpertCount is > 0;
 }
@@ -141,14 +153,25 @@ public sealed record MoeFacts(long? ActiveParamCount, long? ExpertCount, long? E
 ///     <see cref="Confidence" /> flags whether the estimate leaned on a derived head_dim or file-size weights, and
 ///     <see cref="NativeQuantFormat" /> whether the quant is a native, non-requantizable format (MXFP4).
 /// </summary>
-public sealed record MemoryFitEstimate(
-    bool Fits,
-    long EstimatedBytes,
-    long HeadroomBytes,
-    FitMode Mode,
-    MoeFitVerdict MoeVerdict,
-    long? GpuBytes,
-    long? CpuBytes,
-    bool ExpertsOffloaded,
-    FitConfidence Confidence = FitConfidence.Exact,
-    bool NativeQuantFormat = false);
+public sealed record MemoryFitEstimate
+{
+    public required bool Fits { get; init; }
+
+    public required long EstimatedBytes { get; init; }
+
+    public required long HeadroomBytes { get; init; }
+
+    public required FitMode Mode { get; init; }
+
+    public required MoeFitVerdict MoeVerdict { get; init; }
+
+    public required long? GpuBytes { get; init; }
+
+    public required long? CpuBytes { get; init; }
+
+    public required bool ExpertsOffloaded { get; init; }
+
+    public FitConfidence Confidence { get; init; }
+
+    public bool NativeQuantFormat { get; init; }
+}

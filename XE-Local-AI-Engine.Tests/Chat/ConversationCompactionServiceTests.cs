@@ -502,15 +502,18 @@ public sealed class ConversationCompactionServiceTests
     }
 
     private static NodeChatConversationDto Conversation(IReadOnlyList<NodeChatPersistedMessageDto> messages, string? compactionSummary = null, int? coversToSequence = null) =>
-        new(ConversationId,
-            Title: null,
-            UserId: null,
-            CreatedAtUtc: 0,
-            LastSeenUtc: 0,
-            Purged: false,
-            Messages: messages,
-            CompactionSummary: compactionSummary,
-            CompactionSummaryCoversToSequence: coversToSequence);
+        new()
+        {
+            ConversationId = ConversationId,
+            Title = null,
+            UserId = null,
+            CreatedAtUtc = 0,
+            LastSeenUtc = 0,
+            Purged = false,
+            Messages = messages,
+            CompactionSummary = compactionSummary,
+            CompactionSummaryCoversToSequence = coversToSequence
+        };
 
     private static List<NodeChatPersistedMessageDto> CompletedMessages(int count)
     {
@@ -518,19 +521,22 @@ public sealed class ConversationCompactionServiceTests
         for (var sequence = 0; sequence < count; sequence++)
         {
             var role = sequence % 2 == 0 ? "user" : "assistant";
-            messages.Add(new NodeChatPersistedMessageDto(Guid.NewGuid(),
-                ConversationId,
-                RequestId: null,
-                sequence,
-                role,
-                $"message-{sequence}",
-                Reasoning: null,
-                NodeChatMessageStatusValues.Completed,
-                CreatedAtUtc: sequence,
-                UpdatedAtUtc: sequence,
-                Model: null,
-                Error: null,
-                MetadataJson: null));
+            messages.Add(new NodeChatPersistedMessageDto
+            {
+                MessageId = Guid.NewGuid(),
+                ConversationId = ConversationId,
+                RequestId = null,
+                Sequence = sequence,
+                Role = role,
+                Content = $"message-{sequence}",
+                Reasoning = null,
+                Status = NodeChatMessageStatusValues.Completed,
+                CreatedAtUtc = sequence,
+                UpdatedAtUtc = sequence,
+                Model = null,
+                Error = null,
+                MetadataJson = null
+            });
         }
 
         return messages;

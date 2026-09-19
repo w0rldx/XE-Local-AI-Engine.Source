@@ -129,13 +129,15 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
     }
 
     private static BenchmarkRuntimeSnapshotInput Input() =>
-        new(Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            AgentVersion: 3,
-            "Summarize the release notes.",
-            RequestedContextTokens: 4096,
-            new ResolvedAgentRuntime("prompt", [], null, null, 3, Guid.Parse("22222222-2222-2222-2222-222222222222"), "Agent"),
-            new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cuda,
+        new()
+        {
+            ProjectId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            AgentDefinitionId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            AgentVersion = 3,
+            CoreTask = "Summarize the release notes.",
+            RequestedContextTokens = 4096,
+            ResolvedRuntime = new ResolvedAgentRuntime("prompt", [], null, null, 3, Guid.Parse("22222222-2222-2222-2222-222222222222"), "Agent"),
+            PrimaryRuntime = new BenchmarkLlamaRuntimeSnapshotV1(GpuVariant.Cuda,
                 ContextTokens: 8192,
                 GpuLayers: 32,
                 TensorSplit: null,
@@ -144,11 +146,12 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
                 "q8_0",
                 FlashAttention: true,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
-            BenchmarkFrozenPolicies.DeterministicSampling(),
-            Model(),
-            new BenchmarkFreezeDependencySetV1(Hash('1'), Hash('2'), Hash('3'), Hash('4'), Hash('5'), null),
-            "0.1.0",
-            CreatedAtUtc: 1700000000000);
+            PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(),
+            PrimaryModel = Model(),
+            Dependencies = new BenchmarkFreezeDependencySetV1(Hash('1'), Hash('2'), Hash('3'), Hash('4'), Hash('5'), null),
+            ApplicationVersion = "0.1.0",
+            CreatedAtUtc = 1700000000000
+        };
 
     private static BenchmarkInstalledModelSnapshotV1 Model() =>
         new("bartowski/Model-GGUF:Q4_K_M",

@@ -9,9 +9,21 @@ public enum DevWorkflowArtifactReadStatus
     HashMismatch
 }
 
-public sealed record DevWorkflowArtifactBlobWriteResult(string OpaqueReference, string ContentHash, long ByteCount);
+public sealed class DevWorkflowArtifactBlobWriteResult
+{
+    public required string OpaqueReference { get; init; }
 
-public sealed record DevWorkflowArtifactBlobReadResult(DevWorkflowArtifactReadStatus Status, ReadOnlyMemory<byte> Content);
+    public required string ContentHash { get; init; }
+
+    public required long ByteCount { get; init; }
+}
+
+public sealed class DevWorkflowArtifactBlobReadResult
+{
+    public required DevWorkflowArtifactReadStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte> Content { get; init; }
+}
 
 /// <summary>
 ///     The bytes behind a workflow run's artifacts, encrypted at rest under the node key and keyed by run id. Rows live

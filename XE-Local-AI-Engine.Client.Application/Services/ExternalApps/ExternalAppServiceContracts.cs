@@ -51,7 +51,14 @@ public enum ExternalAppBlockedReason
 ///     One container port of one service as it is actually published on the host. Always loopback, so the host
 ///     interface is not carried: a member that is always <c>127.0.0.1</c> is a member two readers read two ways.
 /// </summary>
-public sealed record ExternalAppPublishedPort(string Service, int ContainerPort, int HostPort);
+public sealed class ExternalAppPublishedPort
+{
+    public required string Service { get; init; }
+
+    public required int ContainerPort { get; init; }
+
+    public required int HostPort { get; init; }
+}
 
 /// <summary>
 ///     Reads and writes the <c>PublishedPortsJson</c> column. A JSON OBJECT keyed <c>"&lt;service&gt;:&lt;containerPort&gt;"</c>
@@ -113,7 +120,7 @@ public static class ExternalAppPublishedPorts
                 continue;
             }
 
-            ports.Add(new ExternalAppPublishedPort(entry.Key[..separator], containerPort, entry.Value));
+            ports.Add(new ExternalAppPublishedPort { Service = entry.Key[..separator], ContainerPort = containerPort, HostPort = entry.Value });
         }
 
         return ports;
@@ -141,20 +148,34 @@ public static class ExternalAppJson
 ///     (<see cref="UpdateAvailable" />, <see cref="AvailableManifestVersion" />, <see cref="CatalogMissing" />) are
 ///     computed against the catalog at read time and are never persisted.
 /// </summary>
-public sealed record ExternalAppInstanceSummary(
-    Guid Id,
-    string ApplicationId,
-    string DisplayName,
-    int ManifestVersion,
-    ExternalAppInstanceStatus Status,
-    ExternalAppDesiredState DesiredState,
-    ExternalAppFailureCategory? FailureCategory,
-    string? FailureSummary,
-    bool UpdateAvailable,
-    int? AvailableManifestVersion,
-    bool CatalogMissing,
-    long UpdatedAtUtc,
-    long Version);
+public sealed record ExternalAppInstanceSummary
+{
+    public required Guid Id { get; init; }
+
+    public required string ApplicationId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    public required ExternalAppInstanceStatus Status { get; init; }
+
+    public required ExternalAppDesiredState DesiredState { get; init; }
+
+    public required ExternalAppFailureCategory? FailureCategory { get; init; }
+
+    public required string? FailureSummary { get; init; }
+
+    public required bool UpdateAvailable { get; init; }
+
+    public required int? AvailableManifestVersion { get; init; }
+
+    public required bool CatalogMissing { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>
 ///     Everything the detail page and the settings tab render. <see cref="Manifest" /> is the SANITISED installed
@@ -165,20 +186,34 @@ public sealed record ExternalAppInstanceSummary(
 ///     <see cref="MaskedVariables" /> carries the stored values with every <c>secret</c> replaced by
 ///     <see cref="ExternalAppVariableMask.Value" />, which is why this record may print: nothing on it is a secret.
 /// </remarks>
-public sealed record ExternalAppInstanceDetail(
-    ExternalAppInstanceSummary Summary,
-    ApplicationManifest Manifest,
-    string? TestedVersion,
-    IReadOnlyDictionary<string, string> MaskedVariables,
-    IReadOnlyList<ExternalAppPublishedPort> PublishedPorts,
-    string RuntimeProvider,
-    string? RuntimeOverride,
-    string StoragePath,
-    long LastSequence,
-    bool NeedsRecreate,
-    long InstalledAtUtc,
-    long? StartedAtUtc,
-    long? StoppedAtUtc);
+public sealed record ExternalAppInstanceDetail
+{
+    public required ExternalAppInstanceSummary Summary { get; init; }
+
+    public required ApplicationManifest Manifest { get; init; }
+
+    public required string? TestedVersion { get; init; }
+
+    public required IReadOnlyDictionary<string, string> MaskedVariables { get; init; }
+
+    public required IReadOnlyList<ExternalAppPublishedPort> PublishedPorts { get; init; }
+
+    public required string RuntimeProvider { get; init; }
+
+    public required string? RuntimeOverride { get; init; }
+
+    public required string StoragePath { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required bool NeedsRecreate { get; init; }
+
+    public required long InstalledAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? StoppedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     What an install would do, evaluated without writing anything: the same runtime, capability, GPU and resource
@@ -189,38 +224,64 @@ public sealed record ExternalAppInstanceDetail(
 ///     install command carries them back and admission refuses a mismatch, so a catalog refresh between the
 ///     disclosure and the submit cannot authorise different images.
 /// </remarks>
-public sealed record InstallPreview(
-    string ApplicationId,
-    int ManifestVersion,
-    string ManifestSha256,
-    bool CanInstall,
-    ExternalAppBlockedReason? BlockedReason,
-    Guid? ExistingInstanceId,
-    ApplicationPermissions Permissions,
-    ExternalAppEffectivePermissions EffectivePermissions,
-    IReadOnlyList<ApplicationVariable> Variables,
-    ExternalAppResourceVerdict Resources,
-    ContainerRuntimeResolution Runtime,
-    IReadOnlyList<string> MissingCapabilities);
+public sealed class InstallPreview
+{
+    public required string ApplicationId { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    public required string ManifestSha256 { get; init; }
+
+    public required bool CanInstall { get; init; }
+
+    public required ExternalAppBlockedReason? BlockedReason { get; init; }
+
+    public required Guid? ExistingInstanceId { get; init; }
+
+    public required ApplicationPermissions Permissions { get; init; }
+
+    public required ExternalAppEffectivePermissions EffectivePermissions { get; init; }
+
+    public required IReadOnlyList<ApplicationVariable> Variables { get; init; }
+
+    public required ExternalAppResourceVerdict Resources { get; init; }
+
+    public required ContainerRuntimeResolution Runtime { get; init; }
+
+    public required IReadOnlyList<string> MissingCapabilities { get; init; }
+}
 
 /// <summary>
 ///     What an update would do. <see cref="Variables" /> are the TARGET manifest's definitions and
 ///     <see cref="CurrentValues" /> the stored values with secrets masked, so a target that declares a newly required
 ///     variable can be filled in before the instance is stopped.
 /// </summary>
-public sealed record UpdatePreview(
-    string ApplicationId,
-    Guid InstanceId,
-    int CurrentManifestVersion,
-    int TargetManifestVersion,
-    string ManifestSha256,
-    IReadOnlyList<ApplicationVariable> Variables,
-    IReadOnlyDictionary<string, string> CurrentValues,
-    IReadOnlyList<string> AddedPermissions,
-    ExternalAppEffectivePermissions EffectivePermissions,
-    ExternalAppResourceVerdict ResourceVerdict,
-    bool CanUpdate,
-    ExternalAppBlockedReason? BlockedReason);
+public sealed class UpdatePreview
+{
+    public required string ApplicationId { get; init; }
+
+    public required Guid InstanceId { get; init; }
+
+    public required int CurrentManifestVersion { get; init; }
+
+    public required int TargetManifestVersion { get; init; }
+
+    public required string ManifestSha256 { get; init; }
+
+    public required IReadOnlyList<ApplicationVariable> Variables { get; init; }
+
+    public required IReadOnlyDictionary<string, string> CurrentValues { get; init; }
+
+    public required IReadOnlyList<string> AddedPermissions { get; init; }
+
+    public required ExternalAppEffectivePermissions EffectivePermissions { get; init; }
+
+    public required ExternalAppResourceVerdict ResourceVerdict { get; init; }
+
+    public required bool CanUpdate { get; init; }
+
+    public required ExternalAppBlockedReason? BlockedReason { get; init; }
+}
 
 /// <summary>
 ///     An install request. <see cref="AcceptPermissions" /> is never inferred: the server refuses rather than

@@ -690,8 +690,11 @@ public sealed class DockerSandboxRuntimeProviderTests
         var workspace = Path.Combine(Path.GetTempPath(), "xe-container-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspace);
 
-        var client = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///fake.sock"),
-            DockerDaemonEndpointSource.Configuration));
+        var client = new FakeDockerRuntimeClient(new DockerDaemonEndpoint
+        {
+            Uri = new Uri("unix:///fake.sock"),
+            Source = DockerDaemonEndpointSource.Configuration
+        });
 
         var provider = new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new StubDockerRuntimeClientFactory(client),

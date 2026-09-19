@@ -174,7 +174,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateLexicalSearchService(context);
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("needle", Limit: 10, CollectionId: "project-a"), CancellationToken.None);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest { Query = "needle", Limit = 10, CollectionId = "project-a" }, CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.Results.Count);
         var hit = result.Results[0];

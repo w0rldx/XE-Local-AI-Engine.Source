@@ -34,27 +34,33 @@ internal static class ChatMemoryExtractionHook
             }
 
             var modelName = state.ModelUsed ?? requestedModel ?? package.ModelProfile ?? string.Empty;
-            var telemetry = new MemoryExtractionDispatchContext(resolved.AgentDefinitionId,
-                conversationId,
-                terminal.Persisted.MessageId,
-                modelName,
-                package.ConfigHash,
-                state.GenerationDurationMs ?? 0,
-                !failed,
-                state.InputTokens,
-                state.OutputTokens,
+            var telemetry = new MemoryExtractionDispatchContext
+            {
+                AgentDefinitionId = resolved.AgentDefinitionId,
+                ConversationId = conversationId,
+                MessageId = terminal.Persisted.MessageId,
+                ModelName = modelName,
+                ConfigHash = package.ConfigHash,
+                LatencyMs = state.GenerationDurationMs ?? 0,
+                Success = !failed,
+                PromptTokens = state.InputTokens,
+                CompletionTokens = state.OutputTokens,
                 // Exception TYPE NAME only when present — never the sanitized message text. FailureCategory is the only
                 // type-shaped signal at this seam; the sanitized state.Error string is NOT logged.
-                failed ? state.FailureCategory?.ToString() : null);
+                ErrorClass = failed ? state.FailureCategory?.ToString() : null
+            };
 
-            var run = new MemoryExtractionRunInput(resolved.AgentDefinitionId,
-                conversationId,
-                terminal.Persisted.MessageId,
-                collectUserTurns(),
-                state.StreamedContent,
-                failed,
-                state.Error,
-                memoryExcluded);
+            var run = new MemoryExtractionRunInput
+            {
+                AgentDefinitionId = resolved.AgentDefinitionId,
+                ConversationId = conversationId,
+                AssistantMessageId = terminal.Persisted.MessageId,
+                UserTurns = collectUserTurns(),
+                AssistantResponse = state.StreamedContent,
+                Failed = failed,
+                Error = state.Error,
+                MemoryExcluded = memoryExcluded
+            };
 
             dispatcher.Dispatch(telemetry, run);
         };

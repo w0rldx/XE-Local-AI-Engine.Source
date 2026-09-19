@@ -100,8 +100,8 @@ public sealed class GraphWorkflowToolValidationTests
         var tools = Substitute.For<IToolInvocationService>();
         IReadOnlyList<InvocableToolDescriptor> catalog =
         [
-            new InvocableToolDescriptor("read_file", "Reads a file.", """{"type":"object"}"""),
-            new InvocableToolDescriptor("list_files", "Lists files.", """{"type":"object"}""")
+            new InvocableToolDescriptor { Name = "read_file", Description = "Reads a file.", ParameterSchema = """{"type":"object"}""" },
+            new InvocableToolDescriptor { Name = "list_files", Description = "Lists files.", ParameterSchema = """{"type":"object"}""" }
         ];
         _ = tools.ListInvocableToolsAsync(Arg.Any<CancellationToken>()).Returns(catalog);
 

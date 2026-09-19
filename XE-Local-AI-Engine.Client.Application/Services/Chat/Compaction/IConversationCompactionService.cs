@@ -20,17 +20,25 @@ public enum ConversationCompactionOutcome
 }
 
 /// <summary>Outcome of a compaction attempt. Carries the new synopsis + how much it covers, so the endpoint can echo it back.</summary>
-public sealed record ConversationCompactionResult(
-    ConversationCompactionOutcome Outcome,
-    string? Summary = null,
-    int? CoversToSequence = null,
-    int MessagesFolded = 0,
-    long? UpdatedAtUtc = null,
+public sealed class ConversationCompactionResult
+{
+    public required ConversationCompactionOutcome Outcome { get; init; }
+
+    public string? Summary { get; init; }
+
+    public int? CoversToSequence { get; init; }
+
+    public int MessagesFolded { get; init; }
+
+    public long? UpdatedAtUtc { get; init; }
+
     // The local model that actually produced the synopsis, and whether it differs from the model the user selected
     // (true only when a cloud/unknown selection was transparently downgraded to a node-local model). Lets the UI tell
     // the user their chat was summarized on-device instead of with their cloud selection.
-    string? ModelUsed = null,
-    bool UsedFallbackModel = false);
+    public string? ModelUsed { get; init; }
+
+    public bool UsedFallbackModel { get; init; }
+}
 
 /// <summary>
 ///     Orchestrates non-destructive conversation compaction: selects the older span (everything before the recent-keep

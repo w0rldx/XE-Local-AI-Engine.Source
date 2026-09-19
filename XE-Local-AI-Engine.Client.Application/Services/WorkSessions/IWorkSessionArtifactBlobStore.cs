@@ -9,9 +9,21 @@ public enum WorkSessionArtifactReadStatus
     HashMismatch
 }
 
-public sealed record WorkSessionArtifactBlobWriteResult(string OpaqueReference, string ContentHash, long ByteCount);
+public sealed record WorkSessionArtifactBlobWriteResult
+{
+    public required string OpaqueReference { get; init; }
 
-public sealed record WorkSessionArtifactBlobReadResult(WorkSessionArtifactReadStatus Status, ReadOnlyMemory<byte> Content);
+    public required string ContentHash { get; init; }
+
+    public required long ByteCount { get; init; }
+}
+
+public sealed class WorkSessionArtifactBlobReadResult
+{
+    public required WorkSessionArtifactReadStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte> Content { get; init; }
+}
 
 /// <summary>
 ///     The bytes behind a work session's artifacts, encrypted at rest under the node key and keyed by session id. Rows

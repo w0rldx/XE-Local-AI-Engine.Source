@@ -18,12 +18,15 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var conversationId = Guid.NewGuid();
         var builder = new LocalChatRuntimePackageBuilder();
 
-        var package = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1));
+        var package = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        });
 
         AssertEx.Equal(invocationId, package.InvocationId);
         AssertEx.Equal(conversationId, package.ConversationId);
@@ -44,16 +47,19 @@ public sealed class LocalChatRuntimePackageBuilderTests
     {
         var builder = new LocalChatRuntimePackageBuilder();
 
-        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "You are helpful.",
-            [
+        var package = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [
                 CreateMessage(MessageRole.Assistant, "third", sortOrder: 2),
                 CreateMessage(MessageRole.User, "first", sortOrder: 0),
                 CreateMessage(MessageRole.Assistant, "second", sortOrder: 1)
             ],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1));
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        });
 
         AssertEx.Equal("first", package.ConversationContext[0].Content);
         AssertEx.Equal("second", package.ConversationContext[1].Content);
@@ -71,26 +77,29 @@ public sealed class LocalChatRuntimePackageBuilderTests
             Location = ToolLocation.ApiSide,
             ParameterSchema = "{\"type\":\"object\"}"
         };
-        var request = new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 3,
-            Guid.NewGuid(),
-            [allowedTool],
-            new Dictionary<string, object>
+        var request = new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 3,
+            ClientNodeId = Guid.NewGuid(),
+            AllowedTools = [allowedTool],
+            ToolPolicies = new Dictionary<string, object>
             {
                 ["approvalRequired"] = true
             },
-            ["local-chat", "loopback"],
-            new TimeoutSettings
+            RequestedCapabilities = ["local-chat", "loopback"],
+            Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 45,
                 ToolCallTimeoutSeconds = 15,
                 StreamIdleTimeoutSeconds = 20
             },
-            "high");
+            ReasoningEffort = "high"
+        };
 
         var package = builder.Build(request);
 
@@ -125,13 +134,16 @@ public sealed class LocalChatRuntimePackageBuilderTests
     {
         var builder = new LocalChatRuntimePackageBuilder();
 
-        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            ReasoningEffort: reasoningEffort));
+        var package = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            ReasoningEffort = reasoningEffort
+        });
 
         AssertEx.Equal("on", package.ReasoningEffort);
     }
@@ -141,13 +153,16 @@ public sealed class LocalChatRuntimePackageBuilderTests
     {
         var builder = new LocalChatRuntimePackageBuilder();
 
-        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            ReasoningEffort: "bogus"));
+        var package = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            ReasoningEffort = "bogus"
+        });
 
         AssertEx.Null(package.ReasoningEffort);
     }
@@ -165,13 +180,16 @@ public sealed class LocalChatRuntimePackageBuilderTests
             Stop = ["END"]
         };
 
-        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            SamplingOptions: sampling));
+        var package = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            SamplingOptions = sampling
+        });
 
         var carried = AssertEx.NotNull(package.SamplingOptions);
         AssertEx.Equal(expected: 0.4f, carried.Temperature);
@@ -191,26 +209,32 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var invocationId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
 
-        var withoutSampling = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            ReasoningEffort: "high"));
+        var withoutSampling = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            ReasoningEffort = "high"
+        });
 
-        var withSampling = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            ReasoningEffort: "high",
-            SamplingOptions: new SamplingOptions
+        var withSampling = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            ReasoningEffort = "high",
+            SamplingOptions = new SamplingOptions
             {
                 Temperature = 0.4f,
                 NumCtx = 8192
-            }));
+            }
+        });
 
         AssertEx.Equal(withoutSampling.ConfigHash, withSampling.ConfigHash);
         AssertEx.Null(withoutSampling.SamplingOptions);
@@ -226,20 +250,26 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var invocationId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
 
-        var interactive = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1));
+        var interactive = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        });
 
-        var unattended = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            IsUnattended: true));
+        var unattended = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            IsUnattended = true
+        });
 
         AssertEx.Equal(interactive.ConfigHash, unattended.ConfigHash);
         AssertEx.False(interactive.IsUnattended);
@@ -256,20 +286,26 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var invocationId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
 
-        var filtered = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1));
+        var filtered = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        });
 
-        var optedOut = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            DisableToolRelevanceFilter: true));
+        var optedOut = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            DisableToolRelevanceFilter = true
+        });
 
         AssertEx.Equal(filtered.ConfigHash, optedOut.ConfigHash);
         AssertEx.False(filtered.DisableToolRelevanceFilter);
@@ -287,20 +323,26 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var invocationId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
 
-        var omitted = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1));
+        var omitted = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        });
 
-        var swappable = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
-            conversationId,
-            "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
-            "qwen3.5:0.8b",
-            AgentDefinitionVersion: 1,
-            AllowAutoModelSwap: true));
+        var swappable = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            ResolvedSystemPrompt = "You are helpful.",
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1,
+            AllowAutoModelSwap = true
+        });
 
         AssertEx.False(omitted.AllowAutoModelSwap, "an omitted provenance must fail closed to pinned");
         AssertEx.True(swappable.AllowAutoModelSwap);

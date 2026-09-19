@@ -295,7 +295,7 @@ internal sealed class NodeChatMessageCommands
         // interrupted terminalize); the terminal status/success and bound agent id are derived from the winning row. It
         // is InsertIfAbsent so a real envelope already present (e.g. a race where the run's terminalize committed first)
         // is never clobbered by this thinner one.
-        var envelope = new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId());
+        var envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() };
 
         var message = await UpdateCorrelatedMessageAsync(request.Correlation,
             request.CancelledAtUtc,
@@ -319,7 +319,7 @@ internal sealed class NodeChatMessageCommands
         // already-cancelled message reports Cancelled with no second rewrite, while a cancel that raced a completed /
         // failed / interrupted terminalize reports that terminal status with Cancelled = false.
         var cancelled = string.Equals(message.Status, NodeChatMessageStatusValues.Cancelled, StringComparison.Ordinal);
-        return new NodeChatCancelResultDto(request.Correlation, message.Status, cancelled);
+        return new NodeChatCancelResultDto { Correlation = request.Correlation, Status = message.Status, Cancelled = cancelled };
     }
 
     private async Task<NodeChatPersistedMessageDto> InsertMessageAsync(Guid conversationId,
@@ -389,9 +389,28 @@ internal sealed class NodeChatMessageCommands
                         await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token);
                         await transaction.CommitAsync(token);
 
-                        return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error,
-                            metadataJson, Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId, AgentDefinitionId: agentDefinitionId, AgentName: agentName,
-                            ReasoningEffort: reasoningEffort);
+                        return new NodeChatPersistedMessageDto
+                        {
+                            MessageId = messageId,
+                            ConversationId = conversationId,
+                            RequestId = requestId,
+                            Sequence = sequence,
+                            Role = role,
+                            Content = content,
+                            Reasoning = reasoning,
+                            Status = status,
+                            CreatedAtUtc = createdAtUtc,
+                            UpdatedAtUtc = updatedAtUtc,
+                            Model = model,
+                            Error = error,
+                            MetadataJson = metadataJson,
+                            Origin = origin,
+                            ParentMessageId = parentMessageId,
+                            VariantGroupId = variantGroupId,
+                            AgentDefinitionId = agentDefinitionId,
+                            AgentName = agentName,
+                            ReasoningEffort = reasoningEffort
+                        };
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {

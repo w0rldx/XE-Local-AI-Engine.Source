@@ -8,13 +8,23 @@ public interface IKnowledgeRepositoryImportService
         CancellationToken cancellationToken);
 }
 
-public sealed record KnowledgeRepositoryImportResult(
-    string CollectionId,
-    int DiscoveredFiles,
-    int AddedDocuments,
-    int DeduplicatedDocuments,
-    int EnqueuedDocuments,
-    int SkippedFiles,
-    bool QueueCapacityReached,
-    int UpdatedDocuments = 0,
-    int RemovedDocuments = 0);
+public sealed class KnowledgeRepositoryImportResult
+{
+    public required string CollectionId { get; init; }
+
+    public required int DiscoveredFiles { get; init; }
+
+    public required int AddedDocuments { get; init; }
+
+    public required int DeduplicatedDocuments { get; init; }
+
+    public required int EnqueuedDocuments { get; init; }
+
+    public required int SkippedFiles { get; init; }
+
+    public required bool QueueCapacityReached { get; init; }
+
+    public int UpdatedDocuments { get; init; }
+
+    public int RemovedDocuments { get; init; }
+}

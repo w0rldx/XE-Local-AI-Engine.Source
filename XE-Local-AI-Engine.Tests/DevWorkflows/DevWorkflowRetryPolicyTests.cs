@@ -263,7 +263,7 @@ public sealed class DevWorkflowRetryPolicyTests
             Run(),
             implement,
             [implement],
-            new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError, "The coder attempt could not reach its model.", """{"failureClass":"ProviderError"}"""),
+            new DevWorkflowFailure { FailureClass = DevWorkflowFailureClasses.ProviderError, SanitizedReason = "The coder attempt could not reach its model.", OutputJson = """{"failureClass":"ProviderError"}""" },
             CancellationToken.None);
     }
 
@@ -291,7 +291,7 @@ public sealed class DevWorkflowRetryPolicyTests
             Run(),
             validate,
             [implement, validate],
-            new DevWorkflowFailure(DevWorkflowFailureClasses.ToolCommandFailed, "The release test command reported failing tests.", "{}"),
+            new DevWorkflowFailure { FailureClass = DevWorkflowFailureClasses.ToolCommandFailed, SanitizedReason = "The release test command reported failing tests.", OutputJson = "{}" },
             CancellationToken.None);
     }
 

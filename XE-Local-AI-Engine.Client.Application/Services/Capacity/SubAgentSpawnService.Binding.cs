@@ -15,7 +15,7 @@ internal sealed partial class SubAgentSpawnService
             var instructions = string.IsNullOrWhiteSpace(request.Instructions)
                 ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
                 : request.Instructions;
-            return new ResolvedBinding(request.ModelId, instructions, Tools: null);
+            return new ResolvedBinding { ModelName = request.ModelId, Instructions = instructions, Tools = null };
         }
 
         var definition = await ResolveDefinitionAsync(request.SubAgentKey!, ct);
@@ -57,13 +57,16 @@ internal sealed partial class SubAgentSpawnService
                                       .ResolveAsync(definition.ModelProfile, ct);
         var (supportsThinking, _, _) = childCapabilities;
 
-        return new ResolvedBinding(definition.ModelProfile,
-            resolved.ResolvedSystemPrompt,
-            tools,
+        return new ResolvedBinding
+        {
+            ModelName = definition.ModelProfile,
+            Instructions = resolved.ResolvedSystemPrompt,
+            Tools = tools,
             // The child model's own reasoning-budget enforceability rides alongside its thinking capability, so a child
             // pinned to a template that renders no reasoning end marker is not handed a cap llama.cpp would ignore.
-            new ChildReasoning(resolved.ReasoningEffort, supportsThinking, childCapabilities.ReasoningBudgetEnforceable),
-            resolved.Skills);
+            Reasoning = new ChildReasoning { ReasoningEffort = resolved.ReasoningEffort, SupportsThinking = supportsThinking, ReasoningBudgetEnforceable = childCapabilities.ReasoningBudgetEnforceable },
+            Skills = resolved.Skills
+        };
     }
 
     // Resolve a persisted definition by GUID id first, then fall back to a case-sensitive name match. A spawn naming an
@@ -88,14 +91,27 @@ internal sealed partial class SubAgentSpawnService
     // The child's fully-resolved run inputs. Instructions is the resolved system prompt for a profile-bound child (the
     // scaffold + persona + injected playbook memory), or the raw request instructions for a model-id-only child.
     // Reasoning + Skills are populated only for a profile-bound child (null for model-id-only, keeping that path as-is).
-    private sealed record ResolvedBinding(
-        string ModelName,
-        string Instructions,
-        IList<AITool>? Tools,
-        ChildReasoning? Reasoning = null,
-        IReadOnlyList<ResolvedSkill>? Skills = null);
+    private sealed record ResolvedBinding
+    {
+        public required string ModelName { get; init; }
+
+        public required string Instructions { get; init; }
+
+        public required IList<AITool>? Tools { get; init; }
+
+        public ChildReasoning? Reasoning { get; init; }
+
+        public IReadOnlyList<ResolvedSkill>? Skills { get; init; }
+    }
 
     // The child's reasoning inputs: the resolved effort plus the child model's OWN thinking capability, which together
     // drive ParticipantReasoningOptions.Build exactly as the orchestration-participant path does.
-    private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking, bool ReasoningBudgetEnforceable = true);
+    private sealed record ChildReasoning
+    {
+        public required string? ReasoningEffort { get; init; }
+
+        public required bool SupportsThinking { get; init; }
+
+        public bool ReasoningBudgetEnforceable { get; init; } = true;
+    }
 }

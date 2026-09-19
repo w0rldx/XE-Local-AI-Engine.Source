@@ -87,27 +87,30 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
     public string TemplateId => TemplateIdValue;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateIdValue,
-        "Run a saved agent",
-        "Runs a saved agent on a schedule with a fixed prompt. Node-local models only.",
-        ParameterSchemaJson,
-        DefaultParameters: null,
-        [ScheduleKind.Cron, ScheduleKind.OneShot, ScheduleKind.SimpleInterval, ScheduleKind.Manual],
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new()
+    {
+        TemplateId = TemplateIdValue,
+        DisplayName = "Run a saved agent",
+        Description = "Runs a saved agent on a schedule with a fixed prompt. Node-local models only.",
+        ParameterSchema = ParameterSchemaJson,
+        DefaultParameters = null,
+        SupportedScheduleKinds = [ScheduleKind.Cron, ScheduleKind.OneShot, ScheduleKind.SimpleInterval, ScheduleKind.Manual],
         // Recurring execution is the point of this template, so Cron is the pre-selected kind; the other kinds stay
         // supported for a one-off or an operator-triggered "Run now".
-        ScheduleKind.Cron,
-        SchedulerMisfirePolicy.SkipMissed,
+        DefaultScheduleKind = ScheduleKind.Cron,
+        DefaultMisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
         // No template default. A value here becomes the form's pre-filled per-schedule ceiling, and a fixed 600 s
         // silently capped every unattended run below a raised node "Maximum message request timeout": Quartz's
         // auto-interrupt fired before the run's own invocation deadline could. Left blank, the schedule carries no
         // explicit ceiling and the management service derives one from that node setting instead (see
         // ScheduledJobManagementService.ResolveImplicitMaxRuntimeSecondsAsync). An operator who types a value still
         // gets exactly that value.
-        DefaultMaxRuntimeSeconds: null,
-        AllowManualTrigger: true,
+        DefaultMaxRuntimeSeconds = null,
+        AllowManualTrigger = true,
         // This is the whole point of the run-agent template: the AI agent is permitted to schedule saved-agent runs.
-        AllowAgentCreation: true,
-        HistoryDetailLevel.Detailed);
+        AllowAgentCreation = true,
+        HistoryDetailLevel = HistoryDetailLevel.Detailed
+    };
 
     public async Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {
@@ -257,32 +260,35 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             SortOrder = 0
         };
 
-        return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            resolved.ResolvedSystemPrompt,
-            [seedTurn],
-            effectiveModel,
-            resolved.AgentDefinitionVersion,
-            LocalChatLoopbackDefaults.ClientNodeId,
-            offeredTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+        return packageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+            ConversationContext = [seedTurn],
+            ModelProfile = effectiveModel,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = offeredTools,
+            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
             // Only the invocation timeout is operator-controlled; tool-call and stream-idle keep their defaults. When the
             // setting equals the TimeoutSettings default the package — and its config hash — is byte-identical to one
             // built without an explicit Timeouts.
-            Timeouts: new TimeoutSettings
+            Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = maxMessageRequestTimeoutSeconds
             },
-            ReasoningEffort: reasoningEffort,
-            SupportsThinking: supportsThinking,
-            ReasoningBudgetEnforceable: reasoningBudgetEnforceable,
-            Skills: resolved.Skills,
+            ReasoningEffort = reasoningEffort,
+            SupportsThinking = supportsThinking,
+            ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
+            Skills = resolved.Skills,
             // The one place this flag is set. Stripping approval-required tools from the OFFER above cannot cover the
             // skill tools: they arrive through MAF's AIContextProviders (progressive disclosure), never through the
             // offer, so an assigned skill still surfaces an approval request here. The flag lets the runner fail that
             // request immediately with an explicit reason instead of parking the scheduled run on the full
             // MaxPendingToolCallAge window first.
-            IsUnattended: true));
+            IsUnattended = true
+        });
     }
 
     /// <summary>
@@ -416,11 +422,18 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         }
 
         var reasoningEffort = string.IsNullOrWhiteSpace(dto.ReasoningEffort) ? null : dto.ReasoningEffort.Trim();
-        return new RunSavedAgentParameters(agentDefinitionId, dto.Prompt.Trim(), reasoningEffort);
+        return new RunSavedAgentParameters { AgentDefinitionId = agentDefinitionId, Prompt = dto.Prompt.Trim(), ReasoningEffort = reasoningEffort };
     }
 
     /// <summary>Validated, code-facing parameters for one <c>run-agent</c> fire.</summary>
-    private sealed record RunSavedAgentParameters(Guid AgentDefinitionId, string Prompt, string? ReasoningEffort);
+    private sealed record RunSavedAgentParameters
+    {
+        public required Guid AgentDefinitionId { get; init; }
+
+        public required string Prompt { get; init; }
+
+        public required string? ReasoningEffort { get; init; }
+    }
 
     /// <summary>Decrypted-parameter wire shape for the <c>run-agent</c> template.</summary>
     private sealed record RunSavedAgentParametersDto

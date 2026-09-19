@@ -11,7 +11,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>One phase's frozen launch vector plus the intent scalars the row records beside it.</summary>
-public sealed record BenchmarkFrozenLaunch(BenchmarkLlamaRuntimeSnapshotV1 Runtime, BenchmarkRunLaunchIntent Intent);
+public sealed class BenchmarkFrozenLaunch
+{
+    public required BenchmarkLlamaRuntimeSnapshotV1 Runtime { get; init; }
+
+    public required BenchmarkRunLaunchIntent Intent { get; init; }
+}
 
 // The KV-cache type a launch will actually use: the effective type, whether it was picked explicitly or resolved by
 // Auto, and — for Auto — the reason it degraded (null when it did not).
@@ -137,7 +142,9 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
         var policy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1;
         var intendedIdentity = LlamaServerLaunchProjection.From(variant, applied, plan, ModelRole.Chat, policy.ChatCacheReuse, policy.ChatCacheRamMiB)
                                                           .ComputeIdentity();
-        return new BenchmarkFrozenLaunch(new BenchmarkLlamaRuntimeSnapshotV1(variant,
+        return new BenchmarkFrozenLaunch
+        {
+            Runtime = new BenchmarkLlamaRuntimeSnapshotV1(variant,
                 applied.CtxSize,
                 applied.NGpuLayers,
                 applied.TensorSplit,
@@ -146,7 +153,7 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
                 applied.KvTypeV,
                 applied.FlashAttn,
                 policy),
-            new BenchmarkRunLaunchIntent
+            Intent = new BenchmarkRunLaunchIntent
             {
                 Variant = BenchmarkLaunchBackend.VariantName(variant),
                 KvCacheType = effective,
@@ -158,7 +165,8 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
                 // Stamped once, here, at freeze. Never recomputed at execution: the snapshot carries no CPU thread
                 // inputs, so re-projecting would adopt the executing box's conditions as historical intent.
                 LaunchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion
-            });
+            }
+        };
     }
 
     /// <summary>
@@ -240,7 +248,12 @@ public sealed record BenchmarkJudgeRuntimeV1(
     public const int CurrentSchemaVersion = 1;
 }
 
-public sealed record BenchmarkJudgeRuntimeResolution(BenchmarkJudgeRuntimeV1 Runtime, BenchmarkRunLaunchIntent Intent);
+public sealed class BenchmarkJudgeRuntimeResolution
+{
+    public required BenchmarkJudgeRuntimeV1 Runtime { get; init; }
+
+    public required BenchmarkRunLaunchIntent Intent { get; init; }
+}
 
 public interface IBenchmarkJudgeRuntimeResolver
 {
@@ -288,12 +301,15 @@ public sealed class BenchmarkJudgeRuntimeResolver : IBenchmarkJudgeRuntimeResolv
                                               capabilities,
                                               variant,
                                               cancellationToken);
-        return new BenchmarkJudgeRuntimeResolution(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
+        return new BenchmarkJudgeRuntimeResolution
+        {
+            Runtime = new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
                 model,
                 policy.RequestedContextTokens,
                 launch.Runtime,
                 BenchmarkFrozenPolicies.DeterministicSampling()),
-            launch.Intent);
+            Intent = launch.Intent
+        };
     }
 }
 

@@ -65,7 +65,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
                                        cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
-        return new GeneratedIntegrationApiKey(key, ToView(snapshot));
+        return new GeneratedIntegrationApiKey { Key = key, View = ToView(snapshot) };
     }
 
     public async Task<IReadOnlyList<IntegrationApiKeyView>> ListAsync(CancellationToken cancellationToken = default)
@@ -112,7 +112,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 
         _ = await _store.TouchLastUsedAsync(snapshot.Id, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
 
-        return new IntegrationApiKeyValidation(snapshot.PrincipalId, snapshot.KeyPrefix, DeserializeAllowList(snapshot.AllowedTriggerIdsJson));
+        return new IntegrationApiKeyValidation { PrincipalId = snapshot.PrincipalId, KeyPrefix = snapshot.KeyPrefix, AllowedTriggerIds = DeserializeAllowList(snapshot.AllowedTriggerIdsJson) };
     }
 
     /// <summary>
@@ -152,12 +152,15 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         SHA256.HashData(Encoding.UTF8.GetBytes(key));
 
     private static IntegrationApiKeyView ToView(IntegrationApiKeySnapshot snapshot) =>
-        new(snapshot.Id,
-            snapshot.PrincipalId,
-            snapshot.KeyPrefix,
-            snapshot.Label,
-            DeserializeAllowList(snapshot.AllowedTriggerIdsJson),
-            DateTimeOffset.FromUnixTimeMilliseconds(snapshot.CreatedAtUtc),
-            snapshot.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(snapshot.LastUsedAtUtc.Value),
-            snapshot.RevokedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(snapshot.RevokedAtUtc.Value));
+        new()
+        {
+            Id = snapshot.Id,
+            PrincipalId = snapshot.PrincipalId,
+            KeyPrefix = snapshot.KeyPrefix,
+            Label = snapshot.Label,
+            AllowedTriggerIds = DeserializeAllowList(snapshot.AllowedTriggerIdsJson),
+            CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(snapshot.CreatedAtUtc),
+            LastUsedAt = snapshot.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(snapshot.LastUsedAtUtc.Value),
+            RevokedAt = snapshot.RevokedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(snapshot.RevokedAtUtc.Value)
+        };
 }

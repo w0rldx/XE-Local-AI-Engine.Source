@@ -555,23 +555,29 @@ public sealed class McpServerInboundAuthTests
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(call => storedKey is not null && string.Equals(call.Arg<string?>(), storedKey, StringComparison.Ordinal)
-                         ? new McpServerApiKeyValidation(scope, "xemcp_valid")
+                         ? new McpServerApiKeyValidation { Scope = scope, Prefix = "xemcp_valid" }
                          : null);
         apiKeyService.GenerateAsync(Arg.Any<McpServerApiKeyScope>(), Arg.Any<CancellationToken>())
                      .Returns(call =>
                      {
                          var requestedScope = call.Arg<McpServerApiKeyScope>();
-                         return new GeneratedMcpServerApiKey(ValidKey,
-                             new McpServerApiKeyView("xemcp_valid", requestedScope, DateTimeOffset.UnixEpoch, LastUsedAt: null));
+                         return new GeneratedMcpServerApiKey
+                         {
+                             Key = ValidKey,
+                             View = new McpServerApiKeyView { Prefix = "xemcp_valid", Scope = requestedScope, CreatedAt = DateTimeOffset.UnixEpoch, LastUsedAt = null }
+                         };
                      });
         // The view deliberately has no key field — the node keeps only a digest — so the fake supplies metadata only.
         apiKeyService.GetAsync(Arg.Any<CancellationToken>())
                      .Returns(storedKey is null
                          ? (McpServerApiKeyView?)null
-                         : new McpServerApiKeyView("xemcp_valid",
-                             scope,
-                             DateTimeOffset.UnixEpoch,
-                             LastUsedAt: null));
+                         : new McpServerApiKeyView
+                         {
+                             Prefix = "xemcp_valid",
+                             Scope = scope,
+                             CreatedAt = DateTimeOffset.UnixEpoch,
+                             LastUsedAt = null
+                         });
 
         return new TestServerWebAppFactory
         {

@@ -82,8 +82,15 @@ internal static class GgufFileSelector
 
     private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
     {
-        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern,
-            file.AttentionKeyLengthMla, file.AttentionValueLengthMla);
+        return new GgufAttentionShape
+        {
+            KeyLength = file.AttentionKeyLength,
+            ValueLength = file.AttentionValueLength,
+            SlidingWindow = file.SlidingWindow,
+            SlidingWindowPattern = file.SlidingWindowPattern,
+            KeyLengthMla = file.AttentionKeyLengthMla,
+            ValueLengthMla = file.AttentionValueLengthMla
+        };
     }
 }
 

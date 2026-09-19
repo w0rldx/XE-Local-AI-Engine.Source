@@ -107,24 +107,27 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken);
             var status = ParseStatus(reader.GetString(2));
             var embeddingModel = reader.GetString(5);
-            documents.Add(new KnowledgeDocumentSummary(documentId,
-                displayName,
-                status,
-                await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
-                reader.GetInt32(4),
-                embeddingModel,
-                IsStaleIndex(status,
+            documents.Add(new KnowledgeDocumentSummary
+            {
+                DocumentId = documentId,
+                DisplayName = displayName,
+                Status = status,
+                FailureReason = await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
+                ChunkCount = reader.GetInt32(4),
+                EmbeddingModel = embeddingModel,
+                StaleModel = IsStaleIndex(status,
                     embeddingModel,
                     reader.GetString(6),
                     reader.GetInt32(7),
                     reader.GetString(13),
                     reader.GetString(14),
                     resolution),
-                reader.GetInt64(8),
-                reader.GetInt64(9),
-                reader.GetString(10),
-                await reader.IsDBNullAsync(11, cancellationToken) ? null : reader.GetString(11),
-                reader.GetString(12)));
+                SizeBytes = reader.GetInt64(8),
+                CreatedAtUtc = reader.GetInt64(9),
+                CollectionId = reader.GetString(10),
+                SourcePath = await reader.IsDBNullAsync(11, cancellationToken) ? null : reader.GetString(11),
+                SourceKind = reader.GetString(12)
+            });
         }
 
         return documents;
@@ -175,26 +178,29 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken);
             var status = ParseStatus(reader.GetString(2));
             var embeddingModel = reader.GetString(5);
-            detail = new KnowledgeDocumentDetail(documentId,
-                displayName,
-                status,
-                await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
-                reader.GetInt32(4),
-                embeddingModel,
-                IsStaleIndex(status,
+            detail = new KnowledgeDocumentDetail
+            {
+                DocumentId = documentId,
+                DisplayName = displayName,
+                Status = status,
+                FailureReason = await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
+                ChunkCount = reader.GetInt32(4),
+                EmbeddingModel = embeddingModel,
+                StaleModel = IsStaleIndex(status,
                     embeddingModel,
                     reader.GetString(6),
                     reader.GetInt32(7),
                     reader.GetString(14),
                     reader.GetString(15),
                     resolution),
-                reader.GetInt64(8),
-                reader.GetInt64(9),
-                reader.GetInt64(10),
-                [],
-                reader.GetString(11),
-                await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
-                reader.GetString(13));
+                SizeBytes = reader.GetInt64(8),
+                CreatedAtUtc = reader.GetInt64(9),
+                UpdatedAtUtc = reader.GetInt64(10),
+                Chunks = [],
+                CollectionId = reader.GetString(11),
+                SourcePath = await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
+                SourceKind = reader.GetString(13)
+            };
         }
 
         var chunks = await ReadChunksAsync(connection, documentId, cancellationToken);
@@ -383,16 +389,19 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         var chunks = new List<KnowledgeDocumentChunkView>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            chunks.Add(new KnowledgeDocumentChunkView(reader.GetInt32(0),
-                await reader.IsDBNullAsync(ordinal: 1, cancellationToken) ? null : reader.GetString(1),
-                reader.GetString(2),
-                await reader.IsDBNullAsync(3, cancellationToken) ? null : reader.GetInt32(3),
-                reader.GetInt32(4),
-                reader.GetInt32(5),
-                reader.GetString(6),
-                await reader.IsDBNullAsync(7, cancellationToken) ? null : reader.GetString(7),
-                await reader.IsDBNullAsync(8, cancellationToken) ? null : reader.GetString(8),
-                await reader.IsDBNullAsync(9, cancellationToken) ? null : reader.GetString(9)));
+            chunks.Add(new KnowledgeDocumentChunkView
+            {
+                ChunkIndex = reader.GetInt32(0),
+                HeadingPath = await reader.IsDBNullAsync(ordinal: 1, cancellationToken) ? null : reader.GetString(1),
+                Content = reader.GetString(2),
+                PageNumber = await reader.IsDBNullAsync(3, cancellationToken) ? null : reader.GetInt32(3),
+                StartOffset = reader.GetInt32(4),
+                EndOffset = reader.GetInt32(5),
+                ContentKind = reader.GetString(6),
+                SourcePath = await reader.IsDBNullAsync(7, cancellationToken) ? null : reader.GetString(7),
+                Language = await reader.IsDBNullAsync(8, cancellationToken) ? null : reader.GetString(8),
+                Symbol = await reader.IsDBNullAsync(9, cancellationToken) ? null : reader.GetString(9)
+            });
         }
 
         return chunks;
@@ -418,7 +427,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         }
         catch (InvalidOperationException)
         {
-            return new EmbeddingModelResolution(_options.EmbeddingModelName, IsConfident: false);
+            return new EmbeddingModelResolution { Name = _options.EmbeddingModelName, IsConfident = false };
         }
     }
 

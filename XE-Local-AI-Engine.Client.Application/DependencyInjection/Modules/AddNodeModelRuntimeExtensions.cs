@@ -436,7 +436,7 @@ internal static class AddNodeModelRuntimeExtensions
                 && modelValue is string model
                 && !string.IsNullOrWhiteSpace(model))
             {
-                return new ChatConnectionSettings(endpointUri, model);
+                return new ChatConnectionSettings { Endpoint = endpointUri, Model = model };
             }
         }
 
@@ -451,7 +451,7 @@ internal static class AddNodeModelRuntimeExtensions
                             ?? runtimeSettings.GetDefaultModelName();
 #pragma warning restore MA0045
 
-        return new ChatConnectionSettings(new Uri(fallbackEndpoint, UriKind.Absolute), fallbackModel);
+        return new ChatConnectionSettings { Endpoint = new Uri(fallbackEndpoint, UriKind.Absolute), Model = fallbackModel };
     }
 
     /// <summary>
@@ -538,7 +538,12 @@ internal static class AddNodeModelRuntimeExtensions
         return configuration.GetValue<bool>(UseLocalModelProviderConfigurationKey);
     }
 
-    private sealed record ChatConnectionSettings(Uri Endpoint, string Model);
+    private sealed record ChatConnectionSettings
+    {
+        public required Uri Endpoint { get; init; }
+
+        public required string Model { get; init; }
+    }
 
     // The boxed state the fault continuation is handed. A named type instead of a cast to an anonymous tuple shape:
     // the continuation runs on a plain object?, and the cast has to match the boxed type exactly.

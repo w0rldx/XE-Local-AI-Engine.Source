@@ -48,7 +48,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.RegisterAsync(Arg.Any<SelectedFolderRegistration>(), Arg.Any<CancellationToken>())
-                       .Returns(new SelectedFolderReference(selectedFolderId.ToString(), "repo"));
+                       .Returns(new SelectedFolderReference { Id = selectedFolderId.ToString(), Alias = "repo" });
         var service = CreateService(selectedFolders);
 
         var result = await service.RegisterAsync("Repo", repository);
@@ -69,7 +69,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
-                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.Copy));
+                       .Returns(new ResolvedSelectedFolder { Id = selectedFolderId, Alias = "repo", HostPath = repository, Mode = SelectedFolderMode.Copy });
         var service = CreateService(selectedFolders);
 
         var result = await service.ResolveFolderAsync(selectedFolderId);
@@ -130,7 +130,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
-                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", linkedRepository, SelectedFolderMode.Copy));
+                       .Returns(new ResolvedSelectedFolder { Id = selectedFolderId, Alias = "repo", HostPath = linkedRepository, Mode = SelectedFolderMode.Copy });
         var service = CreateService(selectedFolders);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveFolderAsync(selectedFolderId));
@@ -153,7 +153,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
-                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", linkedRepository, SelectedFolderMode.Copy));
+                       .Returns(new ResolvedSelectedFolder { Id = selectedFolderId, Alias = "repo", HostPath = linkedRepository, Mode = SelectedFolderMode.Copy });
         var service = CreateService(selectedFolders);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveFolderAsync(selectedFolderId));
@@ -166,7 +166,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
-                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.ReadOnlyMount));
+                       .Returns(new ResolvedSelectedFolder { Id = selectedFolderId, Alias = "repo", HostPath = repository, Mode = SelectedFolderMode.ReadOnlyMount });
         var service = CreateService(selectedFolders);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveFolderAsync(selectedFolderId));
@@ -179,7 +179,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
-                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.Copy));
+                       .Returns(new ResolvedSelectedFolder { Id = selectedFolderId, Alias = "repo", HostPath = repository, Mode = SelectedFolderMode.Copy });
         var service = CreateService(selectedFolders);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => service.ResolveExecutionAsync(ExecutionSnapshot(selectedFolderId, repositoryIdentityHash: "different-repository")));
@@ -196,7 +196,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         const long expectedVersion = 7;
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
-                       .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.Copy));
+                       .Returns(new ResolvedSelectedFolder { Id = selectedFolderId, Alias = "repo", HostPath = repository, Mode = SelectedFolderMode.Copy });
         var store = Substitute.For<IDevelopmentStore>();
         var disconnectedProject = ProjectSnapshot(projectId, selectedFolderId: null, repositoryIdentityHash, version: expectedVersion);
         var reconnectedProject = disconnectedProject with

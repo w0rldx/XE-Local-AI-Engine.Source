@@ -195,7 +195,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token);
 
             var tools = BuildRegisteredTools(discovered, slug, ResolveToolCategory(record), _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
-            return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
+            return new ConnectResult(new ConnectedServer { Client = client, Version = record.Version, Slug = slug, Tools = tools }, Error: null);
         }
         catch (SandboxCapabilityNotSupportedException ex)
         {
@@ -241,7 +241,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         if (client is not null)
         {
-            await DisposeClientSafelyAsync(new ConnectedServer(client, version, slug, []));
+            await DisposeClientSafelyAsync(new ConnectedServer { Client = client, Version = version, Slug = slug, Tools = [] });
         }
     }
 
@@ -421,7 +421,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         }
     }
 
-    private sealed record ConnectedServer(McpClient Client, int Version, string Slug, IReadOnlyList<McpRegisteredTool> Tools);
+    private sealed record ConnectedServer
+    {
+        public required McpClient Client { get; init; }
+
+        public required int Version { get; init; }
+
+        public required string Slug { get; init; }
+
+        public required IReadOnlyList<McpRegisteredTool> Tools { get; init; }
+    }
 
     private sealed record ConnectResult(ConnectedServer? Server, string? Error);
 }

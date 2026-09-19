@@ -24,8 +24,13 @@ public interface IMemoryExtractionAgent
 ///     A single proposed memory from the extraction agent — structured (scope + trigger + behavior + confidence) so it
 ///     can be deduped, measured, and shown with provenance once persisted as a <c>Suggested</c>/<c>Extracted</c> action.
 /// </summary>
-public sealed record ProposedMemory(
-    string Behavior,
-    MemoryScope Scope,
-    string? TriggerCondition,
-    double Confidence);
+public sealed class ProposedMemory
+{
+    public required string Behavior { get; init; }
+
+    public required MemoryScope Scope { get; init; }
+
+    public required string? TriggerCondition { get; init; }
+
+    public required double Confidence { get; init; }
+}

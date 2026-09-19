@@ -47,7 +47,7 @@ public sealed class BenchmarkCancellationRegistry : IBenchmarkCancellationRegist
 
     public BenchmarkCancellationRegistration Register(Guid runId, BenchmarkWorkKind kind, CancellationToken hostToken)
     {
-        var key = new RegistrationKey(runId, kind);
+        var key = new RegistrationKey { RunId = runId, Kind = kind };
         var source = CancellationTokenSource.CreateLinkedTokenSource(hostToken);
         lock (_gate)
         {
@@ -66,7 +66,7 @@ public sealed class BenchmarkCancellationRegistry : IBenchmarkCancellationRegist
         CancellationTokenSource? source;
         lock (_gate)
         {
-            _registrations.TryGetValue(new RegistrationKey(runId, kind), out source);
+            _registrations.TryGetValue(new RegistrationKey { RunId = runId, Kind = kind }, out source);
         }
 
         if (source is null)
@@ -96,5 +96,10 @@ public sealed class BenchmarkCancellationRegistry : IBenchmarkCancellationRegist
         }
     }
 
-    private sealed record RegistrationKey(Guid RunId, BenchmarkWorkKind Kind);
+    private sealed record RegistrationKey
+    {
+        public required Guid RunId { get; init; }
+
+        public required BenchmarkWorkKind Kind { get; init; }
+    }
 }

@@ -157,7 +157,7 @@ public sealed class CapacityServiceTests
         };
         var service = harness.Build();
 
-        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, PublishLaunchAdmission: false),
+        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, PublishLaunchAdmission = false },
             CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
@@ -182,7 +182,7 @@ public sealed class CapacityServiceTests
 
         // The benchmark holds its reservation open for the whole exclusive spawn, which is when the supervisor asks
         // the registry whether it may launch. An ordinary Allow leaves an admission there and that ask fails.
-        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, PublishLaunchAdmission: false),
+        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, PublishLaunchAdmission = false },
             CancellationToken.None);
         using var reservation = decision.Reservation;
 
@@ -204,7 +204,7 @@ public sealed class CapacityServiceTests
         };
         var service = harness.Build();
 
-        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, RequiredContextTokens: 32768), CancellationToken.None);
+        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, RequiredContextTokens = 32768 }, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
         _ = harness.FootprintProvider.Received(1)
@@ -468,7 +468,7 @@ public sealed class CapacityServiceTests
                });
         var service = harness.Build();
 
-        var decision = await service.DecideAsync(new CapacityRequest(Model, ModelRole.Chat, RequiredContextTokens: 16384),
+        var decision = await service.DecideAsync(new CapacityRequest { ModelName = Model, Role = ModelRole.Chat, RequiredContextTokens = 16384 },
             CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);

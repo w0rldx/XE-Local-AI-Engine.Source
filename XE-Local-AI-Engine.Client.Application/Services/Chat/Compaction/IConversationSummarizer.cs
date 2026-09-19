@@ -1,19 +1,29 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 /// <summary>One older-history message handed to the summarizer (role + already-decrypted content).</summary>
-public sealed record ConversationSummarizerMessage(string Role, string Content);
+public sealed class ConversationSummarizerMessage
+{
+    public required string Role { get; init; }
+
+    public required string Content { get; init; }
+}
 
 /// <summary>Input for one summarization pass: an optional prior synopsis to fold in, plus the newer older-history span.</summary>
-/// <param name="SupportsThinking">
-///     Whether <paramref name="ModelName" /> advertises graded thinking, as resolved by
-///     <c>IModelCapabilityResolver</c>. False — the safe default, matching that resolver's own miss behaviour — means
-///     the fold sends no thinking fields at all.
-/// </param>
-public sealed record ConversationSummarizerInput(
-    string? PriorSummary,
-    IReadOnlyList<ConversationSummarizerMessage> Messages,
-    string ModelName,
-    bool SupportsThinking = false);
+public sealed class ConversationSummarizerInput
+{
+    public required string? PriorSummary { get; init; }
+
+    public required IReadOnlyList<ConversationSummarizerMessage> Messages { get; init; }
+
+    public required string ModelName { get; init; }
+
+    /// <summary>
+    ///     Whether <see cref="ModelName" /> advertises graded thinking, as resolved by
+    ///     <c>IModelCapabilityResolver</c>. False — the safe default, matching that resolver's own miss behaviour — means
+    ///     the fold sends no thinking fields at all.
+    /// </summary>
+    public bool SupportsThinking { get; init; }
+}
 
 /// <summary>
 ///     Produces a compact, prose synopsis of an older conversation span using a NODE-LOCAL model only (never the shared

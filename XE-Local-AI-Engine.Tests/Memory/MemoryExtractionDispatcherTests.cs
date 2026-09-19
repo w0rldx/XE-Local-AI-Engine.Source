@@ -42,16 +42,19 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         await using var provider = await BuildProviderAsync("exec-log.sqlite");
         await using var pipeline = await Pipeline.StartAsync(provider);
 
-        var telemetry = new MemoryExtractionDispatchContext(agentId,
-            conversationId,
-            messageId,
-            "qwen3:8b",
-            "config-hash-abc",
-            LatencyMs: 1234,
-            Success: true,
-            PromptTokens: 10,
-            CompletionTokens: 3,
-            ErrorClass: null);
+        var telemetry = new MemoryExtractionDispatchContext
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            ModelName = "qwen3:8b",
+            ConfigHash = "config-hash-abc",
+            LatencyMs = 1234,
+            Success = true,
+            PromptTokens = 10,
+            CompletionTokens = 3,
+            ErrorClass = null
+        };
 
         pipeline.Dispatcher.Dispatch(telemetry, Run(agentId, conversationId, messageId));
 
@@ -75,16 +78,19 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         await using var pipeline = await Pipeline.StartAsync(provider);
 
         // A GGUF model may report no usage — PromptTokens/CompletionTokens null must persist cleanly (nullable columns).
-        var telemetry = new MemoryExtractionDispatchContext(agentId,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "gguf-model",
-            "config-hash",
-            LatencyMs: 500,
-            Success: false,
-            PromptTokens: null,
-            CompletionTokens: null,
-            "Unexpected");
+        var telemetry = new MemoryExtractionDispatchContext
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            ModelName = "gguf-model",
+            ConfigHash = "config-hash",
+            LatencyMs = 500,
+            Success = false,
+            PromptTokens = null,
+            CompletionTokens = null,
+            ErrorClass = "Unexpected"
+        };
 
         pipeline.Dispatcher.Dispatch(telemetry, Run(agentId, telemetry.ConversationId, telemetry.MessageId, failed: true));
 
@@ -470,28 +476,34 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
     private static MemoryExtractionDispatchContext Telemetry(Guid agentId)
     {
-        return new MemoryExtractionDispatchContext(agentId,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "qwen3:8b",
-            "config-hash",
-            LatencyMs: 100,
-            Success: true,
-            PromptTokens: null,
-            CompletionTokens: null,
-            ErrorClass: null);
+        return new MemoryExtractionDispatchContext
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            ModelName = "qwen3:8b",
+            ConfigHash = "config-hash",
+            LatencyMs = 100,
+            Success = true,
+            PromptTokens = null,
+            CompletionTokens = null,
+            ErrorClass = null
+        };
     }
 
     private static MemoryExtractionRunInput Run(Guid agentId, Guid conversationId, Guid messageId, bool failed = false)
     {
-        return new MemoryExtractionRunInput(agentId,
-            conversationId,
-            messageId,
-            [new MemoryExtractionTurn("hello")],
-            "answer",
-            failed,
-            failed ? "boom" : null,
-            MemoryExcluded: false);
+        return new MemoryExtractionRunInput
+        {
+            AgentDefinitionId = agentId,
+            ConversationId = conversationId,
+            AssistantMessageId = messageId,
+            UserTurns = [new MemoryExtractionTurn { Content = "hello" }],
+            AssistantResponse = "answer",
+            Failed = failed,
+            Error = failed ? "boom" : null,
+            MemoryExcluded = false
+        };
     }
 
     private static int CountRows(ServiceProvider provider, Guid agentId)

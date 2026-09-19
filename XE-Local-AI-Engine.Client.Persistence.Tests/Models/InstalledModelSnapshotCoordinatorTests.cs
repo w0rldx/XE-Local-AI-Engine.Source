@@ -187,7 +187,7 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         var weightsOnlyIdentity = CreateIdentity();
         var projectorIntent = CreateDownloadIntent() with
         {
-            Projector = new GgufProjectorAcquisitionMetadata("mmproj-model-f16.gguf", new string('c', 64), DeclaredSizeBytes: 7)
+            Projector = new GgufProjectorAcquisitionMetadata { SourceDisplayName = "mmproj-model-f16.gguf", DeclaredSha256 = new string('c', 64), DeclaredSizeBytes = 7 }
         };
         var projectorIdentity = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())))
             .Resolve(projectorIntent);
@@ -212,12 +212,15 @@ public sealed class InstalledModelSnapshotCoordinatorTests
     }
 
     private static InstalledModelMutationRequest CreateRequest(ResolvedGgufAcquisitionIdentity identity) =>
-        new(identity.CanonicalModelName,
-            InstalledModelMutationKind.Acquire,
-            [
-                new IntendedInstalledModelMember(identity.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight),
-                new IntendedInstalledModelMember(identity.RelativeSidecarPath, InstalledModelPhysicalMemberRole.Sidecar)
-            ]);
+        new()
+        {
+            ModelName = identity.CanonicalModelName,
+            Kind = InstalledModelMutationKind.Acquire,
+            IntendedMembers = [
+                new IntendedInstalledModelMember { RelativePath = identity.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight },
+                new IntendedInstalledModelMember { RelativePath = identity.RelativeSidecarPath, Role = InstalledModelPhysicalMemberRole.Sidecar }
+            ]
+        };
 
     private static ResolvedGgufAcquisitionIdentity CreateIdentity()
     {
@@ -226,15 +229,21 @@ public sealed class InstalledModelSnapshotCoordinatorTests
     }
 
     private static GgufAcquisitionIntent CreateDownloadIntent() =>
-        new(GgufAcquisitionOperationKind.Download,
-            "foo",
-            "Q4_K_M",
-            Download: new GgufDownloadAcquisitionMetadata("org/repo",
-                "source-r1",
-                "model.gguf",
-                DeclaredSizeBytes: 10,
-                new string('a', 64),
-                GgufRole.Chat));
+        new()
+        {
+            OperationKind = GgufAcquisitionOperationKind.Download,
+            ModelBaseName = "foo",
+            Quantization = "Q4_K_M",
+            Download = new GgufDownloadAcquisitionMetadata
+            {
+                RepoId = "org/repo",
+                ResolvedRevision = "source-r1",
+                SourceDisplayName = "model.gguf",
+                DeclaredSizeBytes = 10,
+                DeclaredSha256 = new string('a', 64),
+                Role = GgufRole.Chat
+            }
+        };
 
     private static SnapshotFixture CreateCurrentFixture(int failuresBeforeSuccess = 0)
     {

@@ -151,8 +151,15 @@ public static class BenchmarkNiahGenerator
     private static readonly Lazy<HaystackCorpus> Corpus = new(LoadCorpus, LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>One generated case: the item to write, and the answer only the verifier is told.</summary>
-    /// <param name="ExpectedAnswer">The passcode. It reaches the case's encrypted verifier override and nothing else.</param>
-    public sealed record GeneratedCase(BenchmarkNiahCaseV1 Case, string Prompt, string ExpectedAnswer);
+    public sealed class GeneratedCase
+    {
+        public required BenchmarkNiahCaseV1 Case { get; init; }
+
+        public required string Prompt { get; init; }
+
+        /// <summary>The passcode. It reaches the case's encrypted verifier override and nothing else.</summary>
+        public required string ExpectedAnswer { get; init; }
+    }
 
     /// <summary>
     ///     Every case a generator expands into, in (size, depth) order. Pure: no clock, no store, no randomness that
@@ -217,7 +224,7 @@ public static class BenchmarkNiahGenerator
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedAnswer);
         return JsonSerializer.Serialize(new Dictionary<string, ExactOverride>(StringComparer.Ordinal)
         {
-            [criterionId] = new(expectedAnswer, new BenchmarkVerifierNormalizeV1(Trim: true, CollapseWhitespace: true, CaseInsensitive: true, StripMarkdown: true))
+            [criterionId] = new() { Expected = expectedAnswer, Normalize = new BenchmarkVerifierNormalizeV1(Trim: true, CollapseWhitespace: true, CaseInsensitive: true, StripMarkdown: true) }
         }, SerializerOptions);
     }
 
@@ -294,9 +301,12 @@ public static class BenchmarkNiahGenerator
         var prompt = BuildPrompt(haystack, question, corpus.Attribution);
         var approximateTokens = ChunkTokenApproximation.EstimateTokens(prompt);
         var label = string.Create(CultureInfo.InvariantCulture, $"NIAH ≈{Kilo(contextTokens)} @ {depthPercent}%");
-        return new GeneratedCase(new BenchmarkNiahCaseV1(contextTokens, depthPercent, approximateTokens, seed, label, subject, corpus.CorpusId),
-            prompt,
-            passcode);
+        return new GeneratedCase
+        {
+            Case = new BenchmarkNiahCaseV1(contextTokens, depthPercent, approximateTokens, seed, label, subject, corpus.CorpusId),
+            Prompt = prompt,
+            ExpectedAnswer = passcode
+        };
     }
 
     /// <summary>
@@ -396,14 +406,29 @@ public static class BenchmarkNiahGenerator
             throw new InvalidOperationException("The benchmark corpus yielded no usable haystack sentences.");
         }
 
-        return new HaystackCorpus([.. sentences],
-            file.CorpusId,
-            $"WikiText-2 ({file.CorpusId}), Salesforce Research, CC BY-SA 3.0");
+        return new HaystackCorpus
+        {
+            Sentences = [.. sentences],
+            CorpusId = file.CorpusId,
+            Attribution = $"WikiText-2 ({file.CorpusId}), Salesforce Research, CC BY-SA 3.0"
+        };
     }
 
-    private sealed record HaystackCorpus(string[] Sentences, string CorpusId, string Attribution);
+    private sealed record HaystackCorpus
+    {
+        public required string[] Sentences { get; init; }
 
-    private sealed record ExactOverride(string Expected, BenchmarkVerifierNormalizeV1 Normalize);
+        public required string CorpusId { get; init; }
+
+        public required string Attribution { get; init; }
+    }
+
+    private sealed record ExactOverride
+    {
+        public required string Expected { get; init; }
+
+        public required BenchmarkVerifierNormalizeV1 Normalize { get; init; }
+    }
 
     /// <summary>
     ///     A fixed 64-bit generator rather than <see cref="Random" />. <c>Random</c>'s sequence is an implementation

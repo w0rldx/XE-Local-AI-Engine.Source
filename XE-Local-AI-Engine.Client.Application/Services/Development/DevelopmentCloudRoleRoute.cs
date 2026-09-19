@@ -3,11 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-public sealed record DevelopmentCloudRoleRoute(
-    string ProviderName,
-    string ModelId,
-    IReadOnlyList<ChatMessage> Messages,
-    ChatOptions Options);
+public sealed class DevelopmentCloudRoleRoute
+{
+    public required string ProviderName { get; init; }
+
+    public required string ModelId { get; init; }
+
+    public required IReadOnlyList<ChatMessage> Messages { get; init; }
+
+    public required ChatOptions Options { get; init; }
+}
 
 /// <summary>
 ///     Builds a cloud role request from one approved bundle. The API accepts no chat history or general tool catalog.
@@ -53,6 +58,6 @@ public sealed class DevelopmentCloudRoleRouteFactory
             new(ChatRole.User,
                 "Read the approved requirements, acceptance-criteria, policy, and only the listed excerpt resources needed for this bounded role attempt.")
         ];
-        return new DevelopmentCloudRoleRoute(bundle.ProviderName, bundle.ModelId, Array.AsReadOnly(messages), options);
+        return new DevelopmentCloudRoleRoute { ProviderName = bundle.ProviderName, ModelId = bundle.ModelId, Messages = Array.AsReadOnly(messages), Options = options };
     }
 }

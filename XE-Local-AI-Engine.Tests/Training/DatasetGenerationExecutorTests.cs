@@ -39,7 +39,7 @@ public sealed class DatasetGenerationExecutorTests
         StructuredAgentRequest? request = null;
         var runner = Substitute.For<IStructuredAgentRunner>();
         _ = runner.RunAsync(Arg.Any<IChatClient>(), Arg.Do<StructuredAgentRequest>(value => request = value), Arg.Any<CancellationToken>())
-                  .Returns(new StructuredAgentResult(Success: true, "{}", FailureReason: null));
+                  .Returns(new StructuredAgentResult { Success = true, Text = "{}", FailureReason = null });
 
         SampleValidationContext? validationContext = null;
         var pipeline = Substitute.For<ISampleValidationPipeline>();
@@ -196,15 +196,20 @@ public sealed class DatasetGenerationExecutorTests
         };
 
     private static SampleValidationOutcome Accepted() =>
-        new(Accepted: true, RejectionReason: null, TrainingSampleLabel.Good,
-            new TrainingSampleContentV1
+        new()
+        {
+            Accepted = true,
+            RejectionReason = null,
+            Label = TrainingSampleLabel.Good,
+            Content = new TrainingSampleContentV1
             {
                 Parts = [new TrainingSamplePartV1("user", 0, "hi")]
             },
-            new TrainingSampleValidationV1
+            Validation = new TrainingSampleValidationV1
             {
                 Passed = true
-            });
+            }
+        };
 
     private static DatasetGenerationEventBuffer Events() =>
         new(Options.Create(new DatasetGenerationEventBufferOptions()));

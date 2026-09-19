@@ -190,7 +190,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var service = CreateService(provider);
         var conversationId = await SeedConversationWithFootprintAsync(provider, service);
 
-        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId, DeletedAtUtc: 100, PurgeImmediately: true));
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = conversationId, DeletedAtUtc = 100, PurgeImmediately = true });
 
         AssertEx.True(await service.GetConversationAsync(conversationId) is null, "The purged conversation must be deleted.");
         AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "message_feedback", conversationId));
@@ -229,7 +229,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
         await using var scope = factory.Services.CreateAsyncScope();
         var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
-        _ = await chat.DeleteConversationAsync(new NodeChatDeleteConversationRequest(session.ConversationId, DeletedAtUtc: 100, PurgeImmediately: true));
+        _ = await chat.DeleteConversationAsync(new NodeChatDeleteConversationRequest { ConversationId = session.ConversationId, DeletedAtUtc = 100, PurgeImmediately = true });
 
         AssertEx.True(await chat.GetConversationAsync(session.ConversationId) is null, "The purged conversation must be deleted.");
         AssertEx.False(Directory.Exists(artifactDirectory), "An immediate purge must also delete the session's artifact bytes.");
@@ -292,7 +292,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
                 {
                     if (service is not null && touchedId != Guid.Empty)
                     {
-                        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(touchedId, IsPinned: false, UpdatedAtUtc: fixedNowMs));
+                        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest { ConversationId = touchedId, IsPinned = false, UpdatedAtUtc = fixedNowMs });
                     }
                 })));
 
@@ -319,7 +319,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     // Creates a conversation with no messages, so its last_seen_utc is exactly the supplied millisecond value.
     private static async Task<Guid> SeedConversationAtAsync(INodeChatPersistenceService service, long lastSeenMs)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Chat", UserId = "node", CreatedAtUtc = lastSeenMs });
         return conversation.ConversationId;
     }
 
@@ -327,25 +327,28 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     // supplied millisecond value (message/feedback touches all use the same value, and the final pin makes it explicit).
     private static async Task<Guid> SeedExpiredConversationWithFootprintAsync(ServiceProvider provider, INodeChatPersistenceService service, long lastSeenMs)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Chat", UserId = "node", CreatedAtUtc = lastSeenMs });
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: lastSeenMs));
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: lastSeenMs));
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = messageId, Content = "question", CreatedAtUtc = lastSeenMs });
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest { ConversationId = conversation.ConversationId, MessageId = messageId, Rating = "up", Comment = null, UpdatedAtUtc = lastSeenMs });
 
         var uploadedFileStore = provider.GetRequiredService<IConversationUploadedFileStore>();
-        await uploadedFileStore.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
-                Guid.NewGuid(),
-                "doc.txt",
-                "text/plain",
-                ".txt",
-                SizeBytes: 4,
-                new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("data")),
-                DocumentExtractionStatus.Extracted,
-                ExtractedMarkdown: "data",
-                ExtractedChars: 4),
+        await uploadedFileStore.AddAsync(new ConversationUploadedFileInput
+        {
+            ConversationId = conversation.ConversationId,
+            FileId = Guid.NewGuid(),
+            OriginalFileName = "doc.txt",
+            MimeType = "text/plain",
+            Extension = ".txt",
+            SizeBytes = 4,
+            Content = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("data")),
+            ExtractionStatus = DocumentExtractionStatus.Extracted,
+            ExtractedMarkdown = "data",
+            ExtractedChars = 4
+        },
             CancellationToken.None);
 
-        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(conversation.ConversationId, IsPinned: false, UpdatedAtUtc: lastSeenMs));
+        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest { ConversationId = conversation.ConversationId, IsPinned = false, UpdatedAtUtc = lastSeenMs });
         return conversation.ConversationId;
     }
 
@@ -353,22 +356,25 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     {
         // Small timestamps put last_seen far in the past, so the conversation is always expired against a real-now
         // retention cutoff.
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1));
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Chat", UserId = "node", CreatedAtUtc = 1 });
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: 2));
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: 3));
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = messageId, Content = "question", CreatedAtUtc = 2 });
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest { ConversationId = conversation.ConversationId, MessageId = messageId, Rating = "up", Comment = null, UpdatedAtUtc = 3 });
 
         var uploadedFileStore = provider.GetRequiredService<IConversationUploadedFileStore>();
-        await uploadedFileStore.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
-                Guid.NewGuid(),
-                "doc.txt",
-                "text/plain",
-                ".txt",
-                SizeBytes: 4,
-                new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("data")),
-                DocumentExtractionStatus.Extracted,
-                ExtractedMarkdown: "data",
-                ExtractedChars: 4),
+        await uploadedFileStore.AddAsync(new ConversationUploadedFileInput
+        {
+            ConversationId = conversation.ConversationId,
+            FileId = Guid.NewGuid(),
+            OriginalFileName = "doc.txt",
+            MimeType = "text/plain",
+            Extension = ".txt",
+            SizeBytes = 4,
+            Content = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("data")),
+            ExtractionStatus = DocumentExtractionStatus.Extracted,
+            ExtractedMarkdown = "data",
+            ExtractedChars = 4
+        },
             CancellationToken.None);
 
         return conversation.ConversationId;

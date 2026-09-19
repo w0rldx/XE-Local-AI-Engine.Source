@@ -104,7 +104,7 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
                 continue;
             }
 
-            return new WorkSessionToolOutcome(error);
+            return new WorkSessionToolOutcome { Message = error };
         }
 
         var result = await store.ApplyPlanAsync(new ApplyWorkPlanCommand
@@ -118,7 +118,7 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
         },
                                     cancellationToken);
 
-        return new WorkSessionToolOutcome(Describe(changes), result.Sequence, WorkSessionChangeKind.Task);
+        return new WorkSessionToolOutcome { Message = Describe(changes), Sequence = result.Sequence, Kind = WorkSessionChangeKind.Task };
     }
 
     /// <summary>

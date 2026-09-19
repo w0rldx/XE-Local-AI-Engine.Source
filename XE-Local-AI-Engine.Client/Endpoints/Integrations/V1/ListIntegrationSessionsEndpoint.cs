@@ -35,10 +35,13 @@ public sealed class ListIntegrationSessionsEndpoint : Endpoint<ListIntegrationSe
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var filter = new IntegrationSessionFilter(req.TriggerId,
-            req.Status,
-            Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationSessionsRequestValidator.MaxLimit),
-            Math.Max(req.Offset ?? 0, val2: 0));
+        var filter = new IntegrationSessionFilter
+        {
+            TriggerId = req.TriggerId,
+            Status = req.Status,
+            Limit = Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationSessionsRequestValidator.MaxLimit),
+            Offset = Math.Max(req.Offset ?? 0, val2: 0)
+        };
 
         var rows = await _sessions.ListAsync(filter, ct);
 

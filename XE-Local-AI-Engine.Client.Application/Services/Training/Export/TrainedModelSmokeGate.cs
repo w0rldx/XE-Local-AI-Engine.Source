@@ -157,7 +157,7 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
         }
 
         return string.Equals(call.Name, ToolName, StringComparison.Ordinal) && HasArgument(call)
-            ? new TrainedModelSmokeResult(TrainingArtifactSmokeState.Passed, Reason: null)
+            ? new TrainedModelSmokeResult { State = TrainingArtifactSmokeState.Passed, Reason = null }
             : Failed($"the model emitted a malformed tool call (name '{call.Name}')");
     }
 
@@ -195,5 +195,5 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
         && value?.ToString() is { Length: > 0 };
 
     private static TrainedModelSmokeResult Failed(string reason) =>
-        new(TrainingArtifactSmokeState.Failed, $"The smoke test failed: {reason}.");
+        new() { State = TrainingArtifactSmokeState.Failed, Reason = $"The smoke test failed: {reason}." };
 }

@@ -32,25 +32,34 @@ public interface ICatalogRecommendationService
 ///     <see cref="KvQuantAdvisory" /> is a purely advisory second estimate — see its own docs; it never influences
 ///     whether this candidate appears (that is always the fp16 <see cref="Estimate" />).
 /// </summary>
-/// <param name="KvBytesPerTokenAtCtx">
-///     What one token of context costs in KV-cache bytes at the request's context target, computed at
-///     <see cref="KvCacheQuant.Q8_0" /> — the chat launch default, so the figure answers "what will this cost me on
-///     this node" rather than restating the fp16 ranking estimate. <see langword="null" /> when the header cannot size
-///     the KV term; such a candidate sorts LAST on the tiebreak rather than first.
-/// </param>
-/// <param name="AttentionArchTag">
-///     The candidate's attention shape as a stable lowercase token (see <see cref="Fit.AttentionArchTag" />), for the
-///     UI. Never used as a ranking input on its own.
-/// </param>
-public sealed record CatalogRecommendationCandidate(
-    ModelCatalogEntry Entry,
-    GgufRepoFile File,
-    MemoryFitEstimate Estimate,
-    string ModelName,
-    bool IsInstalled,
-    KvQuantAdvisory? KvQuantAdvisory = null,
-    long? KvBytesPerTokenAtCtx = null,
-    string? AttentionArchTag = null);
+public sealed class CatalogRecommendationCandidate
+{
+    public required ModelCatalogEntry Entry { get; init; }
+
+    public required GgufRepoFile File { get; init; }
+
+    public required MemoryFitEstimate Estimate { get; init; }
+
+    public required string ModelName { get; init; }
+
+    public required bool IsInstalled { get; init; }
+
+    public KvQuantAdvisory? KvQuantAdvisory { get; init; }
+
+    /// <summary>
+    ///     What one token of context costs in KV-cache bytes at the request's context target, computed at
+    ///     <see cref="KvCacheQuant.Q8_0" /> — the chat launch default, so the figure answers "what will this cost me on
+    ///     this node" rather than restating the fp16 ranking estimate. <see langword="null" /> when the header cannot size
+    ///     the KV term; such a candidate sorts LAST on the tiebreak rather than first.
+    /// </summary>
+    public long? KvBytesPerTokenAtCtx { get; init; }
+
+    /// <summary>
+    ///     The candidate's attention shape as a stable lowercase token (see <see cref="Fit.AttentionArchTag" />), for the
+    ///     UI. Never used as a ranking input on its own.
+    /// </summary>
+    public string? AttentionArchTag { get; init; }
+}
 
 /// <summary>
 ///     Advisory-only estimate of the memory a candidate would need with an 8-bit (<see cref="KvCacheQuant.Q8_0" />)
@@ -63,24 +72,34 @@ public sealed record CatalogRecommendationCandidate(
 ///     emitted only when the GGUF header carries every field the KV term needs; with incomplete metadata the KV term is
 ///     zero, the "savings" would be nil, and no advisory is produced.
 /// </summary>
-/// <param name="Quant">The KV-cache quantization the advisory was computed at (always <see cref="KvCacheQuant.Q8_0" />).</param>
-/// <param name="EstimatedBytes">Total estimated footprint with the quantized KV cache (lower than the fp16 estimate).</param>
-/// <param name="HeadroomBytes">Scored budget minus <see cref="EstimatedBytes" /> (negative when it still would not fit).</param>
-/// <param name="Fits">Whether the candidate would fit its scored budget with the quantized KV cache.</param>
-/// <param name="RequiresFlashAttention">Always <see langword="true" /> — llama.cpp requires flash attention for a quantized KV cache.</param>
-public sealed record KvQuantAdvisory(
-    KvCacheQuant Quant,
-    long EstimatedBytes,
-    long HeadroomBytes,
-    bool Fits,
-    bool RequiresFlashAttention);
+public sealed class KvQuantAdvisory
+{
+    /// <summary>The KV-cache quantization the advisory was computed at (always <see cref="KvCacheQuant.Q8_0" />).</summary>
+    public required KvCacheQuant Quant { get; init; }
+
+    /// <summary>Total estimated footprint with the quantized KV cache (lower than the fp16 estimate).</summary>
+    public required long EstimatedBytes { get; init; }
+
+    /// <summary>Scored budget minus <see cref="EstimatedBytes" /> (negative when it still would not fit).</summary>
+    public required long HeadroomBytes { get; init; }
+
+    /// <summary>Whether the candidate would fit its scored budget with the quantized KV cache.</summary>
+    public required bool Fits { get; init; }
+
+    /// <summary>Always <see langword="true" /> — llama.cpp requires flash attention for a quantized KV cache.</summary>
+    public required bool RequiresFlashAttention { get; init; }
+}
 
 /// <summary>
 ///     The catalog lane's ranked output: <see cref="Recommended" /> (fits at/above Q4_K_M with headroom) and
 ///     <see cref="CanRun" /> (fits, but only below Q4_K_M or with negligible headroom). Both lists are already ordered; the caller does
 ///     not re-rank.
 /// </summary>
-public sealed record CatalogRecommendationResult(
-    IReadOnlyList<CatalogRecommendationCandidate> Recommended,
-    IReadOnlyList<CatalogRecommendationCandidate> CanRun,
-    ModelCatalogSnapshot CatalogSnapshot);
+public sealed class CatalogRecommendationResult
+{
+    public required IReadOnlyList<CatalogRecommendationCandidate> Recommended { get; init; }
+
+    public required IReadOnlyList<CatalogRecommendationCandidate> CanRun { get; init; }
+
+    public required ModelCatalogSnapshot CatalogSnapshot { get; init; }
+}

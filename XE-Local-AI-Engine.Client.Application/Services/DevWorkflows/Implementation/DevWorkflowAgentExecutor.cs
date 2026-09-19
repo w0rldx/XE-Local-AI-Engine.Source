@@ -286,9 +286,12 @@ internal sealed class DevWorkflowAgentExecutor
                                          run,
                                          nodeRun,
                                          nodeRuns,
-                                         new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError,
-                                             "The agent's work session failed.",
-                                             FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)),
+                                         new DevWorkflowFailure
+                                         {
+                                             FailureClass = DevWorkflowFailureClasses.ProviderError,
+                                             SanitizedReason = "The agent's work session failed.",
+                                             OutputJson = FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)
+                                         },
                                          cancellationToken);
 
             case AgentWorkSessionStatus.Cancelled:
@@ -463,7 +466,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node)
     {
-        var runtime = new WorkSessionRuntimeOverride(node?.ModelProfile, node?.ReasoningEffort, DeclarationRequired(graph, node));
+        var runtime = new WorkSessionRuntimeOverride { ModelProfile = node?.ModelProfile, ReasoningEffort = node?.ReasoningEffort, RefuseUndeclaredWrites = DeclarationRequired(graph, node) };
         return runtime.IsEmpty ? null : runtime;
     }
 
@@ -897,15 +900,18 @@ internal sealed class DevWorkflowAgentExecutor
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
         var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
         var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken);
-        var output = JsonSerializer.Serialize(new AgentOutput(DevWorkflowNodeOutputStatuses.Succeeded,
-                nodeRun.Attempt,
-                FailureClass: null,
-                JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
-                nodeRun.SessionResumes,
-                promoted,
-                findings.Where(static finding => !finding.Superseded)
+        var output = JsonSerializer.Serialize(new AgentOutput
+        {
+            Status = DevWorkflowNodeOutputStatuses.Succeeded,
+            Attempt = nodeRun.Attempt,
+            FailureClass = null,
+            SessionStatus = JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
+            SessionResumes = nodeRun.SessionResumes,
+            ArtifactCount = promoted,
+            Findings = findings.Where(static finding => !finding.Superseded)
                         .GroupBy(static finding => finding.Kind)
-                        .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal)),
+                        .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal)
+        },
             JsonOptions);
 
         return await SettleAsync(store, run, nodeRun, nodeRuns, DevWorkflowNodeRunStatus.Succeeded, failureClass: null, terminalReason: null, output, cancellationToken);
@@ -993,13 +999,16 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     private static string FailureOutput(DevWorkflowNodeRunSnapshot nodeRun, WorkSessionDetail session, string failureClass) =>
-        JsonSerializer.Serialize(new AgentOutput(DevWorkflowNodeOutputStatuses.Failed,
-                nodeRun.Attempt,
-                failureClass,
-                JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
-                nodeRun.SessionResumes,
-                ArtifactCount: 0,
-                new Dictionary<string, int>(StringComparer.Ordinal)),
+        JsonSerializer.Serialize(new AgentOutput
+        {
+            Status = DevWorkflowNodeOutputStatuses.Failed,
+            Attempt = nodeRun.Attempt,
+            FailureClass = failureClass,
+            SessionStatus = JsonNamingPolicy.CamelCase.ConvertName(session.Status.ToString()),
+            SessionResumes = nodeRun.SessionResumes,
+            ArtifactCount = 0,
+            Findings = new Dictionary<string, int>(StringComparer.Ordinal)
+        },
             JsonOptions);
 
     private static async Task<int> SettleAsync(IDevWorkflowStore store,
@@ -1056,12 +1065,20 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>The agent node's slice of the output document every executor writes.</summary>
-    private sealed record AgentOutput(
-        string Status,
-        int Attempt,
-        string? FailureClass,
-        string SessionStatus,
-        int SessionResumes,
-        int ArtifactCount,
-        IReadOnlyDictionary<string, int> Findings);
+    private sealed record AgentOutput
+    {
+        public required string Status { get; init; }
+
+        public required int Attempt { get; init; }
+
+        public required string? FailureClass { get; init; }
+
+        public required string SessionStatus { get; init; }
+
+        public required int SessionResumes { get; init; }
+
+        public required int ArtifactCount { get; init; }
+
+        public required IReadOnlyDictionary<string, int> Findings { get; init; }
+    }
 }

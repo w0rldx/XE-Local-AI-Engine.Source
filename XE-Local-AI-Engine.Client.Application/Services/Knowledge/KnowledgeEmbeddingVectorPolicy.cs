@@ -33,8 +33,11 @@ public static class KnowledgeEmbeddingVectorPolicy
         if (!ShouldApplyMatryoshka(resolution, mode))
         {
             var native = nativeVector.ToArray();
-            return new KnowledgeEmbeddingVector(native,
-                CreateIdentity(resolution.Name, resolution.RevisionFingerprint, NativeAlgorithm, native.Length));
+            return new KnowledgeEmbeddingVector
+            {
+                Values = native,
+                Identity = CreateIdentity(resolution.Name, resolution.RevisionFingerprint, NativeAlgorithm, native.Length)
+            };
         }
 
         if (source.Length < MatryoshkaWidth)
@@ -78,8 +81,11 @@ public static class KnowledgeEmbeddingVectorPolicy
             }
         }
 
-        return new KnowledgeEmbeddingVector(transformed,
-            CreateIdentity(resolution.Name, resolution.RevisionFingerprint, MatryoshkaAlgorithm, MatryoshkaWidth));
+        return new KnowledgeEmbeddingVector
+        {
+            Values = transformed,
+            Identity = CreateIdentity(resolution.Name, resolution.RevisionFingerprint, MatryoshkaAlgorithm, MatryoshkaWidth)
+        };
     }
 
     /// <summary>Serializes a transformed vector deterministically in the platform's established native float32 byte order.</summary>
@@ -174,7 +180,11 @@ public static class KnowledgeEmbeddingVectorPolicy
 }
 
 /// <summary>A post-policy vector plus the canonical model/algorithm/version/width identity that produced it.</summary>
-public sealed record KnowledgeEmbeddingVector(ReadOnlyMemory<float> Values, string Identity)
+public sealed class KnowledgeEmbeddingVector
 {
+    public required ReadOnlyMemory<float> Values { get; init; }
+
+    public required string Identity { get; init; }
+
     public int Dimension => Values.Length;
 }

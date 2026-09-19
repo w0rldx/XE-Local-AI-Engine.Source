@@ -159,22 +159,28 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.Equal(expected: true, resolved!.AllowedTools.Single(tool => tool.Name == "mcp__x__y").RequiresApproval);
         AssertEx.Equal(expected: false, resolved.AllowedTools.Single(tool => tool.Name == "GetCurrentTime").RequiresApproval);
 
-        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            resolved.ResolvedSystemPrompt,
-            [],
-            resolved.ModelProfile,
-            resolved.AgentDefinitionVersion,
-            AllowedTools: resolved.AllowedTools,
-            ReasoningEffort: resolved.ReasoningEffort));
-        var rawOfferPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            resolved.ResolvedSystemPrompt,
-            [],
-            resolved.ModelProfile,
-            resolved.AgentDefinitionVersion,
-            AllowedTools: [mcp, clock],
-            ReasoningEffort: resolved.ReasoningEffort));
+        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+            ConversationContext = [],
+            ModelProfile = resolved.ModelProfile,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            AllowedTools = resolved.AllowedTools,
+            ReasoningEffort = resolved.ReasoningEffort
+        });
+        var rawOfferPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+            ConversationContext = [],
+            ModelProfile = resolved.ModelProfile,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            AllowedTools = [mcp, clock],
+            ReasoningEffort = resolved.ReasoningEffort
+        });
         AssertEx.Equal(rawOfferPackage.ConfigHash, resolvedPackage.ConfigHash);
     }
 
@@ -814,23 +820,29 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
 
         var builder = new LocalChatRuntimePackageBuilder();
-        var projectedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            resolved!.ResolvedSystemPrompt,
-            [],
-            resolved.ModelProfile,
-            resolved.AgentDefinitionVersion,
-            AllowedTools: resolved.AllowedTools,
-            ReasoningEffort: resolved.ReasoningEffort));
+        var projectedPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved!.ResolvedSystemPrompt,
+            ConversationContext = [],
+            ModelProfile = resolved.ModelProfile,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            AllowedTools = resolved.AllowedTools,
+            ReasoningEffort = resolved.ReasoningEffort
+        });
 
-        var handBuiltPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            SystemPrompt,
-            [],
-            "qwen3:8b",
-            AgentDefinitionVersion: 7,
-            AllowedTools: [OfferTool("GetCurrentTime")],
-            ReasoningEffort: "low"));
+        var handBuiltPackage = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = SystemPrompt,
+            ConversationContext = [],
+            ModelProfile = "qwen3:8b",
+            AgentDefinitionVersion = 7,
+            AllowedTools = [OfferTool("GetCurrentTime")],
+            ReasoningEffort = "low"
+        });
 
         AssertEx.Equal(handBuiltPackage.ConfigHash, projectedPackage.ConfigHash);
     }
@@ -1310,14 +1322,17 @@ public sealed class AgentDefinitionResolverTests
             : await resolver.ResolveAsync(definition.Id, "qwen3:8b");
         AssertEx.NotNull(resolved);
 
-        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            resolved!.ResolvedSystemPrompt,
-            [],
-            resolved.ModelProfile,
-            resolved.AgentDefinitionVersion,
-            AllowedTools: resolved.AllowedTools,
-            ReasoningEffort: resolved.ReasoningEffort));
+        var package = builder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = resolved!.ResolvedSystemPrompt,
+            ConversationContext = [],
+            ModelProfile = resolved.ModelProfile,
+            AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+            AllowedTools = resolved.AllowedTools,
+            ReasoningEffort = resolved.ReasoningEffort
+        });
 
         return package.ConfigHash;
     }

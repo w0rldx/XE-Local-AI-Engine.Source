@@ -11,21 +11,43 @@ public sealed record BaseArtifactFileView(string Role, string FileName, string L
 public sealed record BaseArtifactLicenseView(string RepoId, string? License, bool IsGated, DateTimeOffset FetchedAtUtc);
 
 /// <summary>Live transfer progress for an in-flight download. Absent once the download reaches a terminal state.</summary>
-public sealed record BaseArtifactProgressView(long CompletedBytes, long? TotalBytes, int FileIndex, int FileCount);
+public sealed class BaseArtifactProgressView
+{
+    public required long CompletedBytes { get; init; }
 
-public sealed record BaseArtifactView(
-    Guid Id,
-    string RepoId,
-    string Revision,
-    string Status,
-    long TotalBytes,
-    IReadOnlyList<BaseArtifactFileView> Files,
-    BaseArtifactLicenseView? License,
-    string? ErrorMessage,
-    long Version,
-    DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc,
-    BaseArtifactProgressView? Progress);
+    public required long? TotalBytes { get; init; }
+
+    public required int FileIndex { get; init; }
+
+    public required int FileCount { get; init; }
+}
+
+public sealed class BaseArtifactView
+{
+    public required Guid Id { get; init; }
+
+    public required string RepoId { get; init; }
+
+    public required string Revision { get; init; }
+
+    public required string Status { get; init; }
+
+    public required long TotalBytes { get; init; }
+
+    public required IReadOnlyList<BaseArtifactFileView> Files { get; init; }
+
+    public required BaseArtifactLicenseView? License { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required long Version { get; init; }
+
+    public required DateTimeOffset CreatedAtUtc { get; init; }
+
+    public required DateTimeOffset UpdatedAtUtc { get; init; }
+
+    public required BaseArtifactProgressView? Progress { get; init; }
+}
 
 /// <summary>Why a delete did not happen.</summary>
 public enum BaseArtifactDeleteOutcome

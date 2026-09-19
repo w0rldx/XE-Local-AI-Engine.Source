@@ -43,7 +43,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle API", UserId: null, CreatedAtUtc: 10));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Toggle API", UserId = null, CreatedAtUtc = 10 });
         AssertEx.False(conversation.MemoryExcluded, "A fresh unbound conversation starts non-temporary.");
 
         // Toggle on via the PATCH endpoint.

@@ -155,14 +155,14 @@ internal sealed class FakeGraphWorkflowCapacity : ICapacityService
     {
         if ((modelName ?? string.Empty).Contains(GraphWorkflowModels.OvercommittedMarker, StringComparison.Ordinal))
         {
-            return Task.FromResult(new CapacityDecision(CapacityVerdict.RejectInsufficient, RejectionReason, OllamaEvictionWarning: false));
+            return Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = RejectionReason, OllamaEvictionWarning = false });
         }
 
         // One per CALL, not one per model: a test asserting that a path released its reservation is asking about the
         // turn it ran, and a shared instance would answer about somebody else's.
         var reservation = new GraphWorkflowReservation();
         _reservations.GetOrAdd(modelName!, static _ => new ConcurrentQueue<GraphWorkflowReservation>()).Enqueue(reservation);
-        return Task.FromResult(new CapacityDecision(CapacityVerdict.Allow, "Capacity available.", OllamaEvictionWarning: false, reservation));
+        return Task.FromResult(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = reservation });
     }
 }
 

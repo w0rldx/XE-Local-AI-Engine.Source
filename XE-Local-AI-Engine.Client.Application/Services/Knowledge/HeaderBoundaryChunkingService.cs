@@ -68,7 +68,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         for (var ordinal = 0; ordinal < builds.Count; ordinal++)
         {
             var build = builds[ordinal];
-            sections.Add(new KnowledgeChunkingSection(ordinal, build.Heading, build.Level, build.PageNumber));
+            sections.Add(new KnowledgeChunkingSection { Ordinal = ordinal, Heading = build.Heading, Level = build.Level, PageNumber = build.PageNumber });
 
             var body = build.Body.ToString().Trim();
             if (body.Length == 0)
@@ -89,22 +89,25 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                     ? window.Content
                     : string.Concat(build.HeadingPath, "\n\n", window.Content);
 
-                chunks.Add(new KnowledgeChunk(chunkIndex,
-                    ordinal,
-                    window.Content,
-                    contextual,
-                    build.HeadingPath,
-                    ChunkTokenApproximation.EstimateTokens(window.Content),
-                    build.PageNumber,
-                    window.StartOffset,
-                    window.EndOffset,
-                    ContentHash: Hash(window.Content),
-                    EmbeddingInputHash: Hash(contextual)));
+                chunks.Add(new KnowledgeChunk
+                {
+                    ChunkIndex = chunkIndex,
+                    SectionOrdinal = ordinal,
+                    Content = window.Content,
+                    ContextualContent = contextual,
+                    HeadingPath = build.HeadingPath,
+                    TokenCount = ChunkTokenApproximation.EstimateTokens(window.Content),
+                    PageNumber = build.PageNumber,
+                    StartOffset = window.StartOffset,
+                    EndOffset = window.EndOffset,
+                    ContentHash = Hash(window.Content),
+                    EmbeddingInputHash = Hash(contextual)
+                });
                 chunkIndex++;
             }
         }
 
-        return new KnowledgeChunkingResult(sections, chunks);
+        return new KnowledgeChunkingResult { Sections = sections, Chunks = chunks };
     }
 
     // The per-chunk token budget: the configured MaxChunkTokens, tightened to the resolved embedding window (minus a
@@ -148,7 +151,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                 headingStack.Add(new HeadingFrame(level, heading));
                 var headingPath = string.Join(" > ", headingStack.Select(frame => frame.Text));
 
-                current = new SectionBuild(heading, level, headingPath, header.PageNumber);
+                current = new SectionBuild { Heading = heading, Level = level, HeadingPath = headingPath, PageNumber = header.PageNumber };
                 headerSections.Add(current);
                 continue;
             }
@@ -161,7 +164,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
 
             if (current is null)
             {
-                implicitSection ??= new SectionBuild(Heading: null, Level: null, HeadingPath: null, PageNumber: element.PageNumber);
+                implicitSection ??= new SectionBuild { Heading = null, Level = null, HeadingPath = null, PageNumber = element.PageNumber };
                 current = implicitSection;
             }
 
@@ -285,8 +288,16 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
 
-    private sealed record SectionBuild(string? Heading, int? Level, string? HeadingPath, int? PageNumber)
+    private sealed record SectionBuild
     {
+        public required string? Heading { get; init; }
+
+        public required int? Level { get; init; }
+
+        public required string? HeadingPath { get; init; }
+
+        public required int? PageNumber { get; init; }
+
         public StringBuilder Body { get; } = new();
     }
 }

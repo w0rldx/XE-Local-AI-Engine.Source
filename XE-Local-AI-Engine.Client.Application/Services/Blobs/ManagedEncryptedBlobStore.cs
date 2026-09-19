@@ -15,9 +15,21 @@ internal enum ManagedBlobReadStatus
     HashMismatch
 }
 
-internal sealed record ManagedBlobWriteResult(string OpaqueReference, string ContentHash, long ByteCount);
+internal sealed class ManagedBlobWriteResult
+{
+    public required string OpaqueReference { get; init; }
 
-internal sealed record ManagedBlobReadResult(ManagedBlobReadStatus Status, ReadOnlyMemory<byte> Content);
+    public required string ContentHash { get; init; }
+
+    public required long ByteCount { get; init; }
+}
+
+internal sealed class ManagedBlobReadResult
+{
+    public required ManagedBlobReadStatus Status { get; init; }
+
+    public required ReadOnlyMemory<byte> Content { get; init; }
+}
 
 /// <summary>
 ///     The shared body behind the managed blob conventions: AES-GCM under the node key, an AAD binding scope id, blob id
@@ -99,7 +111,7 @@ internal sealed class ManagedEncryptedBlobStore
                 return await VerifyExistingWriteAsync(scopeId, blobId, finalPath, content, contentHash, cancellationToken);
             }
 
-            return new ManagedBlobWriteResult(OpaqueReference(scopeId, blobId), contentHash, content.Length);
+            return new ManagedBlobWriteResult { OpaqueReference = OpaqueReference(scopeId, blobId), ContentHash = contentHash, ByteCount = content.Length };
         }
         catch
         {
@@ -139,7 +151,7 @@ internal sealed class ManagedEncryptedBlobStore
 
         var actualHash = Convert.ToHexString(SHA256.HashData(plaintext));
         return string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase)
-            ? new ManagedBlobReadResult(ManagedBlobReadStatus.Found, plaintext)
+            ? new ManagedBlobReadResult { Status = ManagedBlobReadStatus.Found, Content = plaintext }
             : Failure(ManagedBlobReadStatus.HashMismatch);
     }
 
@@ -192,7 +204,7 @@ internal sealed class ManagedEncryptedBlobStore
             throw new IOException($"The immutable {_subject} '{blobId}' already exists with different content.");
         }
 
-        return new ManagedBlobWriteResult(OpaqueReference(scopeId, blobId), contentHash, content.Length);
+        return new ManagedBlobWriteResult { OpaqueReference = OpaqueReference(scopeId, blobId), ContentHash = contentHash, ByteCount = content.Length };
     }
 
     private byte[] Encrypt(Guid scopeId, Guid blobId, ReadOnlySpan<byte> plaintext)
@@ -241,7 +253,7 @@ internal sealed class ManagedEncryptedBlobStore
         string.Concat(scopeId.ToString("N"), "/", blobId.ToString("N"));
 
     private static ManagedBlobReadResult Failure(ManagedBlobReadStatus status) =>
-        new(status, ReadOnlyMemory<byte>.Empty);
+        new() { Status = status, Content = ReadOnlyMemory<byte>.Empty };
 
     private static void DeleteIfPresent(string path)
     {

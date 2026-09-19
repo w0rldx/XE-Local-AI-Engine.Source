@@ -418,7 +418,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         lock (_sync)
         {
-            _scripts[commandLine] = new ScriptedCommand(Blocks: false, exitCode, standardOutput, standardError);
+            _scripts[commandLine] = new ScriptedCommand { Blocks = false, ExitCode = exitCode, StandardOutput = standardOutput, StandardError = standardError };
         }
     }
 
@@ -429,7 +429,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         lock (_sync)
         {
-            _scripts[commandLine] = new ScriptedCommand(Blocks: true, ExitCode: 0, string.Empty, string.Empty);
+            _scripts[commandLine] = new ScriptedCommand { Blocks = true, ExitCode = 0, StandardOutput = string.Empty, StandardError = string.Empty };
         }
     }
 
@@ -460,13 +460,13 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         if (request.TrustedHostWorkspace is not null)
         {
             var workspace = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.TrustedHostWorkspace.RootPath));
-            bindings.Add(new SandboxMountBinding(workspace, workspace, ReadOnly: false));
+            bindings.Add(new SandboxMountBinding { HostPath = workspace, SandboxPath = workspace, ReadOnly = false });
         }
 
         foreach (var mount in request.Mounts ?? [])
         {
             var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath));
-            bindings.Add(new SandboxMountBinding(canonical, canonical, mount.ReadOnly));
+            bindings.Add(new SandboxMountBinding { HostPath = canonical, SandboxPath = canonical, ReadOnly = mount.ReadOnly });
         }
 
         return bindings;
@@ -540,7 +540,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         var key = BuildCommandKey(request);
         return _scripts.TryGetValue(key, out var scripted)
             ? scripted
-            : new ScriptedCommand(Blocks: false, ExitCode: 0, string.Empty, string.Empty);
+            : new ScriptedCommand { Blocks = false, ExitCode = 0, StandardOutput = string.Empty, StandardError = string.Empty };
     }
 
     private static string BuildCommandKey(SandboxCommandRequest request)
@@ -597,7 +597,16 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed record ScriptedCommand(bool Blocks, int ExitCode, string StandardOutput, string StandardError);
+    private sealed record ScriptedCommand
+    {
+        public required bool Blocks { get; init; }
+
+        public required int ExitCode { get; init; }
+
+        public required string StandardOutput { get; init; }
+
+        public required string StandardError { get; init; }
+    }
 
     // One entry of the virtual filesystem as seen from the enumerated directory: its path relative to that directory,
     // and the file's whole content.

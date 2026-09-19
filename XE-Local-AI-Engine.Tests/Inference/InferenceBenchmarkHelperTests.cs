@@ -60,8 +60,8 @@ public sealed class InferenceBenchmarkHelperTests
             incrementalAbsoluteThresholdBytes: 100,
             incrementalRatioThreshold: 0.05);
 
-        collector.Add(new ResourceObservation(VramObservation.Create(700, 1000), WorkingSetBytes: 10));
-        collector.Add(new ResourceObservation(VramObservation.Create(550, 1000), WorkingSetBytes: 20));
+        collector.Add(new ResourceObservation { Vram = VramObservation.Create(700, 1000), WorkingSetBytes = 10 });
+        collector.Add(new ResourceObservation { Vram = VramObservation.Create(550, 1000), WorkingSetBytes = 20 });
 
         AssertEx.False(AssertEx.NotNull(collector.PreSpawnVram).ExternalPressureDetected);
         AssertEx.True(collector.ExternalPressureDetected);

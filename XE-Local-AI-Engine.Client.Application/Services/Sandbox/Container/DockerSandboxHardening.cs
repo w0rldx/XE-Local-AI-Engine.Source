@@ -503,10 +503,14 @@ internal static class DockerSandboxHardening
 ///         for, never what it maps to, so the provider proves the mapping with a real probe file after creation.
 ///     </para>
 /// </summary>
-/// <param name="UserId">In-container UID.</param>
-/// <param name="GroupId">In-container GID.</param>
-public sealed record ResolvedContainerIdentity(int UserId, int GroupId)
+public sealed class ResolvedContainerIdentity
 {
+    /// <summary>In-container UID.</summary>
+    public required int UserId { get; init; }
+
+    /// <summary>In-container GID.</summary>
+    public required int GroupId { get; init; }
+
     /// <summary>The <c>uid:gid</c> string Docker's <c>User</c> field takes.</summary>
     public string UserSpecification => UserId.ToString(CultureInfo.InvariantCulture) + ":" + GroupId.ToString(CultureInfo.InvariantCulture);
 }

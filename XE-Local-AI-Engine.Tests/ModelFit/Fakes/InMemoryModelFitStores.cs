@@ -220,7 +220,7 @@ internal sealed class EmptyCatalogRecommendationService : ICatalogRecommendation
         CancellationToken cancellationToken)
     {
         var emptyDocument = new ModelCatalogDocument(SchemaVersion: 1, "test-empty", UpdatedAt: null, Models: []);
-        var snapshot = new ModelCatalogSnapshot(emptyDocument, ModelCatalogSource.Bundled, FetchedAtUtc: null, SourceUrl: null);
-        return Task.FromResult(new CatalogRecommendationResult([], [], snapshot));
+        var snapshot = new ModelCatalogSnapshot { Document = emptyDocument, Source = ModelCatalogSource.Bundled, FetchedAtUtc = null, SourceUrl = null };
+        return Task.FromResult(new CatalogRecommendationResult { Recommended = [], CanRun = [], CatalogSnapshot = snapshot });
     }
 }

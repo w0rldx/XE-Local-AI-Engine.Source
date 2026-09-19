@@ -829,7 +829,7 @@ public sealed class WorkerEventDispatcherTests
         // drain runs without NPEs while these tests focus on the agent-run wiring.
         var pump = Substitute.For<INodeChatInvocationPump>();
         pump.FlushDeltaAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<InvocationState>(), Arg.Any<NodeChatPumpCursor>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted: null, ContentDelta: null, ReasoningDelta: null));
+            .Returns(callInfo => new NodeChatPumpFlushResult { Cursor = callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted = null, ContentDelta = null, ReasoningDelta = null });
 
         var coordinator = Substitute.For<INodeChatRemotePersistenceCoordinator>();
         coordinator.BeginAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())

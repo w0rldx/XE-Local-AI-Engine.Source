@@ -14,7 +14,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
         var native = new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth];
         native[0] = 1f;
 
-        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = NomicV15, IsConfident = true },
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -31,7 +31,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     {
         var native = Enumerable.Repeat(7f, 768).ToArray();
 
-        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = NomicV15, IsConfident = true },
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -42,7 +42,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     public void Transform_SameInputTwice_ProducesDeterministicBytesAndIdentity()
     {
         var native = Enumerable.Range(0, 768).Select(static value => (float)Math.Sin(value)).ToArray();
-        var resolution = new EmbeddingModelResolution(NomicV15, IsConfident: true);
+        var resolution = new EmbeddingModelResolution { Name = NomicV15, IsConfident = true };
 
         var ingestion = KnowledgeEmbeddingVectorPolicy.Transform(resolution, native, KnowledgeEmbeddingVectorMode.Matryoshka512);
         var query = KnowledgeEmbeddingVectorPolicy.Transform(resolution, native, KnowledgeEmbeddingVectorMode.Matryoshka512);
@@ -57,12 +57,15 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     public void Transform_SameModelNameWithDifferentInstalledRevision_UsesDifferentCanonicalIdentity()
     {
         var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
-        var original = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true, RevisionFingerprint: "inventory-v1:original"),
+        var original = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = NomicV15, IsConfident = true, RevisionFingerprint = "inventory-v1:original" },
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
-        var replacementResolution = new EmbeddingModelResolution(NomicV15,
-            IsConfident: true,
-            RevisionFingerprint: "inventory-v1:replacement");
+        var replacementResolution = new EmbeddingModelResolution
+        {
+            Name = NomicV15,
+            IsConfident = true,
+            RevisionFingerprint = "inventory-v1:replacement"
+        };
         var replacement = KnowledgeEmbeddingVectorPolicy.Transform(replacementResolution,
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
@@ -80,13 +83,13 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     public void Transform_NonNomicOrExplicitNative_PreservesNativeWidthAndUsesDistinctRollbackIdentity()
     {
         var native = Enumerable.Range(0, 768).Select(static value => value / 100f).ToArray();
-        var nonNomic = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution("bge-m3", IsConfident: true),
+        var nonNomic = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = "bge-m3", IsConfident = true },
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
-        var rollback = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var rollback = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = NomicV15, IsConfident = true },
             native,
             KnowledgeEmbeddingVectorMode.Native);
-        var matryoshka = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: true),
+        var matryoshka = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = NomicV15, IsConfident = true },
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -103,7 +106,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     {
         var native = Enumerable.Range(0, 768).Select(static value => (float)value).ToArray();
 
-        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution(NomicV15, IsConfident: false),
+        var transformed = KnowledgeEmbeddingVectorPolicy.Transform(new EmbeddingModelResolution { Name = NomicV15, IsConfident = false },
             native,
             KnowledgeEmbeddingVectorMode.Matryoshka512);
 
@@ -114,7 +117,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     [Test]
     public void CreateCacheFamilyIdentity_IsolatesNativeAndMatryoshkaWhileLeavingNativeWidthInTheEntry()
     {
-        var resolution = new EmbeddingModelResolution(NomicV15, IsConfident: true);
+        var resolution = new EmbeddingModelResolution { Name = NomicV15, IsConfident = true };
 
         var native = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Native);
         var matryoshka = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, KnowledgeEmbeddingVectorMode.Matryoshka512);
@@ -127,7 +130,7 @@ public sealed class KnowledgeEmbeddingVectorPolicyTests
     [Test]
     public void Transform_ShortOrNonFiniteNomic_ThrowsContentFreeReason()
     {
-        var resolution = new EmbeddingModelResolution(NomicV15, IsConfident: true);
+        var resolution = new EmbeddingModelResolution { Name = NomicV15, IsConfident = true };
 
         var shortException = Capture(() => KnowledgeEmbeddingVectorPolicy.Transform(resolution,
             new float[511],

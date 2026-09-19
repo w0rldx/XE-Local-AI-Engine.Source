@@ -65,6 +65,11 @@ public enum RankFusionStrategy
 public readonly record struct RankFusionInput(Guid ChunkId, double Score);
 
 /// <summary>One fused entry: a chunk id and its accumulated Reciprocal Rank Fusion score (higher ranks higher).</summary>
-/// <param name="ChunkId">The chunk identifier.</param>
-/// <param name="Score">The summed RRF score across every input list the chunk appeared in.</param>
-public sealed record RankFusionEntry(Guid ChunkId, double Score);
+public sealed class RankFusionEntry
+{
+    /// <summary>The chunk identifier.</summary>
+    public required Guid ChunkId { get; init; }
+
+    /// <summary>The summed RRF score across every input list the chunk appeared in.</summary>
+    public required double Score { get; init; }
+}

@@ -36,11 +36,11 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
 
         if (!wasWritten && !IsRetryableOnReUpload(status))
         {
-            return new KnowledgeIngestionAdmissionResult(status, Enqueue: null);
+            return new KnowledgeIngestionAdmissionResult { Status = status, Enqueue = null };
         }
 
         var admission = await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken);
-        return new KnowledgeIngestionAdmissionResult(status, admission);
+        return new KnowledgeIngestionAdmissionResult { Status = status, Enqueue = admission };
     }
 
     /// <summary>

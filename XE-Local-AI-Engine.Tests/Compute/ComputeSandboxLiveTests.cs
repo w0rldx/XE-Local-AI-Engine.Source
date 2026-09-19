@@ -660,7 +660,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     {
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AgentHomeOwnerIdentity("owner-live", "node-live"));
+            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner-live", NodeId = "node-live" });
         }
     }
 

@@ -84,7 +84,7 @@ internal sealed class SandboxIsolationLaunch : IDisposable
                 // Read-only trees are engine-owned but not necessarily private: a provisioned interpreter is 0755 so
                 // it can be executed. What matters is that nobody ELSE can write it, which the opener enforces.
                 var descriptor = Track(resources, SandboxTrustedDescriptorOpener.Open(tree, requirePrivateMode: false));
-                readOnlyTrees.Add(new SandboxIsolatedTreeBinding(descriptor.FileDescriptor, descriptor.Path));
+                readOnlyTrees.Add(new SandboxIsolatedTreeBinding { FileDescriptor = descriptor.FileDescriptor, Path = descriptor.Path });
             }
 
             var passwd = Track(resources, SandboxSealedMemoryFile.Create("xe-passwd", SandboxSyntheticEtc.BuildPasswd(isolation.UserId, isolation.GroupId)));

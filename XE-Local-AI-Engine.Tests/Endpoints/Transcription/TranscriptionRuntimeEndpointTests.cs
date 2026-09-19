@@ -26,20 +26,23 @@ public sealed class TranscriptionRuntimeEndpointTests
     {
         var service = new StubTranscriptionRuntimeService
         {
-            Runtime = new TranscriptionRuntimeView(Enabled: true,
-                new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Ready,
+            Runtime = new TranscriptionRuntimeView
+            {
+                Enabled = true,
+                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Ready,
                     "base",
                     WhisperBackend.Cuda,
                     "b5130",
                     WhisperBinarySource.Pinned,
                     SupportsTranscode: true),
-                new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 1, MutationReserved: false, EvictionReserved: false),
-                ManagedRuntime: null,
-                "large-v3-turbo",
-                "large-v3-turbo-q8_0",
-                IdleTimeoutMinutes: 20,
-                VadInstalled: true,
-                ProcessCaptureSupported: false)
+                Activity = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 1, MutationReserved: false, EvictionReserved: false),
+                ManagedRuntime = null,
+                SelectedModelId = "large-v3-turbo",
+                RecommendedModelId = "large-v3-turbo-q8_0",
+                IdleTimeoutMinutes = 20,
+                VadInstalled = true,
+                ProcessCaptureSupported = false
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -308,15 +311,18 @@ public sealed class TranscriptionRuntimeEndpointTests
         };
 
     private static TranscriptionRuntimeView StoppedRuntime() =>
-        new(Enabled: true,
-            new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
-            new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false),
-            ManagedRuntime: null,
-            SelectedModelId: null,
-            "base",
-            IdleTimeoutMinutes: 15,
-            VadInstalled: true,
-            ProcessCaptureSupported: false);
+        new()
+        {
+            Enabled = true,
+            Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
+            Activity = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false),
+            ManagedRuntime = null,
+            SelectedModelId = null,
+            RecommendedModelId = "base",
+            IdleTimeoutMinutes = 15,
+            VadInstalled = true,
+            ProcessCaptureSupported = false
+        };
 
     private sealed class StubTranscriptionRuntimeService : ITranscriptionRuntimeService
     {
@@ -339,13 +345,13 @@ public sealed class TranscriptionRuntimeEndpointTests
         }
 
         public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>
-            Task.FromResult(new TranscriptionModelCatalogView([], SelectedModelId: null, Recommended.Id));
+            Task.FromResult(new TranscriptionModelCatalogView { Models = [], SelectedModelId = null, RecommendedModelId = Recommended.Id });
 
         public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) =>
             Task.FromResult(Recommended);
 
         public Task<TranscriptionModelCatalogView> SelectModelAsync(string? modelId, CancellationToken ct) =>
-            Task.FromResult(new TranscriptionModelCatalogView([], modelId, Recommended.Id));
+            Task.FromResult(new TranscriptionModelCatalogView { Models = [], SelectedModelId = modelId, RecommendedModelId = Recommended.Id });
 
         public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) =>
             Task.FromResult(Recommended.Id);

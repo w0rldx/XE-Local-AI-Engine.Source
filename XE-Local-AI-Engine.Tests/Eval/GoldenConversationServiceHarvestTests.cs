@@ -25,15 +25,18 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task CreateHarvestedAsync_PinsHarvestedSourceAndStagesInert_EvenWhenInputEnabled()
     {
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Harvested case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "Be consistent with the approved answer.",
-            Enabled: true,
-            GoldenConversationSource.Manual,
-            Guid.NewGuid(),
-            Guid.NewGuid());
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Harvested case",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "Be consistent with the approved answer.",
+            Enabled = true,
+            Source = GoldenConversationSource.Manual,
+            SourceMessageId = Guid.NewGuid(),
+            SourceConversationId = Guid.NewGuid()
+        };
 
         _ = await service.CreateHarvestedAsync(input);
 
@@ -49,15 +52,18 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task CreateHarvestedAsync_WhenProvenanceMissing_RejectsWithValidationError()
     {
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Harvested case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "Be consistent.",
-            Enabled: false,
-            GoldenConversationSource.Harvested,
-            SourceMessageId: null,
-            Guid.NewGuid());
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Harvested case",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "Be consistent.",
+            Enabled = false,
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = null,
+            SourceConversationId = Guid.NewGuid()
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input));
 
@@ -68,15 +74,18 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task CreateHarvestedAsync_WhenTitleExceedsCap_RejectsWithValidationError()
     {
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(AgentId,
-            new string(c: 't', count: 201),
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "Be consistent.",
-            Enabled: false,
-            GoldenConversationSource.Harvested,
-            Guid.NewGuid(),
-            Guid.NewGuid());
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = new string(c: 't', count: 201),
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "Be consistent.",
+            Enabled = false,
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = Guid.NewGuid(),
+            SourceConversationId = Guid.NewGuid()
+        };
 
         // The harvested path reuses the same boundary validation (caps + ≥1 signal + owning agent) as CreateAsync.
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input));
@@ -91,15 +100,18 @@ public sealed class GoldenConversationServiceHarvestTests
                   .Returns(Task.FromResult<AgentDefinitionRecord?>(null));
         var service = new GoldenConversationService(store, agentStore);
 
-        var input = new GoldenConversationCreateInput(AgentId,
-            "Harvested case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            "Be consistent.",
-            Enabled: false,
-            GoldenConversationSource.Harvested,
-            Guid.NewGuid(),
-            Guid.NewGuid());
+        var input = new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = AgentId,
+            Title = "Harvested case",
+            InputTurns = """[{"role":"user","text":"hi"}]""",
+            Assertion = null,
+            Rubric = "Be consistent.",
+            Enabled = false,
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = Guid.NewGuid(),
+            SourceConversationId = Guid.NewGuid()
+        };
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input));
     }

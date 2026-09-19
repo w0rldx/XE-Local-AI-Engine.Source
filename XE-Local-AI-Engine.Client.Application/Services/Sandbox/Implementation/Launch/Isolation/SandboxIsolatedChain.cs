@@ -6,7 +6,12 @@ using System.Globalization;
 /// <summary>
 ///     One read-only tree the jail must see, as an already-opened descriptor plus the canonical path it is bound at.
 /// </summary>
-internal sealed record SandboxIsolatedTreeBinding(int FileDescriptor, string Path);
+internal sealed class SandboxIsolatedTreeBinding
+{
+    public required int FileDescriptor { get; init; }
+
+    public required string Path { get; init; }
+}
 
 /// <summary>
 ///     Everything the isolated chain needs that is NOT a decision: resolved helper paths, descriptor numbers, the unit

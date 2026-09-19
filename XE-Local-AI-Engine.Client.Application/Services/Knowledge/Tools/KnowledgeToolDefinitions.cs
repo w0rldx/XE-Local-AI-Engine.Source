@@ -101,8 +101,14 @@ internal static class ReadSurroundingChunksToolDefinition
 ///     read-only tools and <see cref="Category" /> is always <see cref="ToolCategory.ReadLocal" /> (read-only,
 ///     node-local retrieval).
 /// </summary>
-internal sealed record KnowledgeToolDescriptor(string Name, string Description, string ParameterSchema)
+internal sealed class KnowledgeToolDescriptor
 {
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string ParameterSchema { get; init; }
+
     /// <summary>Knowledge-base read tools never require approval.</summary>
     public bool RequiresApproval { get; }
 
@@ -118,8 +124,8 @@ internal static class KnowledgeToolCatalog
 {
     public static IReadOnlyList<KnowledgeToolDescriptor> Descriptors { get; } =
     [
-        new KnowledgeToolDescriptor(SearchKnowledgeBaseToolDefinition.ToolName, SearchKnowledgeBaseToolDefinition.Description, SearchKnowledgeBaseToolDefinition.ParameterSchema),
-        new KnowledgeToolDescriptor(ReadDocumentToolDefinition.ToolName, ReadDocumentToolDefinition.Description, ReadDocumentToolDefinition.ParameterSchema),
-        new KnowledgeToolDescriptor(ReadSurroundingChunksToolDefinition.ToolName, ReadSurroundingChunksToolDefinition.Description, ReadSurroundingChunksToolDefinition.ParameterSchema)
+        new KnowledgeToolDescriptor { Name = SearchKnowledgeBaseToolDefinition.ToolName, Description = SearchKnowledgeBaseToolDefinition.Description, ParameterSchema = SearchKnowledgeBaseToolDefinition.ParameterSchema },
+        new KnowledgeToolDescriptor { Name = ReadDocumentToolDefinition.ToolName, Description = ReadDocumentToolDefinition.Description, ParameterSchema = ReadDocumentToolDefinition.ParameterSchema },
+        new KnowledgeToolDescriptor { Name = ReadSurroundingChunksToolDefinition.ToolName, Description = ReadSurroundingChunksToolDefinition.Description, ParameterSchema = ReadSurroundingChunksToolDefinition.ParameterSchema }
     ];
 }

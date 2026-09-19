@@ -15,7 +15,7 @@ public sealed class AttentionArchTagTests
     {
         // MLA wins over every other row: a deepseek2 file's ordinary head counts still look like GQA, and its sliding
         // window (if any) would otherwise claim it first.
-        var shape = new GgufAttentionShape(KeyLength: 192, ValueLength: 128, SlidingWindow: 4096, SlidingWindowPattern: 4, KeyLengthMla: 576, ValueLengthMla: 512);
+        var shape = new GgufAttentionShape { KeyLength = 192, ValueLength = 128, SlidingWindow = 4096, SlidingWindowPattern = 4, KeyLengthMla = 576, ValueLengthMla = 512 };
 
         AssertEx.Equal(AttentionArchTag.Mla, AttentionArchTag.Resolve(shape, headCount: 128, headCountKv: 128));
     }
@@ -24,7 +24,7 @@ public sealed class AttentionArchTagTests
     public void Resolve_OnlyOneMlaLengthPresent_IsNotMla()
     {
         // llama.cpp's is_mla() requires BOTH lengths; one alone is not an MLA cache and must not claim the tag.
-        var shape = new GgufAttentionShape(KeyLengthMla: 576);
+        var shape = new GgufAttentionShape { KeyLengthMla = 576 };
 
         AssertEx.Equal(AttentionArchTag.Mha, AttentionArchTag.Resolve(shape, headCount: 32, headCountKv: 32));
     }
@@ -32,7 +32,7 @@ public sealed class AttentionArchTagTests
     [Test]
     public void Resolve_SlidingWindowWithAPattern_IsSwa()
     {
-        var shape = new GgufAttentionShape(KeyLength: 256, ValueLength: 256, SlidingWindow: 1024, SlidingWindowPattern: 6);
+        var shape = new GgufAttentionShape { KeyLength = 256, ValueLength = 256, SlidingWindow = 1024, SlidingWindowPattern = 6 };
 
         AssertEx.Equal(AttentionArchTag.Swa, AttentionArchTag.Resolve(shape, headCount: 8, headCountKv: 4));
     }
@@ -41,7 +41,7 @@ public sealed class AttentionArchTagTests
     public void Resolve_SlidingWindowWithoutAPattern_FallsThroughToTheHeadCounts()
     {
         // A window with no global-attention stride does not describe interleaved SWA, so the head counts decide.
-        var shape = new GgufAttentionShape(SlidingWindow: 1024);
+        var shape = new GgufAttentionShape { SlidingWindow = 1024 };
 
         AssertEx.Equal(AttentionArchTag.Gqa, AttentionArchTag.Resolve(shape, headCount: 32, headCountKv: 8));
     }

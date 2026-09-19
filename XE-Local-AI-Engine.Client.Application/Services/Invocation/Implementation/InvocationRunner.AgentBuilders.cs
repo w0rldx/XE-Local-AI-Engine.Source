@@ -242,18 +242,21 @@ public sealed partial class InvocationRunner
                                 .OrderByDescending(static message => message.SortOrder)
                                 .FirstOrDefault(static message => message.Role == MessageRole.User);
 
-        return new ReasoningDispatchRequest(resolvedModel,
-            package.SupportsThinking,
-            package.ReasoningBudgetEnforceable,
-            package.AllowAutoModelSwap,
-            package.OrchestrationSpec is not null,
-            package.ConversationContext.Count,
-            latestUser?.Content ?? string.Empty,
-            latestUser?.Images is { Count: > 0 },
-            package.AllowedTools.Count,
-            package.Skills is { Count: > 0 },
-            package.ResponseJsonSchema is not null,
-            package.IsUnattended);
+        return new ReasoningDispatchRequest
+        {
+            ResolvedModel = resolvedModel,
+            SupportsThinking = package.SupportsThinking,
+            ReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable,
+            AllowAutoModelSwap = package.AllowAutoModelSwap,
+            HasOrchestration = package.OrchestrationSpec is not null,
+            ConversationDepth = package.ConversationContext.Count,
+            LatestUserText = latestUser?.Content ?? string.Empty,
+            HasAttachments = latestUser?.Images is { Count: > 0 },
+            OfferedToolCount = package.AllowedTools.Count,
+            HasSkills = package.Skills is { Count: > 0 },
+            HasResponseSchema = package.ResponseJsonSchema is not null,
+            IsUnattended = package.IsUnattended
+        };
     }
 
     /// <summary>

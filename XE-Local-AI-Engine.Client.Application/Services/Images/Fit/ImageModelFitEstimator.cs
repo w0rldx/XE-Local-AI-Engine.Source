@@ -30,12 +30,18 @@ public enum ImageModelFitVerdict
 ///     a bare badge. <see cref="ResidentBytes" /> is what actually has to be resident (see
 ///     <see cref="ImageModelFitEstimator" />), <see cref="TotalBytes" /> is the whole download.
 /// </summary>
-public sealed record ImageModelFitEstimate(
-    ImageModelFitVerdict Verdict,
-    long ResidentBytes,
-    long TotalBytes,
-    long BudgetBytes,
-    bool FitsOnDisk);
+public sealed class ImageModelFitEstimate
+{
+    public required ImageModelFitVerdict Verdict { get; init; }
+
+    public required long ResidentBytes { get; init; }
+
+    public required long TotalBytes { get; init; }
+
+    public required long BudgetBytes { get; init; }
+
+    public required bool FitsOnDisk { get; init; }
+}
 
 /// <summary>
 ///     One file of a diffusion set: the role it plays at run time (which decides whether it is charged against VRAM)
@@ -84,7 +90,7 @@ public static class ImageModelFitEstimator
 
         if (profile is null)
         {
-            return new ImageModelFitEstimate(ImageModelFitVerdict.Unknown, diffusionBytes, totalBytes, BudgetBytes: 0, FitsOnDisk: true);
+            return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = true };
         }
 
         var fitsOnDisk = profile.FreeDiskBytes <= 0 || profile.FreeDiskBytes >= totalBytes;
@@ -94,19 +100,19 @@ public static class ImageModelFitEstimator
         // so instead of guessing in either direction.
         if (profile.GpuVendor is not GpuVendor.None && !profile.VramKnown)
         {
-            return new ImageModelFitEstimate(ImageModelFitVerdict.Unknown, diffusionBytes, totalBytes, BudgetBytes: 0, fitsOnDisk);
+            return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = fitsOnDisk };
         }
 
         var budgetBytes = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
         if (budgetBytes <= 0)
         {
-            return new ImageModelFitEstimate(ImageModelFitVerdict.Unknown, diffusionBytes, totalBytes, BudgetBytes: 0, fitsOnDisk);
+            return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = fitsOnDisk };
         }
 
         // GPU mode charges only the diffusion transformer (encoders + VAE are pinned to CPU); CPU mode charges the set.
         var residentBytes = profile.GpuAccelAvailable ? diffusionBytes : totalBytes;
 
-        return new ImageModelFitEstimate(ResolveVerdict(residentBytes, budgetBytes), residentBytes, totalBytes, budgetBytes, fitsOnDisk);
+        return new ImageModelFitEstimate { Verdict = ResolveVerdict(residentBytes, budgetBytes), ResidentBytes = residentBytes, TotalBytes = totalBytes, BudgetBytes = budgetBytes, FitsOnDisk = fitsOnDisk };
     }
 
     private static ImageModelFitVerdict ResolveVerdict(long residentBytes, long budgetBytes)

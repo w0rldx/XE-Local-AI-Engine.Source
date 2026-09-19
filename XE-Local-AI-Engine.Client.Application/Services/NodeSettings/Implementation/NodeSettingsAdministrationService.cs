@@ -115,7 +115,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         {
             return NodeSettingsAdministrationResult.Rejected(current,
             [
-                new NodeSettingsValidationError(NodeSettingsField.DefaultModelName, selectionFailure.DisplayMessage)
+                new NodeSettingsValidationError { Field = NodeSettingsField.DefaultModelName, Message = selectionFailure.DisplayMessage }
             ]);
         }
 
@@ -219,7 +219,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             {
                 return NodeSettingsAdministrationResult.Rejected(settings,
                 [
-                    new NodeSettingsValidationError(NodeSettingsField.AutoEffortFastModelName, AutoEffortFastModelNotLocalMessage)
+                    new NodeSettingsValidationError { Field = NodeSettingsField.AutoEffortFastModelName, Message = AutoEffortFastModelNotLocalMessage }
                 ]);
             }
 
@@ -325,22 +325,25 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         value is null ? current : value.Trim();
 
     private static NodeSettingsAgenticView ToAgenticView(StoredNodeSettings settings) =>
-        new(settings.DefaultModelName,
-            settings.EnableTools,
-            settings.ToolCapableModels,
-            settings.HuggingFaceDefaultQuant,
-            settings.LlamaMaxLoadedProcesses,
-            settings.LlamaIdleTimeToLiveSeconds,
-            settings.KeepModelWarmEnabled,
-            settings.KeepModelWarmModelName,
-            settings.KeepModelWarmIntervalSeconds,
-            settings.MaxMessageRequestTimeoutSeconds,
-            settings.ChatCacheReuse,
-            settings.SpeculativeMode,
-            settings.SpeculativeDraftModelName,
-            settings.SpeculativeDraftMaxTokens,
-            settings.SpeculativeDraftGpuLayers,
-            settings.KvCacheType,
-            settings.RerankerModelName,
-            settings.AutoEffortFastModelName);
+        new()
+        {
+            DefaultModelName = settings.DefaultModelName,
+            EnableTools = settings.EnableTools,
+            ToolCapableModels = settings.ToolCapableModels,
+            HuggingFaceDefaultQuant = settings.HuggingFaceDefaultQuant,
+            LlamaMaxLoadedProcesses = settings.LlamaMaxLoadedProcesses,
+            LlamaIdleTimeToLiveSeconds = settings.LlamaIdleTimeToLiveSeconds,
+            KeepModelWarmEnabled = settings.KeepModelWarmEnabled,
+            KeepModelWarmModelName = settings.KeepModelWarmModelName,
+            KeepModelWarmIntervalSeconds = settings.KeepModelWarmIntervalSeconds,
+            MaxMessageRequestTimeoutSeconds = settings.MaxMessageRequestTimeoutSeconds,
+            ChatCacheReuse = settings.ChatCacheReuse,
+            SpeculativeMode = settings.SpeculativeMode,
+            SpeculativeDraftModelName = settings.SpeculativeDraftModelName,
+            SpeculativeDraftMaxTokens = settings.SpeculativeDraftMaxTokens,
+            SpeculativeDraftGpuLayers = settings.SpeculativeDraftGpuLayers,
+            KvCacheType = settings.KvCacheType,
+            RerankerModelName = settings.RerankerModelName,
+            AutoEffortFastModelName = settings.AutoEffortFastModelName
+        };
 }

@@ -221,7 +221,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             }
         }
 
-        return new MemorySemanticDedupResult(Applied: true, duplicateIndexes);
+        return new MemorySemanticDedupResult { Applied = true, DuplicateIndexes = duplicateIndexes };
     }
 
     private static bool MatchesExisting(IReadOnlyList<MemoryDedupExisting> existing,

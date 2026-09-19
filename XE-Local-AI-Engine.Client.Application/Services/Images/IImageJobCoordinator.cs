@@ -49,7 +49,12 @@ public interface IImageJobCoordinator
 }
 
 /// <summary>One page of the job history plus the count of rows that exist in total, ignoring paging.</summary>
-public sealed record ImageJobPage(IReadOnlyList<ImageJobView> Items, int TotalCount);
+public sealed class ImageJobPage
+{
+    public required IReadOnlyList<ImageJobView> Items { get; init; }
+
+    public required int TotalCount { get; init; }
+}
 
 /// <summary>What a delete did, reported as a value rather than an exception (the endpoint maps it to a status code).</summary>
 public enum ImageJobDeleteOutcome

@@ -92,7 +92,7 @@ public sealed class ContainerBridgeTokenMiddlewareTests
     {
         var instanceId = Guid.NewGuid();
         var verifier = Substitute.For<IContainerBridgeTokenVerifier>();
-        _ = verifier.VerifyAsync(ValidToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller(instanceId));
+        _ = verifier.VerifyAsync(ValidToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller { InstanceId = instanceId });
         var context = CreateContext("Bearer " + ValidToken);
         var nextCalled = false;
 
@@ -112,7 +112,7 @@ public sealed class ContainerBridgeTokenMiddlewareTests
     public async Task Bridge_AcceptsTheBearerSchemeInAnyCase()
     {
         var verifier = Substitute.For<IContainerBridgeTokenVerifier>();
-        _ = verifier.VerifyAsync(ValidToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller(Guid.NewGuid()));
+        _ = verifier.VerifyAsync(ValidToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller { InstanceId = Guid.NewGuid() });
         var context = CreateContext("bEaReR " + ValidToken);
 
         await CreateMiddleware(verifier).InvokeAsync(context, static _ => Task.CompletedTask);

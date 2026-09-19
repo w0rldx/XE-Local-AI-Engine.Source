@@ -146,18 +146,21 @@ internal sealed class BaseArtifactService : IBaseArtifactService
 
     private BaseArtifactView ToView(TrainingBaseArtifactRecord record)
     {
-        return new BaseArtifactView(record.Id,
-            record.RepoId,
-            record.Revision,
-            record.Status.ToString(),
-            record.TotalBytes,
-            BaseArtifactManifest.DeserializeFiles(record.FilesJson),
-            BaseArtifactManifest.DeserializeLicense(record.LicenseJson),
-            record.ErrorMessage,
-            record.Version,
-            DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
-            DateTimeOffset.FromUnixTimeMilliseconds(record.UpdatedAtUtc),
-            _coordinator.GetProgress(record.Id));
+        return new BaseArtifactView
+        {
+            Id = record.Id,
+            RepoId = record.RepoId,
+            Revision = record.Revision,
+            Status = record.Status.ToString(),
+            TotalBytes = record.TotalBytes,
+            Files = BaseArtifactManifest.DeserializeFiles(record.FilesJson),
+            License = BaseArtifactManifest.DeserializeLicense(record.LicenseJson),
+            ErrorMessage = record.ErrorMessage,
+            Version = record.Version,
+            CreatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
+            UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.UpdatedAtUtc),
+            Progress = _coordinator.GetProgress(record.Id)
+        };
     }
 
     private static string FormatGigabytes(long bytes)

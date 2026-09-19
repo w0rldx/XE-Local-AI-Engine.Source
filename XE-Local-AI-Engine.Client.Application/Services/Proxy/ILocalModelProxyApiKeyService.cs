@@ -43,7 +43,14 @@ public interface ILocalModelProxyApiKeyService
 ///     The credential as shown to the operator. Carries no secret by construction — the key is not recoverable from
 ///     the node — so this shape is safe to return from any Operator-gated surface.
 /// </summary>
-public sealed record LocalModelProxyApiKeyView(string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+public sealed class LocalModelProxyApiKeyView
+{
+    public required string Prefix { get; init; }
+
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    public required DateTimeOffset? LastUsedAt { get; init; }
+}
 
 /// <summary>
 ///     A freshly minted credential: the one-time plaintext <see cref="Key" /> plus the metadata that will remain
@@ -51,4 +58,9 @@ public sealed record LocalModelProxyApiKeyView(string Prefix, DateTimeOffset Cre
 ///     is what stops the secret being returned from a retrieval path. Never log it, never persist it, never put it in
 ///     an audit record or an error body: once this value is dropped, the key is gone.
 /// </summary>
-public sealed record GeneratedLocalModelProxyApiKey(string Key, LocalModelProxyApiKeyView View);
+public sealed class GeneratedLocalModelProxyApiKey
+{
+    public required string Key { get; init; }
+
+    public required LocalModelProxyApiKeyView View { get; init; }
+}

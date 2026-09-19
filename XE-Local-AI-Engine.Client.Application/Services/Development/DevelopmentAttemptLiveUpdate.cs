@@ -65,8 +65,13 @@ public sealed record DevelopmentAttemptLiveUpdate
             or DevelopmentAttemptLiveUpdateKind.Progress;
 }
 
-public sealed record DevelopmentAttemptLiveSnapshot(
-    Guid AttemptId,
-    long Watermark,
-    long DroppedOrCoalescedUpdateCount,
-    DevelopmentAttemptLiveUpdate? Latest);
+public sealed class DevelopmentAttemptLiveSnapshot
+{
+    public required Guid AttemptId { get; init; }
+
+    public required long Watermark { get; init; }
+
+    public required long DroppedOrCoalescedUpdateCount { get; init; }
+
+    public required DevelopmentAttemptLiveUpdate? Latest { get; init; }
+}

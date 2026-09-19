@@ -297,7 +297,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             ApprovedSubjectHash = next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null
         },
                            cancellationToken);
-        return new DevelopmentNextActionResult("Attempt", projectId, taskId, AttemptId: null, next, DevelopmentAttemptRole.Coder);
+        return new DevelopmentNextActionResult { Action = "Attempt", ProjectId = projectId, TaskId = taskId, AttemptId = null, TaskStatus = next, Role = DevelopmentAttemptRole.Coder };
     }
 
     /// <summary>
@@ -373,7 +373,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             SanitizedReason = GateFailureReason
         },
                            cancellationToken);
-        return new DevelopmentNextActionResult("Validation", projectId, task.Id, AttemptId: null, DevelopmentTaskStatus.Validation, Role: null);
+        return new DevelopmentNextActionResult { Action = "Validation", ProjectId = projectId, TaskId = task.Id, AttemptId = null, TaskStatus = DevelopmentTaskStatus.Validation, Role = null };
     }
 
     /// <summary>What the scripted gate reports, in the shape <c>DevelopmentValidationRunner</c> composes.</summary>
@@ -434,7 +434,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                cancellationToken);
         }
 
-        return new DevelopmentNextActionResult("Attempt", projectId, ready.Id, attemptId, DevelopmentTaskStatus.InProgress, DevelopmentAttemptRole.Coder);
+        return new DevelopmentNextActionResult { Action = "Attempt", ProjectId = projectId, TaskId = ready.Id, AttemptId = attemptId, TaskStatus = DevelopmentTaskStatus.InProgress, Role = DevelopmentAttemptRole.Coder };
     }
 
     public async Task<bool> CancelAttemptAsync(Guid projectId, Guid taskId, Guid attemptId, CancellationToken cancellationToken = default)

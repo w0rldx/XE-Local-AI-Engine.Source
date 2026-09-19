@@ -64,12 +64,15 @@ internal static class GoldenConversationMapper
             ? null
             : JsonSerializer.Serialize(request.Assertion, SerializerOptions);
 
-        return new GoldenConversationCreateInput(request.AgentDefinitionId,
-            request.Title,
-            inputTurnsJson,
-            assertionJson,
-            request.Rubric,
-            request.Enabled);
+        return new GoldenConversationCreateInput
+        {
+            AgentDefinitionId = request.AgentDefinitionId,
+            Title = request.Title,
+            InputTurns = inputTurnsJson,
+            Assertion = assertionJson,
+            Rubric = request.Rubric,
+            Enabled = request.Enabled
+        };
     }
 
     private static IReadOnlyList<GoldenTurnDto> DeserializeTurns(string inputTurnsJson)

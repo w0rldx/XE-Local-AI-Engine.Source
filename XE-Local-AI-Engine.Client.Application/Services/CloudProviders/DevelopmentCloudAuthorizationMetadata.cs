@@ -67,10 +67,13 @@ public static class DevelopmentCloudAuthorizationMetadata
             state = CloudEgressAuthorizationCarrierState.Valid;
         }
 
-        request = new CloudEgressAuthorizationRequest(providerName,
-            options?.ModelId,
-            state,
-            envelopeValue as DevelopmentCloudAuthorizationEnvelope);
+        request = new CloudEgressAuthorizationRequest
+        {
+            ProviderName = providerName,
+            ModelId = options?.ModelId,
+            CarrierState = state,
+            Envelope = envelopeValue as DevelopmentCloudAuthorizationEnvelope
+        };
         return true;
     }
 }

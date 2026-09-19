@@ -105,7 +105,7 @@ public sealed class ChatTurnContextBuilderTests
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(new KnowledgeSearchResult([Hit("Runbook", "restart the service with the eject command")]));
+                     .Returns(new KnowledgeSearchResult { Results = [Hit("Runbook", "restart the service with the eject command")] });
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
 
         var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
@@ -206,13 +206,24 @@ public sealed class ChatTurnContextBuilderTests
         string extension,
         DocumentExtractionStatus status)
     {
-        return new ConversationUploadedFileInfo(Guid.NewGuid(), conversationId, fileName, mimeType, extension, SizeBytes: 4, status, ExtractedChars: null, CreatedAtUtc: 0);
+        return new ConversationUploadedFileInfo { FileId = Guid.NewGuid(), ConversationId = conversationId, OriginalFileName = fileName, MimeType = mimeType, Extension = extension, SizeBytes = 4, ExtractionStatus = status, ExtractedChars = null, CreatedAtUtc = 0 };
     }
 
     private static KnowledgeSearchHit Hit(string title, string content)
     {
-        return new KnowledgeSearchHit(Guid.NewGuid(), Guid.NewGuid(), title, "Section", content, "knowledge-base", Score: 0.9, ChunkIndex: 0, KnowledgeDocumentStatus.Indexed,
-            ServingLastKnownGood: false);
+        return new KnowledgeSearchHit
+        {
+            DocumentId = Guid.NewGuid(),
+            ChunkId = Guid.NewGuid(),
+            Title = title,
+            Section = "Section",
+            Content = content,
+            Source = "knowledge-base",
+            Score = 0.9,
+            ChunkIndex = 0,
+            DocumentStatus = KnowledgeDocumentStatus.Indexed,
+            ServingLastKnownGood = false
+        };
     }
 
     // The real seed derivation has its own coverage; this suite only needs a stable, non-empty seed so the fenced

@@ -24,9 +24,15 @@ public interface IGoldenHarvestService
 ///     the candidates split across created / already-harvested (duplicate) / skipped (no lead-up user turn or rejected at
 ///     the create boundary). Counts only — no turn/answer text.
 /// </summary>
-public sealed record GoldenHarvestOutcome(
-    bool AgentExists,
-    int ThumbsUpScanned,
-    int CreatedCount,
-    int DuplicateCount,
-    int SkippedCount);
+public sealed class GoldenHarvestOutcome
+{
+    public required bool AgentExists { get; init; }
+
+    public required int ThumbsUpScanned { get; init; }
+
+    public required int CreatedCount { get; init; }
+
+    public required int DuplicateCount { get; init; }
+
+    public required int SkippedCount { get; init; }
+}

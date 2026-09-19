@@ -400,14 +400,17 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
 
     private static KnowledgeDocumentInput NewInput(Guid documentId, byte[] content, string contentHash)
     {
-        return new KnowledgeDocumentInput(documentId,
-            "notes.txt",
-            "text/plain",
-            ".txt",
-            content.Length,
-            contentHash,
-            content,
-            "nomic-embed-text");
+        return new KnowledgeDocumentInput
+        {
+            DocumentId = documentId,
+            OriginalFileName = "notes.txt",
+            MimeType = "text/plain",
+            Extension = ".txt",
+            SizeBytes = content.Length,
+            ContentHash = contentHash,
+            Content = content,
+            EmbeddingModel = "nomic-embed-text"
+        };
     }
 
     private static KnowledgeDocumentInput NewRepositoryInput(Guid documentId,
@@ -416,18 +419,21 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         string contentHash,
         string sourceId = "repository-a")
     {
-        return new KnowledgeDocumentInput(documentId,
-            sourcePath,
-            "text/plain",
-            Path.GetExtension(sourcePath),
-            content.Length,
-            contentHash,
-            content,
-            "nomic-embed-text",
-            "REPOSITORY",
-            sourcePath,
-            "repository",
-            sourceId);
+        return new KnowledgeDocumentInput
+        {
+            DocumentId = documentId,
+            OriginalFileName = sourcePath,
+            MimeType = "text/plain",
+            Extension = Path.GetExtension(sourcePath),
+            SizeBytes = content.Length,
+            ContentHash = contentHash,
+            Content = content,
+            EmbeddingModel = "nomic-embed-text",
+            CollectionId = "REPOSITORY",
+            SourcePath = sourcePath,
+            SourceKind = "repository",
+            SourceId = sourceId
+        };
     }
 
     private KnowledgeDocumentBlobStore CreateStore(ServiceProvider provider)

@@ -66,12 +66,16 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
 
         var blobStore = Substitute.For<IDevelopmentArtifactBlobStore>();
         blobStore.ReadAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-                 .Returns(new DevelopmentArtifactBlobReadResult(DevelopmentArtifactReadStatus.Found, new byte[]
+                 .Returns(new DevelopmentArtifactBlobReadResult
+                 {
+                     Status = DevelopmentArtifactReadStatus.Found,
+                     Content = new byte[]
                  {
                      1,
                      2,
                      3
-                 }));
+                 }
+                 });
 
         var port = new TrustedDevelopmentHostApplyPort(blobStore, Options.Create(OptionsValue()));
         var projectId = Guid.NewGuid();

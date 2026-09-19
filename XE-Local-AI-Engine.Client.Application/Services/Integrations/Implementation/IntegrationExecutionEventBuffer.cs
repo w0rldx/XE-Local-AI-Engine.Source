@@ -141,13 +141,16 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         lock (_gate)
         {
             var entry = Require(executionId);
-            var streamEvent = new IntegrationStreamEvent(type,
-                ++entry.LatestSequence,
-                executionId,
-                sessionId,
-                NowUnixMilliseconds(),
-                contentType,
-                owned);
+            var streamEvent = new IntegrationStreamEvent
+            {
+                Type = type,
+                Sequence = ++entry.LatestSequence,
+                ExecutionId = executionId,
+                SessionId = sessionId,
+                OccurredAtUtc = NowUnixMilliseconds(),
+                ContentType = contentType,
+                Payload = owned
+            };
             Insert(entry, streamEvent);
             return streamEvent;
         }

@@ -17,11 +17,16 @@ public interface IMcpAgentRunCoordinator
     Task<McpAgentRunCancelResult> CancelAsync(Guid requestId, CancellationToken cancellationToken);
 }
 
-public sealed record McpAgentRunStartRequest(
-    Guid RequestId,
-    string Task,
-    McpExecutionBindingRequest Binding,
-    Guid? WorkspaceId = null);
+public sealed record McpAgentRunStartRequest
+{
+    public required Guid RequestId { get; init; }
+
+    public required string Task { get; init; }
+
+    public required McpExecutionBindingRequest Binding { get; init; }
+
+    public Guid? WorkspaceId { get; init; }
+}
 
 public static class McpAgentRunFailureCodes
 {
@@ -38,11 +43,16 @@ public enum McpAgentRunStartKind
     Rejected
 }
 
-public sealed record McpAgentRunStartResult(
-    McpAgentRunStartKind Kind,
-    McpAgentRunView? Run,
-    string? FailureCode,
-    string DisplayMessage);
+public sealed class McpAgentRunStartResult
+{
+    public required McpAgentRunStartKind Kind { get; init; }
+
+    public required McpAgentRunView? Run { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required string DisplayMessage { get; init; }
+}
 
 public enum McpAgentRunCancelKind
 {
@@ -53,22 +63,46 @@ public enum McpAgentRunCancelKind
     Conflict
 }
 
-public sealed record McpAgentRunCancelResult(McpAgentRunCancelKind Kind, McpAgentRunView? Run, string DisplayMessage);
+public sealed class McpAgentRunCancelResult
+{
+    public required McpAgentRunCancelKind Kind { get; init; }
 
-public sealed record McpAgentRunView(
-    Guid RequestId,
-    McpAgentRunStatus Status,
-    long Version,
-    McpAgentRunStopReason StopReason,
-    string? ModelId,
-    Guid? AgentDefinitionId,
-    Guid? WorkspaceId,
-    string? Result,
-    string? DisplayMessage,
-    string? FailureCode,
-    long CreatedAtUtc,
-    long? ClaimedAtUtc,
-    long? CompletedAtUtc,
-    long? PayloadExpiresAtUtc,
-    long? CompactedAtUtc,
-    bool PayloadExpired);
+    public required McpAgentRunView? Run { get; init; }
+
+    public required string DisplayMessage { get; init; }
+}
+
+public sealed record McpAgentRunView
+{
+    public required Guid RequestId { get; init; }
+
+    public required McpAgentRunStatus Status { get; init; }
+
+    public required long Version { get; init; }
+
+    public required McpAgentRunStopReason StopReason { get; init; }
+
+    public required string? ModelId { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required Guid? WorkspaceId { get; init; }
+
+    public required string? Result { get; init; }
+
+    public required string? DisplayMessage { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long? ClaimedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long? PayloadExpiresAtUtc { get; init; }
+
+    public required long? CompactedAtUtc { get; init; }
+
+    public required bool PayloadExpired { get; init; }
+}

@@ -24,23 +24,34 @@ public static class BenchmarkPairwisePolicy
 }
 
 /// <summary>Which pairs a cohort should hold, and which runs it had to leave out.</summary>
-public sealed record BenchmarkPairwisePlan(
-    IReadOnlyList<BenchmarkPairwiseSlot> Slots,
-    IReadOnlyList<Guid> PairedRunIds,
-    IReadOnlyList<Guid> CappedRunIds);
+public sealed class BenchmarkPairwisePlan
+{
+    public required IReadOnlyList<BenchmarkPairwiseSlot> Slots { get; init; }
+
+    public required IReadOnlyList<Guid> PairedRunIds { get; init; }
+
+    public required IReadOnlyList<Guid> CappedRunIds { get; init; }
+}
 
 /// <summary>The pre-flight an operator sees before switching a project to pairwise.</summary>
-/// <param name="EstimatedSeconds">
-///     Null when no judge attempt of this project has completed. The estimate is omitted rather than guessed: a made-up
-///     ETA in front of a ninety-minute commitment is worse than none.
-/// </param>
-public sealed record BenchmarkPairwiseEstimate(
-    int EligibleRuns,
-    int PairedRuns,
-    int CappedRuns,
-    int JudgeCalls,
-    double? EstimatedSeconds,
-    bool Warn);
+public sealed class BenchmarkPairwiseEstimate
+{
+    public required int EligibleRuns { get; init; }
+
+    public required int PairedRuns { get; init; }
+
+    public required int CappedRuns { get; init; }
+
+    public required int JudgeCalls { get; init; }
+
+    /// <summary>
+    ///     Null when no judge attempt of this project has completed. The estimate is omitted rather than guessed: a made-up
+    ///     ETA in front of a ninety-minute commitment is worse than none.
+    /// </summary>
+    public required double? EstimatedSeconds { get; init; }
+
+    public required bool Warn { get; init; }
+}
 
 public interface IBenchmarkPairwisePlanner
 {
@@ -118,9 +129,12 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             }
         }
 
-        return new BenchmarkPairwisePlan(slots,
-            [.. paired.Select(static candidate => candidate.RunId)],
-            [.. candidates.Skip(maximumRuns).Select(static candidate => candidate.RunId)]);
+        return new BenchmarkPairwisePlan
+        {
+            Slots = slots,
+            PairedRunIds = [.. paired.Select(static candidate => candidate.RunId)],
+            CappedRunIds = [.. candidates.Skip(maximumRuns).Select(static candidate => candidate.RunId)]
+        };
     }
 
     public async Task<int> EnsurePairsAsync(Guid projectId, CancellationToken cancellationToken)
@@ -204,12 +218,15 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         var paired = plan.PairedRunIds.Count;
         var calls = paired * (paired - 1);
         var median = await _store.GetMedianJudgeDurationSecondsAsync(projectId, cancellationToken);
-        return new BenchmarkPairwiseEstimate(cohort.Candidates.Count,
-            paired,
-            plan.CappedRunIds.Count,
-            calls,
-            median is { } seconds ? seconds * calls : null,
-            paired >= BenchmarkPairwisePolicy.WarnAtRuns);
+        return new BenchmarkPairwiseEstimate
+        {
+            EligibleRuns = cohort.Candidates.Count,
+            PairedRuns = paired,
+            CappedRuns = plan.CappedRunIds.Count,
+            JudgeCalls = calls,
+            EstimatedSeconds = median is { } seconds ? seconds * calls : null,
+            Warn = paired >= BenchmarkPairwisePolicy.WarnAtRuns
+        };
     }
 
     /// <summary>The project's current judge policy when it judges pairwise, otherwise <see langword="null" />.</summary>

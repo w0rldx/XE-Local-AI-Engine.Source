@@ -41,67 +41,89 @@ internal static class ReasoningTierLabels
 ///     never routing inputs, and no member here can carry one. Every field has exactly one named source on the
 ///     runtime package, so nothing is invented at the call site.
 /// </summary>
-/// <param name="ResolvedModel">The model the turn would run on before dispatch (the runner's resolved model).</param>
-/// <param name="SupportsThinking">Whether the resolved model advertises the graded thinking capability.</param>
-/// <param name="ReasoningBudgetEnforceable">Whether llama-server can enforce a per-request reasoning budget for it.</param>
-/// <param name="AllowAutoModelSwap">Whether the model may be replaced (false = pinned; see <c>RuntimePackage</c>).</param>
-/// <param name="HasOrchestration">Whether the turn drives a compiled orchestration.</param>
-/// <param name="ConversationDepth">Number of messages in the turn's conversation context.</param>
-/// <param name="LatestUserText">
-///     The latest user message's text. Read in-memory for shape only (length, a code fence, a phrase) and NEVER
-///     persisted, logged, or put in a log scope — see the dispatcher's logging invariant.
-/// </param>
-/// <param name="HasAttachments">Whether an image rides the latest user turn.</param>
-/// <param name="OfferedToolCount">How many tools the turn offers. NEVER a score term — it only refuses the model swap.</param>
-/// <param name="HasSkills">Whether the turn carries resolved agent skills.</param>
-/// <param name="HasResponseSchema">Whether the turn's output is constrained to a JSON schema.</param>
-/// <param name="IsUnattended">Whether this is a scheduled/headless run.</param>
-public sealed record ReasoningDispatchRequest(
-    string ResolvedModel,
-    bool SupportsThinking,
-    bool ReasoningBudgetEnforceable,
-    bool AllowAutoModelSwap,
-    bool HasOrchestration,
-    int ConversationDepth,
-    string LatestUserText,
-    bool HasAttachments,
-    int OfferedToolCount,
-    bool HasSkills,
-    bool HasResponseSchema,
-    bool IsUnattended);
+public sealed class ReasoningDispatchRequest
+{
+    /// <summary>The model the turn would run on before dispatch (the runner's resolved model).</summary>
+    public required string ResolvedModel { get; init; }
+
+    /// <summary>Whether the resolved model advertises the graded thinking capability.</summary>
+    public required bool SupportsThinking { get; init; }
+
+    /// <summary>Whether llama-server can enforce a per-request reasoning budget for it.</summary>
+    public required bool ReasoningBudgetEnforceable { get; init; }
+
+    /// <summary>Whether the model may be replaced (false = pinned; see <c>RuntimePackage</c>).</summary>
+    public required bool AllowAutoModelSwap { get; init; }
+
+    /// <summary>Whether the turn drives a compiled orchestration.</summary>
+    public required bool HasOrchestration { get; init; }
+
+    /// <summary>Number of messages in the turn's conversation context.</summary>
+    public required int ConversationDepth { get; init; }
+
+    /// <summary>
+    ///     The latest user message's text. Read in-memory for shape only (length, a code fence, a phrase) and NEVER
+    ///     persisted, logged, or put in a log scope — see the dispatcher's logging invariant.
+    /// </summary>
+    public required string LatestUserText { get; init; }
+
+    /// <summary>Whether an image rides the latest user turn.</summary>
+    public required bool HasAttachments { get; init; }
+
+    /// <summary>How many tools the turn offers. NEVER a score term — it only refuses the model swap.</summary>
+    public required int OfferedToolCount { get; init; }
+
+    /// <summary>Whether the turn carries resolved agent skills.</summary>
+    public required bool HasSkills { get; init; }
+
+    /// <summary>Whether the turn's output is constrained to a JSON schema.</summary>
+    public required bool HasResponseSchema { get; init; }
+
+    /// <summary>Whether this is a scheduled/headless run.</summary>
+    public required bool IsUnattended { get; init; }
+}
 
 /// <summary>
 ///     What the dispatcher resolved <c>auto</c> into for one turn. The runner rewrites exactly these members onto the
 ///     package and then builds the agent definition as it always has.
 /// </summary>
-/// <param name="Tier">The resolved tier, also the persisted category label.</param>
-/// <param name="Model">The model to run — the resolved model, or the node-local FAST model when a swap was admitted.</param>
-/// <param name="Effort">A concrete effort from the ordinary vocabulary. Never <c>auto</c>: that is what was resolved.</param>
-/// <param name="MaxOutputTokens">
-///     Always null today. No tier caps the turn's output: the FAST cap was dropped because it bought nothing on the
-///     reasoning side (the provider's own clamp already yields the full <c>low</c> budget without it) and cost real
-///     history, since both context budgeters derive their output RESERVATION from the requested max-output-tokens.
-///     The member stays so a future tier can carry one without moving the seam.
-/// </param>
-/// <param name="SupportsThinking">Re-resolved for <paramref name="Model" /> when it was swapped; the input's value otherwise.</param>
-/// <param name="ReasoningBudgetEnforceable">Likewise — a stale flag after a swap sends a budget the model 400s on.</param>
-/// <param name="ReasonCode">
-///     A stable kebab-case label, the ONLY dispatcher output that may be logged or displayed. Carries no signal
-///     value and no message text.
-/// </param>
-/// <param name="CapacityReservation">
-///     The ledger reservation a swap's capacity admission produced, or null. The RUNNER owns its disposal and must
-///     release it at turn end (or before a fallback re-run), or later admissions are wrongly rejected.
-/// </param>
-public sealed record ReasoningDispatchDecision(
-    ReasoningTier Tier,
-    string Model,
-    string Effort,
-    int? MaxOutputTokens,
-    bool SupportsThinking,
-    bool ReasoningBudgetEnforceable,
-    string ReasonCode,
-    IDisposable? CapacityReservation);
+public sealed class ReasoningDispatchDecision
+{
+    /// <summary>The resolved tier, also the persisted category label.</summary>
+    public required ReasoningTier Tier { get; init; }
+
+    /// <summary>The model to run — the resolved model, or the node-local FAST model when a swap was admitted.</summary>
+    public required string Model { get; init; }
+
+    /// <summary>A concrete effort from the ordinary vocabulary. Never <c>auto</c>: that is what was resolved.</summary>
+    public required string Effort { get; init; }
+
+    /// <summary>
+    ///     Always null today. No tier caps the turn's output: the FAST cap was dropped because it bought nothing on the
+    ///     reasoning side (the provider's own clamp already yields the full <c>low</c> budget without it) and cost real
+    ///     history, since both context budgeters derive their output RESERVATION from the requested max-output-tokens.
+    ///     The member stays so a future tier can carry one without moving the seam.
+    /// </summary>
+    public required int? MaxOutputTokens { get; init; }
+
+    /// <summary>Re-resolved for <see cref="Model" /> when it was swapped; the input's value otherwise.</summary>
+    public required bool SupportsThinking { get; init; }
+
+    /// <summary>Likewise — a stale flag after a swap sends a budget the model 400s on.</summary>
+    public required bool ReasoningBudgetEnforceable { get; init; }
+
+    /// <summary>
+    ///     A stable kebab-case label, the ONLY dispatcher output that may be logged or displayed. Carries no signal
+    ///     value and no message text.
+    /// </summary>
+    public required string ReasonCode { get; init; }
+
+    /// <summary>
+    ///     The ledger reservation a swap's capacity admission produced, or null. The RUNNER owns its disposal and must
+    ///     release it at turn end (or before a fallback re-run), or later admissions are wrongly rejected.
+    /// </summary>
+    public required IDisposable? CapacityReservation { get; init; }
+}
 
 /// <summary>
 ///     Stable kebab-case reason labels for <see cref="ReasoningDispatchDecision.ReasonCode" />. Safe to log and to

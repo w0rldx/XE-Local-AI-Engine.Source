@@ -12,14 +12,17 @@ internal interface IMcpWorkspaceExecutionSession : IDisposable
     IDisposable EnterAmbientScope();
 }
 
-internal sealed record McpWorkspaceExecutionSessionOpenResult(
-    IMcpWorkspaceExecutionSession? Session,
-    string? FailureCode,
-    string DisplayMessage)
+internal sealed class McpWorkspaceExecutionSessionOpenResult
 {
+    public required IMcpWorkspaceExecutionSession? Session { get; init; }
+
+    public required string? FailureCode { get; init; }
+
+    public required string DisplayMessage { get; init; }
+
     public static McpWorkspaceExecutionSessionOpenResult Success(IMcpWorkspaceExecutionSession session) =>
-        new(session, FailureCode: null, string.Empty);
+        new() { Session = session, FailureCode = null, DisplayMessage = string.Empty };
 
     public static McpWorkspaceExecutionSessionOpenResult Rejected(string failureCode, string displayMessage) =>
-        new(Session: null, FailureCode: failureCode, DisplayMessage: displayMessage);
+        new() { Session = null, FailureCode = failureCode, DisplayMessage = displayMessage };
 }

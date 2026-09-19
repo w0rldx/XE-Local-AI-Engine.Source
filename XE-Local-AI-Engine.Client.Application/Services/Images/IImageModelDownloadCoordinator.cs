@@ -44,9 +44,14 @@ public interface IImageModelDownloadCoordinator
 }
 
 /// <summary>The accepted-download identity returned by <see cref="IImageModelDownloadCoordinator.Start" />.</summary>
-/// <param name="ModelName">The canonical model name the download is keyed by (poll its status by this).</param>
-/// <param name="AlreadyInFlight"><c>true</c> when an existing download for the same model name was rejoined instead of started.</param>
-public sealed record ImageModelDownloadTicket(string ModelName, bool AlreadyInFlight);
+public sealed class ImageModelDownloadTicket
+{
+    /// <summary>The canonical model name the download is keyed by (poll its status by this).</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary><c>true</c> when an existing download for the same model name was rejoined instead of started.</summary>
+    public required bool AlreadyInFlight { get; init; }
+}
 
 /// <summary>Phase of a coordinated image-model download.</summary>
 public enum ImageModelDownloadPhase
@@ -70,13 +75,18 @@ public enum ImageModelDownloadPhase
 ///     A sanitized snapshot of one coordinated image-model download. Carries only the model name, phase, byte counts and
 ///     a sanitized reason — never an absolute path, URL, or token.
 /// </summary>
-public sealed record ImageModelDownloadStatus(
-    string ModelName,
-    ImageModelDownloadPhase Phase,
-    long? CompletedBytes,
-    long? TotalBytes,
-    string? SanitizedError)
+public sealed record ImageModelDownloadStatus
 {
+    public required string ModelName { get; init; }
+
+    public required ImageModelDownloadPhase Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
     /// <summary>
     ///     1-based index of the file currently transferring within the set, or <see langword="null" /> when the download
     ///     has not reported a part yet. Lets the UI say "part 2 of 3" instead of leaving the operator to guess why a

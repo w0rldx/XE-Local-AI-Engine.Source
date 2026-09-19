@@ -67,7 +67,7 @@ public sealed class IntegrationCoordinatorHostFixture : IAsyncInitializer, IAsyn
 
         var capacity = Substitute.For<ICapacityService>();
         _ = capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                    .Returns(new CapacityDecision(CapacityVerdict.Allow, "Capacity available.", OllamaEvictionWarning: false, Reservation: null));
+                    .Returns(new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = "Capacity available.", OllamaEvictionWarning = false, Reservation = null });
 
         services.RemoveAll<IWorkerEventDispatcher>();
         services.AddSingleton(dispatcher);

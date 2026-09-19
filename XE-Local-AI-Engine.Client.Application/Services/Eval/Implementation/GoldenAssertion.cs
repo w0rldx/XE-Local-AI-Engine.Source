@@ -31,8 +31,12 @@ internal enum AssertionParseState
 ///     phrase; such an assertion proves nothing and must not auto-pass. Shared by the judge (deterministic scoring) and
 ///     <see cref="GoldenConversationService" /> (create/update validation) so both agree on what a usable assertion is.
 /// </summary>
-internal sealed record GoldenAssertion(IReadOnlyList<string> RequiredPhrases, IReadOnlyList<string> ForbiddenPhrases)
+internal sealed class GoldenAssertion
 {
+    public required IReadOnlyList<string> RequiredPhrases { get; init; }
+
+    public required IReadOnlyList<string> ForbiddenPhrases { get; init; }
+
     // Web defaults keep camelCase naming + case-insensitive matching so a correctly-spelled wire payload still binds,
     // but System.Text.Json otherwise IGNORES members it cannot map — so {"requiredPhrase":[...]} (a typo / schema drift)
     // would parse into an all-empty assertion, be classified ValidNoSignal, and silently drop the intended deterministic
@@ -70,7 +74,7 @@ internal sealed record GoldenAssertion(IReadOnlyList<string> RequiredPhrases, IR
             return null;
         }
 
-        return new GoldenAssertion(Filter(raw.RequiredPhrases), Filter(raw.ForbiddenPhrases));
+        return new GoldenAssertion { RequiredPhrases = Filter(raw.RequiredPhrases), ForbiddenPhrases = Filter(raw.ForbiddenPhrases) };
     }
 
     /// <summary>

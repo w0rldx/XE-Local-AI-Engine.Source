@@ -60,17 +60,17 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
         if (!_inFlight.TryAdd(entry.Id, cts))
         {
             cts.Dispose();
-            return new WhisperModelDownloadTicket(entry.Id, AlreadyInFlight: true);
+            return new WhisperModelDownloadTicket { ModelId = entry.Id, AlreadyInFlight = true };
         }
 
         // Publish Running before the transfer starts, so a poll landing between the accept and the first byte callback
         // sees the download rather than an empty registry.
-        _status[entry.Id] = new WhisperModelDownloadStatus(entry.Id, WhisperModelDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
+        _status[entry.Id] = new WhisperModelDownloadStatus { ModelId = entry.Id, Phase = WhisperModelDownloadPhase.Running, CompletedBytes = null, TotalBytes = null, SanitizedError = null };
 
         // The detached run gets the TOKEN, not the source: the source stays owned by the _inFlight entry, which keeps a
         // disposable out of an unawaited task's arguments.
         _ = RunDownloadAsync(entry, cts.Token);
-        return new WhisperModelDownloadTicket(entry.Id, AlreadyInFlight: false);
+        return new WhisperModelDownloadTicket { ModelId = entry.Id, AlreadyInFlight = false };
     }
 
     /// <inheritdoc />
@@ -140,11 +140,14 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
                 ct);
 
             var last = _status.TryGetValue(entry.Id, out var snapshot) ? snapshot : null;
-            _status[entry.Id] = new WhisperModelDownloadStatus(entry.Id,
-                WhisperModelDownloadPhase.Completed,
-                last?.CompletedBytes ?? entry.SizeBytes,
-                last?.TotalBytes ?? entry.SizeBytes,
-                SanitizedError: null);
+            _status[entry.Id] = new WhisperModelDownloadStatus
+            {
+                ModelId = entry.Id,
+                Phase = WhisperModelDownloadPhase.Completed,
+                CompletedBytes = last?.CompletedBytes ?? entry.SizeBytes,
+                TotalBytes = last?.TotalBytes ?? entry.SizeBytes,
+                SanitizedError = null
+            };
             _logger.LogInformation("Transcription model download completed for {ModelId}.", entry.Id);
         }
         catch (OperationCanceledException)
@@ -190,11 +193,7 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
     private void ReportRunningProgress(string modelId, PullProgress update, int partIndex)
     {
         _ = _status.AddOrUpdate(modelId,
-            key => new WhisperModelDownloadStatus(key, WhisperModelDownloadPhase.Running, update.CompletedBytes, update.TotalBytes, SanitizedError: null)
-            {
-                PartIndex = partIndex,
-                PartCount = TotalParts
-            },
+            key => new WhisperModelDownloadStatus { ModelId = key, Phase = WhisperModelDownloadPhase.Running, CompletedBytes = update.CompletedBytes, TotalBytes = update.TotalBytes, SanitizedError = null, PartIndex = partIndex, PartCount = TotalParts },
             (_, existing) => existing.Phase != WhisperModelDownloadPhase.Running
                 ? existing
                 : existing with
@@ -208,6 +207,6 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
 
     private void SetTerminal(string modelId, WhisperModelDownloadPhase phase, string? sanitizedError)
     {
-        _status[modelId] = new WhisperModelDownloadStatus(modelId, phase, CompletedBytes: null, TotalBytes: null, sanitizedError);
+        _status[modelId] = new WhisperModelDownloadStatus { ModelId = modelId, Phase = phase, CompletedBytes = null, TotalBytes = null, SanitizedError = sanitizedError };
     }
 }

@@ -160,13 +160,16 @@ public sealed class NodeKeyRegistry : INodeKeyRegistry
                 }
                 else
                 {
-                    _retiredKeys[activeKey.KeyId] = new RetiredNodeKey(activeKey.KeyId,
-                        activeKey.PrivateKey,
-                        now.Add(RetiredKeyGraceWindow));
+                    _retiredKeys[activeKey.KeyId] = new RetiredNodeKey
+                    {
+                        KeyId = activeKey.KeyId,
+                        PrivateKey = activeKey.PrivateKey,
+                        ExpiresAtUtc = now.Add(RetiredKeyGraceWindow)
+                    };
                 }
             }
 
-            _activeKey = new ActiveNodeKey(nodeKeyId, privateKey);
+            _activeKey = new ActiveNodeKey { KeyId = nodeKeyId, PrivateKey = privateKey };
         }
     }
 
@@ -213,7 +216,19 @@ public sealed class NodeKeyRegistry : INodeKeyRegistry
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    private sealed record ActiveNodeKey(string KeyId, Key PrivateKey);
+    private sealed record ActiveNodeKey
+    {
+        public required string KeyId { get; init; }
 
-    private sealed record RetiredNodeKey(string KeyId, Key PrivateKey, DateTimeOffset ExpiresAtUtc);
+        public required Key PrivateKey { get; init; }
+    }
+
+    private sealed record RetiredNodeKey
+    {
+        public required string KeyId { get; init; }
+
+        public required Key PrivateKey { get; init; }
+
+        public required DateTimeOffset ExpiresAtUtc { get; init; }
+    }
 }

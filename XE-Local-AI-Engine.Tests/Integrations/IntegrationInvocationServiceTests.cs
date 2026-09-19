@@ -456,8 +456,8 @@ public sealed class IntegrationInvocationServiceTests
     }
 
     private static IntegrationInputDto Text(string text) =>
-        new(IntegrationInputKinds.Text, text, Label: null, Json: null);
+        new() { Kind = IntegrationInputKinds.Text, Text = text, Label = null, Json = null };
 
     private static IntegrationInputDto Json(string json) =>
-        new(IntegrationInputKinds.Json, Text: null, "payload", json);
+        new() { Kind = IntegrationInputKinds.Json, Text = null, Label = "payload", Json = json };
 }

@@ -286,14 +286,17 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     {
         var clampedRationale = Clamp(rationale, MaxRationaleLength);
 
-        return new ConfigDraft(name,
-            description,
-            content,
-            clampedRationale.Length == 0 ? null : clampedRationale,
-            NormalizeAssumptions(assumptions),
-            double.IsFinite(confidence) ? Math.Clamp(confidence, 0d, 1d) : 0d,
-            _timeProvider.GetUtcNow(),
-            DraftContentHash.Compute(name, description, content));
+        return new ConfigDraft
+        {
+            Name = name,
+            Description = description,
+            Content = content,
+            Rationale = clampedRationale.Length == 0 ? null : clampedRationale,
+            Assumptions = NormalizeAssumptions(assumptions),
+            Confidence = double.IsFinite(confidence) ? Math.Clamp(confidence, 0d, 1d) : 0d,
+            GeneratedAtUtc = _timeProvider.GetUtcNow(),
+            ContentHash = DraftContentHash.Compute(name, description, content)
+        };
     }
 
     private static IReadOnlyList<string> NormalizeAssumptions(IReadOnlyList<string>? assumptions)

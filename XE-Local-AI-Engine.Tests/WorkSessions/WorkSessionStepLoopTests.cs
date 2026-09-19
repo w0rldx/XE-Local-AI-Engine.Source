@@ -538,7 +538,7 @@ public sealed class WorkSessionStepLoopTests
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
-                             .TryStart(sessionId, new WorkSessionRuntimeOverride(ModelProfile: null, ReasoningEffort: null, RefuseUndeclaredWrites: true)));
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RefuseUndeclaredWrites = true }));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);
 
         AssertEx.Equal(expected: 1, fake.Requests.Count, "Only the turn taken before the edit is sent; the widened one never leaves.");
@@ -582,7 +582,7 @@ public sealed class WorkSessionStepLoopTests
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
-                             .TryStart(sessionId, new WorkSessionRuntimeOverride(ModelProfile: null, ReasoningEffort: null, RefuseUndeclaredWrites: true)));
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RefuseUndeclaredWrites = true }));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);
 
         AssertEx.Equal(expected: 1, fake.Requests.Count);
@@ -619,7 +619,7 @@ public sealed class WorkSessionStepLoopTests
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
-                             .TryStart(sessionId, new WorkSessionRuntimeOverride(ModelProfile: null, ReasoningEffort: null, RefuseUndeclaredWrites: true)));
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RefuseUndeclaredWrites = true }));
         var completed = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
 
         AssertEx.Equal(expected: 2, completed.StepCount, "Both scripted turns are sent; the guard costs the session nothing.");
@@ -877,7 +877,7 @@ public sealed class WorkSessionStepLoopTests
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
-                             .TryStart(sessionId, new WorkSessionRuntimeOverride("qwen3-30b", "high")));
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = "qwen3-30b", ReasoningEffort = "high" }));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
 
         AssertEx.Equal(expected: 2, fake.Requests.Count);
@@ -983,10 +983,13 @@ public sealed class WorkSessionStepLoopTests
                 {
                     dropped = true;
                     _ = _pendingToolCalls.Calls.TryAdd(Guid.NewGuid().ToString("N"),
-                        new PendingToolCall(request.RequestId.GetValueOrDefault(),
-                            DateTimeOffset.UtcNow,
-                            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
-                            new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously)));
+                        new PendingToolCall
+                        {
+                            InvocationId = request.RequestId.GetValueOrDefault(),
+                            CreatedAt = DateTimeOffset.UtcNow,
+                            ApprovalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+                            ResultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously)
+                        });
                     yield return streamEvent with
                     {
                         Type = ChatStreamEventTypes.AssistantReconcile,

@@ -47,7 +47,7 @@ public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChat
         // A selected-revision entry that fails integrity validation (not a conversation member / wrong group) throws
         // NodeChatInvalidBranchSelectionException, which the global DomainValidationExceptionHandler answers with a
         // 400 — fail closed rather than branching a path the caller did not actually specify.
-        var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
+        var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest { ConversationId = req.ConversationId, MessageId = req.MessageId, CreatedAtUtc = createdAtUtc, SelectedRevisions = req.SelectedRevisions },
             ct);
 
         if (branched is null)
@@ -95,11 +95,14 @@ public sealed class CreateNodeChatMessageRevisionEndpoint : Endpoint<ListNodeCha
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var variant = await _chatPersistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(req.ConversationId,
-                req.MessageId,
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                createdAtUtc),
+        var variant = await _chatPersistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
+        {
+            ConversationId = req.ConversationId,
+            OriginalMessageId = req.MessageId,
+            NewMessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid(),
+            CreatedAtUtc = createdAtUtc
+        },
             ct);
 
         if (variant is null)
@@ -188,11 +191,14 @@ public sealed class SetNodeChatMessageFeedbackEndpoint : Endpoint<SetNodeChatMes
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var feedback = await _chatPersistence.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(req.ConversationId,
-                req.MessageId,
-                req.Rating,
-                req.Comment,
-                updatedAtUtc),
+        var feedback = await _chatPersistence.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest
+        {
+            ConversationId = req.ConversationId,
+            MessageId = req.MessageId,
+            Rating = req.Rating,
+            Comment = req.Comment,
+            UpdatedAtUtc = updatedAtUtc
+        },
             ct);
 
         await Send.OkAsync(feedback.ToResponse(), ct);
@@ -236,9 +242,12 @@ public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelect
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(req.ConversationId,
-                req.SelectedPath,
-                updatedAtUtc),
+        var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest
+        {
+            ConversationId = req.ConversationId,
+            SelectedPath = req.SelectedPath,
+            UpdatedAtUtc = updatedAtUtc
+        },
             ct);
 
         await Send.OkAsync(new NodeChatSelectedPathResponse

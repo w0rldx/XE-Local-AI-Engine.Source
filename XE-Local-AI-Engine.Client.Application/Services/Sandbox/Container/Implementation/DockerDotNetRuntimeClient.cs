@@ -107,14 +107,17 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                     "The Docker daemon did not report an installation id, so this node cannot pin which daemon it is talking to.");
             }
 
-            return new DockerDaemonIdentity(info.ID,
-                version.Version ?? string.Empty,
-                version.APIVersion ?? string.Empty,
-                version.MinAPIVersion ?? string.Empty,
-                version.Os ?? string.Empty,
-                Endpoint,
-                IsRootless(info),
-                HasSecurityOption(info, "seccomp"));
+            return new DockerDaemonIdentity
+            {
+                DaemonId = info.ID,
+                ServerVersion = version.Version ?? string.Empty,
+                ApiVersion = version.APIVersion ?? string.Empty,
+                MinimumApiVersion = version.MinAPIVersion ?? string.Empty,
+                OperatingSystem = version.Os ?? string.Empty,
+                Endpoint = Endpoint,
+                IsRootless = IsRootless(info),
+                SupportsSeccomp = HasSecurityOption(info, "seccomp")
+            };
         }
         catch (Exception exception) when (exception is not DockerRuntimeException and not OperationCanceledException)
         {

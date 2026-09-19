@@ -33,22 +33,28 @@ public interface ICapacityService
 }
 
 /// <summary>Context-aware capacity request used by frozen benchmark execution.</summary>
-/// <param name="PublishLaunchAdmission">
-///     Whether an llama.cpp Allow also publishes a launch admission the next spawn is expected to CONSUME. A caller
-///     that launches its own process from frozen arguments (a benchmark replay) must say <see langword="false" />:
-///     the admission it never consumes is exactly what the supervisor refuses to launch against. The ledger
-///     reservation is unaffected either way, so the bytes are still booked.
-/// </param>
-/// <param name="KvCacheType">
-///     The llama.cpp KV-cache element type (<c>q8_0</c>/<c>q4_0</c>) the caller will ACTUALLY launch with, so the ledger
-///     reservation sizes its KV term against that instead of the conservative fp16 default. <see langword="null" /> —
-///     every caller but a benchmark run — keeps the fp16 sizing, and so does an f16 or unrecognized value. It can only
-///     ever reserve LESS: the context window is still chosen against the fp16 estimate, and only the returned
-///     allocation's bytes are re-sized.
-/// </param>
-public sealed record CapacityRequest(
-    string ModelName,
-    ModelRole Role,
-    int? RequiredContextTokens = null,
-    bool PublishLaunchAdmission = true,
-    string? KvCacheType = null);
+public sealed record CapacityRequest
+{
+    public required string ModelName { get; init; }
+
+    public required ModelRole Role { get; init; }
+
+    public int? RequiredContextTokens { get; init; }
+
+    /// <summary>
+    ///     Whether an llama.cpp Allow also publishes a launch admission the next spawn is expected to CONSUME. A caller
+    ///     that launches its own process from frozen arguments (a benchmark replay) must say <see langword="false" />:
+    ///     the admission it never consumes is exactly what the supervisor refuses to launch against. The ledger
+    ///     reservation is unaffected either way, so the bytes are still booked.
+    /// </summary>
+    public bool PublishLaunchAdmission { get; init; } = true;
+
+    /// <summary>
+    ///     The llama.cpp KV-cache element type (<c>q8_0</c>/<c>q4_0</c>) the caller will ACTUALLY launch with, so the ledger
+    ///     reservation sizes its KV term against that instead of the conservative fp16 default. <see langword="null" /> —
+    ///     every caller but a benchmark run — keeps the fp16 sizing, and so does an f16 or unrecognized value. It can only
+    ///     ever reserve LESS: the context window is still chosen against the fp16 estimate, and only the returned
+    ///     allocation's bytes are re-sized.
+    /// </summary>
+    public string? KvCacheType { get; init; }
+}

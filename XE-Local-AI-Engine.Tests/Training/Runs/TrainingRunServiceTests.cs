@@ -43,7 +43,7 @@ public sealed class TrainingRunServiceTests : IDisposable
         var service = BuildService(context);
 
         var rejection = await AssertEx.ThrowsAsync<TrainingRunRejectedException>(() =>
-            service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion, fixture.BaseArtifactId, LicenseConfirmed: false)));
+            service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = false }));
 
         AssertEx.True(rejection.Message.Contains("licensing", StringComparison.OrdinalIgnoreCase), "The refusal has to name the licensing gate.");
         var runStore = new TrainingRunStore(context, TimeProvider.System);
@@ -65,7 +65,7 @@ public sealed class TrainingRunServiceTests : IDisposable
 
         // The wizard's confirmation dialog was opened before somebody edited a sample.
         _ = await AssertEx.ThrowsAsync<TrainingConflictException>(() =>
-            service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion + 1, fixture.BaseArtifactId, LicenseConfirmed: true)));
+            service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion + 1, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = true }));
 
         var frozenDirectory = Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen");
         AssertEx.True(!Directory.Exists(frozenDirectory) || Directory.GetFiles(frozenDirectory).Length == 0,
@@ -82,7 +82,7 @@ public sealed class TrainingRunServiceTests : IDisposable
         var service = BuildService(context);
         var workspace = BuildWorkspace();
 
-        var run = await service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion, fixture.BaseArtifactId, LicenseConfirmed: true));
+        var run = await service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = true });
         var freeze = ReadFreeze(run);
         var frozenBytesBefore = await File.ReadAllBytesAsync(workspace.FrozenDatasetPath(fixture.DatasetId, freeze.FreezeId));
         var frozenPlaintext = await workspace.ReadFrozenDatasetAsync(fixture.DatasetId, freeze.FreezeId, CancellationToken.None);
@@ -134,7 +134,7 @@ public sealed class TrainingRunServiceTests : IDisposable
         var fixture = await SeedAsync(context);
         var service = BuildService(context);
 
-        var run = await service.CreateAsync(new CreateTrainingRunCommand(fixture.DatasetId, fixture.DatasetVersion, fixture.BaseArtifactId, LicenseConfirmed: true));
+        var run = await service.CreateAsync(new CreateTrainingRunCommand { DatasetId = fixture.DatasetId, ExpectedDatasetVersion = fixture.DatasetVersion, BaseArtifactId = fixture.BaseArtifactId, LicenseConfirmed = true });
 
         AssertEx.True(run.LicenseConfirmationJson.HasValue, "A run records its confirmation.");
         var confirmation = ReadConfirmation(run);
@@ -206,12 +206,15 @@ public sealed class TrainingRunServiceTests : IDisposable
 
         var defaults = Substitute.For<ITrainingOptionDefaultsCalculator>();
         _ = defaults.ResolveAsync(Arg.Any<Guid>(), Arg.Any<TrainingRunOptionsV1?>(), Arg.Any<CancellationToken>())
-                    .Returns(new TrainingRunDefaults(new TrainingRunOptionsV1(),
-                        new TrainingFootprintEstimate(1, 1, 1, 1, Experimental: false),
-                        AvailableVramBytes: 1,
-                        VramKnown: true,
-                        Fits: true,
-                        RejectionReason: null));
+                    .Returns(new TrainingRunDefaults
+                    {
+                        Options = new TrainingRunOptionsV1(),
+                        Estimate = new TrainingFootprintEstimate { GpuBytes = 1, RamBytes = 1, ParameterCount = 1, TrainableParameterCount = 1, Experimental = false },
+                        AvailableVramBytes = 1,
+                        VramKnown = true,
+                        Fits = true,
+                        RejectionReason = null
+                    });
 
         return new TrainingRunService(runStore,
             datasetStore,

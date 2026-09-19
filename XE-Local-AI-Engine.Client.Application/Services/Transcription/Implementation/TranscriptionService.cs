@@ -131,7 +131,7 @@ public sealed class TranscriptionService : ITranscriptionService
         var store = scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>();
         var items = await store.ListAsync(boundedLimit, boundedOffset, cancellationToken);
         var total = await store.CountAsync(cancellationToken);
-        return new TranscriptionSessionPage(items, total);
+        return new TranscriptionSessionPage { Items = items, TotalCount = total };
     }
 
     public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken)

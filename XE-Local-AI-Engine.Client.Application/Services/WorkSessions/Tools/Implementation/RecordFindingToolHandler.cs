@@ -61,7 +61,7 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
         {
             if (!TryParseId(request.TaskId, out var parsedTask))
             {
-                return new WorkSessionToolOutcome($"{ToolName} could not read '{request.TaskId}' as a task id. Use the ids from the work session state block.");
+                return new WorkSessionToolOutcome { Message = $"{ToolName} could not read '{request.TaskId}' as a task id. Use the ids from the work session state block." };
             }
 
             taskId = parsedTask;
@@ -72,7 +72,7 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
         {
             if (!TryParseId(request.SupersedesId, out var parsedSupersedes))
             {
-                return new WorkSessionToolOutcome($"{ToolName} could not read '{request.SupersedesId}' as a finding id.");
+                return new WorkSessionToolOutcome { Message = $"{ToolName} could not read '{request.SupersedesId}' as a finding id." };
             }
 
             supersedesId = parsedSupersedes;
@@ -93,6 +93,6 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
         },
                                     cancellationToken);
 
-        return new WorkSessionToolOutcome($"Recorded a {request.Kind} on this work session.", result.Sequence, WorkSessionChangeKind.Finding);
+        return new WorkSessionToolOutcome { Message = $"Recorded a {request.Kind} on this work session.", Sequence = result.Sequence, Kind = WorkSessionChangeKind.Finding };
     }
 }

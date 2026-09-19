@@ -112,7 +112,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         // force: true — an operator-triggered refresh must always attempt a fetch, never a silent TTL no-op just
         // because a previous refresh already succeeded within the TTL window.
         return _refreshUrl is null
-            ? Task.FromResult(new ExternalAppCatalogRefreshResult(_current, FailureMessage: null))
+            ? Task.FromResult(new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null })
             : RefreshCoreAsync(_refreshUrl, _options.Value, _timeProvider.GetUtcNow(), force: true, cancellationToken);
     }
 
@@ -201,7 +201,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             // rather than being suppressed for a whole TTL. The debounce is skipped entirely when force is set.
             if (!force && attemptAtUtc - _lastAttemptUtc < RefreshDebounce(options, _current.Source))
             {
-                return new ExternalAppCatalogRefreshResult(_current, FailureMessage: null);
+                return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null };
             }
 
             var previousAttemptUtc = _lastAttemptUtc;
@@ -259,7 +259,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                 _lastETag = outcome.ETag;
 
                 await _cacheStore.SaveAsync(new StoredExternalAppCatalogCache(outcome.Raw!, attemptAtUtc, refreshUrl, outcome.ETag), cancellationToken);
-                return new ExternalAppCatalogRefreshResult(_current, FailureMessage: null);
+                return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null };
             }
             catch (OperationCanceledException)
             {
@@ -326,7 +326,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
-                return new FetchOutcome(Raw: null, ETag: null, NotModified: true, FailureMessage: null);
+                return new FetchOutcome { Raw = null, ETag = null, NotModified = true, FailureMessage = null };
             }
 
             if (!response.IsSuccessStatusCode)
@@ -368,7 +368,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                 raw = raw[1..];
             }
 
-            return new FetchOutcome(raw, response.Headers.ETag?.ToString(), NotModified: false, FailureMessage: null);
+            return new FetchOutcome { Raw = raw, ETag = response.Headers.ETag?.ToString(), NotModified = false, FailureMessage = null };
         }
         // IOException covers the body: with ResponseHeadersRead the stream is still open here, so a connection that
         // dies mid-read surfaces as IOException (HttpIOException among them) rather than HttpRequestException, and
@@ -422,7 +422,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             stored.FetchedAtUtc,
             stored.SourceUrl,
             failureMessage);
-        return new ExternalAppCatalogRefreshResult(_current, failureMessage);
+        return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = failureMessage };
     }
 
     private ExternalAppCatalogRefreshResult Keep(string? failureMessage)
@@ -431,15 +431,23 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         {
             LastRefreshFailure = failureMessage
         };
-        return new ExternalAppCatalogRefreshResult(_current, failureMessage);
+        return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = failureMessage };
     }
 
     /// <summary>One fetch attempt's outcome: a body, a <c>304</c>, or a failure message describing the cause.</summary>
-    private sealed record FetchOutcome(string? Raw, string? ETag, bool NotModified, string? FailureMessage)
+    private sealed record FetchOutcome
     {
+        public required string? Raw { get; init; }
+
+        public required string? ETag { get; init; }
+
+        public required bool NotModified { get; init; }
+
+        public required string? FailureMessage { get; init; }
+
         public static FetchOutcome Failed(string failureMessage)
         {
-            return new FetchOutcome(Raw: null, ETag: null, NotModified: false, failureMessage);
+            return new FetchOutcome { Raw = null, ETag = null, NotModified = false, FailureMessage = failureMessage };
         }
     }
 }

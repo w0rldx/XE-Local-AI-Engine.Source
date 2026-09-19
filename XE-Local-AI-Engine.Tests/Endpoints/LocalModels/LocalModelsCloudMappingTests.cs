@@ -51,7 +51,7 @@ public sealed class LocalModelsCloudMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, ["tools"], IsOverridden: false)
+            ["qwen3:8b"] = new() { ModelName = "qwen3:8b", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = ["tools"], IsOverridden = false }
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
@@ -74,7 +74,7 @@ public sealed class LocalModelsCloudMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, [], IsOverridden: false)
+            ["qwen3:8b"] = new() { ModelName = "qwen3:8b", Kind = ModelKind.Chat, DetectedKind = ModelKind.Chat, Capabilities = [], IsOverridden = false }
         };
 
         var response = LocalModelsMapper.ToListResponse(localModels, "qwen3:8b", "qwen3:8b", classifications);

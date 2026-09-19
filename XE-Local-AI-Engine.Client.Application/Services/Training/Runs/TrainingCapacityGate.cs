@@ -4,8 +4,14 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>A granted reservation, or a refusal carrying the reason. Disposing releases the reserved bytes.</summary>
-public sealed record TrainingCapacityReservation(bool Granted, string? Reason, IDisposable? Handle) : IDisposable
+public sealed class TrainingCapacityReservation : IDisposable
 {
+    public required bool Granted { get; init; }
+
+    public required string? Reason { get; init; }
+
+    public required IDisposable? Handle { get; init; }
+
     public void Dispose() =>
         Handle?.Dispose();
 }
@@ -50,27 +56,33 @@ public sealed class TrainingCapacityGate : ITrainingCapacityGate
             var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, cancellationToken);
             if (!profile.VramKnown)
             {
-                return new TrainingCapacityReservation(Granted: false, "No usable GPU was detected on this node.", Handle: null);
+                return new TrainingCapacityReservation { Granted = false, Reason = "No usable GPU was detected on this node.", Handle = null };
             }
 
             var reserved = _ledger.Reserved;
             var freeVram = (profile.AvailableVramBytes ?? 0) - reserved.GpuBytes;
             if (estimate.GpuBytes > freeVram)
             {
-                return new TrainingCapacityReservation(Granted: false,
-                    "Not enough free VRAM to start this run. Eject any loaded model and try again.",
-                    Handle: null);
+                return new TrainingCapacityReservation
+                {
+                    Granted = false,
+                    Reason = "Not enough free VRAM to start this run. Eject any loaded model and try again.",
+                    Handle = null
+                };
             }
 
             var freeRam = profile.AvailableRamBytes - reserved.RamBytes;
             if (estimate.RamBytes > freeRam)
             {
-                return new TrainingCapacityReservation(Granted: false, "Not enough free system memory to start this run.", Handle: null);
+                return new TrainingCapacityReservation { Granted = false, Reason = "Not enough free system memory to start this run.", Handle = null };
             }
 
-            return new TrainingCapacityReservation(Granted: true,
-                Reason: null,
-                _ledger.Reserve(new ResourceFootprint(estimate.GpuBytes, estimate.RamBytes)));
+            return new TrainingCapacityReservation
+            {
+                Granted = true,
+                Reason = null,
+                Handle = _ledger.Reserve(new ResourceFootprint(estimate.GpuBytes, estimate.RamBytes))
+            };
         }
     }
 }

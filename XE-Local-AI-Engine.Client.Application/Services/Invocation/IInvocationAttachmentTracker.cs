@@ -43,7 +43,12 @@ public interface IInvocationAttachmentTracker
 }
 
 /// <summary>An invocation with no attached consumer, and when the last one went away.</summary>
-public sealed record DetachedInvocation(Guid InvocationId, DateTimeOffset DetachedAtUtc);
+public sealed record DetachedInvocation
+{
+    public required Guid InvocationId { get; init; }
+
+    public required DateTimeOffset DetachedAtUtc { get; init; }
+}
 
 /// <summary>Carries which invocation changed and whether it is now attached.</summary>
 public sealed class InvocationAttachmentChangedEventArgs : EventArgs

@@ -75,7 +75,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
 
             var entries = currentEntries
                           .Where(entry => !string.Equals(entry.Key, trimmedKey, StringComparison.Ordinal))
-                          .Append(new TutorialStateEntry(trimmedKey, status, _timeProvider.GetUtcNow().UtcDateTime))
+                          .Append(new TutorialStateEntry { Key = trimmedKey, Status = status, AtUtc = _timeProvider.GetUtcNow().UtcDateTime })
                           .ToArray();
 
             user.TutorialState = Serialize(entries);
@@ -116,7 +116,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             {
                 if (!string.IsNullOrWhiteSpace(entry.Key) && TryParseStatus(entry.Status, out var status))
                 {
-                    entries.Add(new TutorialStateEntry(entry.Key, status, entry.AtUtc));
+                    entries.Add(new TutorialStateEntry { Key = entry.Key, Status = status, AtUtc = entry.AtUtc });
                 }
             }
 

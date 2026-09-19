@@ -1,40 +1,60 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     One pairwise verdict, already normalized to its canonical unordered pair: <paramref name="RunAId" /> is the
-///     smaller GUID and <paramref name="Verdict" /> says which of the two won regardless of which side the judge was
+///     One pairwise verdict, already normalized to its canonical unordered pair: <see cref="RunAId" /> is the
+///     smaller GUID and <see cref="Verdict" /> says which of the two won regardless of which side the judge was
 ///     shown first.
 /// </summary>
-/// <param name="Verdict"><c>a</c>, <c>b</c> or <c>tie</c>.</param>
-public sealed record BenchmarkPairwiseVerdict(Guid RunAId, Guid RunBId, string Verdict);
+public sealed class BenchmarkPairwiseVerdict
+{
+    public required Guid RunAId { get; init; }
+
+    public required Guid RunBId { get; init; }
+
+    /// <summary><c>a</c>, <c>b</c> or <c>tie</c>.</summary>
+    public required string Verdict { get; init; }
+}
 
 /// <summary>One run's place in a fit: its mapped 0..100 strength, its bootstrap interval, and how it was counted.</summary>
-/// <param name="Score">
-///     <see langword="null" /> when this run is in the fit's scope but carries no publishable strength — too few
-///     verdicts, or a minority component of a disconnected comparison graph. <paramref name="Reason" /> says which.
-/// </param>
-/// <param name="BootstrapAppearances">
-///     How many bootstrap replicates this run was drawn into. Below <see cref="BenchmarkBradleyTerry.MinimumBootstrapAppearances" />
-///     the interval is withheld rather than reported from a handful of replicates.
-/// </param>
-public sealed record BenchmarkPairwiseRunScore(
-    Guid RunId,
-    int? Score,
-    int? CiLow,
-    int? CiHigh,
-    int Comparisons,
-    int BootstrapAppearances,
-    string? Reason);
+public sealed class BenchmarkPairwiseRunScore
+{
+    public required Guid RunId { get; init; }
+
+    /// <summary>
+    ///     <see langword="null" /> when this run is in the fit's scope but carries no publishable strength — too few
+    ///     verdicts, or a minority component of a disconnected comparison graph. <see cref="Reason" /> says which.
+    /// </summary>
+    public required int? Score { get; init; }
+
+    public required int? CiLow { get; init; }
+
+    public required int? CiHigh { get; init; }
+
+    public required int Comparisons { get; init; }
+
+    /// <summary>
+    ///     How many bootstrap replicates this run was drawn into. Below <see cref="BenchmarkBradleyTerry.MinimumBootstrapAppearances" />
+    ///     the interval is withheld rather than reported from a handful of replicates.
+    /// </summary>
+    public required int BootstrapAppearances { get; init; }
+
+    public required string? Reason { get; init; }
+}
 
 /// <summary>
-///     The outcome of fitting one comparison set. A <paramref name="Refusal" /> is a fit that produced no strengths at
+///     The outcome of fitting one comparison set. A <see cref="Refusal" /> is a fit that produced no strengths at
 ///     all — it is published as such, so the reason reaches the ranking read without it having to re-read verdicts.
 /// </summary>
-public sealed record BenchmarkBradleyTerryFit(
-    IReadOnlyList<BenchmarkPairwiseRunScore> Scores,
-    int Iterations,
-    int Replicates,
-    string? Refusal = null);
+public sealed class BenchmarkBradleyTerryFit
+{
+    public required IReadOnlyList<BenchmarkPairwiseRunScore> Scores { get; init; }
+
+    public required int Iterations { get; init; }
+
+    public required int Replicates { get; init; }
+
+    public string? Refusal { get; init; }
+}
 
 /// <summary>
 ///     Regularized Bradley–Terry over a cohort's pairwise verdicts, with a cluster bootstrap for the intervals. No
@@ -99,9 +119,12 @@ public static class BenchmarkBradleyTerry
         }).Distinct().Order().ToArray();
         if (runs.Length < 2)
         {
-            return new BenchmarkBradleyTerryFit([.. runs.Select(static run => new BenchmarkPairwiseRunScore(run, null, null, null, 0, 0, ReasonInsufficient))],
-                Iterations: 0,
-                Replicates: 0);
+            return new BenchmarkBradleyTerryFit
+            {
+                Scores = [.. runs.Select(static run => new BenchmarkPairwiseRunScore { RunId = run, Score = null, CiLow = null, CiHigh = null, Comparisons = 0, BootstrapAppearances = 0, Reason = ReasonInsufficient })],
+                Iterations = 0,
+                Replicates = 0
+            };
         }
 
         var indexByRun = runs.Select(static (run, index) => (run, index)).ToDictionary(static entry => entry.run, static entry => entry.index);
@@ -111,10 +134,13 @@ public static class BenchmarkBradleyTerry
         var solution = Solve(fitted, runs.Length, maximumIterations);
         if (solution is null)
         {
-            return new BenchmarkBradleyTerryFit([.. runs.Select(static run => new BenchmarkPairwiseRunScore(run, null, null, null, 0, 0, RefusalUnfitted))],
-                maximumIterations,
-                Replicates: 0,
-                RefusalUnfitted);
+            return new BenchmarkBradleyTerryFit
+            {
+                Scores = [.. runs.Select(static run => new BenchmarkPairwiseRunScore { RunId = run, Score = null, CiLow = null, CiHigh = null, Comparisons = 0, BootstrapAppearances = 0, Reason = RefusalUnfitted })],
+                Iterations = maximumIterations,
+                Replicates = 0,
+                Refusal = RefusalUnfitted
+            };
         }
 
         var counts = new int[runs.Length];
@@ -126,9 +152,12 @@ public static class BenchmarkBradleyTerry
 
         var scores = MapScores(solution.LogStrengths, component);
         var intervals = replicates > 0 ? Bootstrap(fitted, runs.Length, component, replicates, maximumIterations) : [];
-        return new BenchmarkBradleyTerryFit([.. runs.Select((run, index) => ToRunScore(run, index, scores, counts, intervals, component))],
-            solution.Iterations,
-            replicates);
+        return new BenchmarkBradleyTerryFit
+        {
+            Scores = [.. runs.Select((run, index) => ToRunScore(run, index, scores, counts, intervals, component))],
+            Iterations = solution.Iterations,
+            Replicates = replicates
+        };
     }
 
     private static BenchmarkPairwiseRunScore ToRunScore(Guid run,
@@ -140,16 +169,16 @@ public static class BenchmarkBradleyTerry
     {
         if (!component.Contains(index) || counts[index] < MinimumVerdicts || !scores.TryGetValue(index, out var score))
         {
-            return new BenchmarkPairwiseRunScore(run, null, null, null, counts[index], 0, ReasonInsufficient);
+            return new BenchmarkPairwiseRunScore { RunId = run, Score = null, CiLow = null, CiHigh = null, Comparisons = counts[index], BootstrapAppearances = 0, Reason = ReasonInsufficient };
         }
 
         if (!intervals.TryGetValue(index, out var sample) || sample.Scores.Count < MinimumBootstrapAppearances)
         {
-            return new BenchmarkPairwiseRunScore(run, score, null, null, counts[index], sample?.Scores.Count ?? 0, null);
+            return new BenchmarkPairwiseRunScore { RunId = run, Score = score, CiLow = null, CiHigh = null, Comparisons = counts[index], BootstrapAppearances = sample?.Scores.Count ?? 0, Reason = null };
         }
 
         var ordered = sample.Scores.Order().ToArray();
-        return new BenchmarkPairwiseRunScore(run, score, Percentile(ordered, 0.025), Percentile(ordered, 0.975), counts[index], ordered.Length, null);
+        return new BenchmarkPairwiseRunScore { RunId = run, Score = score, CiLow = Percentile(ordered, 0.025), CiHigh = Percentile(ordered, 0.975), Comparisons = counts[index], BootstrapAppearances = ordered.Length, Reason = null };
     }
 
     /// <summary>
@@ -177,7 +206,7 @@ public static class BenchmarkBradleyTerry
         return
         [
             .. byPair.OrderBy(static entry => entry.Key.A).ThenBy(static entry => entry.Key.B)
-                     .Select(static entry => new PairAggregate(entry.Key.A, entry.Key.B, entry.Value.WinsA, entry.Value.WinsB, entry.Value.Total))
+                     .Select(static entry => new PairAggregate { IndexA = entry.Key.A, IndexB = entry.Key.B, WinsA = entry.Value.WinsA, WinsB = entry.Value.WinsB, Total = entry.Value.Total })
         ];
     }
 
@@ -241,7 +270,7 @@ public static class BenchmarkBradleyTerry
     {
         if (pairs.Count == 0)
         {
-            return new Solution(new double[runCount], Iterations: 0);
+            return new Solution { LogStrengths = new double[runCount], Iterations = 0 };
         }
 
         var wins = new double[runCount];
@@ -289,7 +318,7 @@ public static class BenchmarkBradleyTerry
 
             if (delta < ConvergenceTolerance)
             {
-                return new Solution([.. strengths.Select(static strength => strength > 0 ? Math.Log(strength) : double.NegativeInfinity)], iteration);
+                return new Solution { LogStrengths = [.. strengths.Select(static strength => strength > 0 ? Math.Log(strength) : double.NegativeInfinity)], Iterations = iteration };
             }
         }
 
@@ -368,7 +397,7 @@ public static class BenchmarkBradleyTerry
 
                 if (!samples.TryGetValue(index, out var sample))
                 {
-                    sample = new BootstrapSample([]);
+                    sample = new BootstrapSample { Scores = [] };
                     samples[index] = sample;
                 }
 
@@ -386,9 +415,28 @@ public static class BenchmarkBradleyTerry
         return ordered[Math.Clamp(rank, 0, ordered.Count - 1)];
     }
 
-    private sealed record PairAggregate(int IndexA, int IndexB, double WinsA, double WinsB, int Total);
+    private sealed record PairAggregate
+    {
+        public required int IndexA { get; init; }
 
-    private sealed record Solution(IReadOnlyList<double> LogStrengths, int Iterations);
+        public required int IndexB { get; init; }
 
-    private sealed record BootstrapSample(List<int> Scores);
+        public required double WinsA { get; init; }
+
+        public required double WinsB { get; init; }
+
+        public required int Total { get; init; }
+    }
+
+    private sealed record Solution
+    {
+        public required IReadOnlyList<double> LogStrengths { get; init; }
+
+        public required int Iterations { get; init; }
+    }
+
+    private sealed record BootstrapSample
+    {
+        public required List<int> Scores { get; init; }
+    }
 }

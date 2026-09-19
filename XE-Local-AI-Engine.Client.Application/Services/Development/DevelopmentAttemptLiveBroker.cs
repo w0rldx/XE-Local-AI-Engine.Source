@@ -79,16 +79,19 @@ public sealed class DevelopmentAttemptLiveBroker : IDevelopmentAttemptLiveBroker
     {
         if (!_attempts.TryGetValue(attemptId, out var state))
         {
-            snapshot = new DevelopmentAttemptLiveSnapshot(attemptId, 0, 0, null);
+            snapshot = new DevelopmentAttemptLiveSnapshot { AttemptId = attemptId, Watermark = 0, DroppedOrCoalescedUpdateCount = 0, Latest = null };
             return false;
         }
 
         lock (state.Sync)
         {
-            snapshot = new DevelopmentAttemptLiveSnapshot(attemptId,
-                state.Sequence,
-                state.DroppedOrCoalesced,
-                state.Latest);
+            snapshot = new DevelopmentAttemptLiveSnapshot
+            {
+                AttemptId = attemptId,
+                Watermark = state.Sequence,
+                DroppedOrCoalescedUpdateCount = state.DroppedOrCoalesced,
+                Latest = state.Latest
+            };
             return !state.IsCompleted;
         }
     }

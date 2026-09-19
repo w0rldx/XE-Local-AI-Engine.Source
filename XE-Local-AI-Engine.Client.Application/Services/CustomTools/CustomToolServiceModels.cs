@@ -149,7 +149,14 @@ public sealed record ProbeExecutableRequest
 ///     only when the path passes the same <see cref="HostExecutableGuard" /> checks the executor runs at launch; on
 ///     failure <see cref="Reason" /> carries the sanitized reason (no filesystem contents).
 /// </summary>
-public sealed record HostExecutableProbeResult(bool Ok, string? Reason, string? Path);
+public sealed class HostExecutableProbeResult
+{
+    public required bool Ok { get; init; }
+
+    public required string? Reason { get; init; }
+
+    public required string? Path { get; init; }
+}
 
 /// <summary>The masking sentinel returned in place of a stored secret value on the CRUD read path.</summary>
 public static class CustomToolSecrets

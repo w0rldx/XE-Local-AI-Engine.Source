@@ -117,16 +117,22 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             // from it, so a phase cannot hold the queue's shared GPU-work admission for two full budgets.
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                                                               new CapacityRequest(snapshot.PrimaryModel.ModelName,
-                                                                   ModelRole.Chat,
-                                                                   snapshot.PrimaryRuntime.ContextTokens,
-                                                                   PublishLaunchAdmission: false,
-                                                                   snapshot.PrimaryRuntime.KvTypeK),
-                                                               new BenchmarkAdmissionContext(work.RunId,
-                                                                   "primary",
-                                                                   snapshot.RequestedContextTokens,
-                                                                   snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                                                   CapacityRejectedMessage),
+                                                               new CapacityRequest
+                                                               {
+                                                                   ModelName = snapshot.PrimaryModel.ModelName,
+                                                                   Role = ModelRole.Chat,
+                                                                   RequiredContextTokens = snapshot.PrimaryRuntime.ContextTokens,
+                                                                   PublishLaunchAdmission = false,
+                                                                   KvCacheType = snapshot.PrimaryRuntime.KvTypeK
+                                                               },
+                                                               new BenchmarkAdmissionContext
+                                                               {
+                                                                   RunId = work.RunId,
+                                                                   Phase = "primary",
+                                                                   RequestedContextTokens = snapshot.RequestedContextTokens,
+                                                                   KvCacheType = snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                                   RejectedMessage = CapacityRejectedMessage
+                                                               },
                                                                waitBudget,
                                                                _logger,
                                                                token);
@@ -137,7 +143,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
             _events.Append(work.RunId,
                 BenchmarkRunStreamEventKind.PrimaryState,
-                new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Running.ToString()));
+                new BenchmarkRunStreamPayload { State = BenchmarkPrimaryStatus.Running.ToString() });
 
             var currentVariant = await _variantSelector.SelectVariantAsync(token);
             if (currentVariant != snapshot.PrimaryRuntime.Variant)
@@ -202,20 +208,23 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             var tokensPerSecond = throughput?.GenerationTokensPerSecond ?? TokenThroughput.FromMilliseconds(terminal.TotalTokens, durationMs);
             var metricsEvent = _events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.Metrics,
-                new BenchmarkRunStreamPayload(EffectiveContextTokens: effectiveContext,
-                    DurationMs: durationMs,
-                    TotalTokens: terminal.TotalTokens,
-                    TokensPerSecond: tokensPerSecond,
-                    TtftMs: throughput?.TtftMs,
-                    PromptTokens: throughput?.PromptTokens,
-                    PromptTokensPerSecond: throughput?.PromptTokensPerSecond,
-                    GenerationTokens: throughput?.GenerationTokens,
-                    GenerationTokensPerSecond: throughput?.GenerationTokensPerSecond,
-                    CachedPromptTokens: throughput?.CachedPromptTokens,
-                    SegmentCount: throughput?.SegmentCount));
+                new BenchmarkRunStreamPayload
+                {
+                    EffectiveContextTokens = effectiveContext,
+                    DurationMs = durationMs,
+                    TotalTokens = terminal.TotalTokens,
+                    TokensPerSecond = tokensPerSecond,
+                    TtftMs = throughput?.TtftMs,
+                    PromptTokens = throughput?.PromptTokens,
+                    PromptTokensPerSecond = throughput?.PromptTokensPerSecond,
+                    GenerationTokens = throughput?.GenerationTokens,
+                    GenerationTokensPerSecond = throughput?.GenerationTokensPerSecond,
+                    CachedPromptTokens = throughput?.CachedPromptTokens,
+                    SegmentCount = throughput?.SegmentCount
+                });
             var terminalEvent = _events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-                new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion: work.Run.Version + 1));
+                new BenchmarkRunStreamPayload { State = BenchmarkPrimaryStatus.Succeeded.ToString(), RunVersion = work.Run.Version + 1 });
             var persisted = await MarkPrimarySucceededAsync(work,
                     new BenchmarkPrimarySuccessCommand
                     {
@@ -375,10 +384,12 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     private RuntimePackage BuildPrimaryPackage(BenchmarkRuntimeSnapshotV1 snapshot, int? invocationTimeoutSeconds)
     {
         var runtime = snapshot.ResolvedRuntime;
-        return _packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
-            Guid.NewGuid(),
-            runtime.ResolvedSystemPrompt,
-            [
+        return _packageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = runtime.ResolvedSystemPrompt,
+            ConversationContext = [
                 new ConversationMessageDto
                 {
                     Id = Guid.NewGuid(),
@@ -387,22 +398,23 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                     SortOrder = 0
                 }
             ],
-            snapshot.PrimaryModel.ModelName,
-            runtime.AgentDefinitionVersion,
-            LocalChatLoopbackDefaults.ClientNodeId,
-            runtime.AllowedTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            Timeouts: BenchmarkFrozenPolicies.FrozenTimeouts(invocationTimeoutSeconds),
-            ReasoningEffort: runtime.ReasoningEffort,
-            SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
-            Skills: runtime.Skills,
-            IsUnattended: true,
-            CustomTools: runtime.CustomTools,
+            ModelProfile = snapshot.PrimaryModel.ModelName,
+            AgentDefinitionVersion = runtime.AgentDefinitionVersion,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = runtime.AllowedTools,
+            RequestedCapabilities = [LocalChatLoopbackDefaults.RequestedCapability],
+            Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(invocationTimeoutSeconds),
+            ReasoningEffort = runtime.ReasoningEffort,
+            SamplingOptions = ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
+            Skills = runtime.Skills,
+            IsUnattended = true,
+            CustomTools = runtime.CustomTools,
             // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe
             // answer for a caller that does not know, and freeze does know. A model whose chat template renders no
             // reasoning end marker takes the budget and ignores it, so sending one would advertise a cap that never
             // held. Null is a run frozen before the member existed, which keeps the old default.
-            ReasoningBudgetEnforceable: snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true));
+            ReasoningBudgetEnforceable = snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true
+        });
     }
 
     internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) =>
@@ -472,7 +484,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
 
         var terminal = _events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
+            new BenchmarkRunStreamPayload { State = BenchmarkPrimaryStatus.Cancelled.ToString(), RunVersion = run.Version + 1 });
         var persisted = await _store.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
         _events.PublishReserved(terminal with
         {
@@ -500,7 +512,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
 
         var terminal = _events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Failed.ToString(), RunVersion: run.Version + 1));
+            new BenchmarkRunStreamPayload { State = BenchmarkPrimaryStatus.Failed.ToString(), RunVersion = run.Version + 1 });
         var persisted = await _store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None);
         _events.PublishReserved(terminal with
         {
@@ -592,7 +604,7 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
         var delta = current[priorLength..];
         priorLength = current.Length;
         _parts.Add(new BenchmarkOutputPart(partKind, Content: delta));
-        _events.Append(_runId, eventKind, new BenchmarkRunStreamPayload(Content: delta));
+        _events.Append(_runId, eventKind, new BenchmarkRunStreamPayload { Content = delta });
     }
 
     private void OnToolCallLifecycleChanged(object? sender, ToolCallLifecycleChangedEventArgs args)
@@ -614,11 +626,14 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
                 IsError: requested ? null : payload.IsError));
             _events.Append(_runId,
                 requested ? BenchmarkRunStreamEventKind.ToolCall : BenchmarkRunStreamEventKind.ToolResult,
-                new BenchmarkRunStreamPayload(ToolCallId: payload.ToolCallId,
-                    ToolName: payload.ToolName,
-                    Arguments: requested ? payload.Arguments : null,
-                    Result: requested ? null : payload.Result,
-                    IsError: requested ? null : payload.IsError));
+                new BenchmarkRunStreamPayload
+                {
+                    ToolCallId = payload.ToolCallId,
+                    ToolName = payload.ToolName,
+                    Arguments = requested ? payload.Arguments : null,
+                    Result = requested ? null : payload.Result,
+                    IsError = requested ? null : payload.IsError
+                });
         }
     }
 }

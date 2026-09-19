@@ -187,7 +187,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
         var items = await store.ListAsync(limit, offset, cancellationToken);
         var total = await store.CountAsync(cancellationToken);
-        return new ImageJobPage(items, total);
+        return new ImageJobPage { Items = items, TotalCount = total };
     }
 
     public async Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken)
@@ -438,11 +438,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     /// </summary>
     private static ImageJobProgressDetail ToProgressDetail(ImageGenProgress update)
     {
-        return new ImageJobProgressDetail(ToGenerationPhaseName(update.Phase),
-            update.Step,
-            update.TotalSteps,
-            update.SecondsPerIteration,
-            update.EstimatedRemaining is { } remaining ? (long)remaining.TotalMilliseconds : null);
+        return new ImageJobProgressDetail
+        {
+            GenerationPhase = ToGenerationPhaseName(update.Phase),
+            Step = update.Step,
+            TotalSteps = update.TotalSteps,
+            SecondsPerIteration = update.SecondsPerIteration,
+            EstimatedRemainingMs = update.EstimatedRemaining is { } remaining ? (long)remaining.TotalMilliseconds : null
+        };
     }
 
     /// <summary>The fine phase name, or <see langword="null" /> for the two coarse phases that carry no inner detail.</summary>
@@ -652,9 +655,19 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     ///     is nullable and <see cref="None" /> is the shape used by every push the runtime did not describe (the initial
     ///     queued push and all three terminal ones).
     /// </summary>
-    private sealed record ImageJobProgressDetail(string? GenerationPhase, int? Step, int? TotalSteps, double? SecondsPerIteration, long? EstimatedRemainingMs)
+    private sealed record ImageJobProgressDetail
     {
-        public static ImageJobProgressDetail None { get; } = new(GenerationPhase: null, Step: null, TotalSteps: null, SecondsPerIteration: null, EstimatedRemainingMs: null);
+        public required string? GenerationPhase { get; init; }
+
+        public required int? Step { get; init; }
+
+        public required int? TotalSteps { get; init; }
+
+        public required double? SecondsPerIteration { get; init; }
+
+        public required long? EstimatedRemainingMs { get; init; }
+
+        public static ImageJobProgressDetail None { get; } = new() { GenerationPhase = null, Step = null, TotalSteps = null, SecondsPerIteration = null, EstimatedRemainingMs = null };
     }
 
     /// <summary>
@@ -677,7 +690,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     }
 
     /// <summary>One buffered event in a job's replay log: the SignalR method name, the seq-stamped payload, and its seq.</summary>
-    private sealed record BufferedEvent(string MethodName, object Payload, long Seq);
+    private sealed record BufferedEvent
+    {
+        public required string MethodName { get; init; }
+
+        public required object Payload { get; init; }
+
+        public required long Seq { get; init; }
+    }
 
     /// <summary>
     ///     A per-job ordered, bounded event log for late-subscriber replay. Seq assignment + append are atomic under a lock
@@ -720,7 +740,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
                 if (buffer)
                 {
-                    _events.Add(new BufferedEvent(methodName, payload, seq));
+                    _events.Add(new BufferedEvent { MethodName = methodName, Payload = payload, Seq = seq });
                     if (_events.Count > _maxEvents)
                     {
                         _events.RemoveAt(index: 0);
@@ -744,7 +764,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 var copy = new List<ImageJobBufferedEvent>(_events.Count);
                 foreach (var buffered in _events)
                 {
-                    copy.Add(new ImageJobBufferedEvent(buffered.MethodName, buffered.Payload));
+                    copy.Add(new ImageJobBufferedEvent { MethodName = buffered.MethodName, Payload = buffered.Payload });
                 }
 
                 return copy;

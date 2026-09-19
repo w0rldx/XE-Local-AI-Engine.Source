@@ -3,7 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>An installed GGUF that stands in for a base checkpoint: the model an adapter is served against and the base side of a comparison.</summary>
-public sealed record InstalledBaseModelLink(string ModelName, string RepoId, string? ContentFingerprint);
+public sealed class InstalledBaseModelLink
+{
+    public required string ModelName { get; init; }
+
+    public required string RepoId { get; init; }
+
+    public required string? ContentFingerprint { get; init; }
+}
 
 /// <summary>
 ///     Resolves the installed GGUF counterpart of a base checkpoint repo. Live-found (2026-08-15): nothing wrote
@@ -45,7 +52,7 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
                .Where(entry => string.IsNullOrEmpty(entry.BaseModelName))
                .OrderBy(entry => string.Equals(entry.RepoId, baseRepoId, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                .ThenBy(entry => entry.ModelName, StringComparer.Ordinal)
-               .Select(entry => new InstalledBaseModelLink(entry.ModelName, entry.RepoId, entry.ModelContentFingerprint))
+               .Select(entry => new InstalledBaseModelLink { ModelName = entry.ModelName, RepoId = entry.RepoId, ContentFingerprint = entry.ModelContentFingerprint })
                .ToArray();
     }
 
@@ -55,7 +62,7 @@ public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
         {
             var entry = await _registry.FindAsync(explicitModelName, cancellationToken)
                         ?? throw new TrainingRunRejectedException($"'{explicitModelName}' is not an installed model.");
-            return new InstalledBaseModelLink(entry.ModelName, entry.RepoId, entry.ModelContentFingerprint);
+            return new InstalledBaseModelLink { ModelName = entry.ModelName, RepoId = entry.RepoId, ContentFingerprint = entry.ModelContentFingerprint };
         }
 
         var suggestions = await SuggestAsync(baseRepoId, cancellationToken);

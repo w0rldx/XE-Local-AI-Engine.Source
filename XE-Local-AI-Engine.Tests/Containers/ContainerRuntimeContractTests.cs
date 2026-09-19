@@ -493,7 +493,7 @@ public sealed class ContainerRuntimeContractTests
     /// </summary>
     private static IContainerRuntime Create(ContainerRuntimeUnderTest implementation)
     {
-        var endpoint = new DockerDaemonEndpoint(UnreachableEndpoint, DockerDaemonEndpointSource.Configuration);
+        var endpoint = new DockerDaemonEndpoint { Uri = UnreachableEndpoint, Source = DockerDaemonEndpointSource.Configuration };
 
         return implementation switch
         {
@@ -539,8 +539,11 @@ public sealed class ContainerRuntimeContractTests
                 switch (implementation)
                 {
                     case ContainerRuntimeUnderTest.Fake:
-                        inMemory = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(UnreachableEndpoint,
-                            DockerDaemonEndpointSource.Configuration));
+                        inMemory = new FakeDockerRuntimeClient(new DockerDaemonEndpoint
+                        {
+                            Uri = UnreachableEndpoint,
+                            Source = DockerDaemonEndpointSource.Configuration
+                        });
                         break;
                     case ContainerRuntimeUnderTest.FakeServer:
                         server = await FakeDockerRuntimeBox.StartAsync();

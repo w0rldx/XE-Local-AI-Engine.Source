@@ -60,21 +60,24 @@ public sealed class CreateDevelopmentProjectEndpoint : Endpoint<CreateDevelopmen
 
         try
         {
-            var result = await _service.CreateProjectAsync(new DevelopmentCreateProjectInput(req.OperationId,
-                                               req.SelectedFolderId,
-                                               req.Objective,
-                                               req.BaseBranch,
-                                               req.TaskTitle,
-                                               req.Requirements,
-                                               req.AcceptanceCriteriaJson,
-                                               egressPolicy,
-                                               req.CoderModelId,
-                                               req.ReviewerModelId,
-                                               req.TrustedRepositoryAcknowledged,
-                                               req.MaxTokens,
-                                               req.MaxDurationSeconds,
-                                               req.CommandProfileId,
-                                               req.BuildTarget),
+            var result = await _service.CreateProjectAsync(new DevelopmentCreateProjectInput
+            {
+                OperationId = req.OperationId,
+                SelectedFolderId = req.SelectedFolderId,
+                Objective = req.Objective,
+                BaseBranch = req.BaseBranch,
+                TaskTitle = req.TaskTitle,
+                Requirements = req.Requirements,
+                AcceptanceCriteriaJson = req.AcceptanceCriteriaJson,
+                EgressPolicy = egressPolicy,
+                CoderModelId = req.CoderModelId,
+                ReviewerModelId = req.ReviewerModelId,
+                TrustedRepositoryAcknowledged = req.TrustedRepositoryAcknowledged,
+                MaxTokens = req.MaxTokens,
+                MaxDurationSeconds = req.MaxDurationSeconds,
+                CommandProfileId = req.CommandProfileId,
+                BuildTarget = req.BuildTarget
+            },
                                            ct);
             await Send.OkAsync(result.ToResponse(), ct);
         }

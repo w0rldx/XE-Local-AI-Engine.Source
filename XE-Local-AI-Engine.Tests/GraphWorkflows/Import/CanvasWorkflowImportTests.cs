@@ -31,7 +31,7 @@ public sealed class CanvasWorkflowImportTests
         await using var factory = NewHost();
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([], FailedCount: 0), logger);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = [], FailedCount = 0 }, logger);
 
         AssertEx.Empty(await ListDefinitionsAsync(factory));
         AssertEx.Empty(logger.Entries, "a fresh install runs this on every first start; a summary there would be noise forever.");
@@ -45,10 +45,10 @@ public sealed class CanvasWorkflowImportTests
     public async Task ImportAsync_WithACanvasTheValidatorAccepts_WritesOneDefinitionThatReadsBack()
     {
         await using var factory = NewHost();
-        var candidate = new CanvasWorkflowImportCandidate(Guid.NewGuid(), "Release notes", CanvasGraphs.Linear, CreatedAtUtc: 1);
+        var candidate = new CanvasWorkflowImportCandidate { Id = Guid.NewGuid(), Name = "Release notes", GraphJson = CanvasGraphs.Linear, CreatedAtUtc = 1 };
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), logger);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = [candidate], FailedCount = 0 }, logger);
 
         var summaries = await ListDefinitionsAsync(factory);
         var summary = summaries.Single();
@@ -73,10 +73,10 @@ public sealed class CanvasWorkflowImportTests
     public async Task ImportAsync_WithACanvasTheValidatorRefuses_StillStoresItTaggedForAttention()
     {
         await using var factory = NewHost();
-        var candidate = new CanvasWorkflowImportCandidate(Guid.NewGuid(), "Odd one", CanvasGraphs.UnknownKind, CreatedAtUtc: 1);
+        var candidate = new CanvasWorkflowImportCandidate { Id = Guid.NewGuid(), Name = "Odd one", GraphJson = CanvasGraphs.UnknownKind, CreatedAtUtc = 1 };
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), logger);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = [candidate], FailedCount = 0 }, logger);
 
         var summary = (await ListDefinitionsAsync(factory)).Single();
         AssertEx.True(summary.Description?.StartsWith("IMPORT NEEDS ATTENTION: ", StringComparison.Ordinal) is true,
@@ -102,13 +102,13 @@ public sealed class CanvasWorkflowImportTests
         await using var factory = NewHost();
         CanvasWorkflowImportCandidate[] candidates =
         [
-            new(Guid.NewGuid(), "First", CanvasGraphs.Linear, CreatedAtUtc: 1),
-            new(Guid.NewGuid(), "Odd one", CanvasGraphs.UnknownKind, CreatedAtUtc: 2),
-            new(Guid.NewGuid(), "Third", CanvasGraphs.WithPause, CreatedAtUtc: 3)
+            new() { Id = Guid.NewGuid(), Name = "First", GraphJson = CanvasGraphs.Linear, CreatedAtUtc = 1 },
+            new() { Id = Guid.NewGuid(), Name = "Odd one", GraphJson = CanvasGraphs.UnknownKind, CreatedAtUtc = 2 },
+            new() { Id = Guid.NewGuid(), Name = "Third", GraphJson = CanvasGraphs.WithPause, CreatedAtUtc = 3 }
         ];
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot(candidates, FailedCount: 1), logger);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = 1 }, logger);
 
         var summaries = await ListDefinitionsAsync(factory);
         AssertEx.Equal("First, Odd one, Third", string.Join(", ", summaries.Select(static summary => summary.Name).Order(StringComparer.Ordinal)),
@@ -129,9 +129,9 @@ public sealed class CanvasWorkflowImportTests
     {
         // A host of its own for the one option this test is about.
         await using var factory = GraphWorkflowHostFixture.NewFactory(("GraphWorkflows:Enabled", "false"));
-        var candidate = new CanvasWorkflowImportCandidate(Guid.NewGuid(), "Imported while off", CanvasGraphs.Linear, CreatedAtUtc: 1);
+        var candidate = new CanvasWorkflowImportCandidate { Id = Guid.NewGuid(), Name = "Imported while off", GraphJson = CanvasGraphs.Linear, CreatedAtUtc = 1 };
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), new RecordingLogger<CanvasWorkflowImportTests>());
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = [candidate], FailedCount = 0 }, new RecordingLogger<CanvasWorkflowImportTests>());
 
         AssertEx.Equal("Imported while off", (await ListDefinitionsAsync(factory)).Single().Name);
     }

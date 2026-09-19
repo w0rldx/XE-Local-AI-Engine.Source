@@ -423,7 +423,7 @@ public sealed class IntegrationExecutionEventBufferTests
         buffer.Append(executionId, Guid.NewGuid(), type, contentType: null, payload: null);
 
     private static IntegrationStreamEvent Event(Guid executionId, long sequence, string type) =>
-        new(type, sequence, executionId, Guid.NewGuid(), OccurredAtUtc: 1, ContentType: null, Payload: null);
+        new() { Type = type, Sequence = sequence, ExecutionId = executionId, SessionId = Guid.NewGuid(), OccurredAtUtc = 1, ContentType = null, Payload = null };
 
     private static IntegrationExecutionEventBuffer CreateBuffer(int capacity = 2048,
         int maxBytes = 4 * 1024 * 1024,

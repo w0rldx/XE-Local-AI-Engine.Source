@@ -62,4 +62,9 @@ public interface IChatTurnContextBuilder
 ///     The composed knowledge-base grounding for one turn: the synthetic context message prepended to the conversation,
 ///     and the provenance of the inlined hits threaded to the terminal row as the turn's sources.
 /// </summary>
-public sealed record KnowledgeChatGrounding(ConversationMessageDto Message, IReadOnlyList<NodeChatMessageSource> Sources);
+public sealed class KnowledgeChatGrounding
+{
+    public required ConversationMessageDto Message { get; init; }
+
+    public required IReadOnlyList<NodeChatMessageSource> Sources { get; init; }
+}

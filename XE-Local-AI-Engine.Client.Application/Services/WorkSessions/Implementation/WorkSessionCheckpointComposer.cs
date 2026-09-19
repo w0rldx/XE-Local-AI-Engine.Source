@@ -47,7 +47,7 @@ internal sealed class WorkSessionCheckpointComposer
         var previous = await _store.GetLatestCheckpointAsync(sessionId, cancellationToken);
 
         var openTasks = WorkSessionStateBlockComposer.OpenTasks(tasks);
-        var currentTask = WorkSessionStateBlockComposer.ResolveCurrentTask(new WorkSessionState(session, tasks, findings, [], previous));
+        var currentTask = WorkSessionStateBlockComposer.ResolveCurrentTask(new WorkSessionState { Session = session, Tasks = tasks, Findings = findings, Artifacts = [], LastCheckpoint = previous });
         var state = new WorkSessionCheckpointState(currentTask?.Id,
             [.. openTasks.Select(static task => task.Id)],
             KeyFindingIds(findings),

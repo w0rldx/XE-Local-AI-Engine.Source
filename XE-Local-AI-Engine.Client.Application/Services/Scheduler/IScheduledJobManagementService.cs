@@ -106,18 +106,33 @@ public interface IScheduledJobManagementService
 ///     <c>ScheduledJobDefinitionInput</c>, this carries neither <c>Enabled</c> (create persists enabled, update preserves
 ///     the current state) nor <c>CreatedBy</c> (the service stamps the creator) — those are not operator-editable.
 /// </summary>
-public sealed record ScheduledJobManagementInput(
-    string TemplateId,
-    string DisplayName,
-    string? Description,
-    ScheduleKind ScheduleKind,
-    string? CronExpression,
-    long? IntervalSeconds,
-    int? RepeatCount,
-    long? StartAtUtc,
-    long? EndAtUtc,
-    string TimeZoneId,
-    SchedulerMisfirePolicy MisfirePolicy,
-    bool PreventOverlap,
-    int? MaxRuntimeSeconds,
-    string? Parameters);
+public sealed class ScheduledJobManagementInput
+{
+    public required string TemplateId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required ScheduleKind ScheduleKind { get; init; }
+
+    public required string? CronExpression { get; init; }
+
+    public required long? IntervalSeconds { get; init; }
+
+    public required int? RepeatCount { get; init; }
+
+    public required long? StartAtUtc { get; init; }
+
+    public required long? EndAtUtc { get; init; }
+
+    public required string TimeZoneId { get; init; }
+
+    public required SchedulerMisfirePolicy MisfirePolicy { get; init; }
+
+    public required bool PreventOverlap { get; init; }
+
+    public required int? MaxRuntimeSeconds { get; init; }
+
+    public required string? Parameters { get; init; }
+}

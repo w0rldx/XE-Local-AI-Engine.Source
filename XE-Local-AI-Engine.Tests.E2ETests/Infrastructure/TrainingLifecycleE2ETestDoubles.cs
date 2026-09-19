@@ -67,8 +67,15 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class Defaults : ITrainingOptionDefaultsCalculator
     {
-        private static readonly TrainingRunDefaults Value = new(new TrainingRunOptionsV1(),
-            new TrainingFootprintEstimate(1, 1, 1, 1, Experimental: false), 1, VramKnown: true, Fits: true, RejectionReason: null);
+        private static readonly TrainingRunDefaults Value = new()
+        {
+            Options = new TrainingRunOptionsV1(),
+            Estimate = new TrainingFootprintEstimate { GpuBytes = 1, RamBytes = 1, ParameterCount = 1, TrainableParameterCount = 1, Experimental = false },
+            AvailableVramBytes = 1,
+            VramKnown = true,
+            Fits = true,
+            RejectionReason = null
+        };
 
         public Task<TrainingRunDefaults> ComputeAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(Value);
@@ -87,7 +94,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class Linker : IInstalledBaseModelLinker
     {
-        private static readonly InstalledBaseModelLink Link = new(InstalledBaseModel, "e2e/base", InstalledBaseFingerprint);
+        private static readonly InstalledBaseModelLink Link = new() { ModelName = InstalledBaseModel, RepoId = "e2e/base", ContentFingerprint = InstalledBaseFingerprint };
 
         public Task<IReadOnlyList<InstalledBaseModelLink>> SuggestAsync(string repo, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<InstalledBaseModelLink>>([Link]);
@@ -119,7 +126,7 @@ public static class TrainingLifecycleE2ETestDoubles
     public sealed class Capacity : ITrainingCapacityGate
     {
         public Task<TrainingCapacityReservation> ReserveAsync(TrainingFootprintEstimate estimate, CancellationToken ct = default) =>
-            Task.FromResult(new TrainingCapacityReservation(true, null, null));
+            Task.FromResult(new TrainingCapacityReservation { Granted = true, Reason = null, Handle = null });
     }
 
     public sealed class ProcessSpawner : ITrainingProcessSpawner

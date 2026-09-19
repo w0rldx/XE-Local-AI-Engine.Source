@@ -174,11 +174,14 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 OutputTokens = model.OutputTokens
             },
                                 CancellationToken.None);
-            return new DevelopmentReviewerAttemptResult(snapshot.AttemptId,
-                prepared.ArtifactId,
-                submission.Disposition,
-                target,
-                evidence.Current.SubjectHash);
+            return new DevelopmentReviewerAttemptResult
+            {
+                AttemptId = snapshot.AttemptId,
+                ArtifactId = prepared.ArtifactId,
+                Disposition = submission.Disposition,
+                TaskStatus = target,
+                SubjectHash = evidence.Current.SubjectHash
+            };
         }
         catch (Exception exception)
         {
@@ -305,9 +308,9 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
         return await _cloudContext.CreateAsync(snapshot,
             [
-                new DevelopmentCloudContextExcerpt("workspace.patch", Encoding.UTF8.GetString(evidence.Patch.Span)),
-                new DevelopmentCloudContextExcerpt("changed-files.json", Encoding.UTF8.GetString(evidence.Manifest.Span)),
-                new DevelopmentCloudContextExcerpt("validation-report.json", JsonSerializer.Serialize(validationReport, JsonOptions))
+                new DevelopmentCloudContextExcerpt { RelativePath = "workspace.patch", Content = Encoding.UTF8.GetString(evidence.Patch.Span) },
+                new DevelopmentCloudContextExcerpt { RelativePath = "changed-files.json", Content = Encoding.UTF8.GetString(evidence.Manifest.Span) },
+                new DevelopmentCloudContextExcerpt { RelativePath = "validation-report.json", Content = JsonSerializer.Serialize(validationReport, JsonOptions) }
             ],
             [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id, validationArtifact.Id],
             cancellationToken);

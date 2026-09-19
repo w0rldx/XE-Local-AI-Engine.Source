@@ -203,7 +203,7 @@ public sealed class TrainingEndpointTests
         await using var context = new Context();
         var verified = Mock(ToolMockVerificationState.Verified);
         _ = context.Mocks.VerifyAsync(MockId, 2, Arg.Any<CancellationToken>())
-                   .Returns(new ToolMockVerifyResult(verified, new ToolMockVerificationV1(1, Passed: true, [])));
+                   .Returns(new ToolMockVerifyResult { Mock = verified, Verification = new ToolMockVerificationV1(1, Passed: true, []) });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/mocks/{MockId}/verify", new
         {

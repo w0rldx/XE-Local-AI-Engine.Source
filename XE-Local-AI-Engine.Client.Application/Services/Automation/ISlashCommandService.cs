@@ -11,7 +11,20 @@ public interface ISlashCommandService
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
-public sealed record SlashCommandCatalogItem(Guid? Id, string Name, string? Description, string Source, SlashCommandActionType ActionType, string Prompt);
+public sealed class SlashCommandCatalogItem
+{
+    public required Guid? Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string Source { get; init; }
+
+    public required SlashCommandActionType ActionType { get; init; }
+
+    public required string Prompt { get; init; }
+}
 
 public sealed class SlashCommandValidationException : Exception
 {

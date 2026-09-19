@@ -146,12 +146,15 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
 
         elapsed.Stop();
 
-        var result = new WorkerShutdownDrainResult(stopAcceptingCompleted,
-            activeInvocationsDrained,
-            deadLetterFlushCompleted,
-            workerHubDisconnected,
-            elapsed.Elapsed,
-            diagnostics);
+        var result = new WorkerShutdownDrainResult
+        {
+            StopAcceptingRemoteInvocationsCompleted = stopAcceptingCompleted,
+            ActiveInvocationsDrained = activeInvocationsDrained,
+            DeadLetterFlushCompleted = deadLetterFlushCompleted,
+            WorkerHubDisconnected = workerHubDisconnected,
+            Elapsed = elapsed.Elapsed,
+            Diagnostics = diagnostics
+        };
 
         if (result.Succeeded)
         {

@@ -135,7 +135,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         lock (session.Gate)
         {
             session.AttachmentTimer = _timeProvider.CreateTimer(EndOnTimer,
-                new TimerState(this, session, LiveEndReason.NeverAttached),
+                new TimerState { Registry = this, Session = session, Reason = LiveEndReason.NeverAttached },
                 ProducerAttachmentTimeout,
                 Timeout.InfiniteTimeSpan);
         }
@@ -241,7 +241,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             session.Producer = producer;
         }
 
-        return new LiveProducerRegistration(session.ProducerCts.Token, new ProducerDetach(session, producer));
+        return new LiveProducerRegistration { ProducerToken = session.ProducerCts.Token, Detach = new ProducerDetach(session, producer) };
     }
 
     public void NoteBrowserAttached(Guid sessionId, string connectionId)
@@ -279,7 +279,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             }
 
             session.GraceTimer = _timeProvider.CreateTimer(EndOnTimer,
-                new TimerState(this, session, LiveEndReason.Abandoned),
+                new TimerState { Registry = this, Session = session, Reason = LiveEndReason.Abandoned },
                 TimeSpan.FromSeconds(_options.AbandonedSessionGraceSeconds),
                 Timeout.InfiniteTimeSpan);
         }
@@ -711,7 +711,14 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     }
 
     /// <summary>The state an armed timer carries, so the callback closes over nothing.</summary>
-    private sealed record TimerState(LiveTranscriptionSessionRegistry Registry, LiveSession Session, LiveEndReason Reason);
+    private sealed record TimerState
+    {
+        public required LiveTranscriptionSessionRegistry Registry { get; init; }
+
+        public required LiveSession Session { get; init; }
+
+        public required LiveEndReason Reason { get; init; }
+    }
 
     /// <summary>Detaches one producer, and only if it is still the attached one.</summary>
     private sealed class ProducerDetach : IDisposable

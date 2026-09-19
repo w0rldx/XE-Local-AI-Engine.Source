@@ -193,16 +193,22 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         // No launch admission, and the same retry the judge uses — a fidelity item is dequeued by the same FIFO
         // consumer that just ran the primary, so it routinely arrives while that llama-server is handing VRAM back.
         var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                                                           new CapacityRequest(snapshot.PrimaryModel.ModelName,
-                                                               ModelRole.Chat,
-                                                               BenchmarkFidelityPolicy.ContextTokens,
-                                                               PublishLaunchAdmission: false,
-                                                               snapshot.PrimaryRuntime.KvTypeK),
-                                                           new BenchmarkAdmissionContext(work.RunId,
-                                                               "fidelity",
-                                                               BenchmarkFidelityPolicy.ContextTokens,
-                                                               snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                                               CapacityRejectedMessage),
+                                                           new CapacityRequest
+                                                           {
+                                                               ModelName = snapshot.PrimaryModel.ModelName,
+                                                               Role = ModelRole.Chat,
+                                                               RequiredContextTokens = BenchmarkFidelityPolicy.ContextTokens,
+                                                               PublishLaunchAdmission = false,
+                                                               KvCacheType = snapshot.PrimaryRuntime.KvTypeK
+                                                           },
+                                                           new BenchmarkAdmissionContext
+                                                           {
+                                                               RunId = work.RunId,
+                                                               Phase = "fidelity",
+                                                               RequestedContextTokens = BenchmarkFidelityPolicy.ContextTokens,
+                                                               KvCacheType = snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                               RejectedMessage = CapacityRejectedMessage
+                                                           },
                                                            new BenchmarkWaitBudget(_admissionRetry),
                                                            _logger,
                                                            token);
@@ -264,7 +270,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         var key = BenchmarkKldCacheKey.Create(baseFingerprint, corpus.Sha256, chunks);
         if (_cache.TryResolveExisting(key) is { } existing)
         {
-            return new KldPreparation(key, existing, baseModelName, baseFingerprint);
+            return new KldPreparation { Key = key, BaseFilePath = existing, BaseModelName = baseModelName, BaseFingerprint = baseFingerprint };
         }
 
         await using var baseLease = await _installedModels.AcquireAsync(baseModelName, token);
@@ -286,7 +292,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             // queue. It used to throw here, which terminalized the measurement as failed — under a message that
             // promised a retry there was no mechanism for.
             return await WaitForPublishedBaseAsync(key, token) is { } published
-                ? new KldPreparation(key, published, baseModelName, baseFingerprint)
+                ? new KldPreparation { Key = key, BaseFilePath = published, BaseModelName = baseModelName, BaseFingerprint = baseFingerprint }
                 : throw new BenchmarkFidelityRequeueException(BaseWaitedTooLongMessage);
         }
 
@@ -295,16 +301,22 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         // reservation is released when this method returns, i.e. after the base file is published, so the quant pass
         // is admitted against a ledger the base is no longer in.
         var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                                                           new CapacityRequest(baseModelName,
-                                                               ModelRole.Chat,
-                                                               BenchmarkFidelityPolicy.ContextTokens,
-                                                               PublishLaunchAdmission: false,
-                                                               snapshot.PrimaryRuntime.KvTypeK),
-                                                           new BenchmarkAdmissionContext(runId,
-                                                               "fidelity-base",
-                                                               BenchmarkFidelityPolicy.ContextTokens,
-                                                               snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                                               CapacityRejectedMessage),
+                                                           new CapacityRequest
+                                                           {
+                                                               ModelName = baseModelName,
+                                                               Role = ModelRole.Chat,
+                                                               RequiredContextTokens = BenchmarkFidelityPolicy.ContextTokens,
+                                                               PublishLaunchAdmission = false,
+                                                               KvCacheType = snapshot.PrimaryRuntime.KvTypeK
+                                                           },
+                                                           new BenchmarkAdmissionContext
+                                                           {
+                                                               RunId = runId,
+                                                               Phase = "fidelity-base",
+                                                               RequestedContextTokens = BenchmarkFidelityPolicy.ContextTokens,
+                                                               KvCacheType = snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                               RejectedMessage = CapacityRejectedMessage
+                                                           },
                                                            new BenchmarkWaitBudget(_admissionRetry),
                                                            _logger,
                                                            token);
@@ -330,7 +342,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
 
         _ = _cache.Trim(_cacheOptions.Value.KldCacheMaxBytes, await _store.ListLiveFidelityDigestsAsync(token));
-        return new KldPreparation(key, _cache.PathFor(key), baseModelName, baseFingerprint);
+        return new KldPreparation { Key = key, BaseFilePath = _cache.PathFor(key), BaseModelName = baseModelName, BaseFingerprint = baseFingerprint };
     }
 
     /// <summary>
@@ -503,7 +515,16 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
     }
 
-    private sealed record KldPreparation(BenchmarkKldCacheKey Key, string BaseFilePath, string BaseModelName, string BaseFingerprint);
+    private sealed record KldPreparation
+    {
+        public required BenchmarkKldCacheKey Key { get; init; }
+
+        public required string BaseFilePath { get; init; }
+
+        public required string BaseModelName { get; init; }
+
+        public required string BaseFingerprint { get; init; }
+    }
 }
 
 /// <summary>

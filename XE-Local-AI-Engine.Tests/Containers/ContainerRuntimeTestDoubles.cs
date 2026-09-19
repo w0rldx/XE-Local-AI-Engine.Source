@@ -76,7 +76,7 @@ internal static class DisclosingEndpointRefusal
     /// <summary>Resolves that endpoint through the production resolver and returns the refusal it produced.</summary>
     internal static async Task<ContainerRuntimeResolution> ResolveAsync()
     {
-        var endpoint = new DockerDaemonEndpoint(new Uri(Raw), DockerDaemonEndpointSource.DockerHostEnvironmentVariable);
+        var endpoint = new DockerDaemonEndpoint { Uri = new Uri(Raw), Source = DockerDaemonEndpointSource.DockerHostEnvironmentVariable };
         var settingsStore = Substitute.For<INodeSettingsStore>();
         settingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(new StoredNodeSettings()));
 

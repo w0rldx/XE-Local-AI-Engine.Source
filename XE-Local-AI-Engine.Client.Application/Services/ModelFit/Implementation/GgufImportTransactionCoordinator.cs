@@ -57,7 +57,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         ResolvedGgufAcquisitionIdentity? identity = null;
         if (inspection.DetectedQuantization is not null)
         {
-            identity = _resolver.Resolve(new GgufAcquisitionIntent(PreflightKind.Import, modelBaseName, inspection.DetectedQuantization));
+            identity = _resolver.Resolve(new GgufAcquisitionIntent { OperationKind = PreflightKind.Import, ModelBaseName = modelBaseName, Quantization = inspection.DetectedQuantization });
         }
 
         var quantizationChoices = inspection.DetectedQuantization is null
@@ -70,20 +70,23 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         RemoveExpiredPreviews();
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var expiresAt = _timeProvider.GetUtcNow().Add(PreviewLifetime);
-        _previews[token] = new PreviewState(sourcePath, inspection, quantizationChoices, expiresAt);
-        return new PreviewGgufImportResult(modelBaseName,
-            inspection.DetectedQuantization,
-            quantizationChoices,
-            identity?.CanonicalModelName,
-            identity?.FinalFileName,
-            inspection.SizeBytes,
-            inspection.SourceDisplayName,
-            inspection.Architecture,
-            inspection.GgufVersion,
-            inspection.Warnings,
-            CheckStorage(inspection.SizeBytes),
-            token,
-            expiresAt);
+        _previews[token] = new PreviewState { SourcePath = sourcePath, Inspection = inspection, CanonicalQuantizationChoices = quantizationChoices, ExpiresAtUtc = expiresAt };
+        return new PreviewGgufImportResult
+        {
+            ModelBaseName = modelBaseName,
+            DetectedQuantization = inspection.DetectedQuantization,
+            CanonicalQuantizationChoices = quantizationChoices,
+            CanonicalModelName = identity?.CanonicalModelName,
+            FinalFileName = identity?.FinalFileName,
+            SizeBytes = inspection.SizeBytes,
+            SourceDisplayName = inspection.SourceDisplayName,
+            Architecture = inspection.Architecture,
+            GgufVersion = inspection.GgufVersion,
+            Warnings = inspection.Warnings,
+            HasSufficientStorage = CheckStorage(inspection.SizeBytes),
+            PreviewToken = token,
+            ExpiresAtUtc = expiresAt
+        };
     }
 
     public async Task<GgufImportTicket> StartAsync(StartGgufImportCommand command, CancellationToken cancellationToken = default)
@@ -113,7 +116,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         ResolvedGgufAcquisitionIdentity requestedIdentity;
         try
         {
-            requestedIdentity = _resolver.Resolve(new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization));
+            requestedIdentity = _resolver.Resolve(new GgufAcquisitionIntent { OperationKind = PreflightKind.Import, ModelBaseName = command.ModelBaseName, Quantization = command.Quantization });
         }
         catch (ArgumentException exception)
         {
@@ -141,7 +144,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
-            reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization),
+            reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent { OperationKind = PreflightKind.Import, ModelBaseName = command.ModelBaseName, Quantization = command.Quantization },
                 cancellationToken);
         }
         catch (ArgumentException exception)
@@ -179,9 +182,12 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                 reservation.Identity,
                 lease,
                 registration.CancellationToken);
-            return new GgufImportTicket(registration.Status.OperationId,
-                registration.Status.OperationKind.ToString(),
-                registration.Status.ModelName);
+            return new GgufImportTicket
+            {
+                OperationId = registration.Status.OperationId,
+                OperationKind = registration.Status.OperationKind.ToString(),
+                ModelName = registration.Status.ModelName
+            };
         }
     }
 
@@ -514,9 +520,14 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             _ => "UnsupportedFileType"
         };
 
-    private sealed record PreviewState(
-        string SourcePath,
-        GgufImportInspection Inspection,
-        IReadOnlyList<string> CanonicalQuantizationChoices,
-        DateTimeOffset ExpiresAtUtc);
+    private sealed record PreviewState
+    {
+        public required string SourcePath { get; init; }
+
+        public required GgufImportInspection Inspection { get; init; }
+
+        public required IReadOnlyList<string> CanonicalQuantizationChoices { get; init; }
+
+        public required DateTimeOffset ExpiresAtUtc { get; init; }
+    }
 }

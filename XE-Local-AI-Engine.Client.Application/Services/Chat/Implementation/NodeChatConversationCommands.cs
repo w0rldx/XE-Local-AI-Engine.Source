@@ -66,9 +66,19 @@ internal sealed class NodeChatConversationCommands
                 await OpenIfNeededAsync(command.Connection, token);
                 await command.ExecuteNonQueryAsync(token);
 
-                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, Purged: false, [], request.Origin,
-                    AgentDefinitionId: request.AgentDefinitionId,
-                    MemoryExcluded: memoryExcluded);
+                return new NodeChatConversationDto
+                {
+                    ConversationId = conversationId,
+                    Title = request.Title,
+                    UserId = request.UserId,
+                    CreatedAtUtc = createdAtUtc,
+                    LastSeenUtc = createdAtUtc,
+                    Purged = false,
+                    Messages = [],
+                    Origin = request.Origin,
+                    AgentDefinitionId = request.AgentDefinitionId,
+                    MemoryExcluded = memoryExcluded
+                };
             },
             cancellationToken);
     }
@@ -248,7 +258,7 @@ internal sealed class NodeChatConversationCommands
                 }
 
                 await transaction.CommitAsync(token);
-                return new NodeChatDeleteResultDto(request.ConversationId, cancelCount > 0, request.PurgeImmediately);
+                return new NodeChatDeleteResultDto { ConversationId = request.ConversationId, CancelRequested = cancelCount > 0, Purged = request.PurgeImmediately };
             },
             cancellationToken);
 

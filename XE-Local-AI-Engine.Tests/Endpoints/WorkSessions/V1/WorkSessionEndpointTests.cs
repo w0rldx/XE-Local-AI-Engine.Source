@@ -69,7 +69,7 @@ public sealed class WorkSessionEndpointTests
     {
         var service = Substitute.For<IWorkSessionService>();
         service.ListAsync(Arg.Any<CancellationToken>())
-               .Returns([new WorkSessionSummary(SessionId, "title", AgentWorkSessionKind.Research, AgentWorkSessionStatus.Paused, AgentId, 4, 99)]);
+               .Returns([new WorkSessionSummary { Id = SessionId, Title = "title", Kind = AgentWorkSessionKind.Research, Status = AgentWorkSessionStatus.Paused, AgentDefinitionId = AgentId, StepCount = 4, UpdatedUtc = 99 }]);
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory, "GET", Root);
@@ -376,7 +376,7 @@ public sealed class WorkSessionEndpointTests
         service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact()]);
         service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact());
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
-               .Returns(new WorkSessionArtifactContent(Artifact(), "# report", IsBase64: false));
+               .Returns(new WorkSessionArtifactContent { Artifact = Artifact(), Content = "# report", IsBase64 = false });
         await using var factory = EnabledFactory(service);
 
         using var listResponse = await SendAsync(factory, "GET", $"{Session}/artifacts");
@@ -437,7 +437,7 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(mediaType: mediaType));
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
-               .Returns(new WorkSessionArtifactContent(Artifact(mediaType: mediaType), "payload", isBase64));
+               .Returns(new WorkSessionArtifactContent { Artifact = Artifact(mediaType: mediaType), Content = "payload", IsBase64 = isBase64 });
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
@@ -605,47 +605,56 @@ public sealed class WorkSessionEndpointTests
     }
 
     private static WorkSessionDetail Detail() =>
-        new(SessionId,
-            "title",
-            "objective",
-            AgentWorkSessionKind.Research,
-            AgentWorkSessionStatus.Draft,
-            AgentId,
-            ConversationId,
-            CurrentTaskId: null,
-            StepCount: 0,
-            MaxStepsPerRun: 25,
-            LastCheckpointId: null,
-            LastSequence: 0,
-            Version: 1,
-            CreatedUtc: 1,
-            UpdatedUtc: 2);
+        new()
+        {
+            Id = SessionId,
+            Title = "title",
+            Objective = "objective",
+            Kind = AgentWorkSessionKind.Research,
+            Status = AgentWorkSessionStatus.Draft,
+            AgentDefinitionId = AgentId,
+            ConversationId = ConversationId,
+            CurrentTaskId = null,
+            StepCount = 0,
+            MaxStepsPerRun = 25,
+            LastCheckpointId = null,
+            LastSequence = 0,
+            Version = 1,
+            CreatedUtc = 1,
+            UpdatedUtc = 2
+        };
 
     private static WorkSessionTaskDto TaskRow(long sequence) =>
-        new(Guid.NewGuid(),
-            ParentTaskId: null,
-            sequence,
-            "task",
-            Detail: null,
-            AgentWorkSessionTaskStatus.Planned,
-            BlockedReason: null,
-            AgentWorkSessionTaskOrigin.Agent,
-            CreatedStep: 1,
-            UpdatedStep: 1);
+        new()
+        {
+            Id = Guid.NewGuid(),
+            ParentTaskId = null,
+            Sequence = sequence,
+            Title = "task",
+            Detail = null,
+            Status = AgentWorkSessionTaskStatus.Planned,
+            BlockedReason = null,
+            Origin = AgentWorkSessionTaskOrigin.Agent,
+            CreatedStep = 1,
+            UpdatedStep = 1
+        };
 
     private static WorkSessionEventDto Event(long sequence, Guid? operationId = null) =>
-        new(Guid.NewGuid(), sequence, Step: 1, "step.started", DetailJson: null, Outcome: null, OccurredUtc: 100, operationId);
+        new() { Id = Guid.NewGuid(), Sequence = sequence, Step = 1, EventType = "step.started", DetailJson = null, Outcome = null, OccurredUtc = 100, OperationId = operationId };
 
     private static WorkSessionArtifactDto Artifact(bool isValid = true, long sizeBytes = 8, string mediaType = "text/markdown") =>
-        new(ArtifactId,
-            Sequence: 5,
-            AgentWorkSessionArtifactKind.Report,
-            "report.md",
-            mediaType,
-            "sha",
-            sizeBytes,
-            isValid,
-            CreatedStep: 2);
+        new()
+        {
+            Id = ArtifactId,
+            Sequence = 5,
+            Kind = AgentWorkSessionArtifactKind.Report,
+            Name = "report.md",
+            MediaType = mediaType,
+            ContentSha256 = "sha",
+            SizeBytes = sizeBytes,
+            IsValid = isValid,
+            CreatedStep = 2
+        };
 
     private static Exception CreateWorkSessionNotFoundException(string message)
     {

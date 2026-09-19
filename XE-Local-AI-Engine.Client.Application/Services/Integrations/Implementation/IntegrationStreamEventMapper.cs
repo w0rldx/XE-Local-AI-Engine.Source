@@ -7,7 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 
 /// <summary>One mapped event before the buffer mints its sequence. Plumbing between the pure half and the appending half.</summary>
-internal sealed record IntegrationStreamEventDraft(string Type, string? ContentType, JsonElement? Payload);
+internal sealed class IntegrationStreamEventDraft
+{
+    public required string Type { get; init; }
+
+    public required string? ContentType { get; init; }
+
+    public required JsonElement? Payload { get; init; }
+}
 
 /// <summary>
 ///     Turns the worker dispatcher's signals into integration stream events, in two halves that are deliberately not
@@ -95,7 +102,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     {
         var content = streamedContent ?? string.Empty;
         var slice = content.Length > contentOffset ? content[contentOffset..] : null;
-        return slice is null ? null : new IntegrationStreamEventDraft(IntegrationStreamEventTypes.AssistantDelta, ContentType: null, Text(slice));
+        return slice is null ? null : new IntegrationStreamEventDraft { Type = IntegrationStreamEventTypes.AssistantDelta, ContentType = null, Payload = Text(slice) };
     }
 
     /// <summary>
@@ -103,7 +110,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     ///     never bounded to match — cutting them would drop answer text from the stream that carries it.
     /// </summary>
     public static IntegrationStreamEventDraft Completed(string? streamedContent, int maxOutputBytes) =>
-        new(IntegrationStreamEventTypes.AssistantCompleted, ContentType: null, Text(TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes)));
+        new() { Type = IntegrationStreamEventTypes.AssistantCompleted, ContentType = null, Payload = Text(TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes)) };
 
     /// <summary>
     ///     Both phases map; nothing else on the payload crosses to an external caller. The result text itself is never
@@ -115,19 +122,25 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
 
         return payload.Phase switch
         {
-            ToolCallLifecyclePhase.Requested => new IntegrationStreamEventDraft(IntegrationStreamEventTypes.ToolStarted,
-                ContentType: null,
-                Json(new
+            ToolCallLifecyclePhase.Requested => new IntegrationStreamEventDraft
+            {
+                Type = IntegrationStreamEventTypes.ToolStarted,
+                ContentType = null,
+                Payload = Json(new
                 {
                     name = payload.ToolName
-                })),
-            ToolCallLifecyclePhase.Completed => new IntegrationStreamEventDraft(IntegrationStreamEventTypes.ToolCompleted,
-                ContentType: null,
-                Json(new
+                })
+            },
+            ToolCallLifecyclePhase.Completed => new IntegrationStreamEventDraft
+            {
+                Type = IntegrationStreamEventTypes.ToolCompleted,
+                ContentType = null,
+                Payload = Json(new
                 {
                     name = payload.ToolName,
                     ok = !payload.IsError && IsToolOutcomeOk(payload)
-                })),
+                })
+            },
             _ => null
         };
     }

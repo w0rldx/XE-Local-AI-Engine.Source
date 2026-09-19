@@ -44,7 +44,7 @@ public sealed class SlashCommandEndpointTests
     {
         var service = Substitute.For<ISlashCommandService>();
         service.ListAsync(Arg.Any<CancellationToken>()).Returns([
-            new SlashCommandCatalogItem(null, "ping", "Test", "builtIn", SlashCommandActionType.SendPrompt, "Respond with exactly PONG and nothing else.")
+            new SlashCommandCatalogItem { Id = null, Name = "ping", Description = "Test", Source = "builtIn", ActionType = SlashCommandActionType.SendPrompt, Prompt = "Respond with exactly PONG and nothing else." }
         ]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
@@ -66,7 +66,7 @@ public sealed class SlashCommandEndpointTests
         var service = Substitute.For<ISlashCommandService>();
         var id = Guid.NewGuid();
         service.CreateAsync(Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>())
-               .Returns(new SlashCommandCatalogItem(id, "review", null, "custom", SlashCommandActionType.SendPrompt, "Review this."));
+               .Returns(new SlashCommandCatalogItem { Id = id, Name = "review", Description = null, Source = "custom", ActionType = SlashCommandActionType.SendPrompt, Prompt = "Review this." });
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -113,7 +113,7 @@ public sealed class SlashCommandEndpointTests
     {
         var service = Substitute.For<ISlashCommandService>();
         service.CreateAsync(Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>())
-               .Returns(new SlashCommandCatalogItem(Guid.NewGuid(), "review", null, "custom", SlashCommandActionType.SendPrompt, "Review this."));
+               .Returns(new SlashCommandCatalogItem { Id = Guid.NewGuid(), Name = "review", Description = null, Source = "custom", ActionType = SlashCommandActionType.SendPrompt, Prompt = "Review this." });
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 

@@ -219,16 +219,19 @@ internal static class SkillArchiveReader
                 continue;
             }
 
-            files.Add(new SkillArchiveFile(relative, MediaTypeFor(relative), await ReadTextAsync(entry, budget, options, cancellationToken)));
+            files.Add(new SkillArchiveFile { Name = relative, MediaType = MediaTypeFor(relative), Content = await ReadTextAsync(entry, budget, options, cancellationToken) });
         }
 
         var directoryName = root.Length == 0 ? string.Empty : root.TrimEnd('/').Split('/')[^1];
-        return new SkillArchiveFolder(directoryName,
-            root,
-            await ReadTextAsync(entries[root + SkillFileName], budget, options, cancellationToken),
-            files,
-            refusedScripts,
-            resourceLimitExceeded);
+        return new SkillArchiveFolder
+        {
+            DirectoryName = directoryName,
+            RootPath = root,
+            SkillMarkdown = await ReadTextAsync(entries[root + SkillFileName], budget, options, cancellationToken),
+            Files = files,
+            RefusedScripts = refusedScripts,
+            ResourceLimitExceeded = resourceLimitExceeded
+        };
     }
 
     private static bool OwnedByDeeperRoot(Dictionary<string, ZipArchiveEntry> entries, string root, string path)
@@ -383,16 +386,30 @@ internal static class SkillArchiveReader
 }
 
 /// <summary>One discovered skill folder: its <c>SKILL.md</c>, the bundled files kept, and the scripts refused.</summary>
-/// <param name="DirectoryName">Last segment of <paramref name="RootPath" />; empty when <c>SKILL.md</c> sits at the archive root.</param>
-/// <param name="RootPath">Skill-root prefix inside the archive, with a trailing slash (empty at the archive root).</param>
-/// <param name="ResourceLimitExceeded">The folder carried more bundled files than the per-skill cap; the excess was never inflated.</param>
-internal sealed record SkillArchiveFolder(
-    string DirectoryName,
-    string RootPath,
-    string SkillMarkdown,
-    IReadOnlyList<SkillArchiveFile> Files,
-    IReadOnlyList<string> RefusedScripts,
-    bool ResourceLimitExceeded = false);
+internal sealed class SkillArchiveFolder
+{
+    /// <summary>Last segment of <see cref="RootPath" />; empty when <c>SKILL.md</c> sits at the archive root.</summary>
+    public required string DirectoryName { get; init; }
+
+    /// <summary>Skill-root prefix inside the archive, with a trailing slash (empty at the archive root).</summary>
+    public required string RootPath { get; init; }
+
+    public required string SkillMarkdown { get; init; }
+
+    public required IReadOnlyList<SkillArchiveFile> Files { get; init; }
+
+    public required IReadOnlyList<string> RefusedScripts { get; init; }
+
+    /// <summary>The folder carried more bundled files than the per-skill cap; the excess was never inflated.</summary>
+    public bool ResourceLimitExceeded { get; init; }
+}
 
 /// <summary>One bundled file, named relative to its skill root — the path the model looks it up by.</summary>
-internal sealed record SkillArchiveFile(string Name, string MediaType, string Content);
+internal sealed class SkillArchiveFile
+{
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string Content { get; init; }
+}

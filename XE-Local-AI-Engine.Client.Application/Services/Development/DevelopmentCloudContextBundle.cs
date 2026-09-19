@@ -2,7 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.Collections.ObjectModel;
 
-public sealed record DevelopmentCloudContextExcerpt(string RelativePath, string Content);
+public sealed class DevelopmentCloudContextExcerpt
+{
+    public required string RelativePath { get; init; }
+
+    public required string Content { get; init; }
+}
 
 /// <summary>
 ///     Immutable, content-addressed context approved for one cloud Development attempt.

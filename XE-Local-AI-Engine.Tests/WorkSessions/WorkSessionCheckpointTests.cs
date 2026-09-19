@@ -21,7 +21,7 @@ public sealed class WorkSessionCheckpointTests
     [Test]
     public async Task Compose_WritesTheStructuredStateFromTheSessionsRows()
     {
-        var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Three documents read, two open questions."));
+        var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "Three documents read, two open questions." });
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
@@ -54,11 +54,11 @@ public sealed class WorkSessionCheckpointTests
         // The configured chat window keeps eight messages — four whole steps — verbatim, so a session that checkpoints
         // before its fourth step has nothing OUTSIDE the window to fold: compaction answered NothingToCompact and the
         // checkpoint's prose half stayed null, on exactly the sessions whose checkpoint is the only record of them.
-        var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact))
+        var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact })
         {
             ResultByKeepVerbatim = keep => keep == ConversationStepContextBound.SessionKeepVerbatim
-                ? new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Two steps in, one document read.")
-                : new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact)
+                ? new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "Two steps in, one document read." }
+                : new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NothingToCompact }
         };
 
         await using var factory = NewFactory(compaction);
@@ -80,14 +80,14 @@ public sealed class WorkSessionCheckpointTests
     [Arguments(ConversationCompactionOutcome.SummarizerReturnedNothing)]
     public async Task Compose_WhenCompactionIsANoOp_StillCheckpointsAndKeepsThePriorSummary(ConversationCompactionOutcome outcome)
     {
-        var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "First pass."));
+        var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "First pass." });
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await ComposeAsync(factory, sessionId);
 
-        compaction.Result = new ConversationCompactionResult(outcome);
+        compaction.Result = new ConversationCompactionResult { Outcome = outcome };
         await ComposeAsync(factory, sessionId);
 
         var checkpoints = await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId);
@@ -100,7 +100,7 @@ public sealed class WorkSessionCheckpointTests
     {
         // Nullable end to end on purpose: a node with no local model produces no synopsis, and a placeholder would be a
         // lie the resumed session would then read as fact.
-        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.NoLocalModel)));
+        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.NoLocalModel }));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
@@ -113,7 +113,7 @@ public sealed class WorkSessionCheckpointTests
     [Test]
     public async Task AfterACheckpoint_TheStateBlockCarriesItsSummary()
     {
-        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Where the work stands.")));
+        await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "Where the work stands." }));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
@@ -121,11 +121,14 @@ public sealed class WorkSessionCheckpointTests
         _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId);
 
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var state = new WorkSessionState(await store.GetAsync(sessionId),
-            await store.ListTasksAsync(sessionId),
-            await store.ListFindingsAsync(sessionId),
-            await store.ListArtifactsAsync(sessionId),
-            await store.GetLatestCheckpointAsync(sessionId));
+        var state = new WorkSessionState
+        {
+            Session = await store.GetAsync(sessionId),
+            Tasks = await store.ListTasksAsync(sessionId),
+            Findings = await store.ListFindingsAsync(sessionId),
+            Artifacts = await store.ListArtifactsAsync(sessionId),
+            LastCheckpoint = await store.GetLatestCheckpointAsync(sessionId)
+        };
 
         AssertEx.Contains(WorkSessionStateBlockComposer.Compose(state, step: 6, maxStepsPerRun: 25), "Where the work stands.");
     }

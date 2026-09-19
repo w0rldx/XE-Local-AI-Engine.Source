@@ -330,7 +330,7 @@ public sealed class ContainerRuntimeWireMappingTests
     {
         // Never connected: DockerClientBuilder opens no socket at construction, and no member that touches the wire
         // is called here.
-        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///xe-health-mapping-tests.sock"), DockerDaemonEndpointSource.Configuration),
+        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint { Uri = new Uri("unix:///xe-health-mapping-tests.sock"), Source = DockerDaemonEndpointSource.Configuration },
             TimeSpan.FromSeconds(1),
             TimeProvider.System,
             requestTimeout: null,

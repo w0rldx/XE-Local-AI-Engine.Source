@@ -195,11 +195,14 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint : Endpoint<UpdateBenchmar
     {
         var draft = req.Policy is null
             ? null
-            : new BenchmarkJudgePolicyDraft(req.Policy.ModelName,
-                req.Policy.ContextTokens,
-                req.Policy.Rubric.ToRubric(),
-                req.Policy.ReferenceAnswer,
-                req.Policy.Mode);
+            : new BenchmarkJudgePolicyDraft
+            {
+                ModelName = req.Policy.ModelName,
+                ContextTokens = req.Policy.ContextTokens,
+                Rubric = req.Policy.Rubric.ToRubric(),
+                ReferenceAnswer = req.Policy.ReferenceAnswer,
+                Mode = req.Policy.Mode
+            };
         var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct);
         await Send.OkAsync(await ToResponseAsync(_records, change, ct), ct);
     }

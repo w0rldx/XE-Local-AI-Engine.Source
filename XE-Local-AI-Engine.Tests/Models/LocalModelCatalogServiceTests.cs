@@ -155,11 +155,14 @@ public sealed class LocalModelCatalogServiceTests
             ClassificationService.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
                                  .Returns(call => call.Arg<IEnumerable<ModelIdentity>>()
                                                       .ToDictionary(entry => entry.ModelName,
-                                                          entry => new ModelClassificationResult(entry.ModelName,
-                                                              ModelKind.Chat,
-                                                              ModelKind.Chat,
-                                                              [],
-                                                              IsOverridden: false),
+                                                          entry => new ModelClassificationResult
+                                                          {
+                                                              ModelName = entry.ModelName,
+                                                              Kind = ModelKind.Chat,
+                                                              DetectedKind = ModelKind.Chat,
+                                                              Capabilities = [],
+                                                              IsOverridden = false
+                                                          },
                                                           StringComparer.OrdinalIgnoreCase)
                                      as IReadOnlyDictionary<string, ModelClassificationResult>);
         }

@@ -39,14 +39,17 @@ public sealed class DraftEndpointTests
 
     private static ConfigDraft BuildDraft()
     {
-        return new ConfigDraft("terraform-reviewer",
-            "Reviews Terraform plans before apply.",
-            "# Terraform reviewer\n\nRead the plan, then flag destructive changes.",
-            "Kept the instructions short so the operator can extend them.",
-            ["The operator runs Terraform locally."],
-            Confidence: 0.8d,
-            DateTimeOffset.UnixEpoch.AddSeconds(1_700_000_000),
-            "0123456789abcdef");
+        return new ConfigDraft
+        {
+            Name = "terraform-reviewer",
+            Description = "Reviews Terraform plans before apply.",
+            Content = "# Terraform reviewer\n\nRead the plan, then flag destructive changes.",
+            Rationale = "Kept the instructions short so the operator can extend them.",
+            Assumptions = ["The operator runs Terraform locally."],
+            Confidence = 0.8d,
+            GeneratedAtUtc = DateTimeOffset.UnixEpoch.AddSeconds(1_700_000_000),
+            ContentHash = "0123456789abcdef"
+        };
     }
 
     private static TestServerWebAppFactory CreateFactory(StubConfigDraftService stub)

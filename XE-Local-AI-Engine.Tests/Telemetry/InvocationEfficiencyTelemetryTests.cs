@@ -37,19 +37,22 @@ public sealed class InvocationEfficiencyTelemetryTests
             ProviderRetries: 1,
             ToolArgumentRepairs: 1,
             AgentHandoffs: 2);
-        var record = new InvocationEfficiencyRecord(Guid.NewGuid(),
-            "completed",
-            "local",
-            Orchestration: true,
-            TotalDurationMs: 1800,
-            PreRunDurationMs: 100,
-            QueueDurationMs: 60,
-            ModelReadinessDurationMs: 250,
-            FirstOutputLatencyMs: 40,
-            InputTokens: 800,
-            OutputTokens: 120,
-            ReasoningTokens: 30,
-            ProviderEfficiency: efficiency);
+        var record = new InvocationEfficiencyRecord
+        {
+            InvocationId = Guid.NewGuid(),
+            Outcome = "completed",
+            Provider = "local",
+            Orchestration = true,
+            TotalDurationMs = 1800,
+            PreRunDurationMs = 100,
+            QueueDurationMs = 60,
+            ModelReadinessDurationMs = 250,
+            FirstOutputLatencyMs = 40,
+            InputTokens = 800,
+            OutputTokens = 120,
+            ReasoningTokens = 30,
+            ProviderEfficiency = efficiency
+        };
 
         InvocationEfficiencyTelemetry.Record(record, activity, NullLogger.Instance);
 

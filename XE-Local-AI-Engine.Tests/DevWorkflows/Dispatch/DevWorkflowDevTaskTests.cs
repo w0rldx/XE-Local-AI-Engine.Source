@@ -1529,9 +1529,12 @@ public sealed class DevWorkflowDevTaskTests
             Guid artifactId,
             ReadOnlyMemory<byte> content,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DevWorkflowArtifactBlobWriteResult($"{runId:N}/{artifactId:N}",
-                Convert.ToHexString(SHA256.HashData(content.Span)),
-                content.Length));
+            Task.FromResult(new DevWorkflowArtifactBlobWriteResult
+            {
+                OpaqueReference = $"{runId:N}/{artifactId:N}",
+                ContentHash = Convert.ToHexString(SHA256.HashData(content.Span)),
+                ByteCount = content.Length
+            });
 
         public Task<DevWorkflowArtifactBlobReadResult> ReadAsync(Guid runId,
             Guid artifactId,

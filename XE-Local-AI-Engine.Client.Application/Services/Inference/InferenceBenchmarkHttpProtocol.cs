@@ -17,7 +17,7 @@ internal static class InferenceBenchmarkHttpProtocol
         IReadOnlyList<string> inputs,
         CancellationToken ct)
     {
-        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest(modelName, inputs), SerializerOptions, ct);
+        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest { Model = modelName, Input = inputs }, SerializerOptions, ct);
         response.EnsureSuccessStatusCode();
         var payload = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(SerializerOptions, ct);
         if (payload?.Data is null || payload.Data.Count != inputs.Count)
@@ -40,7 +40,7 @@ internal static class InferenceBenchmarkHttpProtocol
         IReadOnlyList<string> documents,
         CancellationToken ct)
     {
-        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest(query, documents), SerializerOptions, ct);
+        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest { Query = query, Documents = documents }, SerializerOptions, ct);
         response.EnsureSuccessStatusCode();
         var payload = await response.Content.ReadFromJsonAsync<RerankResponse>(SerializerOptions, ct);
         if (payload?.Results is null || payload.Results.Count != documents.Count)
@@ -64,11 +64,14 @@ internal static class InferenceBenchmarkHttpProtocol
         return scores;
     }
 
-    private sealed record EmbeddingRequest(
-        [property: JsonPropertyName("model")]
-        string Model,
-        [property: JsonPropertyName("input")]
-        IReadOnlyList<string> Input);
+    private sealed record EmbeddingRequest
+    {
+        [JsonPropertyName("model")]
+        public required string Model { get; init; }
+
+        [JsonPropertyName("input")]
+        public required IReadOnlyList<string> Input { get; init; }
+    }
 
     private sealed record EmbeddingResponse(
         [property: JsonPropertyName("data")]
@@ -80,11 +83,14 @@ internal static class InferenceBenchmarkHttpProtocol
         [property: JsonPropertyName("embedding")]
         IReadOnlyList<double> Embedding);
 
-    private sealed record RerankRequest(
-        [property: JsonPropertyName("query")]
-        string Query,
-        [property: JsonPropertyName("documents")]
-        IReadOnlyList<string> Documents);
+    private sealed record RerankRequest
+    {
+        [JsonPropertyName("query")]
+        public required string Query { get; init; }
+
+        [JsonPropertyName("documents")]
+        public required IReadOnlyList<string> Documents { get; init; }
+    }
 
     private sealed record RerankResponse(
         [property: JsonPropertyName("results")]

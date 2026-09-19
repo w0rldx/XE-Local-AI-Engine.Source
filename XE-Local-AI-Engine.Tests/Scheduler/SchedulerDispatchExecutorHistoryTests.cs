@@ -396,16 +396,19 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         public ConfigurableHandler(Func<ScheduledJobExecutionContext, CancellationToken, Task> body)
         {
             _body = body;
-            Descriptor = new ScheduledJobTemplateDescriptor(Id,
-                "Configurable (test)",
-                "Test handler that runs an injected body.",
-                ParameterSchema: null,
-                DefaultParameters: null,
-                [ScheduleKind.OneShot, ScheduleKind.Cron],
-                ScheduleKind.OneShot,
-                SchedulerMisfirePolicy.SkipMissed,
-                DefaultMaxRuntimeSeconds: null,
-                AllowManualTrigger: true);
+            Descriptor = new ScheduledJobTemplateDescriptor
+            {
+                TemplateId = Id,
+                DisplayName = "Configurable (test)",
+                Description = "Test handler that runs an injected body.",
+                ParameterSchema = null,
+                DefaultParameters = null,
+                SupportedScheduleKinds = [ScheduleKind.OneShot, ScheduleKind.Cron],
+                DefaultScheduleKind = ScheduleKind.OneShot,
+                DefaultMisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
+                DefaultMaxRuntimeSeconds = null,
+                AllowManualTrigger = true
+            };
         }
 
         public int InvocationCount { get; private set; }

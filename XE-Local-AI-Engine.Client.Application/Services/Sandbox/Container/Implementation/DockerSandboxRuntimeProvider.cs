@@ -426,7 +426,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                                              + $"'{ContainerSandboxOptions.SectionName}:UserId' and ':GroupId' to the ids that own this node's workspace.");
         }
 
-        return new ResolvedContainerIdentity(userId, groupId);
+        return new ResolvedContainerIdentity { UserId = userId, GroupId = groupId };
     }
 
     private static ResolvedContainerIdentity ResolveIdentity(ContainerSandboxOptions options, bool daemonIsRootless)
@@ -561,9 +561,9 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         var strict = new List<ContainerMountTarget>
         {
-            new(nameof(ContainerSandboxOptions.WorkspaceMountTarget), options.WorkspaceMountTarget),
-            new(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget),
-            new(nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget)
+            new() { Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget), Path = options.WorkspaceMountTarget },
+            new() { Name = nameof(ContainerSandboxOptions.ScratchMountTarget), Path = options.ScratchMountTarget },
+            new() { Name = nameof(ContainerSandboxOptions.TempMountTarget), Path = options.TempMountTarget }
         };
         var overlays = new List<string>();
 
@@ -590,7 +590,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             }
             else
             {
-                strict.Add(new ContainerMountTarget("mount " + target, target));
+                strict.Add(new ContainerMountTarget { Name = "mount " + target, Path = target });
             }
         }
 
@@ -693,7 +693,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 ManifestVersion = request.AttachKey.ManifestVersion,
                 // Read off the SPECIFICATION, which is the same list the read-back was verified against — so what the
                 // handle reports is what the daemon confirmed it applied, not what the caller asked for.
-                Mounts = [.. bindMounts.Select(static mount => new SandboxMountBinding(mount.HostPath, mount.ContainerPath, mount.ReadOnly))],
+                Mounts = [.. bindMounts.Select(static mount => new SandboxMountBinding { HostPath = mount.HostPath, SandboxPath = mount.ContainerPath, ReadOnly = mount.ReadOnly })],
                 // The CONTAINER path a command with no working directory runs in — the same value ExecuteAsync falls
                 // back to. It names nothing on the host, which is exactly why the handle reports it as a sandbox path.
                 WorkingRoot = options.WorkspaceMountTarget

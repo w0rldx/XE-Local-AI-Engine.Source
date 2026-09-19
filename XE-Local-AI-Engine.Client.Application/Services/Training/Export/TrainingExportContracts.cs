@@ -5,13 +5,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>What the operator asked to export out of a finished run.</summary>
-/// <param name="Kind">
-///     <see cref="TrainingArtifactKind.MergedGguf" /> merges the adapter into the base and quantizes the result;
-///     <see cref="TrainingArtifactKind.AdapterGguf" /> converts the adapter alone, to be served with
-///     <c>--lora</c> on top of the installed base model.
-/// </param>
-/// <param name="QuantType">Target quantization for a merged export. Ignored for an adapter, which is always f16.</param>
-public sealed record TrainingExportRequest(TrainingArtifactKind Kind, string? QuantType = null);
+public sealed class TrainingExportRequest
+{
+    /// <summary>
+    ///     <see cref="TrainingArtifactKind.MergedGguf" /> merges the adapter into the base and quantizes the result;
+    ///     <see cref="TrainingArtifactKind.AdapterGguf" /> converts the adapter alone, to be served with
+    ///     <c>--lora</c> on top of the installed base model.
+    /// </summary>
+    public required TrainingArtifactKind Kind { get; init; }
+
+    /// <summary>Target quantization for a merged export. Ignored for an adapter, which is always f16.</summary>
+    public string? QuantType { get; init; }
+}
 
 /// <summary>Why a start was refused, or that it was accepted. A refusal is a 4xx, never a fault.</summary>
 public enum TrainingExportStartOutcome
@@ -31,7 +36,12 @@ public enum TrainingExportStartOutcome
     UnsupportedQuantization
 }
 
-public sealed record TrainingExportStart(TrainingExportStartOutcome Outcome, string? Reason = null);
+public sealed class TrainingExportStart
+{
+    public required TrainingExportStartOutcome Outcome { get; init; }
+
+    public string? Reason { get; init; }
+}
 
 /// <summary>
 ///     The quantizations a training export may produce.
@@ -94,9 +104,14 @@ public sealed record TrainingExportJobConfigV1
 /// <summary>
 ///     The verdict of one transient load-and-serve check against a staged artifact.
 /// </summary>
-/// <param name="State">Passed, Failed, or Skipped — never Pending; the gate always decides.</param>
-/// <param name="Reason">Operator-facing diagnosis. Required for anything but a pass.</param>
-public sealed record TrainedModelSmokeResult(TrainingArtifactSmokeState State, string? Reason);
+public sealed class TrainedModelSmokeResult
+{
+    /// <summary>Passed, Failed, or Skipped — never Pending; the gate always decides.</summary>
+    public required TrainingArtifactSmokeState State { get; init; }
+
+    /// <summary>Operator-facing diagnosis. Required for anything but a pass.</summary>
+    public required string? Reason { get; init; }
+}
 
 /// <summary>
 ///     Loads a staged, unpromoted GGUF in a throwaway <c>llama-server</c> and proves it can actually serve before
@@ -115,12 +130,17 @@ public interface ITrainedModelSmokeGate
 ///     What the smoke gate needs about an artifact, with the base model already resolved. Keeps the gate free of the
 ///     run/registry lookups that decide which file to launch.
 /// </summary>
-/// <param name="ArtifactPath">The staged GGUF.</param>
-/// <param name="BaseModelFilePath">
-///     For an adapter: the installed base model's own GGUF, launched as <c>-m</c> with the artifact applied as
-///     <c>--lora</c>. Null for a merged model, which is loaded directly.
-/// </param>
-public sealed record TrainingArtifactRecordView(string ArtifactPath, string? BaseModelFilePath);
+public sealed class TrainingArtifactRecordView
+{
+    /// <summary>The staged GGUF.</summary>
+    public required string ArtifactPath { get; init; }
+
+    /// <summary>
+    ///     For an adapter: the installed base model's own GGUF, launched as <c>-m</c> with the artifact applied as
+    ///     <c>--lora</c>. Null for a merged model, which is loaded directly.
+    /// </summary>
+    public required string? BaseModelFilePath { get; init; }
+}
 
 /// <summary>Promotes a smoke-passed staged artifact with a current successful quality decision into the local model registry.</summary>
 public interface IArtifactPromotionService

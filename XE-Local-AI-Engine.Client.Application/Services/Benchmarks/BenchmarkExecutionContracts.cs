@@ -32,26 +32,46 @@ public enum BenchmarkRunStreamEventKind
     TerminalSnapshotAvailable
 }
 
-public sealed record BenchmarkRunStreamPayload(
-    string? Content = null,
-    string? State = null,
-    string? ToolCallId = null,
-    string? ToolName = null,
-    string? Arguments = null,
-    string? Result = null,
-    bool? IsError = null,
-    int? EffectiveContextTokens = null,
-    long? DurationMs = null,
-    int? TotalTokens = null,
-    double? TokensPerSecond = null,
-    long? RunVersion = null,
-    double? TtftMs = null,
-    int? PromptTokens = null,
-    double? PromptTokensPerSecond = null,
-    int? GenerationTokens = null,
-    double? GenerationTokensPerSecond = null,
-    int? CachedPromptTokens = null,
-    int? SegmentCount = null);
+public sealed record BenchmarkRunStreamPayload
+{
+    public string? Content { get; init; }
+
+    public string? State { get; init; }
+
+    public string? ToolCallId { get; init; }
+
+    public string? ToolName { get; init; }
+
+    public string? Arguments { get; init; }
+
+    public string? Result { get; init; }
+
+    public bool? IsError { get; init; }
+
+    public int? EffectiveContextTokens { get; init; }
+
+    public long? DurationMs { get; init; }
+
+    public int? TotalTokens { get; init; }
+
+    public double? TokensPerSecond { get; init; }
+
+    public long? RunVersion { get; init; }
+
+    public double? TtftMs { get; init; }
+
+    public int? PromptTokens { get; init; }
+
+    public double? PromptTokensPerSecond { get; init; }
+
+    public int? GenerationTokens { get; init; }
+
+    public double? GenerationTokensPerSecond { get; init; }
+
+    public int? CachedPromptTokens { get; init; }
+
+    public int? SegmentCount { get; init; }
+}
 
 public sealed record BenchmarkRunStreamEvent
 {
@@ -75,11 +95,16 @@ public sealed class BenchmarkRunStreamEventArgs : EventArgs
     public BenchmarkRunStreamEvent StreamEvent { get; }
 }
 
-public sealed record BenchmarkReplayResult(
-    IReadOnlyList<BenchmarkRunStreamEvent> Events,
-    bool ResetRequired,
-    long LatestSequence,
-    long RunVersion);
+public sealed class BenchmarkReplayResult
+{
+    public required IReadOnlyList<BenchmarkRunStreamEvent> Events { get; init; }
+
+    public required bool ResetRequired { get; init; }
+
+    public required long LatestSequence { get; init; }
+
+    public required long RunVersion { get; init; }
+}
 
 public interface IBenchmarkEventBuffer
 {
@@ -184,7 +209,7 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             }
 
             var bytes = JsonSerializer.SerializeToUtf8Bytes(streamEvent, JsonOptions).Length;
-            state.Events.AddLast(new BufferedEvent(streamEvent, bytes));
+            state.Events.AddLast(new BufferedEvent { Event = streamEvent, Utf8Bytes = bytes });
             state.Utf8Bytes += bytes;
             state.LastPublishedSequence = streamEvent.Sequence;
             Trim(state);
@@ -199,7 +224,7 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         {
             if (!_runs.TryGetValue(runId, out var state))
             {
-                return new BenchmarkReplayResult([], ResetRequired: false, LatestSequence: 0, runVersion);
+                return new BenchmarkReplayResult { Events = [], ResetRequired = false, LatestSequence = 0, RunVersion = runVersion };
             }
 
             var firstRetained = state.Events.First?.Value.Event.Sequence;
@@ -208,11 +233,11 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
                         || firstRetained is null && state.HistoryTruncated && afterSequence < state.LatestSequence;
             if (reset)
             {
-                return new BenchmarkReplayResult([], ResetRequired: true, state.LatestSequence, runVersion);
+                return new BenchmarkReplayResult { Events = [], ResetRequired = true, LatestSequence = state.LatestSequence, RunVersion = runVersion };
             }
 
             var events = state.Events.Where(item => item.Event.Sequence > afterSequence).Select(item => item.Event).ToArray();
-            return new BenchmarkReplayResult(events, ResetRequired: false, state.LatestSequence, runVersion);
+            return new BenchmarkReplayResult { Events = events, ResetRequired = false, LatestSequence = state.LatestSequence, RunVersion = runVersion };
         }
     }
 
@@ -322,7 +347,12 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         public LinkedList<BufferedEvent> Events { get; } = [];
     }
 
-    private sealed record BufferedEvent(BenchmarkRunStreamEvent Event, int Utf8Bytes);
+    private sealed record BufferedEvent
+    {
+        public required BenchmarkRunStreamEvent Event { get; init; }
+
+        public required int Utf8Bytes { get; init; }
+    }
 }
 
 public sealed record BenchmarkOutputPart(
@@ -603,65 +633,108 @@ public static class BenchmarkExecutionSerialization
         ?? throw new BenchmarkSnapshotException("Benchmark output parts are invalid.");
 }
 
-public sealed record BenchmarkEligibleAgent(Guid Id, string Name, int Version);
+public sealed class BenchmarkEligibleAgent
+{
+    public required Guid Id { get; init; }
 
-public sealed record BenchmarkEligibleModel(
-    string ModelName,
-    int? MaxContextTokens,
-    int? EffectiveContextTokens,
-    LocalModelOrigin? Origin,
-    string ModelContentFingerprint,
-    bool SupportsTools);
+    public required string Name { get; init; }
+
+    public required int Version { get; init; }
+}
+
+public sealed class BenchmarkEligibleModel
+{
+    public required string ModelName { get; init; }
+
+    public required int? MaxContextTokens { get; init; }
+
+    public required int? EffectiveContextTokens { get; init; }
+
+    public required LocalModelOrigin? Origin { get; init; }
+
+    public required string ModelContentFingerprint { get; init; }
+
+    public required bool SupportsTools { get; init; }
+}
 
 /// <summary>
 ///     The operator-editable judge configuration. Everything here is inside the policy hash, so any change to it is a
 ///     new policy revision and — on a project that already has runs — a re-judge.
 /// </summary>
-/// <param name="Rubric">The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</param>
-/// <param name="Mode">
-///     <c>pointwise</c> (the default and the only mode this build executes) or <c>pairwise</c>. Absent means
-///     pointwise, so a caller written before the mode existed keeps working.
-/// </param>
-public sealed record BenchmarkJudgePolicyDraft(
-    string ModelName,
-    int ContextTokens,
-    BenchmarkJudgeRubricV1? Rubric = null,
-    string? ReferenceAnswer = null,
-    string? Mode = null);
+public sealed record BenchmarkJudgePolicyDraft
+{
+    public required string ModelName { get; init; }
 
-/// <param name="MaxOutputTokens">
-///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
-///     context-limited. Validated as <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
-/// </param>
-/// <param name="ReasoningBudgetTokens">
-///     The per-run thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the reasoning
-///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
-///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
-/// </param>
+    public required int ContextTokens { get; init; }
+
+    /// <summary>The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</summary>
+    public BenchmarkJudgeRubricV1? Rubric { get; init; }
+
+    public string? ReferenceAnswer { get; init; }
+
+    /// <summary>
+    ///     <c>pointwise</c> (the default and the only mode this build executes) or <c>pairwise</c>. Absent means
+    ///     pointwise, so a caller written before the mode existed keeps working.
+    /// </summary>
+    public string? Mode { get; init; }
+}
+
 /// <summary>
 ///     The four settable quant-fidelity knobs. The base model's FINGERPRINT is absent on purpose: the service resolves
 ///     it from the eligible-model catalog, because it is an input to the KLD comparability digest.
 /// </summary>
-public sealed record BenchmarkProjectFidelitySettings(bool Enabled, bool KldEnabled, int? Chunks, string? KldBaseModelName);
+public sealed class BenchmarkProjectFidelitySettings
+{
+    public required bool Enabled { get; init; }
 
-/// <param name="FidelityKldBaseModelName">
-///     The base model KL divergence is measured against. Its FINGERPRINT is never part of a draft: the service
-///     resolves it from the eligible-model catalog, so a caller cannot claim a base identity the node does not have.
-/// </param>
-public sealed record BenchmarkProjectDraft(
-    Guid Id,
-    string Name,
-    string CoreTask,
-    int ContextTokens,
-    Guid AgentDefinitionId,
-    BenchmarkJudgePolicyDraft? Judge = null,
-    int? MaxOutputTokens = null,
-    int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null,
-    bool FidelityEnabled = false,
-    bool FidelityKldEnabled = false,
-    int? FidelityChunks = null,
-    string? FidelityKldBaseModelName = null);
+    public required bool KldEnabled { get; init; }
+
+    public required int? Chunks { get; init; }
+
+    public required string? KldBaseModelName { get; init; }
+}
+
+public sealed record BenchmarkProjectDraft
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string CoreTask { get; init; }
+
+    public required int ContextTokens { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public BenchmarkJudgePolicyDraft? Judge { get; init; }
+
+    /// <summary>
+    ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
+    ///     context-limited. Validated as <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
+    /// </summary>
+    public int? MaxOutputTokens { get; init; }
+
+    public int? InvocationTimeoutSeconds { get; init; }
+
+    /// <summary>
+    ///     The per-run thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the reasoning
+    ///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
+    ///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
+    public bool FidelityEnabled { get; init; }
+
+    public bool FidelityKldEnabled { get; init; }
+
+    public int? FidelityChunks { get; init; }
+
+    /// <summary>
+    ///     The base model KL divergence is measured against. Its FINGERPRINT is never part of a draft: the service
+    ///     resolves it from the eligible-model catalog, so a caller cannot claim a base identity the node does not have.
+    /// </summary>
+    public string? FidelityKldBaseModelName { get; init; }
+}
 
 public sealed class BenchmarkQueueOptions
 {
@@ -693,37 +766,46 @@ internal sealed class BenchmarkQueueOptionsValidator : IValidateOptions<Benchmar
 /// <summary>
 ///     One launch request: a project, a model, and how many measured runs to enqueue against them.
 /// </summary>
-/// <param name="KvCacheType">
-///     The KV-cache type the run asked for, or <see langword="null" /> for Auto (freeze picks). Must already be
-///     canonical — see <see cref="BenchmarkKvCacheType.TryNormalize" />.
-/// </param>
-/// <param name="RepeatCount">
-///     How many measured runs to enqueue, 1..<see cref="BenchmarkRunFreezeService.MaxRepeatCount" />. Everything but
-///     the seed is frozen ONCE and the repeats share it.
-/// </param>
-/// <param name="Warmup">
-///     Prepends one more run at repeat index 0, flagged <c>IsWarmup</c>: never ranked, never counted in a group's
-///     statistics. It exists to absorb the first-launch costs (page cache cold, GPU clocks low) the measured repeats
-///     should not pay.
-/// </param>
-/// <param name="RepeatMode">
-///     What the group measures. <see cref="BenchmarkRepeatMode.Throughput" /> is the default and the historical
-///     behaviour: temperature 0, one fixed seed, so the answer is identical across repeats and only the machine varies.
-/// </param>
-/// <param name="AnswerVarianceTemperature">
-///     The temperature an <see cref="BenchmarkRepeatMode.AnswerVariance" /> group samples at, or
-///     <see langword="null" /> for <see cref="BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature" />. Ignored
-///     in throughput mode, which is deterministic by definition.
-/// </param>
-public sealed record BenchmarkRunStartRequest(
-    Guid ProjectId,
-    string PrimaryModelName,
-    long ExpectedProjectVersion,
-    string? KvCacheType = null,
-    int RepeatCount = 1,
-    bool Warmup = false,
-    BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
-    double? AnswerVarianceTemperature = null);
+public sealed record BenchmarkRunStartRequest
+{
+    public required Guid ProjectId { get; init; }
+
+    public required string PrimaryModelName { get; init; }
+
+    public required long ExpectedProjectVersion { get; init; }
+
+    /// <summary>
+    ///     The KV-cache type the run asked for, or <see langword="null" /> for Auto (freeze picks). Must already be
+    ///     canonical — see <see cref="BenchmarkKvCacheType.TryNormalize" />.
+    /// </summary>
+    public string? KvCacheType { get; init; }
+
+    /// <summary>
+    ///     How many measured runs to enqueue, 1..<see cref="BenchmarkRunFreezeService.MaxRepeatCount" />. Everything but
+    ///     the seed is frozen ONCE and the repeats share it.
+    /// </summary>
+    public int RepeatCount { get; init; } = 1;
+
+    /// <summary>
+    ///     Prepends one more run at repeat index 0, flagged <c>IsWarmup</c>: never ranked, never counted in a group's
+    ///     statistics. It exists to absorb the first-launch costs (page cache cold, GPU clocks low) the measured repeats
+    ///     should not pay.
+    /// </summary>
+    public bool Warmup { get; init; }
+
+    /// <summary>
+    ///     What the group measures. <see cref="BenchmarkRepeatMode.Throughput" /> is the default and the historical
+    ///     behaviour: temperature 0, one fixed seed, so the answer is identical across repeats and only the machine varies.
+    /// </summary>
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <summary>
+    ///     The temperature an <see cref="BenchmarkRepeatMode.AnswerVariance" /> group samples at, or
+    ///     <see langword="null" /> for <see cref="BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature" />. Ignored
+    ///     in throughput mode, which is deterministic by definition.
+    /// </summary>
+    public double? AnswerVarianceTemperature { get; init; }
+}
 
 /// <summary>
 ///     One model's freeze, decided but NOT written. Every read a freeze takes — the verified model lease, the
@@ -733,20 +815,47 @@ public sealed record BenchmarkRunStartRequest(
 ///     caller with queued runs it was never told the ids of when the other side then failed, and the only retry
 ///     available duplicated the committed side.
 /// </summary>
-public sealed record BenchmarkFrozenRunPlan(Guid ProjectId, long ExpectedProjectVersion, IReadOnlyList<BenchmarkStartRunCommand> Commands);
+public sealed class BenchmarkFrozenRunPlan
+{
+    public required Guid ProjectId { get; init; }
 
-public sealed record BenchmarkRunBatchRequest(
-    Guid ProjectId,
-    long ExpectedProjectVersion,
-    IReadOnlyList<BenchmarkRunBatchItem> Items,
-    int RepeatCount,
-    bool Warmup,
-    BenchmarkRepeatMode RepeatMode,
-    double? AnswerVarianceTemperature);
+    public required long ExpectedProjectVersion { get; init; }
 
-public sealed record BenchmarkRunBatchItem(string ModelName, string? KvCacheType);
+    public required IReadOnlyList<BenchmarkStartRunCommand> Commands { get; init; }
+}
 
-public sealed record BenchmarkRunBatchStartedItem(string ModelName, string? KvCacheType, IReadOnlyList<Guid> RunIds);
+public sealed class BenchmarkRunBatchRequest
+{
+    public required Guid ProjectId { get; init; }
+
+    public required long ExpectedProjectVersion { get; init; }
+
+    public required IReadOnlyList<BenchmarkRunBatchItem> Items { get; init; }
+
+    public required int RepeatCount { get; init; }
+
+    public required bool Warmup { get; init; }
+
+    public required BenchmarkRepeatMode RepeatMode { get; init; }
+
+    public required double? AnswerVarianceTemperature { get; init; }
+}
+
+public sealed class BenchmarkRunBatchItem
+{
+    public required string ModelName { get; init; }
+
+    public required string? KvCacheType { get; init; }
+}
+
+public sealed class BenchmarkRunBatchStartedItem
+{
+    public required string ModelName { get; init; }
+
+    public required string? KvCacheType { get; init; }
+
+    public required IReadOnlyList<Guid> RunIds { get; init; }
+}
 
 public enum BenchmarkRunBatchRejectionKind
 {
@@ -755,37 +864,58 @@ public enum BenchmarkRunBatchRejectionKind
     TimeBudget
 }
 
-public sealed record BenchmarkRunBatchRejectedItem(
-    string ModelName,
-    string? KvCacheType,
-    BenchmarkRunBatchRejectionKind Kind,
-    string Message,
-    Exception? Failure = null);
+public sealed class BenchmarkRunBatchRejectedItem
+{
+    public required string ModelName { get; init; }
 
-public sealed record BenchmarkRunBatchResult(
-    long ProjectVersion,
-    IReadOnlyList<BenchmarkRunBatchStartedItem> Started,
-    IReadOnlyList<BenchmarkRunBatchRejectedItem> Rejected);
+    public required string? KvCacheType { get; init; }
+
+    public required BenchmarkRunBatchRejectionKind Kind { get; init; }
+
+    public required string Message { get; init; }
+
+    public Exception? Failure { get; init; }
+}
+
+public sealed class BenchmarkRunBatchResult
+{
+    public required long ProjectVersion { get; init; }
+
+    public required IReadOnlyList<BenchmarkRunBatchStartedItem> Started { get; init; }
+
+    public required IReadOnlyList<BenchmarkRunBatchRejectedItem> Rejected { get; init; }
+}
 
 /// <summary>
 ///     One task item as an operator writes it. The index, revision and input hash are absent on purpose: a caller that
 ///     could name them could present an answer to an old question as an answer to the current one.
 /// </summary>
-/// <param name="VerifierConfig">
-///     Per-criterion overrides of the judge policy's verifier config, keyed by criterion id. Carried opaquely here —
-///     it can hold expected answers, which is why it is stored encrypted.
-/// </param>
-/// <param name="GeneratorConfig">The parameters a generator item expands into child cases. Null for a plain prompt.</param>
-public sealed record BenchmarkTaskItemDraft(
-    string Prompt,
-    string? Kind = null,
-    string? ReferenceAnswer = null,
-    JsonElement? VerifierConfig = null,
-    JsonElement? GeneratorConfig = null,
-    bool CountsTowardScore = true);
+public sealed class BenchmarkTaskItemDraft
+{
+    public required string Prompt { get; init; }
 
-/// <param name="EnqueuedRunIds">The runs a judging was queued for, in the order they were enqueued. Empty on a no-op.</param>
-public sealed record BenchmarkJudgePolicyChange(
-    BenchmarkProjectRecord Project,
-    IReadOnlyList<Guid> EnqueuedRunIds,
-    int? CohortGeneration);
+    public string? Kind { get; init; }
+
+    public string? ReferenceAnswer { get; init; }
+
+    /// <summary>
+    ///     Per-criterion overrides of the judge policy's verifier config, keyed by criterion id. Carried opaquely here —
+    ///     it can hold expected answers, which is why it is stored encrypted.
+    /// </summary>
+    public JsonElement? VerifierConfig { get; init; }
+
+    /// <summary>The parameters a generator item expands into child cases. Null for a plain prompt.</summary>
+    public JsonElement? GeneratorConfig { get; init; }
+
+    public bool CountsTowardScore { get; init; } = true;
+}
+
+public sealed class BenchmarkJudgePolicyChange
+{
+    public required BenchmarkProjectRecord Project { get; init; }
+
+    /// <summary>The runs a judging was queued for, in the order they were enqueued. Empty on a no-op.</summary>
+    public required IReadOnlyList<Guid> EnqueuedRunIds { get; init; }
+
+    public required int? CohortGeneration { get; init; }
+}

@@ -15,14 +15,22 @@ using System.Text.Json;
 ///         object on the others.
 ///     </para>
 /// </summary>
-public sealed record IntegrationStreamEvent(
-    string Type,
-    long Sequence,
-    Guid ExecutionId,
-    Guid SessionId,
-    long OccurredAtUtc,
-    string? ContentType,
-    JsonElement? Payload);
+public sealed record IntegrationStreamEvent
+{
+    public required string Type { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required Guid ExecutionId { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public required string? ContentType { get; init; }
+
+    public required JsonElement? Payload { get; init; }
+}
 
 /// <summary>The closed set of <see cref="IntegrationStreamEvent.Type" /> values, and which of them are persisted.</summary>
 public static class IntegrationStreamEventTypes

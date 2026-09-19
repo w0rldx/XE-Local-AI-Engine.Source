@@ -25,15 +25,24 @@ public enum PlaybookMonitorStatus
 ///     rates over the agent's feedback cohort, the after-enable sample size, the derived <see cref="Status" />, whether it
 ///     is <see cref="Flagged" /> for human review, and the optional tool facet the action is scoped to.
 /// </summary>
-public sealed record PlaybookActionMonitorView(
-    Guid ActionId,
-    long EnabledAtUtc,
-    double BeforeDownRate,
-    double AfterDownRate,
-    int AfterSampleSize,
-    PlaybookMonitorStatus Status,
-    bool Flagged,
-    string? FacetToolName);
+public sealed class PlaybookActionMonitorView
+{
+    public required Guid ActionId { get; init; }
+
+    public required long EnabledAtUtc { get; init; }
+
+    public required double BeforeDownRate { get; init; }
+
+    public required double AfterDownRate { get; init; }
+
+    public required int AfterSampleSize { get; init; }
+
+    public required PlaybookMonitorStatus Status { get; init; }
+
+    public required bool Flagged { get; init; }
+
+    public required string? FacetToolName { get; init; }
+}
 
 /// <summary>
 ///     Computes the cohort-monitoring view for every Enabled action of an agent. Invoked off the hot path (the monitor

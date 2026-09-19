@@ -293,7 +293,7 @@ public sealed class ContainerBridgeRealDaemonTests
 
             var verifier = Substitute.For<IContainerBridgeTokenVerifier>();
             _ = verifier.VerifyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((ContainerBridgeCaller?)null);
-            _ = verifier.VerifyAsync(validToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller(instanceId));
+            _ = verifier.VerifyAsync(validToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller { InstanceId = instanceId });
             builder.Services.AddSingleton(verifier);
             builder.Services.AddScoped<ContainerBridgeTokenMiddleware>();
 

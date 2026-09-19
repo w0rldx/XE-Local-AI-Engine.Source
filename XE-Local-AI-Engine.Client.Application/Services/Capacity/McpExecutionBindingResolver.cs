@@ -255,17 +255,20 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 #pragma warning restore MA0045
 
         var fingerprint = Convert.ToHexString(HMACSHA256.HashData(_nodeKey.Key.Span, canonical.WrittenSpan));
-        return new McpExecutionBinding(fingerprint,
-            modelId,
-            instructions,
-            agentDefinitionId,
-            agentDefinitionVersion,
-            immutableAllowedTools,
-            reasoningEffort,
-            supportsThinking,
+        return new McpExecutionBinding
+        {
+            BindingFingerprint = fingerprint,
+            ModelId = modelId,
+            Instructions = instructions,
+            AgentDefinitionId = agentDefinitionId,
+            AgentDefinitionVersion = agentDefinitionVersion,
+            AllowedTools = immutableAllowedTools,
+            ReasoningEffort = reasoningEffort,
+            SupportsThinking = supportsThinking,
             // NOT written into the canonical fingerprint payload above: it is derived from modelId, which is already
             // hashed, so folding it in would invalidate every recorded binding fingerprint for no added identity.
-            reasoningBudgetEnforceable);
+            ReasoningBudgetEnforceable = reasoningBudgetEnforceable
+        };
     }
 
     private static McpExecutionBindingResolution Reject(string failureCode, string displayMessage) =>
