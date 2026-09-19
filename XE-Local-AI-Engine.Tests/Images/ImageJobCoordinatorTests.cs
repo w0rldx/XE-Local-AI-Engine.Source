@@ -435,13 +435,18 @@ public sealed class ImageJobCoordinatorTests
             $"Job {jobId} did not reach status {status}.");
     }
 
-    private sealed record Harness(
-        ImageJobCoordinator Coordinator,
-        FakeImageRuntime Runtime,
-        FakeImageJobStore Store,
-        FakeGeneratedImageStore Images,
-        FakeImageRuntimeActivityGate ActivityGate) : IDisposable
+    private sealed record Harness : IDisposable
     {
+        public required ImageJobCoordinator Coordinator { get; init; }
+
+        public required FakeImageRuntime Runtime { get; init; }
+
+        public required FakeImageJobStore Store { get; init; }
+
+        public required FakeGeneratedImageStore Images { get; init; }
+
+        public required FakeImageRuntimeActivityGate ActivityGate { get; init; }
+
         public void Dispose()
         {
             Coordinator.Dispose();
@@ -473,7 +478,7 @@ public sealed class ImageJobCoordinatorTests
                 gpuWorkGate ?? new GpuWorkGate());
 #pragma warning restore CA2000
 
-            return new Harness(coordinator, runtime, store, images, activityGate);
+            return new Harness { Coordinator = coordinator, Runtime = runtime, Store = store, Images = images, ActivityGate = activityGate };
         }
     }
 

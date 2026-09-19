@@ -41,8 +41,8 @@ internal static class ExecStartEndpoint
 
         await FakeDockerEndpointMapper.WriteFramedAsync(context,
                                           [
-                                              new FakeDockerLogFrame(FakeDockerStreamKind.StandardOutput, outcome.StandardOutput),
-                                              new FakeDockerLogFrame(FakeDockerStreamKind.StandardError, outcome.StandardError)
+                                              new FakeDockerLogFrame { Stream = FakeDockerStreamKind.StandardOutput, Text = outcome.StandardOutput },
+                                              new FakeDockerLogFrame { Stream = FakeDockerStreamKind.StandardError, Text = outcome.StandardError }
                                           ],
                                           hijacked: true);
     }

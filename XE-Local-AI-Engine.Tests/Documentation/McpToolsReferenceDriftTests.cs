@@ -86,7 +86,7 @@ public sealed partial class McpToolsReferenceDriftTests
                 .Select(static method => (Method: method,
                     Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
                 .Where(static item => item.Attribute is not null)
-                .Select(item => new DocumentedTool(item.Attribute!.Name ?? item.Method.Name, scope));
+                .Select(item => new DocumentedTool { Name = item.Attribute!.Name ?? item.Method.Name, Scope = scope });
 
     private static Dictionary<string, string> ParseDocumentedTools(string path)
     {
@@ -109,5 +109,10 @@ public sealed partial class McpToolsReferenceDriftTests
     [GeneratedRegex(@"`(?<field>[a-z][a-z0-9_]*_[a-z0-9_]+)`")]
     private static partial Regex WhitelistFieldsRegex();
 
-    private sealed record DocumentedTool(string Name, string Scope);
+    private sealed record DocumentedTool
+    {
+        public required string Name { get; init; }
+
+        public required string Scope { get; init; }
+    }
 }

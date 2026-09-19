@@ -537,7 +537,7 @@ public sealed class CapabilityReporterTests
         {
             ArgumentNullException.ThrowIfNull(models);
             Server.State.RunningModels = models
-                                         .Select(model => new FakeOllamaState.FakeOllamaRunningModel(model.Name, model.ExpiresAt))
+                                         .Select(model => new FakeOllamaState.FakeOllamaRunningModel { Name = model.Name, ExpiresAt = model.ExpiresAt })
                                          .ToArray();
         }
 

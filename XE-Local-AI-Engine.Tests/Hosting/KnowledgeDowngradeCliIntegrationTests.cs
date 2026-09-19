@@ -124,7 +124,7 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         }
 
         var output = string.Concat(await standardOutput, Environment.NewLine, await standardError);
-        return new CommandResult(process.ExitCode, output);
+        return new CommandResult { ExitCode = process.ExitCode, Output = output };
     }
 
     private static ProcessStartInfo CreateStartInfo(string commandArgument, string databasePath, string nodeDirectory)
@@ -147,5 +147,10 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         return startInfo;
     }
 
-    private sealed record CommandResult(int ExitCode, string Output);
+    private sealed record CommandResult
+    {
+        public required int ExitCode { get; init; }
+
+        public required string Output { get; init; }
+    }
 }

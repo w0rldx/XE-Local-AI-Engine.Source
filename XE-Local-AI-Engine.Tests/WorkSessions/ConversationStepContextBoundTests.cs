@@ -147,12 +147,15 @@ public sealed class ConversationStepContextBoundTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted],
-            DuringTurn: (_, _) =>
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn = (_, _) =>
             {
                 seenInsideTurn = ToolResultBudgetScope.Current;
                 return Task.CompletedTask;
-            }));
+            }
+        });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -181,8 +184,8 @@ public sealed class ConversationStepContextBoundTests
         var fake = ResolveStream(factory, ref stream);
         // The message the step cap actually produces: the supervisor seeds a per-step cap tighter than the node-wide
         // ceiling, so the budget throws its step wording, which the classifier forwards verbatim onto the failed row.
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.StepCallCapReachedMessage));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantFailed], TerminalError = ProviderCallBudget.StepCallCapReachedMessage });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -213,7 +216,7 @@ public sealed class ConversationStepContextBoundTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.CeilingExceededMessage));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantFailed], TerminalError = ProviderCallBudget.CeilingExceededMessage });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -240,7 +243,7 @@ public sealed class ConversationStepContextBoundTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: "The model went away."));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantFailed], TerminalError = "The model went away." });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);

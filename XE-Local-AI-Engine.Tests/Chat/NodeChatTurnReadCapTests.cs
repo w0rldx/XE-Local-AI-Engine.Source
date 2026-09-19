@@ -337,7 +337,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             });
         }
 
-        return new BranchedConversation(conversationId, oldSiblingId, newerSiblingId);
+        return new BranchedConversation { ConversationId = conversationId, PinnedOldSiblingId = oldSiblingId, NewerSiblingId = newerSiblingId };
     }
 
     private static async Task<Guid> CompleteAssistantAsync(NodeChatPersistenceService service,
@@ -384,5 +384,12 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
     }
 
-    private sealed record BranchedConversation(Guid ConversationId, Guid PinnedOldSiblingId, Guid NewerSiblingId);
+    private sealed record BranchedConversation
+    {
+        public required Guid ConversationId { get; init; }
+
+        public required Guid PinnedOldSiblingId { get; init; }
+
+        public required Guid NewerSiblingId { get; init; }
+    }
 }

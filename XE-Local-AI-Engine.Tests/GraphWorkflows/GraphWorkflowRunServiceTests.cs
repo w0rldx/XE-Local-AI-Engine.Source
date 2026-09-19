@@ -570,11 +570,11 @@ public sealed class GraphWorkflowRunServiceTests
     {
         try
         {
-            return new StartOutcome(await StartAsync(definitionId, requestId), Refusal: null);
+            return new StartOutcome { Detail = await StartAsync(definitionId, requestId), Refusal = null };
         }
         catch (GraphWorkflowInvalidTransitionException refusal)
         {
-            return new StartOutcome(Detail: null, refusal);
+            return new StartOutcome { Detail = null, Refusal = refusal };
         }
     }
 
@@ -587,7 +587,12 @@ public sealed class GraphWorkflowRunServiceTests
     }
 
     /// <summary>What one racer came back with: a run, or the refusal it was given instead.</summary>
-    private sealed record StartOutcome(GraphWorkflowRunDetail? Detail, GraphWorkflowInvalidTransitionException? Refusal);
+    private sealed record StartOutcome
+    {
+        public required GraphWorkflowRunDetail? Detail { get; init; }
+
+        public required GraphWorkflowInvalidTransitionException? Refusal { get; init; }
+    }
 }
 
 /// <summary>

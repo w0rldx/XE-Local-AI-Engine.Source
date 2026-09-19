@@ -255,8 +255,17 @@ public sealed class IntegrationSessionStoreTests
         _ = context.IntegrationTriggers.Add(trigger);
         _ = context.IntegrationApiKeys.Add(key);
         _ = await context.SaveChangesAsync();
-        return new SeedState(trigger.Id, trigger.TargetAgentDefinitionId, key.PrincipalId, key.KeyPrefix);
+        return new SeedState { TriggerId = trigger.Id, AgentDefinitionId = trigger.TargetAgentDefinitionId, PrincipalId = key.PrincipalId, KeyPrefix = key.KeyPrefix };
     }
 
-    private sealed record SeedState(Guid TriggerId, Guid AgentDefinitionId, Guid PrincipalId, string KeyPrefix);
+    private sealed record SeedState
+    {
+        public required Guid TriggerId { get; init; }
+
+        public required Guid AgentDefinitionId { get; init; }
+
+        public required Guid PrincipalId { get; init; }
+
+        public required string KeyPrefix { get; init; }
+    }
 }

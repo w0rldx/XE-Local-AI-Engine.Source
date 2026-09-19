@@ -31,7 +31,14 @@ public enum DevelopmentInterruptionBoundary
     AfterValidationArtifactBeforeTerminalization
 }
 
-internal sealed record DevelopmentProject(Guid Id, string RepositoryIdentity, bool TrustedRepository);
+internal sealed class DevelopmentProject
+{
+    public required Guid Id { get; init; }
+
+    public required string RepositoryIdentity { get; init; }
+
+    public required bool TrustedRepository { get; init; }
+}
 
 internal sealed class DevelopmentTask
 {
@@ -107,15 +114,42 @@ internal sealed class DevelopmentArtifact
     public bool IsValid { get; set; } = true;
 }
 
-internal sealed record DevelopmentEvent(Guid Id, Guid ProjectId, Guid TaskId, Guid? AttemptId, string EventType, long Sequence);
+internal sealed class DevelopmentEvent
+{
+    public required Guid Id { get; init; }
 
-internal sealed record WorkspaceSnapshot(string BaseCommit, string SubjectHash, string ManifestHash, IReadOnlyList<string> ChangedFiles);
+    public required Guid ProjectId { get; init; }
 
-internal sealed record DevelopmentRecoveryResult(
-    int InterruptedAttempts,
-    int InvalidatedArtifacts,
-    bool ReplacementAllowed,
-    WorkspaceSnapshot CurrentWorkspace);
+    public required Guid TaskId { get; init; }
+
+    public required Guid? AttemptId { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required long Sequence { get; init; }
+}
+
+internal sealed class WorkspaceSnapshot
+{
+    public required string BaseCommit { get; init; }
+
+    public required string SubjectHash { get; init; }
+
+    public required string ManifestHash { get; init; }
+
+    public required IReadOnlyList<string> ChangedFiles { get; init; }
+}
+
+internal sealed class DevelopmentRecoveryResult
+{
+    public required int InterruptedAttempts { get; init; }
+
+    public required int InvalidatedArtifacts { get; init; }
+
+    public required bool ReplacementAllowed { get; init; }
+
+    public required WorkspaceSnapshot CurrentWorkspace { get; init; }
+}
 
 internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 {
@@ -137,7 +171,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         RepositoryPath = repositoryPath;
         WorktreePath = worktreePath;
         ProtectedBranchCommit = protectedBranchCommit;
-        Project = new DevelopmentProject(Guid.NewGuid(), Hash(repositoryPath), TrustedRepository: true);
+        Project = new DevelopmentProject { Id = Guid.NewGuid(), RepositoryIdentity = Hash(repositoryPath), TrustedRepository = true };
         Task = new DevelopmentTask(Guid.NewGuid(), Project.Id);
     }
 
@@ -247,7 +281,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
             Task.IsBlocked = true;
             Task.BlockedReason = "Workspace base commit cannot be reconciled with persisted evidence.";
             AppendEvent(attemptId: null, "RecoveryBlockedUnreconciledBase");
-            return new DevelopmentRecoveryResult(interruptedAttempts, invalidatedArtifacts, ReplacementAllowed: false, currentWorkspace);
+            return new DevelopmentRecoveryResult { InterruptedAttempts = interruptedAttempts, InvalidatedArtifacts = invalidatedArtifacts, ReplacementAllowed = false, CurrentWorkspace = currentWorkspace };
         }
 
         foreach (var artifact in evidence.Where(artifact => !MatchesCurrentSubject(artifact, currentWorkspace)))
@@ -257,7 +291,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
             AppendEvent(artifact.AttemptId, "EvidenceInvalidated");
         }
 
-        return new DevelopmentRecoveryResult(interruptedAttempts, invalidatedArtifacts, ReplacementAllowed: !Task.IsBlocked, currentWorkspace);
+        return new DevelopmentRecoveryResult { InterruptedAttempts = interruptedAttempts, InvalidatedArtifacts = invalidatedArtifacts, ReplacementAllowed = !Task.IsBlocked, CurrentWorkspace = currentWorkspace };
     }
 
     public async Task<DevelopmentAttempt> CreateReplacementAttemptAsync(Guid predecessorAttemptId)
@@ -312,7 +346,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         var manifest = await BuildManifestAsync(changedFiles);
         var subjectHash = Hash(patch + "\n--manifest--\n" + manifest);
         var manifestHash = Hash(manifest);
-        return new WorkspaceSnapshot(baseCommit, subjectHash, manifestHash, changedFiles);
+        return new WorkspaceSnapshot { BaseCommit = baseCommit, SubjectHash = subjectHash, ManifestHash = manifestHash, ChangedFiles = changedFiles };
     }
 
     public async Task<string> ReadProtectedBranchCommitAsync()
@@ -378,7 +412,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 
     private void AppendEvent(Guid? attemptId, string eventType)
     {
-        Events.Add(new DevelopmentEvent(Guid.NewGuid(), Project.Id, Task.Id, attemptId, eventType, ++_nextSequence));
+        Events.Add(new DevelopmentEvent { Id = Guid.NewGuid(), ProjectId = Project.Id, TaskId = Task.Id, AttemptId = attemptId, EventType = eventType, Sequence = ++_nextSequence });
     }
 
     private void EnsureTrustedRepository()

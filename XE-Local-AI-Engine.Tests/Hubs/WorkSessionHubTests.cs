@@ -193,11 +193,15 @@ public sealed class WorkSessionHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture(hub, groups);
+        return new HubFixture { Hub = hub, Groups = groups };
     }
 
-    private sealed record HubFixture(WorkSessionHub Hub, IGroupManager Groups) : IDisposable
+    private sealed record HubFixture : IDisposable
     {
+        public required WorkSessionHub Hub { get; init; }
+
+        public required IGroupManager Groups { get; init; }
+
         public void Dispose() =>
             Hub.Dispose();
     }

@@ -84,43 +84,69 @@ public sealed class PublishingDevWorkflowStoreTests
     /// </summary>
     private static IReadOnlyList<Probe> Probes() =>
     [
-        new(nameof(IDevWorkflowStore.TransitionRunAsync),
-            DevWorkflowChangeKind.Run,
-            store => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Running })),
-        new(nameof(IDevWorkflowStore.AppendEventAsync),
-            DevWorkflowChangeKind.Run,
-            store => store.AppendEventAsync(new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeInterrupted })),
-        new(nameof(IDevWorkflowStore.MaterializeNodeRunsAsync),
-            DevWorkflowChangeKind.Node,
-            store => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.TransitionRunAsync),
+            Kind = DevWorkflowChangeKind.Run,
+            Invoke = store => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, TargetStatus = DevWorkflowRunStatus.Running })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.AppendEventAsync),
+            Kind = DevWorkflowChangeKind.Run,
+            Invoke = store => store.AppendEventAsync(new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeInterrupted })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.MaterializeNodeRunsAsync),
+            Kind = DevWorkflowChangeKind.Node,
+            Invoke = store => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
             {
                 RunId = RunId,
                 ExpectedVersion = DevWorkflowVersions.Any,
                 OperationId = Guid.NewGuid(),
                 NodeRuns = [new DevWorkflowNodeRunSeed { NodeRunId = NodeRunId, NodeKey = "research", NodeType = DevWorkflowNodeType.Agent }]
-            })),
-        new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
-            DevWorkflowChangeKind.Node,
-            store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Running))),
-        new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
-            DevWorkflowChangeKind.Gate,
-            store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.WaitingForApproval))),
-        new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
-            DevWorkflowChangeKind.Gate,
-            store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked))),
-        new(nameof(IDevWorkflowStore.RouteRetryAsync),
-            DevWorkflowChangeKind.Node,
-            store => store.RouteRetryAsync(new RouteDevWorkflowRetryCommand
+            })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.TransitionNodeRunAsync),
+            Kind = DevWorkflowChangeKind.Node,
+            Invoke = store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Running))
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.TransitionNodeRunAsync),
+            Kind = DevWorkflowChangeKind.Gate,
+            Invoke = store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.WaitingForApproval))
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.TransitionNodeRunAsync),
+            Kind = DevWorkflowChangeKind.Gate,
+            Invoke = store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked))
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.RouteRetryAsync),
+            Kind = DevWorkflowChangeKind.Node,
+            Invoke = store => store.RouteRetryAsync(new RouteDevWorkflowRetryCommand
             {
                 Route = new AppendDevWorkflowEventCommand { RunId = RunId, ExpectedVersion = DevWorkflowVersions.Any, EventType = DevWorkflowEventTypes.NodeRetryRouted, NodeRunId = NodeRunId },
                 Resets = [NodeRunTransition(DevWorkflowNodeRunStatus.Pending)]
-            })),
-        new(nameof(IDevWorkflowStore.AttachWorkSessionAsync),
-            DevWorkflowChangeKind.Node,
-            store => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = RunId, NodeRunId = NodeRunId, ExpectedVersion = DevWorkflowVersions.Any, WorkSessionId = Guid.NewGuid() })),
-        new(nameof(IDevWorkflowStore.AppendArtifactAsync),
-            DevWorkflowChangeKind.Artifact,
-            store => store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
+            })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.AttachWorkSessionAsync),
+            Kind = DevWorkflowChangeKind.Node,
+            Invoke = store => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand { RunId = RunId, NodeRunId = NodeRunId, ExpectedVersion = DevWorkflowVersions.Any, WorkSessionId = Guid.NewGuid() })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.AppendArtifactAsync),
+            Kind = DevWorkflowChangeKind.Artifact,
+            Invoke = store => store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand
             {
                 RunId = RunId,
                 ArtifactId = Guid.NewGuid(),
@@ -133,23 +159,32 @@ public sealed class PublishingDevWorkflowStoreTests
                 ContentSha256 = "sha",
                 SizeBytes = 4,
                 ManagedReference = "reference"
-            })),
-        new(nameof(IDevWorkflowStore.RecordArtifactUsesAsync),
-            DevWorkflowChangeKind.Artifact,
-            store => store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand
+            })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.RecordArtifactUsesAsync),
+            Kind = DevWorkflowChangeKind.Artifact,
+            Invoke = store => store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand
             {
                 RunId = RunId,
                 NodeRunId = NodeRunId,
                 ExpectedVersion = DevWorkflowVersions.Any,
                 OperationId = Guid.NewGuid(),
                 ArtifactIds = [Guid.NewGuid()]
-            })),
-        new(nameof(IDevWorkflowStore.MarkDependentsStaleAsync),
-            DevWorkflowChangeKind.Artifact,
-            store => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand { RunId = RunId, SupersededArtifactId = Guid.NewGuid(), SupersedingArtifactId = Guid.NewGuid(), ExpectedVersion = DevWorkflowVersions.Any })),
-        new(nameof(IDevWorkflowStore.RecordDecisionAsync),
-            DevWorkflowChangeKind.Gate,
-            store => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
+            })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.MarkDependentsStaleAsync),
+            Kind = DevWorkflowChangeKind.Artifact,
+            Invoke = store => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand { RunId = RunId, SupersededArtifactId = Guid.NewGuid(), SupersedingArtifactId = Guid.NewGuid(), ExpectedVersion = DevWorkflowVersions.Any })
+        },
+        new()
+        {
+            Method = nameof(IDevWorkflowStore.RecordDecisionAsync),
+            Kind = DevWorkflowChangeKind.Gate,
+            Invoke = store => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand
             {
                 RunId = RunId,
                 DecisionId = Guid.NewGuid(),
@@ -157,7 +192,8 @@ public sealed class PublishingDevWorkflowStoreTests
                 ExpectedVersion = DevWorkflowVersions.Any,
                 OperationId = Guid.NewGuid(),
                 Decision = DevWorkflowDecisionKind.Approve
-            }))
+            })
+        }
     ];
 
     /// <summary>
@@ -438,23 +474,38 @@ public sealed class PublishingDevWorkflowStoreTests
         // something would only add a second read to every probe.
         var telemetry = source ?? new StubDevWorkflowNodeTelemetrySource();
         var scopes = new RecordingTelemetryScopeFactory(inner, telemetry);
-        return new Harness(new PublishingDevWorkflowStore(inner,
+        return new Harness
+        {
+            Store = new PublishingDevWorkflowStore(inner,
                 publisher,
                 scopes,
                 new DevWorkflowGraphCache(),
                 new DevWorkflowNodeTelemetryCollectionPool(collectionSlots),
                 NullLogger<PublishingDevWorkflowStore>.Instance,
                 collectionTimeout),
-            publisher,
-            inner,
-            scopes);
+            Publisher = publisher,
+            Inner = inner,
+            Scopes = scopes
+        };
     }
 
-    private sealed record Probe(string Method, DevWorkflowChangeKind Kind, Func<IDevWorkflowStore, Task> Invoke);
+    private sealed record Probe
+    {
+        public required string Method { get; init; }
 
-    private sealed record Harness(
-        IDevWorkflowStore Store,
-        IDevWorkflowEventPublisher Publisher,
-        IDevWorkflowStore Inner,
-        RecordingTelemetryScopeFactory Scopes);
+        public required DevWorkflowChangeKind Kind { get; init; }
+
+        public required Func<IDevWorkflowStore, Task> Invoke { get; init; }
+    }
+
+    private sealed record Harness
+    {
+        public required IDevWorkflowStore Store { get; init; }
+
+        public required IDevWorkflowEventPublisher Publisher { get; init; }
+
+        public required IDevWorkflowStore Inner { get; init; }
+
+        public required RecordingTelemetryScopeFactory Scopes { get; init; }
+    }
 }

@@ -12,9 +12,14 @@ using System.Globalization;
 internal static class RetrievalEvalCorpus
 {
     /// <summary>One synthetic corpus document.</summary>
-    /// <param name="Key">Stable relevance-label key.</param>
-    /// <param name="Body">The markdown body ingested through the real pipeline.</param>
-    internal sealed record FixtureDocument(string Key, string Body);
+    internal sealed class FixtureDocument
+    {
+        /// <summary>Stable relevance-label key.</summary>
+        public required string Key { get; init; }
+
+        /// <summary>The markdown body ingested through the real pipeline.</summary>
+        public required string Body { get; init; }
+    }
 
     /// <summary>
     ///     Explicit synonym → concept map handed to the deterministic embedder. It is the harness's ONLY semantic
@@ -28,63 +33,84 @@ internal static class RetrievalEvalCorpus
 
     public static IReadOnlyList<FixtureDocument> Documents { get; } =
     [
-        new("vectordb",
-            """
+        new()
+        {
+            Key = "vectordb",
+            Body = """
             # Vector databases
 
             Cosine similarity ranks dense embeddings by direction so a vector database can serve nearest
             neighbor lookups over high dimensional embedding vectors. Dense retrieval stores each passage as an
             embedding and scores approximate nearest neighbor candidates by cosine distance between the query
             embedding and every stored embedding vector in the index.
-            """),
-        new("fts",
             """
+        },
+        new()
+        {
+            Key = "fts",
+            Body = """
             # Full text search
 
             An inverted index powers keyword full text search: BM25 scores each document by term frequency across
             the tokenized lexical terms. SQLite FTS5 builds the inverted index and ranks matching rows with BM25 so a
             keyword query retrieves documents whose tokens overlap the lexical query terms.
-            """),
-        new("fusion",
             """
+        },
+        new()
+        {
+            Key = "fusion",
+            Body = """
             # Reciprocal rank fusion
 
             Reciprocal rank fusion combines several ranked lists into one hybrid ranking by summing a reciprocal
             rank contribution per list. The rank aggregation constant damps top ranks so no single ranked list
             dominates the fused hybrid retrieval order across the combined candidate lists.
-            """),
-        new("gpu",
             """
+        },
+        new()
+        {
+            Key = "gpu",
+            Body = """
             # GPU acceleration
 
             GPU acceleration offloads transformer layers onto CUDA cores so inference runs on the graphics card.
             VRAM holds the offloaded model weights and the llama runtime chooses how many layers to offload given
             the available VRAM budget on the CUDA device for fast tensor inference.
-            """),
-        new("chunking",
             """
+        },
+        new()
+        {
+            Key = "chunking",
+            Body = """
             # Document chunking
 
             Chunking splits a document into overlapping windows at passage boundaries so a retrieval unit keeps
             local context. Each overlapping window carries trailing characters from the previous segment so a fact
             split across a boundary stays retrievable inside its own passage chunk.
-            """),
-        new("reranker",
             """
+        },
+        new()
+        {
+            Key = "reranker",
+            Body = """
             # Cross encoder reranker
 
             A cross encoder reranker rescores candidate passages for relevance and reorders them before the final
             cut. The reranker scores each query candidate pair jointly, so a strong but lexically weak candidate is
             pulled up by the relevance rescoring during candidate reordering.
-            """),
-        new("vehicle",
             """
+        },
+        new()
+        {
+            Key = "vehicle",
+            Body = """
             # Car safety
 
             Car safety features protect occupants during a collision. The seatbelt restrains the passenger while the
             airbag cushions the impact, and anti lock braking shortens the stopping distance so the car avoids a
             crash. Modern car safety ratings reward strong collision protection.
-            """)
+            """
+        }
     ];
 
     public static IReadOnlyList<LabeledQuery> Queries { get; } =
@@ -143,18 +169,21 @@ internal static class RetrievalEvalCorpus
         var documents = new List<FixtureDocument>
         {
             // bb x4, short: strongest BM25 (highest bb term frequency) but concept bag skewed toward bb → weakest cosine.
-            new("lexspoiler", "aa bb bb bb bb"),
+            new() { Key = "lexspoiler", Body = "aa bb bb bb bb" },
             // bb x2, balanced: rank-2 in BOTH arms — the chunk pure RRF drops and score-aware must recover.
-            new("relevant", "aa bb bb"),
+            new() { Key = "relevant", Body = "aa bb bb" },
             // bb x1, exactly the query direction: strongest cosine but weakest BM25 of the three candidates.
-            new("vecspoiler", "aa bb"),
+            new() { Key = "vecspoiler", Body = "aa bb" },
         };
 
         // Filler documents carry the common term only (never bb), so bb stays rare (3 of 15) and keeps a positive IDF.
         for (var index = 0; index < 12; index++)
         {
-            documents.Add(new FixtureDocument(string.Create(CultureInfo.InvariantCulture, $"f{index}"),
-                string.Create(CultureInfo.InvariantCulture, $"aa c{index}x c{index}y")));
+            documents.Add(new FixtureDocument
+            {
+                Key = string.Create(CultureInfo.InvariantCulture, $"f{index}"),
+                Body = string.Create(CultureInfo.InvariantCulture, $"aa c{index}x c{index}y")
+            });
         }
 
         return documents;

@@ -1176,11 +1176,14 @@ public sealed class NodeAdminMcpToolsTests
             Func<TState, Exception?, string> formatter)
         {
             var properties = state as IEnumerable<KeyValuePair<string, object?>>;
-            Entries.Add(new LogEntry(eventId,
-                formatter(state, exception),
-                properties?.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
+            Entries.Add(new LogEntry
+            {
+                EventId = eventId,
+                Message = formatter(state, exception),
+                Properties = properties?.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
                 ?? new Dictionary<string, object?>(StringComparer.Ordinal),
-                exception));
+                Exception = exception
+            });
         }
     }
 
@@ -1205,9 +1208,14 @@ public sealed class NodeAdminMcpToolsTests
         }
     }
 
-    private sealed record LogEntry(
-        EventId EventId,
-        string Message,
-        IReadOnlyDictionary<string, object?> Properties,
-        Exception? Exception);
+    private sealed record LogEntry
+    {
+        public required EventId EventId { get; init; }
+
+        public required string Message { get; init; }
+
+        public required IReadOnlyDictionary<string, object?> Properties { get; init; }
+
+        public required Exception? Exception { get; init; }
+    }
 }

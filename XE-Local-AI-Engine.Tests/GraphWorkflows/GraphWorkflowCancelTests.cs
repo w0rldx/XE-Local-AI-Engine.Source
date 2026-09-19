@@ -227,7 +227,7 @@ public sealed class GraphWorkflowCancelTests
         // A private agent host: a wedged turn holds the node-wide invocation slot, and the signal channel this asserts
         // on is the dispatcher's own.
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Wedges));
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Wedges });
         var runId = await RunToARunningAgentAsync(harness, instructions);
         var invocationId = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "analyze")).InvocationId?.ToString(),
             "a Running agent row carries the invocation its turn was minted with.");
@@ -259,7 +259,7 @@ public sealed class GraphWorkflowCancelTests
     {
         const string instructions = "drain-does-not-spin";
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Wedges));
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn { Outcome = GraphWorkflowTurnOutcome.Wedges });
         var runId = await RunToARunningAgentAsync(harness, instructions);
 
         await harness.CancelAsync(runId);

@@ -1197,7 +1197,18 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     /// <summary>One published commit, captured off the publisher substitute.</summary>
-    private sealed record PublishedSegment(long Seq, TranscriptChannel Channel, long StartMs, long EndMs, string Text);
+    private sealed record PublishedSegment
+    {
+        public required long Seq { get; init; }
+
+        public required TranscriptChannel Channel { get; init; }
+
+        public required long StartMs { get; init; }
+
+        public required long EndMs { get; init; }
+
+        public required string Text { get; init; }
+    }
 
     /// <summary>
     ///     A registry wired to substituted collaborators, a manual clock and a real segmenter per lane.
@@ -1263,11 +1274,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          {
                              lock (recorded)
                              {
-                                 recorded.Add(new PublishedSegment(call.ArgAt<long>(1),
-                                     call.ArgAt<TranscriptChannel>(2),
-                                     call.ArgAt<long>(3),
-                                     call.ArgAt<long>(4),
-                                     call.ArgAt<string>(5)));
+                                 recorded.Add(new PublishedSegment
+                                 {
+                                     Seq = call.ArgAt<long>(1),
+                                     Channel = call.ArgAt<TranscriptChannel>(2),
+                                     StartMs = call.ArgAt<long>(3),
+                                     EndMs = call.ArgAt<long>(4),
+                                     Text = call.ArgAt<string>(5)
+                                 });
                              }
 
                              return Task.CompletedTask;

@@ -8,27 +8,34 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     One scripted tool call, keyed by the tool NAME the node asks for. Defaults are the happy path: executed, with a
 ///     line of text out.
 ///     <para>
-///         <paramref name="Parks" /> is how a test holds a lane slot without sleeping: the call never ends on its own,
+///         <see cref="Parks" /> is how a test holds a lane slot without sleeping: the call never ends on its own,
 ///         and it ends <c>Cancelled</c> when the token fires — which is exactly what the real service does, because it
 ///         answers a cancellation with an outcome rather than by throwing.
 ///     </para>
 ///     <para>
-///         <paramref name="Throws" /> is that contract BROKEN, so a lane that quietly depended on it can be shown not
+///         <see cref="Throws" /> is that contract BROKEN, so a lane that quietly depended on it can be shown not
 ///         to.
 ///     </para>
 ///     <para>
-///         <paramref name="Blocks" /> holds the CALLING THREAD rather than a task, which <paramref name="Parks" />
+///         <see cref="Blocks" /> holds the CALLING THREAD rather than a task, which <see cref="Parks" />
 ///         cannot: a tool that scans a filesystem does its work before its first await, and a lane that started it
 ///         inline would do that scanning inside the dispatcher's tick.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowScriptedTool(
-    ToolInvocationOutcomeKind Kind = ToolInvocationOutcomeKind.Executed,
-    string? Result = "the fake tool answered",
-    string Reason = "read-local",
-    bool Parks = false,
-    bool Throws = false,
-    bool Blocks = false);
+internal sealed class GraphWorkflowScriptedTool
+{
+    public ToolInvocationOutcomeKind Kind { get; init; }
+
+    public string? Result { get; init; } = "the fake tool answered";
+
+    public string Reason { get; init; } = "read-local";
+
+    public bool Parks { get; init; }
+
+    public bool Throws { get; init; }
+
+    public bool Blocks { get; init; }
+}
 
 /// <summary>
 ///     The tool-invocation seam, scripted per tool name. The ONE thing
@@ -118,7 +125,7 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        _calls.Enqueue(new GraphWorkflowToolCall(toolName, argumentsJson, context));
+        _calls.Enqueue(new GraphWorkflowToolCall { ToolName = toolName, ArgumentsJson = argumentsJson, Context = context });
         var script = _scripts.TryGetValue(toolName, out var scripted) ? scripted : new GraphWorkflowScriptedTool();
         _ = Started(toolName).TrySetResult();
 
@@ -171,4 +178,11 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
 }
 
 /// <summary>One invocation, as the lane asked for it. The arguments arrive as the JSON the executor serialized.</summary>
-internal sealed record GraphWorkflowToolCall(string ToolName, string ArgumentsJson, ToolInvocationContext Context);
+internal sealed class GraphWorkflowToolCall
+{
+    public required string ToolName { get; init; }
+
+    public required string ArgumentsJson { get; init; }
+
+    public required ToolInvocationContext Context { get; init; }
+}

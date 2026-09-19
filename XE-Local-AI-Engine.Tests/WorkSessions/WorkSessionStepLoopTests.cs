@@ -48,8 +48,8 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted]));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted] });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
@@ -136,7 +136,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed]));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantFailed] });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);
@@ -163,7 +163,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([], Park: true));
+        fake.Enqueue(new StepScript { EventTypes = [], Park = true });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -209,7 +209,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted], ParkThenContinue: true));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted], ParkThenContinue = true });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -263,7 +263,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([], Park: true, ParkToolName: RunCommandToolName));
+        fake.Enqueue(new StepScript { EventTypes = [], Park = true, ParkToolName = RunCommandToolName });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -305,7 +305,7 @@ public sealed class WorkSessionStepLoopTests
 
         // The registry is untouched, and the turn then hangs exactly as a parked one would — so only an armed clock
         // could end it early.
-        fake.Enqueue(new StepScript([], Park: true, ParkEventType: ChatStreamEventTypes.AssistantReconcile));
+        fake.Enqueue(new StepScript { EventTypes = [], Park = true, ParkEventType = ChatStreamEventTypes.AssistantReconcile });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -334,7 +334,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([], Park: true));
+        fake.Enqueue(new StepScript { EventTypes = [], Park = true });
 
         var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
         AssertEx.True(supervisor.TryStart(sessionId));
@@ -363,7 +363,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([], Park: true));
+        fake.Enqueue(new StepScript { EventTypes = [], Park = true });
 
         var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
         AssertEx.True(supervisor.TryStart(sessionId));
@@ -401,7 +401,7 @@ public sealed class WorkSessionStepLoopTests
         // run that already finished.
         foreach (var _ in sessionIds)
         {
-            fake.Enqueue(new StepScript([], Park: true));
+            fake.Enqueue(new StepScript { EventTypes = [], Park = true });
         }
 
         var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
@@ -437,7 +437,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], RecordFindingsDuringTheTurnAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = RecordFindingsDuringTheTurnAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -534,8 +534,8 @@ public sealed class WorkSessionStepLoopTests
         var fake = ResolveStream(factory, ref stream);
 
         // Step one is sent because the definition allows nothing that writes; the edit lands while it is in flight.
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => AllowAsync(services, agentId, WriteToolName)));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (services, _) => AllowAsync(services, agentId, WriteToolName) });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
                              .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RefuseUndeclaredWrites = true }));
@@ -578,8 +578,8 @@ public sealed class WorkSessionStepLoopTests
         await SetAllowListAsync(factory.Services, "tool-capable-model");
         var fake = ResolveStream(factory, ref stream);
 
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => DeleteAgentAsync(services, agentId)));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (services, _) => DeleteAgentAsync(services, agentId) });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
                              .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RefuseUndeclaredWrites = true }));
@@ -615,8 +615,8 @@ public sealed class WorkSessionStepLoopTests
         await SetAllowListAsync(factory.Services, "tool-capable-model");
         var fake = ResolveStream(factory, ref stream);
 
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
                              .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = null, ReasoningEffort = null, RefuseUndeclaredWrites = true }));
@@ -754,7 +754,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (_, _) => SpendProviderCallsAsync()));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (_, _) => SpendProviderCallsAsync() });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -788,7 +788,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], (_, _) => SpendProviderCallsAsync()));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantFailed], DuringTurn = (_, _) => SpendProviderCallsAsync() });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);
@@ -819,7 +819,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
@@ -873,8 +873,8 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
                              .TryStart(sessionId, new WorkSessionRuntimeOverride { ModelProfile = "qwen3-30b", ReasoningEffort = "high" }));
@@ -905,7 +905,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
@@ -937,8 +937,8 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, AgentWorkSessionKind.Workflow);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted]));
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted] });
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = DeclareCompleteAsync });
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);

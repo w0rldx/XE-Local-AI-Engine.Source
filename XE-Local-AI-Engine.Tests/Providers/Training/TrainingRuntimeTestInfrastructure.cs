@@ -91,15 +91,20 @@ internal static class TrainingRuntimeTestInfrastructure
             CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            _invocations.Add(new Invocation(file, [.. args], environment, workingDirectory));
+            _invocations.Add(new Invocation { File = file, Args = [.. args], Environment = environment, WorkingDirectory = workingDirectory });
             return Task.FromResult(_handler(file, args, logSink));
         }
 
-        internal sealed record Invocation(
-            string File,
-            IReadOnlyList<string> Args,
-            IReadOnlyDictionary<string, string> Environment,
-            string WorkingDirectory);
+        internal sealed class Invocation
+        {
+            public required string File { get; init; }
+
+            public required IReadOnlyList<string> Args { get; init; }
+
+            public required IReadOnlyDictionary<string, string> Environment { get; init; }
+
+            public required string WorkingDirectory { get; init; }
+        }
     }
 
     /// <summary>Captures published status events so phase order can be asserted.</summary>

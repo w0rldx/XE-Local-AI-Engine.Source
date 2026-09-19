@@ -177,14 +177,24 @@ internal static class GgufStoreTestInfrastructure
         {
             var index = CallCount;
             CallCount++;
-            _requests.Add(new RecordedRequest(request.Headers.Range?.ToString(),
-                request.Headers.Authorization?.Scheme,
-                request.Headers.Authorization?.Parameter));
+            _requests.Add(new RecordedRequest
+            {
+                Range = request.Headers.Range?.ToString(),
+                AuthScheme = request.Headers.Authorization?.Scheme,
+                AuthParameter = request.Headers.Authorization?.Parameter
+            });
             return Task.FromResult(_responder(request, index));
         }
     }
 
-    public sealed record RecordedRequest(string? Range, string? AuthScheme, string? AuthParameter);
+    public sealed class RecordedRequest
+    {
+        public required string? Range { get; init; }
+
+        public required string? AuthScheme { get; init; }
+
+        public required string? AuthParameter { get; init; }
+    }
 
     public sealed class TempModelsDir : IDisposable
     {

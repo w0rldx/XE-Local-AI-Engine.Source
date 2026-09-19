@@ -25,7 +25,9 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         }
 
         var fileId = Guid.NewGuid();
-        files.Add(new StagedFile(new ConversationUploadedFileInfo
+        files.Add(new StagedFile
+        {
+            Info = new ConversationUploadedFileInfo
         {
             FileId = fileId,
             ConversationId = conversationId,
@@ -37,7 +39,8 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
             ExtractedChars = extractedMarkdown.Length,
             CreatedAtUtc = 0
         },
-            extractedMarkdown));
+            Markdown = extractedMarkdown
+        });
     }
 
     public Task<ConversationUploadedFileInfo> AddAsync(ConversationUploadedFileInput input, CancellationToken cancellationToken)
@@ -100,7 +103,12 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         return new FakeStagingSnapshot(hostPath, stagedNames);
     }
 
-    private sealed record StagedFile(ConversationUploadedFileInfo Info, string Markdown);
+    private sealed record StagedFile
+    {
+        public required ConversationUploadedFileInfo Info { get; init; }
+
+        public required string Markdown { get; init; }
+    }
 
     private sealed class FakeStagingSnapshot : IConversationStagingSnapshot
     {

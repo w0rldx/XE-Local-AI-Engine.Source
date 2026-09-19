@@ -251,11 +251,15 @@ public sealed class ExternalAppHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture(hub, groups);
+        return new HubFixture { Hub = hub, Groups = groups };
     }
 
-    private sealed record HubFixture(ExternalAppHub Hub, IGroupManager Groups) : IDisposable
+    private sealed record HubFixture : IDisposable
     {
+        public required ExternalAppHub Hub { get; init; }
+
+        public required IGroupManager Groups { get; init; }
+
         public void Dispose() =>
             Hub.Dispose();
     }

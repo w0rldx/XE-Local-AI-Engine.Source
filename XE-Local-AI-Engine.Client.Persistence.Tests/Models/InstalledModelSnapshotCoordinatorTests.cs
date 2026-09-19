@@ -372,17 +372,25 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             RegistryAliases = aliases,
             MemberRelativePaths = memberArray.Select(static member => member.RelativePath).ToArray()
         };
-        return new SnapshotFixture(snapshot,
-            aliases,
-            owners,
-            new FakeSnapshotStore(candidate, snapshot, failuresBeforeSuccess));
+        return new SnapshotFixture
+        {
+            Snapshot = snapshot,
+            Aliases = aliases,
+            MemberOwners = owners,
+            Store = new FakeSnapshotStore(candidate, snapshot, failuresBeforeSuccess)
+        };
     }
 
-    private sealed record SnapshotFixture(
-        InstalledGgufSnapshot Snapshot,
-        InstalledModelRegistryAliasSnapshot[] Aliases,
-        string[] MemberOwners,
-        FakeSnapshotStore Store);
+    private sealed record SnapshotFixture
+    {
+        public required InstalledGgufSnapshot Snapshot { get; init; }
+
+        public required InstalledModelRegistryAliasSnapshot[] Aliases { get; init; }
+
+        public required string[] MemberOwners { get; init; }
+
+        public required FakeSnapshotStore Store { get; init; }
+    }
 
     private sealed class FakeSnapshotStore : IInstalledGgufSnapshotStore
     {

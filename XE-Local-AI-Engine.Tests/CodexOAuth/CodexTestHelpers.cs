@@ -85,7 +85,7 @@ internal sealed class CapturingHttpMessageHandler : HttpMessageHandler
             ? string.Empty
             : await request.Content.ReadAsStringAsync(cancellationToken);
 
-        Requests.Add(new CapturedRequest(request.Method, request.RequestUri, body));
+        Requests.Add(new CapturedRequest { Method = request.Method, Uri = request.RequestUri, Body = body });
 
         var responder = _responders.Count > 0
             ? _responders.Dequeue()
@@ -95,4 +95,11 @@ internal sealed class CapturingHttpMessageHandler : HttpMessageHandler
 }
 
 /// <summary>An immutable record of one captured outbound request.</summary>
-internal sealed record CapturedRequest(HttpMethod Method, Uri? Uri, string Body);
+internal sealed class CapturedRequest
+{
+    public required HttpMethod Method { get; init; }
+
+    public required Uri? Uri { get; init; }
+
+    public required string Body { get; init; }
+}

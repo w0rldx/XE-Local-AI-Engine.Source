@@ -101,16 +101,24 @@ public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDi
 ///         the card looks like from the supervisor's side.
 ///     </para>
 /// </summary>
-internal sealed record StepScript(
-    IReadOnlyList<string> EventTypes,
-    Func<IServiceProvider, Guid, Task>? DuringTurn = null,
-    bool Park = false,
-    bool ParkThenContinue = false,
-    string ParkToolName = "ask_user",
-    string ParkEventType = ChatStreamEventTypes.ApprovalRequested,
+internal sealed class StepScript
+{
+    public required IReadOnlyList<string> EventTypes { get; init; }
+
+    public Func<IServiceProvider, Guid, Task>? DuringTurn { get; init; }
+
+    public bool Park { get; init; }
+
+    public bool ParkThenContinue { get; init; }
+
+    public string ParkToolName { get; init; } = "ask_user";
+
+    public string ParkEventType { get; init; } = ChatStreamEventTypes.ApprovalRequested;
+
     // Rides on the scripted terminal event. The supervisor reads it to tell a step that spent a BOUND (the
     // provider-call cap, whose message is a fixed constant) from one that actually broke.
-    string? TerminalError = null);
+    public string? TerminalError { get; init; }
+}
 
 /// <summary>
 ///     Stands in for the chat send path. It records what the supervisor asked for, yields a scripted event sequence, and
@@ -187,7 +195,7 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
 
         var script = _scripts.TryDequeue(out var next)
             ? next
-            : new StepScript([ChatStreamEventTypes.AssistantCompleted]);
+            : new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] };
 
         var correlation = new NodeChatMessageCorrelation(request.ConversationId,
             request.MessageId.GetValueOrDefault(Guid.NewGuid()),

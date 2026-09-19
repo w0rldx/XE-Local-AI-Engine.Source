@@ -695,7 +695,7 @@ public sealed class ToolRelevanceChatClientTests
         }
 
         var received = inner.ReceivedOptions.Single();
-        return new SentArray(ReferenceEquals(options, received), NamesOf(received));
+        return new SentArray { PassedThrough = ReferenceEquals(options, received), Names = NamesOf(received) };
     }
 
     private static (List<AITool> Tools, ListToolsFunction ListTools) BuildArray(IReadOnlyList<string> names)
@@ -744,7 +744,12 @@ public sealed class ToolRelevanceChatClientTests
         return [.. (options?.Tools ?? []).Select(static tool => tool.Name)];
     }
 
-    private sealed record SentArray(bool PassedThrough, List<string> Names);
+    private sealed record SentArray
+    {
+        public required bool PassedThrough { get; init; }
+
+        public required List<string> Names { get; init; }
+    }
 
     // Stands in for a node-side selector that breaks in a way the hop cannot anticipate. The message and inner
     // exception are settable so the privacy test can plant a marker and prove neither reaches the sink.
@@ -784,10 +789,15 @@ public sealed class ToolRelevanceChatClientTests
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             ArgumentNullException.ThrowIfNull(formatter);
-            Entries.Add(new Entry(formatter(state, exception), exception));
+            Entries.Add(new Entry { Message = formatter(state, exception), Exception = exception });
         }
 
-        public sealed record Entry(string Message, Exception? Exception);
+        public sealed record Entry
+        {
+            public required string Message { get; init; }
+
+            public required Exception? Exception { get; init; }
+        }
     }
 
     // Counts selections and, when gated, blocks every caller inside the shared factory so a race is observable.

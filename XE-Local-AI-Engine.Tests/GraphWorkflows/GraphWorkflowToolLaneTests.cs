@@ -33,7 +33,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string tool = "probe_dispatch";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Parks = true });
         var runId = await DispatchedToolRunAsync(harness, tool);
 
         var call = await harness.ReadNodeRunAsync(runId, "call");
@@ -56,7 +56,7 @@ public sealed class GraphWorkflowToolLaneTests
         const string slow = "probe_parked";
         const string quick = "probe_prompt";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(slow, new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Script(slow, new GraphWorkflowScriptedTool { Parks = true });
         harness.Tools.Declare(quick);
 
         var parked = await DispatchedToolRunAsync(harness, slow);
@@ -87,7 +87,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string blocking = "probe_blocking";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(blocking, new GraphWorkflowScriptedTool(Blocks: true));
+        harness.Tools.Script(blocking, new GraphWorkflowScriptedTool { Blocks = true });
 
         // The dispatch tick RETURNING is the assertion: started inline, it comes back only once the block has ended.
         var blocked = await DispatchedToolRunAsync(harness, blocking);
@@ -125,7 +125,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string tool = "probe_settle";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Parks = true });
         var runId = await DispatchedToolRunAsync(harness, tool);
 
         var call = await harness.ReadNodeRunAsync(runId, "call");
@@ -156,7 +156,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string tool = "probe_stopped_lane";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Parks = true });
         var runId = await DispatchedToolRunAsync(harness, tool);
 
         var call = await harness.ReadNodeRunAsync(runId, "call");
@@ -184,7 +184,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string tool = "probe_faulting";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Throws: true));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Throws = true });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         // Every tick here goes through AdvanceOnceAsync, which does NOT swallow: a rethrowing row fails this outright
@@ -212,7 +212,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string tool = "probe_superseded";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Parks = true });
         var runId = await DispatchedToolRunAsync(harness, tool);
 
         var call = await harness.ReadNodeRunAsync(runId, "call");
@@ -276,7 +276,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         // A private host, and the cap is the thing under test rather than incidental: two slots against three nodes.
         await using var harness = GraphWorkflowHarness.PrivateToolHost(("GraphWorkflows:MaxConcurrentRuns", "2"));
-        harness.Tools.Script("probe_fanout", new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Script("probe_fanout", new GraphWorkflowScriptedTool { Parks = true });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolFanOut);
 
         await harness.AdvanceUntilAsync(runId,

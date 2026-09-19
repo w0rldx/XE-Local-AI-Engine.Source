@@ -282,7 +282,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             }
         };
 
-        return new PoisonedWorkspace(session, filterSentinel, fsmonitorSentinel);
+        return new PoisonedWorkspace { Session = session, FilterSentinel = filterSentinel, FsmonitorSentinel = fsmonitorSentinel };
     }
 
     private static async Task<string> ReadHeadAsync(string workspace)
@@ -333,5 +333,12 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     private static string ReadConfig(string workspace) =>
         File.ReadAllText(Path.Combine(workspace, ".git", "config"));
 
-    private sealed record PoisonedWorkspace(DevelopmentWorkspaceSession Session, string FilterSentinel, string FsmonitorSentinel);
+    private sealed record PoisonedWorkspace
+    {
+        public required DevelopmentWorkspaceSession Session { get; init; }
+
+        public required string FilterSentinel { get; init; }
+
+        public required string FsmonitorSentinel { get; init; }
+    }
 }

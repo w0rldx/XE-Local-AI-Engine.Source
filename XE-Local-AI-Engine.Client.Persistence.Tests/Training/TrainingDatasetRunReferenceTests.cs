@@ -123,7 +123,7 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
         var artifacts = new TrainingBaseArtifactStore(context, TimeProvider.System);
         var downloading = await artifacts.StartDownloadAsync("org/base-model", new string('b', count: 40));
         var baseArtifact = await artifacts.MarkReadyAsync(downloading.Id, downloading.Version, Encoding.UTF8.GetBytes("[]"), totalBytes: 1, licenseJson: null);
-        return new RunFixture(ready.Id, ready.Version, baseArtifact.Id);
+        return new RunFixture { DatasetId = ready.Id, DatasetVersion = ready.Version, BaseArtifactId = baseArtifact.Id };
     }
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileName)
@@ -135,5 +135,12 @@ public sealed class TrainingDatasetRunReferenceTests : IDisposable
         return context;
     }
 
-    private sealed record RunFixture(Guid DatasetId, long DatasetVersion, Guid BaseArtifactId);
+    private sealed record RunFixture
+    {
+        public required Guid DatasetId { get; init; }
+
+        public required long DatasetVersion { get; init; }
+
+        public required Guid BaseArtifactId { get; init; }
+    }
 }

@@ -196,7 +196,7 @@ public sealed class IntegrationSseEndToEndTests
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"{prefix}-agent");
         var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, prefix, agentId);
         var key = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-key");
-        return new Seeded(trigger.Name, key.Key);
+        return new Seeded { TriggerName = trigger.Name, Key = key.Key };
     }
 
     private static async Task<(Guid ExecutionId, IReadOnlyList<Frame> Frames)> StreamAsync(HttpClient client, Seeded seeded, int frameLimit)
@@ -260,7 +260,7 @@ public sealed class IntegrationSseEndToEndTests
             }
             else if (line.StartsWith("id: ", StringComparison.Ordinal) && type is not null)
             {
-                frames.Add(new Frame(type, long.Parse(line[4..], CultureInfo.InvariantCulture), executionId));
+                frames.Add(new Frame { Type = type, Sequence = long.Parse(line[4..], CultureInfo.InvariantCulture), ExecutionId = executionId });
                 type = null;
             }
         }
@@ -268,7 +268,19 @@ public sealed class IntegrationSseEndToEndTests
         return frames;
     }
 
-    private sealed record Seeded(string TriggerName, string Key);
+    private sealed record Seeded
+    {
+        public required string TriggerName { get; init; }
 
-    private sealed record Frame(string Type, long Sequence, Guid ExecutionId);
+        public required string Key { get; init; }
+    }
+
+    private sealed record Frame
+    {
+        public required string Type { get; init; }
+
+        public required long Sequence { get; init; }
+
+        public required Guid ExecutionId { get; init; }
+    }
 }

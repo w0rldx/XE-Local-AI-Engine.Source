@@ -33,7 +33,7 @@ public sealed class HostBootSmokeE2ETests
                 return null;
             }
 
-            return new BoundHost(factory, candidate);
+            return new BoundHost { Factory = factory, Port = candidate };
         });
 
         await using var factory = bound.Factory;
@@ -60,5 +60,10 @@ public sealed class HostBootSmokeE2ETests
             _ => false,
         };
 
-    private sealed record BoundHost(XENodeE2EWebApplicationFactory Factory, int Port);
+    private sealed record BoundHost
+    {
+        public required XENodeE2EWebApplicationFactory Factory { get; init; }
+
+        public required int Port { get; init; }
+    }
 }

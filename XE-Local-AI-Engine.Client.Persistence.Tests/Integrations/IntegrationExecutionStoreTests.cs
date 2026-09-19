@@ -1057,7 +1057,7 @@ public sealed class IntegrationExecutionStoreTests
         _ = context.IntegrationApiKeys.Add(key);
         _ = await context.SaveChangesAsync();
 
-        return new SeedState(trigger.Id, trigger.TargetAgentDefinitionId, key.Id, key.PrincipalId, key.KeyPrefix);
+        return new SeedState { TriggerId = trigger.Id, AgentDefinitionId = trigger.TargetAgentDefinitionId, KeyId = key.Id, PrincipalId = key.PrincipalId, KeyPrefix = key.KeyPrefix };
     }
 
     private static async Task<(long Sessions, long Executions, long Events)> CountsAsync(IntegrationTestFixture fixture) =>
@@ -1065,5 +1065,16 @@ public sealed class IntegrationExecutionStoreTests
             await fixture.RawTableCountAsync("integration_executions"),
             await fixture.RawTableCountAsync("integration_execution_events"));
 
-    private sealed record SeedState(Guid TriggerId, Guid AgentDefinitionId, Guid KeyId, Guid PrincipalId, string KeyPrefix);
+    private sealed record SeedState
+    {
+        public required Guid TriggerId { get; init; }
+
+        public required Guid AgentDefinitionId { get; init; }
+
+        public required Guid KeyId { get; init; }
+
+        public required Guid PrincipalId { get; init; }
+
+        public required string KeyPrefix { get; init; }
+    }
 }

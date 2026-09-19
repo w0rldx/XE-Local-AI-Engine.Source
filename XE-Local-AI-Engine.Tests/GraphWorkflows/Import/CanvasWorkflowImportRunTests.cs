@@ -30,7 +30,7 @@ public sealed class CanvasWorkflowImportRunTests
     public async Task AnImportedPause_StillHandsTheNodeAfterItTheAnswerItIsApproving()
     {
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        harness.Invocations.Script(DrafterInstructions, new GraphWorkflowScriptedTurn(Text: DraftedAnswer));
+        harness.Invocations.Script(DrafterInstructions, new GraphWorkflowScriptedTurn { Text = DraftedAnswer });
 
         var graphJson = CanvasWorkflowImport.MapGraph(CanvasGraphs.AgentAcrossPause).Document.ToJsonString();
         var runId = await harness.StartRunAsync(graphJson);

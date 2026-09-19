@@ -25,7 +25,7 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 5_000_000_000, SizeVramBytes: 4_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes = 5_000_000_000, SizeVramBytes = 4_000_000_000 }
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         var capabilityClient = new OllamaModelCapabilityClient(ollamaClient);
@@ -47,7 +47,7 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 7_000_000_000, SizeVramBytes: 6_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes = 7_000_000_000, SizeVramBytes = 6_000_000_000 }
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
@@ -71,7 +71,7 @@ public sealed class RunningModelSnapshotMappingTests
         // (A running model always reports an expiry, so this case isolates the size/vram normalization.)
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5))
+            new FakeOllamaState.FakeOllamaRunningModel { Name = "llama3:8b", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5) }
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);

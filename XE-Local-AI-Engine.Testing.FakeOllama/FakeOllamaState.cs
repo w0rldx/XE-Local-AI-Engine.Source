@@ -79,13 +79,18 @@ public sealed class FakeOllamaState
     }
 
     /// <summary>
-    ///     Value object carrying fake ollama running model data. <paramref name="SizeBytes" /> and
-    ///     <paramref name="SizeVramBytes" /> mirror Ollama's <c>/api/ps</c> <c>size</c> / <c>size_vram</c> fields so the
+    ///     Value object carrying fake ollama running model data. <see cref="SizeBytes" /> and
+    ///     <see cref="SizeVramBytes" /> mirror Ollama's <c>/api/ps</c> <c>size</c> / <c>size_vram</c> fields so the
     ///     loaded-models memory mapping is exercisable.
     /// </summary>
-    public sealed record FakeOllamaRunningModel(
-        string Name,
-        DateTimeOffset? ExpiresAt,
-        long SizeBytes = 0,
-        long SizeVramBytes = 0);
+    public sealed class FakeOllamaRunningModel
+    {
+        public required string Name { get; init; }
+
+        public required DateTimeOffset? ExpiresAt { get; init; }
+
+        public long SizeBytes { get; init; }
+
+        public long SizeVramBytes { get; init; }
+    }
 }

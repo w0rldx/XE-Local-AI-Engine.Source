@@ -80,7 +80,7 @@ internal sealed class DevWorkflowTestFixture : IDisposable
             DefinitionGraphHash = definition.GraphHash,
             GraphJson = graphJson
         });
-        return new DevWorkflowSeed(workItem.Id, definition.Id, run.Id, run.Version);
+        return new DevWorkflowSeed { WorkItemId = workItem.Id, DefinitionId = definition.Id, RunId = run.Id, RunVersion = run.Version };
     }
 
     /// <summary>A rule set scoped to everything, which is what most tests want one for.</summary>
@@ -162,4 +162,13 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     }
 }
 
-internal sealed record DevWorkflowSeed(Guid WorkItemId, Guid DefinitionId, Guid RunId, long RunVersion);
+internal sealed class DevWorkflowSeed
+{
+    public required Guid WorkItemId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required long RunVersion { get; init; }
+}

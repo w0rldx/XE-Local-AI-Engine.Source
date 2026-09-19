@@ -96,10 +96,13 @@ internal static class ContainerCreateEndpoint
 
         foreach (var mount in mounts.OfType<JsonObject>())
         {
-            container.EffectiveMounts.Add(new FakeDockerMountPoint(mount["Type"]?.GetValue<string>() ?? "bind",
-                mount["Source"]?.GetValue<string>() ?? string.Empty,
-                mount["Target"]?.GetValue<string>() ?? string.Empty,
-                ReadWrite: mount["ReadOnly"]?.GetValue<bool>() != true));
+            container.EffectiveMounts.Add(new FakeDockerMountPoint
+            {
+                Type = mount["Type"]?.GetValue<string>() ?? "bind",
+                Source = mount["Source"]?.GetValue<string>() ?? string.Empty,
+                Destination = mount["Target"]?.GetValue<string>() ?? string.Empty,
+                ReadWrite = mount["ReadOnly"]?.GetValue<bool>() != true
+            });
         }
     }
 
@@ -120,11 +123,12 @@ internal static class ContainerCreateEndpoint
             }
 
             var volumeName = FakeDockerState.NewId();
-            container.EffectiveMounts.Add(new FakeDockerMountPoint("volume",
-                $"/var/lib/docker/volumes/{volumeName}/_data",
-                declared,
-                ReadWrite: true)
+            container.EffectiveMounts.Add(new FakeDockerMountPoint
             {
+                Type = "volume",
+                Source = $"/var/lib/docker/volumes/{volumeName}/_data",
+                Destination = declared,
+                ReadWrite = true,
                 Name = volumeName
             });
         }

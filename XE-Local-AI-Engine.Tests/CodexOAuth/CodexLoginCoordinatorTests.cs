@@ -119,7 +119,7 @@ public sealed class CodexLoginCoordinatorTests
             var completion = new TaskCompletionSource<CodexTokens>(TaskCreationOptions.RunContinuationsAsynchronously);
             cancellationToken.Register(() => completion.TrySetCanceled(CancellationToken.None));
             var handle = new CodexLoginHandle { AuthorizeUrl = new Uri($"https://auth.openai.com/authorize?attempt={index}"), Completion = completion.Task };
-            LastHandle = new FakeHandle(handle, completion);
+            LastHandle = new FakeHandle { Handle = handle, Completion = completion };
             return handle;
         }
 
@@ -144,8 +144,12 @@ public sealed class CodexLoginCoordinatorTests
         }
     }
 
-    private sealed record FakeHandle(CodexLoginHandle Handle, TaskCompletionSource<CodexTokens> Completion)
+    private sealed record FakeHandle
     {
+        public required CodexLoginHandle Handle { get; init; }
+
+        public required TaskCompletionSource<CodexTokens> Completion { get; init; }
+
         public Uri AuthorizeUrl => Handle.AuthorizeUrl;
     }
 }

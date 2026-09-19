@@ -183,7 +183,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
             Encoding.UTF8.GetBytes("[]"),
             totalBytes: 1,
             licenseJson: null);
-        return new SeedFixture(ready.Id, ready.Version, checkpoint.Id);
+        return new SeedFixture { DatasetId = ready.Id, DatasetVersion = ready.Version, BaseArtifactId = checkpoint.Id };
     }
 
     private async Task<(Guid Base, Guid Tuned)> CompleteEvaluationsAsync(string token,
@@ -295,7 +295,14 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         return JsonDocument.Parse(text);
     }
 
-    private sealed record SeedFixture(Guid DatasetId, long DatasetVersion, Guid BaseArtifactId);
+    private sealed record SeedFixture
+    {
+        public required Guid DatasetId { get; init; }
+
+        public required long DatasetVersion { get; init; }
+
+        public required Guid BaseArtifactId { get; init; }
+    }
 }
 
 /// <summary>The negative control: without every named verdict the lifecycle guard must fail rather than report green.</summary>

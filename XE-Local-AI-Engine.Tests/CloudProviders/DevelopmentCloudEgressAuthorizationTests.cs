@@ -373,12 +373,15 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
             Reject(bundle.SizeBytes > MaximumBundleBytes, "oversized-bundle");
             Reject(!bundle.SecretScanPassed, "secret-scan-failed");
 
-            Audits.Add(new AuditRecord(envelope.ProjectId,
-                envelope.TaskId,
-                envelope.AttemptId,
-                request.ProviderName,
-                request.ModelId,
-                envelope.AuthorizedBundleHash!));
+            Audits.Add(new AuditRecord
+            {
+                ProjectId = envelope.ProjectId,
+                TaskId = envelope.TaskId,
+                AttemptId = envelope.AttemptId,
+                ProviderName = request.ProviderName,
+                ModelId = request.ModelId,
+                BundleHash = envelope.AuthorizedBundleHash!
+            });
         }
 
         private static void Reject(bool condition, string reason)
@@ -390,21 +393,38 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         }
     }
 
-    private sealed record BundleState(string Id, string Hash, long SizeBytes, bool SecretScanPassed, DateTimeOffset ExpiresAt)
+    private sealed record BundleState
     {
+        public required string Id { get; init; }
+
+        public required string Hash { get; init; }
+
+        public required long SizeBytes { get; init; }
+
+        public required bool SecretScanPassed { get; init; }
+
+        public required DateTimeOffset ExpiresAt { get; init; }
+
         public static BundleState Valid(string id = "bundle-1")
         {
-            return new BundleState(id, "bundle-hash", SizeBytes: 256, SecretScanPassed: true, Now.AddMinutes(10));
+            return new BundleState { Id = id, Hash = "bundle-hash", SizeBytes = 256, SecretScanPassed = true, ExpiresAt = Now.AddMinutes(10) };
         }
     }
 
-    private sealed record AuditRecord(
-        string ProjectId,
-        string TaskId,
-        string AttemptId,
-        string ProviderName,
-        string? ModelId,
-        string BundleHash);
+    private sealed record AuditRecord
+    {
+        public required string ProjectId { get; init; }
+
+        public required string TaskId { get; init; }
+
+        public required string AttemptId { get; init; }
+
+        public required string ProviderName { get; init; }
+
+        public required string? ModelId { get; init; }
+
+        public required string BundleHash { get; init; }
+    }
 
     private sealed class FixedCloudFactory : IActiveCloudChatClientFactory
     {

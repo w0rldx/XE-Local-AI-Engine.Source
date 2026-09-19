@@ -333,7 +333,7 @@ public sealed class IntegrationExecutionEndpointTests
         var first = await AdmitAsync(store, triggerId, principalId, keyPrefix, receivedAtUtc: 1_000);
         var second = await AdmitAsync(store, triggerId, principalId, keyPrefix, receivedAtUtc: 2_000);
         var other = await AdmitAsync(store, otherTriggerId, principalId, keyPrefix, receivedAtUtc: 3_000);
-        return new Seeded(principalId, keyPrefix, triggerId, otherTriggerId, [first, second], other);
+        return new Seeded { PrincipalId = principalId, KeyPrefix = keyPrefix, TriggerId = triggerId, OtherTriggerId = otherTriggerId, ExecutionIds = [first, second], OtherTriggerExecutionId = other };
     }
 
     /// <summary>
@@ -366,13 +366,20 @@ public sealed class IntegrationExecutionEndpointTests
         return executionId;
     }
 
-    private sealed record Seeded(
-        Guid PrincipalId,
-        string KeyPrefix,
-        Guid TriggerId,
-        Guid OtherTriggerId,
-        IReadOnlyList<Guid> ExecutionIds,
-        Guid OtherTriggerExecutionId);
+    private sealed record Seeded
+    {
+        public required Guid PrincipalId { get; init; }
+
+        public required string KeyPrefix { get; init; }
+
+        public required Guid TriggerId { get; init; }
+
+        public required Guid OtherTriggerId { get; init; }
+
+        public required IReadOnlyList<Guid> ExecutionIds { get; init; }
+
+        public required Guid OtherTriggerExecutionId { get; init; }
+    }
 
     private sealed record ExecutionSummaryBody(
         Guid Id,

@@ -46,17 +46,22 @@ internal enum GraphWorkflowTurnOutcome
 ///     One scripted turn, keyed by a fragment of the seed user turn the node sends. Defaults are the happy path: text
 ///     out, a full usage block, and a <c>stop</c> finish reason.
 ///     <para>
-///         <paramref name="FailureCategory" /> applies to <see cref="GraphWorkflowTurnOutcome.Fails" /> only, and it is
+///         <see cref="FailureCategory" /> applies to <see cref="GraphWorkflowTurnOutcome.Fails" /> only, and it is
 ///         scriptable because the runner's watchdog reports a TIMEOUT as an ordinary failed terminal — the category is
 ///         the only place that difference survives, and mapping it is what keeps a timed-out node off the plain
 ///         provider-failure class.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowScriptedTurn(
-    GraphWorkflowTurnOutcome Outcome = GraphWorkflowTurnOutcome.Completes,
-    string Text = "the fake agent answered",
-    string FinishReason = "stop",
-    FailureCategory FailureCategory = FailureCategory.ProviderUnreachable);
+internal sealed class GraphWorkflowScriptedTurn
+{
+    public GraphWorkflowTurnOutcome Outcome { get; init; }
+
+    public string Text { get; init; } = "the fake agent answered";
+
+    public string FinishReason { get; init; } = "stop";
+
+    public FailureCategory FailureCategory { get; init; } = FailureCategory.ProviderUnreachable;
+}
 
 /// <summary>
 ///     The invocation-runner seam: there is no installed model here for a turn to run on. It is one of the FIVE seams

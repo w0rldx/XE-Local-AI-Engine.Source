@@ -1565,7 +1565,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
-        return new CommandResult(process.ExitCode, await output, await error);
+        return new CommandResult { ExitCode = process.ExitCode, StandardOutput = await output, StandardError = await error };
     }
 
     private static void EnsureSuccess(CommandResult result) =>
@@ -1596,7 +1596,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         return resolver;
     }
 
-    private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
+    private sealed record CommandResult
+    {
+        public required int ExitCode { get; init; }
+
+        public required string StandardOutput { get; init; }
+
+        public required string StandardError { get; init; }
+    }
 
     /// <summary>
     ///     Passes every call through to the real process backend and records the create requests. A decorator rather

@@ -67,55 +67,91 @@ public sealed class TrainingExceptionHandlerTests
         var handled = await new TrainingExceptionHandler().TryHandleAsync(context, exception, CancellationToken.None);
         body.Position = 0;
         using var reader = new StreamReader(body);
-        return new HandlerResult(handled,
-            context.Response.StatusCode,
-            context.Response.ContentType ?? string.Empty,
-            await reader.ReadToEndAsync());
+        return new HandlerResult
+        {
+            Handled = handled,
+            StatusCode = context.Response.StatusCode,
+            ContentType = context.Response.ContentType ?? string.Empty,
+            Body = await reader.ReadToEndAsync()
+        };
     }
 
     private static readonly TrainingHandlerCase[] ClaimedCases =
     [
-        new("not found",
-            new TrainingNotFoundException("unsafe-storage-path:/training/private"),
-            StatusCodes.Status404NotFound,
-            TrainingErrorCode.NotFound,
-            "The requested training resource was not found.",
-            "unsafe-storage-path"),
-        new("validation",
-            new TrainingValidationException("The training request is invalid."),
-            StatusCodes.Status400BadRequest,
-            TrainingErrorCode.InvalidRequest,
-            "The training request is invalid.",
-            ForbiddenProviderText: null),
-        new("known conflict",
-            new TrainingConflictException("TrainingBusy"),
-            StatusCodes.Status409Conflict,
-            TrainingErrorCode.TrainingBusy,
-            "Training, an evaluation or an export holds the GPU; dataset generation cannot start until it finishes.",
-            ForbiddenProviderText: null),
-        new("unknown conflict fallback",
-            new TrainingConflictException("unsafe-provider-conflict"),
-            StatusCodes.Status409Conflict,
-            TrainingErrorCode.InvalidLifecycleTransition,
-            "The training lifecycle transition is not allowed.",
-            "unsafe-provider-conflict")
+        new()
+        {
+            Name = "not found",
+            Exception = new TrainingNotFoundException("unsafe-storage-path:/training/private"),
+            StatusCode = StatusCodes.Status404NotFound,
+            Code = TrainingErrorCode.NotFound,
+            Message = "The requested training resource was not found.",
+            ForbiddenProviderText = "unsafe-storage-path"
+        },
+        new()
+        {
+            Name = "validation",
+            Exception = new TrainingValidationException("The training request is invalid."),
+            StatusCode = StatusCodes.Status400BadRequest,
+            Code = TrainingErrorCode.InvalidRequest,
+            Message = "The training request is invalid.",
+            ForbiddenProviderText = null
+        },
+        new()
+        {
+            Name = "known conflict",
+            Exception = new TrainingConflictException("TrainingBusy"),
+            StatusCode = StatusCodes.Status409Conflict,
+            Code = TrainingErrorCode.TrainingBusy,
+            Message = "Training, an evaluation or an export holds the GPU; dataset generation cannot start until it finishes.",
+            ForbiddenProviderText = null
+        },
+        new()
+        {
+            Name = "unknown conflict fallback",
+            Exception = new TrainingConflictException("unsafe-provider-conflict"),
+            StatusCode = StatusCodes.Status409Conflict,
+            Code = TrainingErrorCode.InvalidLifecycleTransition,
+            Message = "The training lifecycle transition is not allowed.",
+            ForbiddenProviderText = "unsafe-provider-conflict"
+        }
     ];
 
     private static readonly FallthroughCase[] FallthroughCases =
     [
-        new("contextual KeyNotFoundException", new KeyNotFoundException("contextual")),
-        new("unrelated InvalidOperationException", new InvalidOperationException("unrelated"))
+        new() { Name = "contextual KeyNotFoundException", Exception = new KeyNotFoundException("contextual") },
+        new() { Name = "unrelated InvalidOperationException", Exception = new InvalidOperationException("unrelated") }
     ];
 
-    private sealed record TrainingHandlerCase(
-        string Name,
-        Exception Exception,
-        int StatusCode,
-        TrainingErrorCode Code,
-        string Message,
-        string? ForbiddenProviderText);
+    private sealed record TrainingHandlerCase
+    {
+        public required string Name { get; init; }
 
-    private sealed record FallthroughCase(string Name, Exception Exception);
+        public required Exception Exception { get; init; }
 
-    private sealed record HandlerResult(bool Handled, int StatusCode, string ContentType, string Body);
+        public required int StatusCode { get; init; }
+
+        public required TrainingErrorCode Code { get; init; }
+
+        public required string Message { get; init; }
+
+        public required string? ForbiddenProviderText { get; init; }
+    }
+
+    private sealed record FallthroughCase
+    {
+        public required string Name { get; init; }
+
+        public required Exception Exception { get; init; }
+    }
+
+    private sealed record HandlerResult
+    {
+        public required bool Handled { get; init; }
+
+        public required int StatusCode { get; init; }
+
+        public required string ContentType { get; init; }
+
+        public required string Body { get; init; }
+    }
 }

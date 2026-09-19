@@ -416,7 +416,7 @@ public sealed class IntegrationSseRoutesTests
         var narrow = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-narrow", [other.Id], broad.View.PrincipalId);
         var foreign = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-foreign");
 
-        return new Seeded(trigger.Name, trigger.Id, broad.View.PrincipalId, broad.View.KeyPrefix, broad.Key, narrow.Key, foreign.Key);
+        return new Seeded { TriggerName = trigger.Name, TriggerId = trigger.Id, PrincipalId = broad.View.PrincipalId, KeyPrefix = broad.View.KeyPrefix, BroadKey = broad.Key, NarrowKey = narrow.Key, ForeignKey = foreign.Key };
     }
 
     /// <summary>
@@ -560,14 +560,22 @@ public sealed class IntegrationSseRoutesTests
         return await client.SendAsync(request, completion);
     }
 
-    private sealed record Seeded(
-        string TriggerName,
-        Guid TriggerId,
-        Guid PrincipalId,
-        string KeyPrefix,
-        string BroadKey,
-        string NarrowKey,
-        string ForeignKey);
+    private sealed record Seeded
+    {
+        public required string TriggerName { get; init; }
+
+        public required Guid TriggerId { get; init; }
+
+        public required Guid PrincipalId { get; init; }
+
+        public required string KeyPrefix { get; init; }
+
+        public required string BroadKey { get; init; }
+
+        public required string NarrowKey { get; init; }
+
+        public required string ForeignKey { get; init; }
+    }
 
     private sealed record EventListBody(IReadOnlyList<EventBody> Items);
 

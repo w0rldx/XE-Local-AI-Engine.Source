@@ -41,7 +41,7 @@ internal sealed class RecordingLogger<T> : ILogger<T>
         Func<TState, Exception?, string> formatter)
     {
         ArgumentNullException.ThrowIfNull(formatter);
-        var entry = new Entry(logLevel, formatter(state, exception), exception);
+        var entry = new Entry { Level = logLevel, Message = formatter(state, exception), Exception = exception };
         lock (_gate)
         {
             _entries.Add(entry);
@@ -51,5 +51,12 @@ internal sealed class RecordingLogger<T> : ILogger<T>
     public bool HasEntry(LogLevel level, string messageFragment) =>
         Entries.Any(entry => entry.Level == level && entry.Message.Contains(messageFragment, StringComparison.Ordinal));
 
-    public sealed record Entry(LogLevel Level, string Message, Exception? Exception);
+    public sealed class Entry
+    {
+        public required LogLevel Level { get; init; }
+
+        public required string Message { get; init; }
+
+        public required Exception? Exception { get; init; }
+    }
 }

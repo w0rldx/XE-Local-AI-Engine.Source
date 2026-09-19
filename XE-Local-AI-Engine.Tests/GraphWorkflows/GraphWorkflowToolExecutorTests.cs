@@ -92,7 +92,7 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         const string tool = "probe_text";
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Result: "42 files, none of them interesting"));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Result = "42 files, none of them interesting" });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         var call = await SettleToolAsync(harness, runId);
@@ -115,7 +115,7 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         // The graph fixture names this tool, and only this test uses that fixture.
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script("probe_json", new GraphWorkflowScriptedTool(Result: """{"ok":true,"hits":3}"""));
+        harness.Tools.Script("probe_json", new GraphWorkflowScriptedTool { Result = """{"ok":true,"hits":3}""" });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolThenCondition);
 
         await harness.AdvanceUntilAsync(runId,
@@ -149,7 +149,7 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         const string reason = "the fake refused, and said so structurally";
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(kind, Reason: reason));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Kind = kind, Reason = reason });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         var call = await SettleToolAsync(harness, runId);
@@ -185,7 +185,7 @@ public sealed class GraphWorkflowToolExecutorTests
         GraphWorkflowFailureClass failureClass)
     {
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(kind, Reason: "the fake could not answer"));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Kind = kind, Reason = "the fake could not answer" });
 
         // The shipped three attempts, deliberately: at maxAttempts 1 every retryable class reports AttemptsExhausted
         // on its only try, and the two would be indistinguishable.
@@ -219,7 +219,7 @@ public sealed class GraphWorkflowToolExecutorTests
         // A private host: the cap is host-level configuration, and 1024 is the validator's floor — the smallest cap a
         // real node can be configured with.
         await using var harness = GraphWorkflowHarness.PrivateToolHost(("GraphWorkflows:MaxOutputJsonBytes", "1024"));
-        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Result: new string('a', count: 4096)));
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { Result = new string('a', count: 4096) });
         var runId = await harness.StartRunAsync(Graph(tool));
 
         var call = await SettleToolAsync(harness, runId);

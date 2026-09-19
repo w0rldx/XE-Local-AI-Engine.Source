@@ -117,7 +117,7 @@ public sealed class ContainerRuntimeRealDaemonTests
         var bound = await LoopbackPort.BindWithRetryAsync(async candidate =>
             {
                 var created = await box.RunAsync(box.SpecificationOnPort(candidate));
-                return await box.TryStartAsync(created) ? new BoundContainer(created, candidate) : null;
+                return await box.TryStartAsync(created) ? new BoundContainer { ContainerId = created, HostPort = candidate } : null;
             },
             maxAttempts: 2);
 
@@ -570,7 +570,12 @@ public sealed class ContainerRuntimeRealDaemonTests
     }
 
     /// <summary>One container that started, together with the host port it was asked to bind.</summary>
-    private sealed record BoundContainer(string ContainerId, int HostPort);
+    private sealed record BoundContainer
+    {
+        public required string ContainerId { get; init; }
+
+        public required int HostPort { get; init; }
+    }
 
     /// <summary>
     ///     A synchronous <see cref="IProgress{T}" />. <see cref="Progress{T}" /> posts each callback to the

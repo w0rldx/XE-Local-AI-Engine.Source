@@ -821,19 +821,27 @@ public sealed class OrchestrationAgentFactoryTests
             var hasNumCtxKey = properties?.ContainsKey("num_ctx") ?? false;
             var numCtx = hasNumCtxKey ? properties!["num_ctx"] : null;
 
-            _requests.Add(new RecordedRequest(systemText, options?.ModelId, hasThinkKey, think, codexEffort, hasNumCtxKey, numCtx));
+            _requests.Add(new RecordedRequest { SystemText = systemText, ModelId = options?.ModelId, HasThinkKey = hasThinkKey, Think = think, CodexReasoningEffort = codexEffort, HasNumCtxKey = hasNumCtxKey, NumCtx = numCtx });
         }
     }
 
     /// <summary>One participant's captured outbound request: the system text it saw plus its resolved model + reasoning + window.</summary>
-    private sealed record RecordedRequest(
-        string? SystemText,
-        string? ModelId,
-        bool HasThinkKey,
-        object? Think,
-        string? CodexReasoningEffort,
-        bool HasNumCtxKey,
-        object? NumCtx);
+    private sealed record RecordedRequest
+    {
+        public required string? SystemText { get; init; }
+
+        public required string? ModelId { get; init; }
+
+        public required bool HasThinkKey { get; init; }
+
+        public required object? Think { get; init; }
+
+        public required string? CodexReasoningEffort { get; init; }
+
+        public required bool HasNumCtxKey { get; init; }
+
+        public required object? NumCtx { get; init; }
+    }
 
     /// <summary>
     ///     Scripted model for the combined approval+handoff scenario. Triage (identified by the handoff tool in

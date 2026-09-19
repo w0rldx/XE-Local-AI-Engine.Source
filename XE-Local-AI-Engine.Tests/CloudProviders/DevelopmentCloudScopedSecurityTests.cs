@@ -274,7 +274,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
         var context = await service.CreateAsync(snapshot,
             [new DevelopmentCloudContextExcerpt { RelativePath = "src/Feature.cs", Content = "sealed class Feature { }" }]);
-        return new CreatedContext(context, builder.Built, store);
+        return new CreatedContext { Context = context, Bundle = builder.Built, Store = store };
     }
 
     private static DevelopmentExecutionSnapshot CloudSnapshot(DevelopmentAttemptRole role, string? workflowPolicyText = null) =>
@@ -310,10 +310,14 @@ public sealed class DevelopmentCloudScopedSecurityTests
             WorkflowPolicyText = workflowPolicyText
         };
 
-    private sealed record CreatedContext(
-        DevelopmentCloudAttemptContext Context,
-        DevelopmentCloudContextBundle? Bundle,
-        IDevelopmentStore Store);
+    private sealed record CreatedContext
+    {
+        public required DevelopmentCloudAttemptContext Context { get; init; }
+
+        public required DevelopmentCloudContextBundle? Bundle { get; init; }
+
+        public required IDevelopmentStore Store { get; init; }
+    }
 
     /// <summary>Hands back the REAL bundle the service built, which is the only thing a cloud role can read.</summary>
     private sealed class CapturingContextBuilder : IDevelopmentCloudContextBuilder

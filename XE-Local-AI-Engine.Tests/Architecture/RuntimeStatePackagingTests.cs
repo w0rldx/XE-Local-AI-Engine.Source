@@ -8,15 +8,15 @@ public sealed class RuntimeStatePackagingTests
 {
     private static readonly RuntimeDirectoryProtection[] RuntimeDirectoryProtections =
     [
-        new("development/**", "XE-Local-AI-Engine.Client/development/"),
-        new("generated-images/**", "XE-Local-AI-Engine.Client/generated-images/"),
-        new("logs/**", "XE-Local-AI-Engine.Client/logs/"),
-        new("backups/**", "XE-Local-AI-Engine.Client/backups/"),
-        new("dp-keys/**", "dp-keys/"),
-        new("models/**", "XE-Local-AI-Engine.Client/models/"),
-        new("uploaded-files/**", "uploaded-files/"),
-        new("agent-home-state/**", "agent-home-state/"),
-        new("knowledge-base/**", "XE-Local-AI-Engine.Client/knowledge-base/")
+        new() { ProjectGlob = "development/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/development/" },
+        new() { ProjectGlob = "generated-images/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/generated-images/" },
+        new() { ProjectGlob = "logs/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/logs/" },
+        new() { ProjectGlob = "backups/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/backups/" },
+        new() { ProjectGlob = "dp-keys/**", GitIgnorePattern = "dp-keys/" },
+        new() { ProjectGlob = "models/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/models/" },
+        new() { ProjectGlob = "uploaded-files/**", GitIgnorePattern = "uploaded-files/" },
+        new() { ProjectGlob = "agent-home-state/**", GitIgnorePattern = "agent-home-state/" },
+        new() { ProjectGlob = "knowledge-base/**", GitIgnorePattern = "XE-Local-AI-Engine.Client/knowledge-base/" }
     ];
 
     private static readonly string[] WebSdkItemTypes =
@@ -65,5 +65,10 @@ public sealed class RuntimeStatePackagingTests
         }
     }
 
-    private sealed record RuntimeDirectoryProtection(string ProjectGlob, string GitIgnorePattern);
+    private sealed record RuntimeDirectoryProtection
+    {
+        public required string ProjectGlob { get; init; }
+
+        public required string GitIgnorePattern { get; init; }
+    }
 }

@@ -59,7 +59,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
         // Forces the singleton factory to run: nothing has sent a turn yet, so the field is still null.
         _ = factory.Services.GetRequiredService<INodeChatStreamService>();
         var fake = AssertEx.NotNull(stream, "the fake stream service must be resolved before the loop takes a step.");
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => DeclareCompleteAsync(services, sessionId)));
+        fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (services, _) => DeclareCompleteAsync(services, sessionId) });
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {

@@ -388,7 +388,7 @@ public sealed class IntegrationSessionEndToEndTests
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"{prefix}-agent");
         var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, prefix, agentId, sessionPolicy: "CallerManaged");
         var key = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-key");
-        return new Seeded(trigger.Name, key.Key, trigger.Id, key.View.PrincipalId, key.View.KeyPrefix);
+        return new Seeded { TriggerName = trigger.Name, Key = key.Key, TriggerId = trigger.Id, PrincipalId = key.View.PrincipalId, KeyPrefix = key.View.KeyPrefix };
     }
 
     private static async Task<Accepted> InvokeAsync(HttpClient client, Seeded seeded, string text, Guid? sessionId)
@@ -397,7 +397,7 @@ public sealed class IntegrationSessionEndToEndTests
         using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, await response.Content.ReadAsStringAsync());
         var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<AcceptedBody>(IntegrationEndpointPayloads.Json));
-        return new Accepted(body.ExecutionId, body.SessionId);
+        return new Accepted { ExecutionId = body.ExecutionId, SessionId = body.SessionId };
     }
 
     private static async Task<(Guid ExecutionId, Guid SessionId, IReadOnlyList<Frame> Frames)> StreamAsync(HttpClient client,
@@ -440,7 +440,7 @@ public sealed class IntegrationSessionEndToEndTests
             }
             else if (line.StartsWith("id: ", StringComparison.Ordinal) && type is not null)
             {
-                frames.Add(new Frame(type, contentType, payload));
+                frames.Add(new Frame { Type = type, ContentType = contentType, Payload = payload });
                 type = null;
             }
         }
@@ -499,16 +499,39 @@ public sealed class IntegrationSessionEndToEndTests
         return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<StatusBody>(IntegrationEndpointPayloads.Json));
     }
 
-    private sealed record Seeded(string TriggerName, string Key, Guid TriggerId, Guid PrincipalId, string KeyPrefix);
+    private sealed record Seeded
+    {
+        public required string TriggerName { get; init; }
+
+        public required string Key { get; init; }
+
+        public required Guid TriggerId { get; init; }
+
+        public required Guid PrincipalId { get; init; }
+
+        public required string KeyPrefix { get; init; }
+    }
 
     /// <summary>The external family's error envelope: prose always, and a machine-readable code on the refusals only.</summary>
     private sealed record ErrorBody(string Message, string? Code);
 
-    private sealed record Accepted(Guid ExecutionId, Guid SessionId);
+    private sealed record Accepted
+    {
+        public required Guid ExecutionId { get; init; }
+
+        public required Guid SessionId { get; init; }
+    }
 
     private sealed record AcceptedBody(Guid ExecutionId, Guid SessionId, string Status);
 
     private sealed record StatusBody(Guid ExecutionId, Guid SessionId, string Status, string? FailureCategory, string? FailureSummary, int OutputCount);
 
-    private sealed record Frame(string Type, string? ContentType, JsonElement Payload);
+    private sealed record Frame
+    {
+        public required string Type { get; init; }
+
+        public required string? ContentType { get; init; }
+
+        public required JsonElement Payload { get; init; }
+    }
 }

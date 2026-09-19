@@ -224,7 +224,7 @@ public sealed class IntegrationApiRouteTests
         var foreign = await GenerateKeyAsync(client, $"{prefix}-foreign", allowedTriggerIds: null, principalId: null);
 
         var (executionId, sessionId) = await SeedExecutionAsync(triggerB.Id, broad.View.PrincipalId, broad.View.KeyPrefix);
-        return new Seeded(triggerB.Name, executionId, sessionId, broad.Key, narrow.Key, foreign.Key, broad.View.Id);
+        return new Seeded { TriggerBName = triggerB.Name, ExecutionUnderB = executionId, SessionUnderB = sessionId, BroadKey = broad.Key, NarrowKey = narrow.Key, ForeignKey = foreign.Key, BroadKeyId = broad.View.Id };
     }
 
     private async Task<GeneratedIntegrationApiKeyBody> GenerateKeyAsync(HttpClient client, string label, Guid[]? allowedTriggerIds, Guid? principalId)
@@ -299,14 +299,22 @@ public sealed class IntegrationApiRouteTests
         return await client.SendAsync(request);
     }
 
-    private sealed record Seeded(
-        string TriggerBName,
-        Guid ExecutionUnderB,
-        Guid SessionUnderB,
-        string BroadKey,
-        string NarrowKey,
-        string ForeignKey,
-        Guid BroadKeyId);
+    private sealed record Seeded
+    {
+        public required string TriggerBName { get; init; }
+
+        public required Guid ExecutionUnderB { get; init; }
+
+        public required Guid SessionUnderB { get; init; }
+
+        public required string BroadKey { get; init; }
+
+        public required string NarrowKey { get; init; }
+
+        public required string ForeignKey { get; init; }
+
+        public required Guid BroadKeyId { get; init; }
+    }
 
     private sealed record StatusBody(
         Guid ExecutionId,

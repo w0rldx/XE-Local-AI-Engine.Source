@@ -20,21 +20,41 @@ public enum FakeDockerStreamKind
 }
 
 /// <summary>One frame of a container log or exec stream, written with Docker's 8-byte multiplexed header.</summary>
-public sealed record FakeDockerLogFrame(FakeDockerStreamKind Stream, string Text);
+public sealed class FakeDockerLogFrame
+{
+    public required FakeDockerStreamKind Stream { get; init; }
+
+    public required string Text { get; init; }
+}
 
 /// <summary>
 ///     One entry of a container's <em>effective</em> mount set — the response's top-level <c>Mounts[]</c>, which is
 ///     where an anonymous volume an image's own <c>VOLUME</c> instruction created shows up. Deliberately distinct
 ///     from the <c>HostConfig.Mounts</c> the create request carried, which is what was <em>requested</em>.
 /// </summary>
-public sealed record FakeDockerMountPoint(string Type, string Source, string Destination, bool ReadWrite)
+public sealed class FakeDockerMountPoint
 {
+    public required string Type { get; init; }
+
+    public required string Source { get; init; }
+
+    public required string Destination { get; init; }
+
+    public required bool ReadWrite { get; init; }
+
     /// <summary>The volume name, set for an anonymous volume and absent for a bind.</summary>
     public string? Name { get; init; }
 }
 
 /// <summary>What a scripted <c>exec</c> reports back: its exit code and whatever it wrote on each stream.</summary>
-public sealed record FakeDockerExecOutcome(long ExitCode, string StandardOutput = "", string StandardError = "");
+public sealed class FakeDockerExecOutcome
+{
+    public required long ExitCode { get; init; }
+
+    public string StandardOutput { get; init; } = "";
+
+    public string StandardError { get; init; } = "";
+}
 
 /// <summary>
 ///     One line of a scripted <c>POST /images/create</c> progress stream, in the shape
@@ -67,7 +87,14 @@ public sealed record FakeDockerPullLine
 ///     One request the fake served, recorded so a test can assert on what the client sent rather than only on what
 ///     it did with the answer — the stop endpoint's <c>t=</c> grace period is the case that matters.
 /// </summary>
-public sealed record FakeDockerRequest(string Method, string Path, IReadOnlyDictionary<string, string> Query);
+public sealed class FakeDockerRequest
+{
+    public required string Method { get; init; }
+
+    public required string Path { get; init; }
+
+    public required IReadOnlyDictionary<string, string> Query { get; init; }
+}
 
 /// <summary>
 ///     An image the fake daemon holds. <see cref="DeclaredVolumes" /> stands in for the image's own <c>VOLUME</c>

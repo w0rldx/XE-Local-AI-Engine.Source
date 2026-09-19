@@ -242,8 +242,12 @@ public sealed class McpAgentRunMetricsTests
         }
     }
 
-    private sealed record CapturedMeasurement(double Value, IReadOnlyDictionary<string, object?> Tags)
+    private sealed record CapturedMeasurement
     {
+        public required double Value { get; init; }
+
+        public required IReadOnlyDictionary<string, object?> Tags { get; init; }
+
         public object? Tag(string name) =>
             Tags.TryGetValue(name, out var value) ? value : null;
     }
@@ -266,9 +270,9 @@ public sealed class McpAgentRunMetricsTests
                 }
             };
             _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
-                _measurements.Enqueue((instrument.Name, new CapturedMeasurement(value, ToDictionary(tags)))));
+                _measurements.Enqueue((instrument.Name, new CapturedMeasurement { Value = value, Tags = ToDictionary(tags) })));
             _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
-                _measurements.Enqueue((instrument.Name, new CapturedMeasurement(value, ToDictionary(tags)))));
+                _measurements.Enqueue((instrument.Name, new CapturedMeasurement { Value = value, Tags = ToDictionary(tags) })));
             _listener.Start();
         }
 

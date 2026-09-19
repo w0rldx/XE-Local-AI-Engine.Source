@@ -104,18 +104,23 @@ public sealed record LabeledQuery(
 }
 
 /// <summary>Per-query evaluation outcome, retained so a caller can inspect exactly which query regressed.</summary>
-/// <param name="QueryId">The <see cref="LabeledQuery.Id" />.</param>
-/// <param name="RelevantRetrieved">Whether the relevant document appeared within the top-k hits.</param>
-/// <param name="FirstRelevantRank">1-based rank of the first relevant hit, or 0 when none was retrieved.</param>
-/// <param name="ReciprocalRank">1/<see cref="FirstRelevantRank" />, or 0 when the relevant document was not retrieved.</param>
-/// <param name="CitationCoverage">Fraction of the citation snippet's tokens present in the retrieved chunk text.</param>
-public sealed record QueryEvaluation(
-    string QueryId,
-    bool RelevantRetrieved,
-    int FirstRelevantRank,
-    double ReciprocalRank,
-    double CitationCoverage)
+public sealed record QueryEvaluation
 {
+    /// <summary>The <see cref="LabeledQuery.Id" />.</summary>
+    public required string QueryId { get; init; }
+
+    /// <summary>Whether the relevant document appeared within the top-k hits.</summary>
+    public required bool RelevantRetrieved { get; init; }
+
+    /// <summary>1-based rank of the first relevant hit, or 0 when none was retrieved.</summary>
+    public required int FirstRelevantRank { get; init; }
+
+    /// <summary>1/<see cref="FirstRelevantRank" />, or 0 when the relevant document was not retrieved.</summary>
+    public required double ReciprocalRank { get; init; }
+
+    /// <summary>Fraction of the citation snippet's tokens present in the retrieved chunk text.</summary>
+    public required double CitationCoverage { get; init; }
+
     /// <summary>Number of distinct relevant documents retrieved within the cut-off.</summary>
     public int RetrievedRelevantCount { get; init; }
 
@@ -149,20 +154,26 @@ public sealed record QueryEvaluation(
 ///     queries. Reusable across implementations: a fusion/reranker change invokes the same harness before and
 ///     after to prove a measured gain.
 /// </summary>
-/// <param name="K">The top-k cut-off the metrics were computed at.</param>
-/// <param name="QueryCount">Number of labeled queries evaluated.</param>
-/// <param name="RecallAtK">Fraction of queries whose relevant document appeared within the top-k hits.</param>
-/// <param name="MeanReciprocalRank">Mean over queries of 1/(rank of the first relevant hit).</param>
-/// <param name="CitationCoverage">Mean over queries of the citation-snippet token coverage in the retrieved chunks.</param>
-/// <param name="PerQuery">Per-query breakdown.</param>
-public sealed record RetrievalMetrics(
-    int K,
-    int QueryCount,
-    double RecallAtK,
-    double MeanReciprocalRank,
-    double CitationCoverage,
-    IReadOnlyList<QueryEvaluation> PerQuery)
+public sealed class RetrievalMetrics
 {
+    /// <summary>The top-k cut-off the metrics were computed at.</summary>
+    public required int K { get; init; }
+
+    /// <summary>Number of labeled queries evaluated.</summary>
+    public required int QueryCount { get; init; }
+
+    /// <summary>Fraction of queries whose relevant document appeared within the top-k hits.</summary>
+    public required double RecallAtK { get; init; }
+
+    /// <summary>Mean over queries of 1/(rank of the first relevant hit).</summary>
+    public required double MeanReciprocalRank { get; init; }
+
+    /// <summary>Mean over queries of the citation-snippet token coverage in the retrieved chunks.</summary>
+    public required double CitationCoverage { get; init; }
+
+    /// <summary>Per-query breakdown.</summary>
+    public required IReadOnlyList<QueryEvaluation> PerQuery { get; init; }
+
     /// <summary>Macro-averaged precision@k over answerable queries.</summary>
     public double PrecisionAtK { get; init; }
 
@@ -238,19 +249,7 @@ public static class RetrievalEvalHarness
             : (double)evaluation.RetrievedRelevantCount / evaluation.RelevantDocumentCount);
         var mrr = AverageOrZero(answerable, evaluation => evaluation.ReciprocalRank);
         var citation = AverageOrZero(answerable, evaluation => evaluation.CitationCoverage);
-        return new RetrievalMetrics(k, perQuery.Count, recall, mrr, citation, perQuery)
-        {
-            PrecisionAtK = AverageOrZero(answerable, evaluation => evaluation.PrecisionAtK),
-            NdcgAtK = AverageOrZero(answerable, evaluation => evaluation.NdcgAtK),
-            SourceAnchorCoverage = AverageOrZero(answerable, evaluation => evaluation.SourceAnchorCoverage),
-            CitationAnchorRate = AverageOrZero(answerable, evaluation => evaluation.CitationAnchorPresent ? 1d : 0d),
-            NoAnswerAccuracy = AverageOrZero(noAnswer, evaluation => evaluation.NoAnswerCorrect ? 1d : 0d),
-            AnswerableQueryCount = answerable.Count,
-            NoAnswerQueryCount = noAnswer.Count,
-            QueryLatencyP50Milliseconds = Percentile(perQuery, 0.50d),
-            QueryLatencyP95Milliseconds = Percentile(perQuery, 0.95d),
-            QueryLatencyMaxMilliseconds = perQuery.Count == 0 ? 0d : perQuery.Max(static evaluation => evaluation.ElapsedMilliseconds)
-        };
+        return new RetrievalMetrics { K = k, QueryCount = perQuery.Count, RecallAtK = recall, MeanReciprocalRank = mrr, CitationCoverage = citation, PerQuery = perQuery, PrecisionAtK = AverageOrZero(answerable, evaluation => evaluation.PrecisionAtK), NdcgAtK = AverageOrZero(answerable, evaluation => evaluation.NdcgAtK), SourceAnchorCoverage = AverageOrZero(answerable, evaluation => evaluation.SourceAnchorCoverage), CitationAnchorRate = AverageOrZero(answerable, evaluation => evaluation.CitationAnchorPresent ? 1d : 0d), NoAnswerAccuracy = AverageOrZero(noAnswer, evaluation => evaluation.NoAnswerCorrect ? 1d : 0d), AnswerableQueryCount = answerable.Count, NoAnswerQueryCount = noAnswer.Count, QueryLatencyP50Milliseconds = Percentile(perQuery, 0.50d), QueryLatencyP95Milliseconds = Percentile(perQuery, 0.95d), QueryLatencyMaxMilliseconds = perQuery.Count == 0 ? 0d : perQuery.Max(static evaluation => evaluation.ElapsedMilliseconds) };
     }
 
     private static IReadOnlySet<Guid> ResolveRelevantDocumentIds(LabeledQuery query,
@@ -289,17 +288,7 @@ public static class RetrievalEvalHarness
         var reciprocalRank = relevantRetrieved ? 1d / firstRelevantRank : 0d;
         var coverage = ComputeCitationCoverage(query.CitationSnippet, evaluatedHits);
         var retrievedRelevantCount = evaluatedHits.Select(hit => hit.DocumentId).Distinct().Count(relevantDocumentIds.Contains);
-        return new QueryEvaluation(query.Id, relevantRetrieved, firstRelevantRank, reciprocalRank, coverage)
-        {
-            RetrievedRelevantCount = retrievedRelevantCount,
-            RelevantDocumentCount = relevantDocumentIds.Count,
-            PrecisionAtK = (double)retrievedRelevantCount / k,
-            NdcgAtK = ComputeNdcgAtK(relevantDocumentIds, evaluatedHits, k),
-            SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits),
-            CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits),
-            ExpectsNoAnswer = query.ExpectsNoAnswer,
-            NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0
-        };
+        return new QueryEvaluation { QueryId = query.Id, RelevantRetrieved = relevantRetrieved, FirstRelevantRank = firstRelevantRank, ReciprocalRank = reciprocalRank, CitationCoverage = coverage, RetrievedRelevantCount = retrievedRelevantCount, RelevantDocumentCount = relevantDocumentIds.Count, PrecisionAtK = (double)retrievedRelevantCount / k, NdcgAtK = ComputeNdcgAtK(relevantDocumentIds, evaluatedHits, k), SourceAnchorCoverage = ComputeSourceAnchorCoverage(query.SourceAnchors, evaluatedHits), CitationAnchorPresent = ContainsCitationAnchor(query.CitationSnippet, evaluatedHits), ExpectsNoAnswer = query.ExpectsNoAnswer, NoAnswerCorrect = query.ExpectsNoAnswer && evaluatedHits.Count == 0 };
     }
 
     private static double AverageOrZero(IReadOnlyCollection<QueryEvaluation> evaluations,

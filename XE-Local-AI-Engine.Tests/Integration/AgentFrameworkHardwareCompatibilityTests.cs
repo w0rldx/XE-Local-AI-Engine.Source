@@ -100,14 +100,20 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                 "The fixed compatibility prompt must survive the provider/MEAI/MAF/InvocationRunner stack.");
 
             await WriteEvidenceAsync(evidencePath,
-                    new EvidenceInput(new EvidenceFile(modelFile.Length, modelSha256),
-                        serverSha256,
-                        variant,
-                        state.StreamedContent,
-                        new EvidencePath(resolver.GetType().FullName,
-                            provider.GetType().FullName,
-                            agentFactory.GetType().FullName,
-                            runner.GetType().FullName)));
+                    new EvidenceInput
+                    {
+                        Model = new EvidenceFile { SizeBytes = modelFile.Length, Sha256 = modelSha256 },
+                        ServerSha256 = serverSha256,
+                        Variant = variant,
+                        Response = state.StreamedContent,
+                        Path = new EvidencePath
+                        {
+                            ResolverType = resolver.GetType().FullName,
+                            ProviderType = provider.GetType().FullName,
+                            AgentFactoryType = agentFactory.GetType().FullName,
+                            RunnerType = runner.GetType().FullName
+                        }
+                    });
         }
         finally
         {
@@ -181,20 +187,36 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                ?? "unknown";
     }
 
-    private sealed record EvidenceFile(long SizeBytes, string Sha256);
+    private sealed record EvidenceFile
+    {
+        public required long SizeBytes { get; init; }
 
-    private sealed record EvidencePath(
-        string? ResolverType,
-        string? ProviderType,
-        string? AgentFactoryType,
-        string? RunnerType);
+        public required string Sha256 { get; init; }
+    }
 
-    private sealed record EvidenceInput(
-        EvidenceFile Model,
-        string ServerSha256,
-        string Variant,
-        string Response,
-        EvidencePath Path);
+    private sealed record EvidencePath
+    {
+        public required string? ResolverType { get; init; }
+
+        public required string? ProviderType { get; init; }
+
+        public required string? AgentFactoryType { get; init; }
+
+        public required string? RunnerType { get; init; }
+    }
+
+    private sealed record EvidenceInput
+    {
+        public required EvidenceFile Model { get; init; }
+
+        public required string ServerSha256 { get; init; }
+
+        public required string Variant { get; init; }
+
+        public required string Response { get; init; }
+
+        public required EvidencePath Path { get; init; }
+    }
 
     private sealed class FixedGgufModelStore : IGgufModelStore
     {

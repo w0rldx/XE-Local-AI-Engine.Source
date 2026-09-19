@@ -11,18 +11,18 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Serialize_MembersDeclaredInDifferentOrders_ProducesTheSameDocument()
     {
-        var first = BenchmarkCanonicalJson.Serialize(new AscendingOrder("cuda", Ctx: 8192, Nested: new Nested("q8_0", Layers: 32)));
-        var second = BenchmarkCanonicalJson.Serialize(new DescendingOrder(new Nested("q8_0", Layers: 32), Ctx: 8192, "cuda"));
+        var first = BenchmarkCanonicalJson.Serialize(new AscendingOrder { Backend = "cuda", Ctx = 8192, Nested = new Nested { KvType = "q8_0", Layers = 32 } });
+        var second = BenchmarkCanonicalJson.Serialize(new DescendingOrder { Nested = new Nested { KvType = "q8_0", Layers = 32 }, Ctx = 8192, Backend = "cuda" });
 
         AssertEx.Equal(first, second, "reordering a receipt's properties must not change its canonical form");
-        AssertEx.Equal(BenchmarkCanonicalJson.HashOf(new AscendingOrder("cuda", Ctx: 8192, Nested: new Nested("q8_0", Layers: 32))),
-            BenchmarkCanonicalJson.HashOf(new DescendingOrder(new Nested("q8_0", Layers: 32), Ctx: 8192, "cuda")));
+        AssertEx.Equal(BenchmarkCanonicalJson.HashOf(new AscendingOrder { Backend = "cuda", Ctx = 8192, Nested = new Nested { KvType = "q8_0", Layers = 32 } }),
+            BenchmarkCanonicalJson.HashOf(new DescendingOrder { Nested = new Nested { KvType = "q8_0", Layers = 32 }, Ctx = 8192, Backend = "cuda" }));
     }
 
     [Test]
     public void Serialize_KeepsNullMembersAndEmitsNoWhitespace()
     {
-        var json = BenchmarkCanonicalJson.Serialize(new Nested(KvType: null, Layers: 32));
+        var json = BenchmarkCanonicalJson.Serialize(new Nested { KvType = null, Layers = 32 });
 
         AssertEx.Equal("{\"kvType\":null,\"layers\":32}", json);
     }
@@ -30,10 +30,10 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Hash_IsStableForEqualValuesAndDiffersOnAnyChange()
     {
-        var baseline = new AscendingOrder("cuda", Ctx: 8192, Nested: new Nested("q8_0", Layers: 32));
+        var baseline = new AscendingOrder { Backend = "cuda", Ctx = 8192, Nested = new Nested { KvType = "q8_0", Layers = 32 } };
         var changed = baseline with
         {
-            Nested = new Nested("q4_0", Layers: 32)
+            Nested = new Nested { KvType = "q4_0", Layers = 32 }
         };
 
         AssertEx.Equal(BenchmarkCanonicalJson.HashOf(baseline), BenchmarkCanonicalJson.HashOf(baseline));
@@ -44,7 +44,7 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Hash_MatchesTheHashOfTheCanonicalText()
     {
-        var value = new Nested("q8_0", Layers: 32);
+        var value = new Nested { KvType = "q8_0", Layers = 32 };
 
         AssertEx.Equal(BenchmarkCanonicalJson.Hash(BenchmarkCanonicalJson.Serialize(value)), BenchmarkCanonicalJson.HashOf(value));
     }
@@ -76,9 +76,28 @@ public sealed class BenchmarkCanonicalJsonTests
             "An enum written as its ordinal re-labels every stored receipt the day a member is inserted.");
     }
 
-    private sealed record Nested(string? KvType, int Layers);
+    private sealed record Nested
+    {
+        public required string? KvType { get; init; }
 
-    private sealed record AscendingOrder(string Backend, int Ctx, Nested Nested);
+        public required int Layers { get; init; }
+    }
 
-    private sealed record DescendingOrder(Nested Nested, int Ctx, string Backend);
+    private sealed record AscendingOrder
+    {
+        public required string Backend { get; init; }
+
+        public required int Ctx { get; init; }
+
+        public required Nested Nested { get; init; }
+    }
+
+    private sealed record DescendingOrder
+    {
+        public required Nested Nested { get; init; }
+
+        public required int Ctx { get; init; }
+
+        public required string Backend { get; init; }
+    }
 }

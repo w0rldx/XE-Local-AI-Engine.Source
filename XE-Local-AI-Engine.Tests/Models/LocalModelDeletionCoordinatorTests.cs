@@ -214,7 +214,7 @@ public sealed class LocalModelDeletionCoordinatorTests
                 registry,
                 options,
                 NullLogger<LocalModelDeletionCoordinator>.Instance);
-            return new TestContext(directory, registry, mapStore, providerResolver, coordinator, modelName, weightPath);
+            return new TestContext { Directory = directory, Registry = registry, MapStore = mapStore, ProviderResolver = providerResolver, Coordinator = coordinator, ModelName = modelName, WeightPath = weightPath };
         }
         catch
         {
@@ -303,15 +303,22 @@ public sealed class LocalModelDeletionCoordinatorTests
         }
     }
 
-    private sealed record TestContext(
-        GgufStoreTestInfrastructure.TempModelsDir Directory,
-        GgufModelRegistry Registry,
-        TestProviderMapStore MapStore,
-        ILocalModelProviderResolver ProviderResolver,
-        LocalModelDeletionCoordinator Coordinator,
-        string ModelName,
-        string WeightPath) : IAsyncDisposable
+    private sealed record TestContext : IAsyncDisposable
     {
+        public required GgufStoreTestInfrastructure.TempModelsDir Directory { get; init; }
+
+        public required GgufModelRegistry Registry { get; init; }
+
+        public required TestProviderMapStore MapStore { get; init; }
+
+        public required ILocalModelProviderResolver ProviderResolver { get; init; }
+
+        public required LocalModelDeletionCoordinator Coordinator { get; init; }
+
+        public required string ModelName { get; init; }
+
+        public required string WeightPath { get; init; }
+
         public ValueTask DisposeAsync()
         {
             Registry.Dispose();

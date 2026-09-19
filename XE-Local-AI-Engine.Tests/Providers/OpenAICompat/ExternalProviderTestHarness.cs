@@ -118,7 +118,16 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
 }
 
 /// <summary>One request as it actually left the process, captured after every production policy has run.</summary>
-internal sealed record RecordedRequest(Uri? Uri, string? Body, string? Authorization, bool HasAuthorizationHeader);
+internal sealed class RecordedRequest
+{
+    public required Uri? Uri { get; init; }
+
+    public required string? Body { get; init; }
+
+    public required string? Authorization { get; init; }
+
+    public required bool HasAuthorizationHeader { get; init; }
+}
 
 /// <summary>
 ///     Records outbound requests and replays canned responses. It hands out a FRESH handler per call because the
@@ -192,10 +201,13 @@ internal sealed class OpenAiWireRecorder
             lock (_recorder._requests)
             {
                 index = _recorder._requests.Count;
-                _recorder._requests.Add(new RecordedRequest(request.RequestUri,
-                    body,
-                    request.Headers.Authorization?.ToString(),
-                    request.Headers.Contains("Authorization")));
+                _recorder._requests.Add(new RecordedRequest
+                {
+                    Uri = request.RequestUri,
+                    Body = body,
+                    Authorization = request.Headers.Authorization?.ToString(),
+                    HasAuthorizationHeader = request.Headers.Contains("Authorization")
+                });
             }
 
             return _recorder.Responder(index);

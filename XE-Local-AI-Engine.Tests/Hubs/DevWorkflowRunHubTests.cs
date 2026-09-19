@@ -236,11 +236,15 @@ public sealed class DevWorkflowRunHubTests
             Groups = groups,
             Clients = clients
         };
-        return new HubFixture(hub, groups);
+        return new HubFixture { Hub = hub, Groups = groups };
     }
 
-    private sealed record HubFixture(DevWorkflowRunHub Hub, IGroupManager Groups) : IDisposable
+    private sealed record HubFixture : IDisposable
     {
+        public required DevWorkflowRunHub Hub { get; init; }
+
+        public required IGroupManager Groups { get; init; }
+
         public void Dispose() =>
             Hub.Dispose();
     }

@@ -15,7 +15,7 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
 
     public ScriptedExportSpawner Then(int exitCode = 0, Action<TrainingSpawnRequest>? effect = null, params string[] lines)
     {
-        _script.Enqueue(new ScriptedSpawn(exitCode, effect, lines));
+        _script.Enqueue(new ScriptedSpawn { ExitCode = exitCode, Effect = effect, Lines = lines });
         return this;
     }
 
@@ -31,7 +31,14 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
         return new ScriptedHandle(scripted.ExitCode, scripted.Lines);
     }
 
-    private sealed record ScriptedSpawn(int ExitCode, Action<TrainingSpawnRequest>? Effect, IReadOnlyList<string> Lines);
+    private sealed record ScriptedSpawn
+    {
+        public required int ExitCode { get; init; }
+
+        public required Action<TrainingSpawnRequest>? Effect { get; init; }
+
+        public required IReadOnlyList<string> Lines { get; init; }
+    }
 
     private sealed class ScriptedHandle : ITrainingProcessHandle
     {

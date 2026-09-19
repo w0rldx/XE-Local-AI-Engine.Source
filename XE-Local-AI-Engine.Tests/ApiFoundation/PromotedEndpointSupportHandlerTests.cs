@@ -155,8 +155,15 @@ public sealed class PromotedEndpointSupportHandlerTests
             detail = document.RootElement.GetProperty("detail").GetString();
         }
 
-        return new HandledResponse(context.Response.StatusCode, length, detail);
+        return new HandledResponse { StatusCode = context.Response.StatusCode, BodyLength = length, Detail = detail };
     }
 
-    private sealed record HandledResponse(int StatusCode, long BodyLength, string? Detail);
+    private sealed record HandledResponse
+    {
+        public required int StatusCode { get; init; }
+
+        public required long BodyLength { get; init; }
+
+        public required string? Detail { get; init; }
+    }
 }

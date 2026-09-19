@@ -136,7 +136,7 @@ public sealed class WorkflowBuilderProbeTests
                        .Build();
 
         using var cts = new CancellationTokenSource(RunBudget);
-        await using var run = await InProcessExecution.RunAsync(workflow, new Ticket(lane, "payload"), $"d8-route-{lane}", cts.Token);
+        await using var run = await InProcessExecution.RunAsync(workflow, new Ticket { Lane = lane, Payload = "payload" }, $"d8-route-{lane}", cts.Token);
 
         var events = DrainEvents(run, $"lane-{lane}");
         var visited = trace.Where(id => id != "probe-router").ToList();
@@ -173,7 +173,12 @@ public sealed class WorkflowBuilderProbeTests
                .ToList();
     }
 
-    private sealed record Ticket(string Lane, string Payload);
+    private sealed record Ticket
+    {
+        public required string Lane { get; init; }
+
+        public required string Payload { get; init; }
+    }
 
     /// <summary>Returns its input unchanged; the returned value is auto-forwarded along the outgoing edges.</summary>
     private sealed class PassThroughExecutor : Executor<string, string>

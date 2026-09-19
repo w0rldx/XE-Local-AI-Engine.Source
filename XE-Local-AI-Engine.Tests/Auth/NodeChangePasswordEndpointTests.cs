@@ -202,7 +202,7 @@ public sealed class NodeChangePasswordEndpointTests
         using var response = await LoginAsync(client, password);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var token = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<AccessTokenBody>());
-        return new Session(token.AccessToken, GetRefreshCookie(response));
+        return new Session { AccessToken = token.AccessToken, RefreshCookie = GetRefreshCookie(response) };
     }
 
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client)
@@ -240,7 +240,12 @@ public sealed class NodeChangePasswordEndpointTests
             header => header.StartsWith($"{NodeAuthCookie.RefreshCookieName}=;", StringComparison.Ordinal));
     }
 
-    private sealed record Session(string AccessToken, string RefreshCookie);
+    private sealed record Session
+    {
+        public required string AccessToken { get; init; }
+
+        public required string RefreshCookie { get; init; }
+    }
 
     private sealed record AccessTokenBody(string AccessToken, DateTime ExpiresAtUtc);
 }

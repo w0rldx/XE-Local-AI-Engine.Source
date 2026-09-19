@@ -26,9 +26,12 @@ internal static class FakeDockerEndpointMapper
         // the fake has no route for is exactly the case worth seeing in that record.
         app.Use(async (context, next) =>
         {
-            state.Record(new FakeDockerRequest(context.Request.Method,
-                context.Request.Path.Value ?? string.Empty,
-                context.Request.Query.ToDictionary(entry => entry.Key, entry => entry.Value.ToString(), StringComparer.Ordinal)));
+            state.Record(new FakeDockerRequest
+            {
+                Method = context.Request.Method,
+                Path = context.Request.Path.Value ?? string.Empty,
+                Query = context.Request.Query.ToDictionary(entry => entry.Key, entry => entry.Value.ToString(), StringComparer.Ordinal)
+            });
 
             await next(context);
         });

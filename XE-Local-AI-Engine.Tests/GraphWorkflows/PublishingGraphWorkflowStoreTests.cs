@@ -135,22 +135,34 @@ public sealed class PublishingGraphWorkflowStoreTests
     /// <summary>Every mutation the store can commit, and the kind the client reacts to.</summary>
     private static IReadOnlyList<Probe> Probes() =>
     [
-        new(nameof(IGraphWorkflowStore.TransitionRunAsync),
-            GraphWorkflowChangeKind.Run,
-            store => store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Running })),
-        new(nameof(IGraphWorkflowStore.AppendEventAsync),
-            GraphWorkflowChangeKind.Run,
-            store => store.AppendEventAsync(new AppendGraphWorkflowEventCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, EventType = GraphWorkflowEventTypes.NodeInterrupted })),
-        new(nameof(IGraphWorkflowStore.TransitionNodeRunAsync),
-            GraphWorkflowChangeKind.Node,
-            store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.Running))),
-        new(nameof(IGraphWorkflowStore.TransitionNodeRunAsync),
-            GraphWorkflowChangeKind.Gate,
-            store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.WaitingForApproval))),
+        new()
+        {
+            Method = nameof(IGraphWorkflowStore.TransitionRunAsync),
+            Kind = GraphWorkflowChangeKind.Run,
+            Invoke = store => store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = GraphWorkflowRunStatus.Running })
+        },
+        new()
+        {
+            Method = nameof(IGraphWorkflowStore.AppendEventAsync),
+            Kind = GraphWorkflowChangeKind.Run,
+            Invoke = store => store.AppendEventAsync(new AppendGraphWorkflowEventCommand { RunId = RunId, ExpectedVersion = GraphWorkflowVersions.Any, EventType = GraphWorkflowEventTypes.NodeInterrupted })
+        },
+        new()
+        {
+            Method = nameof(IGraphWorkflowStore.TransitionNodeRunAsync),
+            Kind = GraphWorkflowChangeKind.Node,
+            Invoke = store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.Running))
+        },
+        new()
+        {
+            Method = nameof(IGraphWorkflowStore.TransitionNodeRunAsync),
+            Kind = GraphWorkflowChangeKind.Gate,
+            Invoke = store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.WaitingForApproval))
+        },
 
         // An answered pause is the change a watching client most needs told: it is what removes the badge asking for
         // a person, so it announces a gate rather than an ordinary node repaint.
-        new(nameof(IGraphWorkflowStore.DecideNodeRunAsync), GraphWorkflowChangeKind.Gate, store => store.DecideNodeRunAsync(Decision()))
+        new() { Method = nameof(IGraphWorkflowStore.DecideNodeRunAsync), Kind = GraphWorkflowChangeKind.Gate, Invoke = store => store.DecideNodeRunAsync(Decision()) }
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> Reads() =>
@@ -216,5 +228,12 @@ public sealed class PublishingGraphWorkflowStoreTests
         return (store, publisher, inner);
     }
 
-    private sealed record Probe(string Method, GraphWorkflowChangeKind Kind, Func<IGraphWorkflowStore, Task> Invoke);
+    private sealed record Probe
+    {
+        public required string Method { get; init; }
+
+        public required GraphWorkflowChangeKind Kind { get; init; }
+
+        public required Func<IGraphWorkflowStore, Task> Invoke { get; init; }
+    }
 }

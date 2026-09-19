@@ -639,7 +639,14 @@ public sealed class ProviderCallBudgetChatClientTests
         };
     }
 
-    private sealed record ObservedUsageWrite(string ModelName, long EstimatedTokens, long ObservedInputTokens);
+    private sealed record ObservedUsageWrite
+    {
+        public required string ModelName { get; init; }
+
+        public required long EstimatedTokens { get; init; }
+
+        public required long ObservedInputTokens { get; init; }
+    }
 
     /// <summary>
     ///     A real store that also records every observation written to it, so a test can assert the exact triple the
@@ -663,7 +670,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public void RecordObservedUsage(string modelName, long estimatedTokens, long observedInputTokens)
         {
-            Observations.Add(new ObservedUsageWrite(modelName, estimatedTokens, observedInputTokens));
+            Observations.Add(new ObservedUsageWrite { ModelName = modelName, EstimatedTokens = estimatedTokens, ObservedInputTokens = observedInputTokens });
             _inner.RecordObservedUsage(modelName, estimatedTokens, observedInputTokens);
         }
 

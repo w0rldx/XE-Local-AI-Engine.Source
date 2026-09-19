@@ -77,7 +77,7 @@ public sealed class EngineCliProcessTests : IDisposable
                 return null;
             }
 
-            return new ServingEngine(started, candidate, line);
+            return new ServingEngine { Engine = started, Port = candidate, ReadyLine = line };
         });
 
         await using var engine = serving.Engine;
@@ -190,9 +190,12 @@ public sealed class EngineCliProcessTests : IDisposable
             throw;
         }
 
-        return new CommandResult(process.ExitCode,
-            await stdout,
-            await stderr);
+        return new CommandResult
+        {
+            ExitCode = process.ExitCode,
+            StandardOutput = await stdout,
+            StandardError = await stderr
+        };
     }
 
     private RunningEngine StartServing(IReadOnlyList<string> arguments)
@@ -240,10 +243,23 @@ public sealed class EngineCliProcessTests : IDisposable
         return startInfo;
     }
 
-    private sealed record ServingEngine(RunningEngine Engine, int Port, string ReadyLine);
-
-    private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError)
+    private sealed record ServingEngine
     {
+        public required RunningEngine Engine { get; init; }
+
+        public required int Port { get; init; }
+
+        public required string ReadyLine { get; init; }
+    }
+
+    private sealed record CommandResult
+    {
+        public required int ExitCode { get; init; }
+
+        public required string StandardOutput { get; init; }
+
+        public required string StandardError { get; init; }
+
         public string CombinedOutput => string.Concat(StandardOutput, Environment.NewLine, StandardError);
     }
 

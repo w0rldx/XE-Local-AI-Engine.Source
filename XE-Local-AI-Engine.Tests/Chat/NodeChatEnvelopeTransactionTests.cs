@@ -405,13 +405,25 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             throw new InvalidOperationException("The run-envelope row was not found.");
         }
 
-        return new EnvelopeTokens(await reader.IsDBNullAsync(0) ? null : reader.GetInt64(0),
-            await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
-            await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2),
-            await reader.IsDBNullAsync(3) ? null : reader.GetInt64(3));
+        return new EnvelopeTokens
+        {
+            PromptTokens = await reader.IsDBNullAsync(0) ? null : reader.GetInt64(0),
+            CompletionTokens = await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
+            ReasoningTokens = await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2),
+            TotalTokens = await reader.IsDBNullAsync(3) ? null : reader.GetInt64(3)
+        };
     }
 
-    private sealed record EnvelopeTokens(long? PromptTokens, long? CompletionTokens, long? ReasoningTokens, long? TotalTokens);
+    private sealed record EnvelopeTokens
+    {
+        public required long? PromptTokens { get; init; }
+
+        public required long? CompletionTokens { get; init; }
+
+        public required long? ReasoningTokens { get; init; }
+
+        public required long? TotalTokens { get; init; }
+    }
 
     // Reads the run-envelope row's schema version and both tool-schema token columns in ONE statement with a literal
     // command text, so no column name is ever interpolated into SQL.
@@ -432,12 +444,22 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             throw new InvalidOperationException("The run-envelope row was not found.");
         }
 
-        return new EnvelopeTelemetry(reader.GetInt32(0),
-            await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
-            await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2));
+        return new EnvelopeTelemetry
+        {
+            SchemaVersion = reader.GetInt32(0),
+            ToolSchemaTokens = await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
+            MaxToolSchemaTokens = await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2)
+        };
     }
 
-    private sealed record EnvelopeTelemetry(int SchemaVersion, long? ToolSchemaTokens, long? MaxToolSchemaTokens);
+    private sealed record EnvelopeTelemetry
+    {
+        public required int SchemaVersion { get; init; }
+
+        public required long? ToolSchemaTokens { get; init; }
+
+        public required long? MaxToolSchemaTokens { get; init; }
+    }
 
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
     {

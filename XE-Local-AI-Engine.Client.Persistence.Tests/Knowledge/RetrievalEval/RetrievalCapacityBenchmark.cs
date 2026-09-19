@@ -12,19 +12,27 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
-internal sealed record RetrievalCapacityProfile(string Name, int ChunkCount, int NamespaceCount, int QueryRepetitions)
+internal sealed class RetrievalCapacityProfile
 {
+    public required string Name { get; init; }
+
+    public required int ChunkCount { get; init; }
+
+    public required int NamespaceCount { get; init; }
+
+    public required int QueryRepetitions { get; init; }
+
     public int LargestNamespaceChunkCount => (int)Math.Ceiling(ChunkCount / (double)NamespaceCount);
 
     public static IReadOnlyDictionary<string, RetrievalCapacityProfile> All { get; } =
         new[]
         {
-            new RetrievalCapacityProfile("smoke", 256, 2, 2),
-            new RetrievalCapacityProfile("10k", 10_000, 4, 3),
-            new RetrievalCapacityProfile("100k", 100_000, 4, 2),
-            new RetrievalCapacityProfile("250k", 250_000, 4, 1),
-            new RetrievalCapacityProfile("500k", 500_000, 4, 1),
-            new RetrievalCapacityProfile("1m", 1_000_000, 4, 1)
+            new RetrievalCapacityProfile { Name = "smoke", ChunkCount = 256, NamespaceCount = 2, QueryRepetitions = 2 },
+            new RetrievalCapacityProfile { Name = "10k", ChunkCount = 10_000, NamespaceCount = 4, QueryRepetitions = 3 },
+            new RetrievalCapacityProfile { Name = "100k", ChunkCount = 100_000, NamespaceCount = 4, QueryRepetitions = 2 },
+            new RetrievalCapacityProfile { Name = "250k", ChunkCount = 250_000, NamespaceCount = 4, QueryRepetitions = 1 },
+            new RetrievalCapacityProfile { Name = "500k", ChunkCount = 500_000, NamespaceCount = 4, QueryRepetitions = 1 },
+            new RetrievalCapacityProfile { Name = "1m", ChunkCount = 1_000_000, NamespaceCount = 4, QueryRepetitions = 1 }
         }.ToDictionary(static profile => profile.Name, StringComparer.OrdinalIgnoreCase);
 
     public static RetrievalCapacityProfile Parse(string name) =>
@@ -33,20 +41,37 @@ internal sealed record RetrievalCapacityProfile(string Name, int ChunkCount, int
             : throw new ArgumentException($"Unknown capacity profile '{name}'. Expected one of: {string.Join(", ", All.Keys)}.", nameof(name));
 }
 
-internal sealed record RetrievalCapacityBuildMetrics(
-    double SchemaMilliseconds,
-    double CorpusMilliseconds,
-    double FtsIndexMilliseconds,
-    double VectorIndexMilliseconds,
-    double TotalMilliseconds,
-    long DatabaseBytes,
-    long WorkingSetBaselineBytes,
-    long SampledWorkingSetHighWaterBytes,
-    long ManagedHeapBaselineBytes,
-    long SampledManagedHeapHighWaterBytes);
-
-internal sealed record RetrievalCapacityLatency(double P50Milliseconds, double P95Milliseconds, double MaxMilliseconds)
+internal sealed class RetrievalCapacityBuildMetrics
 {
+    public required double SchemaMilliseconds { get; init; }
+
+    public required double CorpusMilliseconds { get; init; }
+
+    public required double FtsIndexMilliseconds { get; init; }
+
+    public required double VectorIndexMilliseconds { get; init; }
+
+    public required double TotalMilliseconds { get; init; }
+
+    public required long DatabaseBytes { get; init; }
+
+    public required long WorkingSetBaselineBytes { get; init; }
+
+    public required long SampledWorkingSetHighWaterBytes { get; init; }
+
+    public required long ManagedHeapBaselineBytes { get; init; }
+
+    public required long SampledManagedHeapHighWaterBytes { get; init; }
+}
+
+internal sealed class RetrievalCapacityLatency
+{
+    public required double P50Milliseconds { get; init; }
+
+    public required double P95Milliseconds { get; init; }
+
+    public required double MaxMilliseconds { get; init; }
+
     public static RetrievalCapacityLatency From(IReadOnlyList<double> samples)
     {
         if (samples.Count == 0)
@@ -55,7 +80,7 @@ internal sealed record RetrievalCapacityLatency(double P50Milliseconds, double P
         }
 
         var ordered = samples.Order().ToArray();
-        return new RetrievalCapacityLatency(Percentile(ordered, 0.50d), Percentile(ordered, 0.95d), ordered[^1]);
+        return new RetrievalCapacityLatency { P50Milliseconds = Percentile(ordered, 0.50d), P95Milliseconds = Percentile(ordered, 0.95d), MaxMilliseconds = ordered[^1] };
     }
 
     private static double Percentile(IReadOnlyList<double> ordered, double percentile)
@@ -65,29 +90,49 @@ internal sealed record RetrievalCapacityLatency(double P50Milliseconds, double P
     }
 }
 
-internal sealed record RetrievalCapacityQueryMetrics(
-    int QueryCount,
-    int AnswerableQueryCount,
-    int NoAnswerQueryCount,
-    int NonEmptyAnswerableResults,
-    double RecallAtK,
-    double MeanReciprocalRank,
-    double NdcgAtK,
-    double NoAnswerFalsePositiveRate,
-    RetrievalCapacityLatency Fts,
-    RetrievalCapacityLatency Vector,
-    RetrievalCapacityLatency Fusion,
-    RetrievalCapacityLatency EndToEnd,
-    bool MeetsP95Target,
-    double P95TargetMilliseconds);
-
-internal sealed record RetrievalCapacityReport(
-    int Seed,
-    RetrievalCapacityProfile Profile,
-    RetrievalCapacityBuildMetrics Build,
-    RetrievalCapacityQueryMetrics Query,
-    string MeasurementMode = "warm-cache-process-only")
+internal sealed class RetrievalCapacityQueryMetrics
 {
+    public required int QueryCount { get; init; }
+
+    public required int AnswerableQueryCount { get; init; }
+
+    public required int NoAnswerQueryCount { get; init; }
+
+    public required int NonEmptyAnswerableResults { get; init; }
+
+    public required double RecallAtK { get; init; }
+
+    public required double MeanReciprocalRank { get; init; }
+
+    public required double NdcgAtK { get; init; }
+
+    public required double NoAnswerFalsePositiveRate { get; init; }
+
+    public required RetrievalCapacityLatency Fts { get; init; }
+
+    public required RetrievalCapacityLatency Vector { get; init; }
+
+    public required RetrievalCapacityLatency Fusion { get; init; }
+
+    public required RetrievalCapacityLatency EndToEnd { get; init; }
+
+    public required bool MeetsP95Target { get; init; }
+
+    public required double P95TargetMilliseconds { get; init; }
+}
+
+internal sealed class RetrievalCapacityReport
+{
+    public required int Seed { get; init; }
+
+    public required RetrievalCapacityProfile Profile { get; init; }
+
+    public required RetrievalCapacityBuildMetrics Build { get; init; }
+
+    public required RetrievalCapacityQueryMetrics Query { get; init; }
+
+    public string MeasurementMode { get; init; } = "warm-cache-process-only";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -197,19 +242,25 @@ internal static class RetrievalCapacityBenchmark
             cancellationToken);
         memory.Sample();
 
-        return new RetrievalCapacityReport(Seed,
-            profile,
-            new RetrievalCapacityBuildMetrics(schemaMilliseconds,
-                corpusMilliseconds,
-                ftsIndexMilliseconds,
-                vectorIndexMilliseconds,
-                totalMilliseconds,
-                databaseBytes,
-                memory.WorkingSetBaselineBytes,
-                memory.SampledWorkingSetHighWaterBytes,
-                memory.ManagedHeapBaselineBytes,
-                memory.SampledManagedHeapHighWaterBytes),
-            queryMetrics);
+        return new RetrievalCapacityReport
+        {
+            Seed = Seed,
+            Profile = profile,
+            Build = new RetrievalCapacityBuildMetrics
+            {
+                SchemaMilliseconds = schemaMilliseconds,
+                CorpusMilliseconds = corpusMilliseconds,
+                FtsIndexMilliseconds = ftsIndexMilliseconds,
+                VectorIndexMilliseconds = vectorIndexMilliseconds,
+                TotalMilliseconds = totalMilliseconds,
+                DatabaseBytes = databaseBytes,
+                WorkingSetBaselineBytes = memory.WorkingSetBaselineBytes,
+                SampledWorkingSetHighWaterBytes = memory.SampledWorkingSetHighWaterBytes,
+                ManagedHeapBaselineBytes = memory.ManagedHeapBaselineBytes,
+                SampledManagedHeapHighWaterBytes = memory.SampledManagedHeapHighWaterBytes
+            },
+            Query = queryMetrics
+        };
     }
 
     internal static void RefuseVacuousQueryRun(int queryCount, int answerableQueryCount, int nonEmptyAnswerableResults)
@@ -425,20 +476,23 @@ internal static class RetrievalCapacityBenchmark
         RefuseVacuousQueryRun(evaluations.Count, answerable.Count, nonEmptyAnswerableResults);
 
         var endToEnd = RetrievalCapacityLatency.From(endToEndSamples);
-        return new RetrievalCapacityQueryMetrics(evaluations.Count,
-            answerable.Count,
-            noAnswer.Count,
-            nonEmptyAnswerableResults,
-            answerable.Average(static evaluation => evaluation.RelevantRetrieved ? 1d : 0d),
-            answerable.Average(static evaluation => evaluation.ReciprocalRank),
-            answerable.Average(static evaluation => evaluation.NdcgAtK),
-            noAnswer.Average(static evaluation => evaluation.ResultCount > 0 ? 1d : 0d),
-            RetrievalCapacityLatency.From(ftsSamples),
-            RetrievalCapacityLatency.From(vectorSamples),
-            RetrievalCapacityLatency.From(fusionSamples),
-            endToEnd,
-            endToEnd.P95Milliseconds <= p95TargetMilliseconds,
-            p95TargetMilliseconds);
+        return new RetrievalCapacityQueryMetrics
+        {
+            QueryCount = evaluations.Count,
+            AnswerableQueryCount = answerable.Count,
+            NoAnswerQueryCount = noAnswer.Count,
+            NonEmptyAnswerableResults = nonEmptyAnswerableResults,
+            RecallAtK = answerable.Average(static evaluation => evaluation.RelevantRetrieved ? 1d : 0d),
+            MeanReciprocalRank = answerable.Average(static evaluation => evaluation.ReciprocalRank),
+            NdcgAtK = answerable.Average(static evaluation => evaluation.NdcgAtK),
+            NoAnswerFalsePositiveRate = noAnswer.Average(static evaluation => evaluation.ResultCount > 0 ? 1d : 0d),
+            Fts = RetrievalCapacityLatency.From(ftsSamples),
+            Vector = RetrievalCapacityLatency.From(vectorSamples),
+            Fusion = RetrievalCapacityLatency.From(fusionSamples),
+            EndToEnd = endToEnd,
+            MeetsP95Target = endToEnd.P95Milliseconds <= p95TargetMilliseconds,
+            P95TargetMilliseconds = p95TargetMilliseconds
+        };
     }
 
     private static async Task<CapacityQueryResult> ExecuteQueryAsync(DbConnection connection,
@@ -479,12 +533,15 @@ internal static class RetrievalCapacityBenchmark
         var fusionMilliseconds = Stopwatch.GetElapsedTime(fusionStarted).TotalMilliseconds;
         var hydrated = await HydrateAsync(connection, selected, query.CollectionId, cancellationToken);
         var endToEndMilliseconds = Stopwatch.GetElapsedTime(endToEndStarted).TotalMilliseconds;
-        return new CapacityQueryResult(hydrated,
-            selected.Count,
-            ftsMilliseconds,
-            vectorMilliseconds,
-            fusionMilliseconds,
-            endToEndMilliseconds);
+        return new CapacityQueryResult
+        {
+            ChunkIds = hydrated,
+            SelectedCount = selected.Count,
+            FtsMilliseconds = ftsMilliseconds,
+            VectorMilliseconds = vectorMilliseconds,
+            FusionMilliseconds = fusionMilliseconds,
+            EndToEndMilliseconds = endToEndMilliseconds
+        };
     }
 
     private static async Task<IReadOnlyList<Guid>> HydrateAsync(DbConnection connection,
@@ -535,7 +592,7 @@ internal static class RetrievalCapacityBenchmark
 
         if (query.ExpectsNoAnswer)
         {
-            return new CapacityEvaluation(true, false, 0d, 0d, result.ChunkIds.Count);
+            return new CapacityEvaluation { ExpectsNoAnswer = true, RelevantRetrieved = false, ReciprocalRank = 0d, NdcgAtK = 0d, ResultCount = result.ChunkIds.Count };
         }
 
         var rank = 0;
@@ -549,8 +606,8 @@ internal static class RetrievalCapacityBenchmark
         }
 
         return rank == 0
-            ? new CapacityEvaluation(false, false, 0d, 0d, result.ChunkIds.Count)
-            : new CapacityEvaluation(false, true, 1d / rank, 1d / Math.Log2(rank + 1d), result.ChunkIds.Count);
+            ? new CapacityEvaluation { ExpectsNoAnswer = false, RelevantRetrieved = false, ReciprocalRank = 0d, NdcgAtK = 0d, ResultCount = result.ChunkIds.Count }
+            : new CapacityEvaluation { ExpectsNoAnswer = false, RelevantRetrieved = true, ReciprocalRank = 1d / rank, NdcgAtK = 1d / Math.Log2(rank + 1d), ResultCount = result.ChunkIds.Count };
     }
 
     private static IReadOnlyList<CapacityQuery> BuildQueries(RetrievalCapacityProfile profile)
@@ -560,11 +617,11 @@ internal static class RetrievalCapacityBenchmark
         {
             var baseGlobalIndex = Enumerable.Range(0, namespaceIndex).Sum(index => ChunkCountForNamespace(profile, index));
             var collectionId = GetCollectionId(namespaceIndex);
-            queries.Add(new CapacityQuery($"ns{namespaceIndex}-english", "quartz retention seven31", collectionId, StableGuid("chunk", baseGlobalIndex), 0, false));
-            queries.Add(new CapacityQuery($"ns{namespaceIndex}-german", "aufbewahrung kupfer sieben31", collectionId, StableGuid("chunk", baseGlobalIndex + 1), 1, false));
-            queries.Add(new CapacityQuery($"ns{namespaceIndex}-code", "ResolveTenantToken src auth tenantresolver cs", collectionId, StableGuid("chunk", baseGlobalIndex + 2), 2, false));
-            queries.Add(new CapacityQuery($"ns{namespaceIndex}-distractor", "cobalt orchid beacon", collectionId, StableGuid("chunk", baseGlobalIndex + 3), 3, false));
-            queries.Add(new CapacityQuery($"ns{namespaceIndex}-no-answer", "zephyr nonexistent axiom", collectionId, Guid.Empty, VectorDimensions - 1, true));
+            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-english", Text = "quartz retention seven31", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex), VectorDimension = 0, ExpectsNoAnswer = false });
+            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-german", Text = "aufbewahrung kupfer sieben31", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 1), VectorDimension = 1, ExpectsNoAnswer = false });
+            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-code", Text = "ResolveTenantToken src auth tenantresolver cs", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 2), VectorDimension = 2, ExpectsNoAnswer = false });
+            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-distractor", Text = "cobalt orchid beacon", CollectionId = collectionId, RelevantChunkId = StableGuid("chunk", baseGlobalIndex + 3), VectorDimension = 3, ExpectsNoAnswer = false });
+            queries.Add(new CapacityQuery { Id = $"ns{namespaceIndex}-no-answer", Text = "zephyr nonexistent axiom", CollectionId = collectionId, RelevantChunkId = Guid.Empty, VectorDimension = VectorDimensions - 1, ExpectsNoAnswer = true });
         }
 
         return queries;
@@ -574,14 +631,50 @@ internal static class RetrievalCapacityBenchmark
     {
         return localIndex switch
         {
-            0 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "English policy: quartz retention seven31 days authoritative schedule.", 7, "Policy > Retention", "text",
-                "policies/retention-en.md", "en", null),
-            1 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "Deutsche Richtlinie: aufbewahrung kupfer sieben31 Tage verbindlich.", 7, "Richtlinie > Aufbewahrung", "text",
-                "richtlinien/aufbewahrung-de.md", "de", null),
-            2 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "internal string ResolveTenantToken() validates tenant scope before issuing a token.", 10, "TenantResolver", "code",
-                "src/auth/TenantResolver.cs", "csharp", "ResolveTenantToken"),
-            3 => new CapacityCorpusRow(StableGuid("chunk", globalIndex), "Operational signal cobalt orchid beacon identifies the canonical recovery record.", 9, "Operations > Recovery", "text",
-                "runbooks/recovery.md", "en", null),
+            0 => new CapacityCorpusRow
+            {
+                ChunkId = StableGuid("chunk", globalIndex),
+                Content = "English policy: quartz retention seven31 days authoritative schedule.",
+                TokenCount = 7,
+                HeadingPath = "Policy > Retention",
+                ContentKind = "text",
+                SourcePath = "policies/retention-en.md",
+                Language = "en",
+                Symbol = null
+            },
+            1 => new CapacityCorpusRow
+            {
+                ChunkId = StableGuid("chunk", globalIndex),
+                Content = "Deutsche Richtlinie: aufbewahrung kupfer sieben31 Tage verbindlich.",
+                TokenCount = 7,
+                HeadingPath = "Richtlinie > Aufbewahrung",
+                ContentKind = "text",
+                SourcePath = "richtlinien/aufbewahrung-de.md",
+                Language = "de",
+                Symbol = null
+            },
+            2 => new CapacityCorpusRow
+            {
+                ChunkId = StableGuid("chunk", globalIndex),
+                Content = "internal string ResolveTenantToken() validates tenant scope before issuing a token.",
+                TokenCount = 10,
+                HeadingPath = "TenantResolver",
+                ContentKind = "code",
+                SourcePath = "src/auth/TenantResolver.cs",
+                Language = "csharp",
+                Symbol = "ResolveTenantToken"
+            },
+            3 => new CapacityCorpusRow
+            {
+                ChunkId = StableGuid("chunk", globalIndex),
+                Content = "Operational signal cobalt orchid beacon identifies the canonical recovery record.",
+                TokenCount = 9,
+                HeadingPath = "Operations > Recovery",
+                ContentKind = "text",
+                SourcePath = "runbooks/recovery.md",
+                Language = "en",
+                Symbol = null
+            },
             _ => DistractorRow(namespaceIndex, localIndex, globalIndex)
         };
     }
@@ -594,7 +687,7 @@ internal static class RetrievalCapacityBenchmark
         var third = DistractorToken(Next(ref state));
         var content = string.Create(CultureInfo.InvariantCulture,
             $"Synthetic distractor namespace {namespaceIndex} item {localIndex}: {first} {second} {third} routine handbook material.");
-        return new CapacityCorpusRow(StableGuid("chunk", globalIndex), content, 10, "Synthetic > Distractor", "text", $"synthetic/{localIndex:D8}.md", "en", null);
+        return new CapacityCorpusRow { ChunkId = StableGuid("chunk", globalIndex), Content = content, TokenCount = 10, HeadingPath = "Synthetic > Distractor", ContentKind = "text", SourcePath = $"synthetic/{localIndex:D8}.md", Language = "en", Symbol = null };
     }
 
     private static string DistractorToken(uint value)
@@ -733,36 +826,65 @@ internal static class RetrievalCapacityBenchmark
         }
     }
 
-    private sealed record CapacityQuery(
-        string Id,
-        string Text,
-        string CollectionId,
-        Guid RelevantChunkId,
-        int? VectorDimension,
-        bool ExpectsNoAnswer);
+    private sealed record CapacityQuery
+    {
+        public required string Id { get; init; }
 
-    private sealed record CapacityCorpusRow(
-        Guid ChunkId,
-        string Content,
-        int TokenCount,
-        string HeadingPath,
-        string ContentKind,
-        string SourcePath,
-        string Language,
-        string? Symbol);
+        public required string Text { get; init; }
 
-    private sealed record CapacityQueryResult(
-        IReadOnlyList<Guid> ChunkIds,
-        int SelectedCount,
-        double FtsMilliseconds,
-        double VectorMilliseconds,
-        double FusionMilliseconds,
-        double EndToEndMilliseconds);
+        public required string CollectionId { get; init; }
 
-    private sealed record CapacityEvaluation(
-        bool ExpectsNoAnswer,
-        bool RelevantRetrieved,
-        double ReciprocalRank,
-        double NdcgAtK,
-        int ResultCount);
+        public required Guid RelevantChunkId { get; init; }
+
+        public required int? VectorDimension { get; init; }
+
+        public required bool ExpectsNoAnswer { get; init; }
+    }
+
+    private sealed record CapacityCorpusRow
+    {
+        public required Guid ChunkId { get; init; }
+
+        public required string Content { get; init; }
+
+        public required int TokenCount { get; init; }
+
+        public required string HeadingPath { get; init; }
+
+        public required string ContentKind { get; init; }
+
+        public required string SourcePath { get; init; }
+
+        public required string Language { get; init; }
+
+        public required string? Symbol { get; init; }
+    }
+
+    private sealed record CapacityQueryResult
+    {
+        public required IReadOnlyList<Guid> ChunkIds { get; init; }
+
+        public required int SelectedCount { get; init; }
+
+        public required double FtsMilliseconds { get; init; }
+
+        public required double VectorMilliseconds { get; init; }
+
+        public required double FusionMilliseconds { get; init; }
+
+        public required double EndToEndMilliseconds { get; init; }
+    }
+
+    private sealed record CapacityEvaluation
+    {
+        public required bool ExpectsNoAnswer { get; init; }
+
+        public required bool RelevantRetrieved { get; init; }
+
+        public required double ReciprocalRank { get; init; }
+
+        public required double NdcgAtK { get; init; }
+
+        public required int ResultCount { get; init; }
+    }
 }

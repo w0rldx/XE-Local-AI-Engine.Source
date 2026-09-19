@@ -112,10 +112,13 @@ public sealed class LoadedModelsPageE2ETests : XESerialE2ETestBase
         // FakeOllama's /api/ps now reports one resident model, so the page renders the real table path.
         Factory.FakeOllamaState.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel(LoadedModelName,
-                DateTimeOffset.UtcNow.AddMinutes(5),
-                SizeBytes: 900_000_000,
-                SizeVramBytes: 800_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel
+            {
+                Name = LoadedModelName,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                SizeBytes = 900_000_000,
+                SizeVramBytes = 800_000_000
+            }
         ];
 
         var pageErrors = new List<string>();

@@ -1550,7 +1550,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
-        return new CommandResult(process.ExitCode, await stdout, await stderr);
+        return new CommandResult { ExitCode = process.ExitCode, StandardOutput = await stdout, StandardError = await stderr };
     }
 
     private static void EnsureSuccess(CommandResult result)
@@ -1572,7 +1572,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             Sequence: 1);
     }
 
-    private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
+    private sealed record CommandResult
+    {
+        public required int ExitCode { get; init; }
+
+        public required string StandardOutput { get; init; }
+
+        public required string StandardError { get; init; }
+    }
 
     private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models) =>
         LocalModelResolver(servedContextTokens: null, models);

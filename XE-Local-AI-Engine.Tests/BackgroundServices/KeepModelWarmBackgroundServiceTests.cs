@@ -375,9 +375,14 @@ public sealed class KeepModelWarmBackgroundServiceTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            Entries.Add(new Entry(logLevel, formatter(state, exception)));
+            Entries.Add(new Entry { Level = logLevel, Message = formatter(state, exception) });
         }
 
-        public sealed record Entry(LogLevel Level, string Message);
+        public sealed record Entry
+        {
+            public required LogLevel Level { get; init; }
+
+            public required string Message { get; init; }
+        }
     }
 }

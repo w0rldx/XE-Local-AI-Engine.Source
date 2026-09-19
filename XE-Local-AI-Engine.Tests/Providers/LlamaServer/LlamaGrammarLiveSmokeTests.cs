@@ -310,7 +310,7 @@ public sealed class LlamaGrammarLiveSmokeTests
         using var content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
         using var response = await http.PostAsync(new Uri("v1/chat/completions", UriKind.Relative), content);
         var body = await response.Content.ReadAsStringAsync();
-        return new LiveResponse(response.StatusCode, body);
+        return new LiveResponse { Status = response.StatusCode, Body = body };
     }
 
     private static JsonElement ExtractTools(string wireBody)
@@ -373,5 +373,10 @@ public sealed class LlamaGrammarLiveSmokeTests
         await File.WriteAllTextAsync(fullPath, JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine);
     }
 
-    private sealed record LiveResponse(HttpStatusCode Status, string Body);
+    private sealed record LiveResponse
+    {
+        public required HttpStatusCode Status { get; init; }
+
+        public required string Body { get; init; }
+    }
 }

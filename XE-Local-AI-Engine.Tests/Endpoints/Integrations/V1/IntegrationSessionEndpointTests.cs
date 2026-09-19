@@ -189,7 +189,7 @@ public sealed class IntegrationSessionEndpointTests
         var first = await AdmitAsync(store, trigger.Id, principalId, keyPrefix, receivedAtUtc: 1_000);
         var second = await AdmitAsync(store, trigger.Id, principalId, keyPrefix, receivedAtUtc: 2_000);
         _ = await AdmitAsync(store, Guid.NewGuid(), principalId, keyPrefix, receivedAtUtc: 3_000);
-        return new Seeded(trigger.Id, triggerName, principalId, [first, second]);
+        return new Seeded { TriggerId = trigger.Id, TriggerName = triggerName, PrincipalId = principalId, SessionIds = [first, second] };
     }
 
     /// <summary>
@@ -222,7 +222,16 @@ public sealed class IntegrationSessionEndpointTests
         return sessionId;
     }
 
-    private sealed record Seeded(Guid TriggerId, string TriggerName, Guid PrincipalId, IReadOnlyList<Guid> SessionIds);
+    private sealed record Seeded
+    {
+        public required Guid TriggerId { get; init; }
+
+        public required string TriggerName { get; init; }
+
+        public required Guid PrincipalId { get; init; }
+
+        public required IReadOnlyList<Guid> SessionIds { get; init; }
+    }
 
     private sealed record SessionBody(
         Guid Id,

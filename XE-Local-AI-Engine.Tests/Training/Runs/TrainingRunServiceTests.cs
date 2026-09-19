@@ -262,11 +262,14 @@ public sealed class TrainingRunServiceTests : IDisposable
         // licenseJson stays null: a repository with no license tag still has to be confirmed, just differently.
         var baseArtifact = await artifacts.MarkReadyAsync(downloading.Id, downloading.Version, Encoding.UTF8.GetBytes("[]"), totalBytes: 42, licenseJson: null);
 
-        return new RunFixture(ready.Id,
-            ready.Version,
-            AssertEx.NotNull(ready.ContentFingerprint, "A ready dataset carries a content fingerprint."),
-            ready.Revision,
-            baseArtifact.Id);
+        return new RunFixture
+        {
+            DatasetId = ready.Id,
+            DatasetVersion = ready.Version,
+            DatasetContentFingerprint = AssertEx.NotNull(ready.ContentFingerprint, "A ready dataset carries a content fingerprint."),
+            DatasetRevision = ready.Revision,
+            BaseArtifactId = baseArtifact.Id
+        };
     }
 
     private async Task<ServiceProvider> BuildProviderAsync(string name)
@@ -286,5 +289,16 @@ public sealed class TrainingRunServiceTests : IDisposable
         return provider;
     }
 
-    private sealed record RunFixture(Guid DatasetId, long DatasetVersion, string DatasetContentFingerprint, int DatasetRevision, Guid BaseArtifactId);
+    private sealed record RunFixture
+    {
+        public required Guid DatasetId { get; init; }
+
+        public required long DatasetVersion { get; init; }
+
+        public required string DatasetContentFingerprint { get; init; }
+
+        public required int DatasetRevision { get; init; }
+
+        public required Guid BaseArtifactId { get; init; }
+    }
 }

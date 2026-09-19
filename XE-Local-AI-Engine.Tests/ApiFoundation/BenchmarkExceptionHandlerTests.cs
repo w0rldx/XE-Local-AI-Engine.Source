@@ -71,89 +71,136 @@ public sealed class BenchmarkExceptionHandlerTests
         var handled = await new BenchmarkExceptionHandler().TryHandleAsync(context, exception, CancellationToken.None);
         body.Position = 0;
         using var reader = new StreamReader(body);
-        return new HandlerResult(handled,
-            context.Response.StatusCode,
-            context.Response.ContentType ?? string.Empty,
-            await reader.ReadToEndAsync());
+        return new HandlerResult
+        {
+            Handled = handled,
+            StatusCode = context.Response.StatusCode,
+            ContentType = context.Response.ContentType ?? string.Empty,
+            Body = await reader.ReadToEndAsync()
+        };
     }
 
     private static readonly BenchmarkHandlerCase[] ClaimedCases =
     [
-        new("not found",
-            new BenchmarkNotFoundException("unsafe-storage-path:/benchmarks/private"),
-            StatusCodes.Status404NotFound,
-            BenchmarkErrorCode.NotFound,
-            "The requested benchmark resource was not found.",
-            "Not Found",
-            "https://tools.ietf.org/html/rfc9110#section-15.5.5",
-            "unsafe-storage-path"),
-        new("validation",
-            new BenchmarkValidationException("The benchmark request is invalid."),
-            StatusCodes.Status400BadRequest,
-            BenchmarkErrorCode.InvalidRequest,
-            "The benchmark request is invalid.",
-            "Bad Request",
-            "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-            ForbiddenProviderText: null),
-        new("known conflict",
-            new BenchmarkConflictException("VersionConflict"),
-            StatusCodes.Status409Conflict,
-            BenchmarkErrorCode.VersionConflict,
-            "The resource version changed. Refresh and retry.",
-            "Conflict",
-            "https://tools.ietf.org/html/rfc9110#section-15.5.10",
-            ForbiddenProviderText: null),
-        new("unknown conflict fallback",
-            new BenchmarkConflictException("unsafe-provider-conflict"),
-            StatusCodes.Status409Conflict,
-            BenchmarkErrorCode.InvalidLifecycleTransition,
-            "The benchmark lifecycle transition is not allowed.",
-            "Conflict",
-            "https://tools.ietf.org/html/rfc9110#section-15.5.10",
-            "unsafe-provider-conflict"),
-        new("eligibility",
-            new BenchmarkEligibilityException("The selected model is not eligible for benchmarking."),
-            StatusCodes.Status422UnprocessableEntity,
-            BenchmarkErrorCode.IneligibleModel,
-            "The selected model is not eligible for benchmarking.",
-            "Unprocessable Entity",
-            "https://tools.ietf.org/html/rfc4918#section-11.2",
-            ForbiddenProviderText: null),
-        new("unsupported KV cache",
-            new BenchmarkUnsupportedKvCacheTypeException("The selected KV cache type is not supported."),
-            StatusCodes.Status422UnprocessableEntity,
-            BenchmarkErrorCode.UnsupportedKvCacheType,
-            "The selected KV cache type is not supported.",
-            "Unprocessable Entity",
-            "https://tools.ietf.org/html/rfc4918#section-11.2",
-            ForbiddenProviderText: null),
-        new("judge policy changed",
-            new BenchmarkJudgePolicyChangedException("unsafe-provider-revision-detail"),
-            StatusCodes.Status409Conflict,
-            BenchmarkErrorCode.JudgePolicyChanged,
-            "The project's judge policy changed. Refresh and retry.",
-            "Conflict",
-            "https://tools.ietf.org/html/rfc9110#section-15.5.10",
-            "unsafe-provider-revision-detail")
+        new()
+        {
+            Name = "not found",
+            Exception = new BenchmarkNotFoundException("unsafe-storage-path:/benchmarks/private"),
+            StatusCode = StatusCodes.Status404NotFound,
+            Code = BenchmarkErrorCode.NotFound,
+            Detail = "The requested benchmark resource was not found.",
+            Title = "Not Found",
+            ProblemType = "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+            ForbiddenProviderText = "unsafe-storage-path"
+        },
+        new()
+        {
+            Name = "validation",
+            Exception = new BenchmarkValidationException("The benchmark request is invalid."),
+            StatusCode = StatusCodes.Status400BadRequest,
+            Code = BenchmarkErrorCode.InvalidRequest,
+            Detail = "The benchmark request is invalid.",
+            Title = "Bad Request",
+            ProblemType = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+            ForbiddenProviderText = null
+        },
+        new()
+        {
+            Name = "known conflict",
+            Exception = new BenchmarkConflictException("VersionConflict"),
+            StatusCode = StatusCodes.Status409Conflict,
+            Code = BenchmarkErrorCode.VersionConflict,
+            Detail = "The resource version changed. Refresh and retry.",
+            Title = "Conflict",
+            ProblemType = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+            ForbiddenProviderText = null
+        },
+        new()
+        {
+            Name = "unknown conflict fallback",
+            Exception = new BenchmarkConflictException("unsafe-provider-conflict"),
+            StatusCode = StatusCodes.Status409Conflict,
+            Code = BenchmarkErrorCode.InvalidLifecycleTransition,
+            Detail = "The benchmark lifecycle transition is not allowed.",
+            Title = "Conflict",
+            ProblemType = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+            ForbiddenProviderText = "unsafe-provider-conflict"
+        },
+        new()
+        {
+            Name = "eligibility",
+            Exception = new BenchmarkEligibilityException("The selected model is not eligible for benchmarking."),
+            StatusCode = StatusCodes.Status422UnprocessableEntity,
+            Code = BenchmarkErrorCode.IneligibleModel,
+            Detail = "The selected model is not eligible for benchmarking.",
+            Title = "Unprocessable Entity",
+            ProblemType = "https://tools.ietf.org/html/rfc4918#section-11.2",
+            ForbiddenProviderText = null
+        },
+        new()
+        {
+            Name = "unsupported KV cache",
+            Exception = new BenchmarkUnsupportedKvCacheTypeException("The selected KV cache type is not supported."),
+            StatusCode = StatusCodes.Status422UnprocessableEntity,
+            Code = BenchmarkErrorCode.UnsupportedKvCacheType,
+            Detail = "The selected KV cache type is not supported.",
+            Title = "Unprocessable Entity",
+            ProblemType = "https://tools.ietf.org/html/rfc4918#section-11.2",
+            ForbiddenProviderText = null
+        },
+        new()
+        {
+            Name = "judge policy changed",
+            Exception = new BenchmarkJudgePolicyChangedException("unsafe-provider-revision-detail"),
+            StatusCode = StatusCodes.Status409Conflict,
+            Code = BenchmarkErrorCode.JudgePolicyChanged,
+            Detail = "The project's judge policy changed. Refresh and retry.",
+            Title = "Conflict",
+            ProblemType = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+            ForbiddenProviderText = "unsafe-provider-revision-detail"
+        }
     ];
 
     private static readonly FallthroughCase[] FallthroughCases =
     [
-        new("contextual KeyNotFoundException", new KeyNotFoundException("contextual")),
-        new("unrelated InvalidOperationException", new InvalidOperationException("unrelated"))
+        new() { Name = "contextual KeyNotFoundException", Exception = new KeyNotFoundException("contextual") },
+        new() { Name = "unrelated InvalidOperationException", Exception = new InvalidOperationException("unrelated") }
     ];
 
-    private sealed record BenchmarkHandlerCase(
-        string Name,
-        Exception Exception,
-        int StatusCode,
-        BenchmarkErrorCode Code,
-        string Detail,
-        string Title,
-        string ProblemType,
-        string? ForbiddenProviderText);
+    private sealed record BenchmarkHandlerCase
+    {
+        public required string Name { get; init; }
 
-    private sealed record FallthroughCase(string Name, Exception Exception);
+        public required Exception Exception { get; init; }
 
-    private sealed record HandlerResult(bool Handled, int StatusCode, string ContentType, string Body);
+        public required int StatusCode { get; init; }
+
+        public required BenchmarkErrorCode Code { get; init; }
+
+        public required string Detail { get; init; }
+
+        public required string Title { get; init; }
+
+        public required string ProblemType { get; init; }
+
+        public required string? ForbiddenProviderText { get; init; }
+    }
+
+    private sealed record FallthroughCase
+    {
+        public required string Name { get; init; }
+
+        public required Exception Exception { get; init; }
+    }
+
+    private sealed record HandlerResult
+    {
+        public required bool Handled { get; init; }
+
+        public required int StatusCode { get; init; }
+
+        public required string ContentType { get; init; }
+
+        public required string Body { get; init; }
+    }
 }

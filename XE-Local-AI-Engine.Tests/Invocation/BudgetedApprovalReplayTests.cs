@@ -344,17 +344,20 @@ public sealed class BudgetedApprovalReplayTests
                     "Decided by user.")).ToList()));
         }
 
-        return new ReplayOutcome(AssertEx.NotNull(finalText, "the scripted conversation must terminate with a final answer"),
-            queryExecutions,
-            archiveExecutions,
-            reasoningStripped,
-            protectedResultsExcerpted,
-            everExceededBudget,
-            approvalRequestsSurfaced,
-            AssertEx.NotNull(firstBudgeted, "the first round must have been budgeted"),
-            firstMessagesDropped,
-            AssertEx.NotNull(lastBudgeted, "the last round must have been budgeted"),
-            AssertEx.NotNull(scripted.LastMessages, "the provider must have been called at least once"));
+        return new ReplayOutcome
+        {
+            FinalText = AssertEx.NotNull(finalText, "the scripted conversation must terminate with a final answer"),
+            QueryExecutions = queryExecutions,
+            ArchiveExecutions = archiveExecutions,
+            ReasoningStripped = reasoningStripped,
+            ProtectedResultsExcerpted = protectedResultsExcerpted,
+            EverExceededBudget = everExceededBudget,
+            ApprovalRequestsSurfaced = approvalRequestsSurfaced,
+            FirstBudgeted = AssertEx.NotNull(firstBudgeted, "the first round must have been budgeted"),
+            FirstMessagesDropped = firstMessagesDropped,
+            LastBudgeted = AssertEx.NotNull(lastBudgeted, "the last round must have been budgeted"),
+            ProviderMessages = AssertEx.NotNull(scripted.LastMessages, "the provider must have been called at least once")
+        };
     }
 
     private static string ToolNameOf(ToolApprovalRequestContent request)
@@ -416,18 +419,30 @@ public sealed class BudgetedApprovalReplayTests
         };
     }
 
-    private sealed record ReplayOutcome(
-        string FinalText,
-        int QueryExecutions,
-        int ArchiveExecutions,
-        int ReasoningStripped,
-        int ProtectedResultsExcerpted,
-        bool EverExceededBudget,
-        int ApprovalRequestsSurfaced,
-        IReadOnlyList<ChatMessage> FirstBudgeted,
-        int FirstMessagesDropped,
-        IReadOnlyList<ChatMessage> LastBudgeted,
-        IReadOnlyList<ChatMessage> ProviderMessages);
+    private sealed record ReplayOutcome
+    {
+        public required string FinalText { get; init; }
+
+        public required int QueryExecutions { get; init; }
+
+        public required int ArchiveExecutions { get; init; }
+
+        public required int ReasoningStripped { get; init; }
+
+        public required int ProtectedResultsExcerpted { get; init; }
+
+        public required bool EverExceededBudget { get; init; }
+
+        public required int ApprovalRequestsSurfaced { get; init; }
+
+        public required IReadOnlyList<ChatMessage> FirstBudgeted { get; init; }
+
+        public required int FirstMessagesDropped { get; init; }
+
+        public required IReadOnlyList<ChatMessage> LastBudgeted { get; init; }
+
+        public required IReadOnlyList<ChatMessage> ProviderMessages { get; init; }
+    }
 
     /// <summary>
     ///     Scripted stand-in for the model, and the capture point for the message list that would go to the provider — i.e.

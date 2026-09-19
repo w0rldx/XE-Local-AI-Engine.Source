@@ -261,7 +261,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
-        return new CommandResult(process.ExitCode, await stdout, await stderr);
+        return new CommandResult { ExitCode = process.ExitCode, StandardOutput = await stdout, StandardError = await stderr };
     }
 
     private static DevelopmentExecutionSnapshot ExecutionSnapshot(Guid selectedFolderId, string repositoryIdentityHash) =>
@@ -320,5 +320,12 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
             CommandProfileJson = GenericProfileJson
         };
 
-    private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
+    private sealed record CommandResult
+    {
+        public required int ExitCode { get; init; }
+
+        public required string StandardOutput { get; init; }
+
+        public required string StandardError { get; init; }
+    }
 }

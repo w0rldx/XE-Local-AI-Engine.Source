@@ -83,8 +83,8 @@ public sealed class DevWorkflowSliceATests
         var fake = ResolveStream(factory, ref stream);
         for (var node = 0; node < 2; node++)
         {
-            fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
-            fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => FinishTheWorkflowSessionAsync(services)));
+            fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] });
+            fake.Enqueue(new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted], DuringTurn = (services, _) => FinishTheWorkflowSessionAsync(services) });
         }
 
         var definitionId = await FindSeededDefinitionAsync(factory);

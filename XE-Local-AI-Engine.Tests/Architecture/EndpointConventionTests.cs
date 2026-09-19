@@ -442,7 +442,7 @@ public sealed class EndpointConventionTests
             }
         }
 
-        return new RouteScanResult(violations, verbSites, mapSites);
+        return new RouteScanResult { Violations = violations, VerbCallSites = verbSites, MapCallSites = mapSites };
     }
 
     /// <summary>
@@ -931,5 +931,12 @@ public sealed class EndpointConventionTests
         }
     }
 
-    private sealed record RouteScanResult(IReadOnlyList<string> Violations, int VerbCallSites, int MapCallSites);
+    private sealed record RouteScanResult
+    {
+        public required IReadOnlyList<string> Violations { get; init; }
+
+        public required int VerbCallSites { get; init; }
+
+        public required int MapCallSites { get; init; }
+    }
 }

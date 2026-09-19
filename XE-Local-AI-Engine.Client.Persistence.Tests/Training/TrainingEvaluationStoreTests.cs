@@ -469,10 +469,13 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         // The run's own work item is claimed here so the evaluation is the only queued row in the kind-scoped tests.
         _ = await runStore.ClaimNextAsync(TrainingWorkKind.TrainingRun);
 
-        return new EvaluationFixture(run.Id,
-            ready.Id,
-            AssertEx.NotNull(ready.ContentFingerprint, "A ready dataset carries a content fingerprint."),
-            sampleIds);
+        return new EvaluationFixture
+        {
+            TrainingRunId = run.Id,
+            DatasetId = ready.Id,
+            DatasetContentFingerprint = AssertEx.NotNull(ready.ContentFingerprint, "A ready dataset carries a content fingerprint."),
+            SampleIds = sampleIds
+        };
     }
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileNameOrPath)
@@ -493,5 +496,14 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private sealed record EvaluationFixture(Guid TrainingRunId, Guid DatasetId, string DatasetContentFingerprint, IReadOnlyList<Guid> SampleIds);
+    private sealed record EvaluationFixture
+    {
+        public required Guid TrainingRunId { get; init; }
+
+        public required Guid DatasetId { get; init; }
+
+        public required string DatasetContentFingerprint { get; init; }
+
+        public required IReadOnlyList<Guid> SampleIds { get; init; }
+    }
 }

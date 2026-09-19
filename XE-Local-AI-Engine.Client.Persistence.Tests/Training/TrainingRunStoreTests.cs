@@ -288,11 +288,14 @@ public sealed class TrainingRunStoreTests : IDisposable
             totalBytes: 42,
             licenseJson: null);
 
-        return new RunFixture(ready.Id,
-            ready.Version,
-            AssertEx.NotNull(ready.ContentFingerprint, "A ready dataset carries a content fingerprint."),
-            ready.Revision,
-            baseArtifact.Id);
+        return new RunFixture
+        {
+            DatasetId = ready.Id,
+            DatasetVersion = ready.Version,
+            DatasetContentFingerprint = AssertEx.NotNull(ready.ContentFingerprint, "A ready dataset carries a content fingerprint."),
+            DatasetRevision = ready.Revision,
+            BaseArtifactId = baseArtifact.Id
+        };
     }
 
     private async Task<NodeChatDbContext> CreateDatabaseAsync(string fileNameOrPath)
@@ -313,5 +316,16 @@ public sealed class TrainingRunStoreTests : IDisposable
         return Path.Combine(_rootPath, fileName);
     }
 
-    private sealed record RunFixture(Guid DatasetId, long DatasetVersion, string DatasetContentFingerprint, int DatasetRevision, Guid BaseArtifactId);
+    private sealed record RunFixture
+    {
+        public required Guid DatasetId { get; init; }
+
+        public required long DatasetVersion { get; init; }
+
+        public required string DatasetContentFingerprint { get; init; }
+
+        public required int DatasetRevision { get; init; }
+
+        public required Guid BaseArtifactId { get; init; }
+    }
 }

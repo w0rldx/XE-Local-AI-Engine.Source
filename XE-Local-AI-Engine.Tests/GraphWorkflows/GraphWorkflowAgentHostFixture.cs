@@ -210,7 +210,7 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
         bool activeModelIsCloud = false,
         CancellationToken cancellationToken = default)
     {
-        _calls.Enqueue(new GraphWorkflowResolveCall(agentDefinitionId, activeModelId, retrievalQuery, supportsTools, honorModelProfile, activeModelIsCloud));
+        _calls.Enqueue(new GraphWorkflowResolveCall { AgentDefinitionId = agentDefinitionId, ActiveModelId = activeModelId, RetrievalQuery = retrievalQuery, SupportsTools = supportsTools, HonorModelProfile = honorModelProfile, ActiveModelIsCloud = activeModelIsCloud });
 
         // Null for a null binding, exactly as the real resolver answers it: that null is the "keep today's defaults"
         // signal, not a deleted agent. A fake that fabricated a runtime here made every agent node in this suite look
@@ -258,13 +258,20 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
 }
 
 /// <summary>One resolve, as the executor asked for it.</summary>
-internal sealed record GraphWorkflowResolveCall(
-    Guid? AgentDefinitionId,
-    string? ActiveModelId,
-    string? RetrievalQuery,
-    bool SupportsTools,
-    bool HonorModelProfile,
-    bool ActiveModelIsCloud);
+internal sealed class GraphWorkflowResolveCall
+{
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required string? ActiveModelId { get; init; }
+
+    public required string? RetrievalQuery { get; init; }
+
+    public required bool SupportsTools { get; init; }
+
+    public required bool HonorModelProfile { get; init; }
+
+    public required bool ActiveModelIsCloud { get; init; }
+}
 
 /// <summary>Every ping the store announced, in the order the commits allocated their watermarks.</summary>
 internal sealed class RecordingGraphWorkflowEventPublisher : IGraphWorkflowEventPublisher
@@ -276,9 +283,16 @@ internal sealed class RecordingGraphWorkflowEventPublisher : IGraphWorkflowEvent
 
     public Task PublishAsync(Guid runId, long sequence, GraphWorkflowChangeKind kind, CancellationToken cancellationToken = default)
     {
-        _pings.Enqueue(new GraphWorkflowPing(runId, sequence, kind));
+        _pings.Enqueue(new GraphWorkflowPing { RunId = runId, Sequence = sequence, Kind = kind });
         return Task.CompletedTask;
     }
 }
 
-internal sealed record GraphWorkflowPing(Guid RunId, long Sequence, GraphWorkflowChangeKind Kind);
+internal sealed class GraphWorkflowPing
+{
+    public required Guid RunId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required GraphWorkflowChangeKind Kind { get; init; }
+}
