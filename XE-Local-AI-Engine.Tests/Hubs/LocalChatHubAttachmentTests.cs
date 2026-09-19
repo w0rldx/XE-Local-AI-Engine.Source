@@ -148,12 +148,15 @@ public sealed class LocalChatHubAttachmentTests
 
     private static ChatStreamEvent NewEvent(Guid invocationId)
     {
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantQueued,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            invocationId,
-            "queued",
-            Sequence: 0,
-            OccurredAtUtc: 0);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantQueued,
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = invocationId,
+            Status = "queued",
+            Sequence = 0,
+            OccurredAtUtc = 0
+        };
     }
 }

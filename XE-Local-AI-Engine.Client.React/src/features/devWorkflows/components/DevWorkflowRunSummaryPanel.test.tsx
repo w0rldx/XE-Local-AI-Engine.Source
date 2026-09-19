@@ -58,7 +58,21 @@ describe("DevWorkflowRunSummaryPanel", () => {
 	// The template picker carried no label at all: its placeholder was the only wording on screen, and that vanishes
 	// the moment a template is picked.
 	it("names the template picker for assistive technology", () => {
-		renderPanel([devWorkflowNodeRunSummary({ id: "a", status: "Succeeded" })], [{ id: "definition-1", name: "Build and test" }]);
+		renderPanel(
+			[devWorkflowNodeRunSummary({ id: "a", status: "Succeeded" })],
+			[
+				{
+					id: "definition-1",
+					name: "Build and test",
+					source: "Seed",
+					seedSlug: "build-and-test",
+					archived: false,
+					version: 1,
+					nodeCount: 3,
+					updatedAtUtc: 1_700_000_100_000,
+				},
+			],
+		);
 
 		expect(screen.getByRole("combobox", { name: "Pick a template" })).toBe(screen.getByTestId("dev-workflow-start-definition"));
 	});

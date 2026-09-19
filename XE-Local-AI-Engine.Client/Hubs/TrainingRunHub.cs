@@ -12,7 +12,14 @@ public static class TrainingRunHubEvents
     public const string ReplayReset = "trainingRun.replayReset";
 }
 
-public sealed record TrainingRunReplayReset(Guid RunId, long LatestSequence, long RunVersion);
+public sealed class TrainingRunReplayReset
+{
+    public required Guid RunId { get; init; }
+
+    public required long LatestSequence { get; init; }
+
+    public required long RunVersion { get; init; }
+}
 
 /// <summary>
 ///     Operator-only, per-run delivery for live training progress. The caller joins the group before replay so the
@@ -56,7 +63,7 @@ public sealed class TrainingRunHub : Hub
         if (replay.ResetRequired)
         {
             await Clients.Caller.SendAsync(TrainingRunHubEvents.ReplayReset,
-                             new TrainingRunReplayReset(runId, replay.LatestSequence, run.Version),
+                             new TrainingRunReplayReset { RunId = runId, LatestSequence = replay.LatestSequence, RunVersion = run.Version },
                              cancellationToken);
             return;
         }

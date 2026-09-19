@@ -142,90 +142,75 @@ public sealed record NodeChatStreamRequest(
     // Trailing optional so the SignalR hub forwards the record unchanged.
     bool SuppressAskUser = false);
 
-public sealed record ChatStreamEvent(
-    string Type,
-    Guid ConversationId,
-    Guid MessageId,
-    Guid RequestId,
-    string Status,
-    long Sequence,
-    long OccurredAtUtc,
-    string? Delta = null,
-    string? ReasoningDelta = null,
-    string? Content = null,
-    string? Reasoning = null,
-    string? Error = null,
-    string? Model = null,
-    int? InputTokens = null,
-    int? OutputTokens = null,
-    int? TotalTokens = null,
-    int? ReasoningTokens = null,
-    string? ToolCallId = null,
-    string? ToolName = null,
-    string? Arguments = null,
-    bool? RequiresApproval = null,
-    string? Result = null,
-    bool? IsError = null,
-    // Non-fatal turn notice fields (AssistantNotice events only). NoticeKind is the TurnNoticeKind enum name (e.g.
-    // "ModelSubstituted", "ToolDisabled", "HistoryTruncated"); NoticeMessage is the sanitized, user-facing text.
-    // Trailing optional so every existing event type's wire shape is unchanged.
-    string? NoticeKind = null,
-    string? NoticeMessage = null,
-    // Runtime phase (AssistantPhase events only): the wire form of InvocationRuntimePhase — "preparing_runtime",
-    // "loading_model", or "generating" — so the client can show a distinct model-loading indicator before the first
-    // token. Trailing optional so every existing event type's wire shape is unchanged.
-    string? RuntimePhase = null,
-    // Approval request id (ApprovalRequested events only): the durable key the browser echoes back to the
-    // loopback resolve endpoint to release the waiting run. Distinct from the top-level RequestId (the turn
-    // correlation guid). The tool-call id rides ToolCallId and the tool name rides ToolName. Trailing optional so
-    // every existing event type's wire shape is unchanged.
-    string? ApprovalRequestId = null,
-    // Question request id (QuestionRequested events only): the durable key the browser echoes back to the loopback
-    // resolve endpoint to release the waiting run. Distinct from the top-level RequestId (the turn correlation guid).
-    // The tool-call id rides ToolCallId and the tool name rides ToolName. Trailing optional so every existing event
-    // type's wire shape is unchanged.
-    string? QuestionRequestId = null,
-    // The ask_user questions (QuestionRequested events only), as a JSON array of
-    // {header, question, multiSelect, options:[{label, description, recommended}]} — the serialized
-    // UserQuestionSpec[]. Rides as a JSON STRING for the same reason Arguments does: the event record stays a flat
-    // wire shape and the client parses the payload it renders. Trailing optional so every existing event type's wire
-    // shape is unchanged.
-    string? Questions = null,
-    // The character index in the accumulated content at which Delta begins (AssistantDelta), or the length of the
-    // carried Content (AssistantSnapshot). Null on every other event type. The client uses it to detect a gap: a delta
-    // whose ContentOffset is not where the previous one ended means the stream is discontinuous, and it repairs by
-    // re-subscribing through ResumeMessage.
-    //
-    // These are .NET string indices, i.e. UTF-16 code units — deliberately the same index space as JavaScript's
-    // String.length, so client and server agree on the index without any conversion. A delta may therefore split a
-    // surrogate pair; it already could, and rendering concatenates before display, so nothing changes.
-    //
-    // Trailing optional so every existing event type's wire shape is unchanged.
-    long? ContentOffset = null,
-    long? ReasoningOffset = null,
-    // The effective whole-turn ceiling for THIS turn in seconds — the operator's node "Maximum message request
-    // timeout" as it was resolved into the runtime package's TimeoutSettings.InvocationTimeoutSeconds. Stamped on
-    // AssistantQueued and AssistantStreaming only (null everywhere else) so the browser's own stream watchdog can
-    // derive its deadline from the node's ceiling instead of a fixed constant that pre-empts it. Trailing optional so
-    // every existing event type's wire shape is unchanged.
-    int? InvocationTimeoutSeconds = null,
-    // Whether the node can REMEMBER an "approve for this session" decision for this exact request (ApprovalRequested
-    // events only; null everywhere else, and null on a reconnect replay that cannot resolve it). The browser prefers
-    // this per-request answer over the tool catalog's tool-identity flag when deciding whether to offer the session
-    // button. Trailing optional so every existing event type's wire shape is unchanged.
-    bool? SessionScopeEligible = null,
-    // The notice's optional structured detail (AssistantNotice events only), carried verbatim from
-    // TurnNoticePayload.Detail: a stable machine code or short identifier that names WHY the notice fired, next to
-    // NoticeMessage's prose. EffortDispatched carries the kebab-case dispatch reason code, ModelSubstituted /
-    // AttachmentsWithheld / KnowledgeWithheld the effective model, OrchestrationDegraded the degradation reason.
-    // Sanitized at the source like every other notice field. Trailing optional so every existing event type's wire
-    // shape is unchanged.
-    string? NoticeDetail = null,
-    // When the runtime phase last CHANGED (AssistantPhase events only), as an ISO-8601 UTC string ("O", invariant
-    // culture), stamped server-side on InvocationState. The browser renders elapsed cold-load time from THIS rather
-    // than from when it first saw the phase, so a page reload mid-load keeps counting instead of restarting at zero.
-    // Null when the state carries no phase timestamp (cloud/Ollama turns emit no phase at all, and legacy state
-    // predates the field). Unrelated to OccurredAtUtc, which is the frame's send time off a different clock.
-    // Hand-maintained SSE contract: any change here also edits src/features/chat/models/NodeChatStreamTypes.ts.
-    // Trailing optional so every existing event type's wire shape is unchanged.
-    string? RuntimePhaseChangedAtUtc = null);
+public sealed record ChatStreamEvent
+{
+    public required string Type { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required Guid MessageId { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public string? Delta { get; init; }
+
+    public string? ReasoningDelta { get; init; }
+
+    public string? Content { get; init; }
+
+    public string? Reasoning { get; init; }
+
+    public string? Error { get; init; }
+
+    public string? Model { get; init; }
+
+    public int? InputTokens { get; init; }
+
+    public int? OutputTokens { get; init; }
+
+    public int? TotalTokens { get; init; }
+
+    public int? ReasoningTokens { get; init; }
+
+    public string? ToolCallId { get; init; }
+
+    public string? ToolName { get; init; }
+
+    public string? Arguments { get; init; }
+
+    public bool? RequiresApproval { get; init; }
+
+    public string? Result { get; init; }
+
+    public bool? IsError { get; init; }
+
+    public string? NoticeKind { get; init; }
+
+    public string? NoticeMessage { get; init; }
+
+    public string? RuntimePhase { get; init; }
+
+    public string? ApprovalRequestId { get; init; }
+
+    public string? QuestionRequestId { get; init; }
+
+    public string? Questions { get; init; }
+
+    public long? ContentOffset { get; init; }
+
+    public long? ReasoningOffset { get; init; }
+
+    public int? InvocationTimeoutSeconds { get; init; }
+
+    public bool? SessionScopeEligible { get; init; }
+
+    public string? NoticeDetail { get; init; }
+
+    public string? RuntimePhaseChangedAtUtc { get; init; }
+}

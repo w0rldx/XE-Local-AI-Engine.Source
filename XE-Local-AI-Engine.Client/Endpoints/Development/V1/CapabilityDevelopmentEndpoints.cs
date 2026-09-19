@@ -84,13 +84,13 @@ public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<De
         var isolation = BuildIsolationSummary();
         if (!string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal))
         {
-            await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null, isolation), ct);
+            await Send.OkAsync(new DevelopmentCapabilityResponse { Enabled = enabled, SandboxProvider = providerName, ContainerRuntime = null, Isolation = isolation }, ct);
             return;
         }
 
         var preflight = await _dockerDaemonPreflight.InspectAsync(ct);
 
-        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse(), isolation), ct);
+        await Send.OkAsync(new DevelopmentCapabilityResponse { Enabled = enabled, SandboxProvider = providerName, ContainerRuntime = preflight.ToResponse(), Isolation = isolation }, ct);
     }
 
     // Reaches no daemon: the role providers are DI singletons resolved by the selector, and the container preflight

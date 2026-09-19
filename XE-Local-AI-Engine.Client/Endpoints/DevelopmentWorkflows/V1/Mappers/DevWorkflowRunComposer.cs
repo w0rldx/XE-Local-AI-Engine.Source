@@ -97,29 +97,31 @@ public sealed class DevWorkflowRunComposer
                               OperatorRetries(nodeRun, declaredCaps)))
                           .ToList();
 
-        return new DevWorkflowRunResponse(run.Id,
-            run.WorkItemId,
-            run.DefinitionId,
-            run.DefinitionVersion,
-            definitionName,
-            run.GraphRevision,
-            graph,
-            run.Status.ToString(),
-            nodes,
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
-            detail.PendingDecisionCount,
-            detail.BlockingGateNodeRunId,
-            run.FailureClass,
-            run.TerminalReason,
-            run.StartedAtUtc,
-            run.EndedAtUtc,
-            run.Version,
-            run.LastSequence,
-
+        return new DevWorkflowRunResponse
+        {
+            Id = run.Id,
+            WorkItemId = run.WorkItemId,
+            DefinitionId = run.DefinitionId,
+            DefinitionVersion = run.DefinitionVersion,
+            DefinitionName = definitionName,
+            GraphRevision = run.GraphRevision,
+            Graph = graph,
+            Status = run.Status.ToString(),
+            Nodes = nodes,
+            QueuedNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
+            RunningNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
+            PendingDecisionCount = detail.PendingDecisionCount,
+            BlockingGateNodeRunId = detail.BlockingGateNodeRunId,
+            FailureClass = run.FailureClass,
+            TerminalReason = run.TerminalReason,
+            StartedAtUtc = run.StartedAtUtc,
+            CompletedAtUtc = run.EndedAtUtc,
+            Version = run.Version,
+            LastSequence = run.LastSequence,
             // Summed over the node runs already loaded above: the rollup costs no extra query, and a run's own row
             // carries no cost of its own to disagree with.
-            Cost: RunCost(detail.NodeRuns));
+            Cost = RunCost(detail.NodeRuns)
+        };
     }
 
     public async Task<DevWorkflowNodeRunDetailResponse> ComposeNodeAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken)
@@ -155,66 +157,66 @@ public sealed class DevWorkflowRunComposer
             conversationId = (await _sessions.GetAsync(sessionId, cancellationToken)).ConversationId;
         }
 
-        return new DevWorkflowNodeRunDetailResponse(nodeRun.Id,
-            nodeRun.RunId,
-            nodeRun.NodeKey,
-            nodeRun.NodeType.ToString(),
-            node?.Label ?? nodeRun.NodeKey,
-            nodeRun.Status.ToString(),
-            nodeRun.Attempt,
-            nodeRun.MaxAttempts,
-            nodeRun.SessionResumes,
-            nodeRun.QueueReason,
-            nodeRun.QueuedAtUtc,
-            nodeRun.AgentDefinitionId,
-            AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel(nodeRun, node, agentsById),
-            nodeRun.WorkSessionId,
-            conversationId,
-            nodeRun.WorkSessionAvailable,
-            nodeRun.DevelopmentProjectId,
-            nodeRun.DevelopmentTaskId,
-
+        return new DevWorkflowNodeRunDetailResponse
+        {
+            Id = nodeRun.Id,
+            RunId = nodeRun.RunId,
+            NodeKey = nodeRun.NodeKey,
+            NodeType = nodeRun.NodeType.ToString(),
+            Label = node?.Label ?? nodeRun.NodeKey,
+            Status = nodeRun.Status.ToString(),
+            Attempt = nodeRun.Attempt,
+            MaxAttempts = nodeRun.MaxAttempts,
+            SessionResumes = nodeRun.SessionResumes,
+            QueueReason = nodeRun.QueueReason,
+            QueuedAtUtc = nodeRun.QueuedAtUtc,
+            AgentDefinitionId = nodeRun.AgentDefinitionId,
+            AgentDisplayName = AgentDisplayName(nodeRun, node, agentsById),
+            ModelLabel = ModelLabel(nodeRun, node, agentsById),
+            WorkSessionId = nodeRun.WorkSessionId,
+            ConversationId = conversationId,
+            WorkSessionAvailable = nodeRun.WorkSessionAvailable,
+            DevelopmentProjectId = nodeRun.DevelopmentProjectId,
+            DevelopmentTaskId = nodeRun.DevelopmentTaskId,
             // The node's headline output: the newest version it produced, which is the one a review panel opens.
-            produced.LastOrDefault(static artifact => artifact.IsLatest)?.Id ?? produced.LastOrDefault()?.Id,
-            node?.Instructions,
-            nodeRun.InputJson,
-            nodeRun.OutputJson,
-            [.. produced.Select(static artifact => artifact.Id)],
-            consumed,
-            AppliedRuleSets(nodeRun.PolicyResolutionJson, ruleSets),
-            nodeRun.PendingDecisionKind?.ToString(),
-            DevWorkflowGraphContract.AllowedDecisions(nodeRun.Status),
-
+            PrimaryArtifactId = produced.LastOrDefault(static artifact => artifact.IsLatest)?.Id ?? produced.LastOrDefault()?.Id,
+            Instructions = node?.Instructions,
+            InputJson = nodeRun.InputJson,
+            OutputJson = nodeRun.OutputJson,
+            ProducedArtifactIds = [.. produced.Select(static artifact => artifact.Id)],
+            ConsumedArtifactIds = consumed,
+            AppliedRuleSets = AppliedRuleSets(nodeRun.PolicyResolutionJson, ruleSets),
+            PendingDecisionKind = nodeRun.PendingDecisionKind?.ToString(),
+            AllowedDecisions = DevWorkflowGraphContract.AllowedDecisions(nodeRun.Status),
             // Only a human gate produces the answer an out-edge condition reads, so only there does the question mean
             // anything. False here is what tells the confirm dialog that a rejection ENDS the run.
-            nodeRun.NodeType == DevWorkflowNodeType.HumanGate && DevWorkflowGraphContract.HasRejectBranch(run.GraphJson, nodeRun.NodeKey),
-            nodeRun.FailureClass,
-            nodeRun.TerminalReason,
-            [.. decisions.Where(decision => decision.NodeRunId == nodeRunId).OrderBy(static decision => decision.Sequence).Select(DevWorkflowContractMapper.ToResponse)],
-            OperatorRetries(nodeRun, DevWorkflowGraphContract.DeclaredMaxAttempts(run.GraphJson)),
-            nodeRun.StartedAtUtc,
-            nodeRun.EndedAtUtc,
-            nodeRun.Sequence,
-
+            HasRejectBranch = nodeRun.NodeType == DevWorkflowNodeType.HumanGate && DevWorkflowGraphContract.HasRejectBranch(run.GraphJson, nodeRun.NodeKey),
+            FailureClass = nodeRun.FailureClass,
+            TerminalReason = nodeRun.TerminalReason,
+            Decisions = [.. decisions.Where(decision => decision.NodeRunId == nodeRunId).OrderBy(static decision => decision.Sequence).Select(DevWorkflowContractMapper.ToResponse)],
+            OperatorRetries = OperatorRetries(nodeRun, DevWorkflowGraphContract.DeclaredMaxAttempts(run.GraphJson)),
+            StartedAtUtc = nodeRun.StartedAtUtc,
+            CompletedAtUtc = nodeRun.EndedAtUtc,
+            Sequence = nodeRun.Sequence,
             // Named from here on: the tail is a run of same-typed optional slots, so a positional call would compile
             // silently misaligned if a field is spliced in ahead of them.
-            InputTokens: nodeRun.InputTokens,
-            OutputTokens: nodeRun.OutputTokens,
-            ReasoningTokens: nodeRun.ReasoningTokens,
-            EstimatedInputTokens: nodeRun.EstimatedInputTokens,
-            ProviderCalls: nodeRun.ProviderCalls,
-            ToolCalls: nodeRun.ToolCalls,
-            ToolSchemaTokens: nodeRun.ToolSchemaTokens,
-            ToolNames: DevWorkflowNodeRunDocuments.ToolNames(nodeRun.ToolNamesJson),
-            AgentTurnMs: nodeRun.AgentTurnMs,
-            ServedModelName: nodeRun.ServedModelName,
-            Route: Route(nodeRun.RouteJson),
-            WorkSessionSteps: nodeRun.WorkSessionSteps,
-            FailureClassGroup: AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass),
-            ModelReadinessMs: nodeRun.ModelReadinessMs,
-            VramFreeAtLoadBytes: nodeRun.VramFreeAtLoadBytes,
-            VramAdmittedBytes: nodeRun.VramAdmittedBytes);
+            InputTokens = nodeRun.InputTokens,
+            OutputTokens = nodeRun.OutputTokens,
+            ReasoningTokens = nodeRun.ReasoningTokens,
+            EstimatedInputTokens = nodeRun.EstimatedInputTokens,
+            ProviderCalls = nodeRun.ProviderCalls,
+            ToolCalls = nodeRun.ToolCalls,
+            ToolSchemaTokens = nodeRun.ToolSchemaTokens,
+            ToolNames = DevWorkflowNodeRunDocuments.ToolNames(nodeRun.ToolNamesJson),
+            AgentTurnMs = nodeRun.AgentTurnMs,
+            ServedModelName = nodeRun.ServedModelName,
+            Route = Route(nodeRun.RouteJson),
+            WorkSessionSteps = nodeRun.WorkSessionSteps,
+            FailureClassGroup = AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass),
+            ModelReadinessMs = nodeRun.ModelReadinessMs,
+            VramFreeAtLoadBytes = nodeRun.VramFreeAtLoadBytes,
+            VramAdmittedBytes = nodeRun.VramAdmittedBytes
+        };
     }
 
     private static DevWorkflowNodeRunSummaryResponse ToSummary(DevWorkflowNodeRunSnapshot nodeRun,
@@ -228,43 +230,42 @@ public sealed class DevWorkflowRunComposer
         bool hasStaleInputs,
         bool? skipWaived,
         int operatorRetries) =>
-        new(nodeRun.Id,
-            nodeRun.NodeKey,
-            nodeRun.NodeType.ToString(),
-            node?.Label ?? nodeRun.NodeKey,
-            nodeRun.Status.ToString(),
-            nodeRun.Attempt,
-            nodeRun.MaxAttempts,
-            nodeRun.QueueReason,
-            nodeRun.QueuedAtUtc,
-            WaitingOnNodeKeys(nodeRun, graph, byKey, templates),
-            nodeRun.PendingDecisionKind?.ToString(),
-            nodeRun.MaterializedFromNodeRunId is not null,
-            nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
-            nodeRun.MaterializationIndex,
-
-            // Named from here on: the record carries five consecutive Guid? slots, so a positional call would compile
-            // silently misaligned if a future field is spliced in ahead of them.
-            MaterializationGroupId: nodeRun.MaterializedFromNodeRunId,
-            MaterializationCount: nodeRun.MaterializedFromNodeRunId is { } group && materializationCounts.TryGetValue(group, out var count) ? count : null,
-            DevelopmentProjectId: nodeRun.DevelopmentProjectId,
-            DevelopmentTaskId: nodeRun.DevelopmentTaskId,
-            AgentDefinitionId: nodeRun.AgentDefinitionId,
-            AgentDisplayName: AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel: ModelLabel(nodeRun, node, agentsById),
-            HasStaleInputs: hasStaleInputs,
-            StartedAtUtc: nodeRun.StartedAtUtc,
-            CompletedAtUtc: nodeRun.EndedAtUtc,
-            Sequence: nodeRun.Sequence,
-            OperatorRetries: operatorRetries,
-            SkipWaived: skipWaived,
-            InputTokens: nodeRun.InputTokens,
-            OutputTokens: nodeRun.OutputTokens,
-            ToolCalls: nodeRun.ToolCalls,
-
+        new()
+        {
+            Id = nodeRun.Id,
+            NodeKey = nodeRun.NodeKey,
+            NodeType = nodeRun.NodeType.ToString(),
+            Label = node?.Label ?? nodeRun.NodeKey,
+            Status = nodeRun.Status.ToString(),
+            Attempt = nodeRun.Attempt,
+            MaxAttempts = nodeRun.MaxAttempts,
+            QueueReason = nodeRun.QueueReason,
+            QueuedAtUtc = nodeRun.QueuedAtUtc,
+            WaitingOnNodeKeys = WaitingOnNodeKeys(nodeRun, graph, byKey, templates),
+            PendingDecisionKind = nodeRun.PendingDecisionKind?.ToString(),
+            IsMaterialized = nodeRun.MaterializedFromNodeRunId is not null,
+            MaterializedFromNodeKey = nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
+            MaterializationIndex = nodeRun.MaterializationIndex,
+            MaterializationGroupId = nodeRun.MaterializedFromNodeRunId,
+            MaterializationCount = nodeRun.MaterializedFromNodeRunId is { } group && materializationCounts.TryGetValue(group, out var count) ? count : null,
+            DevelopmentProjectId = nodeRun.DevelopmentProjectId,
+            DevelopmentTaskId = nodeRun.DevelopmentTaskId,
+            AgentDefinitionId = nodeRun.AgentDefinitionId,
+            AgentDisplayName = AgentDisplayName(nodeRun, node, agentsById),
+            ModelLabel = ModelLabel(nodeRun, node, agentsById),
+            HasStaleInputs = hasStaleInputs,
+            StartedAtUtc = nodeRun.StartedAtUtc,
+            CompletedAtUtc = nodeRun.EndedAtUtc,
+            Sequence = nodeRun.Sequence,
+            OperatorRetries = operatorRetries,
+            SkipWaived = skipWaived,
+            InputTokens = nodeRun.InputTokens,
+            OutputTokens = nodeRun.OutputTokens,
+            ToolCalls = nodeRun.ToolCalls,
             // Asked of the contract, not of a spelling of the token repeated here: the same verdict decides the
             // drill-down's note, this row's badge and whether the run header counts the row as work.
-            ValidationNotApplicable: DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson));
+            ValidationNotApplicable = DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson)
+        };
 
     /// <summary>
     ///     How many attempts an operator has bought this node run: the distance the row's own <c>MaxAttempts</c> has
@@ -321,7 +322,7 @@ public sealed class DevWorkflowRunComposer
             agentTurnMs = Add(agentTurnMs, nodeRun.AgentTurnMs);
         }
 
-        return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, agentTurnMs);
+        return new DevWorkflowRunCostResponse { InputTokens = inputTokens, OutputTokens = outputTokens, ToolCalls = toolCalls, ProviderCalls = providerCalls, AgentTurnMs = agentTurnMs };
     }
 
     private static long? Add(long? total, long? term) =>
@@ -337,7 +338,7 @@ public sealed class DevWorkflowRunComposer
     /// </summary>
     private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
         DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
-            ? new DevWorkflowNodeRouteResponse(route.Satisfied, route.Dead, route.Waived, route.GateAnswer, route.Truncated)
+            ? new DevWorkflowNodeRouteResponse { Satisfied = route.Satisfied, Dead = route.Dead, Waived = route.Waived, GateAnswer = route.GateAnswer, Truncated = route.Truncated }
             : null;
 
     /// <summary>
@@ -482,9 +483,12 @@ public sealed class DevWorkflowRunComposer
     private static IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets(string? policyResolutionJson, IReadOnlyList<DevWorkflowRuleSetSummary> current) =>
     [
         .. DevWorkflowRulePolicyResolver.Read(policyResolutionJson)
-                                        .Select(applied => new DevWorkflowAppliedRuleSetResponse(applied.Id,
-                                            applied.Name,
-                                            applied.ContentSha256,
-                                            current.FirstOrDefault(ruleSet => ruleSet.Id == applied.Id)?.ContentSha256))
+                                        .Select(applied => new DevWorkflowAppliedRuleSetResponse
+                                        {
+                                            Id = applied.Id,
+                                            Name = applied.Name,
+                                            ContentSha256 = applied.ContentSha256,
+                                            CurrentContentSha256 = current.FirstOrDefault(ruleSet => ruleSet.Id == applied.Id)?.ContentSha256
+                                        })
     ];
 }

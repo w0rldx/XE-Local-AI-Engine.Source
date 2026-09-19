@@ -61,6 +61,7 @@ describe("SandboxIsolationPanel", () => {
 				resourceLimits: false,
 				readOnlyMounts: false,
 				filesystemIsolationUnavailableReason: "the host is not Linux (the Windows Job Object path is not implemented)",
+				resourceLimitsUnavailableReason: null,
 			},
 		]);
 
@@ -91,6 +92,7 @@ describe("SandboxIsolationPanel", () => {
 				readOnlyMounts: true,
 				filesystemIsolationUnavailableReason:
 					"not requested by this role: 'AgentHome' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+				resourceLimitsUnavailableReason: null,
 			},
 			{
 				role: "run_python",
@@ -102,6 +104,8 @@ describe("SandboxIsolationPanel", () => {
 				networkIsolationRequired: true,
 				resourceLimits: true,
 				readOnlyMounts: true,
+				filesystemIsolationUnavailableReason: null,
+				resourceLimitsUnavailableReason: null,
 			},
 			{
 				role: "mcp-stdio",
@@ -117,6 +121,8 @@ describe("SandboxIsolationPanel", () => {
 				// so it gets a build-sized ceiling rather than run_python's script-sized one.
 				resourceLimits: true,
 				readOnlyMounts: true,
+				filesystemIsolationUnavailableReason: null,
+				resourceLimitsUnavailableReason: null,
 			},
 			{
 				role: "development",
@@ -130,6 +136,7 @@ describe("SandboxIsolationPanel", () => {
 				resourceLimits: true,
 				filesystemIsolationUnavailableReason:
 					"not requested by this role: 'DevelopmentMode (host toolchain)' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+				resourceLimitsUnavailableReason: null,
 			},
 			{
 				role: "work-session",

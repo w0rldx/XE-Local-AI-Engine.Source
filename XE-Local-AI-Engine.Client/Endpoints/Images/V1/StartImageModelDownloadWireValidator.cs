@@ -47,45 +47,71 @@ internal static class StartImageModelDownloadWireValidator
                 return Invalid("Each weight part requires a file name.");
             }
 
-            parts.Add(new StartImageModelDownloadPartWireValues(role,
-                part.FileName.Trim(),
-                NormalizeOptional(part.Sha256),
-                NormalizeOptional(part.RepoId),
-                part.SizeBytes is > 0 ? part.SizeBytes : null));
+            parts.Add(new StartImageModelDownloadPartWireValues
+            {
+                Role = role,
+                FileName = part.FileName.Trim(),
+                Sha256 = NormalizeOptional(part.Sha256),
+                RepoId = NormalizeOptional(part.RepoId),
+                SizeBytes = part.SizeBytes is > 0 ? part.SizeBytes : null
+            });
         }
 
-        return new StartImageModelDownloadWireValidationResult(new StartImageModelDownloadWireValues(request.ModelName.Trim(),
-                request.RepoId.Trim(),
-                family,
-                kind,
-                NormalizeOptional(request.Revision),
-                parts),
-            Error: null);
+        return new StartImageModelDownloadWireValidationResult
+        {
+            Values = new StartImageModelDownloadWireValues
+            {
+                ModelName = request.ModelName.Trim(),
+                RepoId = request.RepoId.Trim(),
+                Family = family,
+                Kind = kind,
+                Revision = NormalizeOptional(request.Revision),
+                Parts = parts
+            },
+            Error = null
+        };
     }
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static StartImageModelDownloadWireValidationResult Invalid(string error) =>
-        new(Values: null, error);
+        new() { Values = null, Error = error };
 }
 
-internal sealed record StartImageModelDownloadWireValidationResult(StartImageModelDownloadWireValues? Values, string? Error)
+internal sealed class StartImageModelDownloadWireValidationResult
 {
+    public required StartImageModelDownloadWireValues? Values { get; init; }
+
+    public required string? Error { get; init; }
+
     public bool IsValid => Values is not null;
 }
 
-internal sealed record StartImageModelDownloadWireValues(
-    string ModelName,
-    string RepoId,
-    ImageModelFamily Family,
-    ImageModelKind Kind,
-    string? Revision,
-    IReadOnlyList<StartImageModelDownloadPartWireValues> Parts);
+internal sealed class StartImageModelDownloadWireValues
+{
+    public required string ModelName { get; init; }
 
-internal sealed record StartImageModelDownloadPartWireValues(
-    ImageModelPartRole Role,
-    string FileName,
-    string? Sha256,
-    string? RepoId,
-    long? SizeBytes);
+    public required string RepoId { get; init; }
+
+    public required ImageModelFamily Family { get; init; }
+
+    public required ImageModelKind Kind { get; init; }
+
+    public required string? Revision { get; init; }
+
+    public required IReadOnlyList<StartImageModelDownloadPartWireValues> Parts { get; init; }
+}
+
+internal sealed class StartImageModelDownloadPartWireValues
+{
+    public required ImageModelPartRole Role { get; init; }
+
+    public required string FileName { get; init; }
+
+    public required string? Sha256 { get; init; }
+
+    public required string? RepoId { get; init; }
+
+    public required long? SizeBytes { get; init; }
+}

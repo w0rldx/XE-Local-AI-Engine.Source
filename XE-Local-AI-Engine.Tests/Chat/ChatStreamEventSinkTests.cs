@@ -199,14 +199,17 @@ public sealed class ChatStreamEventSinkTests
 
     private static ChatStreamEvent Delta(string delta)
     {
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantDelta,
-            Correlation.ConversationId,
-            Correlation.MessageId,
-            Correlation.RequestId,
-            NodeChatMessageStatusValues.Streaming,
-            Sequence: 0,
-            OccurredAtUtc: 0,
-            Delta: delta);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantDelta,
+            ConversationId = Correlation.ConversationId,
+            MessageId = Correlation.MessageId,
+            RequestId = Correlation.RequestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = 0,
+            OccurredAtUtc = 0,
+            Delta = delta
+        };
     }
 
     private static async Task<List<ChatStreamEvent>> DrainAsync(ChatStreamEventSink sink)

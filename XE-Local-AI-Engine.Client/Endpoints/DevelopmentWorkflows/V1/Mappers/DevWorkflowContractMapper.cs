@@ -77,83 +77,101 @@ internal static class DevWorkflowContractMapper
     }
 
     public static DevWorkflowWorkItemResponse ToResponse(this DevWorkflowWorkItemSnapshot value, IReadOnlyList<DevWorkflowRunSummary> runs) =>
-        new(value.Id,
-            value.Title,
-            value.Request,
-            value.DevelopmentProjectId,
-            value.Status.ToString(),
-            value.LatestRunId,
-            [.. runs.Select(ToResponse)],
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc,
-            value.Version);
+        new()
+        {
+            Id = value.Id,
+            Title = value.Title,
+            Request = value.Request,
+            DevelopmentProjectId = value.DevelopmentProjectId,
+            Status = value.Status.ToString(),
+            LatestRunId = value.LatestRunId,
+            Runs = [.. runs.Select(ToResponse)],
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc,
+            Version = value.Version
+        };
 
     public static DevWorkflowWorkItemSummaryResponse ToSummaryResponse(this DevWorkflowWorkItemSnapshot value) =>
-        new(value.Id,
-            value.Title,
-            value.DevelopmentProjectId,
-            value.Status.ToString(),
-            value.LatestRunId,
-            value.LatestRunStatus?.ToString(),
-            value.LatestRunDefinitionName,
-            value.LatestRunNodes.Queued,
-            value.LatestRunNodes.Running,
-            value.LatestRunNodes.Completed,
-            value.LatestRunNodes.Total,
-            value.UpdatedAtUtc);
+        new()
+        {
+            Id = value.Id,
+            Title = value.Title,
+            DevelopmentProjectId = value.DevelopmentProjectId,
+            Status = value.Status.ToString(),
+            LatestRunId = value.LatestRunId,
+            LatestRunStatus = value.LatestRunStatus?.ToString(),
+            DefinitionName = value.LatestRunDefinitionName,
+            QueuedNodeCount = value.LatestRunNodes.Queued,
+            RunningNodeCount = value.LatestRunNodes.Running,
+            CompletedNodeCount = value.LatestRunNodes.Completed,
+            TotalNodeCount = value.LatestRunNodes.Total,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
 
     public static DevWorkflowRunSummaryResponse ToResponse(this DevWorkflowRunSummary value) =>
-        new(value.Id,
-            value.WorkItemId,
-            value.DefinitionId,
-            value.DefinitionName,
-            value.Status.ToString(),
-            value.Nodes.Queued,
-            value.Nodes.Running,
-            value.Nodes.Completed,
-            value.Nodes.Total,
-            value.Nodes.PendingDecisionCount,
-            value.Nodes.BlockingGateNodeRunId,
-            value.StartedAtUtc,
-            value.UpdatedAtUtc);
+        new()
+        {
+            Id = value.Id,
+            WorkItemId = value.WorkItemId,
+            DefinitionId = value.DefinitionId,
+            DefinitionName = value.DefinitionName,
+            Status = value.Status.ToString(),
+            QueuedNodeCount = value.Nodes.Queued,
+            RunningNodeCount = value.Nodes.Running,
+            CompletedNodeCount = value.Nodes.Completed,
+            TotalNodeCount = value.Nodes.Total,
+            PendingDecisionCount = value.Nodes.PendingDecisionCount,
+            BlockingGateNodeRunId = value.Nodes.BlockingGateNodeRunId,
+            StartedAtUtc = value.StartedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
 
     public static DevWorkflowDefinitionResponse ToResponse(this DevWorkflowDefinitionSnapshot value) =>
-        new(value.Id,
-            value.Name,
-            ToWireGraph(value.GraphJson),
-            value.GraphHash,
-            value.Source.ToString(),
-            value.SeedSlug,
-            value.Archived,
-            value.Version,
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc);
+        new()
+        {
+            Id = value.Id,
+            Name = value.Name,
+            Graph = ToWireGraph(value.GraphJson),
+            GraphHash = value.GraphHash,
+            Source = value.Source.ToString(),
+            SeedSlug = value.SeedSlug,
+            Archived = value.Archived,
+            Version = value.Version,
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
 
     public static DevWorkflowDefinitionSummaryResponse ToResponse(this DevWorkflowDefinitionSummary value) =>
-        new(value.Id, value.Name, value.Source.ToString(), value.SeedSlug, value.Archived, value.Version, value.NodeCount, value.UpdatedAtUtc);
+        new() { Id = value.Id, Name = value.Name, Source = value.Source.ToString(), SeedSlug = value.SeedSlug, Archived = value.Archived, Version = value.Version, NodeCount = value.NodeCount, UpdatedAtUtc = value.UpdatedAtUtc };
 
     public static DevWorkflowRuleSetResponse ToResponse(this DevWorkflowRuleSetSnapshot value) =>
-        new(value.Id,
-            value.Name,
-            value.Description,
-            value.Body,
-            ToScope(value.ScopeJson),
-            value.Enabled,
-            value.ContentSha256,
-            value.Version,
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc);
+        new()
+        {
+            Id = value.Id,
+            Name = value.Name,
+            Description = value.Description,
+            Body = value.Body,
+            Scope = ToScope(value.ScopeJson),
+            Enabled = value.Enabled,
+            ContentSha256 = value.ContentSha256,
+            Version = value.Version,
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
 
     public static DevWorkflowRuleSetSummaryResponse ToResponse(this DevWorkflowRuleSetSummary value) =>
-        new(value.Id,
-            value.Name,
-            value.Description,
-            ToScope(value.ScopeJson),
-            value.Enabled,
-            value.ContentSha256,
-            value.Version,
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc);
+        new()
+        {
+            Id = value.Id,
+            Name = value.Name,
+            Description = value.Description,
+            Scope = ToScope(value.ScopeJson),
+            Enabled = value.Enabled,
+            ContentSha256 = value.ContentSha256,
+            Version = value.Version,
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
 
     /// <summary>
     ///     The scope as the resolver stores it. An omitted scope is BOTH axes empty, which is the document's own
@@ -172,37 +190,43 @@ internal static class DevWorkflowContractMapper
         DevWorkflowRulePolicyResolver.ReadScope(scopeJson) is { } scope ? new DevWorkflowRuleScope(scope.ProjectIds, scope.NodeTypes) : new DevWorkflowRuleScope([], []);
 
     public static DevWorkflowRunEventResponse ToResponse(this DevWorkflowRunEventSnapshot value) =>
-        new(value.Id, value.Sequence, value.EventType, value.NodeRunId, value.Outcome, value.DetailJson, value.OperationId, value.OccurredAtUtc);
+        new() { Id = value.Id, Sequence = value.Sequence, EventType = value.EventType, NodeRunId = value.NodeRunId, Outcome = value.Outcome, DetailJson = value.DetailJson, OperationId = value.OperationId, OccurredAtUtc = value.OccurredAtUtc };
 
     public static DevWorkflowArtifactResponse ToResponse(this DevWorkflowArtifactSnapshot value) =>
-        new(value.Id,
-            value.LineageId,
-            value.Version,
-            value.Sequence,
-            value.Kind.ToString(),
-            value.Name,
-            value.MediaType,
-            value.ContentSha256,
-            value.SizeBytes,
-            value.ProducedByNodeRunId,
-            value.ProducingNodeKey,
-            value.IsValid,
-            value.IsStale,
-            value.StaleBecauseArtifactId,
-            value.StaleReason,
-            value.IsLatest,
-            value.CreatedAtUtc);
+        new()
+        {
+            Id = value.Id,
+            LineageId = value.LineageId,
+            Version = value.Version,
+            Sequence = value.Sequence,
+            Kind = value.Kind.ToString(),
+            Name = value.Name,
+            MediaType = value.MediaType,
+            ContentSha256 = value.ContentSha256,
+            SizeBytes = value.SizeBytes,
+            ProducedByNodeRunId = value.ProducedByNodeRunId,
+            ProducingNodeKey = value.ProducingNodeKey,
+            IsValid = value.IsValid,
+            IsStale = value.IsStale,
+            StaleBecauseArtifactId = value.StaleBecauseArtifactId,
+            StaleReason = value.StaleReason,
+            IsLatest = value.IsLatest,
+            CreatedAtUtc = value.CreatedAtUtc
+        };
 
     public static DevWorkflowDecisionResponse ToResponse(this DevWorkflowDecisionSnapshot value) =>
-        new(value.Id,
-            value.NodeRunId,
-            value.Attempt,
-            value.Decision.ToString(),
-            value.Comment,
-            value.DecidedBySubject,
-            value.DecidedAtUtc,
-            value.OperationId,
-            value.Sequence);
+        new()
+        {
+            Id = value.Id,
+            NodeRunId = value.NodeRunId,
+            Attempt = value.Attempt,
+            Decision = value.Decision.ToString(),
+            Comment = value.Comment,
+            DecidedBySubject = value.DecidedBySubject,
+            DecidedAtUtc = value.DecidedAtUtc,
+            OperationId = value.OperationId,
+            Sequence = value.Sequence
+        };
 
     /// <summary>
     ///     The page's HIGHEST sequence rather than its last row's. Feeds are ordered for reading, not by watermark, so

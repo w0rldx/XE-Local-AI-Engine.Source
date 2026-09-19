@@ -286,8 +286,8 @@ public sealed class ImageJobCoordinatorTests
     public async Task ImageJobHub_WhenLateSubscriber_ReplaysBufferedEventsInSeqOrder()
     {
         var jobId = Guid.NewGuid();
-        var event0 = new ImageJobStatusHubEvent(jobId, ImageJobStatus.Queued.ToString(), QueuePosition: null, ElapsedMs: null, ImageId: null, SanitizedError: null, OccurredAtUtc: 1, Seq: 0);
-        var event1 = new ImageJobStatusHubEvent(jobId, ImageJobStatus.Generating.ToString(), QueuePosition: null, ElapsedMs: 0, ImageId: null, SanitizedError: null, OccurredAtUtc: 2, Seq: 1);
+        var event0 = new ImageJobStatusHubEvent { JobId = jobId, Phase = ImageJobStatus.Queued.ToString(), QueuePosition = null, ElapsedMs = null, ImageId = null, SanitizedError = null, OccurredAtUtc = 1, Seq = 0 };
+        var event1 = new ImageJobStatusHubEvent { JobId = jobId, Phase = ImageJobStatus.Generating.ToString(), QueuePosition = null, ElapsedMs = 0, ImageId = null, SanitizedError = null, OccurredAtUtc = 2, Seq = 1 };
 
         var coordinator = Substitute.For<IImageJobCoordinator>();
         coordinator.SnapshotBufferedEvents(jobId).Returns(new[]

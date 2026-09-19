@@ -12,17 +12,26 @@ public sealed class GetAgentPlaybookMonitorRequest
 /// <summary>
 ///     Wire projection of one <see cref="PlaybookActionMonitorView" />. <see cref="Status" /> serializes as
 ///     its string name via the globally registered <c>JsonStringEnumConverter</c>; the remaining fields serialize
-///     camelCase. A positional record so the analyzer does not flag unused init-only auto-properties (S3459/S1144).
+///     camelCase.
 /// </summary>
-public sealed record PlaybookActionMonitorItemResponse(
-    Guid ActionId,
-    long EnabledAtUtc,
-    double BeforeDownRate,
-    double AfterDownRate,
-    int AfterSampleSize,
-    PlaybookMonitorStatus Status,
-    bool Flagged,
-    string? FacetToolName);
+public sealed class PlaybookActionMonitorItemResponse
+{
+    public required Guid ActionId { get; init; }
+
+    public required long EnabledAtUtc { get; init; }
+
+    public required double BeforeDownRate { get; init; }
+
+    public required double AfterDownRate { get; init; }
+
+    public required int AfterSampleSize { get; init; }
+
+    public required PlaybookMonitorStatus Status { get; init; }
+
+    public required bool Flagged { get; init; }
+
+    public required string? FacetToolName { get; init; }
+}
 
 /// <summary>
 ///     The relevance-retrieval thresholds surfaced alongside the monitor view, plus the active ranker. The panel uses
@@ -33,17 +42,25 @@ public sealed record PlaybookActionMonitorItemResponse(
 ///     <see cref="JsonIgnoreCondition.WhenWritingNull" />) when lexical, so the React Zod optional matches. All fields
 ///     serialize camelCase.
 /// </summary>
-public sealed record PlaybookRetrievalResponse(
-    int Threshold,
-    int TopK,
-    string Ranker,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? EmbeddingModel);
+public sealed class PlaybookRetrievalResponse
+{
+    public required int Threshold { get; init; }
+
+    public required int TopK { get; init; }
+
+    public required string Ranker { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EmbeddingModel { get; init; }
+}
 
 /// <summary>
 ///     Read-only playbook monitoring envelope for one agent: one item per Enabled action that carries an enable
 ///     timestamp, plus the current relevance-retrieval thresholds. All fields serialize camelCase.
 /// </summary>
-public sealed record AgentPlaybookMonitorResponse(
-    IReadOnlyList<PlaybookActionMonitorItemResponse> Items,
-    PlaybookRetrievalResponse Retrieval);
+public sealed class AgentPlaybookMonitorResponse
+{
+    public required IReadOnlyList<PlaybookActionMonitorItemResponse> Items { get; init; }
+
+    public required PlaybookRetrievalResponse Retrieval { get; init; }
+}

@@ -34,25 +34,31 @@ internal static class ExternalAppMapper
 
         var daemon = resolution.Daemon;
 
-        return new ExternalAppRuntimeResponse(resolution.Provider,
-            resolution.Status.ToString(),
-            resolution.Available,
-            resolution.Ready,
-            resolution.Message,
-            resolution.RequiresOperatorConfirmation,
-            daemon.Endpoint,
-            daemon.EndpointSource.ToString(),
-            daemon.DaemonId is null
+        return new ExternalAppRuntimeResponse
+        {
+            Provider = resolution.Provider,
+            Status = resolution.Status.ToString(),
+            Available = resolution.Available,
+            Ready = resolution.Ready,
+            Message = resolution.Message,
+            RequiresOperatorConfirmation = resolution.RequiresOperatorConfirmation,
+            Endpoint = daemon.Endpoint,
+            EndpointSource = daemon.EndpointSource.ToString(),
+            ObservedDaemon = daemon.DaemonId is null
                 ? null
-                : new ExternalAppDaemonView(daemon.DaemonId, daemon.ServerVersion, daemon.Endpoint, ConfirmedAtUtc: null),
-            daemon.PinnedDaemonId is null
+                : new ExternalAppDaemonView { DaemonId = daemon.DaemonId, ServerVersion = daemon.ServerVersion, Endpoint = daemon.Endpoint, ConfirmedAtUtc = null },
+            PinnedDaemon = daemon.PinnedDaemonId is null
                 ? null
-                : new ExternalAppDaemonView(daemon.PinnedDaemonId,
-                    ServerVersion: null,
-                    Endpoint: null,
-                    daemon.PinnedDaemonConfirmedAtUtc?.ToUnixTimeMilliseconds()),
-            ToCapabilitiesView(resolution.Capabilities),
-            foreignInstallContainers);
+                : new ExternalAppDaemonView
+                {
+                    DaemonId = daemon.PinnedDaemonId,
+                    ServerVersion = null,
+                    Endpoint = null,
+                    ConfirmedAtUtc = daemon.PinnedDaemonConfirmedAtUtc?.ToUnixTimeMilliseconds()
+                },
+            Capabilities = ToCapabilitiesView(resolution.Capabilities),
+            ForeignInstallContainers = foreignInstallContainers
+        };
     }
 
     /// <summary>
@@ -73,13 +79,16 @@ internal static class ExternalAppMapper
             applications.Add(ToSummaryView(manifest, installedByApplicationId));
         }
 
-        return new ExternalAppCatalogResponse(snapshot.Document.SchemaVersion,
-            ToUnixMilliseconds(snapshot.Document.GeneratedAtUtc),
-            snapshot.FetchedAtUtc?.ToUnixTimeMilliseconds() ?? 0L,
-            snapshot.Source == ExternalAppCatalogSource.Bundled,
-            refreshFailureMessage,
-            snapshot.LastRefreshFailure,
-            applications);
+        return new ExternalAppCatalogResponse
+        {
+            SchemaVersion = snapshot.Document.SchemaVersion,
+            GeneratedAtUtc = ToUnixMilliseconds(snapshot.Document.GeneratedAtUtc),
+            FetchedAtUtc = snapshot.FetchedAtUtc?.ToUnixTimeMilliseconds() ?? 0L,
+            FromBundledSeed = snapshot.Source == ExternalAppCatalogSource.Bundled,
+            RefreshFailureMessage = refreshFailureMessage,
+            LastRefreshFailure = snapshot.LastRefreshFailure,
+            Applications = applications
+        };
     }
 
     /// <summary>One catalog card, carrying the instance join when this application already has one.</summary>
@@ -91,19 +100,22 @@ internal static class ExternalAppMapper
 
         _ = installedByApplicationId.TryGetValue(manifest.Id, out var installed);
 
-        return new ExternalAppSummaryView(manifest.Id,
-            manifest.ManifestVersion,
-            manifest.DisplayName,
-            manifest.Summary,
-            manifest.Homepage,
-            manifest.License,
-            manifest.Trust,
-            manifest.TestedVersion,
-            manifest.Requires,
-            ToPermissionsView(manifest.Permissions),
-            ToResourcesView(manifest.Resources),
-            installed?.Id,
-            installed?.Status.ToString());
+        return new ExternalAppSummaryView
+        {
+            Id = manifest.Id,
+            ManifestVersion = manifest.ManifestVersion,
+            DisplayName = manifest.DisplayName,
+            Summary = manifest.Summary,
+            Homepage = manifest.Homepage,
+            License = manifest.License,
+            Trust = manifest.Trust,
+            TestedVersion = manifest.TestedVersion,
+            Requires = manifest.Requires,
+            Permissions = ToPermissionsView(manifest.Permissions),
+            Resources = ToResourcesView(manifest.Resources),
+            InstalledInstanceId = installed?.Id,
+            InstalledStatus = installed?.Status.ToString()
+        };
     }
 
     /// <summary>
@@ -121,50 +133,56 @@ internal static class ExternalAppMapper
             var ports = new List<ExternalAppPortView>(service.Ports.Count);
             foreach (var port in service.Ports)
             {
-                ports.Add(new ExternalAppPortView(port.ContainerPort, port.Role, port.PreferredHostPort, port.OpenPath));
+                ports.Add(new ExternalAppPortView { ContainerPort = port.ContainerPort, Role = port.Role, PreferredHostPort = port.PreferredHostPort, OpenPath = port.OpenPath });
             }
 
             var storage = new List<ExternalAppStorageView>(service.Storage.Count);
             foreach (var entry in service.Storage)
             {
-                storage.Add(new ExternalAppStorageView(entry.Name, entry.ContainerPath));
+                storage.Add(new ExternalAppStorageView { Name = entry.Name, ContainerPath = entry.ContainerPath });
             }
 
             var dependsOn = new List<ExternalAppDependencyView>(service.DependsOn.Count);
             foreach (var dependency in service.DependsOn)
             {
-                dependsOn.Add(new ExternalAppDependencyView(dependency.Service, dependency.Condition));
+                dependsOn.Add(new ExternalAppDependencyView { Service = dependency.Service, Condition = dependency.Condition });
             }
 
-            services.Add(new ExternalAppServiceView(service.Name,
-                service.Image,
-                service.ImageTag,
-                service.Entrypoint,
-                service.Command,
-                service.Environment,
-                ports,
-                storage,
-                service.Healthcheck is not null,
-                dependsOn,
-                service.CapAdd,
-                service.ExtraHosts,
-                service.ReadOnlyRootFilesystem));
+            services.Add(new ExternalAppServiceView
+            {
+                Name = service.Name,
+                Image = service.Image,
+                ImageTag = service.ImageTag,
+                Entrypoint = service.Entrypoint,
+                Command = service.Command,
+                Environment = service.Environment,
+                Ports = ports,
+                Storage = storage,
+                HasHealthcheck = service.Healthcheck is not null,
+                DependsOn = dependsOn,
+                CapAdd = service.CapAdd,
+                ExtraHosts = service.ExtraHosts,
+                ReadOnlyRootFilesystem = service.ReadOnlyRootFilesystem
+            });
         }
 
-        return new ExternalAppManifestView(manifest.Id,
-            manifest.ManifestVersion,
-            manifest.DisplayName,
-            manifest.Summary,
-            manifest.Description,
-            manifest.Homepage,
-            manifest.License,
-            manifest.Trust,
-            manifest.TestedVersion,
-            manifest.Requires,
-            ToPermissionsView(manifest.Permissions),
-            ToResourcesView(manifest.Resources),
-            services,
-            ToVariableViews(manifest.Variables));
+        return new ExternalAppManifestView
+        {
+            Id = manifest.Id,
+            ManifestVersion = manifest.ManifestVersion,
+            DisplayName = manifest.DisplayName,
+            Summary = manifest.Summary,
+            Description = manifest.Description,
+            Homepage = manifest.Homepage,
+            License = manifest.License,
+            Trust = manifest.Trust,
+            TestedVersion = manifest.TestedVersion,
+            Requires = manifest.Requires,
+            Permissions = ToPermissionsView(manifest.Permissions),
+            Resources = ToResourcesView(manifest.Resources),
+            Services = services,
+            Variables = ToVariableViews(manifest.Variables)
+        };
     }
 
     /// <summary>
@@ -177,18 +195,21 @@ internal static class ExternalAppMapper
         ArgumentNullException.ThrowIfNull(preview);
         ArgumentNullException.ThrowIfNull(runtime);
 
-        return new ExternalAppInstallPreview(preview.ApplicationId,
-            preview.ManifestVersion,
-            preview.ManifestSha256,
-            preview.CanInstall,
-            preview.BlockedReason?.ToString(),
-            preview.ExistingInstanceId,
-            ToPermissionsView(preview.Permissions),
-            ToEffectivePermissionsView(preview.EffectivePermissions),
-            ToVariableViews(preview.Variables),
-            runtime,
-            preview.MissingCapabilities,
-            ToResourceCheckView(preview.Resources));
+        return new ExternalAppInstallPreview
+        {
+            ApplicationId = preview.ApplicationId,
+            ManifestVersion = preview.ManifestVersion,
+            ManifestSha256 = preview.ManifestSha256,
+            CanInstall = preview.CanInstall,
+            BlockedReason = preview.BlockedReason?.ToString(),
+            ExistingInstanceId = preview.ExistingInstanceId,
+            Permissions = ToPermissionsView(preview.Permissions),
+            EffectivePermissions = ToEffectivePermissionsView(preview.EffectivePermissions),
+            Variables = ToVariableViews(preview.Variables),
+            Runtime = runtime,
+            MissingCapabilities = preview.MissingCapabilities,
+            ResourceCheck = ToResourceCheckView(preview.Resources)
+        };
     }
 
     /// <summary>
@@ -200,18 +221,21 @@ internal static class ExternalAppMapper
     {
         ArgumentNullException.ThrowIfNull(preview);
 
-        return new ExternalAppUpdatePreview(preview.ApplicationId,
-            preview.InstanceId,
-            preview.CurrentManifestVersion,
-            preview.TargetManifestVersion,
-            preview.ManifestSha256,
-            ToVariableViews(preview.Variables),
-            preview.CurrentValues,
-            preview.AddedPermissions,
-            ToEffectivePermissionsView(preview.EffectivePermissions),
-            ToResourceCheckView(preview.ResourceVerdict),
-            preview.CanUpdate,
-            preview.BlockedReason?.ToString());
+        return new ExternalAppUpdatePreview
+        {
+            ApplicationId = preview.ApplicationId,
+            InstanceId = preview.InstanceId,
+            CurrentManifestVersion = preview.CurrentManifestVersion,
+            TargetManifestVersion = preview.TargetManifestVersion,
+            ManifestSha256 = preview.ManifestSha256,
+            Variables = ToVariableViews(preview.Variables),
+            CurrentValues = preview.CurrentValues,
+            AddedPermissions = preview.AddedPermissions,
+            EffectivePermissions = ToEffectivePermissionsView(preview.EffectivePermissions),
+            ResourceVerdict = ToResourceCheckView(preview.ResourceVerdict),
+            CanUpdate = preview.CanUpdate,
+            BlockedReason = preview.BlockedReason?.ToString()
+        };
     }
 
     /// <summary>
@@ -224,28 +248,31 @@ internal static class ExternalAppMapper
 
         var summary = detail.Summary;
 
-        return new ExternalAppInstanceView(summary.Id,
-            summary.ApplicationId,
-            summary.DisplayName,
-            summary.ManifestVersion,
-            summary.Status.ToString(),
-            summary.DesiredState.ToString(),
-            detail.RuntimeOverride,
-            detail.RuntimeProvider,
-            ToManifestView(detail.Manifest),
-            ToPublishedPortViews(detail.Manifest, detail.PublishedPorts),
-            detail.MaskedVariables,
-            summary.FailureCategory?.ToString(),
-            summary.FailureSummary,
-            summary.UpdateAvailable,
-            summary.AvailableManifestVersion,
-            summary.CatalogMissing,
-            detail.InstalledAtUtc,
-            detail.StartedAtUtc,
-            detail.StoppedAtUtc,
-            summary.UpdatedAtUtc,
-            detail.LastSequence,
-            summary.Version);
+        return new ExternalAppInstanceView
+        {
+            Id = summary.Id,
+            ApplicationId = summary.ApplicationId,
+            DisplayName = summary.DisplayName,
+            ManifestVersion = summary.ManifestVersion,
+            Status = summary.Status.ToString(),
+            DesiredState = summary.DesiredState.ToString(),
+            RuntimeOverride = detail.RuntimeOverride,
+            RuntimeProvider = detail.RuntimeProvider,
+            Manifest = ToManifestView(detail.Manifest),
+            PublishedPorts = ToPublishedPortViews(detail.Manifest, detail.PublishedPorts),
+            Variables = detail.MaskedVariables,
+            FailureCategory = summary.FailureCategory?.ToString(),
+            FailureSummary = summary.FailureSummary,
+            UpdateAvailable = summary.UpdateAvailable,
+            AvailableManifestVersion = summary.AvailableManifestVersion,
+            CatalogMissing = summary.CatalogMissing,
+            InstalledAtUtc = detail.InstalledAtUtc,
+            StartedAtUtc = detail.StartedAtUtc,
+            StoppedAtUtc = detail.StoppedAtUtc,
+            UpdatedAtUtc = summary.UpdatedAtUtc,
+            LastSequence = detail.LastSequence,
+            Version = summary.Version
+        };
     }
 
     /// <summary>The admitted row a lifecycle command answers with. The instance LIST renders full views instead.</summary>
@@ -253,19 +280,22 @@ internal static class ExternalAppMapper
     {
         ArgumentNullException.ThrowIfNull(summary);
 
-        return new ExternalAppInstanceSummaryView(summary.Id,
-            summary.ApplicationId,
-            summary.DisplayName,
-            summary.ManifestVersion,
-            summary.Status.ToString(),
-            summary.DesiredState.ToString(),
-            summary.FailureCategory?.ToString(),
-            summary.FailureSummary,
-            summary.UpdateAvailable,
-            summary.AvailableManifestVersion,
-            summary.CatalogMissing,
-            summary.UpdatedAtUtc,
-            summary.Version);
+        return new ExternalAppInstanceSummaryView
+        {
+            Id = summary.Id,
+            ApplicationId = summary.ApplicationId,
+            DisplayName = summary.DisplayName,
+            ManifestVersion = summary.ManifestVersion,
+            Status = summary.Status.ToString(),
+            DesiredState = summary.DesiredState.ToString(),
+            FailureCategory = summary.FailureCategory?.ToString(),
+            FailureSummary = summary.FailureSummary,
+            UpdateAvailable = summary.UpdateAvailable,
+            AvailableManifestVersion = summary.AvailableManifestVersion,
+            CatalogMissing = summary.CatalogMissing,
+            UpdatedAtUtc = summary.UpdatedAtUtc,
+            Version = summary.Version
+        };
     }
 
     /// <summary>One row of the append-only event feed, shared by the paged read and the hub replay.</summary>
@@ -273,7 +303,7 @@ internal static class ExternalAppMapper
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return new ExternalAppInstanceEventView(snapshot.Sequence, snapshot.OccurredAtUtc, snapshot.Kind.ToString(), snapshot.DetailJson);
+        return new ExternalAppInstanceEventView { Sequence = snapshot.Sequence, AtUtc = snapshot.OccurredAtUtc, Kind = snapshot.Kind.ToString(), DetailJson = snapshot.DetailJson };
     }
 
     /// <summary>
@@ -298,10 +328,13 @@ internal static class ExternalAppMapper
 
         foreach (var entry in permissions.Services)
         {
-            services[entry.Key] = new ExternalAppServicePermissionsView([.. entry.Value.Capabilities],
-                entry.Value.WritableRootFilesystem,
-                [.. entry.Value.PublishedPorts],
-                [.. entry.Value.ExtraHosts]);
+            services[entry.Key] = new ExternalAppServicePermissionsView
+            {
+                Capabilities = [.. entry.Value.Capabilities],
+                WritableRootFilesystem = entry.Value.WritableRootFilesystem,
+                PublishedPorts = [.. entry.Value.PublishedPorts],
+                ExtraHosts = [.. entry.Value.ExtraHosts]
+            };
 
             capabilities.UnionWith(entry.Value.Capabilities);
             publishedPorts.UnionWith(entry.Value.PublishedPorts);
@@ -309,51 +342,60 @@ internal static class ExternalAppMapper
             writableRootFilesystem |= entry.Value.WritableRootFilesystem;
         }
 
-        return new ExternalAppEffectivePermissionsView(permissions.Internet,
-            permissions.HostFiles,
-            permissions.Gpu,
-            permissions.LocalNetwork,
-            services,
-            [.. capabilities],
-            writableRootFilesystem,
-            [.. publishedPorts],
-            [.. extraHosts]);
+        return new ExternalAppEffectivePermissionsView
+        {
+            Internet = permissions.Internet,
+            HostFiles = permissions.HostFiles,
+            Gpu = permissions.Gpu,
+            LocalNetwork = permissions.LocalNetwork,
+            Services = services,
+            Capabilities = [.. capabilities],
+            WritableRootFilesystem = writableRootFilesystem,
+            PublishedPorts = [.. publishedPorts],
+            ExtraHosts = [.. extraHosts]
+        };
     }
 
     private static ExternalAppResourceCheckView ToResourceCheckView(ExternalAppResourceVerdict verdict)
     {
         ArgumentNullException.ThrowIfNull(verdict);
 
-        return new ExternalAppResourceCheckView(verdict.Satisfied,
-            verdict.FailureCategory?.ToString(),
-            verdict.RequiredMemoryBytes,
-            verdict.AvailableMemoryBytes,
-            verdict.RequiredDiskBytes,
-            verdict.AvailableDiskBytes,
-            verdict.Message);
+        return new ExternalAppResourceCheckView
+        {
+            Satisfied = verdict.Satisfied,
+            FailureCategory = verdict.FailureCategory?.ToString(),
+            RequiredMemoryBytes = verdict.RequiredMemoryBytes,
+            AvailableMemoryBytes = verdict.AvailableMemoryBytes,
+            RequiredDiskBytes = verdict.RequiredDiskBytes,
+            AvailableDiskBytes = verdict.AvailableDiskBytes,
+            Message = verdict.Message
+        };
     }
 
     private static ExternalAppCapabilitiesView ToCapabilitiesView(ContainerRuntimeCapabilities capabilities)
     {
-        return new ExternalAppCapabilitiesView(capabilities.Containers,
-            capabilities.Networks,
-            capabilities.BindStorage,
-            capabilities.LoopbackPortPublishing,
-            capabilities.HealthChecks,
-            capabilities.RestartPolicies,
-            capabilities.Logs,
-            capabilities.ImagePull,
-            capabilities.GpuDevices);
+        return new ExternalAppCapabilitiesView
+        {
+            Containers = capabilities.Containers,
+            Networks = capabilities.Networks,
+            BindStorage = capabilities.BindStorage,
+            LoopbackPortPublishing = capabilities.LoopbackPortPublishing,
+            HealthChecks = capabilities.HealthChecks,
+            RestartPolicies = capabilities.RestartPolicies,
+            Logs = capabilities.Logs,
+            ImagePull = capabilities.ImagePull,
+            GpuDevices = capabilities.GpuDevices
+        };
     }
 
     private static ExternalAppPermissionsView ToPermissionsView(ApplicationPermissions permissions)
     {
-        return new ExternalAppPermissionsView(permissions.Internet, permissions.LocalNetwork, permissions.HostFiles, permissions.Gpu);
+        return new ExternalAppPermissionsView { Internet = permissions.Internet, LocalNetwork = permissions.LocalNetwork, HostFiles = permissions.HostFiles, Gpu = permissions.Gpu };
     }
 
     private static ExternalAppResourcesView ToResourcesView(ApplicationResources resources)
     {
-        return new ExternalAppResourcesView(resources.MinimumMemoryMb, resources.RecommendedMemoryMb, resources.CpuHint, resources.PidsLimit);
+        return new ExternalAppResourcesView { MinimumMemoryMb = resources.MinimumMemoryMb, RecommendedMemoryMb = resources.RecommendedMemoryMb, CpuHint = resources.CpuHint, PidsLimit = resources.PidsLimit };
     }
 
     private static IReadOnlyList<ExternalAppVariableView> ToVariableViews(IReadOnlyList<ApplicationVariable> variables)
@@ -363,19 +405,25 @@ internal static class ExternalAppMapper
         {
             var isSecret = string.Equals(variable.Type, SecretVariableType, StringComparison.OrdinalIgnoreCase);
 
-            views.Add(new ExternalAppVariableView(variable.Name,
-                variable.Label,
-                variable.Description,
-                variable.Type,
-                variable.Required,
-                isSecret ? null : variable.Default,
-                variable.AllowedValues,
-                variable.Advanced,
-                variable.Validation is null
+            views.Add(new ExternalAppVariableView
+            {
+                Name = variable.Name,
+                Label = variable.Label,
+                Description = variable.Description,
+                Type = variable.Type,
+                Required = variable.Required,
+                Default = isSecret ? null : variable.Default,
+                AllowedValues = variable.AllowedValues,
+                Advanced = variable.Advanced,
+                Validation = variable.Validation is null
                     ? null
-                    : new ExternalAppVariableValidationView(variable.Validation.MinLength,
-                        variable.Validation.MaxLength,
-                        variable.Validation.Pattern)));
+                    : new ExternalAppVariableValidationView
+                    {
+                        MinLength = variable.Validation.MinLength,
+                        MaxLength = variable.Validation.MaxLength,
+                        Pattern = variable.Validation.Pattern
+                    }
+            });
         }
 
         return views;
@@ -403,13 +451,16 @@ internal static class ExternalAppMapper
         {
             var openPath = openPaths.GetValueOrDefault((published.Service, published.ContainerPort));
 
-            views.Add(new ExternalAppPublishedPortView(published.Service,
-                published.ContainerPort,
-                published.HostPort,
-                openPath,
-                openPath is null
+            views.Add(new ExternalAppPublishedPortView
+            {
+                Service = published.Service,
+                ContainerPort = published.ContainerPort,
+                HostPort = published.HostPort,
+                OpenPath = openPath,
+                Url = openPath is null
                     ? null
-                    : string.Create(CultureInfo.InvariantCulture, $"{LoopbackHost}{published.HostPort}{openPath}")));
+                    : string.Create(CultureInfo.InvariantCulture, $"{LoopbackHost}{published.HostPort}{openPath}")
+            });
         }
 
         return views;

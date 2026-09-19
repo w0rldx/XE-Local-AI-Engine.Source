@@ -12,7 +12,14 @@ public static class DatasetGenerationHubEvents
     public const string ReplayReset = "datasetGeneration.replayReset";
 }
 
-public sealed record DatasetGenerationReplayReset(Guid DatasetId, long LatestSequence, long DatasetVersion);
+public sealed class DatasetGenerationReplayReset
+{
+    public required Guid DatasetId { get; init; }
+
+    public required long LatestSequence { get; init; }
+
+    public required long DatasetVersion { get; init; }
+}
 
 /// <summary>
 ///     Operator-only, per-dataset delivery for live generation progress. The caller joins the group before replay so the
@@ -56,7 +63,7 @@ public sealed class DatasetGenerationHub : Hub
         if (replay.ResetRequired)
         {
             await Clients.Caller.SendAsync(DatasetGenerationHubEvents.ReplayReset,
-                             new DatasetGenerationReplayReset(datasetId, replay.LatestSequence, dataset.Version),
+                             new DatasetGenerationReplayReset { DatasetId = datasetId, LatestSequence = replay.LatestSequence, DatasetVersion = dataset.Version },
                              cancellationToken);
             return;
         }

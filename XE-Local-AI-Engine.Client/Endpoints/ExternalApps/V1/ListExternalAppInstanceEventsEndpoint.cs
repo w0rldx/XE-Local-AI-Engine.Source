@@ -47,6 +47,6 @@ public sealed class ListExternalAppInstanceEventsEndpoint : Endpoint<ExternalApp
         // unchanged on an empty page, so "load more" against an idle instance cannot skip a row minted meanwhile.
         var highest = count == 0 ? req.AfterSequence : items[count - 1].Sequence;
 
-        await Send.OkAsync(new ListExternalAppInstanceEventsResponse(items, highest, page.Count > req.Limit), ct);
+        await Send.OkAsync(new ListExternalAppInstanceEventsResponse { Items = items, HighestSequence = highest, HasMore = page.Count > req.Limit }, ct);
     }
 }

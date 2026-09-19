@@ -72,7 +72,7 @@ public sealed class ListDevWorkflowArtifactsEndpoint : Endpoint<DevWorkflowArtif
 
         var artifacts = await _runQueries.ListArtifactsAsync(req.RunId, req.SinceSeq, ct);
         var items = artifacts.Select(DevWorkflowContractMapper.ToResponse).ToList();
-        await Send.OkAsync(new ListDevWorkflowArtifactsResponse(items, DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence))), ct);
+        await Send.OkAsync(new ListDevWorkflowArtifactsResponse { Items = items, LastSequence = DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence)) }, ct);
     }
 }
 
@@ -134,6 +134,6 @@ public sealed class GetDevWorkflowArtifactContentEndpoint : Endpoint<DevWorkflow
 
         var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
-        await Send.OkAsync(new DevWorkflowArtifactContentResponse(artifact.ToResponse(), content, isBase64), ct);
+        await Send.OkAsync(new DevWorkflowArtifactContentResponse { Artifact = artifact.ToResponse(), Content = content, IsBase64 = isBase64 }, ct);
     }
 }

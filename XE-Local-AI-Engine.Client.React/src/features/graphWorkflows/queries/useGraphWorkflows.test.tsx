@@ -102,6 +102,7 @@ function eventFeed(pages: Readonly<Record<string, FeedPage>>): string[] {
 					seq,
 					eventType: "node.started",
 					nodeKey: "analyze",
+					detail: null,
 					createdAtUtc: seq,
 				})),
 				lastSeq: page.seqs.at(-1) ?? Number(afterSeq),
@@ -328,11 +329,17 @@ describe("useGraphWorkflowRunEvents", () => {
 	});
 });
 
+// The definition write endpoints answer with the whole definition, so the mocked body carries the summary members
+// plus the graph the response schema also requires.
+function definitionBody(): Record<string, unknown> {
+	return { ...graphWorkflowDefinitionSummary({ id: definitionId }), graph: eightNodeGraph };
+}
+
 describe("graph workflow mutations", () => {
 	it("refreshes the catalogue and the edited row after a definition write", async () => {
 		server.use(
-			http.post(localApiPath("graph-workflows/definitions"), () => HttpResponse.json({ id: definitionId }, { status: 201 })),
-			http.put(localApiPath(`graph-workflows/definitions/${definitionId}`), () => HttpResponse.json({ id: definitionId })),
+			http.post(localApiPath("graph-workflows/definitions"), () => HttpResponse.json(definitionBody(), { status: 201 })),
+			http.put(localApiPath(`graph-workflows/definitions/${definitionId}`), () => HttpResponse.json(definitionBody())),
 			http.delete(localApiPath(`graph-workflows/definitions/${definitionId}`), () => new HttpResponse(null, { status: 204 })),
 		);
 		const { queryClient, wrapper } = harness();
@@ -372,7 +379,12 @@ describe("graph workflow mutations", () => {
 	it("invalidates nothing when it only validates a graph", async () => {
 		server.use(
 			http.post(localApiPath("graph-workflows/definitions/validate"), () =>
-				HttpResponse.json({ valid: false, errors: [{ key: "review", message: "No route for Approve." }], nodeCount: 8 }),
+				HttpResponse.json({
+					valid: false,
+					errors: [{ key: "review", message: "No route for Approve." }],
+					nodeCount: 8,
+					warnings: [],
+				}),
 			),
 		);
 		const { queryClient, wrapper } = harness();
@@ -410,7 +422,11 @@ describe("graph workflow mutations", () => {
 	});
 
 	it("re-reads the run after a cancel rather than flipping the toolbar to a terminal label", async () => {
-		server.use(http.post(localApiPath(`graph-workflows/runs/${runId}/cancel`), () => HttpResponse.json({}, { status: 202 })));
+		server.use(
+			http.post(localApiPath(`graph-workflows/runs/${runId}/cancel`), () =>
+				HttpResponse.json({ run: graphWorkflowRunSummary(), nodeRuns: [], output: null, graph: eightNodeGraph }, { status: 202 }),
+			),
+		);
 		const { queryClient, wrapper } = harness();
 		const { result } = renderHook(() => useCancelGraphWorkflowRun(), { wrapper });
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();

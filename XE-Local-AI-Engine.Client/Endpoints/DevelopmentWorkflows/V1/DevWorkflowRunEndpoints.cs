@@ -31,7 +31,7 @@ public sealed class ListDevWorkflowRunsEndpoint : Endpoint<ListDevWorkflowRunsRe
         // Safe to parse rather than TryParse: the validator has already refused anything that is not a member.
         var status = req.Status is null ? (DevWorkflowRunStatus?)null : Enum.Parse<DevWorkflowRunStatus>(req.Status, ignoreCase: true);
         var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, status, req.Limit, ct);
-        await Send.OkAsync(new ListDevWorkflowRunsResponse([.. runs.Select(DevWorkflowContractMapper.ToResponse)]), ct);
+        await Send.OkAsync(new ListDevWorkflowRunsResponse { Items = [.. runs.Select(DevWorkflowContractMapper.ToResponse)] }, ct);
     }
 }
 
@@ -237,9 +237,12 @@ public sealed class ListDevWorkflowRunEventsEndpoint : Endpoint<DevWorkflowRunEv
         // One over the limit, so "there is more" is observed rather than inferred from a full page.
         var events = await _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct);
         var page = events.Take(req.Limit).Select(DevWorkflowContractMapper.ToResponse).ToList();
-        await Send.OkAsync(new ListDevWorkflowRunEventsResponse(page,
-                DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),
-                events.Count > req.Limit),
+        await Send.OkAsync(new ListDevWorkflowRunEventsResponse
+        {
+            Items = page,
+            LastSequence = DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),
+            HasMore = events.Count > req.Limit
+        },
             ct);
     }
 }

@@ -21,22 +21,50 @@ public static class ExternalAppHubEvents
 ///     subscriber re-reads the feed from its own watermark, so a dropped push degrades to a late read rather than to a
 ///     wrong render — and nothing an instance's variables could reach ever rides on the hub.
 /// </summary>
-public sealed record ExternalAppChanged(Guid InstanceId, long Sequence, string Kind, string Status);
+public sealed class ExternalAppChanged
+{
+    public required Guid InstanceId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Status { get; init; }
+}
 
 /// <summary>
 ///     Image-pull progress for one service. Hub-only: high-frequency and worthless after the fact, so it allocates no
 ///     sequence and appends no event row.
 /// </summary>
-public sealed record ExternalAppPullProgress(Guid InstanceId, string Service, int LayerCount, int CompletedLayers, long Bytes);
+public sealed class ExternalAppPullProgress
+{
+    public required Guid InstanceId { get; init; }
 
-public sealed record ExternalAppSubscriptionSnapshot(
-    Guid InstanceId,
-    string Status,
-    string DesiredState,
-    string? FailureCategory,
-    long LastSequence,
-    IReadOnlyList<ExternalAppInstanceEventView> Events,
-    bool ReplayTruncated);
+    public required string Service { get; init; }
+
+    public required int LayerCount { get; init; }
+
+    public required int CompletedLayers { get; init; }
+
+    public required long Bytes { get; init; }
+}
+
+public sealed class ExternalAppSubscriptionSnapshot
+{
+    public required Guid InstanceId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required string DesiredState { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required IReadOnlyList<ExternalAppInstanceEventView> Events { get; init; }
+
+    public required bool ReplayTruncated { get; init; }
+}
 
 /// <summary>
 ///     Operator-only live notifications for one external application instance.
@@ -111,13 +139,16 @@ public sealed class ExternalAppHub : Hub
             // One over the cap, so "there is more" is observed rather than inferred from a full page.
             var events = await _apps.ListEventsAsync(instanceId, afterSequence, ReplayCap + 1, cancellationToken);
 
-            return new ExternalAppSubscriptionSnapshot(instanceId,
-                detail.Summary.Status.ToString(),
-                detail.Summary.DesiredState.ToString(),
-                detail.Summary.FailureCategory?.ToString(),
-                detail.LastSequence,
-                [.. events.Take(ReplayCap).Select(ExternalAppMapper.ToEventView)],
-                events.Count > ReplayCap);
+            return new ExternalAppSubscriptionSnapshot
+            {
+                InstanceId = instanceId,
+                Status = detail.Summary.Status.ToString(),
+                DesiredState = detail.Summary.DesiredState.ToString(),
+                FailureCategory = detail.Summary.FailureCategory?.ToString(),
+                LastSequence = detail.LastSequence,
+                Events = [.. events.Take(ReplayCap).Select(ExternalAppMapper.ToEventView)],
+                ReplayTruncated = events.Count > ReplayCap
+            };
         }
         catch (ExternalAppNotFoundException)
         {

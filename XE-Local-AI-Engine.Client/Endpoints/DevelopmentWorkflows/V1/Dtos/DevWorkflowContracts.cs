@@ -285,350 +285,407 @@ public sealed record DevWorkflowEdgeCondition(string Path, string Op, JsonElemen
 
 // Responses. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.
 
-public sealed record DevWorkflowWorkItemResponse(
-    Guid Id,
-    string Title,
-    string Request,
-    Guid? DevelopmentProjectId,
-    string Status,
-    Guid? LatestRunId,
-    IReadOnlyList<DevWorkflowRunSummaryResponse> Runs,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version);
+public sealed class DevWorkflowWorkItemResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Request { get; init; }
+
+    public required Guid? DevelopmentProjectId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required Guid? LatestRunId { get; init; }
+
+    public required IReadOnlyList<DevWorkflowRunSummaryResponse> Runs { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
 
 /// <summary>
 ///     One row of the work-item list, wide enough to render the page without a per-row fetch — which is what makes the
 ///     list's poll honest rather than a fan-out.
 /// </summary>
-public sealed record DevWorkflowWorkItemSummaryResponse(
-    Guid Id,
-    string Title,
-    Guid? DevelopmentProjectId,
-    string Status,
-    Guid? LatestRunId,
-    string? LatestRunStatus,
-    string? DefinitionName,
-    int QueuedNodeCount,
-    int RunningNodeCount,
-    int CompletedNodeCount,
-    int TotalNodeCount,
-    long UpdatedAtUtc);
+public sealed class DevWorkflowWorkItemSummaryResponse
+{
+    public required Guid Id { get; init; }
 
-public sealed record DevWorkflowDefinitionResponse(
-    Guid Id,
-    string Name,
-    DevWorkflowGraph Graph,
-    string GraphHash,
-    string Source,
-    string? SeedSlug,
-    bool Archived,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+    public required string Title { get; init; }
 
-public sealed record DevWorkflowDefinitionSummaryResponse(
-    Guid Id,
-    string Name,
-    string Source,
-    string? SeedSlug,
-    bool Archived,
-    int Version,
-    int NodeCount,
-    long UpdatedAtUtc);
+    public required Guid? DevelopmentProjectId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required Guid? LatestRunId { get; init; }
+
+    public required string? LatestRunStatus { get; init; }
+
+    public required string? DefinitionName { get; init; }
+
+    public required int QueuedNodeCount { get; init; }
+
+    public required int RunningNodeCount { get; init; }
+
+    public required int CompletedNodeCount { get; init; }
+
+    public required int TotalNodeCount { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class DevWorkflowDefinitionResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required DevWorkflowGraph Graph { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required string Source { get; init; }
+
+    public required string? SeedSlug { get; init; }
+
+    public required bool Archived { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class DevWorkflowDefinitionSummaryResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Source { get; init; }
+
+    public required string? SeedSlug { get; init; }
+
+    public required bool Archived { get; init; }
+
+    public required int Version { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One run in full. The pinned <see cref="Graph" /> and every node summary ride together because the graph view
 ///     paints them together: this is the one fetch a change notification triggers.
 /// </summary>
-public sealed record DevWorkflowRunResponse(
-    Guid Id,
-    Guid WorkItemId,
-    Guid DefinitionId,
-    int DefinitionVersion,
-    string? DefinitionName,
-    int GraphRevision,
-    DevWorkflowGraph Graph,
-    string Status,
-    IReadOnlyList<DevWorkflowNodeRunSummaryResponse> Nodes,
-    int QueuedNodeCount,
-    int RunningNodeCount,
-    int PendingDecisionCount,
-    Guid? BlockingGateNodeRunId,
-    string? FailureClass,
-    string? TerminalReason,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long Version,
-    long LastSequence,
-    /// <summary>
-    ///     The run's cost, summed over the node runs already on this response. A LOWER bound by construction: it is the
-    ///     final attempt of each node, so a run that retried spent more. The runbook's total is this plus the run's
-    ///     <c>node.retry.scheduled</c> details.
-    /// </summary>
-    DevWorkflowRunCostResponse Cost);
+public sealed class DevWorkflowRunResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid WorkItemId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required int DefinitionVersion { get; init; }
+
+    public required string? DefinitionName { get; init; }
+
+    public required int GraphRevision { get; init; }
+
+    public required DevWorkflowGraph Graph { get; init; }
+
+    public required string Status { get; init; }
+
+    public required IReadOnlyList<DevWorkflowNodeRunSummaryResponse> Nodes { get; init; }
+
+    public required int QueuedNodeCount { get; init; }
+
+    public required int RunningNodeCount { get; init; }
+
+    public required int PendingDecisionCount { get; init; }
+
+    public required Guid? BlockingGateNodeRunId { get; init; }
+
+    public required string? FailureClass { get; init; }
+
+    public required string? TerminalReason { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required DevWorkflowRunCostResponse Cost { get; init; }
+}
 
 /// <summary>
 ///     Where one terminal node run routed, parsed off the node run's own <c>route_json</c>.
 /// </summary>
-/// <param name="Satisfied">
-///     The out-edges whose condition fired. This means "the edge was satisfied", NEVER "the successor ran": admission
-///     is a question about a target's INBOUND edges, so an <c>All</c> join can still skip on a dead sibling edge and an
-///     <c>Any</c> join can admit on one. For a human gate, the node's own output document is authoritative.
-/// </param>
-/// <param name="Dead">The out-edges whose condition did not fire.</param>
-/// <param name="Waived">
-///     The out-edges of a node run whose SKIP the state machine waived — an operator's own skip rather than one that
-///     cascaded off something dead. Its own bucket because neither of the others is true of it: a waived edge does not
-///     admit an <c>Any</c> successor the way a satisfied one does, and it does not kill an <c>All</c> one the way a
-///     dead one does. Empty on a row written before this bucket existed, which is also what it means.
-/// </param>
-/// <param name="GateAnswer">The decision a human gate settled on; null on every other node type.</param>
-/// <param name="Truncated">
-///     Whether keys were dropped to keep the stored document inside its column bound. A truncated route must be shown
-///     as truncated, or a short list reads as the whole one.
-/// </param>
-public sealed record DevWorkflowNodeRouteResponse(
-    IReadOnlyList<string> Satisfied,
-    IReadOnlyList<string> Dead,
-    IReadOnlyList<string> Waived,
-    string? GateAnswer,
-    bool Truncated);
+public sealed class DevWorkflowNodeRouteResponse
+{
+    /// <summary>
+    ///     The out-edges whose condition fired. This means "the edge was satisfied", NEVER "the successor ran": admission
+    ///     is a question about a target's INBOUND edges, so an <c>All</c> join can still skip on a dead sibling edge and an
+    ///     <c>Any</c> join can admit on one. For a human gate, the node's own output document is authoritative.
+    /// </summary>
+    public required IReadOnlyList<string> Satisfied { get; init; }
+
+    /// <summary>The out-edges whose condition did not fire.</summary>
+    public required IReadOnlyList<string> Dead { get; init; }
+
+    /// <summary>
+    ///     The out-edges of a node run whose SKIP the state machine waived — an operator's own skip rather than one that
+    ///     cascaded off something dead. Its own bucket because neither of the others is true of it: a waived edge does not
+    ///     admit an <c>Any</c> successor the way a satisfied one does, and it does not kill an <c>All</c> one the way a
+    ///     dead one does. Empty on a row written before this bucket existed, which is also what it means.
+    /// </summary>
+    public required IReadOnlyList<string> Waived { get; init; }
+
+    /// <summary>The decision a human gate settled on; null on every other node type.</summary>
+    public required string? GateAnswer { get; init; }
+
+    /// <summary>
+    ///     Whether keys were dropped to keep the stored document inside its column bound. A truncated route must be shown
+    ///     as truncated, or a short list reads as the whole one.
+    /// </summary>
+    public required bool Truncated { get; init; }
+}
 
 /// <summary>
 ///     A run's headline spend, summed over its node runs' final attempts. Every member is null until some node run
 ///     reports one, because "nobody measured" and "zero" are different answers.
 /// </summary>
-public sealed record DevWorkflowRunCostResponse(
-    long? InputTokens,
-    long? OutputTokens,
-    int? ToolCalls,
-    int? ProviderCalls,
-    long? AgentTurnMs);
+public sealed class DevWorkflowRunCostResponse
+{
+    public required long? InputTokens { get; init; }
 
-public sealed record DevWorkflowRunSummaryResponse(
-    Guid Id,
-    Guid WorkItemId,
-    Guid DefinitionId,
-    string? DefinitionName,
-    string Status,
-    int QueuedNodeCount,
-    int RunningNodeCount,
-    int CompletedNodeCount,
-    int TotalNodeCount,
-    int PendingDecisionCount,
-    Guid? BlockingGateNodeRunId,
-    long? StartedAtUtc,
-    long UpdatedAtUtc);
+    public required long? OutputTokens { get; init; }
+
+    public required int? ToolCalls { get; init; }
+
+    public required int? ProviderCalls { get; init; }
+
+    public required long? AgentTurnMs { get; init; }
+}
+
+public sealed class DevWorkflowRunSummaryResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid WorkItemId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required string? DefinitionName { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int QueuedNodeCount { get; init; }
+
+    public required int RunningNodeCount { get; init; }
+
+    public required int CompletedNodeCount { get; init; }
+
+    public required int TotalNodeCount { get; init; }
+
+    public required int PendingDecisionCount { get; init; }
+
+    public required Guid? BlockingGateNodeRunId { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Everything a node card paints, resolved in the run-detail query. No card needs a follow-up request, which is
 ///     the whole reason there is no node-run list route.
 /// </summary>
-public sealed record DevWorkflowNodeRunSummaryResponse(
-    Guid Id,
-    string NodeKey,
-    string NodeType,
-    string Label,
-    string Status,
-    int Attempt,
-    int MaxAttempts,
-    string? QueueReason,
-    long? QueuedAtUtc,
-    IReadOnlyList<string>? WaitingOnNodeKeys,
-    string? PendingDecisionKind,
-    bool IsMaterialized,
-    string? MaterializedFromNodeKey,
-    int? MaterializationIndex,
-    /// <summary>
-    ///     The node run this clone was materialized FROM, which is the group identifier: one decompose node run
-    ///     materializes once, so its id names that fan-out for the life of the run.
-    /// </summary>
-    Guid? MaterializationGroupId,
-    /// <summary>
-    ///     How many siblings the group holds, counted server-side over the run's WHOLE node-run list. Counted here
-    ///     rather than in the browser because a client can only count the rows it has drawn, which is wrong by
-    ///     construction for a fan-out wider than the page it rendered.
-    /// </summary>
-    int? MaterializationCount,
-    Guid? DevelopmentProjectId,
-    Guid? DevelopmentTaskId,
-    Guid? AgentDefinitionId,
-    string? AgentDisplayName,
-    string? ModelLabel,
-    bool HasStaleInputs,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long Sequence,
-    /// <summary>
-    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
-    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
-    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
-    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
-    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
-    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
-    ///     parsed.
-    /// </summary>
-    int OperatorRetries,
-    /// <summary>
-    ///     For a <c>Skipped</c> row only: whether the state machine WAIVES this skip, so a downstream <c>All</c> join
-    ///     carries on past it as long as a sibling arrived. <c>false</c> means the skip is dead and the join will skip
-    ///     with it; <c>null</c> means the question does not apply — any other status — or that the pinned graph could
-    ///     not be routed to answer it.
-    ///     <para>
-    ///         Computed on the SERVER because it cannot be read off this row. A skip an operator chose and one that
-    ///         cascaded off a Failed ancestor are the same status, and the ancestor that decides which is which is not
-    ///         necessarily among the join's own dependencies — so a client judging by status alone tells an operator
-    ///         the join carries on in exactly the case where the runtime skips it. The verdict comes from the same
-    ///         predicate the dispatcher admits by (<c>DevWorkflowStateMachine.WaivedSkipNodeKeys</c>), which is what
-    ///         stops the two from drifting.
-    ///     </para>
-    /// </summary>
-    bool? SkipWaived,
-    /// <summary>
-    ///     What the node run's LAST attempt cost, three headline numbers of the twelve the drill-down carries. Null on
-    ///     a row with nothing to report — a structural node, a row written before this was collected, or a collection
-    ///     that could not run — which is not the same as zero. Earlier attempts live on the run's
-    ///     <c>node.retry.scheduled</c> events, never here.
-    /// </summary>
-    long? InputTokens,
-    long? OutputTokens,
-    int? ToolCalls,
-    /// <summary>
-    ///     The row is a <c>Succeeded</c> check that had nothing to check — the verdict a zero-task decomposition seeds
-    ///     onto its template's validations (D12). Carried on the SUMMARY rather than left to the drill-down because the
-    ///     run header counts these rows and the node table renders them: without it a run that decomposed into no work
-    ///     reports its template check as completed work, which is the one thing that row does not stand for.
-    /// </summary>
-    bool ValidationNotApplicable);
+public sealed class DevWorkflowNodeRunSummaryResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required string NodeType { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required int MaxAttempts { get; init; }
+
+    public required string? QueueReason { get; init; }
+
+    public required long? QueuedAtUtc { get; init; }
+
+    public required IReadOnlyList<string>? WaitingOnNodeKeys { get; init; }
+
+    public required string? PendingDecisionKind { get; init; }
+
+    public required bool IsMaterialized { get; init; }
+
+    public required string? MaterializedFromNodeKey { get; init; }
+
+    public required int? MaterializationIndex { get; init; }
+
+    public required Guid? MaterializationGroupId { get; init; }
+
+    public required int? MaterializationCount { get; init; }
+
+    public required Guid? DevelopmentProjectId { get; init; }
+
+    public required Guid? DevelopmentTaskId { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required string? AgentDisplayName { get; init; }
+
+    public required string? ModelLabel { get; init; }
+
+    public required bool HasStaleInputs { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int OperatorRetries { get; init; }
+
+    public required bool? SkipWaived { get; init; }
+
+    public required long? InputTokens { get; init; }
+
+    public required long? OutputTokens { get; init; }
+
+    public required int? ToolCalls { get; init; }
+
+    public required bool ValidationNotApplicable { get; init; }
+}
 
 /// <summary>
 ///     The drill-down. <see cref="WorkSessionId" /> is the whole of the agent view: it links out to the EXISTING
 ///     work-session routes rather than this surface growing observability endpoints of its own.
 /// </summary>
-public sealed record DevWorkflowNodeRunDetailResponse(
-    Guid Id,
-    Guid RunId,
-    string NodeKey,
-    string NodeType,
-    string Label,
-    string Status,
-    int Attempt,
-    int MaxAttempts,
-    int SessionResumes,
-    string? QueueReason,
-    long? QueuedAtUtc,
-    Guid? AgentDefinitionId,
-    string? AgentDisplayName,
-    string? ModelLabel,
-    Guid? WorkSessionId,
-    Guid? ConversationId,
-    bool WorkSessionAvailable,
-    Guid? DevelopmentProjectId,
-    Guid? DevelopmentTaskId,
-    Guid? PrimaryArtifactId,
-    string? Instructions,
-    string? InputJson,
-    string? OutputJson,
-    IReadOnlyList<Guid> ProducedArtifactIds,
-    IReadOnlyList<Guid> ConsumedArtifactIds,
-    IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets,
-    string? PendingDecisionKind,
-    IReadOnlyList<string> AllowedDecisions,
-    bool HasRejectBranch,
-    string? FailureClass,
-    string? TerminalReason,
-    IReadOnlyList<DevWorkflowDecisionResponse> Decisions,
-    /// <summary>
-    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
-    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
-    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
-    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
-    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
-    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
-    ///     parsed.
-    /// </summary>
-    int OperatorRetries,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long Sequence,
-    /// <summary>
-    ///     What this node run's LAST attempt spent on the provider. Null means nobody reported it, never zero: the
-    ///     columns are cleared by the <c>Pending</c> reset a re-attempt writes, so earlier attempts are on the run's
-    ///     <c>node.retry.scheduled</c> events and a total is <c>this + those</c>.
-    /// </summary>
-    long? InputTokens,
-    long? OutputTokens,
-    long? ReasoningTokens,
-    /// <summary>A character-profile estimate the agent loop made. Quote it only where <see cref="InputTokens" /> is null.</summary>
-    long? EstimatedInputTokens,
-    int? ProviderCalls,
-    int? ToolCalls,
-    /// <summary>Schema tokens SHIPPED across rounds, which is a cost, not the size of the schema.</summary>
-    long? ToolSchemaTokens,
-    /// <summary>
-    ///     The distinct tools this node run's session called, names only and capped. A last element of <c>"…"</c> is a
-    ///     truncation marker rather than a tool. Null means there were no work-session step rows to read — a DevTask,
-    ///     Tool, Gate, Parallel or Join row — and never "this node called no tools", which is what
-    ///     <see cref="ToolCalls" /> answers.
-    /// </summary>
-    IReadOnlyList<string>? ToolNames,
-    /// <summary>
-    ///     Wall-clock time inside the agent's chat turns, tool loop included — the envelope measures a whole run, and
-    ///     no provider-round-only duration is persisted anywhere this collector can read. So the node's runtime minus
-    ///     this is time spent OUTSIDE the turns, which is not the same thing as tool time and must never be labelled
-    ///     as it.
-    /// </summary>
-    long? AgentTurnMs,
-    /// <summary>
-    ///     The model that actually served the last turn — the receipt, as opposed to <see cref="ModelLabel" />, which
-    ///     is what the node or its agent ASKED for. Both are present because they can differ.
-    /// </summary>
-    string? ServedModelName,
-    /// <summary>Where a terminal node run routed. Null while it has not finished, because it has routed nowhere yet.</summary>
-    DevWorkflowNodeRouteResponse? Route,
-    /// <summary>How many steps the node run's work session took. Zero is a measurement; null is an absence.</summary>
-    int? WorkSessionSteps,
-    /// <summary>
-    ///     <see cref="FailureClass" /> projected onto the ONE cross-unit vocabulary
-    ///     (<c>AgentUnitFailureClass</c>), so a workflow node run, a chat run envelope and a Development attempt can be
-    ///     grouped together in a report. Null exactly when the row records no failure. Nothing routes on it.
-    /// </summary>
-    string? FailureClassGroup,
-    /// <summary>
-    ///     How much of <see cref="AgentTurnMs" /> the turns spent WAITING for a local runtime — llama-server launching
-    ///     and loading the model — rather than generating. Null means unmeasured: no turn went through the
-    ///     local-runtime warmer at all (a cloud-served node) or the row predates the column. Non-null is the warmer's
-    ///     measured wall time summed over the run's turns — the warmer times EVERY call, cache reuse included, and the
-    ///     sum truncates to whole milliseconds, so an already-resident model measures near zero (live: 0) and zero
-    ///     itself proves only "under 1 ms", never residency on its own.
-    /// </summary>
-    long? ModelReadinessMs,
-    /// <summary>
-    ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
-    ///     load of the model in <see cref="ServedModelName" /> THAT CARRIED A CAPACITY ADMISSION — not necessarily a
-    ///     load this run caused, and an unadmitted reload since (a direct, profiling or variant-moved spawn) clears
-    ///     the reading rather than letting it describe the process that reload replaced.
-    ///     <para>
-    ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> tells the two
-    ///         apart: a SMALL readiness means the warmer waited for nothing, so the load these bytes describe predates
-    ///         the run and the box may have looked different by the time it started. Null here means nobody measured — a
-    ///         remote or Ollama model, a model the node never loaded itself, a host with no readable global-free
-    ///         figure, or a row written before the column existed.
-    ///     </para>
-    ///     <para>
-    ///         This and <see cref="VramAdmittedBytes" /> are one pair, written once per attempt by the first settle
-    ///         that carries a reading and never rewritten after that — so the two can never describe different loads.
-    ///         A settle with no reading leaves the pair open for a later one, and a re-attempt clears it.
-    ///     </para>
-    /// </summary>
-    long? VramFreeAtLoadBytes,
-    /// <summary>
-    ///     The GPU bytes the capacity gate RESERVED for that same load's process. Zero is a real answer for a
-    ///     CPU-placed allocation; null carries the same "nobody measured" meaning as
-    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
-    /// </summary>
-    long? VramAdmittedBytes);
+public sealed class DevWorkflowNodeRunDetailResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required string NodeType { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required int MaxAttempts { get; init; }
+
+    public required int SessionResumes { get; init; }
+
+    public required string? QueueReason { get; init; }
+
+    public required long? QueuedAtUtc { get; init; }
+
+    public required Guid? AgentDefinitionId { get; init; }
+
+    public required string? AgentDisplayName { get; init; }
+
+    public required string? ModelLabel { get; init; }
+
+    public required Guid? WorkSessionId { get; init; }
+
+    public required Guid? ConversationId { get; init; }
+
+    public required bool WorkSessionAvailable { get; init; }
+
+    public required Guid? DevelopmentProjectId { get; init; }
+
+    public required Guid? DevelopmentTaskId { get; init; }
+
+    public required Guid? PrimaryArtifactId { get; init; }
+
+    public required string? Instructions { get; init; }
+
+    public required string? InputJson { get; init; }
+
+    public required string? OutputJson { get; init; }
+
+    public required IReadOnlyList<Guid> ProducedArtifactIds { get; init; }
+
+    public required IReadOnlyList<Guid> ConsumedArtifactIds { get; init; }
+
+    public required IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets { get; init; }
+
+    public required string? PendingDecisionKind { get; init; }
+
+    public required IReadOnlyList<string> AllowedDecisions { get; init; }
+
+    public required bool HasRejectBranch { get; init; }
+
+    public required string? FailureClass { get; init; }
+
+    public required string? TerminalReason { get; init; }
+
+    public required IReadOnlyList<DevWorkflowDecisionResponse> Decisions { get; init; }
+
+    public required int OperatorRetries { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required long? InputTokens { get; init; }
+
+    public required long? OutputTokens { get; init; }
+
+    public required long? ReasoningTokens { get; init; }
+
+    public required long? EstimatedInputTokens { get; init; }
+
+    public required int? ProviderCalls { get; init; }
+
+    public required int? ToolCalls { get; init; }
+
+    public required long? ToolSchemaTokens { get; init; }
+
+    public required IReadOnlyList<string>? ToolNames { get; init; }
+
+    public required long? AgentTurnMs { get; init; }
+
+    public required string? ServedModelName { get; init; }
+
+    public required DevWorkflowNodeRouteResponse? Route { get; init; }
+
+    public required int? WorkSessionSteps { get; init; }
+
+    public required string? FailureClassGroup { get; init; }
+
+    public required long? ModelReadinessMs { get; init; }
+
+    public required long? VramFreeAtLoadBytes { get; init; }
+
+    public required long? VramAdmittedBytes { get; init; }
+}
 
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit
@@ -640,7 +697,16 @@ public sealed record DevWorkflowNodeRunDetailResponse(
 ///         what it said. Comparing the two is the whole reason the hash is recorded.
 ///     </para>
 /// </summary>
-public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, string ContentSha256, string? CurrentContentSha256);
+public sealed class DevWorkflowAppliedRuleSetResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required string? CurrentContentSha256 { get; init; }
+}
 
 /// <summary>
 ///     Where a rule set applies. An EMPTY axis means "matches everything"; a populated one is an exact,
@@ -654,105 +720,201 @@ public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, str
 /// </summary>
 public sealed record DevWorkflowRuleScope(IReadOnlyList<Guid> ProjectIds, IReadOnlyList<string> NodeTypes);
 
-public sealed record DevWorkflowRuleSetResponse(
-    Guid Id,
-    string Name,
-    string? Description,
-    string Body,
-    DevWorkflowRuleScope Scope,
-    bool Enabled,
-    string ContentSha256,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class DevWorkflowRuleSetResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string Body { get; init; }
+
+    public required DevWorkflowRuleScope Scope { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     A rule set WITHOUT its body — the list draws names, scopes and hashes. <see cref="ContentSha256" /> is here
 ///     because it is the half a reader compares against a node run's recorded hash to see whether the document has
 ///     moved on since it applied.
 /// </summary>
-public sealed record DevWorkflowRuleSetSummaryResponse(
-    Guid Id,
-    string Name,
-    string? Description,
-    DevWorkflowRuleScope Scope,
-    bool Enabled,
-    string ContentSha256,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class DevWorkflowRuleSetSummaryResponse
+{
+    public required Guid Id { get; init; }
 
-public sealed record DevWorkflowRunEventResponse(
-    Guid Id,
-    long Sequence,
-    string EventType,
-    Guid? NodeRunId,
-    string? Outcome,
-    string? DetailJson,
-    Guid? OperationId,
-    long OccurredAtUtc);
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required DevWorkflowRuleScope Scope { get; init; }
+
+    public required bool Enabled { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class DevWorkflowRunEventResponse
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required Guid? NodeRunId { get; init; }
+
+    public required string? Outcome { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required Guid? OperationId { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>
 ///     An artifact's metadata. There is deliberately no member for the blob reference the node stores it under: it is
 ///     a host path, it is of no use to a client, and a response is the one place it could leak from.
 /// </summary>
-public sealed record DevWorkflowArtifactResponse(
-    Guid Id,
-    Guid LineageId,
-    int Version,
-    long Sequence,
-    string Kind,
-    string Name,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    Guid ProducedByNodeRunId,
-    string ProducingNodeKey,
-    bool IsValid,
-    bool IsStale,
-    Guid? StaleBecauseArtifactId,
-    string? StaleReason,
-    bool IsLatest,
-    long CreatedAtUtc);
+public sealed class DevWorkflowArtifactResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid LineageId { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required Guid ProducedByNodeRunId { get; init; }
+
+    public required string ProducingNodeKey { get; init; }
+
+    public required bool IsValid { get; init; }
+
+    public required bool IsStale { get; init; }
+
+    public required Guid? StaleBecauseArtifactId { get; init; }
+
+    public required string? StaleReason { get; init; }
+
+    public required bool IsLatest { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     An artifact with its bytes. <see cref="IsBase64" /> is decided from the media type, never by sniffing the
 ///     bytes, so binary content is never handed over as mangled UTF-8.
 /// </summary>
-public sealed record DevWorkflowArtifactContentResponse(DevWorkflowArtifactResponse Artifact, string Content, bool IsBase64);
+public sealed class DevWorkflowArtifactContentResponse
+{
+    public required DevWorkflowArtifactResponse Artifact { get; init; }
 
-public sealed record DevWorkflowDecisionResponse(
-    Guid Id,
-    Guid NodeRunId,
-    int Attempt,
-    string Decision,
-    string? Comment,
-    string? DecidedBySubject,
-    long DecidedAtUtc,
-    Guid OperationId,
-    long Sequence);
+    public required string Content { get; init; }
+
+    public required bool IsBase64 { get; init; }
+}
+
+public sealed class DevWorkflowDecisionResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required string Decision { get; init; }
+
+    public required string? Comment { get; init; }
+
+    public required string? DecidedBySubject { get; init; }
+
+    public required long DecidedAtUtc { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required long Sequence { get; init; }
+}
 
 /// <summary>What the decision endpoint answers: the recorded act, plus where the run and node run now stand.</summary>
-public sealed record DevWorkflowDecisionResultResponse(DevWorkflowDecisionResponse Decision, string RunStatus, string NodeRunStatus);
+public sealed class DevWorkflowDecisionResultResponse
+{
+    public required DevWorkflowDecisionResponse Decision { get; init; }
 
-// One concrete response record per list rather than one generic envelope: NSwag builds schema ids from the CLR type
+    public required string RunStatus { get; init; }
+
+    public required string NodeRunStatus { get; init; }
+}
+
+// One concrete response type per list rather than one generic envelope: NSwag builds schema ids from the CLR type
 // name, and a generic would land in the generated client as an unreadable ListDevWorkflowFeedResponseOfT.
 
-public sealed record ListDevWorkflowWorkItemsResponse(IReadOnlyList<DevWorkflowWorkItemSummaryResponse> Items);
+public sealed class ListDevWorkflowWorkItemsResponse
+{
+    public required IReadOnlyList<DevWorkflowWorkItemSummaryResponse> Items { get; init; }
+}
 
-public sealed record ListDevWorkflowDefinitionsResponse(IReadOnlyList<DevWorkflowDefinitionSummaryResponse> Items);
+public sealed class ListDevWorkflowDefinitionsResponse
+{
+    public required IReadOnlyList<DevWorkflowDefinitionSummaryResponse> Items { get; init; }
+}
 
-public sealed record ListDevWorkflowRuleSetsResponse(IReadOnlyList<DevWorkflowRuleSetSummaryResponse> Items);
+public sealed class ListDevWorkflowRuleSetsResponse
+{
+    public required IReadOnlyList<DevWorkflowRuleSetSummaryResponse> Items { get; init; }
+}
 
-public sealed record ListDevWorkflowRunsResponse(IReadOnlyList<DevWorkflowRunSummaryResponse> Items);
+public sealed class ListDevWorkflowRunsResponse
+{
+    public required IReadOnlyList<DevWorkflowRunSummaryResponse> Items { get; init; }
+}
 
 /// <summary>
 ///     A page of events. <see cref="HasMore" /> is reported from a one-over-the-limit probe rather than inferred, and
 ///     the client follows it by re-reading from <see cref="LastSequence" />.
 /// </summary>
-public sealed record ListDevWorkflowRunEventsResponse(IReadOnlyList<DevWorkflowRunEventResponse> Items, long LastSequence, bool HasMore);
+public sealed class ListDevWorkflowRunEventsResponse
+{
+    public required IReadOnlyList<DevWorkflowRunEventResponse> Items { get; init; }
 
-public sealed record ListDevWorkflowArtifactsResponse(IReadOnlyList<DevWorkflowArtifactResponse> Items, long LastSequence);
+    public required long LastSequence { get; init; }
+
+    public required bool HasMore { get; init; }
+}
+
+public sealed class ListDevWorkflowArtifactsResponse
+{
+    public required IReadOnlyList<DevWorkflowArtifactResponse> Items { get; init; }
+
+    public required long LastSequence { get; init; }
+}
 
 /// <summary>
 ///     Whether this node serves development workflows at all. The one response every node answers, switch on or off:
@@ -760,4 +922,7 @@ public sealed record ListDevWorkflowArtifactsResponse(IReadOnlyList<DevWorkflowA
 ///     bodyless 404 is indistinguishable from a broken route, so without this the SPA can only say "could not load".
 ///     Deliberately one field — Development's richer capability payload reports a sandbox this family does not have.
 /// </summary>
-public sealed record DevWorkflowCapabilityResponse(bool Enabled);
+public sealed class DevWorkflowCapabilityResponse
+{
+    public required bool Enabled { get; init; }
+}

@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     encrypted at rest, so a mapper reading one would hand the operator ciphertext.
 ///     <para>
 ///         The graph crosses in BOTH directions here, and deliberately as a deserialize-and-reserialize of the same
-///         field list rather than a projection: what survives a round trip is exactly the members these wire records
+///         field list rather than a projection: what survives a round trip is exactly the members these wire types
 ///         enumerate, and a member the stored document carries that they do not is DROPPED on the way back out. That
 ///         is safe only because every member the runtime reads is enumerated — a document written to a schema version
 ///         this node does not speak is refused by the parser rather than quietly trimmed here. Per-kind node settings
@@ -80,100 +80,117 @@ internal static class GraphWorkflowContractMapper
     public static GraphWorkflowDefinitionResponse ToResponse(this GraphWorkflowDefinitionSnapshot value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowDefinitionResponse(value.Id,
-            value.Name,
-            value.Description,
-            ToWireGraph(value.GraphJson),
-            value.GraphHash,
-            value.NodeCount,
-            value.SchemaVersion,
-            value.Version,
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc);
+        return new GraphWorkflowDefinitionResponse
+        {
+            Id = value.Id,
+            Name = value.Name,
+            Description = value.Description,
+            Graph = ToWireGraph(value.GraphJson),
+            GraphHash = value.GraphHash,
+            NodeCount = value.NodeCount,
+            SchemaVersion = value.SchemaVersion,
+            Version = value.Version,
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
     }
 
     public static GraphWorkflowDefinitionSummaryResponse ToResponse(this GraphWorkflowDefinitionSummary value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowDefinitionSummaryResponse(value.Id,
-            value.Name,
-            value.Description,
-            value.GraphHash,
-            value.NodeCount,
-            value.SchemaVersion,
-            value.Version,
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc);
+        return new GraphWorkflowDefinitionSummaryResponse
+        {
+            Id = value.Id,
+            Name = value.Name,
+            Description = value.Description,
+            GraphHash = value.GraphHash,
+            NodeCount = value.NodeCount,
+            SchemaVersion = value.SchemaVersion,
+            Version = value.Version,
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
     }
 
     public static GraphWorkflowRunSummaryResponse ToResponse(this GraphWorkflowRunSnapshot value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowRunSummaryResponse(value.Id,
-            value.RequestId,
-            value.DefinitionId,
-            value.DefinitionVersion,
-            value.GraphHash,
-            value.Status.ToString(),
-            value.FailureClass.ToString(),
-            value.CancelRequestedAtUtc,
-            value.StartedAtUtc,
-            value.CompletedAtUtc,
-            value.CreatedAtUtc);
+        return new GraphWorkflowRunSummaryResponse
+        {
+            Id = value.Id,
+            RequestId = value.RequestId,
+            DefinitionId = value.DefinitionId,
+            DefinitionVersion = value.DefinitionVersion,
+            GraphHash = value.GraphHash,
+            Status = value.Status.ToString(),
+            FailureClass = value.FailureClass.ToString(),
+            CancelRequestedAtUtc = value.CancelRequestedAtUtc,
+            StartedAtUtc = value.StartedAtUtc,
+            CompletedAtUtc = value.CompletedAtUtc,
+            CreatedAtUtc = value.CreatedAtUtc
+        };
     }
 
     public static GraphWorkflowRunResponse ToResponse(this GraphWorkflowRunDetail value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowRunResponse(value.Run.ToResponse(),
-            [.. value.NodeRuns.Select(ToSummaryResponse)],
-            ToDocument(value.Run.OutputJson),
-
+        return new GraphWorkflowRunResponse
+        {
+            Run = value.Run.ToResponse(),
+            NodeRuns = [.. value.NodeRuns.Select(ToSummaryResponse)],
+            Output = ToDocument(value.Run.OutputJson),
             // The run's PINNED blob, through the same projection a definition read uses: the definition it names may
             // have been edited, or deleted, since — and the node runs below belong to this graph, not to that one.
-            ToWireGraph(value.Run.GraphJson));
+            Graph = ToWireGraph(value.Run.GraphJson)
+        };
     }
 
     public static GraphWorkflowNodeRunSummaryResponse ToSummaryResponse(this GraphWorkflowNodeRunSnapshot value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowNodeRunSummaryResponse(value.Id,
-            value.NodeKey,
-            value.Kind.ToString(),
-            value.Status.ToString(),
-            value.Attempt,
-            value.FailureClass.ToString(),
-            value.PendingDecisionKind?.ToString(),
-            value.InvocationId,
-            value.StartedAtUtc,
-            value.CompletedAtUtc,
-            value.UpdatedAtUtc);
+        return new GraphWorkflowNodeRunSummaryResponse
+        {
+            Id = value.Id,
+            NodeKey = value.NodeKey,
+            Kind = value.Kind.ToString(),
+            Status = value.Status.ToString(),
+            Attempt = value.Attempt,
+            FailureClass = value.FailureClass.ToString(),
+            PendingDecisionKind = value.PendingDecisionKind?.ToString(),
+            InvocationId = value.InvocationId,
+            StartedAtUtc = value.StartedAtUtc,
+            CompletedAtUtc = value.CompletedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
     }
 
     public static GraphWorkflowNodeRunResponse ToResponse(this GraphWorkflowNodeRunSnapshot value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowNodeRunResponse(value.Id,
-            value.RunId,
-            value.NodeKey,
-            value.Kind.ToString(),
-            value.Status.ToString(),
-            value.Attempt,
-            value.FailureClass.ToString(),
-            value.PendingDecisionKind?.ToString(),
-            value.Error,
-            ToDocument(value.InputJson),
-            ToDocument(value.OutputJson),
-            value.InvocationId,
-            value.StartedAtUtc,
-            value.CompletedAtUtc,
-            value.UpdatedAtUtc);
+        return new GraphWorkflowNodeRunResponse
+        {
+            Id = value.Id,
+            RunId = value.RunId,
+            NodeKey = value.NodeKey,
+            Kind = value.Kind.ToString(),
+            Status = value.Status.ToString(),
+            Attempt = value.Attempt,
+            FailureClass = value.FailureClass.ToString(),
+            PendingDecisionKind = value.PendingDecisionKind?.ToString(),
+            Error = value.Error,
+            Input = ToDocument(value.InputJson),
+            Output = ToDocument(value.OutputJson),
+            InvocationId = value.InvocationId,
+            StartedAtUtc = value.StartedAtUtc,
+            CompletedAtUtc = value.CompletedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc
+        };
     }
 
     public static GraphWorkflowRunEventResponse ToResponse(this GraphWorkflowRunEventSnapshot value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return new GraphWorkflowRunEventResponse(value.Id, value.Seq, value.EventType, value.NodeKey, ToDocument(value.DetailJson), value.CreatedAtUtc);
+        return new GraphWorkflowRunEventResponse { Id = value.Id, Seq = value.Seq, EventType = value.EventType, NodeKey = value.NodeKey, Detail = ToDocument(value.DetailJson), CreatedAtUtc = value.CreatedAtUtc };
     }
 
     /// <summary>

@@ -29,12 +29,15 @@ public sealed class PreviewDevelopmentPatchEndpoint : Endpoint<DevelopmentAction
         try
         {
             var preview = await _service.PreviewAsync(req.ProjectId, req.TaskId, ct);
-            await Send.OkAsync(new DevelopmentPatchPreviewResponse(preview.SubjectHash,
-                    preview.PatchHash,
-                    preview.ManifestHash,
-                    preview.ExpectedResultHash,
-                    preview.Patch,
-                    preview.ChangedFiles),
+            await Send.OkAsync(new DevelopmentPatchPreviewResponse
+            {
+                SubjectHash = preview.SubjectHash,
+                PatchHash = preview.PatchHash,
+                ManifestHash = preview.ManifestHash,
+                ExpectedResultHash = preview.ExpectedResultHash,
+                Patch = preview.Patch,
+                ChangedFiles = preview.ChangedFiles
+            },
                 ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
@@ -71,12 +74,15 @@ public sealed class ApplyDevelopmentPatchEndpoint : Endpoint<DevelopmentActionRe
             // No run named: this is the operator's own apply, and it is refused for a task a LIVE workflow run is
             // driving. The 409 that refusal becomes is the same shape every other Development precondition uses.
             var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, onBehalfOfWorkflowRunId: null, ct);
-            await Send.OkAsync(new DevelopmentApplyResponse(result.OperationId,
-                    result.Phase,
-                    result.Outcome,
-                    result.Status,
-                    result.Version,
-                    result.Sequence),
+            await Send.OkAsync(new DevelopmentApplyResponse
+            {
+                OperationId = result.OperationId,
+                Phase = result.Phase,
+                Outcome = result.Outcome,
+                Status = result.Status,
+                Version = result.Version,
+                Sequence = result.Sequence
+            },
                 ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)

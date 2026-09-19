@@ -30,12 +30,16 @@ public enum AppUpdateFailureReason
 }
 
 /// <summary>The result of <see cref="IVelopackUpdateManager.CheckForUpdateAsync" />.</summary>
-/// <param name="Outcome">The check outcome.</param>
-/// <param name="AvailableVersion">The newer version when <see cref="Outcome" /> is <see cref="VelopackCheckOutcome.UpdateAvailable" />; otherwise <see langword="null" />.</param>
-public sealed record VelopackCheckResult(
-    VelopackCheckOutcome Outcome,
-    string? AvailableVersion,
-    AppUpdateFailureReason FailureReason = AppUpdateFailureReason.None);
+public sealed class VelopackCheckResult
+{
+    /// <summary>The check outcome.</summary>
+    public required VelopackCheckOutcome Outcome { get; init; }
+
+    /// <summary>The newer version when <see cref="Outcome" /> is <see cref="VelopackCheckOutcome.UpdateAvailable" />; otherwise <see langword="null" />.</summary>
+    public required string? AvailableVersion { get; init; }
+
+    public AppUpdateFailureReason FailureReason { get; init; }
+}
 
 /// <summary>
 ///     The seam over Velopack's <c>UpdateManager</c> for a single build flavor's GitHub source. It keeps every Velopack

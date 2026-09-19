@@ -403,15 +403,18 @@ public sealed class RuntimeAcquisitionProgressTests
         {
             lock (_gate)
             {
-                _writes.Add(new RuntimeAcquisitionStatusHubEvent(++_sequence,
-                    update.Phase.ToString(),
-                    update.Variant,
-                    update.Tag,
-                    update.CompletedBytes,
-                    update.TotalBytes,
-                    update.StepIndex,
-                    update.StepCount,
-                    update.SanitizedError));
+                _writes.Add(new RuntimeAcquisitionStatusHubEvent
+                {
+                    Sequence = ++_sequence,
+                    Phase = update.Phase.ToString(),
+                    Variant = update.Variant,
+                    Tag = update.Tag,
+                    CompletedBytes = update.CompletedBytes,
+                    TotalBytes = update.TotalBytes,
+                    StepIndex = update.StepIndex,
+                    StepCount = update.StepCount,
+                    SanitizedError = update.SanitizedError
+                });
             }
         }
     }

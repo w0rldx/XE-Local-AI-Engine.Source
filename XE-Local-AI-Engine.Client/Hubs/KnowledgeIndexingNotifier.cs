@@ -31,10 +31,13 @@ internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
 
     public async Task NotifyDocumentChangedAsync(Guid documentId, KnowledgeDocumentStatus status, CancellationToken cancellationToken = default)
     {
-        var payload = new KnowledgeDocumentChangedHubEvent(KnowledgeBaseHubEvents.DocumentChanged,
-            documentId,
-            status,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        var payload = new KnowledgeDocumentChangedHubEvent
+        {
+            EventType = KnowledgeBaseHubEvents.DocumentChanged,
+            DocumentId = documentId,
+            Status = status,
+            OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
 
         try
         {

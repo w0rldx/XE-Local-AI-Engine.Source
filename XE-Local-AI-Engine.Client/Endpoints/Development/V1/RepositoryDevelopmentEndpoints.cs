@@ -25,7 +25,7 @@ public sealed class ListDevelopmentRepositoriesEndpoint : EndpointWithoutRequest
     public override async Task HandleAsync(CancellationToken ct)
     {
         var repositories = await _service.ListRepositoriesAsync(ct);
-        await Send.OkAsync(new ListDevelopmentRepositoriesResponse(repositories.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct);
+        await Send.OkAsync(new ListDevelopmentRepositoriesResponse { Items = repositories.Select(DevelopmentContractMapper.ToResponse).ToArray() }, ct);
     }
 }
 
@@ -87,7 +87,7 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint : Endpoint<Develo
         try
         {
             var detection = await _service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct);
-            await Send.OkAsync(new DevelopmentProfileDetectionResponse(detection.ProfileId, detection.BuildTarget, detection.Candidates), ct);
+            await Send.OkAsync(new DevelopmentProfileDetectionResponse { ProfileId = detection.ProfileId, BuildTarget = detection.BuildTarget, Candidates = detection.Candidates }, ct);
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or DirectoryNotFoundException)
         {

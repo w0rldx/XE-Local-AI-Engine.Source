@@ -19,16 +19,31 @@ public static class WorkSessionHubEvents
 ///     on the literal — and the payload deliberately carries no content: the subscriber re-reads the named feed from
 ///     its own watermark, so a dropped push degrades to a late read rather than to a wrong render.
 /// </summary>
-public sealed record WorkSessionChanged(Guid SessionId, long Seq, string Kind);
+public sealed class WorkSessionChanged
+{
+    public required Guid SessionId { get; init; }
 
-public sealed record WorkSessionSubscriptionSnapshot(
-    Guid SessionId,
-    string Status,
-    int Step,
-    Guid? CurrentTaskId,
-    long LastSeq,
-    IReadOnlyList<WorkSessionEventResponse> Events,
-    bool ReplayTruncated);
+    public required long Seq { get; init; }
+
+    public required string Kind { get; init; }
+}
+
+public sealed class WorkSessionSubscriptionSnapshot
+{
+    public required Guid SessionId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int Step { get; init; }
+
+    public required Guid? CurrentTaskId { get; init; }
+
+    public required long LastSeq { get; init; }
+
+    public required IReadOnlyList<WorkSessionEventResponse> Events { get; init; }
+
+    public required bool ReplayTruncated { get; init; }
+}
 
 /// <summary>
 ///     Operator-only live notifications for one work session.
@@ -95,13 +110,16 @@ public sealed class WorkSessionHub : Hub
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
         var events = await _service.ListEventsAsync(sessionId, afterSeq, ReplayCap + 1, cancellationToken);
         var truncated = events.Count > ReplayCap;
-        return new WorkSessionSubscriptionSnapshot(sessionId,
-            session.Status.ToString(),
-            session.StepCount,
-            session.CurrentTaskId,
-            session.LastSequence,
-            [.. events.Take(ReplayCap).Select(WorkSessionContractMapper.ToResponse)],
-            truncated);
+        return new WorkSessionSubscriptionSnapshot
+        {
+            SessionId = sessionId,
+            Status = session.Status.ToString(),
+            Step = session.StepCount,
+            CurrentTaskId = session.CurrentTaskId,
+            LastSeq = session.LastSequence,
+            Events = [.. events.Take(ReplayCap).Select(WorkSessionContractMapper.ToResponse)],
+            ReplayTruncated = truncated
+        };
     }
 
     public Task UnsubscribeSession(Guid sessionId) =>

@@ -31,7 +31,7 @@ internal static class AddAppUpdateExtensions
 
         // Host facts the services can't derive: desktop mode + the args to re-pass on relaunch. The real desktop flag is
         // recorded here so the services no-op off the flag even though they are registered in every mode.
-        builder.Services.AddSingleton(new AppUpdateHostContext(isLocalMode, RestartArgs: [.. restartArgs]));
+        builder.Services.AddSingleton(new AppUpdateHostContext { IsLocalMode = isLocalMode, RestartArgs = [.. restartArgs] });
 
         // Velopack update manager seam + the shared snapshot state + the orchestration service.
         builder.Services.AddSingleton<IVelopackUpdateManagerFactory, VelopackUpdateManagerFactory>();

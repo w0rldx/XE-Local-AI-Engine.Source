@@ -71,29 +71,39 @@ public enum RuntimeAcquisitionPhase
 ///     Sanitized runtime-acquisition status push payload, also served verbatim by the acquisition-status hydrate
 ///     endpoint so a late-joining client reconciles pushes and hydrate through one shape.
 /// </summary>
-/// <param name="Sequence">
-///     Monotonic counter stamped by <see cref="IRuntimeAcquisitionStatusRegistry" /> on every status write, never reset
-///     within a process lifetime. Hydrate and push travel different paths and race in BOTH directions, so the client
-///     drops any update whose sequence is not greater than the one it already holds. Timestamps are not sufficient.
-/// </param>
-/// <param name="Phase">The <see cref="RuntimeAcquisitionPhase" /> name.</param>
-/// <param name="Variant">The <see cref="GpuVariant" /> name being acquired, or <see langword="null" /> before it is known.</param>
-/// <param name="Tag">The release tag being acquired, or <see langword="null" /> before it is resolved.</param>
-/// <param name="CompletedBytes">Bytes written so far during <see cref="RuntimeAcquisitionPhase.Downloading" />; otherwise <see langword="null" />.</param>
-/// <param name="TotalBytes">
-///     The total download size when the response carried a <c>Content-Length</c>; <see langword="null" /> when unknown
-///     (the pinned path has no catalog-reported size, so the total is simply absent until the headers land).
-/// </param>
-/// <param name="StepIndex">1-based index of the archive being acquired (the Windows-CUDA path fetches two).</param>
-/// <param name="StepCount">How many archives this acquisition fetches in total (1, or 2 for Windows CUDA).</param>
-/// <param name="SanitizedError">A user-safe reason when <see cref="Phase" /> is Failed; otherwise <see langword="null" />.</param>
-public sealed record RuntimeAcquisitionStatusHubEvent(
-    long Sequence,
-    string Phase,
-    string? Variant,
-    string? Tag,
-    long? CompletedBytes,
-    long? TotalBytes,
-    int StepIndex,
-    int StepCount,
-    string? SanitizedError);
+public sealed class RuntimeAcquisitionStatusHubEvent
+{
+    /// <summary>
+    ///     Monotonic counter stamped by <see cref="IRuntimeAcquisitionStatusRegistry" /> on every status write, never reset
+    ///     within a process lifetime. Hydrate and push travel different paths and race in BOTH directions, so the client
+    ///     drops any update whose sequence is not greater than the one it already holds. Timestamps are not sufficient.
+    /// </summary>
+    public required long Sequence { get; init; }
+
+    /// <summary>The <see cref="RuntimeAcquisitionPhase" /> name.</summary>
+    public required string Phase { get; init; }
+
+    /// <summary>The <see cref="GpuVariant" /> name being acquired, or <see langword="null" /> before it is known.</summary>
+    public required string? Variant { get; init; }
+
+    /// <summary>The release tag being acquired, or <see langword="null" /> before it is resolved.</summary>
+    public required string? Tag { get; init; }
+
+    /// <summary>Bytes written so far during <see cref="RuntimeAcquisitionPhase.Downloading" />; otherwise <see langword="null" />.</summary>
+    public required long? CompletedBytes { get; init; }
+
+    /// <summary>
+    ///     The total download size when the response carried a <c>Content-Length</c>; <see langword="null" /> when unknown
+    ///     (the pinned path has no catalog-reported size, so the total is simply absent until the headers land).
+    /// </summary>
+    public required long? TotalBytes { get; init; }
+
+    /// <summary>1-based index of the archive being acquired (the Windows-CUDA path fetches two).</summary>
+    public required int StepIndex { get; init; }
+
+    /// <summary>How many archives this acquisition fetches in total (1, or 2 for Windows CUDA).</summary>
+    public required int StepCount { get; init; }
+
+    /// <summary>A user-safe reason when <see cref="Phase" /> is Failed; otherwise <see langword="null" />.</summary>
+    public required string? SanitizedError { get; init; }
+}

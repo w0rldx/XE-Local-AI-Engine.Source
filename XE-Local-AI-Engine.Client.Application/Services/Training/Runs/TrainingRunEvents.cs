@@ -50,7 +50,16 @@ public sealed record TrainingRunPayload(
     /// <summary>Evaluation kinds only: how many of the scored samples passed.</summary>
     int? PassedCount = null);
 
-public sealed record TrainingRunEvent(Guid RunId, long Sequence, TrainingRunEventKind Kind, TrainingRunPayload Payload);
+public sealed class TrainingRunEvent
+{
+    public required Guid RunId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required TrainingRunEventKind Kind { get; init; }
+
+    public required TrainingRunPayload Payload { get; init; }
+}
 
 public sealed class TrainingRunEventArgs : EventArgs
 {
@@ -114,7 +123,7 @@ public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
         lock (_gate)
         {
             var state = GetOrCreate(runId);
-            runEvent = new TrainingRunEvent(runId, ++state.LatestSequence, kind, payload);
+            runEvent = new TrainingRunEvent { RunId = runId, Sequence = ++state.LatestSequence, Kind = kind, Payload = payload };
             state.Events.AddLast(runEvent);
             while (state.Events.Count > _maxEventCount)
             {

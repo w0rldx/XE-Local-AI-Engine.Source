@@ -35,6 +35,6 @@ public sealed class PostWorkSessionMessageEndpoint : Endpoint<PostWorkSessionMes
 
         var messageId = await _service.PostFollowUpAsync(req.SessionId, req.Text, ct);
         var session = await _service.GetAsync(req.SessionId, ct);
-        await Send.ResultAsync(Results.Accepted(value: new PostWorkSessionMessageResponse(messageId, session.ConversationId)));
+        await Send.ResultAsync(Results.Accepted(value: new PostWorkSessionMessageResponse { MessageId = messageId, ConversationId = session.ConversationId }));
     }
 }

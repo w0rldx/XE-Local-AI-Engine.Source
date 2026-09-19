@@ -11,7 +11,11 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { ExternalAppInstanceSummaryView, ExternalAppInstanceView } from "@/features/externalApps/models/ExternalAppModels";
+import type {
+	ExternalAppInstanceSummaryView,
+	ExternalAppInstanceView,
+	ExternalAppRuntimeResponse,
+} from "@/features/externalApps/models/ExternalAppModels";
 import {
 	externalAppEventsPageSize,
 	externalAppInvalidationKey,
@@ -66,21 +70,22 @@ interface CapturedRequest {
 }
 
 /**
- * Records every request that reaches `path`, and answers with `response`. The response is typed as one of the two wire
- * shapes a lifecycle route can answer — the 202 admission body is a summary, the variables PUT a full view — so a
- * fixture that drifts from the generated types fails tsc here rather than being accepted as an opaque JSON blob.
+ * Records every request that reaches `path`, and answers with `response`. The response is typed as one of the wire
+ * shapes these routes answer — the 202 admission body is a summary, the variables PUT a full view, the runtime
+ * refresh its own runtime projection — so a fixture that drifts from the generated types fails tsc here rather than
+ * being accepted as an opaque JSON blob. `undefined` is the bodyless 202 the cancel route answers.
  */
 function capture(
 	method: "post" | "put" | "delete",
 	path: string,
-	response: ExternalAppInstanceSummaryView | ExternalAppInstanceView,
+	response: ExternalAppInstanceSummaryView | ExternalAppInstanceView | ExternalAppRuntimeResponse | undefined,
 ): CapturedRequest[] {
 	const requests: CapturedRequest[] = [];
 	server.use(
 		http[method](localApiPath(path), async ({ request }) => {
 			const text = await request.text();
 			requests.push({ url: request.url, body: text.length > 0 ? JSON.parse(text) : undefined });
-			return HttpResponse.json(response);
+			return response === undefined ? new HttpResponse(null, { status: 202 }) : HttpResponse.json(response);
 		}),
 	);
 	return requests;
@@ -188,7 +193,7 @@ describe("lifecycle mutations", () => {
 	// Cancel targets the OPERATION, not the row: a version token would refuse the one action an operator has while a
 	// multi-gigabyte pull is running.
 	it("posts a bodyless cancel to the cancel route", async () => {
-		const requests = capture("post", `external-apps/instances/${instanceId}/cancel`, {});
+		const requests = capture("post", `external-apps/instances/${instanceId}/cancel`, undefined);
 		const { wrapper } = harness();
 
 		const { result } = renderHook(() => useCancelExternalAppOperation(), { wrapper });

@@ -19,7 +19,16 @@ public sealed record DatasetGenerationPayload(
     string? Reason = null,
     long? DatasetVersion = null);
 
-public sealed record DatasetGenerationEvent(Guid DatasetId, long Sequence, DatasetGenerationEventKind Kind, DatasetGenerationPayload Payload);
+public sealed class DatasetGenerationEvent
+{
+    public required Guid DatasetId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required DatasetGenerationEventKind Kind { get; init; }
+
+    public required DatasetGenerationPayload Payload { get; init; }
+}
 
 public sealed class DatasetGenerationEventArgs : EventArgs
 {
@@ -83,7 +92,7 @@ public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
         lock (_gate)
         {
             var state = GetOrCreate(datasetId);
-            generationEvent = new DatasetGenerationEvent(datasetId, ++state.LatestSequence, kind, payload);
+            generationEvent = new DatasetGenerationEvent { DatasetId = datasetId, Sequence = ++state.LatestSequence, Kind = kind, Payload = payload };
             state.Events.AddLast(generationEvent);
             while (state.Events.Count > _maxEventCount)
             {

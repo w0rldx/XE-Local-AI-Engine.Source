@@ -31,8 +31,13 @@ public static class KnowledgeBaseHubEvents
 ///     transition was observed — deliberately no file name, chunk text, or failure detail (the list refetch is the source
 ///     of truth for the display name and reason).
 /// </summary>
-public sealed record KnowledgeDocumentChangedHubEvent(
-    string EventType,
-    Guid DocumentId,
-    KnowledgeDocumentStatus Status,
-    long OccurredAtUtc);
+public sealed class KnowledgeDocumentChangedHubEvent
+{
+    public required string EventType { get; init; }
+
+    public required Guid DocumentId { get; init; }
+
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}

@@ -195,7 +195,7 @@ internal static class DesktopLaunch
             return true;
         }
 
-        command = new SetupCommand(email.Trim(), password, passwordFromEnvironment);
+        command = new SetupCommand { Email = email.Trim(), Password = password, PasswordFromEnvironment = passwordFromEnvironment };
         error = null;
         return true;
     }
@@ -316,7 +316,14 @@ internal static class LaunchModeExtensions
         mode is LaunchMode.Desktop or LaunchMode.McpOnly;
 }
 
-internal sealed record SetupCommand(string Email, string Password, bool PasswordFromEnvironment);
+internal sealed class SetupCommand
+{
+    public required string Email { get; init; }
+
+    public required string Password { get; init; }
+
+    public required bool PasswordFromEnvironment { get; init; }
+}
 
 internal enum KnowledgeDowngradeCommand
 {

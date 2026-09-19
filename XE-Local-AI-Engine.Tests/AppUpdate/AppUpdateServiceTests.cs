@@ -36,7 +36,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public void Constructor_ConfiguredDesktop_PrimesImmediateStatusWithoutCheckingTheNetwork()
     {
-        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
         manager.CurrentVersion.Returns("0.1.0-rc.5.2");
         var factory = FactoryReturning(manager);
         var state = new AppUpdateState();
@@ -76,7 +76,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_PublicConfiguredBuild_CreatesAnonymousManagerWithoutTokenLookup()
     {
-        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true);
 
@@ -125,7 +125,7 @@ public sealed class AppUpdateServiceTests
             startupTask = startup.CheckOnceAsync(CancellationToken.None);
         }
 
-        releaseCheck.SetResult(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+        releaseCheck.SetResult(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
 
         await startupTask;
         var manualSnapshot = await manualTask;
@@ -150,7 +150,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_WhenUpdateAvailable_RecordsAvailableVersion()
     {
-        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.UpdateAvailable, "0.2.0"));
+        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = "0.2.0" });
         manager.CurrentVersion.Returns("0.1.0");
         using var service = CreateService(FactoryReturning(manager), isDesktop: true);
 
@@ -163,7 +163,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_WhenFeedIsOffline_RecordsOfflineGracefully()
     {
-        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.Offline, null));
+        var manager = ManagerReturning(new VelopackCheckResult { Outcome = VelopackCheckOutcome.Offline, AvailableVersion = null });
         using var service = CreateService(FactoryReturning(manager), isDesktop: true);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
@@ -176,9 +176,12 @@ public sealed class AppUpdateServiceTests
     public async Task CheckForUpdates_WhenManagerReportsMalformedFeed_RecordsFailedAndLogsSafeReason()
     {
         var logger = new CapturingLogger<AppUpdateService>();
-        var manager = ManagerReturning(new VelopackCheckResult(VelopackCheckOutcome.Failed,
-            null,
-            AppUpdateFailureReason.MalformedFeed));
+        var manager = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.Failed,
+            AvailableVersion = null,
+            FailureReason = AppUpdateFailureReason.MalformedFeed
+        });
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
@@ -215,13 +218,16 @@ public sealed class AppUpdateServiceTests
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(false);
         var factory = FactoryReturning(manager);
         var state = new AppUpdateState();
-        state.Store(new AppUpdateSnapshot("0.1.0",
-            "0.2.0",
-            UpdateAvailable: true,
-            IsConfigured: true,
-            IsDesktop: true,
-            CheckStatus: AppUpdateCheckStatus.Ready,
-            LastCheckedUtc: DateTimeOffset.UtcNow));
+        state.Store(new AppUpdateSnapshot
+        {
+            CurrentVersion = "0.1.0",
+            AvailableVersion = "0.2.0",
+            UpdateAvailable = true,
+            IsConfigured = true,
+            IsDesktop = true,
+            CheckStatus = AppUpdateCheckStatus.Ready,
+            LastCheckedUtc = DateTimeOffset.UtcNow
+        });
         using var service = CreateService(factory, isDesktop: true, state: state);
 
         var applying = await service.ApplyAsync(CancellationToken.None);
@@ -317,7 +323,7 @@ public sealed class AppUpdateServiceTests
                    return releaseApply.Task;
                });
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult(VelopackCheckOutcome.UpToDate, null));
+               .Returns(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true, state: AvailableUpdateState());
 
@@ -358,13 +364,16 @@ public sealed class AppUpdateServiceTests
     private static AppUpdateState AvailableUpdateState()
     {
         var state = new AppUpdateState();
-        state.Store(new AppUpdateSnapshot("0.1.0",
-            "0.2.0",
-            UpdateAvailable: true,
-            IsConfigured: true,
-            IsDesktop: true,
-            CheckStatus: AppUpdateCheckStatus.Ready,
-            LastCheckedUtc: DateTimeOffset.UtcNow));
+        state.Store(new AppUpdateSnapshot
+        {
+            CurrentVersion = "0.1.0",
+            AvailableVersion = "0.2.0",
+            UpdateAvailable = true,
+            IsConfigured = true,
+            IsDesktop = true,
+            CheckStatus = AppUpdateCheckStatus.Ready,
+            LastCheckedUtc = DateTimeOffset.UtcNow
+        });
         return state;
     }
 
@@ -391,7 +400,7 @@ public sealed class AppUpdateServiceTests
         return new AppUpdateService(factory,
             state ?? new AppUpdateState(),
             options,
-            new AppUpdateHostContext(isDesktop, RestartArgs: restartArgs ?? ["--desktop"]),
+            new AppUpdateHostContext { IsLocalMode = isDesktop, RestartArgs = restartArgs ?? ["--desktop"] },
             logger ?? NullLogger<AppUpdateService>.Instance,
             TimeProvider.System);
     }

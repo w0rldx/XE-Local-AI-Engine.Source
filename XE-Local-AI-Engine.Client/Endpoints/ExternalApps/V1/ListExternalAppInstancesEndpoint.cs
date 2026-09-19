@@ -37,6 +37,6 @@ public sealed class ListExternalAppInstancesEndpoint : EndpointWithoutRequest<Li
             items.Add(ExternalAppMapper.ToView(instance));
         }
 
-        await Send.OkAsync(new ListExternalAppInstancesResponse(items), ct);
+        await Send.OkAsync(new ListExternalAppInstancesResponse { Items = items }, ct);
     }
 }

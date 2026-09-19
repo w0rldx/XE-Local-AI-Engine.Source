@@ -39,7 +39,7 @@ public sealed class GetExternalAppInstanceLogsEndpoint : Endpoint<ExternalAppIns
 
         var service = req.Service ?? await ResolveDefaultServiceAsync(req.InstanceId, ct);
 
-        await Send.OkAsync(new ExternalAppInstanceLogsResponse(service, snapshot.Text, snapshot.LineCount, snapshot.Truncated), ct);
+        await Send.OkAsync(new ExternalAppInstanceLogsResponse { Service = service, Text = snapshot.Text, LineCount = snapshot.LineCount, Truncated = snapshot.Truncated }, ct);
     }
 
     /// <summary>

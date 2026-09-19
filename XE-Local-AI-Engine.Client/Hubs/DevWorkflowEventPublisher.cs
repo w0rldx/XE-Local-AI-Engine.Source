@@ -18,7 +18,7 @@ internal sealed class DevWorkflowEventPublisher : IDevWorkflowEventPublisher
 
     public Task PublishAsync(Guid runId, long sequence, DevWorkflowChangeKind kind, CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(DevWorkflowHubGroups.Run(runId))
-                  .SendAsync(DevWorkflowHubEvents.Changed, new DevWorkflowChanged(runId, sequence, ToWireKind(kind)), cancellationToken);
+                  .SendAsync(DevWorkflowHubEvents.Changed, new DevWorkflowChanged { RunId = runId, Seq = sequence, Kind = ToWireKind(kind) }, cancellationToken);
 
     /// <summary>
     ///     The wire spelling of a change kind, written out rather than derived from the enum name. The subscriber

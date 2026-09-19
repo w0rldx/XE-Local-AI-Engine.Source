@@ -236,7 +236,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var lifetime = Substitute.For<IHostApplicationLifetime>();
         lifetime.ApplicationStopping.Returns(CancellationToken.None);
         var acquisition = Substitute.For<IRuntimeAcquisitionStatusRegistry>();
-        acquisition.Current.Returns(new RuntimeAcquisitionStatusHubEvent(0, "Idle", null, null, null, null, 1, 1, null));
+        acquisition.Current.Returns(new RuntimeAcquisitionStatusHubEvent { Sequence = 0, Phase = "Idle", Variant = null, Tag = null, CompletedBytes = null, TotalBytes = null, StepIndex = 1, StepCount = 1, SanitizedError = null });
 
         return new LlamaCppRuntimeAdministrationService(binaryManager,
             releaseCatalog ?? Substitute.For<ILlamaCppReleaseCatalog>(),

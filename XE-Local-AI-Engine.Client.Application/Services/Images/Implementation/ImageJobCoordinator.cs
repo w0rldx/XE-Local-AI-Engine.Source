@@ -507,14 +507,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         // Seq is assigned for EVERY push, buffered or not, so the client's monotonic dedupe stays correct across the
         // two delivery paths; only the retention in the replay log is conditional.
         var payload = (ImageJobStatusHubEvent)log.Append(ImageJobHubEvents.StatusChanged,
-            seq => new ImageJobStatusHubEvent(jobId, status.ToString(), queuePosition, elapsedMs, imageId, sanitizedError, nowUnixMs, seq)
-            {
-                GenerationPhase = detail.GenerationPhase,
-                Step = detail.Step,
-                TotalSteps = detail.TotalSteps,
-                SecondsPerIteration = detail.SecondsPerIteration,
-                EstimatedRemainingMs = detail.EstimatedRemainingMs
-            },
+            seq => new ImageJobStatusHubEvent { JobId = jobId, Phase = status.ToString(), QueuePosition = queuePosition, ElapsedMs = elapsedMs, ImageId = imageId, SanitizedError = sanitizedError, OccurredAtUtc = nowUnixMs, Seq = seq, GenerationPhase = detail.GenerationPhase, Step = detail.Step, TotalSteps = detail.TotalSteps, SecondsPerIteration = detail.SecondsPerIteration, EstimatedRemainingMs = detail.EstimatedRemainingMs },
             isTerminal,
             nowUnixMs,
             buffer,

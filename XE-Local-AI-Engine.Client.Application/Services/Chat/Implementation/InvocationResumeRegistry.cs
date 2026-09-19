@@ -359,21 +359,24 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         int? totalTokens = null,
         int? reasoningTokens = null)
     {
-        return new ChatStreamEvent(type,
-            state.ConversationId,
-            state.InvocationId,
-            state.InvocationId,
-            status ?? MapStatus(state.Status),
-            sequence,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            Content: state.StreamedContent,
-            Reasoning: string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-            Error: state.Error,
-            Model: state.ModelUsed,
-            InputTokens: inputTokens,
-            OutputTokens: outputTokens,
-            TotalTokens: totalTokens,
-            ReasoningTokens: reasoningTokens);
+        return new ChatStreamEvent
+        {
+            Type = type,
+            ConversationId = state.ConversationId,
+            MessageId = state.InvocationId,
+            RequestId = state.InvocationId,
+            Status = status ?? MapStatus(state.Status),
+            Sequence = sequence,
+            OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            Content = state.StreamedContent,
+            Reasoning = string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
+            Error = state.Error,
+            Model = state.ModelUsed,
+            InputTokens = inputTokens,
+            OutputTokens = outputTokens,
+            TotalTokens = totalTokens,
+            ReasoningTokens = reasoningTokens
+        };
     }
 
     private ChatStreamEvent ToToolCallEvent(InvocationState state,

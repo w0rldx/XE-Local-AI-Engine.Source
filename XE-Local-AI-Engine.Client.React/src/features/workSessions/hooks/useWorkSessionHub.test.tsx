@@ -44,7 +44,16 @@ const sessionId = "11111111-1111-4111-8111-111111111111";
 const conversationId = "22222222-2222-4222-8222-222222222222";
 
 function replayedEvent(sequence: number): WorkSessionEventResponse {
-	return { id: `event-${sequence}`, sequence, step: 1, eventType: "StepStarted", occurredAtUtc: sequence };
+	return {
+		id: `event-${sequence}`,
+		sequence,
+		step: 1,
+		eventType: "StepStarted",
+		detailJson: null,
+		outcome: null,
+		occurredAtUtc: sequence,
+		operationId: null,
+	};
 }
 
 function snapshot(overrides: Partial<WorkSessionSubscriptionSnapshot> = {}): WorkSessionSubscriptionSnapshot {

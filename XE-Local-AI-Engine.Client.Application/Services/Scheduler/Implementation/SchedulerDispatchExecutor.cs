@@ -376,19 +376,22 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            var runEvent = new SchedulerRunHubEvent(eventType,
-                record.Id,
-                record.ScheduledJobId,
-                record.TemplateId,
-                record.Status,
-                record.TriggeredBy,
-                record.ScheduledFireTimeUtc,
-                record.ActualFireTimeUtc,
-                record.CompletedAtUtc,
-                record.DurationMs,
-                record.Summary,
-                record.ErrorMessage,
-                occurredAt);
+            var runEvent = new SchedulerRunHubEvent
+            {
+                EventType = eventType,
+                RunId = record.Id,
+                ScheduledJobId = record.ScheduledJobId,
+                TemplateId = record.TemplateId,
+                Status = record.Status,
+                TriggeredBy = record.TriggeredBy,
+                ScheduledFireTimeUtc = record.ScheduledFireTimeUtc,
+                ActualFireTimeUtc = record.ActualFireTimeUtc,
+                CompletedAtUtc = record.CompletedAtUtc,
+                DurationMs = record.DurationMs,
+                Summary = record.Summary,
+                ErrorMessage = record.ErrorMessage,
+                OccurredAtUtc = occurredAt
+            };
 
             await _eventPublisher.PublishRunAsync(runEvent, CancellationToken.None);
         }
@@ -403,7 +406,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent(SchedulerHubEvents.RunProgress, runId, scheduledJobId, message, percent, occurredAt),
+            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent { EventType = SchedulerHubEvents.RunProgress, RunId = runId, ScheduledJobId = scheduledJobId, Message = message, Percent = percent, OccurredAtUtc = occurredAt },
                 CancellationToken.None);
         }
         catch (Exception exception)

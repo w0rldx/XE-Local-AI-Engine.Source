@@ -45,7 +45,7 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         // status endpoint degrades gracefully instead of throwing inside Velopack.
         if (!_updateManager.IsInstalled)
         {
-            return new VelopackCheckResult(VelopackCheckOutcome.UpToDate, AvailableVersion: null);
+            return new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null };
         }
 
         try
@@ -55,11 +55,11 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             var updateInfo = await _updateManager.CheckForUpdatesAsync();
             if (updateInfo is null)
             {
-                return new VelopackCheckResult(VelopackCheckOutcome.UpToDate, AvailableVersion: null);
+                return new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null };
             }
 
             var version = updateInfo.TargetFullRelease.Version.ToString();
-            return new VelopackCheckResult(VelopackCheckOutcome.UpdateAvailable, version);
+            return new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = version };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -68,7 +68,7 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         catch (Exception exception)
         {
             var (outcome, reason) = ClassifyFailure(exception);
-            return new VelopackCheckResult(outcome, AvailableVersion: null, reason);
+            return new VelopackCheckResult { Outcome = outcome, AvailableVersion = null, FailureReason = reason };
         }
     }
 

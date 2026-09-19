@@ -213,9 +213,29 @@ docs and its attributes stay where a reader expects them. **Positional records a
 
 EF entities are classes: an entity has identity, not value equality.
 
-*Migration status:* slice **S5** converts the existing records area by area behind a guard that rejects new
-positional records. The trap it exists to catch: converting a record to a class silently turns a structural
-`AssertEx.Equal` into a reference comparison, so every sub-slice runs the full gate.
+**A response DTO and a hub payload take `required` on every member the server always writes.** Both are built
+by the host and only ever read by a client, so a member with no sensible default is `public required T P { get; init; }`
+and a member with one carries that value as an initializer instead. On the wire this is a tightening that costs
+nothing — the host serializes with `DefaultIgnoreCondition = Never`, so it already writes every member — and it
+buys three things: NSwag emits a `required` array for the schema, the generated hey-api types drop their `?:` and
+the Zod schemas drop their `.optional()`, and a construction site that forgets a member is a compile error rather
+than a silently defaulted value. The frontend consequence is a cost, not a bonus: a test fixture that builds a
+partial literal of a generated DTO stops compiling, and a mocked response body that omits a member starts failing
+response validation. Completing those fixtures belongs to the same change as the regenerated client. The one
+exception is a member the serializer may leave out — `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting…)]` —
+which is never `required`, because the schema would demand the key the host is free to omit and the client would
+reject the response; `RequiredMemberSerializationTests` refuses the combination.
+
+**A request DTO never takes `required` on a member a client may omit, and never on one bound from the route or
+query.** A `required` member turns a tolerated omission into a `JsonException`, which FastEndpoints answers as a
+400 the caller never saw before — and no gate catches it, because the OpenAPI document happily describes the
+stricter contract. Route and query members are worse than that: the JSON body is deserialized *before* the route
+values are overlaid, so a `required` route-bound member rejects every request, including the correct ones. Request
+DTOs therefore stay plain `init` members with initializers for their defaults.
+
+*Migration status:* the existing records convert area by area behind a guard that rejects new positional records.
+The trap it exists to catch: converting a record to a class silently turns a structural `AssertEx.Equal` into a
+reference comparison, so every sub-slice runs the full gate.
 
 ### `ConfigureAwait` is contextual
 

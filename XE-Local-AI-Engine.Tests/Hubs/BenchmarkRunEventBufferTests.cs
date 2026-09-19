@@ -47,7 +47,7 @@ public sealed class BenchmarkRunEventBufferTests
         // room for exactly 3 of the 10 published events, with slack for the sequence number growing a digit.
         var runId = Guid.NewGuid();
         var payload = new string('a', 256);
-        var probeBytes = JsonSerializer.SerializeToUtf8Bytes(new BenchmarkRunStreamEvent(runId, 1, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: payload)),
+        var probeBytes = JsonSerializer.SerializeToUtf8Bytes(new BenchmarkRunStreamEvent { RunId = runId, Sequence = 1, Kind = BenchmarkRunStreamEventKind.OutputDelta, Payload = new BenchmarkRunStreamPayload(Content: payload) },
             ProbeJsonOptions).Length;
         var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions
         {

@@ -9,7 +9,36 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { DevelopmentContainerRuntimePanel } from "@/features/development/components/DevelopmentContainerRuntimePanel";
-import type { XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse as ContainerRuntimeStatus } from "@/core/api/generated/types.gen";
+import type {
+	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse as ContainerDaemon,
+	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse as ContainerRuntimeStatus,
+} from "@/core/api/generated/types.gen";
+
+// The probe answers every member on every branch, endpoints and daemon identities included, so these builders carry
+// the nulls the wire really sends rather than leaving the members off.
+function containerRuntime(overrides: Partial<ContainerRuntimeStatus>): ContainerRuntimeStatus {
+	return {
+		ready: false,
+		status: "probe_failed",
+		message: "",
+		requiresOperatorConfirmation: false,
+		endpoint: null,
+		endpointSource: null,
+		observedDaemon: null,
+		pinnedDaemon: null,
+		...overrides,
+	};
+}
+
+function daemon(overrides: Partial<ContainerDaemon>): ContainerDaemon {
+	return {
+		daemonId: "daemon-alpha",
+		serverVersion: "99.0.0",
+		endpoint: "unix:///var/run/docker.sock",
+		confirmedAtUtc: null,
+		...overrides,
+	};
+}
 
 function renderPanel(
 	runtime: ContainerRuntimeStatus | undefined,
@@ -51,13 +80,15 @@ describe("DevelopmentContainerRuntimePanel", () => {
 	it("renders the exact status code and message for an unreachable daemon", () => {
 		// Values, not containers. Asserting only that the panel rendered would pass against an empty message and the
 		// wrong status — which is the whole failure this surface exists to make visible.
-		renderPanel({
-			ready: false,
-			status: "daemon_unreachable",
-			message: "Development Mode needs a running container runtime and could not reach one at unix:///var/run/docker.sock.",
-			requiresOperatorConfirmation: false,
-			endpoint: "unix:///var/run/docker.sock",
-		});
+		renderPanel(
+			containerRuntime({
+				ready: false,
+				status: "daemon_unreachable",
+				message: "Development Mode needs a running container runtime and could not reach one at unix:///var/run/docker.sock.",
+				requiresOperatorConfirmation: false,
+				endpoint: "unix:///var/run/docker.sock",
+			}),
+		);
 
 		expect(screen.getByTestId("development-container-runtime-status").textContent).toBe("daemon_unreachable");
 		expect(screen.getByTestId("development-container-runtime-message").textContent).toContain(
@@ -68,13 +99,15 @@ describe("DevelopmentContainerRuntimePanel", () => {
 	});
 
 	it("renders the ready status and does not offer a confirmation", () => {
-		renderPanel({
-			ready: true,
-			status: "ready",
-			message: "Container runtime ready: Docker Engine 99.0.0 (API 1.99).",
-			requiresOperatorConfirmation: false,
-			observedDaemon: { daemonId: "daemon-alpha", serverVersion: "99.0.0", endpoint: "unix:///var/run/docker.sock" },
-		});
+		renderPanel(
+			containerRuntime({
+				ready: true,
+				status: "ready",
+				message: "Container runtime ready: Docker Engine 99.0.0 (API 1.99).",
+				requiresOperatorConfirmation: false,
+				observedDaemon: daemon({}),
+			}),
+		);
 
 		expect(screen.getByTestId("development-container-runtime-status").textContent).toBe("ready");
 		expect(screen.getByTestId("development-container-runtime-message").textContent).toContain("99.0.0");
@@ -82,15 +115,21 @@ describe("DevelopmentContainerRuntimePanel", () => {
 	});
 
 	it("shows both daemon identities and confirms with the one the operator was shown", () => {
-		const onConfirm = renderPanel({
-			ready: false,
-			status: "daemon_changed",
-			message: "Development Mode is pinned to a different container runtime than the one it can reach now.",
-			requiresOperatorConfirmation: true,
-			endpoint: "unix:///run/user/1000/docker.sock",
-			pinnedDaemon: { daemonId: "daemon-alpha", serverVersion: "99.0.0", endpoint: "unix:///var/run/docker.sock" },
-			observedDaemon: { daemonId: "daemon-beta", serverVersion: "28.0.0", endpoint: "unix:///run/user/1000/docker.sock" },
-		});
+		const onConfirm = renderPanel(
+			containerRuntime({
+				ready: false,
+				status: "daemon_changed",
+				message: "Development Mode is pinned to a different container runtime than the one it can reach now.",
+				requiresOperatorConfirmation: true,
+				endpoint: "unix:///run/user/1000/docker.sock",
+				pinnedDaemon: daemon({}),
+				observedDaemon: daemon({
+					daemonId: "daemon-beta",
+					serverVersion: "28.0.0",
+					endpoint: "unix:///run/user/1000/docker.sock",
+				}),
+			}),
+		);
 
 		expect(screen.getByTestId("development-container-runtime-status").textContent).toBe("daemon_changed");
 		expect(screen.getByTestId("development-container-runtime-pinned-daemon").textContent).toBe("daemon-alpha");
@@ -104,26 +143,28 @@ describe("DevelopmentContainerRuntimePanel", () => {
 	});
 
 	it("does not offer a confirmation for a permission failure, which no approval can fix", () => {
-		renderPanel({
-			ready: false,
-			status: "permission_denied",
-			message: "Development Mode found a container runtime but this node is not permitted to use it.",
-			requiresOperatorConfirmation: false,
-			endpoint: "unix:///var/run/docker.sock",
-		});
+		renderPanel(
+			containerRuntime({
+				ready: false,
+				status: "permission_denied",
+				message: "Development Mode found a container runtime but this node is not permitted to use it.",
+				requiresOperatorConfirmation: false,
+				endpoint: "unix:///var/run/docker.sock",
+			}),
+		);
 
 		expect(screen.queryByTestId("development-container-runtime-confirm")).toBeNull();
 	});
 
 	it("surfaces a failed confirmation instead of silently doing nothing", () => {
 		renderPanel(
-			{
+			containerRuntime({
 				ready: false,
 				status: "daemon_changed",
 				message: "pinned elsewhere",
 				requiresOperatorConfirmation: true,
-				observedDaemon: { daemonId: "daemon-beta", serverVersion: "28.0.0", endpoint: "unix:///x.sock" },
-			},
+				observedDaemon: daemon({ daemonId: "daemon-beta", serverVersion: "28.0.0", endpoint: "unix:///x.sock" }),
+			}),
 			vi.fn(),
 			"Could not confirm the container runtime.",
 		);
@@ -138,7 +179,7 @@ describe("DevelopmentContainerRuntimePanel", () => {
 		// reasonably conclude their Development Mode runs are already containerised. Under the process provider —
 		// the default, since the container provider is opt-in — they are not.
 		renderPanel(
-			{ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false },
+			containerRuntime({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }),
 			vi.fn(),
 			undefined,
 			"process",
@@ -151,7 +192,7 @@ describe("DevelopmentContainerRuntimePanel", () => {
 		// This sentence was hard-coded, so with `Development:Sandbox:Provider=docker` live and a container
 		// demonstrably running it told the operator the opposite of what the same screen's banner said.
 		renderPanel(
-			{ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false },
+			containerRuntime({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }),
 			vi.fn(),
 			undefined,
 			"docker",

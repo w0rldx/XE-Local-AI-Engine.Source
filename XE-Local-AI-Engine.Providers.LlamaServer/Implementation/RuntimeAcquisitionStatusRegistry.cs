@@ -53,15 +53,18 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
     }
 
     /// <summary>The pre-acquisition snapshot: nothing attempted yet in this process lifetime.</summary>
-    public static RuntimeAcquisitionStatusHubEvent Empty { get; } = new(Sequence: 0,
-        nameof(RuntimeAcquisitionPhase.Idle),
-        Variant: null,
-        Tag: null,
-        CompletedBytes: null,
-        TotalBytes: null,
-        StepIndex: 1,
-        StepCount: 1,
-        SanitizedError: null);
+    public static RuntimeAcquisitionStatusHubEvent Empty { get; } = new()
+    {
+        Sequence = 0,
+        Phase = nameof(RuntimeAcquisitionPhase.Idle),
+        Variant = null,
+        Tag = null,
+        CompletedBytes = null,
+        TotalBytes = null,
+        StepIndex = 1,
+        StepCount = 1,
+        SanitizedError = null
+    };
 
     /// <inheritdoc />
     public RuntimeAcquisitionStatusHubEvent Current
@@ -91,15 +94,18 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
 
             // The write itself is unconditional, so the hydrate endpoint always serves the freshest bytes even while a
             // push is being throttled.
-            _current = new RuntimeAcquisitionStatusHubEvent(++_sequence,
-                update.Phase.ToString(),
-                update.Variant,
-                update.Tag,
-                update.CompletedBytes,
-                update.TotalBytes,
-                update.StepIndex,
-                update.StepCount,
-                update.SanitizedError);
+            _current = new RuntimeAcquisitionStatusHubEvent
+            {
+                Sequence = ++_sequence,
+                Phase = update.Phase.ToString(),
+                Variant = update.Variant,
+                Tag = update.Tag,
+                CompletedBytes = update.CompletedBytes,
+                TotalBytes = update.TotalBytes,
+                StepIndex = update.StepIndex,
+                StepCount = update.StepCount,
+                SanitizedError = update.SanitizedError
+            };
 
             var now = _timeProvider.GetUtcNow().UtcTicks;
             if (isRepeatWithinStep && now - _lastPushTicks < ProgressPushInterval.Ticks)

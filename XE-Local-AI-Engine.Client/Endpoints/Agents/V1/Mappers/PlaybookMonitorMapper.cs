@@ -16,16 +16,22 @@ internal static class PlaybookMonitorMapper
         var ranker = embeddingActive ? "embedding" : "lexical";
         var embeddingModel = embeddingActive ? retrievalOptions.EmbeddingModelName : null;
 
-        return new AgentPlaybookMonitorResponse([
-                .. views.Select(static view => new PlaybookActionMonitorItemResponse(view.ActionId,
-                    view.EnabledAtUtc,
-                    view.BeforeDownRate,
-                    view.AfterDownRate,
-                    view.AfterSampleSize,
-                    view.Status,
-                    view.Flagged,
-                    view.FacetToolName))
+        return new AgentPlaybookMonitorResponse
+        {
+            Items = [
+                .. views.Select(static view => new PlaybookActionMonitorItemResponse
+                {
+                    ActionId = view.ActionId,
+                    EnabledAtUtc = view.EnabledAtUtc,
+                    BeforeDownRate = view.BeforeDownRate,
+                    AfterDownRate = view.AfterDownRate,
+                    AfterSampleSize = view.AfterSampleSize,
+                    Status = view.Status,
+                    Flagged = view.Flagged,
+                    FacetToolName = view.FacetToolName
+                })
             ],
-            new PlaybookRetrievalResponse(retrievalOptions.RetrievalThreshold, retrievalOptions.TopK, ranker, embeddingModel));
+            Retrieval = new PlaybookRetrievalResponse { Threshold = retrievalOptions.RetrievalThreshold, TopK = retrievalOptions.TopK, Ranker = ranker, EmbeddingModel = embeddingModel }
+        };
     }
 }

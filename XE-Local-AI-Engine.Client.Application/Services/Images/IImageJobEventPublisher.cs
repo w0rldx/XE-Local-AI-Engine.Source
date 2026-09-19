@@ -35,16 +35,24 @@ public static class ImageJobHubEvents
 ///         "not known here", and the client must render the coarse phase alone rather than substituting a zero.
 ///     </para>
 /// </summary>
-public sealed record ImageJobStatusHubEvent(
-    Guid JobId,
-    string Phase,
-    int? QueuePosition,
-    long? ElapsedMs,
-    Guid? ImageId,
-    string? SanitizedError,
-    long OccurredAtUtc,
-    long Seq)
+public sealed class ImageJobStatusHubEvent
 {
+    public required Guid JobId { get; init; }
+
+    public required string Phase { get; init; }
+
+    public required int? QueuePosition { get; init; }
+
+    public required long? ElapsedMs { get; init; }
+
+    public required Guid? ImageId { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public required long Seq { get; init; }
+
     /// <summary>
     ///     The fine phase within <c>Generating</c> — <c>Loading</c>/<c>Encoding</c>/<c>Sampling</c>/<c>Decoding</c> —
     ///     or <see langword="null" /> when the runtime cannot see inside the generation. The client keys its

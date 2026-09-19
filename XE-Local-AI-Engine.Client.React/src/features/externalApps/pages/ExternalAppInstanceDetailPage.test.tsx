@@ -387,7 +387,21 @@ describe("ExternalAppInstanceDetailPage", () => {
 				externalAppInstance({
 					manifest: externalAppManifest({
 						services: [
-							{ name: "web", image: "example/ntfy", imageTag: "2", ports: [], storage: [], hasHealthcheck: false, dependsOn: [] },
+							{
+								name: "web",
+								image: "example/ntfy",
+								imageTag: "2",
+								entrypoint: null,
+								command: null,
+								environment: {},
+								ports: [],
+								storage: [],
+								hasHealthcheck: false,
+								dependsOn: [],
+								capAdd: [],
+								extraHosts: [],
+								readOnlyRootFilesystem: false,
+							},
 						],
 					}),
 				}),

@@ -229,16 +229,19 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
     }
 
     private static ChatStreamEvent Event(NodeChatMessageCorrelation correlation, string type, string? toolName = null, string? error = null) =>
-        new(type,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            Status: "streaming",
-            Sequence: 0,
-            OccurredAtUtc: 0,
-            Error: error,
-            ToolName: toolName,
-            ApprovalRequestId: toolName is null ? null : Guid.NewGuid().ToString("N"));
+        new()
+        {
+            Type = type,
+            ConversationId = correlation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            Status = "streaming",
+            Sequence = 0,
+            OccurredAtUtc = 0,
+            Error = error,
+            ToolName = toolName,
+            ApprovalRequestId = toolName is null ? null : Guid.NewGuid().ToString("N")
+        };
 }
 
 /// <summary>Records every publish so a test can assert what the hub would have been told, and when.</summary>

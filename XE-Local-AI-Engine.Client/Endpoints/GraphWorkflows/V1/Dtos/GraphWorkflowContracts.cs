@@ -131,36 +131,62 @@ public sealed record GraphWorkflowEdgeCondition(
 
 // Responses. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.
 
-public sealed record GraphWorkflowDefinitionResponse(
-    Guid Id,
-    string Name,
-    string? Description,
-    GraphWorkflowGraph Graph,
-    string GraphHash,
-    int NodeCount,
-    int SchemaVersion,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class GraphWorkflowDefinitionResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required GraphWorkflowGraph Graph { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>One row of the definition list. No graph: the node count is a column, so listing never decrypts a blob.</summary>
-public sealed record GraphWorkflowDefinitionSummaryResponse(
-    Guid Id,
-    string Name,
-    string? Description,
-    string GraphHash,
-    int NodeCount,
-    int SchemaVersion,
-    int Version,
-    long CreatedAtUtc,
-    long UpdatedAtUtc);
+public sealed class GraphWorkflowDefinitionSummaryResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required int SchemaVersion { get; init; }
+
+    public required int Version { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One thing wrong with a graph. <see cref="Key" /> is the node or edge it belongs to, so the editor draws it on
 ///     the offending element rather than in a list beside the canvas; null means the failure is about the document as
 ///     a whole.
 /// </summary>
-public sealed record GraphWorkflowValidationErrorResponse(string? Key, string Message);
+public sealed class GraphWorkflowValidationErrorResponse
+{
+    public required string? Key { get; init; }
+
+    public required string Message { get; init; }
+}
 
 /// <summary>
 ///     A validation report, which is why it answers 200 for anything well-formed: zero errors and five are the same
@@ -168,20 +194,28 @@ public sealed record GraphWorkflowValidationErrorResponse(string? Key, string Me
 ///     <para>
 ///         <see cref="Warnings" /> are the same <c>(key, message)</c> shape and are NOT errors: <see cref="Valid" />
 ///         stays <c>errors.length === 0</c>, a definition carrying only warnings saves and starts, and a client that
-///         ignores the member behaves exactly as it did before. One record for both rather than a severity member,
+///         ignores the member behaves exactly as it did before. One type for both rather than a severity member,
 ///         so nothing that refuses on <see cref="Errors" /> has to remember to filter first.
 ///     </para>
 /// </summary>
-public sealed record ValidateGraphWorkflowDefinitionResponse(
-    bool Valid,
-    IReadOnlyList<GraphWorkflowValidationErrorResponse> Errors,
-    int NodeCount,
-    IReadOnlyList<GraphWorkflowValidationErrorResponse> Warnings);
+public sealed class ValidateGraphWorkflowDefinitionResponse
+{
+    public required bool Valid { get; init; }
 
-// A concrete response record per list rather than a generic envelope: NSwag builds schema ids from the CLR type name,
+    public required IReadOnlyList<GraphWorkflowValidationErrorResponse> Errors { get; init; }
+
+    public required int NodeCount { get; init; }
+
+    public required IReadOnlyList<GraphWorkflowValidationErrorResponse> Warnings { get; init; }
+}
+
+// A concrete response type per list rather than a generic envelope: NSwag builds schema ids from the CLR type name,
 // and a generic would land in the generated client as an unreadable ListGraphWorkflowFeedResponseOfT.
 
-public sealed record ListGraphWorkflowDefinitionsResponse(IReadOnlyList<GraphWorkflowDefinitionSummaryResponse> Definitions);
+public sealed class ListGraphWorkflowDefinitionsResponse
+{
+    public required IReadOnlyList<GraphWorkflowDefinitionSummaryResponse> Definitions { get; init; }
+}
 
 // Runs. The definition half above is the authoring surface; everything below is one execution of it.
 
@@ -264,38 +298,65 @@ public sealed class GraphWorkflowRunEventFeedRequest
 ///     What a start answers: the run id and nothing else. The run has no state worth reading yet — the dispatcher has
 ///     not ticked — and a full body here would invite a client to believe the statuses in it.
 /// </summary>
-public sealed record StartGraphWorkflowRunResponse(Guid RunId);
+public sealed class StartGraphWorkflowRunResponse
+{
+    public required Guid RunId { get; init; }
+}
 
 /// <summary>One row of the run list. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.</summary>
-public sealed record GraphWorkflowRunSummaryResponse(
-    Guid Id,
-    Guid RequestId,
-    Guid DefinitionId,
-    int DefinitionVersion,
-    string GraphHash,
-    string Status,
-    string FailureClass,
-    long? CancelRequestedAtUtc,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long CreatedAtUtc);
+public sealed class GraphWorkflowRunSummaryResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    public required Guid DefinitionId { get; init; }
+
+    public required int DefinitionVersion { get; init; }
+
+    public required string GraphHash { get; init; }
+
+    public required string Status { get; init; }
+
+    public required string FailureClass { get; init; }
+
+    public required long? CancelRequestedAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One node run without its documents — what a run overview draws. The input and output documents are a per-node
 ///     read, because they are the largest thing a run stores and a graph of two hundred nodes would carry all of them.
 /// </summary>
-public sealed record GraphWorkflowNodeRunSummaryResponse(
-    Guid Id,
-    string NodeKey,
-    string Kind,
-    string Status,
-    int Attempt,
-    string FailureClass,
-    string? PendingDecisionKind,
-    Guid? InvocationId,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long UpdatedAtUtc);
+public sealed class GraphWorkflowNodeRunSummaryResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string NodeKey { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required string FailureClass { get; init; }
+
+    public required string? PendingDecisionKind { get; init; }
+
+    public required Guid? InvocationId { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One run in full. <see cref="Output" /> is the result the succeeded <c>End</c> node resolved, written once at
@@ -309,47 +370,98 @@ public sealed record GraphWorkflowNodeRunSummaryResponse(
 ///         pins a copy at all.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowRunResponse(
-    GraphWorkflowRunSummaryResponse Run,
-    IReadOnlyList<GraphWorkflowNodeRunSummaryResponse> NodeRuns,
-    JsonElement? Output,
-    GraphWorkflowGraph Graph);
+public sealed class GraphWorkflowRunResponse
+{
+    public required GraphWorkflowRunSummaryResponse Run { get; init; }
+
+    public required IReadOnlyList<GraphWorkflowNodeRunSummaryResponse> NodeRuns { get; init; }
+
+    public required JsonElement? Output { get; init; }
+
+    public required GraphWorkflowGraph Graph { get; init; }
+}
 
 /// <summary>
 ///     One node run with its documents. Both ride as raw JSON: they are author- and model-shaped, and a typed mirror of
 ///     eight kinds' payloads would be a schema the runtime does not itself hold.
 /// </summary>
-public sealed record GraphWorkflowNodeRunResponse(
-    Guid Id,
-    Guid RunId,
-    string NodeKey,
-    string Kind,
-    string Status,
-    int Attempt,
-    string FailureClass,
-    string? PendingDecisionKind,
-    string? Error,
-    JsonElement? Input,
-    JsonElement? Output,
-    Guid? InvocationId,
-    long? StartedAtUtc,
-    long? CompletedAtUtc,
-    long UpdatedAtUtc);
+public sealed class GraphWorkflowNodeRunResponse
+{
+    public required Guid Id { get; init; }
 
-public sealed record GraphWorkflowRunEventResponse(Guid Id, long Seq, string EventType, string? NodeKey, JsonElement? Detail, long CreatedAtUtc);
+    public required Guid RunId { get; init; }
 
-public sealed record ListGraphWorkflowRunsResponse(IReadOnlyList<GraphWorkflowRunSummaryResponse> Runs);
+    public required string NodeKey { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required string FailureClass { get; init; }
+
+    public required string? PendingDecisionKind { get; init; }
+
+    public required string? Error { get; init; }
+
+    public required JsonElement? Input { get; init; }
+
+    public required JsonElement? Output { get; init; }
+
+    public required Guid? InvocationId { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class GraphWorkflowRunEventResponse
+{
+    public required Guid Id { get; init; }
+
+    public required long Seq { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? NodeKey { get; init; }
+
+    public required JsonElement? Detail { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
+
+public sealed class ListGraphWorkflowRunsResponse
+{
+    public required IReadOnlyList<GraphWorkflowRunSummaryResponse> Runs { get; init; }
+}
 
 /// <summary>
 ///     What a decision answers with: the decision that now stands, and the CURRENT statuses of the run and of the pause
 ///     it answered. Current rather than predicted — what follows a decision is the dispatcher's work on its own clock,
 ///     so a run that legitimately still reads <c>WaitingForApproval</c> is reported as it is.
 /// </summary>
-public sealed record GraphWorkflowDecisionResultResponse(string Decision, string RunStatus, string NodeRunStatus);
+public sealed class GraphWorkflowDecisionResultResponse
+{
+    public required string Decision { get; init; }
+
+    public required string RunStatus { get; init; }
+
+    public required string NodeRunStatus { get; init; }
+}
 
 /// <summary>
 ///     One page of the event log. <see cref="ReplayTruncated" /> is observed, not inferred: the page is read one row
 ///     over its cap, so a client that fell behind is told it was cut off rather than handed a partial log it would
 ///     mistake for the whole one.
 /// </summary>
-public sealed record ListGraphWorkflowRunEventsResponse(IReadOnlyList<GraphWorkflowRunEventResponse> Events, long LastSeq, bool ReplayTruncated);
+public sealed class ListGraphWorkflowRunEventsResponse
+{
+    public required IReadOnlyList<GraphWorkflowRunEventResponse> Events { get; init; }
+
+    public required long LastSeq { get; init; }
+
+    public required bool ReplayTruncated { get; init; }
+}

@@ -4,7 +4,6 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { DevWorkflowsPage } from "@/features/devWorkflows/pages/DevWorkflowsPage";
 import {
@@ -285,8 +284,6 @@ describe("DevWorkflowsPage", () => {
 		expect(screen.getByTestId("dev-workflow-definition-form-empty")).toBeDefined();
 	});
 
-	// A work item whose `updatedAtUtc` never arrived used to render "updated 1/1/1970", which reads as a real (and
-	// alarming) date on a card whose whole job is to say how fresh the run is.
 	// The shipped default is DevWorkflows:Enabled=false, and the node then 404s the whole family with an EMPTY body.
 	// Read as a query error that is indistinguishable from a broken node ("Could not load the work items."), which is
 	// what this page did before the capability read existed.
@@ -319,20 +316,5 @@ describe("DevWorkflowsPage", () => {
 		const alert = await screen.findByTestId("dev-workflows-disabled");
 		expect(alert.textContent).toContain("the node is unreachable");
 		expect(alert.textContent).not.toContain("disabled by this node's runtime configuration");
-	});
-
-	it("shows the dash, not a 1970 date, for a card with no updated timestamp", async () => {
-		server.use(
-			jsonRoute("get", "development-workflows/work-items", {
-				items: [devWorkflowWorkItemSummary({ updatedAtUtc: undefined })],
-			}),
-			definitionsRoute(),
-			projectsRoute(),
-		);
-		renderWithProviders(<DevWorkflowsPage />);
-
-		const card = await screen.findByTestId(`dev-workflow-card-${workItemId}`);
-		expect(card.textContent).toContain(`updated ${formatTimestamp(undefined)}`);
-		expect(card.textContent).not.toContain("1970");
 	});
 });

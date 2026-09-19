@@ -40,33 +40,59 @@ public static class SchedulerHubEvents
 ///     <c>details_json</c>, <c>error_details</c>, and parameters. <see cref="ErrorMessage" /> carries only the
 ///     sanitized one-line message.
 /// </summary>
-public sealed record SchedulerRunHubEvent(
-    string EventType,
-    Guid RunId,
-    Guid ScheduledJobId,
-    string TemplateId,
-    ScheduledRunStatus Status,
-    ScheduledRunTrigger TriggeredBy,
-    long? ScheduledFireTimeUtc,
-    long? ActualFireTimeUtc,
-    long? CompletedAtUtc,
-    long? DurationMs,
-    string? Summary,
-    string? ErrorMessage,
-    long OccurredAtUtc);
+public sealed class SchedulerRunHubEvent
+{
+    public required string EventType { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required Guid ScheduledJobId { get; init; }
+
+    public required string TemplateId { get; init; }
+
+    public required ScheduledRunStatus Status { get; init; }
+
+    public required ScheduledRunTrigger TriggeredBy { get; init; }
+
+    public required long? ScheduledFireTimeUtc { get; init; }
+
+    public required long? ActualFireTimeUtc { get; init; }
+
+    public required long? CompletedAtUtc { get; init; }
+
+    public required long? DurationMs { get; init; }
+
+    public required string? Summary { get; init; }
+
+    public required string? ErrorMessage { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>Sanitized progress payload — a free-text message and optional percent; never structured run detail.</summary>
-public sealed record SchedulerRunProgressHubEvent(
-    string EventType,
-    Guid RunId,
-    Guid ScheduledJobId,
-    string? Message,
-    int? Percent,
-    long OccurredAtUtc);
+public sealed class SchedulerRunProgressHubEvent
+{
+    public required string EventType { get; init; }
+
+    public required Guid RunId { get; init; }
+
+    public required Guid ScheduledJobId { get; init; }
+
+    public required string? Message { get; init; }
+
+    public required int? Percent { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
 
 /// <summary>Definition-change payload. Carries only the definition id and a coarse action — no editable field values.</summary>
-public sealed record SchedulerDefinitionHubEvent(
-    string EventType,
-    Guid ScheduledJobId,
-    string Action,
-    long OccurredAtUtc);
+public sealed class SchedulerDefinitionHubEvent
+{
+    public required string EventType { get; init; }
+
+    public required Guid ScheduledJobId { get; init; }
+
+    public required string Action { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}

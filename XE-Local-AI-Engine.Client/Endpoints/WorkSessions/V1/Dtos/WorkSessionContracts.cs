@@ -80,129 +80,244 @@ public sealed class PostWorkSessionMessageRequest
 ///         watermark a hub subscriber replays from.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionResponse(
-    Guid Id,
-    string Title,
-    string Objective,
-    string Kind,
-    Guid AgentDefinitionId,
-    Guid ConversationId,
-    string Status,
-    Guid? CurrentTaskId,
-    int StepCount,
-    int MaxStepsPerRun,
-    Guid? LastCheckpointId,
-    long CreatedAtUtc,
-    long UpdatedAtUtc,
-    long Version,
-    long LastSequence);
+public sealed class WorkSessionResponse
+{
+    public required Guid Id { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Objective { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required Guid? CurrentTaskId { get; init; }
+
+    public required int StepCount { get; init; }
+
+    public required int MaxStepsPerRun { get; init; }
+
+    public required Guid? LastCheckpointId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+
+    public required long LastSequence { get; init; }
+}
 
 /// <summary>
 ///     One row of the session list. Deliberately not <see cref="WorkSessionResponse" />: the list never renders an
-///     objective, and the service's list projection does not read one, so a shared record would have to invent
+///     objective, and the service's list projection does not read one, so a shared type would have to invent
 ///     values the node never loaded.
 /// </summary>
-public sealed record WorkSessionSummaryResponse(
-    Guid Id,
-    string Title,
-    string Kind,
-    string Status,
-    Guid AgentDefinitionId,
-    int StepCount,
-    long UpdatedAtUtc);
+public sealed class WorkSessionSummaryResponse
+{
+    public required Guid Id { get; init; }
 
-public sealed record WorkSessionTaskResponse(
-    Guid Id,
-    Guid? ParentTaskId,
-    long Sequence,
-    string Title,
-    string? Detail,
-    string Status,
-    string? BlockedReason,
-    string Origin,
-    int CreatedStep,
-    int UpdatedStep);
+    public required string Title { get; init; }
 
-public sealed record WorkSessionFindingResponse(
-    Guid Id,
-    Guid? TaskId,
-    long Sequence,
-    string Kind,
-    string Text,
-    string? SourceRef,
-    int CreatedStep,
-    bool Superseded);
+    public required string Kind { get; init; }
+
+    public required string Status { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required int StepCount { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+public sealed class WorkSessionTaskResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid? ParentTaskId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string? Detail { get; init; }
+
+    public required string Status { get; init; }
+
+    public required string? BlockedReason { get; init; }
+
+    public required string Origin { get; init; }
+
+    public required int CreatedStep { get; init; }
+
+    public required int UpdatedStep { get; init; }
+}
+
+public sealed class WorkSessionFindingResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid? TaskId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Text { get; init; }
+
+    public required string? SourceRef { get; init; }
+
+    public required int CreatedStep { get; init; }
+
+    public required bool Superseded { get; init; }
+}
 
 /// <summary>
 ///     An artifact's metadata. There is deliberately no member for the blob path the node stores it under: it is a
 ///     host path, it is of no use to a client, and a response is the one place it could leak from.
 /// </summary>
-public sealed record WorkSessionArtifactResponse(
-    Guid Id,
-    long Sequence,
-    string Kind,
-    string Name,
-    string MediaType,
-    string ContentSha256,
-    long SizeBytes,
-    bool IsValid,
-    int CreatedStep);
+public sealed class WorkSessionArtifactResponse
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string MediaType { get; init; }
+
+    public required string ContentSha256 { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required bool IsValid { get; init; }
+
+    public required int CreatedStep { get; init; }
+}
 
 /// <summary>
 ///     A checkpoint. <see cref="Summary" /> is null on a node with no local model to summarize with — the structured
 ///     <see cref="StateJson" /> is the part the resume path actually depends on.
 /// </summary>
-public sealed record WorkSessionCheckpointResponse(
-    Guid Id,
-    long Sequence,
-    int Step,
-    string? Summary,
-    string StateJson,
-    long CreatedAtUtc);
+public sealed class WorkSessionCheckpointResponse
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string? Summary { get; init; }
+
+    public required string StateJson { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     One journal entry. <see cref="OperationId" /> is the tool call the entry belongs to when it has one, so a client
 ///     can group a step's rows by the operation that produced them; it is null for entries no single tool call owns.
 /// </summary>
-public sealed record WorkSessionEventResponse(
-    Guid Id,
-    long Sequence,
-    int Step,
-    string EventType,
-    string? DetailJson,
-    string? Outcome,
-    long OccurredAtUtc,
-    Guid? OperationId);
+public sealed class WorkSessionEventResponse
+{
+    public required Guid Id { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required int Step { get; init; }
+
+    public required string EventType { get; init; }
+
+    public required string? DetailJson { get; init; }
+
+    public required string? Outcome { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+
+    public required Guid? OperationId { get; init; }
+}
 
 /// <summary>
 ///     An artifact with its bytes. <see cref="IsBase64" /> is decided from the media type, never by sniffing the
 ///     bytes, so binary content is never handed over as mangled UTF-8.
 /// </summary>
-public sealed record WorkSessionArtifactContentResponse(WorkSessionArtifactResponse Artifact, string Content, bool IsBase64);
+public sealed class WorkSessionArtifactContentResponse
+{
+    public required WorkSessionArtifactResponse Artifact { get; init; }
 
-public sealed record PostWorkSessionMessageResponse(Guid MessageId, Guid ConversationId);
+    public required string Content { get; init; }
 
-public sealed record ListWorkSessionsResponse(IReadOnlyList<WorkSessionSummaryResponse> Items);
+    public required bool IsBase64 { get; init; }
+}
 
-// One concrete response record per feed rather than one generic envelope: NSwag builds schema ids from the CLR type
+public sealed class PostWorkSessionMessageResponse
+{
+    public required Guid MessageId { get; init; }
+
+    public required Guid ConversationId { get; init; }
+}
+
+public sealed class ListWorkSessionsResponse
+{
+    public required IReadOnlyList<WorkSessionSummaryResponse> Items { get; init; }
+}
+
+// One concrete response type per feed rather than one generic envelope: NSwag builds schema ids from the CLR type
 // name, and a generic would land in the generated client as an unreadable ListWorkSessionFeedResponseOfT.
-public sealed record ListWorkSessionTasksResponse(IReadOnlyList<WorkSessionTaskResponse> Items, long LastSequence);
+public sealed class ListWorkSessionTasksResponse
+{
+    public required IReadOnlyList<WorkSessionTaskResponse> Items { get; init; }
 
-public sealed record ListWorkSessionFindingsResponse(IReadOnlyList<WorkSessionFindingResponse> Items, long LastSequence);
+    public required long LastSequence { get; init; }
+}
 
-public sealed record ListWorkSessionArtifactsResponse(IReadOnlyList<WorkSessionArtifactResponse> Items, long LastSequence);
+public sealed class ListWorkSessionFindingsResponse
+{
+    public required IReadOnlyList<WorkSessionFindingResponse> Items { get; init; }
 
-public sealed record ListWorkSessionCheckpointsResponse(IReadOnlyList<WorkSessionCheckpointResponse> Items, long LastSequence);
+    public required long LastSequence { get; init; }
+}
+
+public sealed class ListWorkSessionArtifactsResponse
+{
+    public required IReadOnlyList<WorkSessionArtifactResponse> Items { get; init; }
+
+    public required long LastSequence { get; init; }
+}
+
+public sealed class ListWorkSessionCheckpointsResponse
+{
+    public required IReadOnlyList<WorkSessionCheckpointResponse> Items { get; init; }
+
+    public required long LastSequence { get; init; }
+}
 
 /// <summary>
 ///     A page of events. <see cref="HasMore" /> rides only this feed because it is the only paged one; the client
 ///     follows it by re-reading from <see cref="LastSequence" />.
 /// </summary>
-public sealed record ListWorkSessionEventsResponse(IReadOnlyList<WorkSessionEventResponse> Items, long LastSequence, bool HasMore);
+public sealed class ListWorkSessionEventsResponse
+{
+    public required IReadOnlyList<WorkSessionEventResponse> Items { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    public required bool HasMore { get; init; }
+}
 
 /// <summary>
 ///     Whether this node serves work sessions at all. The one response every node answers, switch on or off: the rest
 ///     of the family is 404ed by request-path middleware when <c>WorkSessions:Enabled</c> is false, and a bodyless 404
 ///     is indistinguishable from a broken route, so without this the SPA can only say "could not load".
 /// </summary>
-public sealed record WorkSessionCapabilityResponse(bool Enabled);
+public sealed class WorkSessionCapabilityResponse
+{
+    public required bool Enabled { get; init; }
+}

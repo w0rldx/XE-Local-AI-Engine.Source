@@ -48,10 +48,13 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint : Endpoint<ValidateG
         // Counted off the AUTHORED document rather than off the parse, so the number is defined for a graph the parser
         // refused too — which is the case the editor most needs it in, to say how far over the cap the canvas is.
         var nodeCount = req.Graph.Nodes?.Count ?? 0;
-        await Send.OkAsync(new ValidateGraphWorkflowDefinitionResponse(result.IsValid,
-                [.. result.Errors.Select(static error => new GraphWorkflowValidationErrorResponse(error.Key, error.Message))],
-                nodeCount,
-                [.. result.Warnings.Select(static warning => new GraphWorkflowValidationErrorResponse(warning.Key, warning.Message))]),
+        await Send.OkAsync(new ValidateGraphWorkflowDefinitionResponse
+        {
+            Valid = result.IsValid,
+            Errors = [.. result.Errors.Select(static error => new GraphWorkflowValidationErrorResponse { Key = error.Key, Message = error.Message })],
+            NodeCount = nodeCount,
+            Warnings = [.. result.Warnings.Select(static warning => new GraphWorkflowValidationErrorResponse { Key = warning.Key, Message = warning.Message })]
+        },
             ct);
     }
 }

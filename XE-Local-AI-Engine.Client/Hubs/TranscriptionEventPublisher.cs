@@ -36,27 +36,30 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.SegmentCommitted,
-                       new TranscriptSegmentCommittedPush(sessionId,
-                           seq,
-                           startMs,
-                           endMs,
-                           text,
-                           TranscriptionMapper.ToWireChannel(channel),
-                           confidence),
+                       new TranscriptSegmentCommittedPush
+                       {
+                           SessionId = sessionId,
+                           Seq = seq,
+                           StartMs = startMs,
+                           EndMs = endMs,
+                           Text = text,
+                           Channel = TranscriptionMapper.ToWireChannel(channel),
+                           Confidence = confidence
+                       },
                        cancellationToken);
 
     public Task PublishPartialAsync(Guid sessionId, TranscriptChannel channel, string text, CancellationToken cancellationToken) =>
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.PartialUpdated,
-                       new TranscriptPartialUpdatedPush(sessionId, TranscriptionMapper.ToWireChannel(channel), text),
+                       new TranscriptPartialUpdatedPush { SessionId = sessionId, Channel = TranscriptionMapper.ToWireChannel(channel), Text = text },
                        cancellationToken);
 
     public Task PublishStatusAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken) =>
         _hubContext.Clients
                    .Group(TranscriptionHubGroups.Session(sessionId))
                    .SendAsync(TranscriptionHubEvents.SessionStatusChanged,
-                       new TranscriptionSessionStatusPush(sessionId, ToWireStatus(reason)),
+                       new TranscriptionSessionStatusPush { SessionId = sessionId, Status = ToWireStatus(reason) },
                        cancellationToken);
 
     /// <summary>

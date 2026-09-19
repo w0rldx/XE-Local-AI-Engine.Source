@@ -59,22 +59,25 @@ internal static class ChatStreamEventMapper
         int? reasoningTokens = null,
         int? invocationTimeoutSeconds = null)
     {
-        return new ChatStreamEvent(type,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            message.Status,
-            sequence,
-            timestampMs,
-            Content: message.Content,
-            Reasoning: message.Reasoning,
-            Error: message.Error,
-            Model: message.Model,
-            InputTokens: inputTokens ?? message.InputCount,
-            OutputTokens: outputTokens ?? message.OutputCount,
-            TotalTokens: totalTokens ?? message.TotalCount,
-            ReasoningTokens: reasoningTokens ?? message.ReasoningCount,
-            InvocationTimeoutSeconds: invocationTimeoutSeconds);
+        return new ChatStreamEvent
+        {
+            Type = type,
+            ConversationId = correlation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            Status = message.Status,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            Content = message.Content,
+            Reasoning = message.Reasoning,
+            Error = message.Error,
+            Model = message.Model,
+            InputTokens = inputTokens ?? message.InputCount,
+            OutputTokens = outputTokens ?? message.OutputCount,
+            TotalTokens = totalTokens ?? message.TotalCount,
+            ReasoningTokens = reasoningTokens ?? message.ReasoningCount,
+            InvocationTimeoutSeconds = invocationTimeoutSeconds
+        };
     }
 
     /// <summary>
@@ -96,17 +99,20 @@ internal static class ChatStreamEventMapper
         long contentOffset,
         long reasoningOffset)
     {
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantDelta,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            contentDelta,
-            reasoningDelta,
-            ContentOffset: contentOffset,
-            ReasoningOffset: reasoningOffset);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantDelta,
+            ConversationId = correlation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            Delta = contentDelta,
+            ReasoningDelta = reasoningDelta,
+            ContentOffset = contentOffset,
+            ReasoningOffset = reasoningOffset
+        };
     }
 
     /// <summary>
@@ -127,17 +133,20 @@ internal static class ChatStreamEventMapper
         long timestampMs,
         long sequence)
     {
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantSnapshot,
-            conversationId,
-            messageId,
-            requestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            Content: content,
-            Reasoning: reasoning,
-            ContentOffset: content?.Length ?? 0,
-            ReasoningOffset: reasoning?.Length ?? 0);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantSnapshot,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            Content = content,
+            Reasoning = reasoning,
+            ContentOffset = content?.Length ?? 0,
+            ReasoningOffset = reasoning?.Length ?? 0
+        };
     }
 
     /// <summary>
@@ -158,13 +167,16 @@ internal static class ChatStreamEventMapper
     {
         ArgumentNullException.ThrowIfNull(correlation);
 
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantReconcile,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantReconcile,
+            ConversationId = correlation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs
+        };
     }
 
     public static ChatStreamEvent ToolCallEvent(Guid conversationId,
@@ -178,19 +190,22 @@ internal static class ChatStreamEventMapper
             ? ChatStreamEventTypes.ToolCallRequested
             : ChatStreamEventTypes.ToolCallCompleted;
 
-        return new ChatStreamEvent(type,
-            conversationId,
-            messageId,
-            requestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            ToolCallId: payload.ToolCallId,
-            ToolName: payload.ToolName,
-            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
-            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
-            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
-            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
+        return new ChatStreamEvent
+        {
+            Type = type,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            ToolCallId = payload.ToolCallId,
+            ToolName = payload.ToolName,
+            Arguments = payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
+            RequiresApproval = payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
+            Result = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
+            IsError = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null
+        };
     }
 
     public static void AccumulateToolPart(NodeChatPartAccumulator parts, ToolCallLifecyclePayload payload, long sequence)
@@ -218,15 +233,18 @@ internal static class ChatStreamEventMapper
         // may relate them.
         DateTimeOffset? phaseChangedAtUtc = null)
     {
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantPhase,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            RuntimePhase: ToWirePhase(phase),
-            RuntimePhaseChangedAtUtc: phaseChangedAtUtc?.ToString("O", CultureInfo.InvariantCulture));
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantPhase,
+            ConversationId = correlation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            RuntimePhase = ToWirePhase(phase),
+            RuntimePhaseChangedAtUtc = phaseChangedAtUtc?.ToString("O", CultureInfo.InvariantCulture)
+        };
     }
 
     /// <summary>The wire form of <see cref="InvocationRuntimePhase" /> the React reducer keys the loading indicator on.</summary>
@@ -247,16 +265,19 @@ internal static class ChatStreamEventMapper
         long timestampMs,
         long sequence)
     {
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantNotice,
-            conversationId,
-            messageId,
-            requestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            NoticeKind: payload.Kind.ToString(),
-            NoticeMessage: payload.Message,
-            NoticeDetail: payload.Detail);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantNotice,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            NoticeKind = payload.Kind.ToString(),
+            NoticeMessage = payload.Message,
+            NoticeDetail = payload.Detail
+        };
     }
 
     public static void AccumulateNotice(NodeChatPartAccumulator parts, TurnNoticePayload payload, long sequence)
@@ -287,17 +308,20 @@ internal static class ChatStreamEventMapper
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        return new ChatStreamEvent(ChatStreamEventTypes.ApprovalRequested,
-            conversationId,
-            messageId,
-            requestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            ToolCallId: NullIfBlank(payload.CallId),
-            ToolName: NullIfBlank(payload.ToolName),
-            ApprovalRequestId: payload.RequestId,
-            SessionScopeEligible: payload.SessionScopeEligible);
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.ApprovalRequested,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            ToolCallId = NullIfBlank(payload.CallId),
+            ToolName = NullIfBlank(payload.ToolName),
+            ApprovalRequestId = payload.RequestId,
+            SessionScopeEligible = payload.SessionScopeEligible
+        };
     }
 
     /// <summary>
@@ -324,17 +348,20 @@ internal static class ChatStreamEventMapper
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        return new ChatStreamEvent(ChatStreamEventTypes.QuestionRequested,
-            conversationId,
-            messageId,
-            requestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            timestampMs,
-            ToolCallId: NullIfBlank(payload.CallId),
-            ToolName: NullIfBlank(payload.ToolName),
-            QuestionRequestId: payload.RequestId,
-            Questions: JsonSerializer.Serialize(payload.Questions, QuestionsJsonOptions));
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.QuestionRequested,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            RequestId = requestId,
+            Status = NodeChatMessageStatusValues.Streaming,
+            Sequence = sequence,
+            OccurredAtUtc = timestampMs,
+            ToolCallId = NullIfBlank(payload.CallId),
+            ToolName = NullIfBlank(payload.ToolName),
+            QuestionRequestId = payload.RequestId,
+            Questions = JsonSerializer.Serialize(payload.Questions, QuestionsJsonOptions)
+        };
     }
 
     private static string? NullIfBlank(string? value)

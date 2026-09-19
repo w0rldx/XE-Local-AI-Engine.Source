@@ -169,8 +169,8 @@ describe("toGoldenHarvestResult", () => {
 		expect(result.skippedCount).toBe(5);
 	});
 
-	it("coalesces missing counts to zero", () => {
-		expect(toGoldenHarvestResult({})).toEqual({
+	it("coalesces an absent response body to zero counts", () => {
+		expect(toGoldenHarvestResult(undefined)).toEqual({
 			thumbsUpScanned: 0,
 			createdCount: 0,
 			duplicateCount: 0,

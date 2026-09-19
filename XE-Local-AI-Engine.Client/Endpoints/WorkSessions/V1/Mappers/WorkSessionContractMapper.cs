@@ -9,71 +9,80 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 internal static class WorkSessionContractMapper
 {
     public static WorkSessionResponse ToResponse(this WorkSessionDetail value) =>
-        new(value.Id,
-            value.Title,
-            value.Objective,
-            value.Kind.ToString(),
-            value.AgentDefinitionId,
-            value.ConversationId,
-            value.Status.ToString(),
-            value.CurrentTaskId,
-            value.StepCount,
-            value.MaxStepsPerRun,
-            value.LastCheckpointId,
-            value.CreatedUtc,
-            value.UpdatedUtc,
-            value.Version,
-            value.LastSequence);
+        new()
+        {
+            Id = value.Id,
+            Title = value.Title,
+            Objective = value.Objective,
+            Kind = value.Kind.ToString(),
+            AgentDefinitionId = value.AgentDefinitionId,
+            ConversationId = value.ConversationId,
+            Status = value.Status.ToString(),
+            CurrentTaskId = value.CurrentTaskId,
+            StepCount = value.StepCount,
+            MaxStepsPerRun = value.MaxStepsPerRun,
+            LastCheckpointId = value.LastCheckpointId,
+            CreatedAtUtc = value.CreatedUtc,
+            UpdatedAtUtc = value.UpdatedUtc,
+            Version = value.Version,
+            LastSequence = value.LastSequence
+        };
 
     public static WorkSessionSummaryResponse ToResponse(this WorkSessionSummary value) =>
-        new(value.Id, value.Title, value.Kind.ToString(), value.Status.ToString(), value.AgentDefinitionId, value.StepCount, value.UpdatedUtc);
+        new() { Id = value.Id, Title = value.Title, Kind = value.Kind.ToString(), Status = value.Status.ToString(), AgentDefinitionId = value.AgentDefinitionId, StepCount = value.StepCount, UpdatedAtUtc = value.UpdatedUtc };
 
     public static WorkSessionTaskResponse ToResponse(this WorkSessionTaskDto value) =>
-        new(value.Id,
-            value.ParentTaskId,
-            value.Sequence,
-            value.Title,
-            value.Detail,
-            value.Status.ToString(),
-            value.BlockedReason,
-            value.Origin.ToString(),
-            value.CreatedStep,
-            value.UpdatedStep);
+        new()
+        {
+            Id = value.Id,
+            ParentTaskId = value.ParentTaskId,
+            Sequence = value.Sequence,
+            Title = value.Title,
+            Detail = value.Detail,
+            Status = value.Status.ToString(),
+            BlockedReason = value.BlockedReason,
+            Origin = value.Origin.ToString(),
+            CreatedStep = value.CreatedStep,
+            UpdatedStep = value.UpdatedStep
+        };
 
     public static WorkSessionFindingResponse ToResponse(this WorkSessionFindingDto value) =>
-        new(value.Id, value.TaskId, value.Sequence, value.Kind.ToString(), value.Text, value.SourceRef, value.CreatedStep, value.Superseded);
+        new() { Id = value.Id, TaskId = value.TaskId, Sequence = value.Sequence, Kind = value.Kind.ToString(), Text = value.Text, SourceRef = value.SourceRef, CreatedStep = value.CreatedStep, Superseded = value.Superseded };
 
     public static WorkSessionArtifactResponse ToResponse(this WorkSessionArtifactDto value) =>
-        new(value.Id,
-            value.Sequence,
-            value.Kind.ToString(),
-            value.Name,
-            value.MediaType,
-            value.ContentSha256,
-            value.SizeBytes,
-            value.IsValid,
-            value.CreatedStep);
+        new()
+        {
+            Id = value.Id,
+            Sequence = value.Sequence,
+            Kind = value.Kind.ToString(),
+            Name = value.Name,
+            MediaType = value.MediaType,
+            ContentSha256 = value.ContentSha256,
+            SizeBytes = value.SizeBytes,
+            IsValid = value.IsValid,
+            CreatedStep = value.CreatedStep
+        };
 
     public static WorkSessionCheckpointResponse ToResponse(this WorkSessionCheckpointDto value) =>
-        new(value.Id, value.Sequence, value.Step, value.Summary, value.StateJson, value.CreatedUtc);
+        new() { Id = value.Id, Sequence = value.Sequence, Step = value.Step, Summary = value.Summary, StateJson = value.StateJson, CreatedAtUtc = value.CreatedUtc };
 
     public static WorkSessionEventResponse ToResponse(this WorkSessionEventDto value) =>
-        new(value.Id, value.Sequence, value.Step, value.EventType, value.DetailJson, value.Outcome, value.OccurredUtc, value.OperationId);
+        new() { Id = value.Id, Sequence = value.Sequence, Step = value.Step, EventType = value.EventType, DetailJson = value.DetailJson, Outcome = value.Outcome, OccurredAtUtc = value.OccurredUtc, OperationId = value.OperationId };
 
     public static ListWorkSessionTasksResponse ToResponse(this IReadOnlyList<WorkSessionTaskDto> value) =>
-        new([.. value.Select(ToResponse)], HighestSequence(value.Select(static item => item.Sequence)));
+        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
 
     public static ListWorkSessionFindingsResponse ToResponse(this IReadOnlyList<WorkSessionFindingDto> value) =>
-        new([.. value.Select(ToResponse)], HighestSequence(value.Select(static item => item.Sequence)));
+        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
 
     public static ListWorkSessionArtifactsResponse ToResponse(this IReadOnlyList<WorkSessionArtifactDto> value) =>
-        new([.. value.Select(ToResponse)], HighestSequence(value.Select(static item => item.Sequence)));
+        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
 
     public static ListWorkSessionCheckpointsResponse ToResponse(this IReadOnlyList<WorkSessionCheckpointDto> value) =>
-        new([.. value.Select(ToResponse)], HighestSequence(value.Select(static item => item.Sequence)));
+        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)) };
 
     public static ListWorkSessionEventsResponse ToResponse(this IReadOnlyList<WorkSessionEventDto> value, int requestedLimit) =>
-        new([.. value.Select(ToResponse)], HighestSequence(value.Select(static item => item.Sequence)), value.Count >= requestedLimit);
+        new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)), HasMore = value.Count >= requestedLimit };
 
     /// <summary>
     ///     The page's HIGHEST sequence, not its last row's. The feeds are ordered by creation step so a re-stamped task

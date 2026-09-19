@@ -26,7 +26,7 @@ public sealed class ListWorkSessionsEndpoint : EndpointWithoutRequest<ListWorkSe
     public override async Task HandleAsync(CancellationToken ct)
     {
         var sessions = await _service.ListAsync(ct);
-        await Send.OkAsync(new ListWorkSessionsResponse([.. sessions.Select(WorkSessionContractMapper.ToResponse)]), ct);
+        await Send.OkAsync(new ListWorkSessionsResponse { Items = [.. sessions.Select(WorkSessionContractMapper.ToResponse)] }, ct);
     }
 }
 

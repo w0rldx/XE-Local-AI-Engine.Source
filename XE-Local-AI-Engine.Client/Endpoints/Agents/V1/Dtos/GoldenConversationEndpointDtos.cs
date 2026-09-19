@@ -118,8 +118,13 @@ public sealed class ListGoldenConversationsResponse
 ///     already-harvested (duplicate) / skipped. Counts only — the harvested turn/answer text never crosses the wire here
 ///     (it rides the encrypted golden columns surfaced by the golden list).
 /// </summary>
-public sealed record GoldenHarvestResponse(
-    int ThumbsUpScanned,
-    int CreatedCount,
-    int DuplicateCount,
-    int SkippedCount);
+public sealed class GoldenHarvestResponse
+{
+    public required int ThumbsUpScanned { get; init; }
+
+    public required int CreatedCount { get; init; }
+
+    public required int DuplicateCount { get; init; }
+
+    public required int SkippedCount { get; init; }
+}

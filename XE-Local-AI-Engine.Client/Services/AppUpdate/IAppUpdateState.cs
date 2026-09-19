@@ -10,18 +10,33 @@ public enum AppUpdateCheckStatus
 }
 
 /// <summary>The last-computed public app-update snapshot.</summary>
-public sealed record AppUpdateSnapshot(
-    string CurrentVersion,
-    string? AvailableVersion,
-    bool UpdateAvailable,
-    bool IsConfigured,
-    bool IsDesktop,
-    AppUpdateCheckStatus CheckStatus,
-    DateTimeOffset? LastCheckedUtc)
+public sealed record AppUpdateSnapshot
 {
+    public required string CurrentVersion { get; init; }
+
+    public required string? AvailableVersion { get; init; }
+
+    public required bool UpdateAvailable { get; init; }
+
+    public required bool IsConfigured { get; init; }
+
+    public required bool IsDesktop { get; init; }
+
+    public required AppUpdateCheckStatus CheckStatus { get; init; }
+
+    public required DateTimeOffset? LastCheckedUtc { get; init; }
+
     /// <summary>The empty pre-check snapshot.</summary>
-    public static AppUpdateSnapshot Empty { get; } = new("0.0.0", null, false, false, false,
-        AppUpdateCheckStatus.NotChecked, null);
+    public static AppUpdateSnapshot Empty { get; } = new()
+    {
+        CurrentVersion = "0.0.0",
+        AvailableVersion = null,
+        UpdateAvailable = false,
+        IsConfigured = false,
+        IsDesktop = false,
+        CheckStatus = AppUpdateCheckStatus.NotChecked,
+        LastCheckedUtc = null
+    };
 }
 
 /// <summary>Thread-safe holder for the latest <see cref="AppUpdateSnapshot" />.</summary>

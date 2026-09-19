@@ -191,13 +191,16 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             }
         }
 
-        _state.Store(new AppUpdateSnapshot(currentVersion,
-            AvailableVersion: null,
-            UpdateAvailable: false,
-            IsConfigured: _channelOptions.IsConfigured,
-            IsDesktop: _hostContext.IsLocalMode,
-            CheckStatus: checkStatus,
-            LastCheckedUtc: null));
+        _state.Store(new AppUpdateSnapshot
+        {
+            CurrentVersion = currentVersion,
+            AvailableVersion = null,
+            UpdateAvailable = false,
+            IsConfigured = _channelOptions.IsConfigured,
+            IsDesktop = _hostContext.IsLocalMode,
+            CheckStatus = checkStatus,
+            LastCheckedUtc = null
+        });
     }
 
     private IVelopackUpdateManager TakeUpdateManager()
@@ -212,13 +215,16 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         bool updateAvailable = false,
         bool isConfigured = false,
         AppUpdateCheckStatus checkStatus = AppUpdateCheckStatus.NotChecked) =>
-        new(currentVersion,
-            availableVersion,
-            updateAvailable,
-            isConfigured,
-            _hostContext.IsLocalMode,
-            checkStatus,
-            _timeProvider.GetUtcNow());
+        new()
+        {
+            CurrentVersion = currentVersion,
+            AvailableVersion = availableVersion,
+            UpdateAvailable = updateAvailable,
+            IsConfigured = isConfigured,
+            IsDesktop = _hostContext.IsLocalMode,
+            CheckStatus = checkStatus,
+            LastCheckedUtc = _timeProvider.GetUtcNow()
+        };
 
     private AppUpdateSnapshot FailedSnapshot(string currentVersion, AppUpdateFailureReason reason)
     {

@@ -50,6 +50,6 @@ public sealed class GetWorkSessionArtifactContentEndpoint : Endpoint<WorkSession
         }
 
         var content = await _service.ReadArtifactContentAsync(req.SessionId, req.ArtifactId, ct);
-        await Send.OkAsync(new WorkSessionArtifactContentResponse(content.Artifact.ToResponse(), content.Content, content.IsBase64), ct);
+        await Send.OkAsync(new WorkSessionArtifactContentResponse { Artifact = content.Artifact.ToResponse(), Content = content.Content, IsBase64 = content.IsBase64 }, ct);
     }
 }

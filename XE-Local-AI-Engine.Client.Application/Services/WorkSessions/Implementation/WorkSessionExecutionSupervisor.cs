@@ -563,13 +563,16 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
         // The stream ended without a terminal event. Read that as a failure rather than looping: the assistant row was
         // terminalized by the pump either way, and a second step would go out over an unknown state.
-        return new ChatStreamEvent(ChatStreamEventTypes.AssistantFailed,
-            request.ConversationId,
-            request.MessageId.GetValueOrDefault(),
-            request.RequestId.GetValueOrDefault(),
-            NodeChatMessageStatusValues.Failed,
-            Sequence: 0,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        return new ChatStreamEvent
+        {
+            Type = ChatStreamEventTypes.AssistantFailed,
+            ConversationId = request.ConversationId,
+            MessageId = request.MessageId.GetValueOrDefault(),
+            RequestId = request.RequestId.GetValueOrDefault(),
+            Status = NodeChatMessageStatusValues.Failed,
+            Sequence = 0,
+            OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
     }
 
     private async Task<StepOutcome> SettleStepAsync(SessionRun run,

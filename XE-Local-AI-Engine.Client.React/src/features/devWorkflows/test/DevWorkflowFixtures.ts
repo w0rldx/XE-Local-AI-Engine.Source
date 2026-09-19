@@ -110,6 +110,11 @@ export function devWorkflowNodeRunSummary(overrides: Partial<NodeRunSummaryRespo
 		completedAtUtc: null,
 		sequence: 2,
 		validationNotApplicable: false,
+		operatorRetries: 0,
+		skipWaived: null,
+		inputTokens: null,
+		outputTokens: null,
+		toolCalls: null,
 		...overrides,
 	};
 }
@@ -135,6 +140,7 @@ export function devWorkflowRun(overrides: Partial<RunResponse> = {}): RunRespons
 		completedAtUtc: null,
 		version: 3,
 		lastSequence: 9,
+		cost: { inputTokens: null, outputTokens: null, toolCalls: null, providerCalls: null, agentTurnMs: null },
 		...overrides,
 	};
 }
@@ -163,6 +169,16 @@ export function devWorkflowNodeRunDetail(overrides: Partial<NodeRunDetailRespons
 		// Likewise explicit: nothing measured the box for this run, which is not "the load reserved nothing".
 		vramFreeAtLoadBytes: null,
 		vramAdmittedBytes: null,
+		reasoningTokens: null,
+		estimatedInputTokens: null,
+		providerCalls: null,
+		toolSchemaTokens: null,
+		toolNames: null,
+		agentTurnMs: null,
+		servedModelName: null,
+		route: null,
+		workSessionSteps: null,
+		failureClassGroup: null,
 		decisions: [],
 		...overrides,
 	};

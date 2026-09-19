@@ -26,7 +26,7 @@ public sealed class ListDevelopmentProjectsEndpoint : EndpointWithoutRequest<Lis
     public override async Task HandleAsync(CancellationToken ct)
     {
         var projects = await _service.ListProjectsAsync(ct);
-        await Send.OkAsync(new ListDevelopmentProjectsResponse(projects.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct);
+        await Send.OkAsync(new ListDevelopmentProjectsResponse { Items = projects.Select(DevelopmentContractMapper.ToResponse).ToArray() }, ct);
     }
 }
 

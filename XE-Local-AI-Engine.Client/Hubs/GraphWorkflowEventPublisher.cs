@@ -18,7 +18,7 @@ internal sealed class GraphWorkflowEventPublisher : IGraphWorkflowEventPublisher
 
     public Task PublishAsync(Guid runId, long sequence, GraphWorkflowChangeKind kind, CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(GraphWorkflowHubGroups.Run(runId))
-                  .SendAsync(GraphWorkflowHubEvents.Changed, new GraphWorkflowChanged(runId, sequence, ToWireKind(kind)), cancellationToken);
+                  .SendAsync(GraphWorkflowHubEvents.Changed, new GraphWorkflowChanged { RunId = runId, Seq = sequence, Kind = ToWireKind(kind) }, cancellationToken);
 
     /// <summary>
     ///     The wire spelling of a change kind, written out rather than derived from the enum name. The subscriber

@@ -52,16 +52,28 @@ const validationArtifact: DevelopmentArtifact = {
 	contentHash: "hash",
 	byteCount: 512,
 	createdAtUtc: 1700,
+	baseCommit: null,
+	subjectHash: null,
+	changedFilesManifestHash: null,
+	commandProfileVersion: null,
+	commandProfileDigest: null,
 	isValid: true,
 };
 
 const coderAttempt: DevelopmentAttempt = {
 	id: "attempt-1",
 	taskId: "task-1",
+	predecessorAttemptId: null,
 	role: "Coder",
 	modelId: "model-1",
 	provider: "provider-1",
 	status: "Running",
+	startedAtUtc: 1700,
+	endedAtUtc: null,
+	terminalReason: null,
+	inputTokens: null,
+	outputTokens: null,
+	version: 1,
 };
 
 function testOutcome(overrides: Partial<DevelopmentTestOutcome> = {}): DevelopmentTestOutcome {

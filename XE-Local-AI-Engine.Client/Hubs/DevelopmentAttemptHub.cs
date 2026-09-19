@@ -7,13 +7,20 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed record DevelopmentAttemptSubscriptionSnapshot(
-    Guid ProjectId,
-    Guid TaskId,
-    Guid AttemptId,
-    long Watermark,
-    long DroppedOrCoalescedUpdateCount,
-    DevelopmentAttemptLiveUpdate? Latest);
+public sealed class DevelopmentAttemptSubscriptionSnapshot
+{
+    public required Guid ProjectId { get; init; }
+
+    public required Guid TaskId { get; init; }
+
+    public required Guid AttemptId { get; init; }
+
+    public required long Watermark { get; init; }
+
+    public required long DroppedOrCoalescedUpdateCount { get; init; }
+
+    public required DevelopmentAttemptLiveUpdate? Latest { get; init; }
+}
 
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class DevelopmentAttemptHub : Hub
@@ -57,12 +64,15 @@ public sealed class DevelopmentAttemptHub : Hub
             throw new HubException("The Development attempt completed while the subscription was being established.");
         }
 
-        return new DevelopmentAttemptSubscriptionSnapshot(projectId,
-            taskId,
-            attemptId,
-            snapshot.Watermark,
-            snapshot.DroppedOrCoalescedUpdateCount,
-            snapshot.Latest);
+        return new DevelopmentAttemptSubscriptionSnapshot
+        {
+            ProjectId = projectId,
+            TaskId = taskId,
+            AttemptId = attemptId,
+            Watermark = snapshot.Watermark,
+            DroppedOrCoalescedUpdateCount = snapshot.DroppedOrCoalescedUpdateCount,
+            Latest = snapshot.Latest
+        };
     }
 }
 

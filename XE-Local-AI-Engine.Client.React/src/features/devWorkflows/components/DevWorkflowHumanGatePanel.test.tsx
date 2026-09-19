@@ -10,15 +10,31 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { DevWorkflowHumanGatePanel } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
 import type {
+	DevWorkflowDecisionResponse,
 	DevWorkflowDecisionSubmission,
 	DevWorkflowNodeRunDetailResponse,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+
+// The decision feed answers every member, the deciding node run and the operation that carried the act included.
+function decision(overrides: Partial<DevWorkflowDecisionResponse>): DevWorkflowDecisionResponse {
+	return {
+		id: "d1",
+		nodeRunId: "00000000-0000-4000-8000-000000000001",
+		attempt: 1,
+		decision: "Approve",
+		comment: null,
+		decidedBySubject: "admin",
+		decidedAtUtc: 1_700_000_100_000,
+		operationId: "00000000-0000-4000-8000-0000000000a1",
+		sequence: 10,
+		...overrides,
+	};
+}
 
 function gateNode(overrides: Partial<DevWorkflowNodeRunDetailResponse> = {}): DevWorkflowNodeRunDetailResponse {
 	return devWorkflowNodeRunDetail({
@@ -340,8 +356,22 @@ describe("DevWorkflowHumanGatePanel", () => {
 			gateNode({
 				attempt: 3,
 				decisions: [
-					{ id: "d2", attempt: 2, decision: "RequestChanges", comment: "second", decidedBySubject: "admin", sequence: 20 },
-					{ id: "d1", attempt: 1, decision: "RequestChanges", comment: "first", decidedBySubject: "admin", sequence: 10 },
+					decision({
+						id: "d2",
+						attempt: 2,
+						decision: "RequestChanges",
+						comment: "second",
+						sequence: 20,
+						decidedAtUtc: 1_700_000_200_000,
+					}),
+					decision({
+						id: "d1",
+						attempt: 1,
+						decision: "RequestChanges",
+						comment: "first",
+						sequence: 10,
+						decidedAtUtc: 1_700_000_100_000,
+					}),
 				],
 			}),
 		);
@@ -355,24 +385,11 @@ describe("DevWorkflowHumanGatePanel", () => {
 			gateNode({
 				status: "Succeeded",
 				pendingDecisionKind: null,
-				decisions: [{ id: "d1", attempt: 1, decision: "Approve", decidedBySubject: "admin", sequence: 10 }],
+				decisions: [decision({ id: "d1", attempt: 1, decision: "Approve", sequence: 10 })],
 			}),
 		);
 
 		expect(screen.getByTestId("dev-workflow-gate-history")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-gate-Approve")).toBeNull();
-	});
-
-	// The decision history is the audit trail of a human act, so a missing stamp has to read as missing. Coalescing
-	// it to epoch zero dated somebody's approval to 1970 and looked like a real entry.
-	it("shows the dash, not a 1970 date, for a decision with no timestamp", () => {
-		renderPanel(
-			gateNode({
-				decisions: [{ id: "d1", attempt: 1, decision: "Approve", decidedBySubject: "admin", sequence: 10 }],
-			}),
-		);
-
-		const row = screen.getByTestId("dev-workflow-gate-decision-d1");
-		expect(row.textContent).toContain(`admin \u00b7 ${formatTimestamp(undefined)}`);
 	});
 });

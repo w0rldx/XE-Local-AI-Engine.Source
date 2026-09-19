@@ -113,19 +113,15 @@ function editorRoutes(graph: GraphWorkflowGraph = eightNodeGraph) {
 /**
  * The run and the definition it was started from. `graph` is BOTH the run's pinned graph and the definition's current
  * one, which is the ordinary case; `definitionNow` overrides only the definition, standing in for an edit made after
- * the run started.
+ * the run started. The run response always carries a graph, so there is no "no pinned graph" variant here — the canvas
+ * model's own tests cover that notice.
  */
 function runViewRoutes(
 	graph: GraphWorkflowGraph = eightNodeGraph,
-	options: { readonly definitionNow?: GraphWorkflowGraph; readonly pinned?: GraphWorkflowGraph | undefined } = {},
+	options: { readonly definitionNow?: GraphWorkflowGraph } = {},
 ) {
-	const hasPinned = !("pinned" in options) || options.pinned !== undefined;
 	return [
-		jsonRoute(
-			"get",
-			`graph-workflows/runs/${runId}`,
-			graphWorkflowRun({ graph: hasPinned ? (options.pinned ?? graph) : undefined }),
-		),
+		jsonRoute("get", `graph-workflows/runs/${runId}`, graphWorkflowRun({ graph })),
 		jsonRoute("get", "graph-workflows/runs", { runs: [graphWorkflowRunSummary()] }),
 		jsonRoute(
 			"get",
@@ -374,17 +370,6 @@ describe("GraphWorkflowsPage", () => {
 		expect(screen.queryByTestId("graph-workflow-run-graph-mismatch")).toBeNull();
 	});
 
-	it("falls back to nodes only for a run response that carries no graph", async () => {
-		const definitionNow: GraphWorkflowGraph = {
-			...eightNodeGraph,
-			nodes: (eightNodeGraph.nodes ?? []).filter((node) => node.key !== "lookup"),
-		};
-		server.use(...runViewRoutes(eightNodeGraph, { definitionNow, pinned: undefined }));
-
-		renderPage({ definitionId, runId, tab: "runs" });
-
-		expect((await screen.findByTestId("graph-workflow-run-graph-mismatch")).textContent).toContain("nodes only");
-	});
 	it("shows a server warning without blocking the save, and keeps it through the save's own reload", async () => {
 		const put = vi.fn();
 		// The write bumps the version, and the GET answers the NEW one from then on — which is what makes the

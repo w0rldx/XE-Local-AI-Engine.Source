@@ -421,7 +421,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, action, occurredAt),
+            await _eventPublisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent { EventType = SchedulerHubEvents.JobDefinitionChanged, ScheduledJobId = scheduledJobId, Action = action, OccurredAtUtc = occurredAt },
                 CancellationToken.None);
         }
         catch (Exception exception)

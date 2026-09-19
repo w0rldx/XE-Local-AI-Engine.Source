@@ -253,14 +253,17 @@ public sealed class NodeChatHubTests
             LastRequest = request;
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
-            yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantCompleted,
-                request.ConversationId,
-                request.MessageId.GetValueOrDefault(Guid.NewGuid()),
-                request.RequestId.GetValueOrDefault(Guid.NewGuid()),
-                NodeChatMessageStatusValues.Completed,
-                Sequence: 0,
-                OccurredAtUtc: 1,
-                Content: "ok");
+            yield return new ChatStreamEvent
+            {
+                Type = ChatStreamEventTypes.AssistantCompleted,
+                ConversationId = request.ConversationId,
+                MessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid()),
+                RequestId = request.RequestId.GetValueOrDefault(Guid.NewGuid()),
+                Status = NodeChatMessageStatusValues.Completed,
+                Sequence = 0,
+                OccurredAtUtc = 1,
+                Content = "ok"
+            };
         }
     }
 
@@ -272,34 +275,43 @@ public sealed class NodeChatHubTests
         {
             var messageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
             var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
-            yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantStreaming,
-                request.ConversationId,
-                messageId,
-                requestId,
-                NodeChatMessageStatusValues.Streaming,
-                Sequence: 0,
-                OccurredAtUtc: 1);
+            yield return new ChatStreamEvent
+            {
+                Type = ChatStreamEventTypes.AssistantStreaming,
+                ConversationId = request.ConversationId,
+                MessageId = messageId,
+                RequestId = requestId,
+                Status = NodeChatMessageStatusValues.Streaming,
+                Sequence = 0,
+                OccurredAtUtc = 1
+            };
 
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
 
-            yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantDelta,
-                request.ConversationId,
-                messageId,
-                requestId,
-                NodeChatMessageStatusValues.Streaming,
-                Sequence: 1,
-                OccurredAtUtc: 2,
-                "hi",
-                Content: "hi");
-            yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantCompleted,
-                request.ConversationId,
-                messageId,
-                requestId,
-                NodeChatMessageStatusValues.Completed,
-                Sequence: 2,
-                OccurredAtUtc: 3,
-                Content: "hi");
+            yield return new ChatStreamEvent
+            {
+                Type = ChatStreamEventTypes.AssistantDelta,
+                ConversationId = request.ConversationId,
+                MessageId = messageId,
+                RequestId = requestId,
+                Status = NodeChatMessageStatusValues.Streaming,
+                Sequence = 1,
+                OccurredAtUtc = 2,
+                Delta = "hi",
+                Content = "hi"
+            };
+            yield return new ChatStreamEvent
+            {
+                Type = ChatStreamEventTypes.AssistantCompleted,
+                ConversationId = request.ConversationId,
+                MessageId = messageId,
+                RequestId = requestId,
+                Status = NodeChatMessageStatusValues.Completed,
+                Sequence = 2,
+                OccurredAtUtc = 3,
+                Content = "hi"
+            };
         }
     }
 }

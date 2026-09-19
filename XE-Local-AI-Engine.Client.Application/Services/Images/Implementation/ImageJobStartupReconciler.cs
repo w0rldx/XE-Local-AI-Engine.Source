@@ -83,14 +83,17 @@ public sealed class ImageJobStartupReconciler : IHostedService
     private async Task PublishFailedAsync(Guid jobId, CancellationToken cancellationToken)
     {
         // Seq 0: the per-job replay log did not survive the restart, so this is the first event of the new process.
-        var payload = new ImageJobStatusHubEvent(jobId,
-            ImageJobStatus.Failed.ToString(),
-            QueuePosition: null,
-            ElapsedMs: null,
-            ImageId: null,
-            SanitizedError: InterruptedReason,
-            OccurredAtUtc: NowUnixMs(),
-            Seq: 0);
+        var payload = new ImageJobStatusHubEvent
+        {
+            JobId = jobId,
+            Phase = ImageJobStatus.Failed.ToString(),
+            QueuePosition = null,
+            ElapsedMs = null,
+            ImageId = null,
+            SanitizedError = InterruptedReason,
+            OccurredAtUtc = NowUnixMs(),
+            Seq = 0
+        };
 
         try
         {

@@ -48,12 +48,16 @@ export function toGoldenConversations(
 	return (dto.items ?? []).map(toGoldenConversation);
 }
 
-export function toGoldenHarvestResult(dto: XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse): GoldenHarvestResult {
+// The wire counts are all required, so the only way a count can be missing is an absent response body; that case
+// still maps to an all-zero result rather than surfacing an error toast.
+export function toGoldenHarvestResult(
+	dto: XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse | undefined,
+): GoldenHarvestResult {
 	return {
-		thumbsUpScanned: dto.thumbsUpScanned ?? 0,
-		createdCount: dto.createdCount ?? 0,
-		duplicateCount: dto.duplicateCount ?? 0,
-		skippedCount: dto.skippedCount ?? 0,
+		thumbsUpScanned: dto?.thumbsUpScanned ?? 0,
+		createdCount: dto?.createdCount ?? 0,
+		duplicateCount: dto?.duplicateCount ?? 0,
+		skippedCount: dto?.skippedCount ?? 0,
 	};
 }
 

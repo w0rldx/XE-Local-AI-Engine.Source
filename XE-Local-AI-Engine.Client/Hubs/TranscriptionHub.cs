@@ -48,33 +48,59 @@ public static class TranscriptionHubErrors
 ///     What a subscriber gets back: the session's status, the transcript rows after its watermark, the watermark it
 ///     may resume from, and whether the replay cap cut the page short.
 /// </summary>
-/// <param name="SessionId">The session subscribed to.</param>
-/// <param name="Status">The session's persisted status, or <c>Transcribing</c> for a persist-free session.</param>
-/// <param name="LastSeq">The last row DELIVERED, or the caller's own watermark when nothing was.</param>
-/// <param name="Segments">The replayed rows, ascending by sequence.</param>
-/// <param name="ReplayTruncated">Whether rows beyond this page exist; read one row past the cap, never inferred.</param>
-public sealed record TranscriptionSessionSubscriptionSnapshot(
-    Guid SessionId,
-    string Status,
-    long LastSeq,
-    IReadOnlyList<TranscriptSegmentResponse> Segments,
-    bool ReplayTruncated);
+public sealed class TranscriptionSessionSubscriptionSnapshot
+{
+    /// <summary>The session subscribed to.</summary>
+    public required Guid SessionId { get; init; }
+
+    /// <summary>The session's persisted status, or <c>Transcribing</c> for a persist-free session.</summary>
+    public required string Status { get; init; }
+
+    /// <summary>The last row DELIVERED, or the caller's own watermark when nothing was.</summary>
+    public required long LastSeq { get; init; }
+
+    /// <summary>The replayed rows, ascending by sequence.</summary>
+    public required IReadOnlyList<TranscriptSegmentResponse> Segments { get; init; }
+
+    /// <summary>Whether rows beyond this page exist; read one row past the cap, never inferred.</summary>
+    public required bool ReplayTruncated { get; init; }
+}
 
 /// <summary>One committed transcript row, pushed as it is allocated its sequence.</summary>
-public sealed record TranscriptSegmentCommittedPush(
-    Guid SessionId,
-    long Seq,
-    long StartMs,
-    long EndMs,
-    string Text,
-    string Channel,
-    double? Confidence);
+public sealed class TranscriptSegmentCommittedPush
+{
+    public required Guid SessionId { get; init; }
+
+    public required long Seq { get; init; }
+
+    public required long StartMs { get; init; }
+
+    public required long EndMs { get; init; }
+
+    public required string Text { get; init; }
+
+    public required string Channel { get; init; }
+
+    public required double? Confidence { get; init; }
+}
 
 /// <summary>One lane's provisional text. Never persisted and never sequenced: it is replaced, not accumulated.</summary>
-public sealed record TranscriptPartialUpdatedPush(Guid SessionId, string Channel, string Text);
+public sealed class TranscriptPartialUpdatedPush
+{
+    public required Guid SessionId { get; init; }
+
+    public required string Channel { get; init; }
+
+    public required string Text { get; init; }
+}
 
 /// <summary>A live session reached its terminal state, and this is what it was.</summary>
-public sealed record TranscriptionSessionStatusPush(Guid SessionId, string Status);
+public sealed class TranscriptionSessionStatusPush
+{
+    public required Guid SessionId { get; init; }
+
+    public required string Status { get; init; }
+}
 
 /// <summary>
 ///     Operator-only live transcription: the browser's audio goes in here and committed segments come back out.
@@ -175,11 +201,14 @@ public sealed class TranscriptionHub : Hub
         if (session is null)
         {
             // Nothing was ever stored, so a reconnect resumes the stream and recovers nothing it missed.
-            return new TranscriptionSessionSubscriptionSnapshot(sessionId,
-                TranscriptionSessionStatus.Transcribing.ToString(),
-                afterSeq,
-                [],
-                ReplayTruncated: false);
+            return new TranscriptionSessionSubscriptionSnapshot
+            {
+                SessionId = sessionId,
+                Status = TranscriptionSessionStatus.Transcribing.ToString(),
+                LastSeq = afterSeq,
+                Segments = [],
+                ReplayTruncated = false
+            };
         }
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
@@ -191,11 +220,14 @@ public sealed class TranscriptionHub : Hub
         // skip every row the cap cut off, for good: nothing replays them a second time. An empty page keeps the
         // caller's own watermark, because it has seen nothing new and has therefore moved nowhere.
         var lastSeq = replayed.Count == 0 ? afterSeq : replayed[^1].Seq;
-        return new TranscriptionSessionSubscriptionSnapshot(sessionId,
-            session.Status.ToString(),
-            lastSeq,
-            [.. replayed.Select(static segment => segment.ToResponse())],
-            segments.Count > replayLimit);
+        return new TranscriptionSessionSubscriptionSnapshot
+        {
+            SessionId = sessionId,
+            Status = session.Status.ToString(),
+            LastSeq = lastSeq,
+            Segments = [.. replayed.Select(static segment => segment.ToResponse())],
+            ReplayTruncated = segments.Count > replayLimit
+        };
     }
 
     /// <summary>

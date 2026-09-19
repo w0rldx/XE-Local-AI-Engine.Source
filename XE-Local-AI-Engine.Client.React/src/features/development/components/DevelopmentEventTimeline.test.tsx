@@ -41,10 +41,22 @@ beforeEach(() => {
 	});
 });
 
-// Every field on the generated response type is optional, so this needs no cast — which is the point: the test
-// stops compiling if the model gains a required field, instead of silently constructing a shape the app never sees.
-function event(id: string, sequence: number, outcome: string | null, operationPhase?: string): DevelopmentEvent {
-	return { id, sequence, eventType: "TaskTransitioned", outcome, operationPhase };
+// Built from the generated response type without a cast — which is the point: the test stops compiling when the
+// model gains a member, instead of silently constructing a shape the app never sees. The feed carries an explicit
+// null for every member an event does not use.
+function event(id: string, sequence: number, outcome: string | null, operationPhase: string | null = null): DevelopmentEvent {
+	return {
+		id,
+		projectId: "project-1",
+		taskId: null,
+		attemptId: null,
+		sequence,
+		eventType: "TaskTransitioned",
+		occurredAtUtc: 1700 + sequence,
+		operationId: null,
+		operationPhase,
+		outcome,
+	};
 }
 
 function renderTimeline(events: readonly DevelopmentEvent[]) {

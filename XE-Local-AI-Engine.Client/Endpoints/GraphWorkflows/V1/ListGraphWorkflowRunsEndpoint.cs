@@ -32,6 +32,6 @@ public sealed class ListGraphWorkflowRunsEndpoint : Endpoint<ListGraphWorkflowRu
         // Safe to parse rather than TryParse: the validator has already refused anything that is not a member name.
         var status = req.Status is null ? (GraphWorkflowRunStatus?)null : Enum.Parse<GraphWorkflowRunStatus>(req.Status, ignoreCase: true);
         var listed = await _runs.ListRunsAsync(status, req.Limit, ct);
-        await Send.OkAsync(new ListGraphWorkflowRunsResponse([.. listed.Select(GraphWorkflowContractMapper.ToResponse)]), ct);
+        await Send.OkAsync(new ListGraphWorkflowRunsResponse { Runs = [.. listed.Select(GraphWorkflowContractMapper.ToResponse)] }, ct);
     }
 }

@@ -25,7 +25,7 @@ internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
         CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
                   .SendAsync(ExternalAppHubEvents.Changed,
-                      new ExternalAppChanged(instanceId, sequence, ToWireKind(kind), status.ToString()),
+                      new ExternalAppChanged { InstanceId = instanceId, Sequence = sequence, Kind = ToWireKind(kind), Status = status.ToString() },
                       cancellationToken);
 
     public Task PublishPullProgressAsync(Guid instanceId,
@@ -36,7 +36,7 @@ internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
         CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(ExternalAppHubGroups.Instance(instanceId))
                   .SendAsync(ExternalAppHubEvents.PullProgress,
-                      new ExternalAppPullProgress(instanceId, service, layerCount, completedLayers, bytes),
+                      new ExternalAppPullProgress { InstanceId = instanceId, Service = service, LayerCount = layerCount, CompletedLayers = completedLayers, Bytes = bytes },
                       cancellationToken);
 
     /// <summary>

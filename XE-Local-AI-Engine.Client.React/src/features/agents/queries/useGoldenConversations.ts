@@ -92,7 +92,7 @@ export function useHarvestGolden(agentDefinitionId: string) {
 		mutationFn: async (): Promise<GoldenHarvestResult> => {
 			const options = withResponseValidation(harvestGoldenConversationsMutation());
 			const data = await options.mutationFn?.({ path: { agentDefinitionId } }, undefined as never);
-			return toGoldenHarvestResult(data ?? {});
+			return toGoldenHarvestResult(data);
 		},
 		onSuccess: () => invalidateList(queryClient),
 	});

@@ -19,102 +19,123 @@ internal static class DevelopmentContractMapper
     public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value)
     {
         var profile = DevelopmentProfileSummary.TryFrom(value.CommandProfileJson);
-        return new DevelopmentProjectResponse(value.Id,
-            value.Objective,
-            value.SelectedFolderId,
-            value.SelectedFolderId is null,
-            value.BaseBranch,
-            value.Status.ToString(),
-            value.EgressPolicy.ToString(),
-            value.CoderModelId,
-            value.ReviewerModelId,
-            value.MaxTokens,
-            value.MaxDurationSeconds,
-            value.CreatedAtUtc,
-            value.UpdatedAtUtc,
-            value.Version,
-            profile?.ProfileId,
-            profile?.BuildTarget,
-            profile?.Digest);
+        return new DevelopmentProjectResponse
+        {
+            Id = value.Id,
+            Objective = value.Objective,
+            SelectedFolderId = value.SelectedFolderId,
+            RepositoryConnectionRequired = value.SelectedFolderId is null,
+            BaseBranch = value.BaseBranch,
+            Status = value.Status.ToString(),
+            EgressPolicy = value.EgressPolicy.ToString(),
+            CoderModelId = value.CoderModelId,
+            ReviewerModelId = value.ReviewerModelId,
+            MaxTokens = value.MaxTokens,
+            MaxDurationSeconds = value.MaxDurationSeconds,
+            CreatedAtUtc = value.CreatedAtUtc,
+            UpdatedAtUtc = value.UpdatedAtUtc,
+            Version = value.Version,
+            CommandProfileId = profile?.ProfileId,
+            CommandProfileBuildTarget = profile?.BuildTarget,
+            CommandProfileDigest = profile?.Digest
+        };
     }
 
     public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value) =>
-        new(value.Id, value.Alias, value.Availability);
+        new() { Id = value.Id, Alias = value.Alias, Availability = value.Availability };
 
     public static DevelopmentTemplateResponse ToResponse(this DevelopmentTemplateReference value) =>
-        new(value.Id, value.Alias, value.Availability);
+        new() { Id = value.Id, Alias = value.Alias, Availability = value.Availability };
 
     /// <summary>
     ///     The task's own row says nothing about workflows, so the run driving it travels beside it — from the
     ///     aggregate, which is where the reverse lookup happens.
     /// </summary>
     public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value, Guid? workflowRunId = null) =>
-        new(value.Id,
-            value.ProjectId,
-            value.Title,
-            value.Requirements,
-            value.AcceptanceCriteriaJson,
-            value.Status.ToString(),
-            value.CurrentReviewRound,
-            value.MaxReviewRounds,
-            value.BlockedReason,
-            value.ApprovedSubjectHash,
-            value.Version,
-            workflowRunId);
+        new()
+        {
+            Id = value.Id,
+            ProjectId = value.ProjectId,
+            Title = value.Title,
+            Requirements = value.Requirements,
+            AcceptanceCriteriaJson = value.AcceptanceCriteriaJson,
+            Status = value.Status.ToString(),
+            CurrentReviewRound = value.CurrentReviewRound,
+            MaxReviewRounds = value.MaxReviewRounds,
+            BlockedReason = value.BlockedReason,
+            ApprovedSubjectHash = value.ApprovedSubjectHash,
+            Version = value.Version,
+            WorkflowRunId = workflowRunId
+        };
 
     public static DevelopmentAttemptResponse ToResponse(this DevelopmentAttemptSnapshot value) =>
-        new(value.Id,
-            value.TaskId,
-            value.PredecessorAttemptId,
-            value.Role.ToString(),
-            value.ModelId,
-            value.Provider,
-            value.Status.ToString(),
-            value.StartedAtUtc,
-            value.EndedAtUtc,
-            value.TerminalReason,
-            value.InputTokens,
-            value.OutputTokens,
-            value.Version);
+        new()
+        {
+            Id = value.Id,
+            TaskId = value.TaskId,
+            PredecessorAttemptId = value.PredecessorAttemptId,
+            Role = value.Role.ToString(),
+            ModelId = value.ModelId,
+            Provider = value.Provider,
+            Status = value.Status.ToString(),
+            StartedAtUtc = value.StartedAtUtc,
+            EndedAtUtc = value.EndedAtUtc,
+            TerminalReason = value.TerminalReason,
+            InputTokens = value.InputTokens,
+            OutputTokens = value.OutputTokens,
+            Version = value.Version
+        };
 
     public static DevelopmentArtifactResponse ToResponse(this DevelopmentArtifactSnapshot value) =>
-        new(value.Id,
-            value.ProjectId,
-            value.TaskId,
-            value.AttemptId,
-            value.Kind.ToString(),
-            value.ContentHash,
-            value.ByteCount,
-            value.CreatedAtUtc,
-            value.BaseCommit,
-            value.SubjectHash,
-            value.ChangedFilesManifestHash,
-            value.CommandProfileVersion,
-            value.CommandProfileDigest,
-            value.IsValid);
+        new()
+        {
+            Id = value.Id,
+            ProjectId = value.ProjectId,
+            TaskId = value.TaskId,
+            AttemptId = value.AttemptId,
+            Kind = value.Kind.ToString(),
+            ContentHash = value.ContentHash,
+            ByteCount = value.ByteCount,
+            CreatedAtUtc = value.CreatedAtUtc,
+            BaseCommit = value.BaseCommit,
+            SubjectHash = value.SubjectHash,
+            ChangedFilesManifestHash = value.ChangedFilesManifestHash,
+            CommandProfileVersion = value.CommandProfileVersion,
+            CommandProfileDigest = value.CommandProfileDigest,
+            IsValid = value.IsValid
+        };
 
     public static DevelopmentEventResponse ToResponse(this DevelopmentEventSnapshot value) =>
-        new(value.Id,
-            value.ProjectId,
-            value.TaskId,
-            value.AttemptId,
-            value.Sequence,
-            value.EventType,
-            value.OccurredAtUtc,
-            value.OperationId,
-            value.OperationPhase,
-            value.Outcome,
-            value.Reason);
+        new()
+        {
+            Id = value.Id,
+            ProjectId = value.ProjectId,
+            TaskId = value.TaskId,
+            AttemptId = value.AttemptId,
+            Sequence = value.Sequence,
+            EventType = value.EventType,
+            OccurredAtUtc = value.OccurredAtUtc,
+            OperationId = value.OperationId,
+            OperationPhase = value.OperationPhase,
+            Outcome = value.Outcome,
+            Reason = value.Reason
+        };
 
     public static DevelopmentTaskDetailResponse ToResponse(this DevelopmentTaskAggregate value) =>
-        new(value.Task.ToResponse(value.WorkflowRunId),
-            value.Attempts.Select(ToResponse).ToArray(),
-            value.Artifacts.Select(ToResponse).ToArray());
+        new()
+        {
+            Task = value.Task.ToResponse(value.WorkflowRunId),
+            Attempts = value.Attempts.Select(ToResponse).ToArray(),
+            Artifacts = value.Artifacts.Select(ToResponse).ToArray()
+        };
 
     public static DevelopmentProjectDetailResponse ToResponse(this DevelopmentProjectAggregate value) =>
-        new(value.Project.ToResponse(),
-            value.Tasks.Select(ToResponse).ToArray(),
-            value.Events.Select(ToResponse).ToArray());
+        new()
+        {
+            Project = value.Project.ToResponse(),
+            Tasks = value.Tasks.Select(ToResponse).ToArray(),
+            Events = value.Events.Select(ToResponse).ToArray()
+        };
 
     /// <summary>
     ///     Projects one sandbox role's SERVED isolation posture — what the role's own declaration asks for, intersected
@@ -238,22 +259,25 @@ internal static class DevelopmentContractMapper
                 "CPU, memory or process-count ceilings",
                 "a runaway command is bounded only by its timeout and the machine");
 
-        return new SandboxIsolationSummaryResponse(role,
-            provider.ProviderName,
-            ToIsolationBackend(provider.ProviderName, filesystem),
-            enforced switch
+        return new SandboxIsolationSummaryResponse
+        {
+            Role = role,
+            Provider = provider.ProviderName,
+            Backend = ToIsolationBackend(provider.ProviderName, filesystem),
+            Level = enforced switch
             {
                 3 => "Isolated",
                 > 0 => "Confined",
                 _ => "None"
             },
-            filesystem,
-            network,
-            networkRequired,
-            limits,
-            capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts),
-            filesystem ? null : boundaryReason,
-            limits ? null : limitsReason);
+            FilesystemIsolation = filesystem,
+            NetworkIsolation = network,
+            NetworkIsolationRequired = networkRequired,
+            ResourceLimits = limits,
+            ReadOnlyMounts = capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts),
+            FilesystemIsolationUnavailableReason = filesystem ? null : boundaryReason,
+            ResourceLimitsUnavailableReason = limits ? null : limitsReason
+        };
     }
 
     // Derived from the declaration rather than written per role, so a workload added to SandboxWorkloads gets a true
@@ -309,24 +333,33 @@ internal static class DevelopmentContainerRuntimeMapper
     {
         ArgumentNullException.ThrowIfNull(preflight);
 
-        return new DevelopmentContainerRuntimeResponse(preflight.Ready,
-            ToStatusCode(preflight.Status),
-            preflight.Message,
-            preflight.RequiresOperatorConfirmation,
-            preflight.Endpoint?.Display,
-            preflight.Endpoint is null ? null : ToSourceCode(preflight.Endpoint.Source),
-            preflight.ObservedDaemon is null
+        return new DevelopmentContainerRuntimeResponse
+        {
+            Ready = preflight.Ready,
+            Status = ToStatusCode(preflight.Status),
+            Message = preflight.Message,
+            RequiresOperatorConfirmation = preflight.RequiresOperatorConfirmation,
+            Endpoint = preflight.Endpoint?.Display,
+            EndpointSource = preflight.Endpoint is null ? null : ToSourceCode(preflight.Endpoint.Source),
+            ObservedDaemon = preflight.ObservedDaemon is null
                 ? null
-                : new DevelopmentContainerDaemonResponse(preflight.ObservedDaemon.DaemonId,
-                    preflight.ObservedDaemon.ServerVersion,
-                    preflight.ObservedDaemon.Endpoint.Display,
-                    ConfirmedAtUtc: null),
-            preflight.PinnedDaemon is null
+                : new DevelopmentContainerDaemonResponse
+                {
+                    DaemonId = preflight.ObservedDaemon.DaemonId,
+                    ServerVersion = preflight.ObservedDaemon.ServerVersion,
+                    Endpoint = preflight.ObservedDaemon.Endpoint.Display,
+                    ConfirmedAtUtc = null
+                },
+            PinnedDaemon = preflight.PinnedDaemon is null
                 ? null
-                : new DevelopmentContainerDaemonResponse(preflight.PinnedDaemon.DaemonId,
-                    preflight.PinnedDaemon.ServerVersion,
-                    preflight.PinnedDaemon.Endpoint,
-                    preflight.PinnedDaemon.ConfirmedAtUtc));
+                : new DevelopmentContainerDaemonResponse
+                {
+                    DaemonId = preflight.PinnedDaemon.DaemonId,
+                    ServerVersion = preflight.PinnedDaemon.ServerVersion,
+                    Endpoint = preflight.PinnedDaemon.Endpoint,
+                    ConfirmedAtUtc = preflight.PinnedDaemon.ConfirmedAtUtc
+                }
+        };
     }
 
     // Mapped explicitly rather than by ToString(): these codes are a wire contract the React app branches on, and

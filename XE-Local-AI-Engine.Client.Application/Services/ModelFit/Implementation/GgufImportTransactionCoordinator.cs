@@ -414,15 +414,18 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
     private void Publish(GgufAcquisitionStatus status)
     {
-        _ = PublishAsync(new GgufDownloadStatusHubEvent(status.ModelName,
-            status.Phase.ToString(),
-            status.CompletedBytes,
-            status.TotalBytes,
-            status.SanitizedError,
-            status.OperationId,
-            status.OperationKind.ToString(),
-            status.ErrorCode,
-            status.UpdatedAtUtc));
+        _ = PublishAsync(new GgufDownloadStatusHubEvent
+        {
+            ModelName = status.ModelName,
+            Phase = status.Phase.ToString(),
+            CompletedBytes = status.CompletedBytes,
+            TotalBytes = status.TotalBytes,
+            SanitizedError = status.SanitizedError,
+            OperationId = status.OperationId,
+            OperationKind = status.OperationKind.ToString(),
+            ErrorCode = status.ErrorCode,
+            UpdatedAtUtc = status.UpdatedAtUtc
+        });
     }
 
     private async Task PublishAsync(GgufDownloadStatusHubEvent statusEvent)

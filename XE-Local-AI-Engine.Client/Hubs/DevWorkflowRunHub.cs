@@ -21,18 +21,35 @@ public static class DevWorkflowHubEvents
 ///     on the literal — and the payload deliberately carries no content: the subscriber re-reads the named feed from
 ///     its own watermark, so a dropped push degrades to a late read rather than to a wrong render.
 /// </summary>
-public sealed record DevWorkflowChanged(Guid RunId, long Seq, string Kind);
+public sealed class DevWorkflowChanged
+{
+    public required Guid RunId { get; init; }
 
-public sealed record DevWorkflowRunSubscriptionSnapshot(
-    Guid RunId,
-    string Status,
-    int QueuedNodeCount,
-    int RunningNodeCount,
-    int PendingDecisionCount,
-    Guid? BlockingGateNodeRunId,
-    long LastSeq,
-    IReadOnlyList<DevWorkflowRunEventResponse> Events,
-    bool ReplayTruncated);
+    public required long Seq { get; init; }
+
+    public required string Kind { get; init; }
+}
+
+public sealed class DevWorkflowRunSubscriptionSnapshot
+{
+    public required Guid RunId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int QueuedNodeCount { get; init; }
+
+    public required int RunningNodeCount { get; init; }
+
+    public required int PendingDecisionCount { get; init; }
+
+    public required Guid? BlockingGateNodeRunId { get; init; }
+
+    public required long LastSeq { get; init; }
+
+    public required IReadOnlyList<DevWorkflowRunEventResponse> Events { get; init; }
+
+    public required bool ReplayTruncated { get; init; }
+}
 
 /// <summary>
 ///     Operator-only live notifications for one development workflow run.
@@ -101,15 +118,18 @@ public sealed class DevWorkflowRunHub : Hub
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
         var events = await _queries.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken);
-        return new DevWorkflowRunSubscriptionSnapshot(runId,
-            detail.Run.Status.ToString(),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
-            detail.PendingDecisionCount,
-            detail.BlockingGateNodeRunId,
-            detail.Run.LastSequence,
-            [.. events.Take(ReplayCap).Select(DevWorkflowContractMapper.ToResponse)],
-            events.Count > ReplayCap);
+        return new DevWorkflowRunSubscriptionSnapshot
+        {
+            RunId = runId,
+            Status = detail.Run.Status.ToString(),
+            QueuedNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
+            RunningNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
+            PendingDecisionCount = detail.PendingDecisionCount,
+            BlockingGateNodeRunId = detail.BlockingGateNodeRunId,
+            LastSeq = detail.Run.LastSequence,
+            Events = [.. events.Take(ReplayCap).Select(DevWorkflowContractMapper.ToResponse)],
+            ReplayTruncated = events.Count > ReplayCap
+        };
     }
 
     public Task UnsubscribeRun(Guid runId) =>

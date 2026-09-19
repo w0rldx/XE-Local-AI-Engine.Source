@@ -18,7 +18,7 @@ internal sealed class WorkSessionEventPublisher : IWorkSessionEventPublisher
 
     public Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default) =>
         _hubContext.Clients.Group(WorkSessionHubGroups.Session(sessionId))
-                  .SendAsync(WorkSessionHubEvents.Changed, new WorkSessionChanged(sessionId, sequence, ToWireKind(kind)), cancellationToken);
+                  .SendAsync(WorkSessionHubEvents.Changed, new WorkSessionChanged { SessionId = sessionId, Seq = sequence, Kind = ToWireKind(kind) }, cancellationToken);
 
     /// <summary>
     ///     The wire spelling of a change kind, written out rather than derived from the enum name. The subscriber

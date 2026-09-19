@@ -548,28 +548,34 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public List<RuntimeAcquisitionUpdate> Updates { get; } = [];
 
-        public RuntimeAcquisitionStatusHubEvent Current { get; private set; } = new(Sequence: 0,
-            nameof(RuntimeAcquisitionPhase.Idle),
-            Variant: null,
-            Tag: null,
-            CompletedBytes: null,
-            TotalBytes: null,
-            StepIndex: 1,
-            StepCount: 1,
-            SanitizedError: null);
+        public RuntimeAcquisitionStatusHubEvent Current { get; private set; } = new()
+        {
+            Sequence = 0,
+            Phase = nameof(RuntimeAcquisitionPhase.Idle),
+            Variant = null,
+            Tag = null,
+            CompletedBytes = null,
+            TotalBytes = null,
+            StepIndex = 1,
+            StepCount = 1,
+            SanitizedError = null
+        };
 
         public void Report(RuntimeAcquisitionUpdate update)
         {
             Updates.Add(update);
-            Current = new RuntimeAcquisitionStatusHubEvent(++_sequence,
-                update.Phase.ToString(),
-                update.Variant,
-                update.Tag,
-                update.CompletedBytes,
-                update.TotalBytes,
-                update.StepIndex,
-                update.StepCount,
-                update.SanitizedError);
+            Current = new RuntimeAcquisitionStatusHubEvent
+            {
+                Sequence = ++_sequence,
+                Phase = update.Phase.ToString(),
+                Variant = update.Variant,
+                Tag = update.Tag,
+                CompletedBytes = update.CompletedBytes,
+                TotalBytes = update.TotalBytes,
+                StepIndex = update.StepIndex,
+                StepCount = update.StepCount,
+                SanitizedError = update.SanitizedError
+            };
         }
     }
 

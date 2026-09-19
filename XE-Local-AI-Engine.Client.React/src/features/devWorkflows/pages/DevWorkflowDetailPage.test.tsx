@@ -56,12 +56,16 @@ function runRoutes(id: string, status: string) {
 	];
 }
 
+// The catalogue answers every member of the summary, its seed provenance and last-write stamp included.
 const startableDefinition = {
 	id: devWorkflowTestIds.definition,
 	name: "Research → Plan → Approval",
+	source: "Seed",
+	seedSlug: "research-plan-approval",
+	archived: false,
 	version: 1,
 	nodeCount: 3,
-	archived: false,
+	updatedAtUtc: 1_700_000_100_000,
 };
 
 function baseRoutes(overrides: { run?: unknown; nodeRun?: unknown } = {}) {

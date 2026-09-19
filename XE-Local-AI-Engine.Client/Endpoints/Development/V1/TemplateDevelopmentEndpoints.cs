@@ -25,7 +25,7 @@ public sealed class ListDevelopmentTemplatesEndpoint : EndpointWithoutRequest<Li
     public override async Task HandleAsync(CancellationToken ct)
     {
         var templates = await _service.ListTemplatesAsync(ct);
-        await Send.OkAsync(new ListDevelopmentTemplatesResponse(templates.Select(template => template.ToResponse()).ToArray()), ct);
+        await Send.OkAsync(new ListDevelopmentTemplatesResponse { Templates = templates.Select(template => template.ToResponse()).ToArray() }, ct);
     }
 }
 
@@ -114,9 +114,12 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint : Endpoint<C
         try
         {
             var result = await _service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct);
-            await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse(result.Repository.ToResponse(),
-                    result.TemplateAlias,
-                    result.TemplateCommit),
+            await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse
+            {
+                Repository = result.Repository.ToResponse(),
+                TemplateAlias = result.TemplateAlias,
+                TemplateCommit = result.TemplateCommit
+            },
                 ct);
         }
         catch (Exception exception) when (exception is ArgumentException

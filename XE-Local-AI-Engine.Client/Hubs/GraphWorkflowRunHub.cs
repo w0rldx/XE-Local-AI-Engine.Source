@@ -21,17 +21,33 @@ public static class GraphWorkflowHubEvents
 ///     on the literal — and the payload deliberately carries no content: the subscriber re-reads the named feed from
 ///     its own watermark, so a dropped push degrades to a late read rather than to a wrong render.
 /// </summary>
-public sealed record GraphWorkflowChanged(Guid RunId, long Seq, string Kind);
+public sealed class GraphWorkflowChanged
+{
+    public required Guid RunId { get; init; }
 
-public sealed record GraphWorkflowRunSubscriptionSnapshot(
-    Guid RunId,
-    string Status,
-    int QueuedNodeCount,
-    int RunningNodeCount,
-    int PendingDecisionCount,
-    long LastSeq,
-    IReadOnlyList<GraphWorkflowRunEventResponse> Events,
-    bool ReplayTruncated);
+    public required long Seq { get; init; }
+
+    public required string Kind { get; init; }
+}
+
+public sealed class GraphWorkflowRunSubscriptionSnapshot
+{
+    public required Guid RunId { get; init; }
+
+    public required string Status { get; init; }
+
+    public required int QueuedNodeCount { get; init; }
+
+    public required int RunningNodeCount { get; init; }
+
+    public required int PendingDecisionCount { get; init; }
+
+    public required long LastSeq { get; init; }
+
+    public required IReadOnlyList<GraphWorkflowRunEventResponse> Events { get; init; }
+
+    public required bool ReplayTruncated { get; init; }
+}
 
 /// <summary>
 ///     Operator-only live notifications for one graph workflow run.
@@ -94,14 +110,17 @@ public sealed class GraphWorkflowRunHub : Hub
         // run's own sequence, which on a truncated page is past events this snapshot did not carry and nothing ever
         // replays again.
         var replay = await _runs.ListEventsAsync(runId, afterSeq, cancellationToken);
-        return new GraphWorkflowRunSubscriptionSnapshot(runId,
-            detail.Run.Status.ToString(),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval),
-            replay.LastSeq,
-            [.. replay.Events.Select(static @event => @event.ToResponse())],
-            replay.ReplayTruncated);
+        return new GraphWorkflowRunSubscriptionSnapshot
+        {
+            RunId = runId,
+            Status = detail.Run.Status.ToString(),
+            QueuedNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),
+            RunningNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
+            PendingDecisionCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval),
+            LastSeq = replay.LastSeq,
+            Events = [.. replay.Events.Select(static @event => @event.ToResponse())],
+            ReplayTruncated = replay.ReplayTruncated
+        };
     }
 
     public Task UnsubscribeRun(Guid runId) =>

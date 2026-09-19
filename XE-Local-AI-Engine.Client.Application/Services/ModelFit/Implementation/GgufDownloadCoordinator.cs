@@ -307,15 +307,18 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     // swallowed with a debug log — the list endpoint remains the authoritative one-shot hydrate either way.
     private void PublishStatus(GgufAcquisitionStatus status)
     {
-        var hubEvent = new GgufDownloadStatusHubEvent(status.ModelName,
-            status.Phase.ToString(),
-            status.CompletedBytes,
-            status.TotalBytes,
-            status.SanitizedError,
-            status.OperationId,
-            status.OperationKind.ToString(),
-            status.ErrorCode,
-            status.UpdatedAtUtc);
+        var hubEvent = new GgufDownloadStatusHubEvent
+        {
+            ModelName = status.ModelName,
+            Phase = status.Phase.ToString(),
+            CompletedBytes = status.CompletedBytes,
+            TotalBytes = status.TotalBytes,
+            SanitizedError = status.SanitizedError,
+            OperationId = status.OperationId,
+            OperationKind = status.OperationKind.ToString(),
+            ErrorCode = status.ErrorCode,
+            UpdatedAtUtc = status.UpdatedAtUtc
+        };
 
         _ = PublishStatusAsync(hubEvent);
     }

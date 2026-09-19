@@ -23918,6 +23918,11 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "artifact",
+          "content",
+          "isBase64"
+        ],
         "properties": {
           "artifact": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse"
@@ -23933,6 +23938,17 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "sequence",
+          "kind",
+          "name",
+          "mediaType",
+          "contentSha256",
+          "sizeBytes",
+          "isValid",
+          "createdStep"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -23972,6 +23988,9 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "enabled"
+        ],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -23981,6 +24000,10 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "messageId",
+          "conversationId"
+        ],
         "properties": {
           "messageId": {
             "type": "string",
@@ -24004,6 +24027,9 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -24016,6 +24042,15 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "status",
+          "agentDefinitionId",
+          "stepCount",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -24046,6 +24081,23 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "objective",
+          "kind",
+          "agentDefinitionId",
+          "conversationId",
+          "status",
+          "currentTaskId",
+          "stepCount",
+          "maxStepsPerRun",
+          "lastCheckpointId",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "version",
+          "lastSequence"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -24165,6 +24217,10 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionTasksResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -24180,6 +24236,18 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "parentTaskId",
+          "sequence",
+          "title",
+          "detail",
+          "status",
+          "blockedReason",
+          "origin",
+          "createdStep",
+          "updatedStep"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -24227,6 +24295,10 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionFindingsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -24242,6 +24314,16 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionFindingResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "taskId",
+          "sequence",
+          "kind",
+          "text",
+          "sourceRef",
+          "createdStep",
+          "superseded"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -24277,6 +24359,10 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionArtifactsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -24292,6 +24378,10 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionCheckpointsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -24307,6 +24397,14 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "sequence",
+          "step",
+          "summary",
+          "stateJson",
+          "createdAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -24334,6 +24432,11 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionEventsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence",
+          "hasMore"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -24352,6 +24455,16 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionEventResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "sequence",
+          "step",
+          "eventType",
+          "detailJson",
+          "outcome",
+          "occurredAtUtc",
+          "operationId"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -35825,6 +35938,12 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "run",
+          "nodeRuns",
+          "output",
+          "graph"
+        ],
         "properties": {
           "run": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse"
@@ -35846,6 +35965,19 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "requestId",
+          "definitionId",
+          "definitionVersion",
+          "graphHash",
+          "status",
+          "failureClass",
+          "cancelRequestedAtUtc",
+          "startedAtUtc",
+          "completedAtUtc",
+          "createdAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -35892,6 +36024,19 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "nodeKey",
+          "kind",
+          "status",
+          "attempt",
+          "failureClass",
+          "pendingDecisionKind",
+          "invocationId",
+          "startedAtUtc",
+          "completedAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -36065,6 +36210,18 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "graph",
+          "graphHash",
+          "nodeCount",
+          "schemaVersion",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -36132,6 +36289,11 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "decision",
+          "runStatus",
+          "nodeRunStatus"
+        ],
         "properties": {
           "decision": {
             "type": "string"
@@ -36176,6 +36338,23 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "runId",
+          "nodeKey",
+          "kind",
+          "status",
+          "attempt",
+          "failureClass",
+          "pendingDecisionKind",
+          "error",
+          "input",
+          "output",
+          "invocationId",
+          "startedAtUtc",
+          "completedAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -36240,6 +36419,9 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "definitions"
+        ],
         "properties": {
           "definitions": {
             "type": "array",
@@ -36252,6 +36434,17 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "graphHash",
+          "nodeCount",
+          "schemaVersion",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -36290,6 +36483,11 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunEventsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "events",
+          "lastSeq",
+          "replayTruncated"
+        ],
         "properties": {
           "events": {
             "type": "array",
@@ -36308,6 +36506,14 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "seq",
+          "eventType",
+          "nodeKey",
+          "detail",
+          "createdAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -36338,6 +36544,9 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "runs"
+        ],
         "properties": {
           "runs": {
             "type": "array",
@@ -36354,6 +36563,9 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "tools"
+        ],
         "properties": {
           "tools": {
             "type": "array",
@@ -36366,6 +36578,11 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "parameterSchema"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -36381,6 +36598,9 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "runId"
+        ],
         "properties": {
           "runId": {
             "type": "string",
@@ -36451,6 +36671,12 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "valid",
+          "errors",
+          "nodeCount",
+          "warnings"
+        ],
         "properties": {
           "valid": {
             "type": "boolean"
@@ -36476,6 +36702,10 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "key",
+          "message"
+        ],
         "properties": {
           "key": {
             "type": "string",
@@ -36756,6 +36986,22 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppManifestView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "manifestVersion",
+          "displayName",
+          "summary",
+          "description",
+          "homepage",
+          "license",
+          "trust",
+          "testedVersion",
+          "requires",
+          "permissions",
+          "resources",
+          "services",
+          "variables"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -36814,6 +37060,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPermissionsView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "internet",
+          "localNetwork",
+          "hostFiles",
+          "gpu"
+        ],
         "properties": {
           "internet": {
             "type": "boolean"
@@ -36832,6 +37084,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourcesView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "minimumMemoryMb",
+          "recommendedMemoryMb",
+          "cpuHint",
+          "pidsLimit"
+        ],
         "properties": {
           "minimumMemoryMb": {
             "type": "integer",
@@ -36854,6 +37112,21 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppServiceView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "name",
+          "image",
+          "imageTag",
+          "entrypoint",
+          "command",
+          "environment",
+          "ports",
+          "storage",
+          "hasHealthcheck",
+          "dependsOn",
+          "capAdd",
+          "extraHosts",
+          "readOnlyRootFilesystem"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -36925,6 +37198,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPortView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "containerPort",
+          "role",
+          "preferredHostPort",
+          "openPath"
+        ],
         "properties": {
           "containerPort": {
             "type": "integer",
@@ -36947,6 +37226,10 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppStorageView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "name",
+          "containerPath"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -36959,6 +37242,10 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDependencyView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "service",
+          "condition"
+        ],
         "properties": {
           "service": {
             "type": "string"
@@ -36971,6 +37258,17 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "name",
+          "label",
+          "description",
+          "type",
+          "required",
+          "default",
+          "allowedValues",
+          "advanced",
+          "validation"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -37015,6 +37313,11 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "minLength",
+          "maxLength",
+          "pattern"
+        ],
         "properties": {
           "minLength": {
             "type": "integer",
@@ -37039,6 +37342,20 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstallPreview": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "applicationId",
+          "manifestVersion",
+          "manifestSha256",
+          "canInstall",
+          "blockedReason",
+          "existingInstanceId",
+          "permissions",
+          "effectivePermissions",
+          "variables",
+          "runtime",
+          "missingCapabilities",
+          "resourceCheck"
+        ],
         "properties": {
           "applicationId": {
             "type": "string"
@@ -37091,6 +37408,17 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "internet",
+          "hostFiles",
+          "gpu",
+          "localNetwork",
+          "services",
+          "capabilities",
+          "writableRootFilesystem",
+          "publishedPorts",
+          "extraHosts"
+        ],
         "properties": {
           "internet": {
             "type": "boolean"
@@ -37136,6 +37464,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "capabilities",
+          "writableRootFilesystem",
+          "publishedPorts",
+          "extraHosts"
+        ],
         "properties": {
           "capabilities": {
             "type": "array",
@@ -37163,6 +37497,20 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "provider",
+          "status",
+          "available",
+          "ready",
+          "message",
+          "requiresOperatorConfirmation",
+          "endpoint",
+          "endpointSource",
+          "observedDaemon",
+          "pinnedDaemon",
+          "capabilities",
+          "foreignInstallContainers"
+        ],
         "properties": {
           "provider": {
             "type": "string"
@@ -37218,6 +37566,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDaemonView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "daemonId",
+          "serverVersion",
+          "endpoint",
+          "confirmedAtUtc"
+        ],
         "properties": {
           "daemonId": {
             "type": "string",
@@ -37240,6 +37594,17 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "containers",
+          "networks",
+          "bindStorage",
+          "loopbackPortPublishing",
+          "healthChecks",
+          "restartPolicies",
+          "logs",
+          "imagePull",
+          "gpuDevices"
+        ],
         "properties": {
           "containers": {
             "type": "boolean"
@@ -37273,6 +37638,15 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "satisfied",
+          "failureCategory",
+          "requiredMemoryBytes",
+          "availableMemoryBytes",
+          "requiredDiskBytes",
+          "availableDiskBytes",
+          "message"
+        ],
         "properties": {
           "satisfied": {
             "type": "boolean"
@@ -37301,6 +37675,30 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "applicationId",
+          "displayName",
+          "manifestVersion",
+          "status",
+          "desiredState",
+          "runtimeOverride",
+          "runtimeProvider",
+          "manifest",
+          "publishedPorts",
+          "variables",
+          "failureCategory",
+          "failureSummary",
+          "updateAvailable",
+          "availableManifestVersion",
+          "catalogMissing",
+          "installedAtUtc",
+          "startedAtUtc",
+          "stoppedAtUtc",
+          "updatedAtUtc",
+          "lastSequence",
+          "version"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -37388,6 +37786,13 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "service",
+          "containerPort",
+          "hostPort",
+          "openPath",
+          "url"
+        ],
         "properties": {
           "service": {
             "type": "string"
@@ -37413,6 +37818,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "service",
+          "text",
+          "lineCount",
+          "truncated"
+        ],
         "properties": {
           "service": {
             "type": "string"
@@ -37436,6 +37847,20 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "applicationId",
+          "instanceId",
+          "currentManifestVersion",
+          "targetManifestVersion",
+          "manifestSha256",
+          "variables",
+          "currentValues",
+          "addedPermissions",
+          "effectivePermissions",
+          "resourceVerdict",
+          "canUpdate",
+          "blockedReason"
+        ],
         "properties": {
           "applicationId": {
             "type": "string"
@@ -37491,6 +37916,21 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "applicationId",
+          "displayName",
+          "manifestVersion",
+          "status",
+          "desiredState",
+          "failureCategory",
+          "failureSummary",
+          "updateAvailable",
+          "availableManifestVersion",
+          "catalogMissing",
+          "updatedAtUtc",
+          "version"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -37583,6 +38023,15 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "generatedAtUtc",
+          "fetchedAtUtc",
+          "fromBundledSeed",
+          "refreshFailureMessage",
+          "lastRefreshFailure",
+          "applications"
+        ],
         "properties": {
           "schemaVersion": {
             "type": "integer",
@@ -37616,6 +38065,21 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppSummaryView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "manifestVersion",
+          "displayName",
+          "summary",
+          "homepage",
+          "license",
+          "trust",
+          "testedVersion",
+          "requires",
+          "permissions",
+          "resources",
+          "installedInstanceId",
+          "installedStatus"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -37668,6 +38132,11 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "highestSequence",
+          "hasMore"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -37686,6 +38155,12 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "sequence",
+          "atUtc",
+          "kind",
+          "detailJson"
+        ],
         "properties": {
           "sequence": {
             "type": "integer"
@@ -37709,6 +38184,9 @@
       "XE_Local_AI_EngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -37798,6 +38276,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "decision",
+          "runStatus",
+          "nodeRunStatus"
+        ],
         "properties": {
           "decision": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse"
@@ -37813,6 +38296,17 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "nodeRunId",
+          "attempt",
+          "decision",
+          "comment",
+          "decidedBySubject",
+          "decidedAtUtc",
+          "operationId",
+          "sequence"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -37882,6 +38376,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -37894,6 +38391,16 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "source",
+          "seedSlug",
+          "archived",
+          "version",
+          "nodeCount",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -37932,6 +38439,18 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "graph",
+          "graphHash",
+          "source",
+          "seedSlug",
+          "archived",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38198,6 +38717,60 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "runId",
+          "nodeKey",
+          "nodeType",
+          "label",
+          "status",
+          "attempt",
+          "maxAttempts",
+          "sessionResumes",
+          "queueReason",
+          "queuedAtUtc",
+          "agentDefinitionId",
+          "agentDisplayName",
+          "modelLabel",
+          "workSessionId",
+          "conversationId",
+          "workSessionAvailable",
+          "developmentProjectId",
+          "developmentTaskId",
+          "primaryArtifactId",
+          "instructions",
+          "inputJson",
+          "outputJson",
+          "producedArtifactIds",
+          "consumedArtifactIds",
+          "appliedRuleSets",
+          "pendingDecisionKind",
+          "allowedDecisions",
+          "hasRejectBranch",
+          "failureClass",
+          "terminalReason",
+          "decisions",
+          "operatorRetries",
+          "startedAtUtc",
+          "completedAtUtc",
+          "sequence",
+          "inputTokens",
+          "outputTokens",
+          "reasoningTokens",
+          "estimatedInputTokens",
+          "providerCalls",
+          "toolCalls",
+          "toolSchemaTokens",
+          "toolNames",
+          "agentTurnMs",
+          "servedModelName",
+          "route",
+          "workSessionSteps",
+          "failureClassGroup",
+          "modelReadinessMs",
+          "vramFreeAtLoadBytes",
+          "vramAdmittedBytes"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38433,6 +39006,12 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "contentSha256",
+          "currentContentSha256"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38453,6 +39032,13 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "satisfied",
+          "dead",
+          "waived",
+          "gateAnswer",
+          "truncated"
+        ],
         "properties": {
           "satisfied": {
             "type": "array",
@@ -38488,6 +39074,10 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -38503,6 +39093,25 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "lineageId",
+          "version",
+          "sequence",
+          "kind",
+          "name",
+          "mediaType",
+          "contentSha256",
+          "sizeBytes",
+          "producedByNodeRunId",
+          "producingNodeKey",
+          "isValid",
+          "isStale",
+          "staleBecauseArtifactId",
+          "staleReason",
+          "isLatest",
+          "createdAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38571,6 +39180,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "artifact",
+          "content",
+          "isBase64"
+        ],
         "properties": {
           "artifact": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse"
@@ -38590,6 +39204,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -38602,6 +39219,17 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "scope",
+          "enabled",
+          "contentSha256",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38657,6 +39285,18 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "body",
+          "scope",
+          "enabled",
+          "contentSha256",
+          "version",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38785,6 +39425,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -38797,6 +39440,21 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "workItemId",
+          "definitionId",
+          "definitionName",
+          "status",
+          "queuedNodeCount",
+          "runningNodeCount",
+          "completedNodeCount",
+          "totalNodeCount",
+          "pendingDecisionCount",
+          "blockingGateNodeRunId",
+          "startedAtUtc",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38858,6 +39516,28 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "workItemId",
+          "definitionId",
+          "definitionVersion",
+          "definitionName",
+          "graphRevision",
+          "graph",
+          "status",
+          "nodes",
+          "queuedNodeCount",
+          "runningNodeCount",
+          "pendingDecisionCount",
+          "blockingGateNodeRunId",
+          "failureClass",
+          "terminalReason",
+          "startedAtUtc",
+          "completedAtUtc",
+          "version",
+          "lastSequence",
+          "cost"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -38942,6 +39622,39 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "nodeKey",
+          "nodeType",
+          "label",
+          "status",
+          "attempt",
+          "maxAttempts",
+          "queueReason",
+          "queuedAtUtc",
+          "waitingOnNodeKeys",
+          "pendingDecisionKind",
+          "isMaterialized",
+          "materializedFromNodeKey",
+          "materializationIndex",
+          "materializationGroupId",
+          "materializationCount",
+          "developmentProjectId",
+          "developmentTaskId",
+          "agentDefinitionId",
+          "agentDisplayName",
+          "modelLabel",
+          "hasStaleInputs",
+          "startedAtUtc",
+          "completedAtUtc",
+          "sequence",
+          "operatorRetries",
+          "skipWaived",
+          "inputTokens",
+          "outputTokens",
+          "toolCalls",
+          "validationNotApplicable"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39074,6 +39787,13 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "inputTokens",
+          "outputTokens",
+          "toolCalls",
+          "providerCalls",
+          "agentTurnMs"
+        ],
         "properties": {
           "inputTokens": {
             "type": "integer",
@@ -39149,6 +39869,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "lastSequence",
+          "hasMore"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -39167,6 +39892,16 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "sequence",
+          "eventType",
+          "nodeRunId",
+          "outcome",
+          "detailJson",
+          "operationId",
+          "occurredAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39208,6 +39943,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -39220,6 +39958,20 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "developmentProjectId",
+          "status",
+          "latestRunId",
+          "latestRunStatus",
+          "definitionName",
+          "queuedNodeCount",
+          "runningNodeCount",
+          "completedNodeCount",
+          "totalNodeCount",
+          "updatedAtUtc"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39277,6 +40029,18 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "request",
+          "developmentProjectId",
+          "status",
+          "latestRunId",
+          "runs",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "version"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39370,6 +40134,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "enabled"
+        ],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -39379,6 +40146,12 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "enabled",
+          "sandboxProvider",
+          "containerRuntime",
+          "isolation"
+        ],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -39405,6 +40178,16 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "ready",
+          "status",
+          "message",
+          "requiresOperatorConfirmation",
+          "endpoint",
+          "endpointSource",
+          "observedDaemon",
+          "pinnedDaemon"
+        ],
         "properties": {
           "ready": {
             "type": "boolean"
@@ -39447,6 +40230,12 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "daemonId",
+          "serverVersion",
+          "endpoint",
+          "confirmedAtUtc"
+        ],
         "properties": {
           "daemonId": {
             "type": "string"
@@ -39467,6 +40256,19 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "role",
+          "provider",
+          "backend",
+          "level",
+          "filesystemIsolation",
+          "networkIsolation",
+          "networkIsolationRequired",
+          "resourceLimits",
+          "readOnlyMounts",
+          "filesystemIsolationUnavailableReason",
+          "resourceLimitsUnavailableReason"
+        ],
         "properties": {
           "role": {
             "type": "string"
@@ -39517,6 +40319,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -39529,6 +40334,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "alias",
+          "availability"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -39556,6 +40366,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "templates"
+        ],
         "properties": {
           "templates": {
             "type": "array",
@@ -39568,6 +40381,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "alias",
+          "availability"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -39599,6 +40417,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "repository",
+          "templateAlias",
+          "templateCommit"
+        ],
         "properties": {
           "repository": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse"
@@ -39633,6 +40456,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "profileId",
+          "buildTarget",
+          "candidates"
+        ],
         "properties": {
           "profileId": {
             "type": "string"
@@ -39656,6 +40484,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -39668,6 +40499,25 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "objective",
+          "selectedFolderId",
+          "repositoryConnectionRequired",
+          "baseBranch",
+          "status",
+          "egressPolicy",
+          "coderModelId",
+          "reviewerModelId",
+          "maxTokens",
+          "maxDurationSeconds",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "version",
+          "commandProfileId",
+          "commandProfileBuildTarget",
+          "commandProfileDigest"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39737,6 +40587,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "project",
+          "tasks",
+          "events"
+        ],
         "properties": {
           "project": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectResponse"
@@ -39758,6 +40613,11 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "task",
+          "attempts",
+          "artifacts"
+        ],
         "properties": {
           "task": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskResponse"
@@ -39779,6 +40639,20 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "projectId",
+          "title",
+          "requirements",
+          "acceptanceCriteriaJson",
+          "status",
+          "currentReviewRound",
+          "maxReviewRounds",
+          "blockedReason",
+          "approvedSubjectHash",
+          "version",
+          "workflowRunId"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39829,6 +40703,21 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "taskId",
+          "predecessorAttemptId",
+          "role",
+          "modelId",
+          "provider",
+          "status",
+          "startedAtUtc",
+          "endedAtUtc",
+          "terminalReason",
+          "inputTokens",
+          "outputTokens",
+          "version"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39883,6 +40772,22 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "projectId",
+          "taskId",
+          "attemptId",
+          "kind",
+          "contentHash",
+          "byteCount",
+          "createdAtUtc",
+          "baseCommit",
+          "subjectHash",
+          "changedFilesManifestHash",
+          "commandProfileVersion",
+          "commandProfileDigest",
+          "isValid"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -39941,6 +40846,18 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentEventResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "id",
+          "projectId",
+          "taskId",
+          "attemptId",
+          "sequence",
+          "eventType",
+          "occurredAtUtc",
+          "operationId",
+          "operationPhase",
+          "outcome"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -40058,6 +40975,14 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "action",
+          "projectId",
+          "taskId",
+          "attemptId",
+          "taskStatus",
+          "role"
+        ],
         "properties": {
           "action": {
             "type": "string"
@@ -40101,6 +41026,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -40113,6 +41041,9 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -40125,6 +41056,10 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "artifact",
+          "content"
+        ],
         "properties": {
           "artifact": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse"
@@ -40141,6 +41076,14 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "subjectHash",
+          "patchHash",
+          "manifestHash",
+          "expectedResultHash",
+          "patch",
+          "changedFiles"
+        ],
         "properties": {
           "subjectHash": {
             "type": "string"
@@ -40184,6 +41127,14 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentApplyResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "operationId",
+          "phase",
+          "outcome",
+          "status",
+          "version",
+          "sequence"
+        ],
         "properties": {
           "operationId": {
             "type": "string",
@@ -44535,6 +45486,10 @@
       "XE_Local_AI_EngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "items",
+          "retrieval"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -44550,6 +45505,16 @@
       "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "actionId",
+          "enabledAtUtc",
+          "beforeDownRate",
+          "afterDownRate",
+          "afterSampleSize",
+          "status",
+          "flagged",
+          "facetToolName"
+        ],
         "properties": {
           "actionId": {
             "type": "string",
@@ -44601,6 +45566,11 @@
       "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookRetrievalResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "threshold",
+          "topK",
+          "ranker"
+        ],
         "properties": {
           "threshold": {
             "type": "integer",
@@ -44806,6 +45776,12 @@
       "XE_Local_AI_EngineClientEndpointsAgentsV1GoldenHarvestResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "thumbsUpScanned",
+          "createdCount",
+          "duplicateCount",
+          "skippedCount"
+        ],
         "properties": {
           "thumbsUpScanned": {
             "type": "integer",

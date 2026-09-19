@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";
 import type { DevWorkflowApplyReportBody } from "@/features/devWorkflows/models/DevWorkflowApplyReport";
 import type { DevWorkflowValidationReportBody } from "@/features/devWorkflows/models/DevWorkflowValidationReport";
-import { devWorkflowNodeRunDetail, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
+import {
+	devWorkflowArtifact,
+	devWorkflowNodeRunDetail,
+	devWorkflowTestIds,
+} from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -44,11 +48,23 @@ function applyReport(overrides: Partial<DevWorkflowApplyReportBody> = {}): DevWo
 	};
 }
 
-/** The artifact-content route, answering the body a Tool node's report artifact carries. */
+/**
+ * The artifact-content route, answering the body a Tool node's report artifact carries. The endpoint answers the
+ * artifact row alongside the content, so the mocked body carries it too.
+ */
 function serveContent(body: unknown): void {
 	server.use(
 		http.get(localApiPath(`development-workflows/runs/${devWorkflowTestIds.run}/artifacts/${artifactId}/content`), () =>
-			HttpResponse.json({ content: typeof body === "string" ? body : JSON.stringify(body), isBase64: false }),
+			HttpResponse.json({
+				artifact: devWorkflowArtifact({
+					id: artifactId,
+					kind: "Report",
+					name: "validation-report.json",
+					mediaType: "application/json",
+				}),
+				content: typeof body === "string" ? body : JSON.stringify(body),
+				isBase64: false,
+			}),
 		),
 	);
 }

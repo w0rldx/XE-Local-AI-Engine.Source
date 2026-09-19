@@ -32,13 +32,23 @@ public static class GgufDownloadHubEvents
 ///     list item — never an absolute path, URL, token, or raw store payload. <see cref="Phase" /> is the
 ///     <see cref="GgufDownloadPhase" /> name (<c>Running</c>/<c>Completed</c>/<c>Cancelled</c>/<c>Failed</c>).
 /// </summary>
-public sealed record GgufDownloadStatusHubEvent(
-    string ModelName,
-    string Phase,
-    long? CompletedBytes,
-    long? TotalBytes,
-    string? SanitizedError,
-    Guid OperationId = default,
-    string OperationKind = "Download",
-    string? ErrorCode = null,
-    DateTimeOffset? UpdatedAtUtc = null);
+public sealed class GgufDownloadStatusHubEvent
+{
+    public required string ModelName { get; init; }
+
+    public required string Phase { get; init; }
+
+    public required long? CompletedBytes { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public Guid OperationId { get; init; }
+
+    public string OperationKind { get; init; } = "Download";
+
+    public string? ErrorCode { get; init; }
+
+    public DateTimeOffset? UpdatedAtUtc { get; init; }
+}

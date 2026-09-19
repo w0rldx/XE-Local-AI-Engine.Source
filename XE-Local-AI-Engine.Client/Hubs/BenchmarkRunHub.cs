@@ -12,7 +12,14 @@ public static class BenchmarkRunHubEvents
     public const string ReplayReset = "benchmarkRun.replayReset";
 }
 
-public sealed record BenchmarkRunReplayReset(Guid RunId, long LatestSequence, long RunVersion);
+public sealed class BenchmarkRunReplayReset
+{
+    public required Guid RunId { get; init; }
+
+    public required long LatestSequence { get; init; }
+
+    public required long RunVersion { get; init; }
+}
 
 /// <summary>
 ///     Operator-only, per-run delivery for transient benchmark output. Joining the group before replay closes the
@@ -57,7 +64,7 @@ public sealed class BenchmarkRunHub : Hub
         if (replay.ResetRequired || run.LastStreamSequence > replay.LatestSequence)
         {
             await Clients.Caller.SendAsync(BenchmarkRunHubEvents.ReplayReset,
-                             new BenchmarkRunReplayReset(runId, latestSequence, run.Version),
+                             new BenchmarkRunReplayReset { RunId = runId, LatestSequence = latestSequence, RunVersion = run.Version },
                              cancellationToken);
             return;
         }

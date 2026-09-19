@@ -140,7 +140,12 @@ public sealed record PlaybookEvalCaseResultResponse(
 ///     <c>PlaybookPromotionStatus</c> enum name (<c>EvalRequired</c> / <c>EvalRegressed</c> / <c>EvalStale</c>),
 ///     <see cref="Reason" /> is a short human message the panel renders.
 /// </summary>
-public sealed record PlaybookPromotionConflictResponse(string Status, string Reason);
+public sealed class PlaybookPromotionConflictResponse
+{
+    public required string Status { get; init; }
+
+    public required string Reason { get; init; }
+}
 
 public sealed class ListPlaybookActionsResponse
 {

@@ -53,11 +53,16 @@ public sealed record BenchmarkRunStreamPayload(
     int? CachedPromptTokens = null,
     int? SegmentCount = null);
 
-public sealed record BenchmarkRunStreamEvent(
-    Guid RunId,
-    long Sequence,
-    BenchmarkRunStreamEventKind Kind,
-    BenchmarkRunStreamPayload Payload);
+public sealed record BenchmarkRunStreamEvent
+{
+    public required Guid RunId { get; init; }
+
+    public required long Sequence { get; init; }
+
+    public required BenchmarkRunStreamEventKind Kind { get; init; }
+
+    public required BenchmarkRunStreamPayload Payload { get; init; }
+}
 
 public sealed class BenchmarkRunStreamEventArgs : EventArgs
 {
@@ -158,7 +163,7 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         lock (_gate)
         {
             var state = GetOrCreate(runId);
-            return new BenchmarkRunStreamEvent(runId, ++state.LatestSequence, kind, payload);
+            return new BenchmarkRunStreamEvent { RunId = runId, Sequence = ++state.LatestSequence, Kind = kind, Payload = payload };
         }
     }
 

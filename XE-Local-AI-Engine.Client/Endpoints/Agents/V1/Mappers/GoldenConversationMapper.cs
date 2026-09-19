@@ -46,10 +46,13 @@ internal static class GoldenConversationMapper
     {
         ArgumentNullException.ThrowIfNull(outcome);
 
-        return new GoldenHarvestResponse(outcome.ThumbsUpScanned,
-            outcome.CreatedCount,
-            outcome.DuplicateCount,
-            outcome.SkippedCount);
+        return new GoldenHarvestResponse
+        {
+            ThumbsUpScanned = outcome.ThumbsUpScanned,
+            CreatedCount = outcome.CreatedCount,
+            DuplicateCount = outcome.DuplicateCount,
+            SkippedCount = outcome.SkippedCount
+        };
     }
 
     public static GoldenConversationCreateInput ToInput(this CreateGoldenConversationRequest request)

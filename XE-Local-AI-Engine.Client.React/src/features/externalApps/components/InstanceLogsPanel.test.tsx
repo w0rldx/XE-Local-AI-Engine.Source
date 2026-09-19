@@ -25,7 +25,21 @@ const instanceId = externalAppTestIds.instance;
 const logsPath = `external-apps/instances/${instanceId}/logs`;
 
 function service(name: string) {
-	return { name, image: "example/image", imageTag: "1", ports: [], storage: [], hasHealthcheck: false, dependsOn: [] };
+	return {
+		name,
+		image: "example/image",
+		imageTag: "1",
+		entrypoint: null,
+		command: null,
+		environment: {},
+		ports: [],
+		storage: [],
+		hasHealthcheck: false,
+		dependsOn: [],
+		capAdd: [],
+		extraHosts: [],
+		readOnlyRootFilesystem: false,
+	};
 }
 
 describe("InstanceLogsPanel", () => {

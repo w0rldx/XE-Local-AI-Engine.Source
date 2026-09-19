@@ -79,21 +79,21 @@ export type XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = {
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse = {
-	artifact?: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse;
-	content?: string;
-	isBase64?: boolean;
+	artifact: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse;
+	content: string;
+	isBase64: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse = {
-	id?: string;
-	sequence?: number;
-	kind?: string;
-	name?: string;
-	mediaType?: string;
-	contentSha256?: string;
-	sizeBytes?: number;
-	isValid?: boolean;
-	createdStep?: number;
+	id: string;
+	sequence: number;
+	kind: string;
+	name: string;
+	mediaType: string;
+	contentSha256: string;
+	sizeBytes: number;
+	isValid: boolean;
+	createdStep: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = {
@@ -101,12 +101,12 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactReque
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCapabilityResponse = {
-	enabled?: boolean;
+	enabled: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse = {
-	messageId?: string;
-	conversationId?: string;
+	messageId: string;
+	conversationId: string;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest = {
@@ -114,35 +114,35 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRe
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse = {
-	id?: string;
-	title?: string;
-	kind?: string;
-	status?: string;
-	agentDefinitionId?: string;
-	stepCount?: number;
-	updatedAtUtc?: number;
+	id: string;
+	title: string;
+	kind: string;
+	status: string;
+	agentDefinitionId: string;
+	stepCount: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse = {
-	id?: string;
-	title?: string;
-	objective?: string;
-	kind?: string;
-	agentDefinitionId?: string;
-	conversationId?: string;
-	status?: string;
-	currentTaskId?: string | null;
-	stepCount?: number;
-	maxStepsPerRun?: number;
-	lastCheckpointId?: string | null;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
-	version?: number;
-	lastSequence?: number;
+	id: string;
+	title: string;
+	objective: string;
+	kind: string;
+	agentDefinitionId: string;
+	conversationId: string;
+	status: string;
+	currentTaskId: string | null;
+	stepCount: number;
+	maxStepsPerRun: number;
+	lastCheckpointId: string | null;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	version: number;
+	lastSequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1CreateWorkSessionRequest = {
@@ -163,21 +163,21 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1UpdateWorkSessionRequest
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionTasksResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse>;
-	lastSequence?: number;
+	items: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse>;
+	lastSequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse = {
-	id?: string;
-	parentTaskId?: string | null;
-	sequence?: number;
-	title?: string;
-	detail?: string | null;
-	status?: string;
-	blockedReason?: string | null;
-	origin?: string;
-	createdStep?: number;
-	updatedStep?: number;
+	id: string;
+	parentTaskId: string | null;
+	sequence: number;
+	title: string;
+	detail: string | null;
+	status: string;
+	blockedReason: string | null;
+	origin: string;
+	createdStep: number;
+	updatedStep: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFeedRequest = {
@@ -185,55 +185,55 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFeedRequest =
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionFindingsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFindingResponse>;
-	lastSequence?: number;
+	items: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFindingResponse>;
+	lastSequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFindingResponse = {
-	id?: string;
-	taskId?: string | null;
-	sequence?: number;
-	kind?: string;
-	text?: string;
-	sourceRef?: string | null;
-	createdStep?: number;
-	superseded?: boolean;
+	id: string;
+	taskId: string | null;
+	sequence: number;
+	kind: string;
+	text: string;
+	sourceRef: string | null;
+	createdStep: number;
+	superseded: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionArtifactsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse>;
-	lastSequence?: number;
+	items: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse>;
+	lastSequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionCheckpointsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse>;
-	lastSequence?: number;
+	items: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse>;
+	lastSequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse = {
-	id?: string;
-	sequence?: number;
-	step?: number;
-	summary?: string | null;
-	stateJson?: string;
-	createdAtUtc?: number;
+	id: string;
+	sequence: number;
+	step: number;
+	summary: string | null;
+	stateJson: string;
+	createdAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionEventsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse>;
-	lastSequence?: number;
-	hasMore?: boolean;
+	items: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse>;
+	lastSequence: number;
+	hasMore: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse = {
-	id?: string;
-	sequence?: number;
-	step?: number;
-	eventType?: string;
-	detailJson?: string | null;
-	outcome?: string | null;
-	occurredAtUtc?: number;
-	operationId?: string | null;
+	id: string;
+	sequence: number;
+	step: number;
+	eventType: string;
+	detailJson: string | null;
+	outcome: string | null;
+	occurredAtUtc: number;
+	operationId: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventFeedRequest = {
@@ -3462,38 +3462,38 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse = {
-	run?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse;
-	nodeRuns?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse>;
-	output?: unknown;
-	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+	run: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse;
+	nodeRuns: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse>;
+	output: unknown;
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse = {
-	id?: string;
-	requestId?: string;
-	definitionId?: string;
-	definitionVersion?: number;
-	graphHash?: string;
-	status?: string;
-	failureClass?: string;
-	cancelRequestedAtUtc?: number | null;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	createdAtUtc?: number;
+	id: string;
+	requestId: string;
+	definitionId: string;
+	definitionVersion: number;
+	graphHash: string;
+	status: string;
+	failureClass: string;
+	cancelRequestedAtUtc: number | null;
+	startedAtUtc: number | null;
+	completedAtUtc: number | null;
+	createdAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse = {
-	id?: string;
-	nodeKey?: string;
-	kind?: string;
-	status?: string;
-	attempt?: number;
-	failureClass?: string;
-	pendingDecisionKind?: string | null;
-	invocationId?: string | null;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	updatedAtUtc?: number;
+	id: string;
+	nodeKey: string;
+	kind: string;
+	status: string;
+	attempt: number;
+	failureClass: string;
+	pendingDecisionKind: string | null;
+	invocationId: string | null;
+	startedAtUtc: number | null;
+	completedAtUtc: number | null;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph = {
@@ -3538,16 +3538,16 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunReques
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse = {
-	id?: string;
-	name?: string;
-	description?: string | null;
-	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
-	graphHash?: string;
-	nodeCount?: number;
-	schemaVersion?: number;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+	id: string;
+	name: string;
+	description: string | null;
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+	graphHash: string;
+	nodeCount: number;
+	schemaVersion: number;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest = {
@@ -3557,9 +3557,9 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDef
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse = {
-	decision?: string;
-	runStatus?: string;
-	nodeRunStatus?: string;
+	decision: string;
+	runStatus: string;
+	nodeRunStatus: string;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNodeRunRequest = {
@@ -3574,21 +3574,21 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse = {
-	id?: string;
-	runId?: string;
-	nodeKey?: string;
-	kind?: string;
-	status?: string;
-	attempt?: number;
-	failureClass?: string;
-	pendingDecisionKind?: string | null;
-	error?: string | null;
-	input?: unknown;
-	output?: unknown;
-	invocationId?: string | null;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	updatedAtUtc?: number;
+	id: string;
+	runId: string;
+	nodeKey: string;
+	kind: string;
+	status: string;
+	attempt: number;
+	failureClass: string;
+	pendingDecisionKind: string | null;
+	error: string | null;
+	input: unknown;
+	output: unknown;
+	invocationId: string | null;
+	startedAtUtc: number | null;
+	completedAtUtc: number | null;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunRequest = {
@@ -3596,34 +3596,34 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunRe
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse = {
-	definitions?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse>;
+	definitions: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse = {
-	id?: string;
-	name?: string;
-	description?: string | null;
-	graphHash?: string;
-	nodeCount?: number;
-	schemaVersion?: number;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+	id: string;
+	name: string;
+	description: string | null;
+	graphHash: string;
+	nodeCount: number;
+	schemaVersion: number;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunEventsResponse = {
-	events?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventResponse>;
-	lastSeq?: number;
-	replayTruncated?: boolean;
+	events: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventResponse>;
+	lastSeq: number;
+	replayTruncated: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventResponse = {
-	id?: string;
-	seq?: number;
-	eventType?: string;
-	nodeKey?: string | null;
-	detail?: unknown;
-	createdAtUtc?: number;
+	id: string;
+	seq: number;
+	eventType: string;
+	nodeKey: string | null;
+	detail: unknown;
+	createdAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventFeedRequest = {
@@ -3631,7 +3631,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventF
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse = {
-	runs?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse>;
+	runs: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsRequest = {
@@ -3639,17 +3639,17 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsR
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse = {
-	tools?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse>;
+	tools: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse = {
-	name?: string;
-	description?: string;
-	parameterSchema?: string;
+	name: string;
+	description: string;
+	parameterSchema: string;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse = {
-	runId?: string;
+	runId: string;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest = {
@@ -3666,15 +3666,15 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDef
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse = {
-	valid?: boolean;
-	errors?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
-	nodeCount?: number;
-	warnings?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
+	valid: boolean;
+	errors: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
+	nodeCount: number;
+	warnings: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {
-	key?: string | null;
-	message?: string;
+	key: string | null;
+	message: string;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = {
@@ -3760,87 +3760,87 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceReque
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView = {
-	id?: string;
-	manifestVersion?: number;
-	displayName?: string;
-	summary?: string;
-	description?: string;
-	homepage?: string;
-	license?: string;
-	trust?: string;
-	testedVersion?: string;
-	requires?: Array<string>;
-	permissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
-	resources?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView;
-	services?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView>;
-	variables?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
+	id: string;
+	manifestVersion: number;
+	displayName: string;
+	summary: string;
+	description: string;
+	homepage: string;
+	license: string;
+	trust: string;
+	testedVersion: string;
+	requires: Array<string>;
+	permissions: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
+	resources: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView;
+	services: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView>;
+	variables: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView = {
-	internet?: boolean;
-	localNetwork?: boolean;
-	hostFiles?: string;
-	gpu?: string;
+	internet: boolean;
+	localNetwork: boolean;
+	hostFiles: string;
+	gpu: string;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView = {
-	minimumMemoryMb?: number;
-	recommendedMemoryMb?: number;
-	cpuHint?: number;
-	pidsLimit?: number;
+	minimumMemoryMb: number;
+	recommendedMemoryMb: number;
+	cpuHint: number;
+	pidsLimit: number;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView = {
-	name?: string;
-	image?: string;
-	imageTag?: string;
-	entrypoint?: Array<string> | null;
-	command?: Array<string> | null;
-	environment?: {
+	name: string;
+	image: string;
+	imageTag: string;
+	entrypoint: Array<string> | null;
+	command: Array<string> | null;
+	environment: {
 		[key: string]: string;
 	};
-	ports?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView>;
-	storage?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView>;
-	hasHealthcheck?: boolean;
-	dependsOn?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView>;
-	capAdd?: Array<string>;
-	extraHosts?: Array<string>;
-	readOnlyRootFilesystem?: boolean;
+	ports: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView>;
+	storage: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView>;
+	hasHealthcheck: boolean;
+	dependsOn: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView>;
+	capAdd: Array<string>;
+	extraHosts: Array<string>;
+	readOnlyRootFilesystem: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView = {
-	containerPort?: number;
-	role?: string;
-	preferredHostPort?: number | null;
-	openPath?: string | null;
+	containerPort: number;
+	role: string;
+	preferredHostPort: number | null;
+	openPath: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView = {
-	name?: string;
-	containerPath?: string;
+	name: string;
+	containerPath: string;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView = {
-	service?: string;
-	condition?: string;
+	service: string;
+	condition: string;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView = {
-	name?: string;
-	label?: string;
-	description?: string | null;
-	type?: string;
-	required?: boolean;
-	default?: string | null;
-	allowedValues?: Array<string> | null;
-	advanced?: boolean;
-	validation?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView | null;
+	name: string;
+	label: string;
+	description: string | null;
+	type: string;
+	required: boolean;
+	default: string | null;
+	allowedValues: Array<string> | null;
+	advanced: boolean;
+	validation: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView = {
-	minLength?: number | null;
-	maxLength?: number | null;
-	pattern?: string | null;
+	minLength: number | null;
+	maxLength: number | null;
+	pattern: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = {
@@ -3848,125 +3848,125 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRe
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstallPreview = {
-	applicationId?: string;
-	manifestVersion?: number;
-	manifestSha256?: string;
-	canInstall?: boolean;
-	blockedReason?: string | null;
-	existingInstanceId?: string | null;
-	permissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
-	effectivePermissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView;
-	variables?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
-	runtime?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
-	missingCapabilities?: Array<string>;
-	resourceCheck?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView;
+	applicationId: string;
+	manifestVersion: number;
+	manifestSha256: string;
+	canInstall: boolean;
+	blockedReason: string | null;
+	existingInstanceId: string | null;
+	permissions: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
+	effectivePermissions: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView;
+	variables: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
+	runtime: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
+	missingCapabilities: Array<string>;
+	resourceCheck: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView = {
-	internet?: boolean;
-	hostFiles?: string;
-	gpu?: string;
-	localNetwork?: boolean;
-	services?: {
+	internet: boolean;
+	hostFiles: string;
+	gpu: string;
+	localNetwork: boolean;
+	services: {
 		[key: string]: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView;
 	};
-	capabilities?: Array<string>;
-	writableRootFilesystem?: boolean;
-	publishedPorts?: Array<string>;
-	extraHosts?: Array<string>;
+	capabilities: Array<string>;
+	writableRootFilesystem: boolean;
+	publishedPorts: Array<string>;
+	extraHosts: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView = {
-	capabilities?: Array<string>;
-	writableRootFilesystem?: boolean;
-	publishedPorts?: Array<string>;
-	extraHosts?: Array<string>;
+	capabilities: Array<string>;
+	writableRootFilesystem: boolean;
+	publishedPorts: Array<string>;
+	extraHosts: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse = {
-	provider?: string;
-	status?: string;
-	available?: boolean;
-	ready?: boolean;
-	message?: string;
-	requiresOperatorConfirmation?: boolean;
-	endpoint?: string | null;
-	endpointSource?: string | null;
-	observedDaemon?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView | null;
-	pinnedDaemon?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView | null;
-	capabilities?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView;
-	foreignInstallContainers?: number;
+	provider: string;
+	status: string;
+	available: boolean;
+	ready: boolean;
+	message: string;
+	requiresOperatorConfirmation: boolean;
+	endpoint: string | null;
+	endpointSource: string | null;
+	observedDaemon: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView | null;
+	pinnedDaemon: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView | null;
+	capabilities: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView;
+	foreignInstallContainers: number;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView = {
-	daemonId?: string | null;
-	serverVersion?: string | null;
-	endpoint?: string | null;
-	confirmedAtUtc?: number | null;
+	daemonId: string | null;
+	serverVersion: string | null;
+	endpoint: string | null;
+	confirmedAtUtc: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView = {
-	containers?: boolean;
-	networks?: boolean;
-	bindStorage?: boolean;
-	loopbackPortPublishing?: boolean;
-	healthChecks?: boolean;
-	restartPolicies?: boolean;
-	logs?: boolean;
-	imagePull?: boolean;
-	gpuDevices?: boolean;
+	containers: boolean;
+	networks: boolean;
+	bindStorage: boolean;
+	loopbackPortPublishing: boolean;
+	healthChecks: boolean;
+	restartPolicies: boolean;
+	logs: boolean;
+	imagePull: boolean;
+	gpuDevices: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView = {
-	satisfied?: boolean;
-	failureCategory?: string | null;
-	requiredMemoryBytes?: number;
-	availableMemoryBytes?: number;
-	requiredDiskBytes?: number;
-	availableDiskBytes?: number;
-	message?: string;
+	satisfied: boolean;
+	failureCategory: string | null;
+	requiredMemoryBytes: number;
+	availableMemoryBytes: number;
+	requiredDiskBytes: number;
+	availableDiskBytes: number;
+	message: string;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView = {
-	id?: string;
-	applicationId?: string;
-	displayName?: string;
-	manifestVersion?: number;
-	status?: string;
-	desiredState?: string;
-	runtimeOverride?: string | null;
-	runtimeProvider?: string;
-	manifest?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView;
-	publishedPorts?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView>;
-	variables?: {
+	id: string;
+	applicationId: string;
+	displayName: string;
+	manifestVersion: number;
+	status: string;
+	desiredState: string;
+	runtimeOverride: string | null;
+	runtimeProvider: string;
+	manifest: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView;
+	publishedPorts: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView>;
+	variables: {
 		[key: string]: string;
 	};
-	failureCategory?: string | null;
-	failureSummary?: string | null;
-	updateAvailable?: boolean;
-	availableManifestVersion?: number | null;
-	catalogMissing?: boolean;
-	installedAtUtc?: number;
-	startedAtUtc?: number | null;
-	stoppedAtUtc?: number | null;
-	updatedAtUtc?: number;
-	lastSequence?: number;
-	version?: number;
+	failureCategory: string | null;
+	failureSummary: string | null;
+	updateAvailable: boolean;
+	availableManifestVersion: number | null;
+	catalogMissing: boolean;
+	installedAtUtc: number;
+	startedAtUtc: number | null;
+	stoppedAtUtc: number | null;
+	updatedAtUtc: number;
+	lastSequence: number;
+	version: number;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView = {
-	service?: string;
-	containerPort?: number;
-	hostPort?: number;
-	openPath?: string | null;
-	url?: string | null;
+	service: string;
+	containerPort: number;
+	hostPort: number;
+	openPath: string | null;
+	url: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse = {
-	service?: string;
-	text?: string;
-	lineCount?: number;
-	truncated?: boolean;
+	service: string;
+	text: string;
+	lineCount: number;
+	truncated: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsRequest = {
@@ -3974,36 +3974,36 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsR
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview = {
-	applicationId?: string;
-	instanceId?: string;
-	currentManifestVersion?: number;
-	targetManifestVersion?: number;
-	manifestSha256?: string;
-	variables?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
-	currentValues?: {
+	applicationId: string;
+	instanceId: string;
+	currentManifestVersion: number;
+	targetManifestVersion: number;
+	manifestSha256: string;
+	variables: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
+	currentValues: {
 		[key: string]: string;
 	};
-	addedPermissions?: Array<string>;
-	effectivePermissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView;
-	resourceVerdict?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView;
-	canUpdate?: boolean;
-	blockedReason?: string | null;
+	addedPermissions: Array<string>;
+	effectivePermissions: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView;
+	resourceVerdict: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView;
+	canUpdate: boolean;
+	blockedReason: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView = {
-	id?: string;
-	applicationId?: string;
-	displayName?: string;
-	manifestVersion?: number;
-	status?: string;
-	desiredState?: string;
-	failureCategory?: string | null;
-	failureSummary?: string | null;
-	updateAvailable?: boolean;
-	availableManifestVersion?: number | null;
-	catalogMissing?: boolean;
-	updatedAtUtc?: number;
-	version?: number;
+	id: string;
+	applicationId: string;
+	displayName: string;
+	manifestVersion: number;
+	status: string;
+	desiredState: string;
+	failureCategory: string | null;
+	failureSummary: string | null;
+	updateAvailable: boolean;
+	availableManifestVersion: number | null;
+	catalogMissing: boolean;
+	updatedAtUtc: number;
+	version: number;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1InstallExternalAppRequest = {
@@ -4018,42 +4018,42 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1InstallExternalAppReques
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse = {
-	schemaVersion?: number;
-	generatedAtUtc?: number;
-	fetchedAtUtc?: number;
-	fromBundledSeed?: boolean;
-	refreshFailureMessage?: string | null;
-	lastRefreshFailure?: string | null;
-	applications?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView>;
+	schemaVersion: number;
+	generatedAtUtc: number;
+	fetchedAtUtc: number;
+	fromBundledSeed: boolean;
+	refreshFailureMessage: string | null;
+	lastRefreshFailure: string | null;
+	applications: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView>;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView = {
-	id?: string;
-	manifestVersion?: number;
-	displayName?: string;
-	summary?: string;
-	homepage?: string;
-	license?: string;
-	trust?: string;
-	testedVersion?: string;
-	requires?: Array<string>;
-	permissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
-	resources?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView;
-	installedInstanceId?: string | null;
-	installedStatus?: string | null;
+	id: string;
+	manifestVersion: number;
+	displayName: string;
+	summary: string;
+	homepage: string;
+	license: string;
+	trust: string;
+	testedVersion: string;
+	requires: Array<string>;
+	permissions: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
+	resources: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView;
+	installedInstanceId: string | null;
+	installedStatus: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView>;
-	highestSequence?: number;
-	hasMore?: boolean;
+	items: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView>;
+	highestSequence: number;
+	hasMore: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView = {
-	sequence?: number;
-	atUtc?: number;
-	kind?: string;
-	detailJson?: string | null;
+	sequence: number;
+	atUtc: number;
+	kind: string;
+	detailJson: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventFeedRequest = {
@@ -4061,7 +4061,7 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEvent
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView>;
+	items: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView>;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest = {
@@ -4094,21 +4094,21 @@ export type XeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppVariabl
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse = {
-	decision?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse;
-	runStatus?: string;
-	nodeRunStatus?: string;
+	decision: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse;
+	runStatus: string;
+	nodeRunStatus: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse = {
-	id?: string;
-	nodeRunId?: string;
-	attempt?: number;
-	decision?: string;
-	comment?: string | null;
-	decidedBySubject?: string | null;
-	decidedAtUtc?: number;
-	operationId?: string;
-	sequence?: number;
+	id: string;
+	nodeRunId: string;
+	attempt: number;
+	decision: string;
+	comment: string | null;
+	decidedBySubject: string | null;
+	decidedAtUtc: number;
+	operationId: string;
+	sequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest = {
@@ -4119,18 +4119,18 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecis
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse = {
-	id?: string;
-	name?: string;
-	source?: string;
-	seedSlug?: string | null;
-	archived?: boolean;
-	version?: number;
-	nodeCount?: number;
-	updatedAtUtc?: number;
+	id: string;
+	name: string;
+	source: string;
+	seedSlug: string | null;
+	archived: boolean;
+	version: number;
+	nodeCount: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsRequest = {
@@ -4138,16 +4138,16 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowD
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse = {
-	id?: string;
-	name?: string;
-	graph?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
-	graphHash?: string;
-	source?: string;
-	seedSlug?: string | null;
-	archived?: boolean;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+	id: string;
+	name: string;
+	graph: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
+	graphHash: string;
+	source: string;
+	seedSlug: string | null;
+	archived: boolean;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph = {
@@ -4216,73 +4216,73 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflo
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse = {
-	id?: string;
-	runId?: string;
-	nodeKey?: string;
-	nodeType?: string;
-	label?: string;
-	status?: string;
-	attempt?: number;
-	maxAttempts?: number;
-	sessionResumes?: number;
-	queueReason?: string | null;
-	queuedAtUtc?: number | null;
-	agentDefinitionId?: string | null;
-	agentDisplayName?: string | null;
-	modelLabel?: string | null;
-	workSessionId?: string | null;
-	conversationId?: string | null;
-	workSessionAvailable?: boolean;
-	developmentProjectId?: string | null;
-	developmentTaskId?: string | null;
-	primaryArtifactId?: string | null;
-	instructions?: string | null;
-	inputJson?: string | null;
-	outputJson?: string | null;
-	producedArtifactIds?: Array<string>;
-	consumedArtifactIds?: Array<string>;
-	appliedRuleSets?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse>;
-	pendingDecisionKind?: string | null;
-	allowedDecisions?: Array<string>;
-	hasRejectBranch?: boolean;
-	failureClass?: string | null;
-	terminalReason?: string | null;
-	decisions?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse>;
-	operatorRetries?: number;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	sequence?: number;
-	inputTokens?: number | null;
-	outputTokens?: number | null;
-	reasoningTokens?: number | null;
-	estimatedInputTokens?: number | null;
-	providerCalls?: number | null;
-	toolCalls?: number | null;
-	toolSchemaTokens?: number | null;
-	toolNames?: Array<string> | null;
-	agentTurnMs?: number | null;
-	servedModelName?: string | null;
-	route?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
-	workSessionSteps?: number | null;
-	failureClassGroup?: string | null;
-	modelReadinessMs?: number | null;
-	vramFreeAtLoadBytes?: number | null;
-	vramAdmittedBytes?: number | null;
+	id: string;
+	runId: string;
+	nodeKey: string;
+	nodeType: string;
+	label: string;
+	status: string;
+	attempt: number;
+	maxAttempts: number;
+	sessionResumes: number;
+	queueReason: string | null;
+	queuedAtUtc: number | null;
+	agentDefinitionId: string | null;
+	agentDisplayName: string | null;
+	modelLabel: string | null;
+	workSessionId: string | null;
+	conversationId: string | null;
+	workSessionAvailable: boolean;
+	developmentProjectId: string | null;
+	developmentTaskId: string | null;
+	primaryArtifactId: string | null;
+	instructions: string | null;
+	inputJson: string | null;
+	outputJson: string | null;
+	producedArtifactIds: Array<string>;
+	consumedArtifactIds: Array<string>;
+	appliedRuleSets: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse>;
+	pendingDecisionKind: string | null;
+	allowedDecisions: Array<string>;
+	hasRejectBranch: boolean;
+	failureClass: string | null;
+	terminalReason: string | null;
+	decisions: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse>;
+	operatorRetries: number;
+	startedAtUtc: number | null;
+	completedAtUtc: number | null;
+	sequence: number;
+	inputTokens: number | null;
+	outputTokens: number | null;
+	reasoningTokens: number | null;
+	estimatedInputTokens: number | null;
+	providerCalls: number | null;
+	toolCalls: number | null;
+	toolSchemaTokens: number | null;
+	toolNames: Array<string> | null;
+	agentTurnMs: number | null;
+	servedModelName: string | null;
+	route: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
+	workSessionSteps: number | null;
+	failureClassGroup: string | null;
+	modelReadinessMs: number | null;
+	vramFreeAtLoadBytes: number | null;
+	vramAdmittedBytes: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {
-	id?: string;
-	name?: string;
-	contentSha256?: string;
-	currentContentSha256?: string | null;
+	id: string;
+	name: string;
+	contentSha256: string;
+	currentContentSha256: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = {
-	satisfied?: Array<string>;
-	dead?: Array<string>;
-	waived?: Array<string>;
-	gateAnswer?: string | null;
-	truncated?: boolean;
+	satisfied: Array<string>;
+	dead: Array<string>;
+	waived: Array<string>;
+	gateAnswer: string | null;
+	truncated: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = {
@@ -4290,28 +4290,28 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse>;
-	lastSequence?: number;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse>;
+	lastSequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse = {
-	id?: string;
-	lineageId?: string;
-	version?: number;
-	sequence?: number;
-	kind?: string;
-	name?: string;
-	mediaType?: string;
-	contentSha256?: string;
-	sizeBytes?: number;
-	producedByNodeRunId?: string;
-	producingNodeKey?: string;
-	isValid?: boolean;
-	isStale?: boolean;
-	staleBecauseArtifactId?: string | null;
-	staleReason?: string | null;
-	isLatest?: boolean;
-	createdAtUtc?: number;
+	id: string;
+	lineageId: string;
+	version: number;
+	sequence: number;
+	kind: string;
+	name: string;
+	mediaType: string;
+	contentSha256: string;
+	sizeBytes: number;
+	producedByNodeRunId: string;
+	producingNodeKey: string;
+	isValid: boolean;
+	isStale: boolean;
+	staleBecauseArtifactId: string | null;
+	staleReason: string | null;
+	isLatest: boolean;
+	createdAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactFeedRequest = {
@@ -4319,9 +4319,9 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtif
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse = {
-	artifact?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse;
-	content?: string;
-	isBase64?: boolean;
+	artifact: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse;
+	content: string;
+	isBase64: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest = {
@@ -4329,19 +4329,19 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtif
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse = {
-	id?: string;
-	name?: string;
-	description?: string | null;
-	scope?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope;
-	enabled?: boolean;
-	contentSha256?: string;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+	id: string;
+	name: string;
+	description: string | null;
+	scope: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope;
+	enabled: boolean;
+	contentSha256: string;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope = {
@@ -4350,16 +4350,16 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleS
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse = {
-	id?: string;
-	name?: string;
-	description?: string | null;
-	body?: string;
-	scope?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope;
-	enabled?: boolean;
-	contentSha256?: string;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
+	id: string;
+	name: string;
+	description: string | null;
+	body: string;
+	scope: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope;
+	enabled: boolean;
+	contentSha256: string;
+	version: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest = {
@@ -4384,23 +4384,23 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflo
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse = {
-	id?: string;
-	workItemId?: string;
-	definitionId?: string;
-	definitionName?: string | null;
-	status?: string;
-	queuedNodeCount?: number;
-	runningNodeCount?: number;
-	completedNodeCount?: number;
-	totalNodeCount?: number;
-	pendingDecisionCount?: number;
-	blockingGateNodeRunId?: string | null;
-	startedAtUtc?: number | null;
-	updatedAtUtc?: number;
+	id: string;
+	workItemId: string;
+	definitionId: string;
+	definitionName: string | null;
+	status: string;
+	queuedNodeCount: number;
+	runningNodeCount: number;
+	completedNodeCount: number;
+	totalNodeCount: number;
+	pendingDecisionCount: number;
+	blockingGateNodeRunId: string | null;
+	startedAtUtc: number | null;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsRequest = {
@@ -4408,68 +4408,68 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowR
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse = {
-	id?: string;
-	workItemId?: string;
-	definitionId?: string;
-	definitionVersion?: number;
-	definitionName?: string | null;
-	graphRevision?: number;
-	graph?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
-	status?: string;
-	nodes?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse>;
-	queuedNodeCount?: number;
-	runningNodeCount?: number;
-	pendingDecisionCount?: number;
-	blockingGateNodeRunId?: string | null;
-	failureClass?: string | null;
-	terminalReason?: string | null;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	version?: number;
-	lastSequence?: number;
-	cost?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse;
+	id: string;
+	workItemId: string;
+	definitionId: string;
+	definitionVersion: number;
+	definitionName: string | null;
+	graphRevision: number;
+	graph: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
+	status: string;
+	nodes: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse>;
+	queuedNodeCount: number;
+	runningNodeCount: number;
+	pendingDecisionCount: number;
+	blockingGateNodeRunId: string | null;
+	failureClass: string | null;
+	terminalReason: string | null;
+	startedAtUtc: number | null;
+	completedAtUtc: number | null;
+	version: number;
+	lastSequence: number;
+	cost: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse = {
-	id?: string;
-	nodeKey?: string;
-	nodeType?: string;
-	label?: string;
-	status?: string;
-	attempt?: number;
-	maxAttempts?: number;
-	queueReason?: string | null;
-	queuedAtUtc?: number | null;
-	waitingOnNodeKeys?: Array<string> | null;
-	pendingDecisionKind?: string | null;
-	isMaterialized?: boolean;
-	materializedFromNodeKey?: string | null;
-	materializationIndex?: number | null;
-	materializationGroupId?: string | null;
-	materializationCount?: number | null;
-	developmentProjectId?: string | null;
-	developmentTaskId?: string | null;
-	agentDefinitionId?: string | null;
-	agentDisplayName?: string | null;
-	modelLabel?: string | null;
-	hasStaleInputs?: boolean;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-	sequence?: number;
-	operatorRetries?: number;
-	skipWaived?: boolean | null;
-	inputTokens?: number | null;
-	outputTokens?: number | null;
-	toolCalls?: number | null;
-	validationNotApplicable?: boolean;
+	id: string;
+	nodeKey: string;
+	nodeType: string;
+	label: string;
+	status: string;
+	attempt: number;
+	maxAttempts: number;
+	queueReason: string | null;
+	queuedAtUtc: number | null;
+	waitingOnNodeKeys: Array<string> | null;
+	pendingDecisionKind: string | null;
+	isMaterialized: boolean;
+	materializedFromNodeKey: string | null;
+	materializationIndex: number | null;
+	materializationGroupId: string | null;
+	materializationCount: number | null;
+	developmentProjectId: string | null;
+	developmentTaskId: string | null;
+	agentDefinitionId: string | null;
+	agentDisplayName: string | null;
+	modelLabel: string | null;
+	hasStaleInputs: boolean;
+	startedAtUtc: number | null;
+	completedAtUtc: number | null;
+	sequence: number;
+	operatorRetries: number;
+	skipWaived: boolean | null;
+	inputTokens: number | null;
+	outputTokens: number | null;
+	toolCalls: number | null;
+	validationNotApplicable: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse = {
-	inputTokens?: number | null;
-	outputTokens?: number | null;
-	toolCalls?: number | null;
-	providerCalls?: number | null;
-	agentTurnMs?: number | null;
+	inputTokens: number | null;
+	outputTokens: number | null;
+	toolCalls: number | null;
+	providerCalls: number | null;
+	agentTurnMs: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = {
@@ -4487,20 +4487,20 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunAc
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse>;
-	lastSequence?: number;
-	hasMore?: boolean;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse>;
+	lastSequence: number;
+	hasMore: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse = {
-	id?: string;
-	sequence?: number;
-	eventType?: string;
-	nodeRunId?: string | null;
-	outcome?: string | null;
-	detailJson?: string | null;
-	operationId?: string | null;
-	occurredAtUtc?: number;
+	id: string;
+	sequence: number;
+	eventType: string;
+	nodeRunId: string | null;
+	outcome: string | null;
+	detailJson: string | null;
+	operationId: string | null;
+	occurredAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventFeedRequest = {
@@ -4508,22 +4508,22 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEv
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse = {
-	id?: string;
-	title?: string;
-	developmentProjectId?: string | null;
-	status?: string;
-	latestRunId?: string | null;
-	latestRunStatus?: string | null;
-	definitionName?: string | null;
-	queuedNodeCount?: number;
-	runningNodeCount?: number;
-	completedNodeCount?: number;
-	totalNodeCount?: number;
-	updatedAtUtc?: number;
+	id: string;
+	title: string;
+	developmentProjectId: string | null;
+	status: string;
+	latestRunId: string | null;
+	latestRunStatus: string | null;
+	definitionName: string | null;
+	queuedNodeCount: number;
+	runningNodeCount: number;
+	completedNodeCount: number;
+	totalNodeCount: number;
+	updatedAtUtc: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsRequest = {
@@ -4531,16 +4531,16 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowW
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse = {
-	id?: string;
-	title?: string;
-	request?: string;
-	developmentProjectId?: string | null;
-	status?: string;
-	latestRunId?: string | null;
-	runs?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse>;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
-	version?: number;
+	id: string;
+	title: string;
+	request: string;
+	developmentProjectId: string | null;
+	status: string;
+	latestRunId: string | null;
+	runs: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse>;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	version: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest = {
@@ -4559,46 +4559,46 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflo
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowCapabilityResponse = {
-	enabled?: boolean;
+	enabled: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
-	enabled?: boolean;
-	sandboxProvider?: string;
-	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
-	isolation?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse>;
+	enabled: boolean;
+	sandboxProvider: string;
+	containerRuntime: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
+	isolation: Array<XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = {
-	ready?: boolean;
-	status?: string;
-	message?: string;
-	requiresOperatorConfirmation?: boolean;
-	endpoint?: string | null;
-	endpointSource?: string | null;
-	observedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
-	pinnedDaemon?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
+	ready: boolean;
+	status: string;
+	message: string;
+	requiresOperatorConfirmation: boolean;
+	endpoint: string | null;
+	endpointSource: string | null;
+	observedDaemon: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
+	pinnedDaemon: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = {
-	daemonId?: string;
-	serverVersion?: string;
-	endpoint?: string;
-	confirmedAtUtc?: string | null;
+	daemonId: string;
+	serverVersion: string;
+	endpoint: string;
+	confirmedAtUtc: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse = {
-	role?: string;
-	provider?: string;
-	backend?: string;
-	level?: string;
-	filesystemIsolation?: boolean;
-	networkIsolation?: boolean;
-	networkIsolationRequired?: boolean;
-	resourceLimits?: boolean;
-	readOnlyMounts?: boolean;
-	filesystemIsolationUnavailableReason?: string | null;
-	resourceLimitsUnavailableReason?: string | null;
+	role: string;
+	provider: string;
+	backend: string;
+	level: string;
+	filesystemIsolation: boolean;
+	networkIsolation: boolean;
+	networkIsolationRequired: boolean;
+	resourceLimits: boolean;
+	readOnlyMounts: boolean;
+	filesystemIsolationUnavailableReason: string | null;
+	resourceLimitsUnavailableReason: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = {
@@ -4606,13 +4606,13 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContain
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = {
-	id?: string;
-	alias?: string;
-	availability?: string;
+	id: string;
+	alias: string;
+	availability: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = {
@@ -4621,13 +4621,13 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentReposi
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentTemplatesResponse = {
-	templates?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse>;
+	templates: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateResponse = {
-	id?: string;
-	alias?: string;
-	availability?: string;
+	id: string;
+	alias: string;
+	availability: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentTemplateRequest = {
@@ -4640,9 +4640,9 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTemplateReques
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryFromTemplateResponse = {
-	repository?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
-	templateAlias?: string;
-	templateCommit?: string;
+	repository: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+	templateAlias: string;
+	templateCommit: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentRepositoryFromTemplateRequest = {
@@ -4653,9 +4653,9 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentReposito
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionResponse = {
-	profileId?: string;
-	buildTarget?: string | null;
-	candidates?: Array<string>;
+	profileId: string;
+	buildTarget: string | null;
+	candidates: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetectionRequest = {
@@ -4663,100 +4663,100 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProfileDetecti
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = {
-	id?: string;
-	objective?: string;
-	selectedFolderId?: string | null;
-	repositoryConnectionRequired?: boolean;
-	baseBranch?: string;
-	status?: string;
-	egressPolicy?: string;
-	coderModelId?: string | null;
-	reviewerModelId?: string | null;
-	maxTokens?: number | null;
-	maxDurationSeconds?: number | null;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
-	version?: number;
-	commandProfileId?: string | null;
-	commandProfileBuildTarget?: string | null;
-	commandProfileDigest?: string | null;
+	id: string;
+	objective: string;
+	selectedFolderId: string | null;
+	repositoryConnectionRequired: boolean;
+	baseBranch: string;
+	status: string;
+	egressPolicy: string;
+	coderModelId: string | null;
+	reviewerModelId: string | null;
+	maxTokens: number | null;
+	maxDurationSeconds: number | null;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+	version: number;
+	commandProfileId: string | null;
+	commandProfileBuildTarget: string | null;
+	commandProfileDigest: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = {
-	project?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse;
-	tasks?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse>;
-	events?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
+	project: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse;
+	tasks: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse>;
+	events: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse = {
-	task?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse;
-	attempts?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse>;
-	artifacts?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
+	task: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse;
+	attempts: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse>;
+	artifacts: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse = {
-	id?: string;
-	projectId?: string;
-	title?: string;
-	requirements?: string;
-	acceptanceCriteriaJson?: string;
-	status?: string;
-	currentReviewRound?: number;
-	maxReviewRounds?: number;
-	blockedReason?: string | null;
-	approvedSubjectHash?: string | null;
-	version?: number;
-	workflowRunId?: string | null;
+	id: string;
+	projectId: string;
+	title: string;
+	requirements: string;
+	acceptanceCriteriaJson: string;
+	status: string;
+	currentReviewRound: number;
+	maxReviewRounds: number;
+	blockedReason: string | null;
+	approvedSubjectHash: string | null;
+	version: number;
+	workflowRunId: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = {
-	id?: string;
-	taskId?: string;
-	predecessorAttemptId?: string | null;
-	role?: string;
-	modelId?: string;
-	provider?: string;
-	status?: string;
-	startedAtUtc?: number | null;
-	endedAtUtc?: number | null;
-	terminalReason?: string | null;
-	inputTokens?: number | null;
-	outputTokens?: number | null;
-	version?: number;
+	id: string;
+	taskId: string;
+	predecessorAttemptId: string | null;
+	role: string;
+	modelId: string;
+	provider: string;
+	status: string;
+	startedAtUtc: number | null;
+	endedAtUtc: number | null;
+	terminalReason: string | null;
+	inputTokens: number | null;
+	outputTokens: number | null;
+	version: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse = {
-	id?: string;
-	projectId?: string;
-	taskId?: string;
-	attemptId?: string | null;
-	kind?: string;
-	contentHash?: string;
-	byteCount?: number;
-	createdAtUtc?: number;
-	baseCommit?: string | null;
-	subjectHash?: string | null;
-	changedFilesManifestHash?: string | null;
-	commandProfileVersion?: string | null;
-	commandProfileDigest?: string | null;
-	isValid?: boolean;
+	id: string;
+	projectId: string;
+	taskId: string;
+	attemptId: string | null;
+	kind: string;
+	contentHash: string;
+	byteCount: number;
+	createdAtUtc: number;
+	baseCommit: string | null;
+	subjectHash: string | null;
+	changedFilesManifestHash: string | null;
+	commandProfileVersion: string | null;
+	commandProfileDigest: string | null;
+	isValid: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse = {
-	id?: string;
-	projectId?: string;
-	taskId?: string | null;
-	attemptId?: string | null;
-	sequence?: number;
-	eventType?: string;
-	occurredAtUtc?: number;
-	operationId?: string | null;
-	operationPhase?: string | null;
-	outcome?: string | null;
+	id: string;
+	projectId: string;
+	taskId: string | null;
+	attemptId: string | null;
+	sequence: number;
+	eventType: string;
+	occurredAtUtc: number;
+	operationId: string | null;
+	operationPhase: string | null;
+	outcome: string | null;
 	reason?: string | null;
 };
 
@@ -4787,12 +4787,12 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskRequest = 
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse = {
-	action?: string;
-	projectId?: string;
-	taskId?: string;
-	attemptId?: string | null;
-	taskStatus?: string;
-	role?: string | null;
+	action: string;
+	projectId: string;
+	taskId: string;
+	attemptId: string | null;
+	taskStatus: string;
+	role: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = {
@@ -4804,16 +4804,16 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
+	items: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse = {
-	artifact?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse;
-	content?: string;
+	artifact: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse;
+	content: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest = {
@@ -4821,12 +4821,12 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentArtifactReques
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse = {
-	subjectHash?: string;
-	patchHash?: string;
-	manifestHash?: string;
-	expectedResultHash?: string;
-	patch?: string;
-	changedFiles?: Array<XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile>;
+	subjectHash: string;
+	patchHash: string;
+	manifestHash: string;
+	expectedResultHash: string;
+	patch: string;
+	changedFiles: Array<XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile>;
 };
 
 export type XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile = {
@@ -4836,12 +4836,12 @@ export type XeLocalAiEngineClientServicesDevelopmentDevelopmentPatchPreviewFile 
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse = {
-	operationId?: string;
-	phase?: string;
-	outcome?: string;
-	status?: string;
-	version?: number;
-	sequence?: number;
+	operationId: string;
+	phase: string;
+	outcome: string;
+	status: string;
+	version: number;
+	sequence: number;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = {
@@ -6072,27 +6072,27 @@ export type XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsReques
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse>;
-	retrieval?: XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse;
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse>;
+	retrieval: XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse = {
-	actionId?: string;
-	enabledAtUtc?: number;
-	beforeDownRate?: number;
-	afterDownRate?: number;
-	afterSampleSize?: number;
-	status?: XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus;
-	flagged?: boolean;
-	facetToolName?: string | null;
+	actionId: string;
+	enabledAtUtc: number;
+	beforeDownRate: number;
+	afterDownRate: number;
+	afterSampleSize: number;
+	status: XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus;
+	flagged: boolean;
+	facetToolName: string | null;
 };
 
 export type XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = "InsufficientData" | "Improved" | "Flat" | "Regressed";
 
 export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookRetrievalResponse = {
-	threshold?: number;
-	topK?: number;
-	ranker?: string;
+	threshold: number;
+	topK: number;
+	ranker: string;
 	embeddingModel?: string | null;
 };
 
@@ -6150,10 +6150,10 @@ export type XeLocalAiEngineClientEndpointsAgentsV1ToolCapableModelsResponse = {
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse = {
-	thumbsUpScanned?: number;
-	createdCount?: number;
-	duplicateCount?: number;
-	skippedCount?: number;
+	thumbsUpScanned: number;
+	createdCount: number;
+	duplicateCount: number;
+	skippedCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest = {

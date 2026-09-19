@@ -96,11 +96,14 @@ public sealed class ServerPushHubTests
         _ = connection.On<GgufDownloadStatusHubEvent>(GgufDownloadHubEvents.StatusChanged, evt => received.TrySetResult(evt));
         await connection.StartAsync();
 
-        var published = new GgufDownloadStatusHubEvent("qwen3.5-0.8b-q4_k_m.gguf",
-            "Running",
-            CompletedBytes: 512,
-            TotalBytes: 4096,
-            SanitizedError: null);
+        var published = new GgufDownloadStatusHubEvent
+        {
+            ModelName = "qwen3.5-0.8b-q4_k_m.gguf",
+            Phase = "Running",
+            CompletedBytes = 512,
+            TotalBytes = 4096,
+            SanitizedError = null
+        };
         await Factory.Services.GetRequiredService<IGgufDownloadEventPublisher>().PublishStatusAsync(published);
 
         var evt = await received.Task.WaitAsync(TestBudgets.Contended);
@@ -118,15 +121,18 @@ public sealed class ServerPushHubTests
         _ = connection.On<RuntimeAcquisitionStatusHubEvent>(RuntimeAcquisitionHubEvents.StatusChanged, evt => received.TrySetResult(evt));
         await connection.StartAsync();
 
-        var published = new RuntimeAcquisitionStatusHubEvent(Sequence: 7,
-            nameof(RuntimeAcquisitionPhase.Downloading),
-            "Cuda",
-            "b10201",
-            CompletedBytes: 1024,
-            TotalBytes: 8192,
-            StepIndex: 1,
-            StepCount: 2,
-            SanitizedError: null);
+        var published = new RuntimeAcquisitionStatusHubEvent
+        {
+            Sequence = 7,
+            Phase = nameof(RuntimeAcquisitionPhase.Downloading),
+            Variant = "Cuda",
+            Tag = "b10201",
+            CompletedBytes = 1024,
+            TotalBytes = 8192,
+            StepIndex = 1,
+            StepCount = 2,
+            SanitizedError = null
+        };
         await Factory.Services.GetRequiredService<IRuntimeAcquisitionEventPublisher>().PublishStatusAsync(published);
 
         var evt = await received.Task.WaitAsync(TestBudgets.Contended);

@@ -5,61 +5,93 @@ using FastEndpoints;
 /// <summary>
 ///     The resolved container runtime, its capability set and the daemon behind it.
 /// </summary>
-/// <param name="Status">
-///     <c>Ready</c> | <c>DaemonUnreachable</c> | <c>PermissionDenied</c> | <c>ApiVersionTooOld</c> |
-///     <c>DaemonIdentityChanged</c> | <c>NotConfigured</c> | <c>ProbeFailed</c>.
-/// </param>
-/// <param name="Available">
-///     Read straight off <c>ContainerRuntimeResolution.Available</c> — the daemon answered THIS probe. The mapper
-///     projects the member and never re-derives it from <paramref name="Status" />, so <c>PermissionDenied</c>,
-///     <c>ApiVersionTooOld</c> and <c>DaemonIdentityChanged</c> arrive <c>available: true, ready: false</c>: reachable
-///     but unusable, which is a different sentence for the operator than "no daemon". It is the single member the SPA
-///     renders "Runtime unavailable" from, and it is why a missing daemon rewrites no instance row.
-/// </param>
-/// <param name="ForeignInstallContainers">
-///     Owner-labelled containers whose install id belongs to another node data directory. Surfaced, never removed:
-///     removal stays a manual operator act. It is 0 on an install preview, where nothing reconciles — the count is the
-///     reconciler's observation, not a standing fact.
-/// </param>
-public sealed record ExternalAppRuntimeResponse(
-    string Provider,
-    string Status,
-    bool Available,
-    bool Ready,
-    string Message,
-    bool RequiresOperatorConfirmation,
-    string? Endpoint,
-    string? EndpointSource,
-    ExternalAppDaemonView? ObservedDaemon,
-    ExternalAppDaemonView? PinnedDaemon,
-    ExternalAppCapabilitiesView Capabilities,
-    int ForeignInstallContainers);
+public sealed class ExternalAppRuntimeResponse
+{
+    public required string Provider { get; init; }
+
+    /// <summary>
+    ///     <c>Ready</c> | <c>DaemonUnreachable</c> | <c>PermissionDenied</c> | <c>ApiVersionTooOld</c> |
+    ///     <c>DaemonIdentityChanged</c> | <c>NotConfigured</c> | <c>ProbeFailed</c>.
+    /// </summary>
+    public required string Status { get; init; }
+
+    /// <summary>
+    ///     Read straight off <c>ContainerRuntimeResolution.Available</c> — the daemon answered THIS probe. The mapper
+    ///     projects the member and never re-derives it from <see cref="Status" />, so <c>PermissionDenied</c>,
+    ///     <c>ApiVersionTooOld</c> and <c>DaemonIdentityChanged</c> arrive <c>available: true, ready: false</c>: reachable
+    ///     but unusable, which is a different sentence for the operator than "no daemon". It is the single member the SPA
+    ///     renders "Runtime unavailable" from, and it is why a missing daemon rewrites no instance row.
+    /// </summary>
+    public required bool Available { get; init; }
+
+    public required bool Ready { get; init; }
+
+    public required string Message { get; init; }
+
+    public required bool RequiresOperatorConfirmation { get; init; }
+
+    public required string? Endpoint { get; init; }
+
+    public required string? EndpointSource { get; init; }
+
+    public required ExternalAppDaemonView? ObservedDaemon { get; init; }
+
+    public required ExternalAppDaemonView? PinnedDaemon { get; init; }
+
+    public required ExternalAppCapabilitiesView Capabilities { get; init; }
+
+    /// <summary>
+    ///     Owner-labelled containers whose install id belongs to another node data directory. Surfaced, never removed:
+    ///     removal stays a manual operator act. It is 0 on an install preview, where nothing reconciles — the count is the
+    ///     reconciler's observation, not a standing fact.
+    /// </summary>
+    public required int ForeignInstallContainers { get; init; }
+}
 
 /// <summary>
-///     One daemon, observed or pinned. <paramref name="DaemonId" /> and <paramref name="ServerVersion" /> are NULLABLE
+///     One daemon, observed or pinned. <see cref="DaemonId" /> and <see cref="ServerVersion" /> are NULLABLE
 ///     because a probe that failed reports neither, and an empty-string identity would read as a daemon that answered.
-///     The pinned view is built from the attestation's two members alone, so its <paramref name="ServerVersion" /> is
+///     The pinned view is built from the attestation's two members alone, so its <see cref="ServerVersion" /> is
 ///     null by construction — the pin records who was approved, not what version answered.
 /// </summary>
-/// <param name="ConfirmedAtUtc">
-///     Unix milliseconds, like every other time member here: a <c>DateTimeOffset</c> would hand the generated client a
-///     string for this one field and a number for the rest.
-/// </param>
-public sealed record ExternalAppDaemonView(string? DaemonId, string? ServerVersion, string? Endpoint, long? ConfirmedAtUtc);
+public sealed class ExternalAppDaemonView
+{
+    public required string? DaemonId { get; init; }
+
+    public required string? ServerVersion { get; init; }
+
+    public required string? Endpoint { get; init; }
+
+    /// <summary>
+    ///     Unix milliseconds, like every other time member here: a <c>DateTimeOffset</c> would hand the generated client a
+    ///     string for this one field and a number for the rest.
+    /// </summary>
+    public required long? ConfirmedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Member names are exactly the manifest <c>requires[]</c> capability names. <c>GpuDevices</c> is always false.
 /// </summary>
-public sealed record ExternalAppCapabilitiesView(
-    bool Containers,
-    bool Networks,
-    bool BindStorage,
-    bool LoopbackPortPublishing,
-    bool HealthChecks,
-    bool RestartPolicies,
-    bool Logs,
-    bool ImagePull,
-    bool GpuDevices);
+public sealed class ExternalAppCapabilitiesView
+{
+    public required bool Containers { get; init; }
+
+    public required bool Networks { get; init; }
+
+    public required bool BindStorage { get; init; }
+
+    public required bool LoopbackPortPublishing { get; init; }
+
+    public required bool HealthChecks { get; init; }
+
+    public required bool RestartPolicies { get; init; }
+
+    public required bool Logs { get; init; }
+
+    public required bool ImagePull { get; init; }
+
+    public required bool GpuDevices { get; init; }
+}
 
 /// <summary>
 ///     Body of <c>POST external-apps/runtime/refresh</c>. Names the daemon the operator was shown; it must equal the
@@ -71,286 +103,480 @@ public sealed record RefreshExternalAppRuntimeRequest
     public string? AcknowledgeDaemonId { get; init; }
 }
 
-/// <param name="FromBundledSeed">This document is the shipped seed, not a fetched one.</param>
-/// <param name="RefreshFailureMessage">
-///     Set on the POST when THIS refresh failed and the last-good document was returned;
-///     <paramref name="LastRefreshFailure" /> is set when the MOST RECENT refresh failed, read off the snapshot. Two
-///     members because "your click just failed" and "the cache is stale" are different sentences.
-/// </param>
-public sealed record ExternalAppCatalogResponse(
-    int SchemaVersion,
-    long GeneratedAtUtc,
-    long FetchedAtUtc,
-    bool FromBundledSeed,
-    string? RefreshFailureMessage,
-    string? LastRefreshFailure,
-    IReadOnlyList<ExternalAppSummaryView> Applications);
+public sealed class ExternalAppCatalogResponse
+{
+    public required int SchemaVersion { get; init; }
 
-/// <param name="InstalledInstanceId">
-///     Set when this application already has an instance. V1 allows one, so the card links instead of offering install.
-/// </param>
-public sealed record ExternalAppSummaryView(
-    string Id,
-    int ManifestVersion,
-    string DisplayName,
-    string Summary,
-    string Homepage,
-    string License,
-    string Trust,
-    string TestedVersion,
-    IReadOnlyList<string> Requires,
-    ExternalAppPermissionsView Permissions,
-    ExternalAppResourcesView Resources,
-    Guid? InstalledInstanceId,
-    string? InstalledStatus);
+    public required long GeneratedAtUtc { get; init; }
+
+    public required long FetchedAtUtc { get; init; }
+
+    /// <summary>This document is the shipped seed, not a fetched one.</summary>
+    public required bool FromBundledSeed { get; init; }
+
+    /// <summary>
+    ///     Set on the POST when THIS refresh failed and the last-good document was returned;
+    ///     <see cref="LastRefreshFailure" /> is set when the MOST RECENT refresh failed, read off the snapshot. Two
+    ///     members because "your click just failed" and "the cache is stale" are different sentences.
+    /// </summary>
+    public required string? RefreshFailureMessage { get; init; }
+
+    public required string? LastRefreshFailure { get; init; }
+
+    public required IReadOnlyList<ExternalAppSummaryView> Applications { get; init; }
+}
+
+public sealed class ExternalAppSummaryView
+{
+    public required string Id { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string Summary { get; init; }
+
+    public required string Homepage { get; init; }
+
+    public required string License { get; init; }
+
+    public required string Trust { get; init; }
+
+    public required string TestedVersion { get; init; }
+
+    public required IReadOnlyList<string> Requires { get; init; }
+
+    public required ExternalAppPermissionsView Permissions { get; init; }
+
+    public required ExternalAppResourcesView Resources { get; init; }
+
+    /// <summary>Set when this application already has an instance. V1 allows one, so the card links instead of offering install.</summary>
+    public required Guid? InstalledInstanceId { get; init; }
+
+    public required string? InstalledStatus { get; init; }
+}
 
 /// <summary>
 ///     The full manifest MINUS every <c>files[]</c> entry: those are base64 asset bodies the engine materialises, never
 ///     UI data. There is no user or uid member at either level — containers run as the image's default user, and the
 ///     boundary is the container's dropped capabilities, seccomp and loopback-only network.
 /// </summary>
-public sealed record ExternalAppManifestView(
-    string Id,
-    int ManifestVersion,
-    string DisplayName,
-    string Summary,
-    string Description,
-    string Homepage,
-    string License,
-    string Trust,
-    string TestedVersion,
-    IReadOnlyList<string> Requires,
-    ExternalAppPermissionsView Permissions,
-    ExternalAppResourcesView Resources,
-    IReadOnlyList<ExternalAppServiceView> Services,
-    IReadOnlyList<ExternalAppVariableView> Variables);
+public sealed class ExternalAppManifestView
+{
+    public required string Id { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required string Summary { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string Homepage { get; init; }
+
+    public required string License { get; init; }
+
+    public required string Trust { get; init; }
+
+    public required string TestedVersion { get; init; }
+
+    public required IReadOnlyList<string> Requires { get; init; }
+
+    public required ExternalAppPermissionsView Permissions { get; init; }
+
+    public required ExternalAppResourcesView Resources { get; init; }
+
+    public required IReadOnlyList<ExternalAppServiceView> Services { get; init; }
+
+    public required IReadOnlyList<ExternalAppVariableView> Variables { get; init; }
+}
 
 /// <summary>One container of an application, as the detail page renders it.</summary>
-public sealed record ExternalAppServiceView(
-    string Name,
-    string Image,
-    string ImageTag,
-    IReadOnlyList<string>? Entrypoint,
-    IReadOnlyList<string>? Command,
-    IReadOnlyDictionary<string, string> Environment,
-    IReadOnlyList<ExternalAppPortView> Ports,
-    IReadOnlyList<ExternalAppStorageView> Storage,
-    bool HasHealthcheck,
-    IReadOnlyList<ExternalAppDependencyView> DependsOn,
-    IReadOnlyList<string> CapAdd,
-    IReadOnlyList<string> ExtraHosts,
-    bool ReadOnlyRootFilesystem);
+public sealed class ExternalAppServiceView
+{
+    public required string Name { get; init; }
 
-public sealed record ExternalAppPortView(int ContainerPort, string Role, int? PreferredHostPort, string? OpenPath);
+    public required string Image { get; init; }
 
-public sealed record ExternalAppStorageView(string Name, string ContainerPath);
+    public required string ImageTag { get; init; }
 
-public sealed record ExternalAppDependencyView(string Service, string Condition);
+    public required IReadOnlyList<string>? Entrypoint { get; init; }
 
-public sealed record ExternalAppPermissionsView(bool Internet, bool LocalNetwork, string HostFiles, string Gpu);
+    public required IReadOnlyList<string>? Command { get; init; }
 
-public sealed record ExternalAppResourcesView(int MinimumMemoryMb, int RecommendedMemoryMb, int CpuHint, int PidsLimit);
+    public required IReadOnlyDictionary<string, string> Environment { get; init; }
+
+    public required IReadOnlyList<ExternalAppPortView> Ports { get; init; }
+
+    public required IReadOnlyList<ExternalAppStorageView> Storage { get; init; }
+
+    public required bool HasHealthcheck { get; init; }
+
+    public required IReadOnlyList<ExternalAppDependencyView> DependsOn { get; init; }
+
+    public required IReadOnlyList<string> CapAdd { get; init; }
+
+    public required IReadOnlyList<string> ExtraHosts { get; init; }
+
+    public required bool ReadOnlyRootFilesystem { get; init; }
+}
+
+public sealed class ExternalAppPortView
+{
+    public required int ContainerPort { get; init; }
+
+    public required string Role { get; init; }
+
+    public required int? PreferredHostPort { get; init; }
+
+    public required string? OpenPath { get; init; }
+}
+
+public sealed class ExternalAppStorageView
+{
+    public required string Name { get; init; }
+
+    public required string ContainerPath { get; init; }
+}
+
+public sealed class ExternalAppDependencyView
+{
+    public required string Service { get; init; }
+
+    public required string Condition { get; init; }
+}
+
+public sealed class ExternalAppPermissionsView
+{
+    public required bool Internet { get; init; }
+
+    public required bool LocalNetwork { get; init; }
+
+    public required string HostFiles { get; init; }
+
+    public required string Gpu { get; init; }
+}
+
+public sealed class ExternalAppResourcesView
+{
+    public required int MinimumMemoryMb { get; init; }
+
+    public required int RecommendedMemoryMb { get; init; }
+
+    public required int CpuHint { get; init; }
+
+    public required int PidsLimit { get; init; }
+}
 
 /// <summary>
 ///     The permissions an installed instance ACTUALLY holds, computed by <c>ExternalAppEffectivePermissions.From</c> and
 ///     carried on BOTH previews, so the panel renders a widening rather than the operator diffing two manifests by eye.
-///     <paramref name="Services" /> is the per-service breakdown the server actually diffs, projected as a MAP keyed by
+///     <see cref="Services" /> is the per-service breakdown the server actually diffs, projected as a MAP keyed by
 ///     service name so the panel can name the service that gained a capability: aggregates alone hide a redistribution,
 ///     because moving a capability from service A to service B changes nothing at the union.
 ///     <para>
-///         The four application-level aggregates — <paramref name="Capabilities" />,
-///         <paramref name="WritableRootFilesystem" />, <paramref name="PublishedPorts" /> and
-///         <paramref name="ExtraHosts" /> — complete the eight names of the widening vocabulary
+///         The four application-level aggregates — <see cref="Capabilities" />,
+///         <see cref="WritableRootFilesystem" />, <see cref="PublishedPorts" /> and
+///         <see cref="ExtraHosts" /> — complete the eight names of the widening vocabulary
 ///         (<c>ExternalAppEffectivePermissions.Vocabulary</c>), so the panel renders all eight from the wire instead
 ///         of deriving four of them client-side and disagreeing with the server about what an application may do.
 ///         They are DISPLAY ONLY: the verdict stays <c>addedPermissions</c>, which is the server's per-service diff.
 ///     </para>
 /// </summary>
-/// <param name="Capabilities">Every capability any service adds, ordinal-sorted so the render order is stable.</param>
-/// <param name="WritableRootFilesystem">True when ANY service runs with a writable root filesystem.</param>
-/// <param name="PublishedPorts">Every <c>service:containerPort</c> string of the map, ordinal-sorted.</param>
-/// <param name="ExtraHosts">Every extra host any service declares, ordinal-sorted.</param>
-public sealed record ExternalAppEffectivePermissionsView(
-    bool Internet,
-    string HostFiles,
-    string Gpu,
-    bool LocalNetwork,
-    IReadOnlyDictionary<string, ExternalAppServicePermissionsView> Services,
-    IReadOnlyList<string> Capabilities,
-    bool WritableRootFilesystem,
-    IReadOnlyList<string> PublishedPorts,
-    IReadOnlyList<string> ExtraHosts);
+public sealed class ExternalAppEffectivePermissionsView
+{
+    public required bool Internet { get; init; }
+
+    public required string HostFiles { get; init; }
+
+    public required string Gpu { get; init; }
+
+    public required bool LocalNetwork { get; init; }
+
+    public required IReadOnlyDictionary<string, ExternalAppServicePermissionsView> Services { get; init; }
+
+    /// <summary>Every capability any service adds, ordinal-sorted so the render order is stable.</summary>
+    public required IReadOnlyList<string> Capabilities { get; init; }
+
+    /// <summary>True when ANY service runs with a writable root filesystem.</summary>
+    public required bool WritableRootFilesystem { get; init; }
+
+    /// <summary>Every <c>service:containerPort</c> string of the map, ordinal-sorted.</summary>
+    public required IReadOnlyList<string> PublishedPorts { get; init; }
+
+    /// <summary>Every extra host any service declares, ordinal-sorted.</summary>
+    public required IReadOnlyList<string> ExtraHosts { get; init; }
+}
 
 /// <summary>
 ///     One service's own grants. Sets become arrays in declaration order; the mapper sorts nothing and adds nothing.
-///     <paramref name="PublishedPorts" /> entries are <c>service:containerPort</c>, the same strings the diff compares.
+///     <see cref="PublishedPorts" /> entries are <c>service:containerPort</c>, the same strings the diff compares.
 /// </summary>
-public sealed record ExternalAppServicePermissionsView(
-    IReadOnlyList<string> Capabilities,
-    bool WritableRootFilesystem,
-    IReadOnlyList<string> PublishedPorts,
-    IReadOnlyList<string> ExtraHosts);
+public sealed class ExternalAppServicePermissionsView
+{
+    public required IReadOnlyList<string> Capabilities { get; init; }
 
-/// <param name="Default">
-///     NULL for a <c>secret</c> variable whatever the manifest says: a shipped secret default is never a wire value.
-/// </param>
-public sealed record ExternalAppVariableView(
-    string Name,
-    string Label,
-    string? Description,
-    string Type,
-    bool Required,
-    string? Default,
-    IReadOnlyList<string>? AllowedValues,
-    bool Advanced,
-    ExternalAppVariableValidationView? Validation);
+    public required bool WritableRootFilesystem { get; init; }
 
-public sealed record ExternalAppVariableValidationView(int? MinLength, int? MaxLength, string? Pattern);
+    public required IReadOnlyList<string> PublishedPorts { get; init; }
 
-/// <param name="ManifestSha256">
-///     SHA-256 of the canonical manifest JSON as served. Acceptance is bound to this fingerprint, not to the version
-///     number: a catalog that republishes v3 with a wider <c>capAdd</c> produces a different sha, and the install 409s
-///     <c>ExternalAppManifestChanged</c> instead of installing something the operator never read.
-/// </param>
-/// <param name="Variables">
-///     EVERY declared variable, not just the required ones — <c>Required</c> is already a member, and required-only
-///     would silently drop an application's optional settings at install.
-/// </param>
-/// <param name="BlockedReason">
-///     Why <paramref name="CanInstall" /> is false, as the <c>ExternalAppBlockedReason</c> name: <c>GpuNotSupported</c>
-///     | <c>RuntimeIncompatible</c> | <c>RuntimeUnavailable</c> | <c>InsufficientMemory</c> | <c>InsufficientDisk</c> |
-///     <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c>. Null when the install can proceed.
-///     The install path cannot produce <c>CatalogMissing</c> and the update path cannot produce
-///     <c>AlreadyInstalled</c>, but one closed vocabulary means the SPA ships eight labels once instead of two
-///     overlapping sets.
-/// </param>
-public sealed record ExternalAppInstallPreview(
-    string ApplicationId,
-    int ManifestVersion,
-    string ManifestSha256,
-    bool CanInstall,
-    string? BlockedReason,
-    Guid? ExistingInstanceId,
-    ExternalAppPermissionsView Permissions,
-    ExternalAppEffectivePermissionsView EffectivePermissions,
-    IReadOnlyList<ExternalAppVariableView> Variables,
-    ExternalAppRuntimeResponse Runtime,
-    IReadOnlyList<string> MissingCapabilities,
-    ExternalAppResourceCheckView ResourceCheck);
+    public required IReadOnlyList<string> ExtraHosts { get; init; }
+}
+
+public sealed class ExternalAppVariableView
+{
+    public required string Name { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required string Type { get; init; }
+
+    public required bool Required { get; init; }
+
+    /// <summary>NULL for a <c>secret</c> variable whatever the manifest says: a shipped secret default is never a wire value.</summary>
+    public required string? Default { get; init; }
+
+    public required IReadOnlyList<string>? AllowedValues { get; init; }
+
+    public required bool Advanced { get; init; }
+
+    public required ExternalAppVariableValidationView? Validation { get; init; }
+}
+
+public sealed class ExternalAppVariableValidationView
+{
+    public required int? MinLength { get; init; }
+
+    public required int? MaxLength { get; init; }
+
+    public required string? Pattern { get; init; }
+}
+
+public sealed class ExternalAppInstallPreview
+{
+    public required string ApplicationId { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    /// <summary>
+    ///     SHA-256 of the canonical manifest JSON as served. Acceptance is bound to this fingerprint, not to the version
+    ///     number: a catalog that republishes v3 with a wider <c>capAdd</c> produces a different sha, and the install 409s
+    ///     <c>ExternalAppManifestChanged</c> instead of installing something the operator never read.
+    /// </summary>
+    public required string ManifestSha256 { get; init; }
+
+    public required bool CanInstall { get; init; }
+
+    /// <summary>
+    ///     Why <see cref="CanInstall" /> is false, as the <c>ExternalAppBlockedReason</c> name: <c>GpuNotSupported</c>
+    ///     | <c>RuntimeIncompatible</c> | <c>RuntimeUnavailable</c> | <c>InsufficientMemory</c> | <c>InsufficientDisk</c> |
+    ///     <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c>. Null when the install can proceed.
+    ///     The install path cannot produce <c>CatalogMissing</c> and the update path cannot produce
+    ///     <c>AlreadyInstalled</c>, but one closed vocabulary means the SPA ships eight labels once instead of two
+    ///     overlapping sets.
+    /// </summary>
+    public required string? BlockedReason { get; init; }
+
+    public required Guid? ExistingInstanceId { get; init; }
+
+    public required ExternalAppPermissionsView Permissions { get; init; }
+
+    public required ExternalAppEffectivePermissionsView EffectivePermissions { get; init; }
+
+    /// <summary>
+    ///     EVERY declared variable, not just the required ones — <c>Required</c> is already a member, and required-only
+    ///     would silently drop an application's optional settings at install.
+    /// </summary>
+    public required IReadOnlyList<ExternalAppVariableView> Variables { get; init; }
+
+    public required ExternalAppRuntimeResponse Runtime { get; init; }
+
+    public required IReadOnlyList<string> MissingCapabilities { get; init; }
+
+    public required ExternalAppResourceCheckView ResourceCheck { get; init; }
+}
 
 /// <summary>
-///     Body of <c>GET …/instances/{instanceId}/update-preview</c>. <paramref name="Variables" /> is every variable the
+///     Body of <c>GET …/instances/{instanceId}/update-preview</c>. <see cref="Variables" /> is every variable the
 ///     TARGET manifest declares; a variable that was <c>secret</c> in the installed snapshot and is plain in the target
 ///     arrives UNSET, because the stored value is discarded on update and never returned in plaintext.
 /// </summary>
-/// <param name="AddedPermissions">
-///     The names this update ADDS, from the closed vocabulary. Empty means no widening and no acknowledgement needed.
-/// </param>
-/// <param name="TargetManifestVersion">
-///     The version this update would move TO; <paramref name="CurrentManifestVersion" /> is what is installed. Named
-///     for the target rather than bare <c>ManifestVersion</c> because a preview carrying both must not make the reader
-///     guess which one a plain name meant.
-/// </param>
-/// <param name="ResourceVerdict">
-///     The service's own resource verdict, projected. The install preview names the same shape <c>ResourceCheck</c>.
-/// </param>
-public sealed record ExternalAppUpdatePreview(
-    string ApplicationId,
-    Guid InstanceId,
-    int CurrentManifestVersion,
-    int TargetManifestVersion,
-    string ManifestSha256,
-    IReadOnlyList<ExternalAppVariableView> Variables,
-    IReadOnlyDictionary<string, string> CurrentValues,
-    IReadOnlyList<string> AddedPermissions,
-    ExternalAppEffectivePermissionsView EffectivePermissions,
-    ExternalAppResourceCheckView ResourceVerdict,
-    bool CanUpdate,
-    string? BlockedReason);
+public sealed class ExternalAppUpdatePreview
+{
+    public required string ApplicationId { get; init; }
 
-/// <param name="Message">
-///     The sentence naming requested versus available, carried straight across, which the SPA shows rather than
-///     composing it from the byte counts.
-/// </param>
-public sealed record ExternalAppResourceCheckView(
-    bool Satisfied,
-    string? FailureCategory,
-    long RequiredMemoryBytes,
-    long AvailableMemoryBytes,
-    long RequiredDiskBytes,
-    long AvailableDiskBytes,
-    string Message);
+    public required Guid InstanceId { get; init; }
 
-/// <param name="Variables">Every declared variable name → its value, with <c>secret</c> values replaced by the mask sentinel.</param>
-/// <param name="Version">The optimistic concurrency token a lifecycle or variables command must echo back.</param>
-/// <param name="UpdateAvailable">
-///     Computed by the SERVICE against the catalog's manifest version; false when <paramref name="CatalogMissing" />,
-///     since an application that left the catalog cannot offer an update.
-/// </param>
-/// <param name="Manifest">
-///     The INSTALLED snapshot, sanitised — <c>files[]</c> stripped, every <c>secret</c> variable's default nulled. The
-///     detail page and the Settings tab read this and never the catalog: an instance installed at v2 must render what
-///     it is running, not what the catalog now offers, and a <c>catalogMissing</c> instance must still render at all.
-///     <c>testedVersion</c> reaches the client as <c>manifest.testedVersion</c>; there is no duplicate top-level member.
-/// </param>
-/// <param name="RuntimeOverride">Null means the node-wide selection applies.</param>
-public sealed record ExternalAppInstanceView(
-    Guid Id,
-    string ApplicationId,
-    string DisplayName,
-    int ManifestVersion,
-    string Status,
-    string DesiredState,
-    string? RuntimeOverride,
-    string RuntimeProvider,
-    ExternalAppManifestView Manifest,
-    IReadOnlyList<ExternalAppPublishedPortView> PublishedPorts,
-    IReadOnlyDictionary<string, string> Variables,
-    string? FailureCategory,
-    string? FailureSummary,
-    bool UpdateAvailable,
-    int? AvailableManifestVersion,
-    bool CatalogMissing,
-    long InstalledAtUtc,
-    long? StartedAtUtc,
-    long? StoppedAtUtc,
-    long UpdatedAtUtc,
-    long LastSequence,
-    long Version);
+    public required int CurrentManifestVersion { get; init; }
+
+    /// <summary>
+    ///     The version this update would move TO; <see cref="CurrentManifestVersion" /> is what is installed. Named
+    ///     for the target rather than bare <c>ManifestVersion</c> because a preview carrying both must not make the reader
+    ///     guess which one a plain name meant.
+    /// </summary>
+    public required int TargetManifestVersion { get; init; }
+
+    public required string ManifestSha256 { get; init; }
+
+    public required IReadOnlyList<ExternalAppVariableView> Variables { get; init; }
+
+    public required IReadOnlyDictionary<string, string> CurrentValues { get; init; }
+
+    /// <summary>The names this update ADDS, from the closed vocabulary. Empty means no widening and no acknowledgement needed.</summary>
+    public required IReadOnlyList<string> AddedPermissions { get; init; }
+
+    public required ExternalAppEffectivePermissionsView EffectivePermissions { get; init; }
+
+    /// <summary>The service's own resource verdict, projected. The install preview names the same shape <c>ResourceCheck</c>.</summary>
+    public required ExternalAppResourceCheckView ResourceVerdict { get; init; }
+
+    public required bool CanUpdate { get; init; }
+
+    public required string? BlockedReason { get; init; }
+}
+
+public sealed class ExternalAppResourceCheckView
+{
+    public required bool Satisfied { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required long RequiredMemoryBytes { get; init; }
+
+    public required long AvailableMemoryBytes { get; init; }
+
+    public required long RequiredDiskBytes { get; init; }
+
+    public required long AvailableDiskBytes { get; init; }
+
+    /// <summary>
+    ///     The sentence naming requested versus available, carried straight across, which the SPA shows rather than
+    ///     composing it from the byte counts.
+    /// </summary>
+    public required string Message { get; init; }
+}
+
+public sealed class ExternalAppInstanceView
+{
+    public required Guid Id { get; init; }
+
+    public required string ApplicationId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    public required string Status { get; init; }
+
+    public required string DesiredState { get; init; }
+
+    /// <summary>Null means the node-wide selection applies.</summary>
+    public required string? RuntimeOverride { get; init; }
+
+    public required string RuntimeProvider { get; init; }
+
+    /// <summary>
+    ///     The INSTALLED snapshot, sanitised — <c>files[]</c> stripped, every <c>secret</c> variable's default nulled. The
+    ///     detail page and the Settings tab read this and never the catalog: an instance installed at v2 must render what
+    ///     it is running, not what the catalog now offers, and a <c>catalogMissing</c> instance must still render at all.
+    ///     <c>testedVersion</c> reaches the client as <c>manifest.testedVersion</c>; there is no duplicate top-level member.
+    /// </summary>
+    public required ExternalAppManifestView Manifest { get; init; }
+
+    public required IReadOnlyList<ExternalAppPublishedPortView> PublishedPorts { get; init; }
+
+    /// <summary>Every declared variable name → its value, with <c>secret</c> values replaced by the mask sentinel.</summary>
+    public required IReadOnlyDictionary<string, string> Variables { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required string? FailureSummary { get; init; }
+
+    /// <summary>
+    ///     Computed by the SERVICE against the catalog's manifest version; false when <see cref="CatalogMissing" />,
+    ///     since an application that left the catalog cannot offer an update.
+    /// </summary>
+    public required bool UpdateAvailable { get; init; }
+
+    public required int? AvailableManifestVersion { get; init; }
+
+    public required bool CatalogMissing { get; init; }
+
+    public required long InstalledAtUtc { get; init; }
+
+    public required long? StartedAtUtc { get; init; }
+
+    public required long? StoppedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long LastSequence { get; init; }
+
+    /// <summary>The optimistic concurrency token a lifecycle or variables command must echo back.</summary>
+    public required long Version { get; init; }
+}
 
 /// <summary>
 ///     The admitted row as a lifecycle command left it — the snapshot taken before the operation runner starts, which
-///     is why <paramref name="Status" /> carries <c>Starting</c>, <c>Stopping</c>, <c>Updating</c> and
+///     is why <see cref="Status" /> carries <c>Starting</c>, <c>Stopping</c>, <c>Updating</c> and
 ///     <c>Resetting</c>. It is deliberately NOT the full <see cref="ExternalAppInstanceView" />: admission returns a
 ///     summary, and re-reading the instance to fill a manifest into a 202 body would return a row a concurrent
 ///     operation may already have moved.
 /// </summary>
-public sealed record ExternalAppInstanceSummaryView(
-    Guid Id,
-    string ApplicationId,
-    string DisplayName,
-    int ManifestVersion,
-    string Status,
-    string DesiredState,
-    string? FailureCategory,
-    string? FailureSummary,
-    bool UpdateAvailable,
-    int? AvailableManifestVersion,
-    bool CatalogMissing,
-    long UpdatedAtUtc,
-    long Version);
+public sealed class ExternalAppInstanceSummaryView
+{
+    public required Guid Id { get; init; }
 
-/// <param name="OpenPath">
-///     NULLABLE: a published port may be reachable without being an Open target — an application may publish a
-///     <c>ui</c> port with no open path.
-/// </param>
-/// <param name="Url">
-///     Composed here rather than in the SPA — the loopback host and the manifest's open path are both server facts —
-///     and emitted ONLY for the port whose open path is non-null. At most one such port exists per application, so a
-///     non-null url identifies the Open target unambiguously and the SPA selects on it rather than on "the first
-///     published port".
-/// </param>
-public sealed record ExternalAppPublishedPortView(string Service, int ContainerPort, int HostPort, string? OpenPath, string? Url);
+    public required string ApplicationId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required int ManifestVersion { get; init; }
+
+    public required string Status { get; init; }
+
+    public required string DesiredState { get; init; }
+
+    public required string? FailureCategory { get; init; }
+
+    public required string? FailureSummary { get; init; }
+
+    public required bool UpdateAvailable { get; init; }
+
+    public required int? AvailableManifestVersion { get; init; }
+
+    public required bool CatalogMissing { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required long Version { get; init; }
+}
+
+public sealed class ExternalAppPublishedPortView
+{
+    public required string Service { get; init; }
+
+    public required int ContainerPort { get; init; }
+
+    public required int HostPort { get; init; }
+
+    /// <summary>
+    ///     NULLABLE: a published port may be reachable without being an Open target — an application may publish a
+    ///     <c>ui</c> port with no open path.
+    /// </summary>
+    public required string? OpenPath { get; init; }
+
+    /// <summary>
+    ///     Composed here rather than in the SPA — the loopback host and the manifest's open path are both server facts —
+    ///     and emitted ONLY for the port whose open path is non-null. At most one such port exists per application, so a
+    ///     non-null url identifies the Open target unambiguously and the SPA selects on it rather than on "the first
+    ///     published port".
+    /// </summary>
+    public required string? Url { get; init; }
+}
 
 /// <summary>
 ///     FULL instance views, not summaries: a card shows the Open target and the runtime provider, and the store reads
@@ -358,7 +584,10 @@ public sealed record ExternalAppPublishedPortView(string Service, int ContainerP
 ///     The lifecycle 202s still answer <see cref="ExternalAppInstanceSummaryView" /> — an admitted row is a snapshot,
 ///     and re-reading it to fill in a manifest would return a row a concurrent operation may already have moved.
 /// </summary>
-public sealed record ListExternalAppInstancesResponse(IReadOnlyList<ExternalAppInstanceView> Items);
+public sealed class ListExternalAppInstancesResponse
+{
+    public required IReadOnlyList<ExternalAppInstanceView> Items { get; init; }
+}
 
 public sealed record InstallExternalAppRequest
 {
@@ -484,18 +713,31 @@ public sealed record ExternalAppInstanceEventFeedRequest
 }
 
 /// <summary>
-///     <paramref name="Items" /> is ASCENDING by sequence — oldest first, which is both the store's natural order and
+///     <see cref="Items" /> is ASCENDING by sequence — oldest first, which is both the store's natural order and
 ///     what the History tab wants: it loads from 0 in pages of 200 and renders newest at the bottom, and "Load more"
 ///     advances <c>afterSequence</c> to the LAST returned sequence. There is no descending mode and no <c>before</c>
 ///     bound: one direction means the hub replay and the paged feed can share one store member without a reversal step
 ///     that could disagree.
 /// </summary>
-public sealed record ListExternalAppInstanceEventsResponse(
-    IReadOnlyList<ExternalAppInstanceEventView> Items,
-    long HighestSequence,
-    bool HasMore);
+public sealed class ListExternalAppInstanceEventsResponse
+{
+    public required IReadOnlyList<ExternalAppInstanceEventView> Items { get; init; }
 
-public sealed record ExternalAppInstanceEventView(long Sequence, long AtUtc, string Kind, string? DetailJson);
+    public required long HighestSequence { get; init; }
+
+    public required bool HasMore { get; init; }
+}
+
+public sealed class ExternalAppInstanceEventView
+{
+    public required long Sequence { get; init; }
+
+    public required long AtUtc { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string? DetailJson { get; init; }
+}
 
 public sealed record ExternalAppInstanceLogsRequest
 {
@@ -508,9 +750,18 @@ public sealed record ExternalAppInstanceLogsRequest
     public int Tail { get; init; } = 500;
 }
 
-/// <param name="Text">
-///     Raw container stdout and stderr, UNMASKED by design: the mapper masks engine-owned values only, and the engine
-///     cannot tell an application's own echo of its password from any other line.
-/// </param>
-/// <param name="Truncated">Observed, not inferred — the daemon reported that bytes were discarded.</param>
-public sealed record ExternalAppInstanceLogsResponse(string Service, string Text, int LineCount, bool Truncated);
+public sealed class ExternalAppInstanceLogsResponse
+{
+    public required string Service { get; init; }
+
+    /// <summary>
+    ///     Raw container stdout and stderr, UNMASKED by design: the mapper masks engine-owned values only, and the engine
+    ///     cannot tell an application's own echo of its password from any other line.
+    /// </summary>
+    public required string Text { get; init; }
+
+    public required int LineCount { get; init; }
+
+    /// <summary>Observed, not inferred — the daemon reported that bytes were discarded.</summary>
+    public required bool Truncated { get; init; }
+}

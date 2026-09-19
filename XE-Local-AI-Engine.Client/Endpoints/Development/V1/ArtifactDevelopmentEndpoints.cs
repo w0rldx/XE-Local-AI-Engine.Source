@@ -25,7 +25,7 @@ public sealed class ListDevelopmentArtifactsEndpoint : Endpoint<DevelopmentTaskR
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
         var artifacts = await _service.ListArtifactsAsync(req.ProjectId, req.TaskId, ct);
-        await Send.OkAsync(new ListDevelopmentArtifactsResponse(artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct);
+        await Send.OkAsync(new ListDevelopmentArtifactsResponse { Items = artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray() }, ct);
     }
 }
 
@@ -48,6 +48,6 @@ public sealed class GetDevelopmentArtifactEndpoint : Endpoint<DevelopmentArtifac
     public override async Task HandleAsync(DevelopmentArtifactRequest req, CancellationToken ct)
     {
         var artifact = await _service.ReadArtifactAsync(req.ProjectId, req.TaskId, req.ArtifactId, ct);
-        await Send.OkAsync(new DevelopmentArtifactContentResponse(artifact.Artifact.ToResponse(), artifact.Content), ct);
+        await Send.OkAsync(new DevelopmentArtifactContentResponse { Artifact = artifact.Artifact.ToResponse(), Content = artifact.Content }, ct);
     }
 }

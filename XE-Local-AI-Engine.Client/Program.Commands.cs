@@ -156,7 +156,7 @@ public sealed partial class Program
         {
             await standardError.WriteLineAsync(dataDirectoryError);
             return await WriteStatusAsync(args,
-                new EngineStatus(false, null, null, null, string.Empty, null, ResolveInstallKind(isManagedInstall)),
+                new EngineStatus { Running = false, Version = null, Url = null, McpUrl = null, DataDir = string.Empty, SetupRequired = null, InstallKind = ResolveInstallKind(isManagedInstall) },
                 standardOutput);
         }
 
@@ -212,13 +212,16 @@ public sealed partial class Program
             }
         }
 
-        var status = new EngineStatus(running,
-            ready?.Version,
-            ready?.Url,
-            ready?.McpUrl,
-            dataDirectory,
-            running ? setupRequired : null,
-            ResolveInstallKind(isManagedInstall));
+        var status = new EngineStatus
+        {
+            Running = running,
+            Version = ready?.Version,
+            Url = ready?.Url,
+            McpUrl = ready?.McpUrl,
+            DataDir = dataDirectory,
+            SetupRequired = running ? setupRequired : null,
+            InstallKind = ResolveInstallKind(isManagedInstall)
+        };
 
         return await WriteStatusAsync(args, status, standardOutput);
     }
@@ -265,14 +268,22 @@ public sealed partial class Program
         }
     }
 
-    private sealed record EngineStatus(
-        bool Running,
-        string? Version,
-        string? Url,
-        string? McpUrl,
-        string DataDir,
-        bool? SetupRequired,
-        string InstallKind);
+    private sealed record EngineStatus
+    {
+        public required bool Running { get; init; }
+
+        public required string? Version { get; init; }
+
+        public required string? Url { get; init; }
+
+        public required string? McpUrl { get; init; }
+
+        public required string DataDir { get; init; }
+
+        public required bool? SetupRequired { get; init; }
+
+        public required string InstallKind { get; init; }
+    }
 
     private enum OneShotCommandStage
     {
