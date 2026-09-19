@@ -2,7 +2,7 @@
 
 > Reviewed: 2026-09-15 · Code-grounded.
 
-This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the unconditional SignalR push/stream hubs plus the conditional Development hub, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
+This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the unconditional SignalR push/stream hubs plus the conditional Development hub, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
 
 If you are adding or changing an endpoint or hub, this is the page that tells you *where the route lives, how it is secured, and what regen step you must run for the React client to see it*.
 
@@ -11,11 +11,11 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
 ## Big picture
 
 ```
- Browser (React SPA, same origin)                C0re Platform
-        │  HTTP /api/local/v1/*  (FastEndpoints)         ▲
-        │  SignalR hubs (all but one unconditional)      │  ONE outbound
-        ▼                                                │  WorkerHub conn
- ┌──────────────────────────────────────────────────────┴───────────────┐
+ Browser (React SPA, same origin)
+        │  HTTP /api/local/v1/*  (FastEndpoints)
+        │  SignalR hubs (all but one unconditional)
+        ▼
+ ┌───────────────────────────────────────────────────────────────────────┐
  │ Node Web Server  (XE-Local-AI-Engine.Client)                          │
  │  • UseExceptionHandler  → IExceptionHandler chain → RFC7807           │
  │  • UseAntiforgery / UseStaticFiles                                    │
@@ -31,10 +31,10 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
  └───────────────────────────────────────────────────────────────────────┘
 ```
 
-**Text fallback — two transport directions to keep straight:**
-
-- **Inbound, browser → node** — the local management API and local hubs. Loopback/local-only, authenticated as the node *operator*, secret-redacted. This is everything under `/api/local/v1`.
-- **Outbound, node → platform** — exactly **one** SignalR connection, `WorkerHubConnection`. Worker creds and platform tokens live only here and are never returned to the browser. See [Security & Privacy](12-security-and-privacy.md) for the full invariant.
+**Text fallback:** there is one transport direction — **inbound, browser → node**: the local management
+API and local hubs, loopback/local-only, authenticated as the node *operator*, secret-redacted. This is
+everything under `/api/local/v1`. The node holds no outbound control connection; see
+[Security & Privacy](12-security-and-privacy.md) for the full invariant.
 
 The middleware/mapping order above is authoritative — see `XE-Local-AI-Engine.Client/Program.cs`, from the `app.UseExceptionHandler()` call through `app.MapFallbackToFile("index.html")`.
 
@@ -65,8 +65,6 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 | **ApiFoundation** | `diagnostics/validation-probe`, `diagnostics/exception-probe`, `diagnostics/configurator-canary-probe` (excluded from the OpenAPI document, so it has no generated client function; see §4) | (transport diagnostics) |
 | **Auth** (`auth/*`) | `auth/status`, `auth/setup`, `auth/login`, `auth/refresh`, `auth/logout`, `auth/change-password` | [Security & Privacy](12-security-and-privacy.md) |
 | **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/compact/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel`, `chat/approvals/resolve`, `chat/questions/resolve` | [Chat](05-chat.md) |
-| **NodeBinding** (`binding/*`) | `binding/start`, `binding/poll`, `binding/cancel` | [Hosting & Deployment](11-hosting-and-deployment.md) |
-| **Connection** (`connection/*`) | `connection`, `connection/connect`, `connection/disconnect`, `connection/auto-connect/enable\|disable` | [Architecture Overview](01-architecture-overview.md) |
 | **NodeSettings** (`node-settings`) | get/save node settings, including the `VoiceFeatureEnabled` gate | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **CloudSettings** (`cloud-settings*`) | `cloud-settings`, `cloud-settings/entra/device-code/start\|status`, `cloud-settings/entra/auth-code/start\|status` | [Security & Privacy](12-security-and-privacy.md) |
 | **ExternalProviders** (`external-providers/*`) | `external-providers/connections` (GET list, carrying the store revision every write compares against), `external-providers/connections/{connectionId}` (GET / PUT insert-or-replace / DELETE), `external-providers/probe` (POST — a server-side `GET {base}/models` against a stored connection or an unsaved draft; run on the node because the browser cannot reach an operator endpoint through CORS). Operator-gated; the read path reports `hasApiKey` and never the key. A stale revision on PUT/DELETE answers **409 carrying the configuration as it actually stands**, so the editor re-renders rather than guessing | [Local Runtime & Providers](03-local-runtime-and-providers.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -242,17 +240,16 @@ Browsers cannot set an `Authorization` header on a WebSocket handshake, so JWT b
 
 ---
 
-## 3. The outbound platform connection (WorkerHub)
+## 3. Outbound traffic
 
-`WorkerHubConnection` (`XE-Local-AI-Engine.Client.Application/Services/Connection/Implementation/WorkerHubConnection*.cs`) is the **single** SignalR client connection from this node to the C0re platform. It is the only component allowed to hold platform/worker credentials.
+The node holds **no outbound control connection**. An earlier design paired it with a central platform
+over a single outbound `WorkerHub` SignalR connection (device binding, token refresh, encrypted
+invocation envelopes, a file-backed dead-letter queue); none of it was reachable in a shipped build and
+it has been removed, along with the `binding/*` and `connection/*` route families.
 
-- **Partial class, split by concern:** `.cs` (lifecycle/ctor), `.EventHandlers.cs` (inbound platform→node events), `.Payloads.cs` (wire payload parsing), `.Reconnect.cs` (reconnect/backoff).
-- **Auth & token lifecycle:** holds `ITokenStore`, `INodeKeyRegistry`, `IWorkerTokenRefreshService`, and `CentralPlatformOptions`; refreshes the access token with a 5-minute skew (`AccessTokenRefreshSkew`) under a `SemaphoreSlim`. These secrets stay in process memory and are **never** surfaced on `/api/local/v1` or logged.
-- **Inbound platform events** (registered `.On<…>` handlers in `WorkerHubConnection.EventHandlers.cs`): `InvocationAssigned`, `InvocationAssignedV2`, `ToolCallResult`, `DisconnectRequested`, `ApprovalResolved`, `InvocationCancelled`, `ConversationPurged`. These are re-raised as C# events (`InvocationAssignedReceived`, `ToolCallResultReceived`, etc.) that the application layer subscribes to, then routes into the local runtime.
-- **Capability reporting:** `ReportCapabilitiesRequestedAsync` answers the platform's capability probe (what models/tools this node offers). The reporter is injected `Lazy<ICapabilityReporter>` to break a construction cycle.
-- **Local-control surface:** the browser drives this connection only through the `connection/*` REST endpoints (connect/disconnect/auto-connect) — it never sees the underlying tokens.
-
-This is the architectural choke point of the platform's "only the Node Web Server talks to the platform" invariant. See [Architecture Overview](01-architecture-overview.md).
+What still leaves the machine does so only because an operator configured a feature to fetch it: model
+downloads, a declared cloud or OpenAI-compatible provider, a registered MCP server. Each is documented on
+its own subsystem page.
 
 ---
 
@@ -351,7 +348,7 @@ The generated SDK is regenerated as endpoint families land; the current artifact
 
 ## Related pages
 
-- [Architecture Overview](01-architecture-overview.md) — where the transport layer sits; the WorkerHub choke point.
+- [Architecture Overview](01-architecture-overview.md) — where the transport layer sits.
 - [Project Layout](02-project-layout.md) — `Client/Endpoints`, `Client/Hubs`, `Client.Application/Services`.
 - [Chat](05-chat.md) — `LocalChatHub` streaming methods + Codex/cloud chat routes.
 - [Scheduler](06-scheduler.md) — `scheduler/*` endpoints + `SchedulerHub` push events.

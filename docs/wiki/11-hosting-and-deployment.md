@@ -95,8 +95,6 @@ Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServi
 
 | Service | Role |
 |---------|------|
-| `HeartbeatBackgroundService` | platform WorkerHub heartbeat |
-| `AutoConnectBackgroundService` | establishes/maintains the single WorkerHub connection |
 | `ModelRecommendationScheduleSeeder` | seeds the model-fit recommendation schedule (see [Model-Fit](07-model-fit.md)) |
 | `DefaultAgentSeeder`, `CoderAgentSeeder` | seed built-in agent definitions (see [Agent Mode](04-agent-mode.md)) |
 | `ToolCallCleanupService` | clears stale tool-call state |

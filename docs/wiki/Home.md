@@ -2,10 +2,9 @@
 
 > Reviewed: 2026-09-15 · Code-grounded.
 
-XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform. A single
-**Node Web Server process** (`XE-Local-AI-Engine.Client`) serves the React management UI, owns the one
-outbound platform link (`WorkerHub`), exposes loopback-only local APIs (`/api/local/v1`) plus
-SignalR hubs, persists selected sensitive payloads in SQLite with **per-column AEAD encryption**, and runs the local model runtimes
+XE Local AI Engine (product name **XE AI-Engine**) is a **self-contained local AI node**. A single
+**Node Web Server process** (`XE-Local-AI-Engine.Client`) serves the React management UI, exposes
+loopback-only local APIs (`/api/local/v1`) plus SignalR hubs, persists selected sensitive payloads in SQLite with **per-column AEAD encryption**, and runs the local model runtimes
 as node-owned, supervised host child processes — **llama.cpp** (`llama-server`) for text,
 **stable-diffusion.cpp** (`sd-server`) for images and **whisper.cpp** (`whisper-server`) for speech-to-text.
 
@@ -60,7 +59,7 @@ Framework pins, while the wiki covers architecture.
 | 06 | [Scheduler](06-scheduler.md) | Quartz.NET jobs, run history, cancellation, live hub, encoded gotchas |
 | 07 | [Model-fit / Advisor](07-model-fit.md) | Cache-read vs scheduler refresh, `MemoryFitEstimator`, hardware profiler, sanitization |
 | 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, schema milestones |
-| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`) — this page owns the hub list, WorkerHub, operator-authored custom tools, the inbound MCP tool surface, OpenAPI→hey-api |
+| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`) — this page owns the hub list, operator-authored custom tools, the inbound MCP tool surface, OpenAPI→hey-api |
 | 10 | [React Client](10-react-client.md) | The feature directories under `Client.React/src/features/`, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
 | 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, legacy/manual cleanup |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, loopback/Host-Origin, redaction, node-local AI ops, Development Mode execution boundary |

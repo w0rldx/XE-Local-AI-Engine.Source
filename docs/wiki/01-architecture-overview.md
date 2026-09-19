@@ -2,12 +2,11 @@
 
 > Reviewed: 2026-09-15 · Code-grounded.
 
-XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
-(`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
-`WorkerHub` connection, serves local APIs and SignalR hubs, persists selected sensitive fields in SQLite
-with per-column AEAD encryption,
+XE Local AI Engine (product name **XE AI-Engine**) is a self-contained local AI node: a single ASP.NET Core process
+(`XE-Local-AI-Engine.Client`) that hosts the React management UI, serves local APIs and SignalR hubs,
+persists selected sensitive fields in SQLite with per-column AEAD encryption,
 and supervises node-owned `llama-server`, `sd-server` and `whisper-server` host child processes. This page is the map:
-it shows the node↔platform boundary, the in-process layering and one-way dependency flow, and the
+it shows the machine boundary, the in-process layering and one-way dependency flow, and the
 post-re-architecture runtime model (host llama.cpp, **no Docker on the inference path, no HostAgent**;
 Development Mode execution is the one scoped exception — see [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)). Subsystem detail lives
 in the per-topic pages linked throughout.
@@ -55,25 +54,20 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 
 ---
 
-## The node ↔ C0re-platform boundary (WorkerHub)
+## The machine boundary
 
-The single trust boundary that crosses the machine is the **outbound `WorkerHub` SignalR connection** to
-the central C0re platform. Only the Node Web Server holds it; the browser never sees it.
+The node holds **no outbound control connection at all**. Every inbound surface is loopback-bound
+(`/api/local/v1`, the SignalR hubs, the inbound MCP server), and the only traffic that leaves the machine
+is what an operator configured a feature to fetch: a model download, an operator-declared cloud or
+OpenAI-compatible provider, an operator-registered MCP server.
 
-- The connection abstraction is `IWorkerHubConnection`
-  (`Client.Application/Services/Connection/IWorkerHubConnection.cs`): it sends `WorkerHello`,
-  worker-key registration, capabilities, and heartbeats, and receives platform-pushed events
-  (`InvocationAssignedReceived`, `ToolCallResultReceived`, `ApprovalResolvedReceived`,
-  `InvocationCancelledReceived`, `DisconnectRequestedReceived`, `ConversationPurgedReceived`).
-- Lifecycle is driven by hosted services in the host: `AutoConnectBackgroundService` and
-  `HeartbeatBackgroundService` (`Client/BackgroundServices/`), and connection health surfaces through
-  `WorkerHealthCheck` (the `/health/ready` gate, `Client/HealthChecks/WorkerHealthCheck.cs`).
-- On shutdown the host drains the worker cleanly via `IWorkerShutdownDrainService`
-  (`RegisterWorkerShutdownDrain` in `Program.cs`).
+An earlier design paired the node with a central platform over an outbound `WorkerHub` SignalR
+connection, with device binding, a token refresh loop, an auto-connect hosted service and
+end-to-end-encrypted invocation envelopes. None of it was reachable in any shipped build, and it is gone.
 
-**Invariant:** only the Node Web Server talks to the platform over `WorkerHub`. Worker credentials, the
-HMAC/endpoint tokens, and cloud-provider credentials stay **local** — never returned to the browser,
-never logged. See [Security & Privacy](12-security-and-privacy.md) and [API & Hubs](09-api-and-hubs.md).
+**Invariant:** nothing in the node opens an outbound connection to a control plane. Cloud-provider
+credentials and HMAC/endpoint tokens stay **local** — never returned to the browser, never logged.
+See [Security & Privacy](12-security-and-privacy.md) and [API & Hubs](09-api-and-hubs.md).
 
 ---
 
@@ -210,16 +204,16 @@ development, the container sandbox, model runtime, images, the training runtime,
 
 ```
                          ┌──────────────────────────────────────────────────────┐
-   C0re Platform         │  XE-Local-AI-Engine.Client  (the Node Web Server)     │
-  ┌────────────┐  Worker │  ┌────────────────────────────────────────────────┐  │
-  │  WorkerHub │◀────Hub─┼──┤ Host wiring: FastEndpoints, JWT auth, SignalR,  │  │
-  │ (platform) │  (only  │  │ rate-limit, health, hosted services, static SPA │  │
-  └────────────┘  node)  │  └───────────────────────┬────────────────────────┘  │
+                         │  XE-Local-AI-Engine.Client  (the Node Web Server)     │
+                         │  ┌────────────────────────────────────────────────┐  │
+                         │  │ Host wiring: FastEndpoints, JWT auth, SignalR,  │  │
+                         │  │ rate-limit, health, hosted services, static SPA │  │
+                         │  └───────────────────────┬────────────────────────┘  │
                          │                          │ AddNodeApplication         │
    Browser SPA           │  ┌───────────────────────▼────────────────────────┐  │
   ┌────────────┐  REST + │  │ Client.Application  (Services/* areas)          │  │
   │  React UI  │◀──hubs──┼─▶│ chat · agents · scheduler · model-fit · capacity│  │
-  │ (loopback) │ (local) │  │ connection · mcp · eval · training · benchmarks…│  │
+  │ (loopback) │ (local) │  │ mcp · eval · training · benchmarks · images…    │  │
   └────────────┘         │  └───────┬───────────────────────────┬────────────┘  │
                          │          │                           │               │
                          │  ┌───────▼────────┐         ┌────────▼────────────┐  │
@@ -247,8 +241,8 @@ development, the container sandbox, model runtime, images, the training runtime,
                          └──────────────────────────────────────────────────────┘
 ```
 
-**Text fallback for the diagram:** the C0re platform reaches the node only through the node-owned
-outbound `WorkerHub` connection. The loopback browser reaches the node through REST and local SignalR.
+**Text fallback for the diagram:** the loopback browser reaches the node through REST and local SignalR;
+nothing reaches it from off the machine.
 Inside the node, the web host composes application services, AI/agent services, provider abstractions,
 and SQLite persistence. Provider implementations may start host-user `llama-server` and `sd-server`
 child processes. Those process boundaries are supervision boundaries, not container or OS-isolation
@@ -322,8 +316,9 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 
 A maintainer must preserve these. Each is enforced or anchored in code today:
 
-1. **One platform link.** Only the Node Web Server talks to the platform over `WorkerHub`
-   (`IWorkerHubConnection`). Nothing else opens an outbound platform connection.
+1. **No control-plane link.** The node opens no outbound connection to a control plane. Outbound traffic
+   exists only where an operator configured a feature to fetch something (model downloads, a declared
+   cloud or OpenAI-compatible provider, a registered MCP server).
 2. **Secrets stay local.** Worker creds, cloud-provider creds, and HMAC/endpoint tokens are never
    returned to the browser and never logged (request-log query redaction in `Program.cs`,
    `AccessTokenQueryRedactor`). See [Security & Privacy](12-security-and-privacy.md).

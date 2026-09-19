@@ -452,7 +452,7 @@ React chat / agent run
   -> idle 15 min OR explicit unload OR node shutdown -> tree-kill, port released
 ```
 
-Every `llama-server` child is same-user, unprivileged, and `127.0.0.1`-bound — the node never exposes a model port outward. Only the Node Web Server talks to the platform (over WorkerHub); the runtime layer here is purely local. See [09-api-and-hubs.md](09-api-and-hubs.md) for the local admin endpoints that drive warm/unload/health and [12-security-and-privacy.md](12-security-and-privacy.md) for the trust boundary.
+Every `llama-server` child is same-user, unprivileged, and `127.0.0.1`-bound — the node never exposes a model port outward; the runtime layer here is purely local. See [09-api-and-hubs.md](09-api-and-hubs.md) for the local admin endpoints that drive warm/unload/health and [12-security-and-privacy.md](12-security-and-privacy.md) for the trust boundary.
 
 ---
 

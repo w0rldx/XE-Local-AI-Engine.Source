@@ -69,8 +69,7 @@ Substitute only at a real collaboration boundary, and take the first of these th
 
 1. **The real thing**, when it is fast and deterministic — an in-memory store, a pure function, a real SQLite file.
 2. **The repo's fake seam** for that boundary: `FakeOllama` for anything model-dependent,
-   `RecordingHubMessageSender` for WorkerHub outbound, `Fixtures/FakeWorkerNodeFixture.cs` only when the transport
-   itself is the subject, MSW handlers for frontend network calls.
+   MSW handlers for frontend network calls.
 3. **`Substitute.For<T>()`** — NSubstitute, never Moq or FakeItEasy, both banned — or `vi.fn()`/`vi.mock()` on the
    frontend, or stdlib `unittest.mock` in Python (not `pytest-mock`).
 4. **A hand-written fake**, only when `Returns`/`Received` genuinely cannot express the behaviour. Reaching this
@@ -221,12 +220,11 @@ unrelated failure. See `Providers/LlamaServer/OverrideSelectorAndOptionsTests.cs
 
 A sleep is either flaky (too short on a loaded box) or slow (too long everywhere). Use:
 
-- a `TaskCompletionSource` the code under test completes — `Shutdown/WorkerShutdownDrainServiceTests.cs`,
-  `Connection/WorkerHubConnectionSignalRIntegrationTests.cs`;
+- a `TaskCompletionSource` the code under test completes;
 - `Microsoft.Extensions.Time.Testing.FakeTimeProvider` to advance time deterministically —
   `Capabilities/CapabilityReporterTests.cs`, `Interaction/AskUserToolHandlerTests.cs`;
-- an unbounded `Channel` plus a bounded read, which is how `Fixtures/FakeWorkerNodeFixture.cs` turns "did the node
-  send X?" into a wait with a real timeout and a legible `TimeoutException`.
+- an unbounded `Channel` plus a bounded read, which turns "did the node do X?" into a wait with a real timeout
+  and a legible `TimeoutException`.
 
 The same holds on the frontend: `setTimeout`, or `await new Promise(r => setTimeout(r, n))`, is the identical
 defect. Use `vi.useFakeTimers()` or `waitFor`.
@@ -254,15 +252,6 @@ to the factory constructor. Embeddings are SHA256-seeded and therefore stable
 (`Determinism/EmbeddingDeterminism.cs`). Flip `RUN_LOCAL_INTEGRATION=true` only for a deliberate fidelity run
 against a real local runtime — never as a CI default.
 
-### WorkerHub outbound behaviour → `RecordingHubMessageSender`, not a real host
-
-`XE-Local-AI-Engine.Client.Testing`'s `RecordingHubMessageSender` decorates the real `IHubMessageSender` and
-records every outbound call with a monotonic sequence number. Use it whenever the question is *what the node
-sends*. Reach for `Fixtures/FakeWorkerNodeFixture.cs` — a real loopback Kestrel + SignalR host with a self-signed
-certificate — only when the transport itself is the subject: negotiation, heartbeat cadence, or reconnect
-(`FireTransportLevelConnectionDropAsync()` drops the transport with no close frame so `WithAutomaticReconnect`
-engages; `FireConnectionDropAsync()` closes gracefully and the client deliberately does **not** reconnect).
-
 ### A local SignalR hub
 
 Point a real `HubConnection` at the fixture's in-memory transport — no sockets:
@@ -285,8 +274,7 @@ foreign origin must be asserted to 403. Pattern: `Chat/NodeChatHubTests.cs`, `En
 
 Do not start the whole host and hope the loop ran. Resolve the service, drive one iteration through
 `Testing/BackgroundServiceTestHelper.RunExecuteAsync(service, ct)`, and cancel the token to end it. Give the class
-a keyed `[NotInParallel(nameof(YourBackgroundServiceTests))]` when it touches a shared timer or connection —
-`BackgroundServices/AutoConnectBackgroundServiceTests.cs` and `BackgroundServices/HeartbeatBackgroundServiceTests.cs` do.
+a keyed `[NotInParallel(nameof(YourBackgroundServiceTests))]` when it touches a shared timer or connection.
 
 ### An EF migration
 

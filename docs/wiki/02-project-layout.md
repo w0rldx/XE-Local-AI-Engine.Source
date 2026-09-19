@@ -36,7 +36,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, owns the single platform WorkerHub connection, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
+| `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
 | `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, benchmarking, training, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
 | `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, every migration under `Client.Persistence/Migrations/` (that folder is the inventory — count it there; all but `InitialNodeChatSchema` and `AddNodeMessageLifecycleColumns` are timestamped), and the 2 model snapshots (`NodeIdentityDbContextModelSnapshot`, `NodeChatDbContextModelSnapshot`). References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). References `Providers.Abstractions` (its only project reference). See [08-data-and-persistence.md](08-data-and-persistence.md). |
 | `XE-Local-AI-Engine.AI.Agent` | `Microsoft.NET.Sdk`, `net10.0` | Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI (MEAI) wiring: agents, tools, playbooks, the AgentHome write-back loop. See [04-agent-mode.md](04-agent-mode.md). |
@@ -126,7 +126,7 @@ Notable edges:
 
 ```
    Transport / Web        Client                (Microsoft.NET.Sdk.Web)
-        │  orchestration only — endpoints, hubs, WorkerHub, host
+        │  orchestration only — endpoints, hubs, host
         ▼
    Application            Client.Application     (decisions / services)
         │

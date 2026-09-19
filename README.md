@@ -3,7 +3,7 @@
 XE Local AI Engine runs AI workloads locally on one machine. A single ASP.NET Core process serves the React management
 UI, exposes loopback-only endpoints under `/api/local/v1` plus SignalR hubs, persists to SQLite with per-column
 encryption, and supervises the `llama-server`, `sd-server`, and `whisper-server` child processes that do the inference.
-It also owns the node's outbound `WorkerHub` connection to the C0re platform. The current source version is
+The current source version is
 `1.0.0-rc.2`, composed in [`eng/ReleaseVersion.props`](eng/ReleaseVersion.props).
 
 > **Just want to install and use the app?** Start with the **[User Guide](docs/user-guide/README.md)** — download,
@@ -33,7 +33,7 @@ Velopack AppImage. Both formats self-update. Release assets are unsigned because
 ## What ships from this repo
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — the host process: FastEndpoints, the SignalR hubs, the
-  composition root, the SPA, and the platform `WorkerHub` connection. See [API & hubs](docs/wiki/09-api-and-hubs.md).
+  composition root and the SPA. See [API & hubs](docs/wiki/09-api-and-hubs.md).
 - **React management UI** (`XE-Local-AI-Engine.Client.React`) — the node-local browser UI for every feature below.
   See [React client](docs/wiki/10-react-client.md).
 - **Runtimes and providers** — llama.cpp is the default local runtime, supervised as `llama-server` children on a
@@ -111,8 +111,8 @@ explicit `--autostart`/`-Autostart` opt-in registering a current-user systemd se
 
 ## Architecture rules
 
-- Only the Node Web Server talks to the C0re platform over `WorkerHub`.
-- Worker credentials, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to
+- The node opens no outbound control-plane connection; every egress traces to a feature an operator turned on.
+- Cloud-provider credentials and external endpoint tokens stay local and must not be returned to
   the browser or written to logs/transcripts.
 - Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
 - Installers and packaging must not create background autostart behavior unless explicitly opted in via `--autostart`

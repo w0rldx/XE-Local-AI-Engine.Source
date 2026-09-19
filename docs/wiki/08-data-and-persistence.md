@@ -202,7 +202,7 @@ Tests use `NullNodeSqliteKeyHolder` (a fixed zero key) plus a non-encrypting mig
 - **AAD is part of the on-disk format.** Changing the AAD layout or the `"v1"` schema-version string makes existing ciphertext undecryptable. Bump deliberately and provide a backfill (as `EncryptConversationTitle` did).
 - **Migrations are forward-only.** Prefer new nullable/defaulted columns. Any destructive cleanup needs explicit release notes, migration tests, and a rollback caveat because older binaries may not understand the upgraded database.
 - **Two history tables.** When adding identity schema changes, target `NodeIdentityDbContext` (writes to `__EFMigrationsHistory_Identity`), not the chat context.
-- **Cloud creds & operator secrets are not in this DB.** Don't add a "credentials" table — credentials live in DataProtection files and the WorkerHub layer; see [Security & Privacy](12-security-and-privacy.md).
+- **Cloud creds & operator secrets are not in this DB.** Don't add a "credentials" table — credentials live in DataProtection files and the node-local credential stores; see [Security & Privacy](12-security-and-privacy.md).
 - **Go through stores.** Don't expose `DbSet`s or return entities across the transport boundary; map to records/DTOs in the store layer.
 
 ## Node-run cost telemetry: fifteen plaintext columns, and why they are not encrypted

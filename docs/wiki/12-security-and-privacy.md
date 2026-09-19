@@ -6,7 +6,7 @@ This page documents the cross-cutting security and privacy controls implemented 
 Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
 for the stated baseline, not proof of operating effectiveness, deployment configuration, compliance,
 certification, or formal risk acceptance. The supported design routes platform traffic through the
-node-owned `WorkerHub`, keeps secret-bearing values behind node-local stores and redaction seams,
+keeps secret-bearing values behind node-local stores and redaction seams,
 serves management/admin APIs on loopback, encrypts selected sensitive fields at rest, routes designated
 privacy-sensitive AI work to node-local models, and confines application-mediated tool file access.
 
@@ -14,40 +14,38 @@ If you are touching persistence, see [Data & Persistence](08-data-and-persistenc
 
 ---
 
-## 1. Egress invariant: WorkerHub is the only platform channel
+## 1. Egress invariant: the node has no control-plane channel
 
-The node is the *single* outbound connection to the C0re platform. All platform-facing traffic flows through one SignalR `HubConnection` owned by `WorkerHubConnection` (`XE-Local-AI-Engine.Client.Application/Services/Connection/Implementation/WorkerHubConnection.cs`, contract `IWorkerHubConnection`). Nothing in the browser, in a tool, or in a provider opens its own connection to the platform.
+The node opens **no outbound connection to a control plane**. Every inbound surface is loopback-bound
+(`/api/local/v1`, the SignalR hubs, the inbound MCP server), and nothing in the browser, in a tool or in a
+provider dials out on the node's behalf.
 
-| Concern | Owner | Evidence |
+An earlier design gave the node a single outbound `WorkerHub` SignalR connection to a central platform,
+with device binding, a token refresh loop, an auto-connect hosted service, a `/health/ready` worker check,
+end-to-end-encrypted invocation envelopes and a file-backed dead-letter queue. No shipped build could reach
+the pairing UI (its capability flags were compile-time `false`), so the whole stack was removed rather than
+maintained. Nothing reads `worker-credentials.enc`, a cert-pin file or a `dead-letter-queue` directory any
+more; any such leftovers on an installed node are inert.
+
+What still leaves the machine does so only because an operator configured a feature to fetch it:
+
+| Egress | Owner | Operator decision that enables it |
 |---|---|---|
-| The one platform connection | `WorkerHubConnection` | `Services/Connection/Implementation/WorkerHubConnection.cs` |
-| Event/RPC handlers from platform | `WorkerHubConnection.EventHandlers.cs` | same folder |
-| Heartbeat / liveness to platform | `HeartbeatBackgroundService` | `XE-Local-AI-Engine.Client/BackgroundServices/HeartbeatBackgroundService.cs` |
-| Capability reporting | `CapabilityReporter` | `Services/Capabilities/Implementation/CapabilityReporter.cs` |
-| Graceful drain on shutdown | `WorkerShutdownDrainService` | `Services/Shutdown/Implementation/WorkerShutdownDrainService.cs` |
+| Model downloads | `Providers.HuggingFace` | the operator starts a download |
+| Cloud chat providers | `Services/CloudProviders` | the operator stores Codex OAuth / Azure Foundry credentials |
+| OpenAI-compatible providers | `Services/ExternalProviders` | the operator declares a connection and its base URL |
+| Outbound MCP servers | `Services/Mcp` | the operator registers and enables a server |
+| Update checks | `Services/AppUpdate` | shipped update channel |
 
-**Maintainer rule:** new platform-facing behavior must go through the WorkerHub seam. Do not give the React client or a provider project a direct line to the platform — the browser talks only to the *local* node API/hubs ([API & Hubs](09-api-and-hubs.md)), and the node relays to the platform.
-
-### No background autostart — connection is opt-in
-
-The node does **not** silently dial the platform on process start. `AutoConnectBackgroundService` gates the auto-connect on a stored, operator-controlled flag:
-
-```csharp
-// AutoConnectBackgroundService.ExecuteAsync()
-if (!_tokenStore.AutoConnectOnStart)
-{
-    // ...does not connect
-}
-```
-
-A fresh install is inert until the operator opts in. Preserve this contract: do not add a code path that connects to the platform without an explicit, persisted operator decision.
+**Maintainer rule:** do not add an outbound connection that a shipped build opens on its own. Egress belongs
+to a feature an operator turned on, and it is documented on that feature's page.
 
 ---
 
 ## 2. Secret-handling invariant — not returned to the browser or deliberately logged
 
 The baseline implementation treats the following as node-local secrets: the **node operator secret**
-(master key material), the **worker credentials / endpoint tokens** used on WorkerHub,
+(master key material), the **endpoint tokens**,
 **cloud-provider credentials** (for example Codex OAuth), the **HMAC/JWT signing keys**, and the
 **HuggingFace token**. DTOs, stores, and redactors are designed so these values are not returned across
 the browser boundary or deliberately logged. That source-level design does not by itself prove the
@@ -890,9 +888,8 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 
 ## Invariant checklist (for reviewers)
 
-- [ ] Platform traffic goes only through `WorkerHubConnection`; nothing else dials the platform.
-- [ ] No code path connects on startup without the `AutoConnectOnStart` opt-in.
-- [ ] No secret (operator secret, worker/endpoint token, cloud cred, HMAC/JWT key, HF token) is returned to the browser or logged; new credential-bearing fields pass a redactor.
+- [ ] No code path opens an outbound control-plane connection; every egress traces to an operator-enabled feature.
+- [ ] No secret (operator secret, endpoint token, cloud cred, HMAC/JWT key, HF token) is returned to the browser or logged; new credential-bearing fields pass a redactor.
 - [ ] New local-admin routes live under `/api/local/v1`, keep the Host/Origin gate fail-closed, and apply an authorization policy.
 - [ ] Production error responses carry no internal detail (message/stack/ids).
 - [ ] At-rest crypto routes through `AesGcmNodeAeadCipher`; AAD context components are preserved.
