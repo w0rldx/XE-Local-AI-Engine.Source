@@ -385,6 +385,31 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         AssertEx.Null(await store.GetProjectAsync(project.Id));
     }
 
+    /// <summary>
+    ///     The delete takes FINISHED runs with it but refuses a project that still holds a queued one. That refusal is
+    ///     the whole reason the delete can never race the run queue: there is no path where a project goes while one of
+    ///     its runs is generating, holding the GPU gate or waiting behind it. The project row and its encrypted items
+    ///     must survive the refused call intact.
+    /// </summary>
+    [Test]
+    public async Task DeleteProject_WithARunQueued_IsRefusedAndChangesNothing()
+    {
+        var (context, store) = await CreateStoreAsync("delete-project-with-run.sqlite");
+        await using var scope = context;
+        var project = await store.CreateProjectAsync(NewProject(), initialItems: [Item("first")]);
+        var run = await store.StartRunAsync(NewRun(project));
+        var current = await store.GetProjectAsync(project.Id);
+
+        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(
+            () => store.DeleteProjectAsync(project.Id, current!.Version));
+
+        AssertEx.Equal("ActiveRun", conflict.Code, "The endpoint maps this code to the 409 the SPA disables its delete on.");
+        context.ChangeTracker.Clear();
+        AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        AssertEx.Equal(expected: 1, await context.BenchmarkTaskItems.CountAsync(entity => entity.ProjectId == project.Id));
+        AssertEx.Equal(expected: 1, await context.BenchmarkRuns.CountAsync(entity => entity.Id == run.Id));
+    }
+
     private static BenchmarkTaskItemInput Item(string prompt) =>
         new(Encoding.UTF8.GetBytes(prompt));
 

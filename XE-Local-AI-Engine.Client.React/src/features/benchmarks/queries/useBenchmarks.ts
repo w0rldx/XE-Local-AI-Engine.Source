@@ -6,6 +6,7 @@ import {
 	clearBenchmarkRunScore,
 	createBenchmarkProject,
 	createBenchmarkTaskItem,
+	deleteBenchmarkProject,
 	deleteBenchmarkRun,
 	deleteBenchmarkTaskItem,
 	getBenchmarkKldDiskEstimate,
@@ -123,7 +124,7 @@ export interface BenchmarkRubricPresets {
 // Three things can still change a run's row, and the poll has to survive all three. Fidelity is the one that is easy to
 // miss: it is measured on its own queue AFTER the primary and the judge are both terminal, so a predicate reading only
 // those two stops polling the instant a measurement is queued and the finished numbers never arrive on their own.
-const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge" | "fidelity">): boolean =>
+export const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge" | "fidelity">): boolean =>
 	["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
 	isJudgeActive(run.judge.state) ||
 	isFidelityActive(run.fidelity);
@@ -468,6 +469,39 @@ export function useUpdateBenchmarkProject() {
 			return toBenchmarkProjectDetail(data);
 		},
 		onSuccess: (project) => invalidate(project.id),
+	});
+}
+
+/**
+ * Deletes a project with everything under it: its runs and all their results, transcripts and judge verdicts, then its
+ * task items, its pairwise fits and its judge-policy history.
+ *
+ * The node refuses with 409 `ActiveRun` — having deleted nothing — while any of the project's runs is still queued,
+ * generating, judging or being compared. Finished runs are deleted with the project; a live one blocks the whole call,
+ * so this can never race the run queue. Nothing outside the benchmarks tables points at a project.
+ *
+ * The invalidation is deliberately `exact`, unlike every other mutation here: the shared {@link useBenchmarkInvalidation}
+ * re-reads everything under `["benchmarks", "projects", id]`, and for a project that no longer exists that is a
+ * guaranteed 404 refetch of its own detail while the page still has it selected. Only the LIST is re-read; the page
+ * controller then sees the project leave it and selects another one on its own. The deleted project's own entries are
+ * dropped from the cache afterwards, once the refreshed list has already moved the selection off it.
+ */
+export function useDeleteBenchmarkProject() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) => {
+			await callWithResponseValidation(
+				deleteBenchmarkProject({ path: { projectId }, body: { expectedVersion }, throwOnError: true }),
+			);
+		},
+		onSuccess: async (_, { projectId }) => {
+			await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.projects, exact: true });
+			// Prefix removal: the project's detail, runs, task items, cells, comparisons and estimates all hang under
+			// this key. `inactive` only, because the page may not have re-rendered off the deleted project yet and
+			// removing a query that still has an observer makes it refetch — a guaranteed 404 for a project that is
+			// gone. What is still mounted becomes inactive on that re-render and is collected with the rest.
+			queryClient.removeQueries({ queryKey: benchmarkQueryKeys.project(projectId), type: "inactive" });
+		},
 	});
 }
 

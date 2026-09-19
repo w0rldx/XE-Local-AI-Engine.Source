@@ -4405,6 +4405,18 @@
 				"rejudgeConfirmPolicy": "Eine Änderung am Judge bewertet dieses Projekt neu. Alle {{count}} erfolgreichen Läufe werden neu bewertet und die Rangliste wird aus der neuen Kohorte aufgebaut.",
 				"rejudgeConfirmAll": "Alle {{count}} erfolgreichen Läufe werden mit der aktuellen Richtlinie neu bewertet, und die gewertete Kohorte wechselt auf die aktuelle Bewertungslaufzeit.",
 				"rejudgeConfirmAccept": "Neu bewerten",
+				"deleteHint": "Löscht das Projekt mit seinen Läufen, Aufgabenpunkten und dem Bewertungsverlauf.",
+				"deleteBlocked": "Ein Lauf dieses Projekts läuft noch. Warten Sie, bis er fertig ist, oder brechen Sie ihn ab, und löschen Sie das Projekt dann.",
+				"deleteConfirmRuns_one": "Sein {{count}} Lauf wird mitgelöscht, samt jedem Ergebnis, Transkript und Bewertungsurteil.",
+				"deleteConfirmRuns_other": "Seine {{count}} Läufe werden mitgelöscht, samt jedem Ergebnis, Transkript und Bewertungsurteil.",
+				"deleteTitle": "Dieses Benchmark-Projekt löschen?",
+				"deleteConfirm_one": "„{{name}}“ wird mit seinem {{count}} Aufgabenpunkt — dessen Prompt, Musterantwort und Prüfer-Einstellungen — und dem gesamten Bewertungsverlauf gelöscht. Das lässt sich nicht rückgängig machen.",
+				"deleteConfirm_other": "„{{name}}“ wird mit seinen {{count}} Aufgabenpunkten — deren Prompts, Musterantworten und Prüfer-Einstellungen — und dem gesamten Bewertungsverlauf gelöscht. Das lässt sich nicht rückgängig machen.",
+				"deleteConfirmUnknownCount": "„{{name}}“ wird mit seinen Aufgabenpunkten — deren Prompts, Musterantworten und Prüfer-Einstellungen — und dem gesamten Bewertungsverlauf gelöscht. Das lässt sich nicht rückgängig machen.",
+				"deleted": "Benchmark-Projekt gelöscht.",
+				"errors": {
+					"delete": "Dieses Benchmark-Projekt konnte nicht gelöscht werden."
+				},
 				"maxOutputTokens": "Maximale Ausgabe-Tokens",
 				"maxOutputTokensHint": "Leer lassen = nur durch den Kontext begrenzt. Muss kleiner als der angeforderte Kontext sein.",
 				"invocationTimeout": "Zeitlimit der Generierung (s)",

@@ -884,6 +884,44 @@ public sealed class BenchmarkEndpointTests
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.ProjectFrozen, "The benchmark project has runs and is frozen.");
     }
 
+    /// <summary>
+    ///     The project delete now takes the project's finished runs with it, so its refusal is no longer "this project
+    ///     has runs" but "one of them is still going". Both halves of that contract are pinned here: the expected
+    ///     version reaches the store unchanged, and the 409 carries the run-oriented code and sentence.
+    /// </summary>
+    [Test]
+    public async Task DeleteProject_WithNoActiveRun_DeletesAtTheExpectedVersionAndAnswersNoContent()
+    {
+        await using var context = CreateContext();
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Delete, Api + $"/projects/{ProjectId}", new
+        {
+            expectedVersion = 7
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await context.Store.Received(1).DeleteProjectAsync(ProjectId, 7, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteProject_WhileARunIsActive_ReturnsConflictNamingTheRunNotTheFreeze()
+    {
+        await using var context = CreateContext();
+        context.Store.DeleteProjectAsync(ProjectId, 7, Arg.Any<CancellationToken>())
+               .Returns<Task>(_ => throw new BenchmarkConflictException("ActiveRun"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Delete, Api + $"/projects/{ProjectId}", new
+        {
+            expectedVersion = 7
+        });
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.ActiveRun,
+            "A benchmark run is still active. Wait for it to finish or cancel it first.");
+    }
+
     [Test]
     public async Task ScoreRun_WhenScoreIsInvalid_ReturnsBadRequest()
     {

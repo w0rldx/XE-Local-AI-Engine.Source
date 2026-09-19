@@ -19,6 +19,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/BenchmarkBatchProgressAlert";
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/BenchmarkFidelityPanel";
+import { BenchmarkProjectDeleteButton } from "@/features/benchmarks/components/BenchmarkProjectDeleteButton";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkTaskItemEditor } from "@/features/benchmarks/components/BenchmarkTaskItemEditor";
 import type { BenchmarksPageController } from "@/features/benchmarks/hooks/useBenchmarksPageController";
@@ -63,6 +64,7 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 		startRunErrorMessage,
 		runs,
 		singleRunEstimate,
+		taskItemsQuery,
 	} = controller;
 	return (
 		<>
@@ -170,6 +172,14 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 										<Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setEditorMode("edit")}>
 											{detail.isFrozen ? t("pages.benchmarks.project.editJudge", "Edit judge") : t("common.edit", "Edit")}
 										</Button>
+										{/* `isSuccess`, never `data?.length ?? 0`: the item query has no placeholder data, so right after a
+										    project switch it is loading with `data` undefined — and a destructive confirmation that
+										    says "0 task items" about a project that has several is a lie the operator acts on. */}
+										<BenchmarkProjectDeleteButton
+											project={detail}
+											taskItemCount={taskItemsQuery.isSuccess ? taskItemsQuery.data.items.length : undefined}
+											runs={runs}
+										/>
 									</Group>
 								</Group>
 								{detail.isFrozen ? (

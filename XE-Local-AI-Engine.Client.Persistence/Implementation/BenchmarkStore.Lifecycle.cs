@@ -298,26 +298,48 @@ public sealed partial class BenchmarkStore
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         EnsureVersion(run.Version, expectedRunVersion);
-        if (!IsPrimaryTerminal(run.PrimaryStatus)
-            || await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
-                                                                      && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running), cancellationToken)
-            || await _dbContext.BenchmarkJudgeAttempts.AnyAsync(entity => entity.RunId == runId
-                                                                          && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
-                                                                              || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
-
-            // A comparison names TWO runs and its work item names only the canonical first, so the work-item guard
-            // above sees a live comparison when this run is the A side and is blind to it when the run is the B side.
-            // Asking the comparison rows themselves is the only guard that covers both.
-            || await _dbContext.BenchmarkComparisons.AnyAsync(entity => (entity.RunAId == runId || entity.RunBId == runId)
-                                                                        && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
-                                                                            || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken))
+        if (await IsRunActiveAsync(runId, run.PrimaryStatus, cancellationToken))
         {
             throw new BenchmarkConflictException("ActiveRun");
         }
 
+        await DeleteRunCoreAsync(run, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     Whether the run is still in play, and therefore whether deleting it would pull the ground out from under
+    ///     something the node is about to do. This is the ONE definition of "active" — the per-run delete and the
+    ///     project cascade both ask it, so the two can never drift into refusing different things.
+    ///     <para>
+    ///         A comparison names TWO runs and its work item names only the canonical first, so a work-item guard sees
+    ///         a live comparison when this run is the A side and is blind to it when the run is the B side. Asking the
+    ///         comparison rows themselves is the only guard that covers both. <c>CancelRequested</c> is deliberately
+    ///         not terminal: the cancel has been asked for and not yet observed by the child process.
+    ///     </para>
+    /// </summary>
+    private async Task<bool> IsRunActiveAsync(Guid runId, BenchmarkPrimaryStatus primaryStatus, CancellationToken cancellationToken) =>
+        !IsPrimaryTerminal(primaryStatus)
+        || await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
+                                                                  && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running), cancellationToken)
+        || await _dbContext.BenchmarkJudgeAttempts.AnyAsync(entity => entity.RunId == runId
+                                                                      && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
+                                                                          || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
+        || await _dbContext.BenchmarkComparisons.AnyAsync(entity => (entity.RunAId == runId || entity.RunBId == runId)
+                                                                    && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
+                                                                        || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken);
+
+    /// <summary>
+    ///     Deletes one run and everything scoped to it, inside a transaction the CALLER owns and after the caller has
+    ///     established that the run is not active. Split out of <see cref="DeleteRunAsync" /> so the project cascade
+    ///     reuses this exact order instead of growing a second deletion routine that would drift from it.
+    /// </summary>
+    private async Task DeleteRunCoreAsync(BenchmarkRun run, CancellationToken cancellationToken)
+    {
         // Foreign keys are not enforced on this database, so the order below IS the referential integrity: the run
         // stops pointing at its attempt, then comparisons, work items, judge and fidelity attempts, then the run
         // itself. Anything left out of that list does not error — it simply outlives its run for good.
+        var runId = run.Id;
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
         await SaveAsync(cancellationToken);
@@ -337,8 +359,6 @@ public sealed partial class BenchmarkStore
         {
             await ResetCurrentCohortAsync(projectId, cancellationToken);
         }
-
-        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

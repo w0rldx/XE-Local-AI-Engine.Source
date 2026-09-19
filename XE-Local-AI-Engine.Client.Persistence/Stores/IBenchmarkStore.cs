@@ -34,6 +34,11 @@ public interface IBenchmarkStore
         BenchmarkJudgePolicyChangeInput? judgePolicyChange = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Deletes a project with every run under it and everything scoped to those runs. Refused with
+    ///     <c>ActiveRun</c> — nothing deleted — while any of its runs is not terminal or still holds a queued or
+    ///     running work item, judge attempt or comparison.
+    /// </summary>
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
 
     /// <summary>Every task item of a project — generators included — ordered by <see cref="BenchmarkTaskItemRecord.Index" />.</summary>

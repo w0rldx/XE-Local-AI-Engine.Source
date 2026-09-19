@@ -774,6 +774,159 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
     private static async Task<long> CurrentVersionAsync(BenchmarkStore store, Guid projectId) =>
         AssertEx.NotNull(await store.GetProjectAsync(projectId)).Version;
 
+    /// <summary>
+    ///     The project delete takes its finished runs with it, and every table that hangs off a run or off the project
+    ///     is emptied — foreign keys are off on this database, so a table the cascade forgets does not error, its rows
+    ///     simply outlive the project forever, and most of them carry encrypted evidence. A second project with its
+    ///     own run is the control: a cascade that deletes by the wrong predicate would take it too.
+    /// </summary>
+    [Test]
+    public async Task DeleteProject_WithFinishedRuns_TakesEveryDependentRowWithIt_AndLeavesOtherProjectsAlone()
+    {
+        var databasePath = GetDatabasePath("cascade-delete.sqlite");
+        Guid projectId;
+        Guid survivorId;
+        await using (var context = await CreateDatabaseAsync(databasePath, create: true))
+        {
+            var store = new BenchmarkStore(context, TimeProvider.System);
+            var (project, revision) = await CreateJudgeProjectAsync(store);
+            projectId = project.Id;
+            _ = await store.CreateTaskItemAsync(project.Id, project.Version, new BenchmarkTaskItemInput(Encoding.UTF8.GetBytes("question")));
+
+            // A judged run (work items + a judge attempt), a fidelity attempt, and a comparison naming it: one run
+            // that has touched every run-scoped table there is.
+            var run = await SucceedRunAsync(store, AssertEx.NotNull(await store.GetProjectAsync(project.Id)), revision);
+            var judge = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judge.Version, Encoding.UTF8.GetBytes("{}")));
+            var fidelityAttemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
+            var fidelity = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, fidelity.Version, fidelityAttemptId,
+                PerplexityMean: 6.5));
+            // A comparison names two DIFFERENT runs in canonical order — `CK_benchmark_comparisons_pair_order` is a
+            // database invariant — so the project gets a second finished run to be compared against.
+            var second = await store.StartRunAsync(NewRun(AssertEx.NotNull(await store.GetProjectAsync(project.Id))));
+            var secondPrimary = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(second.Id, secondPrimary.Run.Version));
+            await InsertTerminalComparisonAsync(context, project.Id, revision.Id, run.Id, second.Id);
+            await InsertFitAsync(context, project.Id, revision.Id);
+
+            var survivor = await store.CreateProjectAsync(NewProject());
+            survivorId = survivor.Id;
+            var survivorRun = await store.StartRunAsync(NewRun(survivor));
+            var survivorPrimary = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(survivorRun.Id, survivorPrimary.Run.Version));
+
+            await store.DeleteProjectAsync(projectId, await CurrentVersionAsync(store, projectId));
+
+            AssertEx.Null(await store.GetProjectAsync(projectId));
+            AssertEx.NotNull(await store.GetProjectAsync(survivorId), "Deleting one project must not reach another one's rows.");
+        }
+
+        // Foreign keys off is the real node configuration, so nothing catches an orphan for us: every table is counted
+        // by hand, scoped to the deleted project, and the survivor's own rows are counted to prove the blast radius.
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        // Counted over the WHOLE table rather than filtered by project id: a `WHERE project_id = '…'` predicate that
+        // does not match the stored literal would answer 0 for every table and let this test pass while every row
+        // survived. The database holds exactly the deleted project and the survivor, so the totals below say both
+        // halves at once — what the cascade removed, and what it left alone. The survivor contributes its own run,
+        // that run's primary work item, and nothing else: it has no judge, no items, no fits and no comparisons.
+        AssertEx.Equal(expected: 1L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_projects;"));
+        AssertEx.Equal(expected: 1L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_runs;"));
+        AssertEx.Equal(expected: 1L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_work_items;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_task_items;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_judge_policy_revisions;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_pairwise_fits;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_comparisons;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_judge_attempts;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_fidelity_attempts;"));
+    }
+
+    /// <summary>
+    ///     A queued run is not finished, so the whole call is refused and NOTHING is deleted — not the other runs, not
+    ///     the task items, not the project. The version is asserted unchanged because the delete bumps it as its first
+    ///     write (that is what reserves SQLite's writer before the run set is read); a refusal must roll that back too.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task DeleteProject_WhileARunIsStillInPlay_IsRefusedAndDeletesNothing(bool claimTheRun)
+    {
+        await using var context = await CreateDatabaseAsync(claimTheRun ? "cascade-running.sqlite" : "cascade-queued.sqlite");
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var finished = await SucceedRunAsync(store, project, revision);
+        var live = await store.StartRunAsync(NewRun(AssertEx.NotNull(await store.GetProjectAsync(project.Id))));
+        if (claimTheRun)
+        {
+            // Claiming moves the primary to Running; without it the run stays Queued. Both are "in play".
+            _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        }
+
+        var versionBefore = await CurrentVersionAsync(store, project.Id);
+        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.DeleteProjectAsync(project.Id, versionBefore));
+
+        AssertEx.Equal("ActiveRun", conflict.Code, "The endpoint maps this code to the 409 the SPA disables its delete on.");
+        context.ChangeTracker.Clear();
+        AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        AssertEx.Equal(versionBefore, await CurrentVersionAsync(store, project.Id), "A refused delete must leave the version where it was.");
+        AssertEx.Equal(expected: 2, await context.BenchmarkRuns.CountAsync(entity => entity.ProjectId == project.Id),
+            "The finished run must survive a refusal caused by a different run.");
+        AssertEx.True(await context.BenchmarkJudgeAttempts.AnyAsync(entity => entity.RunId == finished.Id),
+            "Nothing at all is deleted when the call is refused.");
+        _ = live;
+    }
+
+    private static async Task InsertTerminalComparisonAsync(NodeChatDbContext context,
+        Guid projectId,
+        Guid revisionId,
+        Guid firstRunId,
+        Guid secondRunId)
+    {
+        var (left, right) = firstRunId.CompareTo(secondRunId) < 0 ? (firstRunId, secondRunId) : (secondRunId, firstRunId);
+        context.BenchmarkComparisons.Add(new BenchmarkJudgeComparison
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = projectId,
+            PolicyRevisionId = revisionId,
+            CohortGeneration = 1,
+            TaskInputHash = string.Empty,
+            RunAId = left,
+            RunBId = right,
+            Order = 0,
+            AttemptSequence = 1,
+            Sequence = 1,
+            Status = BenchmarkJudgeAttemptStatus.Succeeded,
+            EnqueuedAtUtc = 1,
+            Version = 1
+        });
+        _ = await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+    }
+
+    private static async Task InsertFitAsync(NodeChatDbContext context, Guid projectId, Guid revisionId)
+    {
+        context.BenchmarkPairwiseFits.Add(new BenchmarkPairwiseFit
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = projectId,
+            PolicyRevisionId = revisionId,
+            CohortGeneration = 1,
+            FitKey = "v1:" + new string('a', count: 64),
+            JudgeExecutionKey = "v1:" + new string('b', count: 64),
+            ComparisonSetVersion = 1,
+            FittedSetJson = "[]",
+            ScoresJson = "[]",
+            Iterations = 1,
+            BootstrapReplicates = 1,
+            IsActive = true,
+            CreatedAtUtc = 1,
+            Version = 1
+        });
+        _ = await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+    }
+
     private static async Task<long> CountAsync(SqliteConnection connection, string sql)
     {
         await using var command = connection.CreateCommand();

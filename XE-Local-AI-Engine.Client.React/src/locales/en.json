@@ -4405,6 +4405,18 @@
 				"rejudgeConfirmPolicy": "Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
 				"rejudgeConfirmAll": "All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
 				"rejudgeConfirmAccept": "Re-judge",
+				"deleteHint": "Deletes the project with its runs, task items and judge history.",
+				"deleteBlocked": "A run of this project is still going. Wait for it to finish or cancel it, then delete the project.",
+				"deleteConfirmRuns_one": "Its {{count}} run goes with it, including every result, transcript and judge verdict.",
+				"deleteConfirmRuns_other": "Its {{count}} runs go with it, including every result, transcript and judge verdict.",
+				"deleteTitle": "Delete this benchmark project?",
+				"deleteConfirm_one": "“{{name}}” is deleted with its {{count}} task item — its prompt, reference answer and verifier settings — and its whole judge history. This cannot be undone.",
+				"deleteConfirm_other": "“{{name}}” is deleted with its {{count}} task items — their prompts, reference answers and verifier settings — and its whole judge history. This cannot be undone.",
+				"deleteConfirmUnknownCount": "“{{name}}” is deleted with its task items — their prompts, reference answers and verifier settings — and its whole judge history. This cannot be undone.",
+				"deleted": "Benchmark project deleted.",
+				"errors": {
+					"delete": "Could not delete this benchmark project."
+				},
 				"maxOutputTokens": "Max output tokens",
 				"maxOutputTokensHint": "Leave empty = context-limited. Must be smaller than the requested context.",
 				"invocationTimeout": "Generation timeout (s)",

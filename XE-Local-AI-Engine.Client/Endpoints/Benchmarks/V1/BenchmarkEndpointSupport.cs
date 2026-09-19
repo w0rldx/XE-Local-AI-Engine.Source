@@ -109,7 +109,9 @@ internal static class BenchmarkEndpointSupport
         {
             "VersionConflict" => "The resource version changed. Refresh and retry.",
             "ProjectFrozen" => "The benchmark project has runs and is frozen.",
-            "ActiveRun" => "The benchmark run is active and cannot be deleted.",
+            // Answered for a single run AND for a project delete that would take its runs with it, so it names the way
+            // out rather than only the run: "cannot be deleted" left the operator with nothing to do about it.
+            "ActiveRun" => "A benchmark run is still active. Wait for it to finish or cancel it first.",
             "FreezeDependencyChanged" => "A benchmark dependency changed while the run was being frozen.",
             "FingerprintChanged" => "The installed model content changed.",
             "RejudgeRequired" => "Changing the judge re-scores every run of this project. Confirm the re-judge to continue.",

@@ -131,26 +131,72 @@ public sealed partial class BenchmarkStore
         return ToRecord(project, frozen: false);
     }
 
+    /// <summary>
+    ///     Deletes a project with everything under it: every run and all the run-scoped evidence, then the
+    ///     project-scoped rows, then the project.
+    ///     <para>
+    ///         Refused with <c>ActiveRun</c> while ANY of the project's runs is still in play — not terminal, or
+    ///         holding a queued/running work item, judge attempt or comparison. A finished run is deleted; a run the
+    ///         node is generating or judging is not, and the whole call is refused rather than partially applied, so
+    ///         the operator never loses half a project because one cell was still running.
+    ///     </para>
+    ///     <para>
+    ///         The version bump is the FIRST write on purpose. It reserves SQLite's single writer before the run set
+    ///         is read — the same idiom as <c>AcquireWorkCompletionAsync</c> — so a run started concurrently is either
+    ///         already committed and therefore seen by the guard below, or blocked behind this write and then refused
+    ///         by its own compare-and-swap in <c>StartRunsAsync</c>, which reads the project version inside its own
+    ///         transaction. Reading first and writing afterwards is what would let a run land in the gap.
+    ///     </para>
+    /// </summary>
     public async Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedVersion);
-        if (await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken))
+        project.Version++;
+        project.UpdatedAtUtc = Now();
+        await SaveAsync(cancellationToken);
+
+        var runs = await _dbContext.BenchmarkRuns.AsNoTracking()
+                                   .Where(entity => entity.ProjectId == projectId)
+                                   .Select(entity => new
+                                   {
+                                       entity.Id,
+                                       entity.PrimaryStatus
+                                   })
+                                   .ToArrayAsync(cancellationToken);
+        foreach (var run in runs)
         {
-            throw new BenchmarkConflictException("ProjectFrozen");
+            if (await IsRunActiveAsync(run.Id, run.PrimaryStatus, cancellationToken))
+            {
+                // Nothing has been committed, so the version bump above is rolled back with everything else.
+                throw new BenchmarkConflictException("ActiveRun");
+            }
+        }
+
+        // The SAME per-run deletion the single-run delete performs, once per run, inside this one transaction — not a
+        // second routine that would drift from it. Every run is checked before any is deleted.
+        //
+        // Re-read one run at a time rather than reusing entities from the guard pass: `DeleteRunCoreAsync` clears the
+        // change tracker, so an instance materialized before it ran is detached by the next iteration and the write
+        // that severs its judge-attempt pointer would silently do nothing.
+        // ponytail: one pass per run, so a 400-run project issues a few thousand statements in one local transaction.
+        // Set-based deletes over the whole id list would be one pass each, if a project ever grows enough to notice.
+        foreach (var run in runs)
+        {
+            await DeleteRunCoreAsync(await RequireRunAsync(run.Id, tracking: true, cancellationToken), cancellationToken);
         }
 
         // Same explicit order as run deletion, for the same reason: the project stops pointing at its revision
         // before the revisions go, and nothing relies on a cascade that this database does not enforce.
+        project = await RequireProjectAsync(projectId, cancellationToken);
         project.CurrentJudgePolicyRevisionId = null;
         await SaveAsync(cancellationToken);
 
-        // The guard above refuses a project that still holds runs, so every run-scoped child (work items, judge and
-        // fidelity attempts, comparisons) went with its run. What is scoped to the PROJECT did not: task items hold
-        // encrypted prompts, reference answers and verifier overrides and outlive every run, and a pairwise fit is
-        // only DEACTIVATED when the runs it was fitted over are deleted. Both are children of the project row, so
-        // both go before it.
+        // Every run-scoped child (work items, judge and fidelity attempts, comparisons) went with its run above. What
+        // is scoped to the PROJECT did not: task items hold encrypted prompts, reference answers and verifier
+        // overrides and outlive every run, and a pairwise fit is only DEACTIVATED when the runs it was fitted over are
+        // deleted. Both are children of the project row, so both go before it.
         await _dbContext.BenchmarkTaskItems.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);

@@ -357,6 +357,16 @@ The base model's **fingerprint is never client-writable**: it is an input to the
 
 > **A comparison references two runs and foreign keys are OFF.** `DeleteRunAsync` guards and deletes through `BenchmarkComparisons` on `RunAId == id || RunBId == id`, bumps each affected revision's `ComparisonSetVersion` and deactivates the project's active fits. The delete order is comparisons → work items → judge attempts → fidelity attempts → run; fidelity attempts carry an encrypted receipt, so skipping them is a leak, not untidiness.
 
+### 7.0 Deleting a run, and deleting a project
+
+Both deletions are refused by **one** definition of "in play", `BenchmarkStore.IsRunActiveAsync`: a run whose primary status is not terminal (`Queued`, `Running`, `CancelRequested`), or that still holds a **Queued or Running** work item, judge attempt or comparison on either side of a pair. `DeleteRunAsync` asks it about one run; `DeleteProjectAsync` asks it about every run of the project.
+
+**`DELETE benchmarks/projects/{projectId}` takes the project's runs with it.** It is not "delete an empty project": the project, every run, and everything scoped to those runs go in **one transaction**, and the call is refused whole — `409` `ActiveRun`, nothing deleted — if *any* run is still in play. Per run it performs exactly the same deletion as the single-run path (`DeleteRunCoreAsync`, shared by both so the order cannot drift), then deletes the project-scoped rows that outlive every run: **task items** (encrypted prompts, reference answers, verifier overrides), **pairwise fits** (only *deactivated* by a run deletion) and **judge-policy revisions**, and finally the project row.
+
+> **The project version is bumped as the FIRST write, before the run set is read.** That reserves SQLite's single writer — the same idiom as `AcquireWorkCompletionAsync` — so a run started concurrently is either already committed and therefore seen by the guard, or blocked behind this write and then refused by its own compare-and-swap in `StartRunsAsync`, which reads the project version inside its own transaction. Reading the run set first and writing afterwards is what would let a run land in the gap and survive as an orphan. A refusal rolls the bump back with everything else.
+
+Nothing outside the benchmark tables references a project. Two nullable columns on a **training comparison report** (`base_benchmark_run_id`, `tuned_benchmark_run_id`) name benchmark *runs* with **no foreign key**, so they dangle after any run deletion (harmless: a report's deltas are computed and stored when it is created, and the ids are only dereferenced then) — the single-run path has always behaved this way and the cascade does not change it. The **KLD base-logit cache** on disk is keyed by base model and shared node-wide (its route merely hangs under a project); it is deliberately untouched, and is cleared only through `DELETE …/fidelity/cache`.
+
 ### 7.1 Repeat modes and stop reasons
 
 `BenchmarkRepeatMode`:

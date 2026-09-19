@@ -133,6 +133,11 @@ public sealed class UpdateBenchmarkProjectEndpoint : Endpoint<UpdateBenchmarkPro
     }
 }
 
+/// <summary>
+///     Deletes a project with its runs and all their evidence. Answers 409 <c>ActiveRun</c>, having deleted nothing,
+///     while any of the project's runs is still queued, generating, judging or being compared — a finished run goes,
+///     a live one blocks the whole call.
+/// </summary>
 public sealed class DeleteBenchmarkProjectEndpoint : Endpoint<DeleteBenchmarkProjectRequest>
 {
     private readonly BenchmarkRecordService _records;
