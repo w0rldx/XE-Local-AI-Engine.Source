@@ -35,7 +35,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly bool _allowCloudKnowledgeAccess;
     private readonly IReadOnlyList<LocalToolCatalogEntry> _builtinCatalogEntries;
     private readonly IReadOnlyList<string> _builtinNames;
-    private readonly IReadOnlyList<AllowedToolDto> _builtinWithoutAgentHome;
+
+    // The whole offer with every capability-gated tool removed, returned when the active model is not tool-capable.
+    private readonly IReadOnlyList<AllowedToolDto> _builtinAllToolsNonCapable;
     private readonly IMcpToolRegistry _mcpToolRegistry;
 
     // Read LIVE per offer, not captured at construction. See IsToolCapable for why.
@@ -51,6 +53,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AllowedToolDto _spawnOfferDto;
     private readonly AllowedToolDto _computeOfferDto;
+    private readonly AllowedToolDto _agentHomeOfferDto;
     private readonly AllowedToolDto _emitOutputOfferDto;
 
     // The four work-session state tools, held out of the whole offer for the same reason spawn_subagent is: they are
@@ -78,9 +81,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // which IAgentToolRegistry.GetLocalChatToolDescriptors() does NOT project — registering the handlers in DI
         // surfaces them only in the RESOLUTION seam, never the OFFER seam. The agent-send path intersects
         // offered ∩ AllowedToolNames, so without merging them here the seeded Coder agent's tool set would be ∅ and the
-        // feature inert. They join the capability-gated (capable-only) built-in set just like run_in_agent_home: present
-        // in the full offer, withheld from a non-tool-capable model. The descriptor set is static, so the merged offer
-        // stays byte-identical across sends (stable config hash).
+        // feature inert. They join the capability-gated (capable-only) built-in set: present in the full offer, withheld
+        // from a non-tool-capable model. The descriptor set is static, so the merged offer stays byte-identical across
+        // sends (stable config hash).
         var coderDescriptors = CoderToolDefinition.Descriptors;
 
         // The read-only knowledge-base tools (search_knowledge_base / read_document / read_surrounding_chunks) are also
@@ -120,8 +123,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // (the config hash ignores the Id, but a stable Id keeps client-side rendering and equality predictable).
         // The coder and knowledge-base tools are worker-owned IClientLocalToolHandlers merged here so they appear in the
         // OFFER seam (the handler registration surfaces them only in the RESOLUTION seam). They join the
-        // capability-gated set just like run_in_agent_home — present in the capable offer, withheld from a non-capable
-        // model. spawn_subagent is deliberately NOT folded into this whole offer: it is profile-opt-in only (below).
+        // capability-gated set — present in the capable offer, withheld from a non-capable model. spawn_subagent,
+        // run_python and run_in_agent_home are deliberately NOT folded into this whole offer: they are profile-opt-in
+        // only (below).
         _builtinAllTools =
         [
             .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
@@ -157,6 +161,19 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // every approval-required tool, so they strip this one for free.
         _computeOfferDto = ToOfferDto(ComputeToolDefinition.ToolName, ComputeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
 
+        // run_in_agent_home takes run_python's shape, not the coder tools': it runs model-directed commands and writes
+        // files inside a node-local sandbox, and exports a patch aimed at the operator's own folders. So it is held out
+        // of the whole offer entirely and added back by GetOfferedToolsForProfile[Async] only when an agent profile named
+        // it in AllowedToolNames — which also keeps the most deeply nested schema we ship (docs/agent-knowledge.md §3)
+        // out of the GBNF grammar llama.cpp compiles on an ordinary chat turn. WriteExecute + RequiresApproval: true
+        // matches the handler's hardcoded RequiresApproval (the node policy can only tighten it) and is what makes the
+        // three unattended paths — sub-agent, scheduler, delegate-scope inbound MCP — strip it for free.
+        //
+        // AgentHome:Enabled is deliberately NOT consulted here: like ComputeOptions.Enabled and WorkSessionOptions.Enabled,
+        // the kill-switch is enforced at EXECUTION time (RunInAgentHomeToolHandler re-reads it), so the offer stays a pure
+        // static projection with a stable config hash.
+        _agentHomeOfferDto = ToOfferDto(AgentHomeToolDefinition.ToolName, AgentHomeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
+
         // emit_output is held out of EVERY projection — the whole offer, the profile pool, and both known-tool catalogs
         // — so it never reaches chat, the scheduler, a benchmark, MCP, a sub-agent, or the agent-editor tool picker. An
         // integration execution is the only context in which delivering a payload to an external caller means anything,
@@ -177,18 +194,18 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         _workSessionOfferDtos =
             [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
 
-        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home, the coder/knowledge tools
-        // and ask_user, returned when the active model is not tool-capable. Those tools are offered only to a
-        // tool-capable model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is
-        // not in _builtinAllTools at all, so it never appears in either capability variant of the whole offer.)
+        // Precompute the capability-gated variant once: the built-ins minus the coder/knowledge tools and ask_user,
+        // returned when the active model is not tool-capable. Those tools are offered only to a tool-capable model. The
+        // encrypted path stays server-gated and never reaches this provider. (spawn_subagent, run_python and
+        // run_in_agent_home are not in _builtinAllTools at all, so they never appear in either capability variant of the
+        // whole offer.)
         var capableOnlyNames = coderDescriptors.Select(static descriptor => descriptor.Name)
                                                .Concat(knowledgeDescriptors.Select(static descriptor => descriptor.Name))
                                                .Append(askUserDescriptor.Name)
                                                .ToHashSet(StringComparer.Ordinal);
-        _builtinWithoutAgentHome =
+        _builtinAllToolsNonCapable =
         [
-            .. _builtinAllTools.Where(tool => !string.Equals(tool.Name, AgentHomeToolDefinition.ToolName, StringComparison.Ordinal)
-                                              && !capableOnlyNames.Contains(tool.Name))
+            .. _builtinAllTools.Where(tool => !capableOnlyNames.Contains(tool.Name))
         ];
 
         _builtinCatalogEntries =
@@ -246,6 +263,17 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 // unknown name and the picker would not show it.
                 Category = ToolCategory.WriteExecute
             },
+            new LocalToolCatalogEntry
+            {
+                Name = AgentHomeToolDefinition.ToolName,
+                Description = AgentHomeToolDefinition.Description,
+                RequiresApproval = true,
+                Source = BuiltinSource,
+                // Same reasoning as run_python's entry above: listed UNGATED by model so the agent-editor tool picker can
+                // show it and CRUD validation accepts the name — which is the only way an operator can opt an agent in,
+                // and therefore the only way the tool is ever offered at all.
+                Category = ToolCategory.WriteExecute
+            },
             .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => new LocalToolCatalogEntry
             {
                 Name = descriptor.Name,
@@ -264,6 +292,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             askUserDescriptor.Name,
             SpawnSubAgentToolDefinition.ToolName,
             ComputeToolDefinition.ToolName,
+            AgentHomeToolDefinition.ToolName,
             .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => descriptor.Name)
         ];
     }
@@ -314,16 +343,16 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false)
     {
-        // High-risk tools (run_in_agent_home and every MCP tool) are offered only to a tool-capable model. A
-        // null/unknown model id is treated as not capable, so those tools are withheld rather than offered to a model
-        // that cannot drive them. The MCP part is read live and sorted so the same catalog state yields a byte-identical
-        // offer (stable config hash).
+        // High-risk tools (the coder/knowledge tools, ask_user and every MCP tool) are offered only to a tool-capable
+        // model. A null/unknown model id is treated as not capable, so those tools are withheld rather than offered to a
+        // model that cannot drive them. The MCP part is read live and sorted so the same catalog state yields a
+        // byte-identical offer (stable config hash).
         var capable = IsToolCapable(activeModelId);
         if (!capable)
         {
             // The non-capable variant already excludes the knowledge tools (they are capable-only), so it needs no
             // locality gate.
-            return _builtinWithoutAgentHome;
+            return _builtinAllToolsNonCapable;
         }
 
         // Provider-locality gate: withhold the node-local-data tools (knowledge-base read tools AND coder workspace file
@@ -394,10 +423,17 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         var capable = IsToolCapable(activeModelId);
         if (!capable)
         {
-            return _builtinWithoutAgentHome;
+            return _builtinAllToolsNonCapable;
         }
 
-        return [.. GetOfferedTools(activeModelId, isCloudModel), .. SpawnOffer(activeModelId, isCloudModel), .. ComputeOffer(activeModelId, isCloudModel), .. _workSessionOfferDtos];
+        return
+        [
+            .. GetOfferedTools(activeModelId, isCloudModel),
+            .. SpawnOffer(activeModelId, isCloudModel),
+            .. ComputeOffer(activeModelId, isCloudModel),
+            .. AgentHomeOffer(activeModelId, isCloudModel),
+            .. _workSessionOfferDtos
+        ];
     }
 
     public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
@@ -405,7 +441,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // Non-capable models get the non-capable variant and NO spawn/custom tools, so the opt-in cannot bypass the gate.
         if (!IsToolCapable(activeModelId))
         {
-            return _builtinWithoutAgentHome;
+            return _builtinAllToolsNonCapable;
         }
 
         // The async whole offer (built-in + MCP + capability/local-gated custom) PLUS the opt-in-only spawn tool — the same
@@ -415,6 +451,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken),
             .. SpawnOffer(activeModelId, isCloudModel),
             .. ComputeOffer(activeModelId, isCloudModel),
+            .. AgentHomeOffer(activeModelId, isCloudModel),
             .. _workSessionOfferDtos
         ];
     }
@@ -459,7 +496,22 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     }
 
     /// <summary>
-    ///     Whether prompts for <paramref name="activeModelId" /> leave the node, for the three tool gates above.
+    ///     <c>run_in_agent_home</c> for the profile pool, or nothing for a model outside the trust boundary.
+    ///     <para>
+    ///         Withheld on exactly <c>run_python</c>'s reasoning, at a larger blast radius: the tool's
+    ///         <c>run_commands</c> / <c>write_workspace</c> actions execute in a node-local sandbox and its
+    ///         <c>export_patch</c> action produces a diff aimed at the operator's own folders. That is a remote model
+    ///         directing execution on the operator's machine, so it is withheld unconditionally rather than behind the
+    ///         <c>AllowCloudModelAccess</c> opt-in, which governs only reading node-local data.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<AllowedToolDto> AgentHomeOffer(string? activeModelId, bool isCloudModel)
+    {
+        return IsOutsideTrustBoundary(activeModelId, isCloudModel) ? [] : [_agentHomeOfferDto];
+    }
+
+    /// <summary>
+    ///     Whether prompts for <paramref name="activeModelId" /> leave the node, for the profile-pool tool gates above.
     /// </summary>
     /// <remarks>
     ///     <para>

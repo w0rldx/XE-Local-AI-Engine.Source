@@ -83,6 +83,11 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             nodeId = ctx.NodeId,
             ownerUserId = ctx.OwnerUserId,
             providerName = ctx.ProviderName,
+            // WHO ran it, beside the correlation fields: the node's own export git runs in the same sandbox, over the
+            // same workspace, as the model's run_command, so a line without this reads as if the model ran the node's
+            // git. A closed set of node-defined constants (AgentHomeCommandActors), never model input, so it needs no
+            // redaction of its own.
+            record.Actor,
             record.ExecutionId,
             record.Executable,
             record.Arguments,

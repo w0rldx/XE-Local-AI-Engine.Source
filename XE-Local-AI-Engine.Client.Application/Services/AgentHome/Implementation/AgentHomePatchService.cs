@@ -8,7 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
 ///     Patch export implementation for <see cref="IAgentHomePatchService" />. Runs two in-sandbox <c>git diff</c>
-///     commands against the workspace-copy baseline (a full <c>--binary</c> patch and a <c>--name-status</c> summary)
+///     commands — under <see cref="AgentHomeGitHardening" />, which is what keeps a model-authored
+///     <c>textconv</c>/<c>clean</c> driver from executing here, after the model's turn has ended — against the
+///     workspace-copy baseline (a full <c>--binary</c> patch and a <c>--name-status</c> summary)
 ///     with the byte-stabilizing git flags,
 ///     captures their standard output (the sandbox SPI is shell-neutral, so the worker — not a shell redirection — owns
 ///     the file write), then writes <c>changes.patch</c> and <c>changed-files.json</c> under the host-side
@@ -27,13 +29,16 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
     private readonly ILogger<AgentHomePatchService> _logger;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly TimeProvider _timeProvider;
 
     public AgentHomePatchService(IAgentSandboxRuntimeProvider provider,
         INodeRuntimeSettings runtimeSettings,
+        TimeProvider timeProvider,
         ILogger<AgentHomePatchService> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -48,19 +53,33 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
         var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
+        // BEFORE any git runs on this workspace: make every configuration git can reach node-owned again. The goal
+        // loop's run_command could have set a repository-local textconv/clean driver and its write_file could have
+        // created the .gitattributes that selects it, and git would run that program HERE, as the node, after the
+        // model's turn is over. Fails closed rather than exporting if the repository is no longer the node's.
+        if (!await AgentHomeGitHardening.TryHardenWorkspaceRepositoryAsync(handle, cancellationToken))
+        {
+            _logger.LogError("Patch export for run {RunId} refused: the workspace git directory is not the one the baseline created.",
+                request.RunId);
+            return FailedExport();
+        }
+
         // Full binary-aware patch. Captured from standard output; the worker writes the file, since the SPI
-        // carries no shell redirection.
-        var patchResult = await _provider.ExecuteAsync(handle,
-            DiffCommand($"{request.RunId}-patch-diff",
-                commandTimeout,
-                "diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."),
+        // carries no shell redirection. --no-textconv/--no-ext-diff are belt and braces on top of the rewrite above,
+        // NOT the control: measured on git 2.53.0, they leave filter.<driver>.clean running.
+        var patchResult = await RunGitAsync(handle,
+            request,
+            $"{request.RunId}-patch-diff",
+            commandTimeout,
+            ["diff", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."],
             cancellationToken);
 
         // Name-status summary used to build changed-files.json.
-        var statusResult = await _provider.ExecuteAsync(handle,
-            DiffCommand($"{request.RunId}-patch-status",
-                commandTimeout,
-                "diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."),
+        var statusResult = await RunGitAsync(handle,
+            request,
+            $"{request.RunId}-patch-status",
+            commandTimeout,
+            ["diff", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."],
             cancellationToken);
 
         if (!IsSuccessful(patchResult) || !IsSuccessful(statusResult))
@@ -130,16 +149,65 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         };
     }
 
-    private static SandboxCommandRequest DiffCommand(string executionId, TimeSpan timeout, params string[] tail)
+    /// <summary>
+    ///     Runs one export git command and appends it to the run's command log, attributed to the NODE. The log entry
+    ///     is not decoration: this git runs in the same sandbox, over the same workspace, as the model's own
+    ///     <c>run_command</c> calls, and an operator auditing <c>commands.jsonl</c> after a run has to be able to see
+    ///     the whole sequence rather than only the half the model asked for.
+    /// </summary>
+    private async Task<SandboxCommandResult> RunGitAsync(SandboxHandle handle,
+        AgentHomePatchExportRequest request,
+        string executionId,
+        TimeSpan timeout,
+        string[] tail,
+        CancellationToken cancellationToken)
     {
-        return new SandboxCommandRequest
+        var arguments = AgentHomeGit.WorkspaceArguments(tail);
+        var startedAt = _timeProvider.GetUtcNow();
+        var result = await _provider.ExecuteAsync(handle,
+            new SandboxCommandRequest
+            {
+                ExecutionId = executionId,
+                Executable = AgentHomeGit.Executable,
+                Arguments = arguments,
+                WorkingDirectory = AgentHomeGit.WorkspaceSelectedRoot,
+                Environment = AgentHomeGitHardening.Environment,
+                Timeout = timeout
+            },
+            cancellationToken);
+
+        await AppendCommandSafelyAsync(request, executionId, arguments, result, startedAt, cancellationToken);
+        return result;
+    }
+
+    private async Task AppendCommandSafelyAsync(AgentHomePatchExportRequest request,
+        string executionId,
+        IReadOnlyList<string> arguments,
+        SandboxCommandResult result,
+        DateTimeOffset startedAt,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            ExecutionId = executionId,
-            Executable = AgentHomeGit.Executable,
-            Arguments = AgentHomeGit.Arguments(tail),
-            WorkingDirectory = AgentHomeGit.WorkspaceSelectedRoot,
-            Timeout = timeout
-        };
+            await request.RunLogger.AppendCommandAsync(new AgentHomeCommandLogRecord
+                {
+                    TimestampUtc = startedAt,
+                    ExecutionId = executionId,
+                    Executable = AgentHomeGit.Executable,
+                    Arguments = arguments,
+                    Completed = result.Completed,
+                    ExitCode = result.ExitCode,
+                    DurationMs = (long)result.Duration.TotalMilliseconds,
+                    ErrorClass = null,
+                    Actor = AgentHomeCommandActors.Node
+                },
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // Best-effort logging: a filesystem, permissions or not-opened error must never fail the export.
+            _logger.LogDebug(exception, "Patch export for run {RunId} could not append its git command to the run log.", request.RunId);
+        }
     }
 
     private static bool IsSuccessful(SandboxCommandResult result)

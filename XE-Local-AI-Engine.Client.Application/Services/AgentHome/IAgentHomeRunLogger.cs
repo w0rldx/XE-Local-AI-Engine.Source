@@ -90,6 +90,24 @@ internal sealed record AgentHomeCommandLogRecord
 
     /// <summary>Error class name when the command raised an exception; <see langword="null" /> on success.</summary>
     public string? ErrorClass { get; init; }
+
+    /// <summary>
+    ///     Who asked for this command: <see cref="AgentHomeCommandActors.Model" /> for one the goal loop's
+    ///     <c>run_command</c> issued, <see cref="AgentHomeCommandActors.Node" /> for one the engine issued itself (the
+    ///     patch export's git). Both run in the same sandbox over the same workspace, so a log that did not
+    ///     distinguish them would read as if the model had run the node's git.
+    /// </summary>
+    public required string Actor { get; init; }
+}
+
+/// <summary>The <see cref="AgentHomeCommandLogRecord.Actor" /> values.</summary>
+internal static class AgentHomeCommandActors
+{
+    /// <summary>The engine issued the command itself (patch export).</summary>
+    public const string Node = "node";
+
+    /// <summary>The goal loop's <c>run_command</c> tool issued it on the model's behalf.</summary>
+    public const string Model = "model";
 }
 
 /// <summary>

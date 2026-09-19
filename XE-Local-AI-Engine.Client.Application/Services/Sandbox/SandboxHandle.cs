@@ -25,6 +25,22 @@ public sealed record SandboxHandle
     public required int ManifestVersion { get; init; }
 
     /// <summary>
+    ///     The isolation the provider ACTUALLY DELIVERED for this sandbox — not what the create request asked for.
+    ///     <para>
+    ///         A caller whose behaviour depends on a filesystem boundary must branch on this rather than on its own
+    ///         request: the request is a preference that a provider may refuse, and the two are only the same value
+    ///         because the process provider rejects an unmeetable isolation request fail-closed. Reading it off the
+    ///         handle is what makes "did I get the boundary?" a fact the sandbox reports rather than an inference the
+    ///         caller re-derives — and the answer a caller needs is about the sandbox it is holding, not about the host.
+    ///     </para>
+    ///     <para>
+    ///         <see cref="SandboxIsolationMode.None" /> is the default, so a provider that does not isolate (the
+    ///         deterministic fake) reports the honest answer without opting in.
+    ///     </para>
+    /// </summary>
+    public SandboxIsolationMode Isolation { get; init; } = SandboxIsolationMode.None;
+
+    /// <summary>
     ///     Every engine-generated mount this sandbox carries, as the provider RESOLVED it — including the trusted host
     ///     workspace. This is the answer to "what is this host path called inside the sandbox?", and it is the only
     ///     honest place to ask: the requested <see cref="SandboxMount.SandboxPath" /> is a preference, and the process

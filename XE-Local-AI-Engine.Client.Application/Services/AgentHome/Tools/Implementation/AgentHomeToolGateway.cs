@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
 using System.Globalization;
+using System.Text;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
@@ -49,7 +51,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             // workspace summary carries aliases and counts only — never host paths (workspace copy).
             var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
             return string.Create(CultureInfo.InvariantCulture,
-                $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
+                $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)}. Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildGoalSummary(run.GoalOutcome)}{BuildPatchSummary(run.Patch)}{BuildSandboxNotice(run.SandboxProviderName, run.GoalOutcome)}");
         }
         catch (AgentHomeBusyException)
         {
@@ -67,12 +69,105 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 
     private static string DescribeOutcome(AgentHomeRunResult run, int commandTimeoutSeconds)
     {
+        if (run.GoalOutcome is { } goal)
+        {
+            return goal.Status switch
+            {
+                AgentHomeGoalStatus.NotRun => "did not execute the goal",
+                AgentHomeGoalStatus.TimeBudgetExceeded => "was cut off by the whole-run time budget",
+                AgentHomeGoalStatus.ToolCallBudgetExceeded => "was cut off by the tool-call budget",
+                AgentHomeGoalStatus.Failed => "did not complete (the run failed part-way)",
+                _ => "completed"
+            };
+        }
+
+        // No goal outcome at all: the run never reached the executor. Fall back to the lifecycle's own flags.
         if (run.TimedOut)
         {
             return string.Create(CultureInfo.InvariantCulture, $"did not complete (timed out after {commandTimeoutSeconds}s)");
         }
 
         return run.Completed ? "completed" : "did not complete";
+    }
+
+    /// <summary>
+    ///     What the run actually did, in the model's own result. This is the honesty clause, and it runs in BOTH
+    ///     directions: a run whose goal never executed must SAY so (the previous shape reported a bare
+    ///     "completed (exit code 0)" for a fixed liveness probe, and a live round watched a model reason its way to
+    ///     that truth unaided), and a run that did execute must not be described as if it had not.
+    /// </summary>
+    private static string BuildGoalSummary(AgentHomeGoalOutcome? goal)
+    {
+        if (goal is null)
+        {
+            return string.Empty;
+        }
+
+        if (!goal.Executed)
+        {
+            return $" NOTE: the goal was NOT executed — {goal.NotRunReason}";
+        }
+
+        // A granted action that produced no tool is reported BEFORE the work summary: a model that asked for
+        // run_commands and reads "0 commands" would otherwise conclude it chose not to run any.
+        var withheld = goal.CommandsUnavailableReason is { Length: > 0 } reason
+            ? $" NOTE: {reason}"
+            : string.Empty;
+
+        var summary = new StringBuilder();
+        _ = summary.Append(string.Create(CultureInfo.InvariantCulture, $" Work: {goal.ToolCallCount} tool call(s)"));
+
+        if (goal.RefusedCallCount > 0)
+        {
+            _ = summary.Append(string.Create(CultureInfo.InvariantCulture, $" ({goal.RefusedCallCount} refused)"));
+        }
+
+        _ = summary.Append(string.Create(CultureInfo.InvariantCulture, $", {goal.WrittenFiles.Count} file(s) written"));
+
+        if (goal.Commands.Count > 0)
+        {
+            _ = summary.Append(", commands: ")
+                       .Append(string.Join("; ",
+                           goal.Commands.Select(static command => command.Completed
+                               ? string.Create(CultureInfo.InvariantCulture, $"{command.Executable} exit {command.ExitCode}")
+                               : string.Create(CultureInfo.InvariantCulture, $"{command.Executable} did not complete"))));
+        }
+
+        _ = summary.Append('.').Append(withheld);
+
+        if (goal.Status == AgentHomeGoalStatus.TimeBudgetExceeded || goal.Status == AgentHomeGoalStatus.ToolCallBudgetExceeded)
+        {
+            _ = summary.Append(" NOTE: a budget cut this run off, so the work below may be incomplete.");
+        }
+        else if (goal.Status == AgentHomeGoalStatus.Failed)
+        {
+            _ = summary.Append(" NOTE: the run failed part-way, so the work below may be incomplete.");
+        }
+
+        return summary.ToString();
+    }
+
+    /// <summary>
+    ///     The honesty clause for the no-op sandbox backend. <c>fake</c> answers every command it was not scripted for
+    ///     with exit 0 and empty output, so a run it served renders as "completed" with no file changes —
+    ///     indistinguishable from a real run whose goal produced nothing. It is also the backend a Development node
+    ///     resolves when <c>AgentHome:Sandbox:Provider</c> is unset, i.e. the default a first live round hits. Saying so
+    ///     in the model-facing result is what stops the model reporting work it never did — and it must say it whether
+    ///     or not the goal loop ran, because on this backend a loop that "ran" still executed nothing.
+    /// </summary>
+    private static string BuildSandboxNotice(string sandboxProviderName, AgentHomeGoalOutcome? goal)
+    {
+        if (!string.Equals(sandboxProviderName, FakeSandboxRuntimeProvider.Name, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        var executed = goal?.Executed == true;
+        return (executed
+                   ? " NOTE: nothing was really executed — this node's AgentHome sandbox backend is 'fake', which runs nothing."
+                     + " Any command the run reports produced no real work and any file it reports writing went nowhere."
+                   : " NOTE: nothing was executed — this node's AgentHome sandbox backend is 'fake', which runs nothing.")
+               + " Set AgentHome:Sandbox:Provider=process and restart the node to execute for real.";
     }
 
     private static string BuildWorkspaceSummary(IReadOnlyList<SelectedFolderSnapshot> snapshots)

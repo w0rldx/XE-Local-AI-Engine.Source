@@ -27,9 +27,26 @@ internal static partial class AgentHomeRunToolRequestValidator
     private const int GoalMaxLength = 4000;
     private const int MaxSelectedFolders = 8;
 
+    /// <summary>
+    ///     The authoritative selected-folder-id pattern: a lowercase alias or a 36-character GUID. It is a
+    ///     <see langword="const" /> so the <see cref="GeneratedRegexAttribute" /> below and the copy embedded in
+    ///     <see cref="AgentHomeToolDefinition.ParameterSchema" /> have ONE source an equality test can compare against
+    ///     — see <c>AgentHomeToolSchemaContractTests</c>.
+    ///     <para>
+    ///         The alternation MUST stay inside one pair of anchors. It means the same thing to .NET either way, but
+    ///         llama.cpp's GBNF converter treats an anchor that is not the pattern's first/last character as a literal
+    ///         character, so <c>^a$|^b$</c> compiles into a grammar that forces a literal <c>$</c> onto every value the
+    ///         model emits. See the comment on <see cref="AgentHomeToolDefinition.ParameterSchema" />.
+    ///     </para>
+    /// </summary>
+    internal const string SelectedFolderIdPattern = "^([a-z0-9][a-z0-9-]{0,63}|[0-9a-fA-F-]{36})$";
+
+    // `propose_memory` was REMOVED, not renamed: the node collected proposals from the sandbox and then discarded
+    // them, so offering the value advertised a capability that silently no-opped. Persisting a proposal into the
+    // existing adaptive-memory Suggested pipeline is a later slice; until it lands, the schema must not claim it.
     private static readonly string[] AllowedActionValues =
     [
-        "read_workspace", "write_workspace", "run_commands", "export_patch", "propose_memory"
+        "read_workspace", "write_workspace", "run_commands", "export_patch"
     ];
 
     private static readonly string[] RuntimeProfileValues = ["dotnet-agent-home"];
@@ -113,6 +130,9 @@ internal static partial class AgentHomeRunToolRequestValidator
         }
     }
 
-    [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,63}$|^[0-9a-fA-F-]{36}$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
+    // ExplicitCapture, not a `(?:` group in the pattern itself: the group exists only to scope the alternation under the
+    // anchors, nothing reads it, and keeping the pattern text free of engine-specific syntax is what lets the schema
+    // copy stay byte-identical for every provider that compiles it (MA0023 is satisfied by the option, not the text).
+    [GeneratedRegex(SelectedFolderIdPattern, RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 2000)]
     private static partial Regex SelectedFolderIdRegex();
 }

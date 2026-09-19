@@ -388,18 +388,20 @@ public sealed class AgentHomeServiceTests : IDisposable
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
-        provider.RegisterBlockingCommand("dotnet --version");
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
-        using var harness = CreateHarness(clock, provider, resolver);
+        // The goal loop is what a run spends its time in now, so it is where the first run is held. A gate, not a
+        // sleep: the test releases it, so the run's duration is the test's to choose.
+        var loop = GateableGoalExecutor.Create();
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: loop.Executor);
 
-        // First run holds the owner-node lease on its blocking command; the second run for the SAME owner-node must be rejected
-        // (not queued) while the first is in flight.
+        // First run holds the owner-node lease inside its goal loop; the second run for the SAME owner-node must be
+        // rejected (not queued) while the first is in flight.
         using var firstCancellation = new CancellationTokenSource();
         var first = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), firstCancellation.Token);
-        await WaitForInFlightCommandAsync(provider);
+        await loop.WaitForEntryAsync(count: 1);
 
         await AssertEx.ThrowsAsync<AgentHomeBusyException>(() => harness.Service.RunLifecycleAsync(NewLifecycle(folderId)));
 
@@ -408,7 +410,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         await firstCancellation.CancelAsync();
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => first);
 
-        provider.RegisterCommand("dotnet --version", exitCode: 0);
+        loop.Release();
         var third = await harness.Service.RunLifecycleAsync(NewLifecycle(folderId));
         AssertEx.True(third.Completed, "the guard must be released so a later run for the same owner-node succeeds");
     }
@@ -418,33 +420,31 @@ public sealed class AgentHomeServiceTests : IDisposable
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
-        provider.RegisterBlockingCommand("dotnet --version");
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         var identity = new MutableIdentityProvider("owner-a", "node-1");
-        using var harness = CreateHarness(clock, provider, resolver, identity);
+        var loop = GateableGoalExecutor.Create();
+        using var harness = CreateHarness(clock, provider, resolver, identity, goalExecutor: loop.Executor);
 
         using var firstCancellation = new CancellationTokenSource();
         var first = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), firstCancellation.Token);
-        await WaitForInFlightCommandAsync(provider);
+        await loop.WaitForEntryAsync(count: 1);
 
         // A different owner-node keys a different guard, so its run is not rejected. Use a distinct node id too so the
         // two runs do not contend on the same node-scoped manifest/sandbox; the point is the guard key differs. Assert
-        // it got past the guard (a SECOND in-flight command exists) rather than throwing AgentHomeBusy.
+        // it got past the guard (a SECOND goal loop is running) rather than throwing AgentHomeBusy.
         identity.OwnerUserId = "owner-b";
         identity.NodeId = "node-2";
         using var secondCancellation = new CancellationTokenSource();
         var second = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), secondCancellation.Token);
-        await WaitForInFlightCommandCountAsync(provider, count: 2, first, second);
+        await loop.WaitForEntryAsync(count: 2);
 
-        // The real assertion: the second run got PAST the guard (two in-flight commands exist) instead of being
-        // rejected with AgentHomeBusy. Both runs are still blocking, so neither has faulted.
         AssertEx.False(second.IsFaulted, "a different owner-node must not be rejected by the first owner's guard");
-        AssertEx.False(first.IsFaulted, "the first run is still blocking, not faulted");
+        AssertEx.False(first.IsFaulted, "the first run is still inside its goal loop, not faulted");
 
-        // Drain both blocking runs to leave no orphan (cancellation is cleanup here, not the assertion).
+        // Drain both blocked runs to leave no orphan (cancellation is cleanup here, not the assertion).
         await firstCancellation.CancelAsync();
         await secondCancellation.CancelAsync();
         await SwallowAsync(first);
@@ -502,52 +502,60 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     [Test]
-    public async Task RunAsync_WhenCommandTimesOut_ReturnsTimedOutResultWithoutThrowing()
+    public async Task RunAsync_WhenTheGoalLoopHitsItsTimeBudget_ReturnsTimedOutResultWithoutThrowing()
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
-        provider.RegisterBlockingCommand("dotnet --version");
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
-        // A short command timeout fires the internal CancelAfter while the caller token stays un-cancelled, so the run
-        // is a TIMEOUT (non-throwing, TimedOut=true) rather than a caller cancel.
-        using var harness = CreateHarness(clock, provider, resolver, commandTimeoutSeconds: 1);
+        // The whole-run wall clock is the executor's, and it comes back as an OUTCOME rather than an exception so the
+        // conversation continues and the partial work still exports. The service must translate that faithfully.
+        var budgetCapped = new StubAgentHomeGoalExecutor((_, _) => Task.FromResult(new AgentHomeGoalOutcome
+        {
+            Status = AgentHomeGoalStatus.TimeBudgetExceeded,
+            ToolCallCount = 3
+        }));
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: budgetCapped);
 
         var run = await harness.Service.RunLifecycleAsync(NewLifecycle(folderId));
 
-        AssertEx.False(run.Completed, "a timed-out run did not complete");
-        AssertEx.True(run.TimedOut, "the command timeout must surface as TimedOut, not an exception");
+        AssertEx.False(run.Completed, "a budget-capped run did not complete");
+        AssertEx.True(run.TimedOut, "the whole-run time budget must surface as TimedOut, not an exception");
         AssertEx.Equal(expected: -1, run.ExitCode);
+        AssertEx.Equal(AgentHomeGoalStatus.TimeBudgetExceeded, AssertEx.NotNull(run.GoalOutcome).Status);
     }
 
     [Test]
-    public async Task RunAsync_WhenCancelled_FiresProviderCancelAndPropagates()
+    public async Task RunAsync_WhenCancelled_PropagatesAndReleasesTheLease()
     {
         var clock = new FixedClock(FixedNow);
-        var inner = new FakeSandboxRuntimeProvider(clock);
-        inner.RegisterBlockingCommand("dotnet --version");
-        var provider = new CancelRecordingProvider(inner);
+        var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
-        using var harness = CreateHarness(clock, provider, resolver);
+        var loop = GateableGoalExecutor.Create();
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: loop.Executor);
 
         using var cancellation = new CancellationTokenSource();
         var runTask = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), cancellation.Token);
-        await WaitForInFlightCommandAsync(inner);
+        await loop.WaitForEntryAsync(count: 1);
 
         await cancellation.CancelAsync();
 
-        // A user cancel propagates OperationCanceledException, and the in-flight command is best-effort cancelled.
+        // A user cancel propagates OperationCanceledException — and, the part that matters for the next run, the
+        // single-flight lease is released on the way out rather than stranded by the throw.
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => runTask);
-        AssertEx.True(provider.CancelCommandCallCount > 0, "a caller cancel must fire CancelCommandAsync on the provider");
+
+        loop.Release();
+        var next = await harness.Service.RunLifecycleAsync(NewLifecycle(folderId));
+        AssertEx.True(next.Completed, "a cancelled run must release the owner-node lease for the next one");
     }
 
     [Test]
-    public async Task RunAsync_WhenWorkspaceCopied_RunsCommandAtWorkspaceSelectedRoot()
+    public async Task RunAsync_HandsTheGoalLoopTheGoalActionsAndTheCopiedWorkspaceAliases()
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
@@ -555,24 +563,29 @@ public sealed class AgentHomeServiceTests : IDisposable
         var folderId = Guid.NewGuid();
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
-        using var harness = CreateHarness(clock, provider, resolver);
+        var recorder = new StubAgentHomeGoalExecutor();
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: recorder);
 
         var run = await harness.Service.RunLifecycleAsync(NewLifecycle(folderId));
-        AssertEx.True(run.Completed, "the scripted probe completes on the fake provider");
 
-        var probe = provider.ExecutedCommands.Single(command =>
-            string.Equals(command.Executable, "dotnet", StringComparison.Ordinal) && command.Arguments.Contains("--version"));
-        AssertEx.Equal("/agent-home/workspace/selected", probe.WorkingDirectory);
+        var handed = recorder.Requests.Single();
+        AssertEx.Equal("g", handed.Goal);
+        AssertEx.Equal(run.RunId, handed.RunId);
+        AssertEx.Contains(handed.AllowedActions, "run_commands");
+
+        // Aliases only — the loop names the folders the model may work in and never a host path.
+        AssertEx.Equal("selected-project", string.Join(",", handed.WorkspaceAliases));
     }
 
     [Test]
-    public async Task RunAsync_WhenNoWorkspaceCopied_RunsCommandWithoutWorkingDirectory()
+    public async Task RunAsync_WhenNoWorkspaceCopied_HandsTheGoalLoopNoAliases()
     {
         var clock = new FixedClock(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
 
-        using var harness = CreateHarness(clock, provider, resolver);
+        var recorder = new StubAgentHomeGoalExecutor();
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: recorder);
 
         var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
         {
@@ -585,10 +598,8 @@ public sealed class AgentHomeServiceTests : IDisposable
             AllowedActions = ["run_commands"]
         });
 
-        AssertEx.True(run.Completed, "the scripted probe completes on the fake provider");
-        var probe = provider.ExecutedCommands.Single(command =>
-            string.Equals(command.Executable, "dotnet", StringComparison.Ordinal) && command.Arguments.Contains("--version"));
-        AssertEx.True(probe.WorkingDirectory is null, "with no copied workspace the command runs with no CWD override");
+        AssertEx.True(run.Completed, "a run with nothing copied still completes");
+        AssertEx.Empty(recorder.Requests.Single().WorkspaceAliases);
     }
 
     [Test]
@@ -620,66 +631,6 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         AssertEx.Equal(expected: 0, run.Patch.ChangedFileCount);
         AssertEx.True(run.Patch.PatchRelativePath is null, "export_patch was not granted, so no patch path is produced");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenProposeMemoryNotAllowed_SkipsMemoryCollection()
-    {
-        var clock = new FixedClock(FixedNow);
-        var provider = new FakeSandboxRuntimeProvider(clock);
-        var resolver = new FakeSelectedFolderResolver();
-        var folderId = Guid.NewGuid();
-        resolver.Add(folderId, "selected-project", CreateSourceFolder());
-
-        using var harness = CreateHarness(clock, provider, resolver);
-
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
-        {
-            SelectedFolderIds = [folderId.ToString()]
-        });
-
-        // Seed a memory proposals file under the run dir BEFORE the run so that, IF collection ran, it would read it.
-        // The run id is allocated inside RunAsync, so assert via the log instead: with propose_memory omitted, no
-        // memory_collected event is written. (Collection on the fake is a no-op regardless, so the gate is the signal.)
-        var run = await harness.Service.RunAsync(new AgentHomeRunRequest
-        {
-            Prepared = prepared,
-            Goal = "g",
-            AllowedActions = ["read_workspace"]
-        });
-
-        var eventsLog = Path.Combine(run.LogPath, "events.jsonl");
-        AssertEx.True(File.Exists(eventsLog), "the run logger must write events.jsonl");
-        var eventsContent = await File.ReadAllTextAsync(eventsLog);
-        AssertEx.False(eventsContent.Contains("memory_collected", StringComparison.Ordinal),
-            "propose_memory was not granted, so memory collection (and its event) must be skipped");
-    }
-
-    [Test]
-    public async Task RunAsync_WhenProposeMemoryAllowed_RunsMemoryCollection()
-    {
-        var clock = new FixedClock(FixedNow);
-        var provider = new FakeSandboxRuntimeProvider(clock);
-        var resolver = new FakeSelectedFolderResolver();
-        var folderId = Guid.NewGuid();
-        resolver.Add(folderId, "selected-project", CreateSourceFolder());
-
-        using var harness = CreateHarness(clock, provider, resolver);
-
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
-        {
-            SelectedFolderIds = [folderId.ToString()]
-        });
-        var run = await harness.Service.RunAsync(new AgentHomeRunRequest
-        {
-            Prepared = prepared,
-            Goal = "g",
-            AllowedActions = ["read_workspace", "propose_memory"]
-        });
-
-        var eventsLog = Path.Combine(run.LogPath, "events.jsonl");
-        var eventsContent = await File.ReadAllTextAsync(eventsLog);
-        AssertEx.Contains(eventsContent, "memory_collected");
     }
 
     [Test]
@@ -933,6 +884,50 @@ public sealed class AgentHomeServiceTests : IDisposable
         }
     }
 
+    /// <summary>
+    ///     A goal executor that blocks inside the run until the test releases it, so a lifecycle test can hold the
+    ///     owner-node lease for exactly as long as it needs without a sleep. Entry is signalled, not polled for.
+    /// </summary>
+    private sealed class GateableGoalExecutor
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _entered;
+
+        private GateableGoalExecutor()
+        {
+            Executor = new StubAgentHomeGoalExecutor(async (request, cancellationToken) =>
+            {
+                ArgumentNullException.ThrowIfNull(request);
+                _ = Interlocked.Increment(ref _entered);
+                await _release.Task.WaitAsync(cancellationToken);
+                return new AgentHomeGoalOutcome
+                {
+                    Status = AgentHomeGoalStatus.Completed
+                };
+            });
+        }
+
+        public StubAgentHomeGoalExecutor Executor { get; }
+
+        public static GateableGoalExecutor Create()
+        {
+            return new GateableGoalExecutor();
+        }
+
+        public async Task WaitForEntryAsync(int count)
+        {
+            await AssertEx.EventuallyAsync(() => Volatile.Read(ref _entered) >= count,
+                TimeSpan.FromSeconds(10),
+                $"expected {count} goal loop(s) to be in flight");
+        }
+
+        /// <summary>Lets every blocked (and every later) run through, so the test can finish on a real completion.</summary>
+        public void Release()
+        {
+            _ = _release.TrySetResult();
+        }
+    }
+
     private static AgentHomeRunLifecycleRequest NewLifecycle(Guid folderId)
     {
         return new AgentHomeRunLifecycleRequest
@@ -941,11 +936,6 @@ public sealed class AgentHomeServiceTests : IDisposable
             Goal = "g",
             AllowedActions = ["run_commands"]
         };
-    }
-
-    private static async Task WaitForInFlightCommandAsync(FakeSandboxRuntimeProvider provider)
-    {
-        await WaitForInFlightCommandCountAsync(provider, count: 1);
     }
 
     private static async Task SwallowAsync(Task task)
@@ -958,50 +948,6 @@ public sealed class AgentHomeServiceTests : IDisposable
         {
             // Expected when a blocking run is drained by cancelling its token; this is cleanup, not the assertion.
         }
-    }
-
-    private static async Task WaitForInFlightCommandCountAsync(FakeSandboxRuntimeProvider provider,
-        int count,
-        params Task[] runs)
-    {
-        // Deliberately NOT TestBudgets.Contended. The commands this waits on are registered blocking, so they stay
-        // in flight until the test cancels them: if the count has not been reached, waiting longer does not reach it.
-        // A 120s budget here bought nothing and made the same failure take two minutes to surface on CI.
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            if (InFlightExecutionIds(provider).Count >= count)
-            {
-                return;
-            }
-
-            // A run that faulted will never produce its command, so report why instead of polling out with a
-            // count that hides the real exception.
-            foreach (var run in runs)
-            {
-                if (run.IsFaulted)
-                {
-                    throw new InvalidOperationException($"A run faulted before {count} command(s) were in flight.",
-                        run.Exception);
-                }
-            }
-
-            await Task.Delay(10);
-        }
-
-        throw new InvalidOperationException($"Expected {count} in-flight command(s) but the fake never reached it; "
-                                            + $"observed {InFlightExecutionIds(provider).Count}.");
-    }
-
-    private static IReadOnlyList<string> InFlightExecutionIds(FakeSandboxRuntimeProvider provider)
-    {
-        // The blocking command records the run id as its execution id; ExecutedCommands holds every issued command.
-        // A command that is still blocking has no completion recorded, so its execution id is in flight. The fake's
-        // CancelCommandAsync targets it by id, so collecting the executed ids of blocking probes is sufficient here.
-        return provider.ExecutedCommands
-                       .Where(command => string.Equals(command.Executable, "dotnet", StringComparison.Ordinal))
-                       .Select(command => command.ExecutionId)
-                       .ToList();
     }
 
     private static SandboxAttachKey AnyKey()
@@ -1036,7 +982,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         IAgentHomeManifestService? manifestOverride = null,
         SandboxOptions? sandboxOptions = null,
         ComputeOptions? ceilingDefaults = null,
-        LocalContainerOptions? nodeOptions = null)
+        LocalContainerOptions? nodeOptions = null,
+        IAgentHomeGoalExecutor? goalExecutor = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -1059,8 +1006,6 @@ public sealed class AgentHomeServiceTests : IDisposable
                               .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
                               .BuildServiceProvider();
 
-        var memoryProposalService = new AgentHomeMemoryProposalService(NullLogger<AgentHomeMemoryProposalService>.Instance);
-
         var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
         var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
@@ -1071,6 +1016,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         var patchService = new AgentHomePatchService(provider,
             runtimeSettings,
+            clock,
             NullLogger<AgentHomePatchService>.Instance);
 
         var service = new AgentHomeService(manifestOverride ?? manifestService,
@@ -1080,7 +1026,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             isolation,
             workspaceService,
             patchService,
-            memoryProposalService,
+            goalExecutor ?? new StubAgentHomeGoalExecutor(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             Options.Create(sandboxOptions ?? new SandboxOptions()),
@@ -1159,14 +1105,11 @@ public sealed class AgentHomeServiceTests : IDisposable
     private sealed class CancelRecordingProvider : IAgentSandboxRuntimeProvider
     {
         private readonly FakeSandboxRuntimeProvider _inner;
-        private int _cancelCommandCallCount;
 
         public CancelRecordingProvider(FakeSandboxRuntimeProvider inner)
         {
             _inner = inner;
         }
-
-        public int CancelCommandCallCount => Volatile.Read(ref _cancelCommandCallCount);
 
         public bool FailCreateOrAttach { get; init; }
 
@@ -1216,7 +1159,6 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default)
         {
-            _ = Interlocked.Increment(ref _cancelCommandCallCount);
             return _inner.CancelCommandAsync(handle, executionId, cancellationToken);
         }
 

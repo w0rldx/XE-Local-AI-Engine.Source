@@ -45,6 +45,40 @@ public sealed class AgentHomeOptions
     public int CommandTimeoutSeconds { get; set; } = 300;
 
     /// <summary>
+    ///     Wall-clock ceiling for the WHOLE goal-execution loop — every inner model turn and every command it runs —
+    ///     applied on top of, and separately from, <see cref="CommandTimeoutSeconds" /> (which still bounds ONE command).
+    ///     A stuck inner loop holds the node's single inference slot for as long as it runs, so this is not optional.
+    ///     Defaults to 600 seconds, which is a CONSERVATIVE STARTING POINT, not a measured value: the live round must
+    ///     time a realistic multi-tool-call goal on the target model class and this default re-set from that number.
+    /// </summary>
+    public int MaxRunSeconds { get; set; } = 600;
+
+    /// <summary>
+    ///     Maximum number of inner tool calls one goal-execution loop may make. The model is told the budget, and the
+    ///     call that would exceed it is refused rather than executed; the run then finishes and still exports whatever
+    ///     partial work it produced. Defaults to 24.
+    /// </summary>
+    public int MaxInnerToolCalls { get; set; } = 24;
+
+    /// <summary>
+    ///     Hard byte budget for ONE <c>write_file</c> inside the goal-execution loop. Defaults to 262144 (256 KiB).
+    /// </summary>
+    public int MaxWriteFileBytes { get; set; } = 262144;
+
+    /// <summary>
+    ///     Hard byte budget for ALL <c>write_file</c> calls in one run, summed. Defaults to 4194304 (4 MiB). The
+    ///     sandbox's own jail-disk ceiling still bounds what a command writes; this bounds what the MODEL writes
+    ///     directly.
+    /// </summary>
+    public long MaxTotalWriteBytes { get; set; } = 4194304;
+
+    /// <summary>
+    ///     How many bytes of one command's combined stdout/stderr are fed back into the inner model's context. The
+    ///     capture itself is bounded by the provider; this is the smaller, context-sized budget. Defaults to 16384.
+    /// </summary>
+    public int MaxCommandOutputBytes { get; set; } = 16384;
+
+    /// <summary>
     ///     Hard per-folder byte budget for a selected folder. Workspace copy sums the surviving
     ///     (post-exclusion) file sizes before copying; a folder over budget is reported as blocked and skipped rather
     ///     than copied. Defaults to 536870912 (512 MiB).

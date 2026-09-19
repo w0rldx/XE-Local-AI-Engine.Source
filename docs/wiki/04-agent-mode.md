@@ -247,10 +247,10 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 **Tool-offer security invariant** (`ProjectAllowedTools`): only the seeded **"Default Assistant"**
 (mode-off persona, identified by forge-proof `Source=Seeded` + `SeedSlug`) receives the *full*
 capability-gated offer. **Every other definition is intersected** down to its `AllowedToolNames` — a
-selected agent's offer is never widened beyond its allowed set. `spawn_subagent` is opt-in only (it
-lives in the *profile* pool, not the default offer), and a non-tool-capable model gets an **empty**
-offer before per-name gating. See [Chat](05-chat.md) for how the selected agent surfaces as
-per-message attribution.
+selected agent's offer is never widened beyond its allowed set. `spawn_subagent`, `run_python` and
+`run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
+non-tool-capable model gets an **empty** offer before per-name gating. See [Chat](05-chat.md) for how
+the selected agent surfaces as per-message attribution.
 
 ### 2.2 The AgentHome write-back loop
 
@@ -265,6 +265,122 @@ is a singleton and `NodeChatDbContext` isn't thread-safe), runs the agent, appli
 (`NodePatchApplyService` with `O_NOFOLLOW`/byte-recheck guards), and stages **memory proposals** that
 are secret-scanned (`MemoryProposalSecretScanner`) before they can be exported. The
 `run_in_agent_home` tool is a ClientLocal handler (`Tools/Implementation/RunInAgentHomeToolHandler.cs`).
+
+**How `run_in_agent_home` is offered.** Registering the handler in DI reaches the *resolution* seam only, so the
+descriptor is merged into the *offer* seam by `LocalToolOfferProvider` — on `run_python`'s terms, not the coder
+tools':
+
+- **Per-agent opt-in.** It lives in the profile pool (`GetOfferedToolsForProfile[Async]`), never in the whole
+  chat offer, so a plain/mode-off turn and the seeded Default Assistant are never handed it. An operator must
+  list `run_in_agent_home` in an agent definition's `AllowedToolNames` — the agent editor's tool picker can
+  offer it because the known-tool catalog lists it ungated by model.
+- **Local tool-capable models only.** The `AgentHome:ToolCapableModels` allow-list gate applies (read live per
+  offer), and the tool is withheld outright from any model outside the trust boundary — a cloud-hosted, Codex-
+  pinned or declared-cloud external id — because `run_commands` / `write_workspace` execute on the operator's
+  own machine. That withholding is unconditional, not behind `AllowCloudModelAccess`.
+- **Approval always.** The descriptor is `ToolCategory.WriteExecute` with `RequiresApproval: true`, matching the
+  handler's hardcoded flag; the node policy can tighten it but never waive it. That is also what makes the
+  unattended callers (sub-agent spawn, scheduler, graph workflows, delegate-scope inbound MCP) strip it, since
+  each strips every approval-required tool rather than consulting a name list.
+- **`AgentHome:Enabled` is enforced at execution, not at the offer**, like the compute and work-session
+  kill-switches: the handler re-reads it and refuses before touching anything.
+- **Sandbox backend.** A node whose `AgentHome:Sandbox:Provider` is unset resolves the no-op `fake` backend in
+  non-Production, which executes nothing; the tool result says so explicitly rather than reporting a clean
+  exit 0. Set `AgentHome:Sandbox:Provider=process` (restart-time) to execute for real.
+- **Host patch apply has no operator surface yet.** A run *exports* `changes.patch` under its run directory
+  automatically, but `INodePatchApplyService` (`PreviewAsync` / `ApplyApprovedAsync`) has no endpoint, hub
+  method or SPA affordance calling it, so landing an exported patch on the host is not something an operator
+  can do from the product today.
+
+**What a run does with the `goal`.** `AgentHomeService.RunAsync` hands it to `IAgentHomeGoalExecutor`
+(`Services/AgentHome/Implementation/AgentHomeGoalExecutor.cs`), which runs a **bounded nested agent loop** on the
+node: a MAF `ChatClientAgent` over the same `IChatClient` the outer turn runs on, built the way
+`SubAgentSpawnService` builds a spawned child, invoked as an `AIFunction` inside a child `SpawnContext` scope.
+Its tools work only on the sandbox's workspace copy, and `allowedActions` decides which of them exist at all:
+
+| `allowedActions` value | What the loop is handed |
+|---|---|
+| `read_workspace` | `list_files` / `read_file` / `search_text`, served by the existing `CoderWorkspaceReader` against the same sandbox |
+| `write_workspace` | `write_file` — one bounded UTF-8 file, written through the provider's own jail-guarded copy-in |
+| `run_commands` | `run_command` — any executable, jailed, with the workspace copy pinned as its working directory |
+| `export_patch` | the post-run patch export (unchanged) |
+
+There is no fifth value. `propose_memory` was **removed** from the schema rather than left standing, because the
+node collected the sandbox's proposals and then discarded them; persisting one into the adaptive-memory
+Suggested pipeline is a later slice, and `IAgentHomeMemoryProposalService` stays registered but unconsumed until
+it lands.
+
+**What bounds the loop.** Four budgets, separate from the sandbox's own per-command timeout and jail-disk
+ceiling, all on `AgentHomeOptions`: `MaxRunSeconds` (the whole loop's wall clock — it matters most, because an
+inner loop holds the node's single inference slot for as long as it runs), `MaxInnerToolCalls`,
+`MaxWriteFileBytes` / `MaxTotalWriteBytes`, and `MaxCommandOutputBytes` for how much command output re-enters
+the model's context. A budget that fires **cuts the run off and says so** in the tool result; it never discards
+the partial work, which still exports as a patch. The shipped `MaxRunSeconds` default is a conservative starting
+point, not a measured one — a live round on the target model class is what should set it.
+
+**What confines the loop.** The inner tool list is built item by item from `allowedActions`, never read off the
+tool offer, so the inner agent structurally cannot reach an MCP tool, a custom tool, `spawn_subagent`,
+`ask_user`, a knowledge tool, an approval-gated tool of any kind, or a nested `run_in_agent_home`. It has no
+human-in-the-loop route, which is why the operator's single approval of the outer call has to cover the whole
+envelope up front. Every model-supplied path goes through `WorkspacePathGuard` and then the provider's
+`ResolveJailPath` + `EnsureNoSymlinkComponentsUnderJail` pair, so an absolute path, a `..` climb, or a symlink a
+command just planted is refused; writes anywhere under `.git` are refused outright, because that is where the
+baseline the exported patch is diffed against lives. File contents and command output are fenced with
+`UntrustedContentFraming` before they re-enter the model, and the sandbox's own root is stripped from captured
+output so no host path reaches it.
+
+**The patch export's own git is hardened, and logged.** Export runs `git diff` over the workspace the model just
+had `write_file` and `run_command` access to, **after** its turn ended and outside the run's budgets — and git
+executes programs named by configuration (`diff.<name>.textconv`, `diff.external`, `filter.<driver>.clean` on any
+content conversion, `core.fsmonitor` on an index refresh). Measured on git 2.53.0 against the exact export
+argument vector: a repository-local `textconv` and a repository-local `clean` filter both executed, and so did a
+driver defined in the **global** config (the sandbox forwards `HOME`). `AgentHomeGit`'s `-c` pins cannot close
+that class — driver names are arbitrary and git has no flag that disables attribute processing.
+`AgentHomeGitHardening` closes it structurally instead, on the principle that a driver has to be **defined in
+configuration** to run, so an in-tree `.gitattributes` naming an undefined one is a no-op:
+
+- the repository's own `.git/config` is rewritten to a node-owned allow-list immediately before every node git
+  invocation, reusing Development Mode's `DevelopmentWorkspaceGitConfig` rather than growing a second such rewrite;
+- the global and system files are removed from git's search entirely by `GIT_CONFIG_GLOBAL` (pointed at the null
+  **device**, which nothing can turn into a config file), `GIT_CONFIG_NOSYSTEM` and `GIT_ATTR_NOSYSTEM`;
+- a `.git` that is not a real directory — a gitfile pointing at a model-owned git directory defeats a rewrite
+  outright — **fails the export closed** rather than exporting a patch the node cannot vouch for;
+- and every export git invocation is written to the run's `commands.jsonl` with `actor: node`, beside the model's
+  own `actor: model` entries, so an audit sees the whole sequence rather than half of it.
+
+Two residuals are stated rather than claimed away. The rewrite happens immediately before the invocation, so a
+process a `run_command` deliberately double-forked could in principle rewrite the file again in between — the
+same window Development Mode accepts, and not closable on a soft jail with no filesystem boundary. And a model
+that rewrote the git objects or HEAD could make the exported patch misrepresent the tree; that bounds what a
+patch proves, and the operator reviewing it is the control.
+
+**It only runs from an approved chat turn.** The loop reads the outer model id off the ambient `SpawnContext`
+root that `InvocationRunner` seeds, and refuses when there is none or when that model is outside the node's
+trust boundary. The unattended entry points seed a root without a model id, so they cannot reach it even if the
+approval gate were somehow bypassed.
+
+**`run_command` ships only behind a real filesystem boundary.** The process jail confines a command child's
+**network**, **environment** and **resource ceilings** and pins its working directory — but under
+`SandboxIsolationMode.None` it is **not a filesystem boundary**: the command reads and writes any path the
+engine's user can, including the operator's original registered folder. So AgentHome asks for
+`SandboxIsolationMode.Filesystem` wherever the provider advertises it (a request the registry refuses
+fail-closed if it cannot be met, which is why it is gated on the advertised capability and can never sink a run),
+and the goal loop then reads the boundary it actually **got** off `SandboxHandle.Isolation`:
+
+- **boundary delivered** → `run_command` joins the inner tool list. The child sees a read-only `/usr`, the
+  workspace at `/work`, a `HOME` inside the jail, and no network; a path outside is not in its mount namespace at
+  all, so it can be neither read nor written.
+- **no boundary** (a Linux host without user namespaces or bubblewrap, and **every Windows host today**) →
+  `run_command` is **withheld even though `run_commands` was allowed**, the inner prompt tells the model so, and
+  the tool result says *"commands were not available: this node cannot isolate the sandbox file system"*. The
+  read tools and `write_file` stay, because they are confined by the node's own `WorkspacePathGuard` and the
+  provider's no-follow file surface rather than by the jail.
+
+`ProcessSandboxFilesystemReachTests` measures both sides, and `AgentHomeGoalExecutorTests` pins the exact inner
+tool list with and without the boundary. See [Security & privacy §7](12-security-and-privacy.md).
+
+**Still not done end to end.** Host patch apply has no operator surface (above), so an exported patch is
+something the operator can read on disk and nothing the product can land for them.
 
 **Conversation-attachment staging** (`IConversationSandboxStager`,
 `Services/AgentHome/IConversationSandboxStager.cs`). `AgentHomeService` also implements this narrow public

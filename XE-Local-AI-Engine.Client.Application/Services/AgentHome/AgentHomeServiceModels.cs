@@ -121,6 +121,28 @@ internal sealed record AgentHomeRunResult
     ///     null paths).
     /// </summary>
     public required AgentHomePatchExport Patch { get; init; }
+
+    /// <summary>
+    ///     The sandbox backend that served the run (<see cref="ISandboxRuntimeProvider.ProviderName" />). Carried onto
+    ///     the result so the tool gateway can tell the model — and the operator reading the transcript — when the run
+    ///     was served by the no-op <c>fake</c> backend, which returns exit 0 and empty output for every command it was
+    ///     not scripted for. Without this the gateway renders "completed (exit code 0)" for a node where nothing ran,
+    ///     which is the default in Development until <c>AgentHome:Sandbox:Provider</c> is set.
+    /// </summary>
+    public string SandboxProviderName { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     What the goal-execution loop actually did — tool calls, commands and their exit codes, files written,
+    ///     refusals, and which budget (if any) cut it off. <see langword="null" /> only when the run never reached the
+    ///     executor at all.
+    ///     <para>
+    ///         Carried onto the result so the tool gateway reports the real work instead of a bare
+    ///         "completed (exit code 0)" that reads as if the goal was carried out. The honesty rule runs both ways:
+    ///         when <see cref="AgentHomeGoalOutcome.Executed" /> is <see langword="false" /> the gateway must SAY the
+    ///         goal was not executed, and it must never say that when it was.
+    ///     </para>
+    /// </summary>
+    public AgentHomeGoalOutcome? GoalOutcome { get; init; }
 }
 
 /// <summary>

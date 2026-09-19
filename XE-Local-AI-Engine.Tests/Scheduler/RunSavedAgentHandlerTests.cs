@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -19,6 +21,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     <see cref="RunSavedAgentHandler" /> tests: parameter validation rejects a blank/invalid agent id or
@@ -213,6 +216,33 @@ public sealed class RunSavedAgentHandlerTests
 
         AssertEx.Equal(expected: 1, harness.CapturedPackage!.AllowedTools.Count);
         AssertEx.Equal("get_current_time", harness.CapturedPackage.AllowedTools[0].Name);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_StripsTheRealAgentHomeToolFromTheUnattendedOffer()
+    {
+        // run_in_agent_home is offered to an opted-in agent, and a scheduled run of that same agent is unattended: there
+        // is no person to answer its approval round-trip, and it runs commands and writes files in a node-local sandbox.
+        // The strip keys off RequiresApproval rather than a denylist, so the descriptor taken from the REAL offer is what
+        // proves it — a hand-written DTO would only prove the predicate, not that the shipped tool trips it.
+        using var harness = new Harness();
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
+            allowCloudKnowledgeAccess: false);
+        var agentHome = (await offerProvider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false))
+                        .Single(tool => tool.Name == AgentHomeToolDefinition.ToolName);
+
+        harness.Resolver
+               .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(new ResolvedAgentRuntime("SCAFFOLD+PERSONA", [agentHome], null, null, 7, AgentId, "AgentHome Agent", []));
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.Empty(harness.CapturedPackage!.AllowedTools,
+            "a scheduled run must never be offered run_in_agent_home — nobody is there to approve it");
     }
 
     // Stripping approval-required tools from the OFFER (above) cannot reach the skill tools: they arrive through MAF's

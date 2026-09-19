@@ -20,6 +20,18 @@ public sealed class AgentHomeOptionsValidator : IValidateOptions<AgentHomeOption
                                    "AgentHome:PrepareTimeoutSeconds must be greater than zero.")
                                .AppendIf(options.CommandTimeoutSeconds <= 0,
                                    "AgentHome:CommandTimeoutSeconds must be greater than zero.")
+                               .AppendIf(options.MaxRunSeconds <= 0,
+                                   "AgentHome:MaxRunSeconds must be greater than zero.")
+                               .AppendIf(options.MaxRunSeconds < options.CommandTimeoutSeconds,
+                                   "AgentHome:MaxRunSeconds must be at least AgentHome:CommandTimeoutSeconds — the whole-run budget cannot be shorter than one command's.")
+                               .AppendIf(options.MaxInnerToolCalls <= 0,
+                                   "AgentHome:MaxInnerToolCalls must be greater than zero.")
+                               .AppendIf(options.MaxWriteFileBytes <= 0,
+                                   "AgentHome:MaxWriteFileBytes must be greater than zero.")
+                               .AppendIf(options.MaxTotalWriteBytes < options.MaxWriteFileBytes,
+                                   "AgentHome:MaxTotalWriteBytes must be at least AgentHome:MaxWriteFileBytes.")
+                               .AppendIf(options.MaxCommandOutputBytes <= 0,
+                                   "AgentHome:MaxCommandOutputBytes must be greater than zero.")
                                .AppendIf(options.MaxSelectedFolderBytes <= 0,
                                    "AgentHome:MaxSelectedFolderBytes must be greater than zero.")
                                .AppendIf(options.MaxPatchBytes <= 0,

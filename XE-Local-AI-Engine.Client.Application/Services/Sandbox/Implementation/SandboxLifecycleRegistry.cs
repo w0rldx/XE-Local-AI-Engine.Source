@@ -83,9 +83,17 @@ internal sealed class SandboxLifecycleRegistry
                 CreatedAt = _timeProvider.GetUtcNow(),
                 ManifestVersion = request.AttachKey.ManifestVersion,
                 Mounts = ResolveIdentityMounts(request, jailDirectory),
+                // What the launch policy RESOLVED to, after every fail-closed refusal above — so the handle reports
+                // the boundary the sandbox really has rather than the one its caller asked for.
+                Isolation = launchPolicy.Isolation,
                 // A host child sees host paths, so the jail directory names the same bytes inside and out. That
                 // identity is what lets a caller compose a child-visible path UNDER the jail — which is where anything
                 // the jail disk watchdog is supposed to meter has to live.
+                //
+                // Under SandboxIsolationMode.Filesystem the CHILD sees the jail at SandboxIsolatedPaths.Work instead,
+                // and this stays the HOST path deliberately: it is how the engine reaches the same bytes from outside
+                // the namespace (the workspace copy, the survey operations, the git-config rewrite before export all
+                // need it). A caller composing a path for the CHILD under isolation must use SandboxIsolatedPaths.
                 WorkingRoot = jailDirectory
             };
             _sandboxes[sandboxId] = new JailState(handle,

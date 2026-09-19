@@ -84,8 +84,9 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         AssertEx.Equal(expected: 1, prepared.FolderSnapshots.Count);
         AssertEx.Equal(SelectedFolderCopyStatus.Copied, prepared.FolderSnapshots[0].Status);
 
-        // 2) RUN — change the copied file in the jail (an "agent edit") then run the probe; the command runs with the
-        // copied workspace as CWD so the later diff sees the change.
+        // 2) EDIT — change the copied file in the jail through the provider's own copy-in, standing in for what the
+        // goal loop's write_file does. The loop itself is graded in AgentHomeGoalExecutorTests; what THIS test proves
+        // is the copy → export → apply half, on the real process provider with real git.
         var jailRelativeReadme = AgentHomeGit.WorkspaceSelectedRoot + "/selected-project/README.md";
         await provider.CopyIntoAsync(prepared.Handle, new SandboxCopyRequest
         {
@@ -93,7 +94,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             DestinationPath = jailRelativeReadme
         });
 
-        // 3) EXPORT — run + patch export (export_patch granted). The diff is taken against the baseline, so the agent
+        // 3) EXPORT — run + patch export (export_patch granted). The diff is taken against the baseline, so the
         // edit surfaces as a changes.patch written host-side under the run dir.
         var run = await harness.Service.RunAsync(new AgentHomeRunRequest
         {
@@ -102,7 +103,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             AllowedActions = ["read_workspace", "run_commands", "export_patch"]
         });
 
-        AssertEx.True(run.Completed, $"the real probe completes on the process provider (exit {run.ExitCode})");
+        AssertEx.True(run.Completed, $"the run completes on the process provider (exit {run.ExitCode})");
         AssertEx.Equal(expected: 1, run.Patch.ChangedFileCount);
         AssertEx.False(run.Patch.Blocked, "the one-line change is under budget");
         var patchFile = Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches", "changes.patch");
@@ -191,7 +192,8 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 
     private ServiceHarness CreateHarness(TimeProvider clock,
         IAgentSandboxRuntimeProvider provider,
-        ISelectedFolderResolver resolver)
+        ISelectedFolderResolver resolver,
+        IAgentHomeGoalExecutor? goalExecutor = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-proc-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -211,7 +213,6 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
                               .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
                               .BuildServiceProvider();
 
-        var memoryProposalService = new AgentHomeMemoryProposalService(NullLogger<AgentHomeMemoryProposalService>.Instance);
         var leases = new AgentHomeExecutionLeaseManager();
         var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
@@ -221,6 +222,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             NullLogger<AgentHomeWorkspaceService>.Instance);
         var patchService = new AgentHomePatchService(provider,
             runtimeSettings,
+            clock,
             NullLogger<AgentHomePatchService>.Instance);
 
         var service = new AgentHomeService(manifestService,
@@ -230,7 +232,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             isolation,
             workspaceService,
             patchService,
-            memoryProposalService,
+            goalExecutor ?? new StubAgentHomeGoalExecutor(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             Options.Create(new SandboxOptions()),

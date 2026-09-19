@@ -31,4 +31,11 @@ internal sealed record AgentHomePatchExportRequest
 
     /// <summary>The resolved selected folders, used to map a changed <c>&lt;alias&gt;</c> back to its selected-folder id.</summary>
     public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
+
+    /// <summary>
+    ///     The run's logger. Export's git commands are appended to <c>commands.jsonl</c> beside the model's own,
+    ///     attributed to the node: they run on the same workspace the model just had write and command access to, after
+    ///     its turn ended, so an audit that could not see them would be missing the most interesting entries.
+    /// </summary>
+    public required IAgentHomeRunLogger RunLogger { get; init; }
 }

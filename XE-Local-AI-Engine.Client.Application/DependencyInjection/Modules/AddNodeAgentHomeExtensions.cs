@@ -32,8 +32,15 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
         // Patch export service: post-run diff of the workspace-copy baseline with changes.patch, changed-files.json, and budget guard.
         builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
-        // Memory-proposal export service: gated collection of agent-written JSONL proposals with schema validation and secret scan.
+        // Memory-proposal export service: schema validation and secret scan for agent-written JSONL proposals. It is
+        // registered but NOT yet consumed: `propose_memory` was removed from the tool schema because the node
+        // collected proposals and discarded them, and persisting one into the adaptive-memory Suggested pipeline is
+        // the slice that will take this dependency back up. Its own tests keep it honest in the meantime.
         builder.Services.AddSingleton<IAgentHomeMemoryProposalService, AgentHomeMemoryProposalService>();
+        // Goal executor: the bounded inner agent loop that turns the model's `goal` into real workspace work. It takes
+        // the shared IChatClient, so it is registered here rather than folded into AgentHomeService, which has no
+        // model dependency of its own.
+        builder.Services.AddSingleton<IAgentHomeGoalExecutor, AgentHomeGoalExecutor>();
         // Run-scoped JSONL logger. The AgentHome gateway constructs one per run; the logger owns redacted event output.
         builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
         // Host patch-apply service: approval-gated landing of exported changes.patch onto selected host folders.

@@ -57,7 +57,129 @@ public sealed class AgentHomeToolGatewayTests
         AssertEx.Contains(result, "2 file(s) changed");
         AssertEx.Contains(result, "runs/run-123/patches/changes.patch");
         AssertEx.False(result.Contains("/tmp/agent-home", StringComparison.Ordinal), "the model must not see the absolute worker-host path");
+        AssertEx.False(result.Contains("fake", StringComparison.OrdinalIgnoreCase),
+            "a run served by a real backend carries no no-op notice");
     }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheGoalLoopNeverRan_SaysTheGoalWasNotExecuted()
+    {
+        // The honesty clause, first direction. Live round 2 watched a model receive "completed (exit code 0) … no file
+        // changes" for an explicit edit goal and have to reason its way to the truth unaided. A run whose goal loop
+        // never started must SAY so, in the reason the executor gave.
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-notrun",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-notrun/logs",
+                Patch = EmptyPatch,
+                SandboxProviderName = "process",
+                GoalOutcome = new AgentHomeGoalOutcome
+                {
+                    Status = AgentHomeGoalStatus.NotRun,
+                    NotRunReason = "allowedActions granted no workspace action."
+                }
+            }),
+            GatewayOptions);
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "the goal was NOT executed");
+        AssertEx.Contains(result, "granted no workspace action");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheGoalLoopRan_ReportsTheWorkAndNeverClaimsItDidNotRun()
+    {
+        // The honesty clause, other direction: a run that really did the work must not carry the "NOT executed"
+        // wording, and must report what it did in terms the operator can check against the run log.
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-worked",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-worked/logs",
+                Patch = EmptyPatch,
+                SandboxProviderName = "process",
+                GoalOutcome = new AgentHomeGoalOutcome
+                {
+                    Status = AgentHomeGoalStatus.Completed,
+                    ToolCallCount = 4,
+                    RefusedCallCount = 1,
+                    WrittenFiles = ["project/README.md"],
+                    Commands = [new AgentHomeCommandOutcome("dotnet", ExitCode: 0, Completed: true)]
+                }
+            }),
+            GatewayOptions);
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.False(result.Contains("NOT executed", StringComparison.Ordinal),
+            "a run that really executed the goal must never be described as if it had not");
+        AssertEx.Contains(result, "4 tool call(s)");
+        AssertEx.Contains(result, "(1 refused)");
+        AssertEx.Contains(result, "1 file(s) written");
+        AssertEx.Contains(result, "dotnet exit 0");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenABudgetCutTheRunOff_SaysSo()
+    {
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-capped",
+                Completed = false,
+                TimedOut = true,
+                ExitCode = -1,
+                LogPath = "/tmp/agent-home/runs/run-capped/logs",
+                Patch = EmptyPatch,
+                SandboxProviderName = "process",
+                GoalOutcome = new AgentHomeGoalOutcome
+                {
+                    Status = AgentHomeGoalStatus.TimeBudgetExceeded,
+                    ToolCallCount = 9
+                }
+            }),
+            GatewayOptions);
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "cut off by the whole-run time budget");
+        AssertEx.Contains(result, "may be incomplete");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheRunWasServedByTheFakeBackend_SaysNothingWasExecuted()
+    {
+        // The 'fake' backend answers every unscripted command with exit 0 and empty output, and it is what a
+        // Development node resolves when AgentHome:Sandbox:Provider is unset — so without this clause the model is told
+        // "completed (exit code 0)" for a run in which nothing ran at all, and reports work it never did.
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-fake",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-fake/logs",
+                Patch = EmptyPatch,
+                SandboxProviderName = "fake"
+            }),
+            GatewayOptions);
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "nothing was executed");
+        AssertEx.Contains(result, "AgentHome:Sandbox:Provider=process");
+    }
+
+    private static readonly AgentHomePatchExport EmptyPatch = new()
+    {
+        ChangedFileCount = 0,
+        Blocked = false,
+        PatchBytes = 0,
+        PatchRelativePath = null,
+        ChangedFilesRelativePath = null
+    };
 
     [Test]
     public async Task ExecuteAsync_WhenPatchBlocked_RendersBudgetNoticeWithoutPatchPath()

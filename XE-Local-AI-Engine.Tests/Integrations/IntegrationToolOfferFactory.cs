@@ -4,7 +4,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
-using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -20,7 +19,6 @@ internal static class IntegrationToolOfferFactory
 
     public static LocalToolOfferProvider Create(params string[] toolCapableModels) =>
         new(new FakeAgentToolRegistry([
-                new LocalChatToolDescriptor { Name = AgentHomeToolDefinition.ToolName, Description = "Runs an agent task.", ParameterSchema = """{"type":"object"}""", RequiresApproval = true },
                 new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = """{"type":"object"}""", RequiresApproval = false }
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),

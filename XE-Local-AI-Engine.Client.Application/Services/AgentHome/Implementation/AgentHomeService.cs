@@ -14,13 +14,21 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     provider (the deterministic fake by default): <see cref="RunLifecycleAsync" /> resolves owner/node identity once,
 ///     acquires the shared exclusive execution lease keyed by that owner-node, then runs Prepare + Run under it. Prepare
 ///     builds the attach key, recovers the worker-local layout, attaches/creates the sandbox, resolves and copies
-///     the selected folders, and creates the git baseline. Run executes one bounded, profile-driven command — with the
-///     copied workspace as its working directory so the post-run patch export diffs the real CWD — classifies
-///     timeout-vs-cancel, and feeds the gated patch export, memory proposal export, and run-scoped logging.
+///     the selected folders, and creates the git baseline. Run hands the model's GOAL to
+///     <see cref="IAgentHomeGoalExecutor" /> — the bounded inner agent loop whose tools work only on the copied
+///     workspace, which is also every command's working directory, so the post-run patch export diffs the real CWD —
+///     then feeds the gated patch export and run-scoped logging.
 ///     <para>
-///         The service-level tests exercise orchestration, busy/cancel/owner hardening, and the optional patch and
-///         memory exports against the deterministic provider. The configured runtime provider supplies the real
-///         command execution and git behavior.
+///         The split is deliberate: this class owns identity, the single-flight lease, the workspace copy and the
+///         patch, and depends on no model; the executor owns the inner agent, its sandbox-scoped tools and the
+///         whole-run budgets. Cancellation classification moved WITH the work — a caller cancel propagates from the
+///         executor and unwinds the lease here, while a budget cut-off comes back as a non-throwing outcome so a
+///         partial run still exports its patch.
+///     </para>
+///     <para>
+///         The service-level tests exercise orchestration, busy/cancel/owner hardening and the gated patch export
+///         against the deterministic provider; the executor's own tests drive the real inner tools with a scripted
+///         chat client. The configured runtime provider supplies the real command execution and git behavior.
 ///     </para>
 /// </summary>
 internal sealed class AgentHomeService : IAgentHomeService, IConversationSandboxStager
@@ -38,21 +46,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         ChangedFilesRelativePath = null
     };
 
-    // Per-RuntimeProfile in-sandbox command descriptor. Keeping the current profile keyed allows additional profiles
-    // without changing RunAsync. The command is the profile's liveness/work probe on the deterministic provider.
-    private static readonly IReadOnlyDictionary<string, AgentHomeCommandDescriptor> ProfileCommands =
-        new Dictionary<string, AgentHomeCommandDescriptor>(StringComparer.Ordinal)
-        {
-            ["dotnet-agent-home"] = new() { Executable = "dotnet", Arguments = ["--version"] }
-        };
-
     private readonly ComputeOptions _ceilingDefaults;
+    private readonly IAgentHomeGoalExecutor _goalExecutor;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly IAgentHomeExecutionLeaseManager _leaseManager;
     private readonly IAgentHomeWorkspaceIsolation _isolation;
     private readonly ILogger<AgentHomeService> _logger;
     private readonly IAgentHomeManifestService _manifestService;
-    private readonly IAgentHomeMemoryProposalService _memoryProposalService;
     private readonly AgentHomeOptions _options;
     private readonly IAgentHomePatchService _patchService;
     private readonly LocalContainerOptions _nodeOptions;
@@ -73,7 +73,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IAgentHomeWorkspaceIsolation isolation,
         IAgentHomeWorkspaceService workspaceService,
         IAgentHomePatchService patchService,
-        IAgentHomeMemoryProposalService memoryProposalService,
+        IAgentHomeGoalExecutor goalExecutor,
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,
         IOptions<SandboxOptions> sandboxOptions,
@@ -91,7 +91,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
-        _memoryProposalService = memoryProposalService ?? throw new ArgumentNullException(nameof(memoryProposalService));
+        _goalExecutor = goalExecutor ?? throw new ArgumentNullException(nameof(goalExecutor));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
@@ -191,6 +191,24 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // where it does not, with the degradation visible in the sandbox containment log rather than silent. A node
             // that wants the refusal instead sets AgentHome:Sandbox:RequireEgressDenial, which SandboxEgressPolicy
             // turns into a fail-closed refusal naming that key.
+            // Ask for a real filesystem boundary wherever the backend advertises one. Three things make this the
+            // right shape rather than "only when run_commands is granted":
+            //
+            //  * It CANNOT fail the run closed. SandboxLifecycleRegistry refuses an unmeetable isolation request
+            //    outright, so the request is gated on the capability the provider advertises — and that advertisement
+            //    is mechanical (the same probe the launch path reads), not a second opinion about the host.
+            //  * The sandbox is owner-node scoped and REUSED across runs through CreateOrAttach. A per-run request
+            //    would be a lie on the attach path: the second run would silently inherit the first run's boundary
+            //    while believing it had asked for its own.
+            //  * A read/write-only run is no worse off for having the boundary, and the chat attachment re-stage
+            //    creates the same sandbox, so one posture keeps the two entry points from disagreeing.
+            //
+            // Whether the boundary ARRIVED is then read off the handle, never re-derived — that is what gates
+            // run_command in the goal loop.
+            Isolation = _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
+                ? SandboxIsolationMode.Filesystem
+                : SandboxIsolationMode.None,
+
             NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
                 _sandboxOptions.RequireEgressDenial,
                 SandboxEgressPolicy.AgentOptionKey,
@@ -394,14 +412,9 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         cancellationToken.ThrowIfCancellationRequested();
 
         var runId = CreateRunId();
-        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
-        var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
-
-        using var commandCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        commandCts.CancelAfter(commandTimeout);
 
         // Re-check cancellation before touching the host filesystem so an early cancel leaves no orphaned run dir.
-        commandCts.Token.ThrowIfCancellationRequested();
+        cancellationToken.ThrowIfCancellationRequested();
         var runDirectory = Path.Combine(request.Prepared.Layout.RootPath, "runs", runId);
         var logDirectory = Path.Combine(runDirectory, "logs");
         Directory.CreateDirectory(logDirectory);
@@ -410,106 +423,82 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         // new instance is resolved per run from a short-lived scope). Logging is best-effort and never fails the run.
         using var loggerScope = _scopeFactory.CreateScope();
         var runLogger = loggerScope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
-        var identity = await _identityProvider.GetAsync(commandCts.Token);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
         await OpenRunLogAsync(runLogger, runId, logDirectory, identity, cancellationToken);
         await AppendEventSafelyAsync(runLogger, "prepare_completed",
             string.Create(CultureInfo.InvariantCulture, $"goal_length={request.Goal.Length}"),
             cancellationToken);
 
-        // The single command is sourced from a per-profile descriptor. When a folder copied, run it with the copied
-        // workspace as the CWD so patch export diffs the real working tree.
-        var descriptor = ResolveCommandDescriptor(request.Prepared.RuntimeProfile);
-        var hasWorkspace = HasCopiedWorkspace(request.Prepared.FolderSnapshots);
-        var commandRequest = new SandboxCommandRequest
-        {
-            ExecutionId = runId,
-            Executable = descriptor.Executable,
-            Arguments = descriptor.Arguments,
-            WorkingDirectory = hasWorkspace ? AgentHomeGit.WorkspaceSelectedRoot : null,
-            // commandCts is the authoritative hard deadline (it works with every provider, including the fake which
-            // ignores Timeout); request.Timeout carries the same budget as a hint a real provider may honor. Both
-            // derive from the single CommandTimeoutSeconds value, so they cannot diverge.
-            Timeout = commandTimeout
-        };
-
-        var commandStartedAt = _timeProvider.GetTimestamp();
-        SandboxCommandResult result;
+        // The GOAL is what runs. The executor owns the inner agent loop, its sandbox-scoped tools (built from
+        // AllowedActions, so read_workspace / write_workspace / run_commands each gate a real capability) and the
+        // whole-run budgets; every tool it hands out works on the copied workspace, which is also the CWD every
+        // command runs in, so the patch export below diffs the real working tree.
+        AgentHomeGoalOutcome goal;
         try
         {
-            result = await _provider.ExecuteAsync(request.Prepared.Handle, commandRequest, commandCts.Token);
+            goal = await _goalExecutor.ExecuteAsync(new AgentHomeGoalRequest
+                {
+                    Handle = request.Prepared.Handle,
+                    RunId = runId,
+                    Goal = request.Goal,
+                    AllowedActions = request.AllowedActions,
+                    WorkspaceAliases = [.. CopiedWorkspaceAliases(request.Prepared.FolderSnapshots)],
+                    RunLogger = runLogger
+                },
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            // Best-effort cancel of the in-flight command (run id == execution id). Use a fresh token so a cancelled
-            // caller token does not abort the cleanup itself. Do NOT KillAsync: the sandbox is owner-node-scoped and
-            // reused across runs, so a normal cancel/timeout must not force a full re-prepare next run.
-            await CancelInFlightCommandSafelyAsync(request.Prepared.Handle, runId);
-
-            if (cancellationToken.IsCancellationRequested)
-            {
-                // The ORIGINAL caller token fired → a user/connection cancel → propagate.
-                await AppendEventSafelyAsync(runLogger, "cancelled", detail: null, CancellationToken.None);
-                throw;
-            }
-
-            // Only commandCts fired (CancelAfter) → a TIMEOUT → surface a non-throwing result so the conversation can
-            // continue. The patch/memory exports are skipped; the run logger records the timeout.
-            await AppendCommandSafelyAsync(runLogger, runId, descriptor, completed: false, exitCode: -1, commandStartedAt,
-                nameof(OperationCanceledException), CancellationToken.None);
-            await AppendEventSafelyAsync(runLogger, "timed_out",
-                string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={commandTimeoutSeconds}"),
-                CancellationToken.None);
-
-            _logger.LogWarning("AgentHome run {RunId} timed out after {TimeoutSeconds}s.",
-                runId,
-                commandTimeoutSeconds);
-
-            return new AgentHomeRunResult
-            {
-                RunId = runId,
-                Completed = false,
-                TimedOut = true,
-                ExitCode = -1,
-                LogPath = logDirectory,
-                FolderSnapshots = request.Prepared.FolderSnapshots,
-                Patch = EmptyPatchExport
-            };
+            // A user/connection cancel. The sandbox tree-kills the in-flight command on the same token, so there is
+            // nothing left running; record it and propagate so the lifecycle releases the lease.
+            await AppendEventSafelyAsync(runLogger, "cancelled", detail: null, CancellationToken.None);
+            throw;
         }
 
-        await AppendCommandSafelyAsync(runLogger, runId, descriptor, result.Completed, result.ExitCode, commandStartedAt,
-            errorClass: null, cancellationToken);
-
-        // Patch export runs after the command so the agent's file edits are diffed against the workspace-copy git
-        // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).
-        var patch = await ExportPatchAsync(request, runId, runDirectory, commandCts.Token);
-
-        // memory-proposal export: collect the agent-written memory proposals — gated on propose_memory ∈ AllowedActions.
-        await CollectMemoryProposalsAsync(request, runId, runDirectory, runLogger, commandCts.Token);
-
-        await AppendEventSafelyAsync(runLogger, "run_completed",
-            string.Create(CultureInfo.InvariantCulture, $"exit_code={result.ExitCode};changed_files={patch.ChangedFileCount}"),
+        await AppendEventSafelyAsync(runLogger, "goal_executed",
+            string.Create(CultureInfo.InvariantCulture,
+                $"status={goal.Status};tool_calls={goal.ToolCallCount};refused={goal.RefusedCallCount};commands={goal.Commands.Count};files_written={goal.WrittenFiles.Count}"),
             cancellationToken);
 
-        _logger.LogInformation("AgentHome run {RunId} finished: completed={Completed}, exitCode={ExitCode}, changedFiles={ChangedFiles}.",
+        // Patch export runs after the loop so the agent's file edits are diffed against the workspace-copy git
+        // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate). A run the
+        // budgets cut off still exports: the partial work is real and the operator must be able to see it.
+        var patch = await ExportPatchAsync(request, runId, runDirectory, runLogger, cancellationToken);
+
+        var timedOut = goal.Status == AgentHomeGoalStatus.TimeBudgetExceeded;
+        var completed = goal.Status is AgentHomeGoalStatus.Completed or AgentHomeGoalStatus.NotRun;
+
+        await AppendEventSafelyAsync(runLogger, "run_completed",
+            string.Create(CultureInfo.InvariantCulture, $"status={goal.Status};changed_files={patch.ChangedFileCount}"),
+            cancellationToken);
+
+        _logger.LogInformation("AgentHome run {RunId} finished: status={Status}, toolCalls={ToolCalls}, commands={Commands}, changedFiles={ChangedFiles}.",
             runId,
-            result.Completed,
-            result.ExitCode,
+            goal.Status,
+            goal.ToolCallCount,
+            goal.Commands.Count,
             patch.ChangedFileCount);
 
         return new AgentHomeRunResult
         {
             RunId = runId,
-            Completed = result.Completed,
-            ExitCode = result.ExitCode,
+            Completed = completed,
+            TimedOut = timedOut,
+            // The run-level exit code: 0 when the loop ended on its own terms, -1 when a budget or a failure cut it
+            // off. Individual command exit codes ride GoalOutcome.Commands, where they belong.
+            ExitCode = completed ? 0 : -1,
             LogPath = logDirectory,
             FolderSnapshots = request.Prepared.FolderSnapshots,
-            Patch = patch
+            Patch = patch,
+            SandboxProviderName = _provider.ProviderName,
+            GoalOutcome = goal
         };
     }
 
     private async Task<AgentHomePatchExport> ExportPatchAsync(AgentHomeRunRequest request,
         string runId,
         string runDirectory,
+        IAgentHomeRunLogger runLogger,
         CancellationToken cancellationToken)
     {
         // The AgentHome gateway requires the model to grant export_patch. A Git baseline exists only after workspace copy, so
@@ -531,48 +520,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             {
                 RunId = runId,
                 HostRunDirectory = runDirectory,
-                ResolvedFolders = request.Prepared.ResolvedFolders
+                ResolvedFolders = request.Prepared.ResolvedFolders,
+                RunLogger = runLogger
             },
             cancellationToken);
-    }
-
-    private async Task CollectMemoryProposalsAsync(AgentHomeRunRequest request,
-        string runId,
-        string runDirectory,
-        IAgentHomeRunLogger runLogger,
-        CancellationToken cancellationToken)
-    {
-        // Gated on propose_memory ∈ AllowedActions. On the fake the agent writes nothing, so the collector returns an
-        // empty result; the call proves the gate + wiring. Collection never mutates real memory and never throws on a
-        // bad record (rejections are returned), so a logging best-effort wrapper is enough.
-        if (!request.AllowedActions.Contains("propose_memory", StringComparer.Ordinal))
-        {
-            return;
-        }
-
-        var collected = await _memoryProposalService.CollectAsync(new MemoryProposalCollectRequest
-            {
-                RunId = runId,
-                HostRunDirectory = runDirectory
-            },
-            cancellationToken);
-
-        await AppendEventSafelyAsync(runLogger, "memory_collected",
-            string.Create(CultureInfo.InvariantCulture, $"proposals={collected.Proposals.Count};rejections={collected.Rejections.Count}"),
-            cancellationToken);
-    }
-
-    private async Task CancelInFlightCommandSafelyAsync(SandboxHandle handle, string runId)
-    {
-        try
-        {
-            await _provider.CancelCommandAsync(handle, runId, CancellationToken.None);
-        }
-        catch (SandboxHandleInvalidException exception)
-        {
-            // The sandbox is already gone (e.g. an owner-mismatch reset killed it). Nothing to cancel.
-            _logger.LogDebug(exception, "AgentHome run {RunId} cancel cleanup found no live sandbox.", runId);
-        }
     }
 
     private async Task OpenRunLogAsync(IAgentHomeRunLogger runLogger,
@@ -618,54 +569,14 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         }
     }
 
-    private async Task AppendCommandSafelyAsync(IAgentHomeRunLogger runLogger,
-        string runId,
-        AgentHomeCommandDescriptor descriptor,
-        bool completed,
-        int exitCode,
-        long startedTimestamp,
-        string? errorClass,
-        CancellationToken cancellationToken)
+    /// <summary>
+    ///     The aliases of the folders that actually copied, so the goal loop's prompt can name the top-level
+    ///     directories the model may work in. Aliases only — never a host path.
+    /// </summary>
+    private static IEnumerable<string> CopiedWorkspaceAliases(IReadOnlyList<SelectedFolderSnapshot> snapshots)
     {
-        var elapsed = _timeProvider.GetElapsedTime(startedTimestamp);
-        try
-        {
-            await runLogger.AppendCommandAsync(new AgentHomeCommandLogRecord
-                {
-                    TimestampUtc = _timeProvider.GetUtcNow(),
-                    ExecutionId = runId,
-                    Executable = descriptor.Executable,
-                    Arguments = descriptor.Arguments,
-                    Completed = completed,
-                    ExitCode = exitCode,
-                    DurationMs = (long)elapsed.TotalMilliseconds,
-                    ErrorClass = errorClass
-                },
-                cancellationToken);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort logging: a filesystem or permissions error must never fail the run.
-            _logger.LogDebug(exception, "AgentHome run {RunId} command log append failed.", runId);
-        }
-        catch (InvalidOperationException exception)
-        {
-            _logger.LogDebug(exception, "AgentHome run {RunId} command log append skipped (log not opened).", runId);
-        }
-    }
-
-    private static AgentHomeCommandDescriptor ResolveCommandDescriptor(string runtimeProfile)
-    {
-        // The profile was already validated against the worker default in PrepareAsync, so the lookup should always
-        // hit; the explicit throw guards a future profile added to options but not to the descriptor table.
-        return ProfileCommands.TryGetValue(runtimeProfile, out var descriptor)
-            ? descriptor
-            : throw new AgentHomeRequestRejectedException($"no command descriptor is registered for runtime profile '{runtimeProfile}'.");
-    }
-
-    private static bool HasCopiedWorkspace(IReadOnlyList<SelectedFolderSnapshot> snapshots)
-    {
-        return snapshots.Any(snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 });
+        return snapshots.Where(static snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 })
+                        .Select(static snapshot => snapshot.Alias);
     }
 
     private string ResolveRuntimeProfile(string? requestedProfile)
@@ -702,13 +613,5 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         var unixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         return string.Create(CultureInfo.InvariantCulture,
             $"run-{unixMs}-{counter}");
-    }
-
-    /// <summary>The executable and arguments for a runtime profile's in-sandbox command.</summary>
-    private sealed record AgentHomeCommandDescriptor
-    {
-        public required string Executable { get; init; }
-
-        public required IReadOnlyList<string> Arguments { get; init; }
     }
 }

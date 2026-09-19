@@ -262,37 +262,45 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         // configured runtime provider supplies real git state.
         var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken);
         var timeout = TimeSpan.FromSeconds(prepareTimeoutSeconds);
-        var commands = new[]
+
+        // `init` first: there is no repository to harden until it exists.
+        await RunBaselineCommandAsync(handle, BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.WorkspaceArguments("init")), cancellationToken);
+
+        // `add -A` CONVERTS worktree content, so a clean filter named by configuration runs here, as the node. The
+        // copy exclusion set keeps a source repository's own .git out of the workspace and `init` just wrote a fresh
+        // config, so nothing model-authored can be there yet — the guard runs anyway, because the sandbox is reused
+        // across runs and "nothing has reached it yet" is an argument about ordering rather than a control.
+        if (!await AgentHomeGitHardening.TryHardenWorkspaceRepositoryAsync(handle, cancellationToken))
         {
-            BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.Arguments("init")),
-            BaselineCommand("agent-home-baseline-autocrlf", timeout, AgentHomeGit.Arguments("config", "core.autocrlf", "false")),
-            BaselineCommand("agent-home-baseline-filemode", timeout, AgentHomeGit.Arguments("config", "core.filemode", "false")),
-            BaselineCommand("agent-home-baseline-add", timeout, AgentHomeGit.Arguments("add", "-A")),
-            BaselineCommand("agent-home-baseline-commit", timeout, AgentHomeGit.Arguments("-c",
+            throw new AgentHomeRequestRejectedException("the workspace git directory is not the one the baseline created.");
+        }
+
+        await RunBaselineCommandAsync(handle, BaselineCommand("agent-home-baseline-add", timeout, AgentHomeGit.WorkspaceArguments("add", "-A")), cancellationToken);
+        await RunBaselineCommandAsync(handle,
+            BaselineCommand("agent-home-baseline-commit", timeout, AgentHomeGit.WorkspaceArguments("-c",
                 $"user.email={BaselineUserEmail}",
                 "-c",
                 $"user.name={BaselineUserName}",
                 "commit",
                 "-m",
                 "agent-home baseline",
-                "--allow-empty"))
-        };
-
-        foreach (var command in commands)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
-            if (!result.Completed || result.ExitCode != 0)
-            {
-                // A failed baseline command leaves no reproducible HEAD for the patch export diff to compare against, so
-                // fail the prepare loudly rather than letting a later export silently report zero changes. The message
-                // carries only the command's execution id and exit code — never a host path. (Real non-zero git exits
-                // arrive with the local-container provider in local-container sandbox.)
-                throw new AgentHomeRequestRejectedException($"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
-            }
-        }
+                "--allow-empty")),
+            cancellationToken);
 
         _logger.LogInformation("Created the in-sandbox git baseline for the selected workspace.");
+    }
+
+    private async Task RunBaselineCommandAsync(SandboxHandle handle, SandboxCommandRequest command, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
+        if (!result.Completed || result.ExitCode != 0)
+        {
+            // A failed baseline command leaves no reproducible HEAD for the patch export diff to compare against, so
+            // fail the prepare loudly rather than letting a later export silently report zero changes. The message
+            // carries only the command's execution id and exit code — never a host path.
+            throw new AgentHomeRequestRejectedException($"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
+        }
     }
 
     private static SandboxCommandRequest BaselineCommand(string executionId, TimeSpan timeout, IReadOnlyList<string> arguments)
@@ -303,6 +311,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             Executable = AgentHomeGit.Executable,
             Arguments = arguments,
             WorkingDirectory = AgentHomeGit.WorkspaceSelectedRoot,
+            Environment = AgentHomeGitHardening.Environment,
             Timeout = timeout
         };
     }

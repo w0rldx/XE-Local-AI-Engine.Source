@@ -93,15 +93,98 @@ public sealed class SelectedFolderResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_WithNonGuidId_Throws()
+    public async Task ResolveAsync_WithAValueThatIsNeitherGuidNorAlias_Throws()
     {
         var resolver = CreateResolver();
 
-        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("not-a-guid"),
-            "A non-GUID id should be rejected.");
+        // "not-a-guid" is NOT the right fixture for this any more: it is a well-formed ALIAS, so it now reaches the
+        // alias lookup and comes back not-found. A value that can be neither is what still proves the input rejection.
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("Not A Guid!"),
+            "A value that is neither a GUID nor a well-formed alias should be rejected.");
 
-        // An unparsable id is malformed input (400), not a missing resource (404).
+        // Malformed input (400), not a missing resource (404).
         AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
+    }
+
+    [Test]
+    public async Task ResolveAsync_WithKnownAlias_ReturnsTrustedHostPath()
+    {
+        // THE live-round regression (round 2, D2). run_in_agent_home's schema advertises "alias OR GUID" and Node
+        // Settings only ever shows the operator an alias, but ResolveAsync used to Guid.TryParse and throw, so every
+        // alias a model sent was rejected as "not a valid identifier" and only an opaque GUID — which no tool result
+        // ever reveals to the model — could be made to work.
+        var resolver = CreateResolver();
+        var reference = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
+
+        var resolved = await resolver.ResolveAsync("repo-one");
+
+        AssertEx.Equal(TrustedHostPath, resolved.HostPath);
+        AssertEx.Equal("repo-one", resolved.Alias);
+        AssertEx.Equal(SelectedFolderMode.Copy, resolved.Mode);
+        AssertEx.Equal(reference.Id, resolved.Id.ToString());
+    }
+
+    [Test]
+    public async Task ResolveAsync_WithUnknownAlias_ThrowsNotFound()
+    {
+        var resolver = CreateResolver();
+
+        // NotFound derives from SelectedFolderValidationException, which is the type AgentHomeToolGateway catches and
+        // renders as "run_in_agent_home rejected: …", so an unknown alias still reaches the model as a clear sentence.
+        _ = await AssertEx.ThrowsAsync<SelectedFolderNotFoundException>(() => resolver.ResolveAsync("no-such-folder"),
+            "A well-formed but unregistered alias should be not-found, not an input problem.");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WithUppercaseAlias_Throws()
+    {
+        // Registration normalizes, resolution does NOT: stored aliases are always canonical, so an exact match finds
+        // exactly what exists. Normalizing here would let a caller passing unvalidated text resolve "Repo One" to
+        // "repo-one", which is a quieter contract than this seam should have. The tool schema is lowercase-only too.
+        var resolver = CreateResolver();
+        _ = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
+
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("Repo-One"),
+            "An alias is matched exactly; an uppercase variant is not a well-formed alias.");
+
+        AssertEx.Equal(typeof(SelectedFolderValidationException), exception.GetType());
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAnAliasLooksLikeAGuid_ThePlainIdWins_AndTheAliasStaysReachable()
+    {
+        // An alias of GUID shape IS registrable: NormalizeAlias leaves lowercase hex and hyphens alone and the alias
+        // shape regex accepts the result. So the order is load-bearing — a real id must never be shadowed by an alias
+        // that merely looks like one — and the fall-through is what keeps such an alias reachable rather than masked.
+        var resolver = CreateResolver();
+        var decoyAlias = Guid.NewGuid().ToString();
+        var realFolder = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
+        var decoyFolder = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = decoyAlias, HostPath = HostPath("trusted", "host", "decoy") });
+
+        // The decoy's alias is not any folder's id, so resolving it must still find the decoy by alias.
+        var byDecoyAlias = await resolver.ResolveAsync(decoyAlias);
+        AssertEx.Equal(decoyFolder.Id, byDecoyAlias.Id.ToString());
+
+        // And a real id still resolves to its own folder, never to a same-shaped alias.
+        var byRealId = await resolver.ResolveAsync(realFolder.Id);
+        AssertEx.Equal("repo-one", byRealId.Alias);
+    }
+
+    [Test]
+    public async Task ResolveAsync_AfterRevocation_RejectsBothTheIdAndTheAlias()
+    {
+        // Alias resolution must inherit every guard the id path has: the store hides a revoked folder from BOTH
+        // lookups, so a removed folder cannot be reached by the friendlier handle.
+        var store = new FakeSelectedFolderStore();
+        var resolver = new SelectedFolderResolver(store, NullLogger<SelectedFolderResolver>.Instance);
+        var reference = await resolver.RegisterAsync(new SelectedFolderRegistration { Alias = "repo-one", HostPath = TrustedHostPath });
+
+        AssertEx.True(await store.RevokeAsync(Guid.Parse(reference.Id)), "the folder should have been revoked");
+
+        _ = await AssertEx.ThrowsAsync<SelectedFolderNotFoundException>(() => resolver.ResolveAsync("repo-one"),
+            "A revoked folder must not be reachable by alias.");
+        _ = await AssertEx.ThrowsAsync<SelectedFolderNotFoundException>(() => resolver.ResolveAsync(reference.Id),
+            "…nor by id.");
     }
 
     [Test]

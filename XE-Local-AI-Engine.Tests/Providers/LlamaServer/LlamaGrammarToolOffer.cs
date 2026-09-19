@@ -10,7 +10,6 @@ using NSubstitute;
 using OpenAI;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
-using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -38,7 +37,10 @@ internal static class LlamaGrammarToolOffer
             Model
         });
 
-        var provider = new LocalToolOfferProvider(new NodeCatalogAgentToolRegistry(),
+        // The REAL registry. run_in_agent_home reaches the offer through LocalToolOfferProvider's own profile-pool merge,
+        // so wrapping the registry to inject its descriptor would now offer it TWICE and grade a fixture rather than the
+        // shipped offer.
+        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
@@ -133,39 +135,6 @@ internal static class LlamaGrammarToolOffer
         options.Transport = new HttpClientPipelineTransport(http);
         var client = new OpenAIClient(new ApiKeyCredential("ignored"), options);
         return client.GetChatClient("test-model").AsIChatClient();
-    }
-
-    /// <summary>
-    ///     The node's built-in catalog as the offer provider sees it: the real <see cref="LocalAgentToolRegistry" />
-    ///     descriptors plus <c>run_in_agent_home</c>, whose descriptor reaches a live node through the server
-    ///     <c>ToolDefinition</c> seed rather than through the local registry. Its schema is the real
-    ///     <see cref="AgentHomeToolDefinition.ParameterSchema" /> constant, so the 4000-char <c>goal</c> bound this pass
-    ///     has to handle is the shipped one, not a fixture.
-    /// </summary>
-    private sealed class NodeCatalogAgentToolRegistry : IAgentToolRegistry
-    {
-        private static readonly LocalAgentToolRegistry Catalog = new(TimeProvider.System);
-
-        public IReadOnlyList<AITool> GetLocalChatTools()
-        {
-            return Catalog.GetLocalChatTools();
-        }
-
-        public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()
-        {
-            return
-            [
-                .. Catalog.GetLocalChatToolDescriptors(),
-                new LocalChatToolDescriptor
-                {
-                    Name = AgentHomeToolDefinition.ToolName,
-                    Description = AgentHomeToolDefinition.Description,
-                    ParameterSchema = AgentHomeToolDefinition.ParameterSchema,
-                    RequiresApproval = true,
-                    Category = ToolCategory.Unknown
-                }
-            ];
-        }
     }
 
     /// <summary>Captures the outbound request body and returns a canned OpenAI chat completion so no network is hit.</summary>

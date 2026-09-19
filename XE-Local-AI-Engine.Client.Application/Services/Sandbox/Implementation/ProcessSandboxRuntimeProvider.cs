@@ -516,6 +516,23 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
         finally
         {
+            // TEARDOWN ON EVERY COMPLETION PATH, SUCCESS INCLUDED — not only on the cancel/timeout/disk-cap branches
+            // above.
+            //
+            // A command's own exit says nothing about its DESCENDANTS. `/bin/sh -c "…&"` returns at once with exit 0
+            // while its backgrounded child keeps running; an orphan is reparented, not killed, and nothing re-derives
+            // the group. That child would then outlive the command, and — because an AgentHome sandbox is owner-node
+            // scoped and reused through CreateOrAttach — outlive the whole RUN, still writing into a workspace the
+            // node is about to diff, still burning CPU, and invisible to the startup orphan sweep the moment the
+            // marker below is deleted. This repository has already paid for that class once.
+            //
+            // Ordered BEFORE the marker delete on purpose: if the engine dies mid-teardown the marker is still on
+            // disk, so the next start's sweep finds whatever survived. Every layer here is best-effort and idempotent
+            // — killing a scope or group that already exited on its own is a no-op, which is what makes it safe to
+            // run unconditionally rather than only where something is known to have leaked.
+            SandboxProcessTree.TreeKill(process);
+            await TerminateLaunchAsync(launch, process);
+
             _ = state.InFlight.TryRemove(request.ExecutionId, out _);
 
             // The command is over one way or another, so its marker has done its job. Deleting it here is what keeps the

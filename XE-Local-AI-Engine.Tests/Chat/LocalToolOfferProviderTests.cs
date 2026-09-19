@@ -19,48 +19,54 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Capability gate (AgentHome Decision 7): the loopback offer omits <c>run_in_agent_home</c> and every MCP tool
-///     when the active model is not in <see cref="AgentHomeOptions.ToolCapableModels" />, and offers them when it is.
-///     The offer/known-name/known-tool surfaces merge the live MCP snapshot, MCP tools join the
+///     Capability gate (AgentHome Decision 7): the loopback offer omits the capability-gated built-ins and every MCP
+///     tool when the active model is not in <see cref="AgentHomeOptions.ToolCapableModels" />, and offers them when it
+///     is. The offer/known-name/known-tool surfaces merge the live MCP snapshot, MCP tools join the
 ///     capable-only set, and <c>GetKnownTools</c> tags each entry with its source.
+///     <para>
+///         The registry seeded here is a FAKE, so it deliberately seeds no <c>run_in_agent_home</c> descriptor: the real
+///         <c>LocalAgentToolRegistry</c> never projects a ClientLocal handler, and a fabricated one would let these
+///         assertions pass against a descriptor production cannot produce. The real offer seam for that tool is pinned
+///         by <c>AgentHomeOfferSeamTests</c> against the real registry.
+///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalToolOfferProviderTests
 {
     [Test]
-    public void GetOfferedTools_WhenModelIsToolCapable_OffersAgentHomeTool()
+    public void GetOfferedTools_WhenModelIsToolCapable_OffersTheCapabilityGatedToolsAlongsideTheUngatedOnes()
     {
         var provider = CreateProvider("qwen3:8b");
 
         var offered = provider.GetOfferedTools("qwen3:8b");
 
-        AssertEx.Contains(offered, tool => tool.Name == AgentHomeToolDefinition.ToolName);
+        AssertEx.Contains(offered, tool => tool.Name == AskUserTool.ToolName);
         AssertEx.Contains(offered, tool => tool.Name == "open_url");
     }
 
     [Test]
-    public void GetOfferedTools_WhenModelIsNotToolCapable_OmitsAgentHomeToolButKeepsOthers()
+    public void GetOfferedTools_WhenModelIsNotToolCapable_OmitsCapabilityGatedToolsButKeepsOthers()
     {
         var provider = CreateProvider("qwen3:8b");
 
         var offered = provider.GetOfferedTools("some-other-model");
 
-        AssertEx.False(offered.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
-            "run_in_agent_home must be withheld from a model that is not in ToolCapableModels");
+        AssertEx.False(offered.Any(tool => tool.Name == AskUserTool.ToolName),
+            "a capability-gated tool must be withheld from a model that is not in ToolCapableModels");
         AssertEx.Contains(offered, tool => tool.Name == "open_url");
     }
 
     [Test]
-    public void GetOfferedTools_WhenActiveModelEqualsToolCapableEntry_OffersAgentHomeTool()
+    public void GetOfferedTools_WhenActiveModelEqualsToolCapableEntry_OffersTheCapabilityGatedTools()
     {
         // Regression: the live-evidence model id (qwen3:8b, the default ToolCapableModels entry) MUST satisfy
         // the gate when it is the offer-time active model — the bug was that this model never reached this seam, not
-        // that the seam mismatched it. An exact match offers run_in_agent_home.
+        // that the seam mismatched it. An exact match offers the capability-gated tools.
         var provider = CreateProvider("qwen3:8b");
 
         var offered = provider.GetOfferedTools("qwen3:8b");
 
-        AssertEx.Contains(offered, tool => tool.Name == AgentHomeToolDefinition.ToolName);
+        AssertEx.Contains(offered, tool => tool.Name == AskUserTool.ToolName);
     }
 
     [Test]
@@ -78,7 +84,6 @@ public sealed class LocalToolOfferProviderTests
         runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);
 
         var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([
-                new LocalChatToolDescriptor { Name = AgentHomeToolDefinition.ToolName, Description = "Runs an agent task.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = true },
                 new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
@@ -88,21 +93,21 @@ public sealed class LocalToolOfferProviderTests
             allowCloudKnowledgeAccess: false);
 
         var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
-        AssertEx.False(beforeEdit.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+        AssertEx.False(beforeEdit.Any(tool => tool.Name == AskUserTool.ToolName),
             "A model absent from the allow-list must not be offered the capable-only tools.");
 
         // The operator adds the model in Node Settings and saves. No restart.
         toolCapableModels.Add("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
 
         var afterEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
-        AssertEx.Contains(afterEdit, tool => tool.Name == AgentHomeToolDefinition.ToolName,
+        AssertEx.Contains(afterEdit, tool => tool.Name == AskUserTool.ToolName,
             "The allow-list is read live, so an edit must take effect on the very next offer without a node restart.");
 
         // And the reverse: a removal must also take effect immediately, or the gate could not be tightened at runtime.
         toolCapableModels.Clear();
 
         var afterRemoval = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
-        AssertEx.False(afterRemoval.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+        AssertEx.False(afterRemoval.Any(tool => tool.Name == AskUserTool.ToolName),
             "Removing a model from the allow-list must withhold the capable-only tools immediately.");
     }
 
@@ -116,7 +121,7 @@ public sealed class LocalToolOfferProviderTests
         runtimeSettings.GetToolCapableModels().Returns(_ => toolCapableModels);
 
         var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([
-                new LocalChatToolDescriptor { Name = AgentHomeToolDefinition.ToolName, Description = "Runs an agent task.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = true }
+                new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
@@ -134,7 +139,7 @@ public sealed class LocalToolOfferProviderTests
     }
 
     [Test]
-    public void GetOfferedTools_WhenActiveModelDiffersOnlyByCase_OmitsAgentHomeTool()
+    public void GetOfferedTools_WhenActiveModelDiffersOnlyByCase_OmitsCapabilityGatedTools()
     {
         // The capability gate is intentionally an Ordinal (exact) match: a model id that differs only by case is NOT
         // tool-capable. This pins the matching contract so a future change cannot silently loosen it.
@@ -142,20 +147,20 @@ public sealed class LocalToolOfferProviderTests
 
         var offered = provider.GetOfferedTools("QWEN3:8B");
 
-        AssertEx.False(offered.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+        AssertEx.False(offered.Any(tool => tool.Name == AskUserTool.ToolName),
             "the capability gate is an Ordinal exact match, so a case-only variant is not tool-capable");
         AssertEx.Contains(offered, tool => tool.Name == "open_url");
     }
 
     [Test]
-    public void GetOfferedTools_WhenModelIsNull_OmitsAgentHomeTool()
+    public void GetOfferedTools_WhenModelIsNull_OmitsCapabilityGatedTools()
     {
         var provider = CreateProvider("qwen3:8b");
 
         var offered = provider.GetOfferedTools(null);
 
-        AssertEx.False(offered.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
-            "a null/unknown model is treated as not tool-capable, so the high-risk tool is withheld");
+        AssertEx.False(offered.Any(tool => tool.Name == AskUserTool.ToolName),
+            "a null/unknown model is treated as not tool-capable, so the high-risk tools are withheld");
     }
 
     [Test]
@@ -477,7 +482,7 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.False(offered.Any(tool => tool.Name == KnowledgeSearchToolName),
             "a cloud model must not be offered the knowledge tools by default (node-local content must not leave the node)");
         // The rest of the capable offer is unaffected — only the knowledge tools are gated off.
-        AssertEx.Contains(offered, tool => tool.Name == AgentHomeToolDefinition.ToolName);
+        AssertEx.Contains(offered, tool => tool.Name == AskUserTool.ToolName);
     }
 
     [Test]
@@ -732,8 +737,10 @@ public sealed class LocalToolOfferProviderTests
         FakeModelTrustResolver trustResolver,
         params string[] toolCapableModels)
     {
+        // NO fabricated run_in_agent_home seed here. The real LocalAgentToolRegistry never projects a ClientLocal
+        // handler, so seeding one would make every assertion below pass against a descriptor production cannot produce.
+        // The capability-gated subject these tests use is ask_user, which the provider merges itself.
         var registry = new FakeAgentToolRegistry([
-            new LocalChatToolDescriptor { Name = AgentHomeToolDefinition.ToolName, Description = "Runs an agent task.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = true },
             new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
         ]);
 

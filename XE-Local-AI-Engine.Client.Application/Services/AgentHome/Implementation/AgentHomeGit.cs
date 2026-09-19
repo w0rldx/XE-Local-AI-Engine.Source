@@ -52,24 +52,47 @@ internal static class AgentHomeGit
     ///     C-style quoted, escaped path, and the exec-bearing keys are pinned so repository-local configuration cannot
     ///     turn a git invocation into host-side command execution.
     ///     <para>
-    ///         <strong>Not covered here, by necessity:</strong> a <c>filter.&lt;driver&gt;.clean</c> defined in
-    ///         repository-local config and selected by an <em>in-tree</em> <c>.gitattributes</c> still executes on
-    ///         <c>git add</c>. <c>core.attributesfile=/dev/null</c> only disables the <em>global</em> attributes file —
-    ///         in-tree <c>.gitattributes</c> outranks it — and git has no command-line flag that disables attribute
-    ///         processing, so it is not closable from here. Two things close it instead, and both live outside this
-    ///         class: the container provider binds <c>&lt;workspace&gt;/.git/config</c> read-only into the container, and
-    ///         a filter driver that cannot be <em>defined</em> cannot run whatever the in-tree <c>.gitattributes</c>
-    ///         selects; and the engine rewrites that file to a known-good minimal config immediately before each
-    ///         host-side git invocation, which is provider-independent and therefore also covers the process provider
-    ///         Development runs on when the container provider is not enabled. The second one matters because the
-    ///         standalone clone <em>introduced</em> this
-    ///         exposure rather than inheriting it:
-    ///         the previous linked worktree had a pointer-<em>file</em> <c>.git</c>, so a workspace-confined write could
-    ///         not reach repository-local config at all.
+    ///         <strong>What these flags do NOT close, and what does.</strong> A <c>filter.&lt;driver&gt;.clean</c> or
+    ///         <c>diff.&lt;name&gt;.textconv</c> defined in configuration and selected by an <em>in-tree</em>
+    ///         <c>.gitattributes</c> still executes on <c>add</c> and on <c>diff</c>. Driver names are arbitrary, so
+    ///         there is no finite key set to pin here, and git has no flag that disables attribute processing —
+    ///         <c>core.attributesfile=/dev/null</c> only disables the <em>global</em> attributes file, which an in-tree
+    ///         <c>.gitattributes</c> outranks. It is closed OUTSIDE this class, by
+    ///         <see cref="AgentHomeGitHardening" />: a driver has to be DEFINED in configuration to run, so making
+    ///         every configuration git can reach node-owned closes the whole class at once without enumerating a key.
+    ///         Every AgentHome git invocation goes through that guard and carries
+    ///         <see cref="AgentHomeGitHardening.Environment" />; these <c>-c</c> pins remain the byte-stabilizing half
+    ///         and a second, independent cut at the exec-bearing keys that do have fixed names.
     ///     </para>
     /// </summary>
     public static IReadOnlyList<string> Arguments(params string[] tail)
     {
         return [.. HardenedConfig, .. tail];
+    }
+
+    /// <summary>
+    ///     The byte-stability settings the AgentHome WORKSPACE repository needs on top of
+    ///     <see cref="Arguments(string[])" />: the baseline and the later diff must agree about line endings and the
+    ///     executable bit, or the diff reports changes nobody made.
+    ///     <para>
+    ///         They are carried on the COMMAND LINE, and they are NOT in <see cref="HardenedConfig" />. Two separate
+    ///         reasons, both load-bearing. The command line, because
+    ///         <see cref="AgentHomeGitHardening.TryHardenWorkspaceRepositoryAsync" /> rewrites the repository's own
+    ///         config to a node-owned allow-list before every invocation, so a value the baseline had STORED there
+    ///         would be dropped before the diff and the two sides would stop agreeing. And not in the shared set,
+    ///         because <see cref="Arguments(string[])" /> is also what Development Mode, Dev Workflows, knowledge
+    ///         repository import and host patch APPLY run git with — those operate on the operator's own checkouts,
+    ///         where forcing <c>core.autocrlf</c> would change how a patch renders or applies on a repository that
+    ///         legitimately stores CRLF. Development Mode derives that policy from the repository's own index
+    ///         (<c>DevelopmentWorkspaceWhitespacePolicy</c>) precisely so that it is not forced.
+    ///     </para>
+    /// </summary>
+    /// <remarks>
+    ///     Use this for the two sites that own the AgentHome workspace copy — the baseline and the patch export — and
+    ///     nothing else. The pair must match on both, or the comparison is between two different normalizations.
+    /// </remarks>
+    public static IReadOnlyList<string> WorkspaceArguments(params string[] tail)
+    {
+        return [.. HardenedConfig, "-c", "core.autocrlf=false", "-c", "core.filemode=false", .. tail];
     }
 }

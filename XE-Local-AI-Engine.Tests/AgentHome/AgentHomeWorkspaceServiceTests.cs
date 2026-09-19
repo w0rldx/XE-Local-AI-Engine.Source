@@ -241,14 +241,15 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
             "every baseline command carries -c core.hooksPath=/dev/null and -c core.attributesfile=/dev/null");
 
         AssertEx.True(IssuesArgument(gitCommands, "init"), "git init must run");
-        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("config")
-                                                 && command.Arguments.Contains("core.autocrlf")
-                                                 && command.Arguments.Contains("false")),
-            "core.autocrlf must be disabled");
-        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("config")
-                                                 && command.Arguments.Contains("core.filemode")
-                                                 && command.Arguments.Contains("false")),
-            "core.filemode must be disabled");
+        // Byte stability is carried on the COMMAND LINE now, not written into the repository's own config by a
+        // `git config` command. It had to move: AgentHomeGitHardening rewrites that config to a node-owned allow-list
+        // before every node git invocation, so a value STORED there would be dropped between the baseline and the
+        // later diff and the two sides of the comparison would stop agreeing. Asserted on EVERY baseline command,
+        // which the old shape could not do — a stored value was only present after the command that stored it.
+        AssertEx.True(gitCommands.All(command => command.Arguments.Contains("core.autocrlf=false")),
+            "every baseline command must pin core.autocrlf=false, so the config rewrite cannot drop it");
+        AssertEx.True(gitCommands.All(command => command.Arguments.Contains("core.filemode=false")),
+            "every baseline command must pin core.filemode=false, so the config rewrite cannot drop it");
         AssertEx.True(IssuesArgument(gitCommands, "add"), "git add -A must run");
         AssertEx.True(IssuesArgument(gitCommands, "commit"), "git commit must run for the baseline");
     }
@@ -329,9 +330,12 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         AssertEx.True(leases.IsPoisoned(new AgentHomeExecutionLeaseKey("owner", "node")));
     }
 
+    // The baseline runs through AgentHomeGit.WorkspaceArguments — the shared hardened set PLUS the workspace's
+    // own byte-stability pins — so the scripted key has to be built from the same helper or the fake never
+    // matches and every assertion below grades a default result instead of the scripted one.
     private static string BaselineCommandKey(params string[] tail)
     {
-        return AgentHomeGit.Executable + " " + string.Join(" ", AgentHomeGit.Arguments(tail));
+        return AgentHomeGit.Executable + " " + string.Join(" ", AgentHomeGit.WorkspaceArguments(tail));
     }
 
     /// <summary>

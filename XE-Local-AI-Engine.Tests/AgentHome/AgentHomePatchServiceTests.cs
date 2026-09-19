@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
@@ -222,13 +223,14 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithAgentHomeMaxPatchBytes(maxPatchBytes)
                                                      .Build();
-        return new AgentHomePatchService(provider, runtimeSettings, NullLogger<AgentHomePatchService>.Instance);
+        return new AgentHomePatchService(provider, runtimeSettings, TimeProvider.System, NullLogger<AgentHomePatchService>.Instance);
     }
 
     private static AgentHomePatchExportRequest Request(string runId, string hostRunDirectory, params ResolvedSelectedFolder[] folders)
     {
         return new AgentHomePatchExportRequest
         {
+            RunLogger = new NoOpAgentHomeRunLogger(),
             RunId = runId,
             HostRunDirectory = hostRunDirectory,
             ResolvedFolders = folders

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
+using System.Reflection;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
@@ -109,6 +110,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
 
         var commandRecord = new AgentHomeCommandLogRecord
         {
+            Actor = AgentHomeCommandActors.Node,
             TimestampUtc = FixedNow,
             ExecutionId = "run-001-cmd",
             Executable = "dotnet",
@@ -130,6 +132,106 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         AssertCorrelation(record, ctx);
     }
 
+    /// <summary>
+    ///     WHO ran a command is the point of this log: the node's own export git runs in the same sandbox, over the
+    ///     same workspace, as the model's <c>run_command</c>. Asserted off DISK, because the in-memory record was
+    ///     always right while the serialized line silently dropped the actor.
+    /// </summary>
+    [Test]
+    public async Task AppendCommandAsync_WritesTheActorOfEveryRecordToDisk()
+    {
+        var (logger, ctx) = CreateLogger();
+        await logger.OpenAsync(ctx);
+
+        await logger.AppendCommandAsync(new AgentHomeCommandLogRecord
+        {
+            Actor = AgentHomeCommandActors.Model,
+            TimestampUtc = FixedNow,
+            ExecutionId = "run-001-cmd",
+            Executable = "/bin/echo",
+            Arguments = ["hello"],
+            Completed = true,
+            ExitCode = 0,
+            DurationMs = 7
+        });
+        await logger.AppendCommandAsync(new AgentHomeCommandLogRecord
+        {
+            Actor = AgentHomeCommandActors.Node,
+            TimestampUtc = FixedNow,
+            ExecutionId = "run-001-export-diff",
+            Executable = "git",
+            Arguments = ["diff", "--no-textconv"],
+            Completed = true,
+            ExitCode = 0,
+            DurationMs = 11
+        });
+
+        var lines = NonEmptyLines(await File.ReadAllLinesAsync(Path.Combine(ctx.HostLogDirectory, "commands.jsonl")));
+        AssertEx.Equal(expected: 2, lines.Count);
+
+        var model = ParseRecord(lines[0]);
+        AssertEx.Equal(AgentHomeCommandActors.Model, model.GetProperty("actor").GetString(),
+            "the model's own run_command must be attributed to the model on disk");
+        AssertEx.Equal("/bin/echo", model.GetProperty("executable").GetString());
+        AssertEx.Equal("hello", model.GetProperty("arguments")[0].GetString());
+        AssertCorrelation(model, ctx);
+
+        var node = ParseRecord(lines[1]);
+        AssertEx.Equal(AgentHomeCommandActors.Node, node.GetProperty("actor").GetString(),
+            "the node's own export git must be attributed to the node on disk");
+        AssertEx.Equal("git", node.GetProperty("executable").GetString());
+        AssertEx.Equal("--no-textconv", node.GetProperty("arguments")[1].GetString());
+        AssertEx.Equal(expected: 11L, node.GetProperty("durationMs").GetInt64());
+        AssertCorrelation(node, ctx);
+    }
+
+    /// <summary>
+    ///     The class of bug the missing actor was: the envelope is hand-written, so a member of
+    ///     <see cref="AgentHomeCommandLogRecord" /> reaches disk only while someone remembers to list it there. Every
+    ///     public member must appear in the serialized line, or be named on the allow-list below with a reason.
+    /// </summary>
+    [Test]
+    public async Task AppendCommandAsync_SerializesEveryMemberOfTheRecord()
+    {
+        // Members deliberately kept OUT of commands.jsonl. Empty today; anything added here needs its reason written
+        // beside it, because the alternative reading of an absent field is that it was dropped by accident.
+        var deliberatelyOmitted = new HashSet<string>(StringComparer.Ordinal);
+
+        var (logger, ctx) = CreateLogger();
+        await logger.OpenAsync(ctx);
+
+        // Every member non-null on purpose: the logger drops nulls, so a record with the usual null ErrorClass would
+        // let a member the envelope forgot pass as one the serializer correctly omitted.
+        await logger.AppendCommandAsync(new AgentHomeCommandLogRecord
+        {
+            Actor = AgentHomeCommandActors.Node,
+            TimestampUtc = FixedNow,
+            ExecutionId = "run-001-cmd",
+            Executable = "git",
+            Arguments = ["diff"],
+            Completed = false,
+            ExitCode = 1,
+            DurationMs = 3,
+            ErrorClass = nameof(TimeoutException)
+        });
+
+        var record = ReadFirstRecord(Path.Combine(ctx.HostLogDirectory, "commands.jsonl"));
+
+        foreach (var property in typeof(AgentHomeCommandLogRecord).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (deliberatelyOmitted.Contains(property.Name))
+            {
+                continue;
+            }
+
+            // JsonSerializerDefaults.Web: the envelope's member names are camelCased on the way out.
+            var jsonName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+            AssertEx.True(record.TryGetProperty(jsonName, out _),
+                $"AgentHomeCommandLogRecord.{property.Name} never reaches commands.jsonl as '{jsonName}' — list it in the envelope "
+                + "in AgentHomeRunLogger.AppendCommandAsync, or on this test's deliberatelyOmitted allow-list with a reason");
+        }
+    }
+
     [Test]
     public async Task AppendCommandAsync_RecordDoesNotContainRawHostPath()
     {
@@ -139,6 +241,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         // Arguments are sanitised by the caller; we pass only model-safe strings.
         var commandRecord = new AgentHomeCommandLogRecord
         {
+            Actor = AgentHomeCommandActors.Node,
             TimestampUtc = FixedNow,
             ExecutionId = "run-001-cmd",
             Executable = "dotnet",
@@ -263,6 +366,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         await logger.AppendEventAsync("run_completed");
         await logger.AppendCommandAsync(new AgentHomeCommandLogRecord
         {
+            Actor = AgentHomeCommandActors.Node,
             TimestampUtc = FixedNow,
             ExecutionId = "run-99-cmd",
             Executable = "dotnet",
