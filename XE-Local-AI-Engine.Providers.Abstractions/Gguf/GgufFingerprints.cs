@@ -17,12 +17,18 @@ public enum InstalledModelPhysicalMemberRole
 }
 
 /// <summary>Canonical facts used to compute an aggregate model-content fingerprint.</summary>
-public sealed record GgufModelContentMember(
-    string RelativePath,
-    InstalledModelPhysicalMemberRole Role,
-    long SizeBytes,
-    string Sha256,
-    IReadOnlyList<string> OwningAliases);
+public sealed record GgufModelContentMember
+{
+    public required string RelativePath { get; init; }
+
+    public required InstalledModelPhysicalMemberRole Role { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string Sha256 { get; init; }
+
+    public required IReadOnlyList<string> OwningAliases { get; init; }
+}
 
 /// <summary>Canonical per-file GGUF content fingerprint.</summary>
 public static class GgufMemberFingerprint

@@ -202,7 +202,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             // silent multi-second phases the operator sees no explanation for (the archive download is the other, and the
             // binary manager reports that one itself). Reporting is fire-and-forget inside the registry, so it adds no
             // await to the startup path.
-            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.DetectingGpu));
+            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.DetectingGpu });
             variant = await _runtime.SelectGpuVariantAsync(probeCts.Token);
         }
         catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)
@@ -221,8 +221,11 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             // spans the model download and the settings save, so a throw from either would overwrite a legitimate
             // Completed with a false runtime failure — and the banner's retry would then be a dead button attached to a
             // wrong diagnosis. Cancellation is excluded above because a shutting-down host is not an acquisition failure.
-            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
-                SanitizedError: SanitizeAcquisitionFailure(exception)));
+            _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Failed,
+                SanitizedError = SanitizeAcquisitionFailure(exception)
+            });
 
             // Propagate exactly as before, so the outer catch still swallows + logs and startup never crashes.
             throw;

@@ -181,7 +181,7 @@ public sealed class LocalModelProxyForwarderTests
         using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{\"data\":[]}");
         var forwarder = CreateForwarder(out _, out var supervisor, upstream);
         supervisor.EnsureRunningAsync(InstalledModel, ModelRole.Embedding, Arg.Any<CancellationToken>())
-                  .Returns(new LlamaServerEndpoint(InstalledModel, ModelRole.Embedding, ChildEndpoint));
+                  .Returns(new LlamaServerEndpoint { ModelName = InstalledModel, Role = ModelRole.Embedding, BaseAddress = ChildEndpoint });
         var context = BuildContext("{\"model\":\"test-model\",\"input\":\"hi\"}", out _);
 
         await forwarder.ForwardEmbeddingsAsync(context);
@@ -281,7 +281,7 @@ public sealed class LocalModelProxyForwarderTests
 
         supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
-                  .Returns(callInfo => new LlamaServerEndpoint(callInfo.ArgAt<string>(0), callInfo.ArgAt<ModelRole>(1), ChildEndpoint));
+                  .Returns(callInfo => new LlamaServerEndpoint { ModelName = callInfo.ArgAt<string>(0), Role = callInfo.ArgAt<ModelRole>(1), BaseAddress = ChildEndpoint });
 
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         // disposeHandler:false — the test owns the handler via `using var`, so the client must not dispose it too.

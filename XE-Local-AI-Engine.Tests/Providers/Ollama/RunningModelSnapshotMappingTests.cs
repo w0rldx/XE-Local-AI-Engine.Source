@@ -89,7 +89,7 @@ public sealed class RunningModelSnapshotMappingTests
         // A snapshot with no expiry/footprint maps to a row with null memory + null countdown rather than zeroed values, so
         // the UI can omit those columns.
         var response = LocalModelsMapper.ToRunningResponse([
-            new RunningModelSnapshot("llama3:8b", ModelName: null, ExpiresAt: null)
+            new RunningModelSnapshot { Name = "llama3:8b", ModelName = null, ExpiresAt = null }
         ], ollamaConfigured: true);
 
         AssertEx.True(response.IsAvailable);
@@ -106,8 +106,8 @@ public sealed class RunningModelSnapshotMappingTests
     {
         // The runtime may report the canonical id under "model"; nameless rows (neither field set) are dropped.
         var response = LocalModelsMapper.ToRunningResponse([
-            new RunningModelSnapshot("raw", "llama3:8b", ExpiresAt: null),
-            new RunningModelSnapshot(Name: null, ModelName: null, ExpiresAt: null)
+            new RunningModelSnapshot { Name = "raw", ModelName = "llama3:8b", ExpiresAt = null },
+            new RunningModelSnapshot { Name = null, ModelName = null, ExpiresAt = null }
         ], ollamaConfigured: true);
 
         var model = AssertEx.NotNull(response.Items.SingleOrDefault());

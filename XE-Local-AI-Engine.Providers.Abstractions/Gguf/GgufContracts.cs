@@ -40,14 +40,22 @@ public sealed record GgufModelRequest
 ///     register and route the model. <see cref="Sha256" /> is <see langword="null" /> when the source LFS OID was not
 ///     exposed (revision-pin only).
 /// </summary>
-public sealed record GgufModelHandle(
-    string ModelName,
-    string LocalPath,
-    string Quant,
-    long SizeBytes,
-    string? Sha256,
-    string SourceRevision,
-    GgufRole Role);
+public sealed class GgufModelHandle
+{
+    public required string ModelName { get; init; }
+
+    public required string LocalPath { get; init; }
+
+    public required string Quant { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string? Sha256 { get; init; }
+
+    public required string SourceRevision { get; init; }
+
+    public required GgufRole Role { get; init; }
+}
 
 /// <summary>
 ///     On-disk registry manifest entry for one present GGUF file. The store is the only writer; the registry reads it.
@@ -153,11 +161,16 @@ public sealed record GgufModelRegistryEntry
 ///     model needs for llama-server to accept image input. Discovered separately from the selectable weight files
 ///     (which exclude projectors), so a repo's projector can be paired with the chosen quant and downloaded alongside it.
 /// </summary>
-public sealed record GgufProjectorFile(
-    string FileName,
-    long SizeBytes,
-    string? Sha256,
-    string Revision);
+public sealed class GgufProjectorFile
+{
+    public required string FileName { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string? Sha256 { get; init; }
+
+    public required string Revision { get; init; }
+}
 
 /// <summary>Sort order for GGUF repo discovery.</summary>
 public enum GgufSearchSort
@@ -194,15 +207,24 @@ public sealed record GgufSearchQuery
 ///     soft quality signal (<see cref="GgufPublisherTrust" />) — a reputable packager / first-party org — never an
 ///     exclusion gate; untrusted repos still appear in results and are simply badged for review by the UI.
 /// </summary>
-public sealed record GgufRepoSummary(
-    string RepoId,
-    bool IsGated,
-    long Downloads,
-    int Likes,
-    DateTimeOffset LastModified,
-    string? License,
-    bool HasUsableGguf,
-    bool IsTrustedPublisher);
+public sealed class GgufRepoSummary
+{
+    public required string RepoId { get; init; }
+
+    public required bool IsGated { get; init; }
+
+    public required long Downloads { get; init; }
+
+    public required int Likes { get; init; }
+
+    public required DateTimeOffset LastModified { get; init; }
+
+    public required string? License { get; init; }
+
+    public required bool HasUsableGguf { get; init; }
+
+    public required bool IsTrustedPublisher { get; init; }
+}
 
 /// <summary>
 ///     One <c>.gguf</c> file inside a repo, with quant/size/integrity plus the GGUF header metadata read via an HTTP
@@ -211,68 +233,95 @@ public sealed record GgufRepoSummary(
 ///     Header fields absent from a file are <see langword="null" />. <see cref="Sha256" /> is <see langword="null" />
 ///     when the LFS OID was not exposed (treat as "unavailable, revision-pin only").
 /// </summary>
-/// <param name="ExpertCount">
-///     Total experts (GGUF <c>{arch}.expert_count</c>), when the header was read. A positive value marks the file as
-///     Mixture-of-Experts; <see langword="null" /> for a dense model or when headers were not requested
-///     (<c>ListRepoFilesAsync</c>). Feeds <c>MoeFacts.ExpertCount</c> for the memory-fit estimator's expert-offload split.
-/// </param>
-/// <param name="ExpertUsedCount">
-///     Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), when the header was read; <see langword="null" />
-///     for a dense model or when headers were not requested.
-/// </param>
-/// <param name="AttentionKeyLength">
-///     Explicit per-head key dimension (GGUF <c>{arch}.attention.key_length</c>), preferred by the memory-fit estimator
-///     over the derived <c>head_dim = embedding_length / n_heads</c>; <see langword="null" /> when the header omits it.
-/// </param>
-/// <param name="AttentionValueLength">Explicit per-head value dimension (GGUF <c>{arch}.attention.value_length</c>), or <see langword="null" />.</param>
-/// <param name="SlidingWindow">
-///     Interleaved sliding-window-attention window size (GGUF <c>{arch}.attention.sliding_window</c>); a positive value
-///     caps the window-limited layers' KV cache at the window in the estimator. <see langword="null" /> for a non-SWA model.
-/// </param>
-/// <param name="SlidingWindowPattern">
-///     Global-attention layer stride (every Nth layer is full attention; Gemma3=6, Gemma2=2), resolved from the header or
-///     a per-architecture default; <see langword="null" /> when unknown (the estimator then keeps every layer full-attention).
-/// </param>
-/// <param name="AttentionKeyLengthMla">
-///     Multi-head Latent Attention latent key dimension (GGUF <c>{arch}.attention.key_length_mla</c>). Together with
-///     <paramref name="AttentionValueLengthMla" /> this is llama.cpp's <c>is_mla()</c> test: when both are present and
-///     positive the KV cache is one latent K tensor per layer and NO V tensor. <see langword="null" /> for every
-///     non-MLA model. Detection is by these keys, never by architecture name.
-/// </param>
-/// <param name="AttentionValueLengthMla">
-///     MLA latent value dimension (GGUF <c>{arch}.attention.value_length_mla</c>); present only alongside
-///     <paramref name="AttentionKeyLengthMla" />. Under MLA no V cache is allocated, so this participates in detection
-///     rather than in the byte formula.
-/// </param>
-public sealed record GgufRepoFile(
-    string FileName,
-    string Quant,
-    long SizeBytes,
-    string? Sha256,
-    string Revision,
-    string? Architecture,
-    string? QuantType,
-    long? ParamCount,
-    long? BlockCount,
-    long? AttentionHeadCount,
-    long? AttentionHeadCountKV,
-    long? EmbeddingLength,
-    long? ContextLength,
-    long? ExpertCount = null,
-    long? ExpertUsedCount = null,
-    long? AttentionKeyLength = null,
-    long? AttentionValueLength = null,
-    long? SlidingWindow = null,
-    long? SlidingWindowPattern = null,
-    long? AttentionKeyLengthMla = null,
-    long? AttentionValueLengthMla = null);
+public sealed class GgufRepoFile
+{
+    public required string FileName { get; init; }
+
+    public required string Quant { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string? Sha256 { get; init; }
+
+    public required string Revision { get; init; }
+
+    public required string? Architecture { get; init; }
+
+    public required string? QuantType { get; init; }
+
+    public required long? ParamCount { get; init; }
+
+    public required long? BlockCount { get; init; }
+
+    public required long? AttentionHeadCount { get; init; }
+
+    public required long? AttentionHeadCountKV { get; init; }
+
+    public required long? EmbeddingLength { get; init; }
+
+    public required long? ContextLength { get; init; }
+
+    /// <summary>
+    ///     Total experts (GGUF <c>{arch}.expert_count</c>), when the header was read. A positive value marks the file as
+    ///     Mixture-of-Experts; <see langword="null" /> for a dense model or when headers were not requested
+    ///     (<c>ListRepoFilesAsync</c>). Feeds <c>MoeFacts.ExpertCount</c> for the memory-fit estimator's expert-offload split.
+    /// </summary>
+    public long? ExpertCount { get; init; }
+
+    /// <summary>
+    ///     Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), when the header was read; <see langword="null" />
+    ///     for a dense model or when headers were not requested.
+    /// </summary>
+    public long? ExpertUsedCount { get; init; }
+
+    /// <summary>
+    ///     Explicit per-head key dimension (GGUF <c>{arch}.attention.key_length</c>), preferred by the memory-fit estimator
+    ///     over the derived <c>head_dim = embedding_length / n_heads</c>; <see langword="null" /> when the header omits it.
+    /// </summary>
+    public long? AttentionKeyLength { get; init; }
+
+    /// <summary>Explicit per-head value dimension (GGUF <c>{arch}.attention.value_length</c>), or <see langword="null" />.</summary>
+    public long? AttentionValueLength { get; init; }
+
+    /// <summary>
+    ///     Interleaved sliding-window-attention window size (GGUF <c>{arch}.attention.sliding_window</c>); a positive value
+    ///     caps the window-limited layers' KV cache at the window in the estimator. <see langword="null" /> for a non-SWA model.
+    /// </summary>
+    public long? SlidingWindow { get; init; }
+
+    /// <summary>
+    ///     Global-attention layer stride (every Nth layer is full attention; Gemma3=6, Gemma2=2), resolved from the header or
+    ///     a per-architecture default; <see langword="null" /> when unknown (the estimator then keeps every layer full-attention).
+    /// </summary>
+    public long? SlidingWindowPattern { get; init; }
+
+    /// <summary>
+    ///     Multi-head Latent Attention latent key dimension (GGUF <c>{arch}.attention.key_length_mla</c>). Together with
+    ///     <see cref="AttentionValueLengthMla" /> this is llama.cpp's <c>is_mla()</c> test: when both are present and
+    ///     positive the KV cache is one latent K tensor per layer and NO V tensor. <see langword="null" /> for every
+    ///     non-MLA model. Detection is by these keys, never by architecture name.
+    /// </summary>
+    public long? AttentionKeyLengthMla { get; init; }
+
+    /// <summary>
+    ///     MLA latent value dimension (GGUF <c>{arch}.attention.value_length_mla</c>); present only alongside
+    ///     <see cref="AttentionKeyLengthMla" />. Under MLA no V cache is allocated, so this participates in detection
+    ///     rather than in the byte formula.
+    /// </summary>
+    public long? AttentionValueLengthMla { get; init; }
+}
 
 /// <summary>One repo's inspected detail: gating, license, and its usable <c>.gguf</c> files.</summary>
-public sealed record GgufRepoDetail(
-    string RepoId,
-    bool IsGated,
-    string? License,
-    IReadOnlyList<GgufRepoFile> Files);
+public sealed class GgufRepoDetail
+{
+    public required string RepoId { get; init; }
+
+    public required bool IsGated { get; init; }
+
+    public required string? License { get; init; }
+
+    public required IReadOnlyList<GgufRepoFile> Files { get; init; }
+}
 
 /// <summary>
 ///     The memory-footprint inputs for one INSTALLED GGUF model, sourced from the registry (quant label + on-disk file
@@ -282,22 +331,41 @@ public sealed record GgufRepoDetail(
 ///     <see cref="ParamCount" /> is null. This is the public seam the capacity footprint provider consumes so the GGUF
 ///     header reader can stay internal to the Hugging Face provider.
 /// </summary>
-public sealed record GgufModelFootprintFacts(
-    string Quant,
-    long FileSizeBytes,
-    long? ParamCount,
-    long? BlockCount,
-    long? AttentionHeadCount,
-    long? AttentionHeadCountKV,
-    long? EmbeddingLength,
-    long? ContextLength,
-    long? AttentionKeyLength = null,
-    long? AttentionValueLength = null,
-    long? SlidingWindow = null,
-    long? SlidingWindowPattern = null,
-    string? ContentIdentity = null,
-    string? Architecture = null,
-    long? ExpertCount = null,
-    long? ExpertUsedCount = null,
-    long? AttentionKeyLengthMla = null,
-    long? AttentionValueLengthMla = null);
+public sealed class GgufModelFootprintFacts
+{
+    public required string Quant { get; init; }
+
+    public required long FileSizeBytes { get; init; }
+
+    public required long? ParamCount { get; init; }
+
+    public required long? BlockCount { get; init; }
+
+    public required long? AttentionHeadCount { get; init; }
+
+    public required long? AttentionHeadCountKV { get; init; }
+
+    public required long? EmbeddingLength { get; init; }
+
+    public required long? ContextLength { get; init; }
+
+    public long? AttentionKeyLength { get; init; }
+
+    public long? AttentionValueLength { get; init; }
+
+    public long? SlidingWindow { get; init; }
+
+    public long? SlidingWindowPattern { get; init; }
+
+    public string? ContentIdentity { get; init; }
+
+    public string? Architecture { get; init; }
+
+    public long? ExpertCount { get; init; }
+
+    public long? ExpertUsedCount { get; init; }
+
+    public long? AttentionKeyLengthMla { get; init; }
+
+    public long? AttentionValueLengthMla { get; init; }
+}

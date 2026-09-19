@@ -274,13 +274,13 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task<ImageServerEndpoint> EnsureRunningAsync(string modelName, CancellationToken ct)
         {
             EnsureCount++;
-            return Task.FromResult(new ImageServerEndpoint(modelName, _baseAddress));
+            return Task.FromResult(new ImageServerEndpoint { ModelName = modelName, BaseAddress = _baseAddress });
         }
 
         public Task<ImageServerEndpoint> RestartAsync(string modelName, CancellationToken ct)
         {
             RestartCount++;
-            return Task.FromResult(new ImageServerEndpoint(modelName, _baseAddress));
+            return Task.FromResult(new ImageServerEndpoint { ModelName = modelName, BaseAddress = _baseAddress });
         }
 
         public Task EvictAsync(string modelName, CancellationToken ct)
@@ -292,8 +292,11 @@ public sealed class StableDiffusionCppRuntimeTests
         public Task<ImageServerEvictAllResult> EvictAllAsync(CancellationToken ct)
         {
             EvictCount++;
-            return Task.FromResult(new ImageServerEvictAllResult(true,
-                new ImageRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false)));
+            return Task.FromResult(new ImageServerEvictAllResult
+            {
+                Evicted = true,
+                Activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+            });
         }
 
         // The runtime now acquires a job lease across submit→poll→complete. This fake has no resident daemon

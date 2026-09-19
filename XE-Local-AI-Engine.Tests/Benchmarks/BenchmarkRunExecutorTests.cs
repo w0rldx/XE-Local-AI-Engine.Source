@@ -1198,24 +1198,27 @@ public sealed class BenchmarkRunExecutorTests
                               LlamaServerProfilingRefusalReason.InUse);
                       }
 
-                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), []);
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint { ModelName = modelName, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:19000") }, []);
                       return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
                   });
         return supervisor;
     }
 
     private static LlamaServerLaunchReceipt Receipt() =>
-        new(LlamaServerLaunchReceipt.CurrentVersion,
-            GpuVariant.Cuda,
-            "linux",
-            "b10201",
-            "exe-sha",
-            "manifest-sha",
-            LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(8192, 33), plan: null, ModelRole.Chat),
-            new LlamaServerLaunchAuxAssets(false, false, false),
-            new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Full, 33, 33),
-            8192,
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+        new()
+        {
+            ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+            Variant = GpuVariant.Cuda,
+            Os = "linux",
+            ExecutableVersion = "b10201",
+            ExecutableSha256 = "exe-sha",
+            ManifestSha256 = "manifest-sha",
+            LaunchProjection = LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(8192, 33), plan: null, ModelRole.Chat),
+            AuxAssets = new LlamaServerLaunchAuxAssets(false, false, false),
+            Placement = new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Full, 33, 33),
+            EffectiveContextTokens = 8192,
+            BenchmarkLaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+        };
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus status, long version, int? invocationTimeoutSeconds = null) =>
         new()
@@ -1412,7 +1415,7 @@ public sealed class BenchmarkRunExecutorTests
                   .Returns(call =>
                   {
                       var modelName = call.ArgAt<string>(0);
-                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), [])
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint { ModelName = modelName, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:19000") }, [])
                       {
                           LaunchReceipt = receipt
                       };

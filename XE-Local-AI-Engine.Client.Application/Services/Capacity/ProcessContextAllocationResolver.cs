@@ -466,7 +466,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             placement = ProcessPlacementMode.Hybrid;
         }
 
-        return new ProcessContextAllocation(contextTokens, trainCeiling, source, placement, footprint, contentIdentity, key);
+        return new ProcessContextAllocation { ProcessContextTokens = contextTokens, ModelTrainContextTokens = trainCeiling, Source = source, Placement = placement, Footprint = footprint, ContentIdentity = contentIdentity, CacheKey = key };
     }
 
     /// <summary>

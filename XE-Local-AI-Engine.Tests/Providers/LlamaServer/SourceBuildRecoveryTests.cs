@@ -359,7 +359,7 @@ public sealed class SourceBuildRecoveryTests
         var signal = new CudaManagedBuildSignal();
         using var service = CreateService(temp.Path, store, signal);
 
-        await AssertEx.ThrowsAsync<IOException>(() => service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None));
+        await AssertEx.ThrowsAsync<IOException>(() => service.StartAsync(new LlamaCppSourceBuildRequest { Backend = LlamaCppSourceBackend.Cpu, Source = LlamaCppSourceSelection.Official }, CancellationToken.None));
 
         AssertEx.True(File.Exists(Path.Combine(backup, "sentinel")));
     }
@@ -436,7 +436,7 @@ public sealed class SourceBuildRecoveryTests
     private sealed class ReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
         public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
-            Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport(true, []));
+            Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport { CanBuild = true, Items = [] });
     }
 
     private sealed class NoopManager : ILlamaCppBinaryManager

@@ -173,7 +173,7 @@ public sealed class InferenceBenchmarkHarnessTests
         };
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
-                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+                preSpawnVram: new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = globalFree, ProcessBudgetBytes = processBudget }),
             spec,
             CancellationToken.None);
 
@@ -202,7 +202,7 @@ public sealed class InferenceBenchmarkHarnessTests
         };
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
-                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+                preSpawnVram: new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = globalFree, ProcessBudgetBytes = processBudget }),
             spec,
             CancellationToken.None);
 
@@ -231,7 +231,7 @@ public sealed class InferenceBenchmarkHarnessTests
         };
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
-                preSpawnVram: new LlamaServerProfilingVramSnapshot(globalFree, processBudget)),
+                preSpawnVram: new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = globalFree, ProcessBudgetBytes = processBudget }),
             spec,
             CancellationToken.None);
 
@@ -256,7 +256,7 @@ public sealed class InferenceBenchmarkHarnessTests
         };
 
         var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Embedding,
-                preSpawnVram: new LlamaServerProfilingVramSnapshot(8 * Gb, 8 * Gb)),
+                preSpawnVram: new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 8 * Gb, ProcessBudgetBytes = 8 * Gb }),
             spec,
             CancellationToken.None);
 
@@ -385,16 +385,19 @@ public sealed class InferenceBenchmarkHarnessTests
         var context = ProfilingContext(ModelRole.Chat) with
         {
             SuccessfulLaunchArguments = ["-m", "/private/models/model.gguf", "-c", "4096"],
-            LoadObservation = new LlamaServerLoadObservation(ModelRole.Chat,
-                GpuVariant.Cuda,
-                RuntimeVersion: "b10375",
-                RuntimeSha256: new string('A', 64),
-                ReadinessDurationMs: 812.5,
-                LlamaServerReadinessOutcome.Ready,
-                LlamaServerPlacementOutcome.Partial,
-                LlamaServerLoadAttemptKind.Primary,
-                SpeculativeModeClass.MainModelHeads,
-                ModelName: "model")
+            LoadObservation = new LlamaServerLoadObservation
+            {
+                Role = ModelRole.Chat,
+                Variant = GpuVariant.Cuda,
+                RuntimeVersion = "b10375",
+                RuntimeSha256 = new string('A', 64),
+                ReadinessDurationMs = 812.5,
+                Outcome = LlamaServerReadinessOutcome.Ready,
+                Placement = LlamaServerPlacementOutcome.Partial,
+                AttemptKind = LlamaServerLoadAttemptKind.Primary,
+                SpeculativeModeClass = SpeculativeModeClass.MainModelHeads,
+                ModelName = "model"
+            }
         };
         var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
         {
@@ -429,9 +432,12 @@ public sealed class InferenceBenchmarkHarnessTests
         int? processId = null,
         LlamaServerProfilingVramSnapshot? preSpawnVram = null)
     {
-        return new LlamaServerProfilingContext(new LlamaServerEndpoint("bartowski/Model-GGUF:Q4_K_M",
-                role,
-                new Uri("http://127.0.0.1:18100/v1")),
+        return new LlamaServerProfilingContext(new LlamaServerEndpoint
+        {
+            ModelName = "bartowski/Model-GGUF:Q4_K_M",
+            Role = role,
+            BaseAddress = new Uri("http://127.0.0.1:18100/v1")
+        },
             [],
             FitParamsOutput: [],
             processId)

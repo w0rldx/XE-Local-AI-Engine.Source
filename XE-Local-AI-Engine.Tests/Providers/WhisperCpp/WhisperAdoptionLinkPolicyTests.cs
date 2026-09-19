@@ -111,13 +111,14 @@ public sealed class WhisperAdoptionLinkPolicyTests
             // Custom + ExplicitCommit: the runtime store requires an engine-pinned record to carry the pinned
             // release commit exactly, and this fixture's commit is arbitrary on purpose.
             var commit = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("commit")))[..40];
-            Descriptor = new WhisperCppSourceBuildDescriptor(WhisperBackend.Cuda,
-                WhisperCppSourceSelection.Custom,
-                WhisperCppSourceBuildRequestValidation.OfficialRepository,
-                WhisperCppSourceRevisionMode.ExplicitCommit,
-                commit,
-                commit)
+            Descriptor = new WhisperCppSourceBuildDescriptor
             {
+                Backend = WhisperBackend.Cuda,
+                Source = WhisperCppSourceSelection.Custom,
+                Repository = WhisperCppSourceBuildRequestValidation.OfficialRepository,
+                RevisionMode = WhisperCppSourceRevisionMode.ExplicitCommit,
+                RequestedCommit = commit,
+                ResolvedCommit = commit,
                 BuildId = Guid.NewGuid()
             };
         }

@@ -53,7 +53,7 @@ public sealed partial class LlamaServerProcessSupervisor
         // that pinned it is the exception — that window IS the one its own measurement runs in, and withholding it
         // leaves a benchmark's context admission nothing to size against, failing the run it just warmed.
         return !running.IsProfilingOwned || ReferenceEquals(running, GetOwnExclusiveProfilingProcess(key, out _))
-            ? new LlamaServerRuntimeInfo(effectiveContext)
+            ? new LlamaServerRuntimeInfo { EffectiveContextTokens = effectiveContext }
             : null;
     }
 
@@ -65,15 +65,18 @@ public sealed partial class LlamaServerProcessSupervisor
         {
             if (running.Handle.HasExited)
             {
-                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, IsResponsive: false, "Process has exited.", HasExited: true));
+                healths.Add(new LlamaServerProcessHealth { ModelName = key.ModelName, Role = key.Role, IsResponsive = false, Detail = "Process has exited.", HasExited = true });
                 continue;
             }
 
             var responsive = await _healthProbe.CheckResponsiveAsync(running.Endpoint.BaseAddress, ct).ConfigureAwait(false);
-            healths.Add(new LlamaServerProcessHealth(key.ModelName,
-                key.Role,
-                responsive,
-                responsive ? "Responsive." : "Not responding to health probe."));
+            healths.Add(new LlamaServerProcessHealth
+            {
+                ModelName = key.ModelName,
+                Role = key.Role,
+                IsResponsive = responsive,
+                Detail = responsive ? "Responsive." : "Not responding to health probe."
+            });
         }
 
         return healths;

@@ -1,5 +1,10 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
-/// <param name="Name">Raw model name/tag as reported by the runtime (caller normalizes).</param>
-/// <param name="Digest">Raw content digest as reported by the runtime, when available.</param>
-public sealed record InstalledModelEntry(string? Name, string? Digest);
+public sealed class InstalledModelEntry
+{
+    /// <summary>Raw model name/tag as reported by the runtime (caller normalizes).</summary>
+    public required string? Name { get; init; }
+
+    /// <summary>Raw content digest as reported by the runtime, when available.</summary>
+    public required string? Digest { get; init; }
+}

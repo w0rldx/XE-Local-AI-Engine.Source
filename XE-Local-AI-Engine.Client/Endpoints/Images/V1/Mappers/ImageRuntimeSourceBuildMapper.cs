@@ -8,11 +8,14 @@ internal static class ImageRuntimeSourceBuildMapper
     public static StableDiffusionCppSourceBuildRequest ToContract(this StartStableDiffusionCppSourceBuildRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return new StableDiffusionCppSourceBuildRequest(request.Backend.ToContract(),
-            (StableDiffusionCppSourceSelection)(int)request.Source,
-            request.Repository,
-            request.Commit,
-            request.AcknowledgeCustomSourceRisk);
+        return new StableDiffusionCppSourceBuildRequest
+        {
+            Backend = request.Backend.ToContract(),
+            Source = (StableDiffusionCppSourceSelection)(int)request.Source,
+            Repository = request.Repository,
+            Commit = request.Commit,
+            AcknowledgeCustomSourceRisk = request.AcknowledgeCustomSourceRisk
+        };
     }
 
     public static SdGpuBackend ToContract(this StableDiffusionCppSourceBackendDto backend)

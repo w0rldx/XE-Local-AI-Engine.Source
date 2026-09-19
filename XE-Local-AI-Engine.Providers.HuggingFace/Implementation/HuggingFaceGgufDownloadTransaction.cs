@@ -70,21 +70,27 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                         "The projector metadata does not identify the selected model revision exactly.");
                 }
 
-                projector = new ResolvedGgufProjectorDownload(Path.GetFileName(discoveredProjector.FileName),
-                    discoveredProjector.SizeBytes,
-                    NormalizeSha256(discoveredProjector.Sha256!));
+                projector = new ResolvedGgufProjectorDownload
+                {
+                    SourceDisplayName = Path.GetFileName(discoveredProjector.FileName),
+                    SourceSizeBytes = discoveredProjector.SizeBytes,
+                    SourceSha256 = NormalizeSha256(discoveredProjector.Sha256!)
+                };
             }
         }
 
-        return new ResolvedGgufDownload(request.RepoId,
-            selected.Quant,
-            request.RepoId,
-            revision,
-            Path.GetFileName(selected.FileName),
-            selected.SizeBytes,
-            NormalizeSha256(selected.Sha256!),
-            role,
-            projector);
+        return new ResolvedGgufDownload
+        {
+            ModelBaseName = request.RepoId,
+            CanonicalQuant = selected.Quant,
+            RepoId = request.RepoId,
+            ResolvedRevision = revision,
+            SourceDisplayName = Path.GetFileName(selected.FileName),
+            SourceSizeBytes = selected.SizeBytes,
+            SourceSha256 = NormalizeSha256(selected.Sha256!),
+            Role = role,
+            Projector = projector
+        };
     }
 
     public async Task<PreparedGgufDownload> PrepareAsync(ResolvedGgufDownload source,
@@ -159,19 +165,25 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 : GgufMemberFingerprint.Compute(projectorHash, source.Projector!.SourceSizeBytes);
             var contentMembers = new List<GgufModelContentMember>
             {
-                new(destination.RelativeGgufPath,
-                    InstalledModelPhysicalMemberRole.Weight,
-                    source.SourceSizeBytes,
-                    weightHash,
-                    [destination.CanonicalModelName])
+                new()
+                {
+                    RelativePath = destination.RelativeGgufPath,
+                    Role = InstalledModelPhysicalMemberRole.Weight,
+                    SizeBytes = source.SourceSizeBytes,
+                    Sha256 = weightHash,
+                    OwningAliases = [destination.CanonicalModelName]
+                }
             };
             if (projectorHash is not null)
             {
-                contentMembers.Add(new GgufModelContentMember(destination.ProjectorRelativePath!,
-                    InstalledModelPhysicalMemberRole.Projector,
-                    source.Projector!.SourceSizeBytes,
-                    projectorHash,
-                    [destination.CanonicalModelName]));
+                contentMembers.Add(new GgufModelContentMember
+                {
+                    RelativePath = destination.ProjectorRelativePath!,
+                    Role = InstalledModelPhysicalMemberRole.Projector,
+                    SizeBytes = source.Projector!.SourceSizeBytes,
+                    Sha256 = projectorHash,
+                    OwningAliases = [destination.CanonicalModelName]
+                });
             }
 
             var modelFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
@@ -228,30 +240,33 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 ModelContentFingerprint = modelFingerprint
             };
             await GgufAcquisitionSidecar.WriteAsync(temporarySidecarPath, sidecar, cancellationToken).ConfigureAwait(false);
-            return new PreparedGgufDownload(operationId,
-                source,
-                destination,
-                temporaryWeightPath,
-                temporarySidecarPath,
-                temporaryProjectorPath,
-                entry,
-                sidecar,
-                weightFingerprint,
-                projectorFingerprint,
-                modelFingerprint);
+            return new PreparedGgufDownload
+            {
+                OperationId = operationId,
+                Source = source,
+                Destination = destination,
+                TemporaryGgufPath = temporaryWeightPath,
+                TemporarySidecarPath = temporarySidecarPath,
+                TemporaryProjectorPath = temporaryProjectorPath,
+                RegistryEntry = entry,
+                Sidecar = sidecar,
+                WeightMemberFingerprint = weightFingerprint,
+                ProjectorMemberFingerprint = projectorFingerprint,
+                ModelContentFingerprint = modelFingerprint
+            };
         }
         catch (Exception exception)
         {
             var artifacts = new List<OwnedArtifact>
             {
-                new(temporarySidecarPath, Owned: true),
-                new(temporaryWeightPath, Owned: true),
-                new(temporaryWeightPath + ".part", Owned: true)
+                new() { Path = temporarySidecarPath, Owned = true },
+                new() { Path = temporaryWeightPath, Owned = true },
+                new() { Path = temporaryWeightPath + ".part", Owned = true }
             };
             if (temporaryProjectorPath is not null)
             {
-                artifacts.Add(new OwnedArtifact(temporaryProjectorPath, Owned: true));
-                artifacts.Add(new OwnedArtifact(temporaryProjectorPath + ".part", Owned: true));
+                artifacts.Add(new OwnedArtifact { Path = temporaryProjectorPath, Owned = true });
+                artifacts.Add(new OwnedArtifact { Path = temporaryProjectorPath + ".part", Owned = true });
             }
 
             var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll([.. artifacts]);
@@ -308,26 +323,30 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 throw IntegrityFailure("The committed download failed integrity revalidation.");
             }
 
-            return new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
-                finalWeightPath,
-                finalSidecarPath,
-                finalProjectorPath,
-                preparedDownload.WeightMemberFingerprint,
-                preparedDownload.ProjectorMemberFingerprint,
-                preparedDownload.ModelContentFingerprint);
+            return new GgufDownloadCommitReceipt
+            {
+                RegistryEntry = preparedDownload.RegistryEntry,
+                FinalGgufPath = finalWeightPath,
+                FinalSidecarPath = finalSidecarPath,
+                FinalProjectorPath = finalProjectorPath,
+                WeightMemberFingerprint = preparedDownload.WeightMemberFingerprint,
+                ProjectorMemberFingerprint = preparedDownload.ProjectorMemberFingerprint,
+                ModelContentFingerprint = preparedDownload.ModelContentFingerprint
+            };
         }
         catch (Exception exception)
         {
             if (movedWeight || movedProjector || movedSidecar)
             {
-                var receipt = new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
-                    finalWeightPath,
-                    finalSidecarPath,
-                    finalProjectorPath,
-                    preparedDownload.WeightMemberFingerprint,
-                    preparedDownload.ProjectorMemberFingerprint,
-                    preparedDownload.ModelContentFingerprint)
+                var receipt = new GgufDownloadCommitReceipt
                 {
+                    RegistryEntry = preparedDownload.RegistryEntry,
+                    FinalGgufPath = finalWeightPath,
+                    FinalSidecarPath = finalSidecarPath,
+                    FinalProjectorPath = finalProjectorPath,
+                    WeightMemberFingerprint = preparedDownload.WeightMemberFingerprint,
+                    ProjectorMemberFingerprint = preparedDownload.ProjectorMemberFingerprint,
+                    ModelContentFingerprint = preparedDownload.ModelContentFingerprint,
                     OwnsFinalGguf = movedWeight,
                     OwnsFinalSidecar = movedSidecar,
                     OwnsFinalProjector = movedProjector
@@ -374,10 +393,13 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
             }
         }
 
-        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
-            new OwnedArtifact(commitReceipt.FinalProjectorPath ?? string.Empty,
-                commitReceipt.FinalProjectorPath is not null && commitReceipt.OwnsFinalProjector),
-            new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalGgufPath, Owned = commitReceipt.OwnsFinalGguf },
+            new OwnedArtifact
+            {
+                Path = commitReceipt.FinalProjectorPath ?? string.Empty,
+                Owned = commitReceipt.FinalProjectorPath is not null && commitReceipt.OwnsFinalProjector
+            },
+            new OwnedArtifact { Path = commitReceipt.FinalSidecarPath, Owned = commitReceipt.OwnsFinalSidecar });
     }
 
     public Task DiscardPreparedAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
@@ -385,14 +407,14 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         ArgumentNullException.ThrowIfNull(preparedDownload);
         var artifacts = new List<OwnedArtifact>
         {
-            new(preparedDownload.TemporarySidecarPath, Owned: true),
-            new(preparedDownload.TemporaryGgufPath, Owned: true),
-            new(preparedDownload.TemporaryGgufPath + ".part", Owned: true)
+            new() { Path = preparedDownload.TemporarySidecarPath, Owned = true },
+            new() { Path = preparedDownload.TemporaryGgufPath, Owned = true },
+            new() { Path = preparedDownload.TemporaryGgufPath + ".part", Owned = true }
         };
         if (preparedDownload.TemporaryProjectorPath is not null)
         {
-            artifacts.Add(new OwnedArtifact(preparedDownload.TemporaryProjectorPath, Owned: true));
-            artifacts.Add(new OwnedArtifact(preparedDownload.TemporaryProjectorPath + ".part", Owned: true));
+            artifacts.Add(new OwnedArtifact { Path = preparedDownload.TemporaryProjectorPath, Owned = true });
+            artifacts.Add(new OwnedArtifact { Path = preparedDownload.TemporaryProjectorPath + ".part", Owned = true });
         }
 
         OwnedArtifactCleanup.DeleteAll(CleanupOwnership, [.. artifacts]);

@@ -80,11 +80,14 @@ internal sealed class GgufModelImporter : IGgufModelImporter
 
             var memberFingerprint = GgufMemberFingerprint.Compute(hash, copied);
             var modelFingerprint = GgufModelContentFingerprint.ComputeV1([
-                new GgufModelContentMember(destination.RelativeGgufPath,
-                    InstalledModelPhysicalMemberRole.Weight,
-                    copied,
-                    hash,
-                    [destination.CanonicalModelName])
+                new GgufModelContentMember
+                {
+                    RelativePath = destination.RelativeGgufPath,
+                    Role = InstalledModelPhysicalMemberRole.Weight,
+                    SizeBytes = copied,
+                    Sha256 = hash,
+                    OwningAliases = [destination.CanonicalModelName]
+                }
             ]);
             var acquiredAt = _timeProvider.GetUtcNow();
             var lineage = destination.Lineage;
@@ -149,12 +152,21 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                 BaseModelName = entry.BaseModelName
             };
             await GgufAcquisitionSidecar.WriteAsync(temporarySidecarPath, sidecar, cancellationToken).ConfigureAwait(false);
-            return new PreparedGgufImport(operationId, destination, temporaryPath, temporarySidecarPath, entry, sidecar,
-                memberFingerprint, modelFingerprint);
+            return new PreparedGgufImport
+            {
+                OperationId = operationId,
+                Destination = destination,
+                TemporaryGgufPath = temporaryPath,
+                TemporarySidecarPath = temporarySidecarPath,
+                RegistryEntry = entry,
+                Sidecar = sidecar,
+                WeightMemberFingerprint = memberFingerprint,
+                ModelContentFingerprint = modelFingerprint
+            };
         }
         catch (Exception exception)
         {
-            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll(new OwnedArtifact(temporaryPath, Owned: true), new OwnedArtifact(temporarySidecarPath, Owned: true));
+            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll(new OwnedArtifact { Path = temporaryPath, Owned = true }, new OwnedArtifact { Path = temporarySidecarPath, Owned = true });
             if (cleanupFailure is not null)
             {
                 throw new GgufAcquisitionCleanupException("Import cleanup requires recovery.",
@@ -202,22 +214,26 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                 throw new IOException("The committed import failed integrity revalidation.");
             }
 
-            return new GgufImportCommitReceipt(preparedImport.RegistryEntry,
-                finalPath,
-                finalSidecarPath,
-                preparedImport.WeightMemberFingerprint,
-                preparedImport.ModelContentFingerprint);
+            return new GgufImportCommitReceipt
+            {
+                RegistryEntry = preparedImport.RegistryEntry,
+                FinalGgufPath = finalPath,
+                FinalSidecarPath = finalSidecarPath,
+                WeightMemberFingerprint = preparedImport.WeightMemberFingerprint,
+                ModelContentFingerprint = preparedImport.ModelContentFingerprint
+            };
         }
         catch (Exception exception)
         {
             if (movedWeight || movedSidecar)
             {
-                var receipt = new GgufImportCommitReceipt(preparedImport.RegistryEntry,
-                    finalPath,
-                    finalSidecarPath,
-                    preparedImport.WeightMemberFingerprint,
-                    preparedImport.ModelContentFingerprint)
+                var receipt = new GgufImportCommitReceipt
                 {
+                    RegistryEntry = preparedImport.RegistryEntry,
+                    FinalGgufPath = finalPath,
+                    FinalSidecarPath = finalSidecarPath,
+                    WeightMemberFingerprint = preparedImport.WeightMemberFingerprint,
+                    ModelContentFingerprint = preparedImport.ModelContentFingerprint,
                     OwnsFinalGguf = movedWeight,
                     OwnsFinalSidecar = movedSidecar
                 };
@@ -251,8 +267,8 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                     "The committed import registry identity changed during rollback.");
             }
 
-            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, commitReceipt.OwnsFinalGguf),
-                new OwnedArtifact(commitReceipt.FinalSidecarPath, commitReceipt.OwnsFinalSidecar));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalGgufPath, Owned = commitReceipt.OwnsFinalGguf },
+                new OwnedArtifact { Path = commitReceipt.FinalSidecarPath, Owned = commitReceipt.OwnsFinalSidecar });
             return;
         }
 
@@ -281,11 +297,11 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                     "The committed import artifact identity no longer matches the rollback receipt.");
             }
 
-            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalGgufPath, Owned = true });
         }
         else if (commitReceipt.OwnsFinalGguf && Directory.Exists(commitReceipt.FinalGgufPath))
         {
-            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalGgufPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalGgufPath, Owned = true });
         }
 
         if (commitReceipt.OwnsFinalSidecar && File.Exists(commitReceipt.FinalSidecarPath))
@@ -302,11 +318,11 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                     "The committed import recovery metadata no longer matches the rollback receipt.");
             }
 
-            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalSidecarPath, Owned = true });
         }
         else if (commitReceipt.OwnsFinalSidecar && Directory.Exists(commitReceipt.FinalSidecarPath))
         {
-            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(commitReceipt.FinalSidecarPath, Owned: true));
+            OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = commitReceipt.FinalSidecarPath, Owned = true });
         }
     }
 
@@ -319,7 +335,7 @@ internal sealed class GgufModelImporter : IGgufModelImporter
     public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedImport);
-        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact(preparedImport.TemporarySidecarPath, Owned: true), new OwnedArtifact(preparedImport.TemporaryGgufPath, Owned: true));
+        OwnedArtifactCleanup.DeleteAll(CleanupOwnership, new OwnedArtifact { Path = preparedImport.TemporarySidecarPath, Owned = true }, new OwnedArtifact { Path = preparedImport.TemporaryGgufPath, Owned = true });
         return Task.CompletedTask;
     }
 
@@ -346,7 +362,7 @@ internal sealed class GgufModelImporter : IGgufModelImporter
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             hasher.AppendData(buffer, 0, read);
             total += read;
-            progress?.Report(new GgufImportProgress(total, expectedBytes));
+            progress?.Report(new GgufImportProgress { CompletedBytes = total, TotalBytes = expectedBytes });
         }
 
         await destination.FlushAsync(cancellationToken).ConfigureAwait(false);

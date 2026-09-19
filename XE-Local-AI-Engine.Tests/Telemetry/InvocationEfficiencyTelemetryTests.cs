@@ -18,25 +18,28 @@ public sealed class InvocationEfficiencyTelemetryTests
         using var capture = new NodeMeterCapture();
         using var activity = new Activity("invocation-test");
         activity.Start();
-        var efficiency = new ProviderCallEfficiencySnapshot(ProviderCalls: 3,
-            ProviderRoundsRejected: 1,
-            EstimatedInputTokens: 2400,
-            MaximumEstimatedInputTokens: 900,
-            ToolSchemaTokens: 600,
-            MaximumToolSchemaTokens: 200,
-            ProviderRoundElapsedMs: 1250,
-            MessagesDropped: 2,
-            ToolResultsTruncated: 1,
-            CharsTruncated: 4000,
-            ToolCallsRequested: 2,
-            ToolCallsCompleted: 2,
-            ToolCallsFailed: 1,
-            ToolRequestToResultMs: 75,
-            ToolResultBytes: 8192,
-            TimeToFirstToolRequestMs: 320,
-            ProviderRetries: 1,
-            ToolArgumentRepairs: 1,
-            AgentHandoffs: 2);
+        var efficiency = new ProviderCallEfficiencySnapshot
+        {
+            ProviderCalls = 3,
+            ProviderRoundsRejected = 1,
+            EstimatedInputTokens = 2400,
+            MaximumEstimatedInputTokens = 900,
+            ToolSchemaTokens = 600,
+            MaximumToolSchemaTokens = 200,
+            ProviderRoundElapsedMs = 1250,
+            MessagesDropped = 2,
+            ToolResultsTruncated = 1,
+            CharsTruncated = 4000,
+            ToolCallsRequested = 2,
+            ToolCallsCompleted = 2,
+            ToolCallsFailed = 1,
+            ToolRequestToResultMs = 75,
+            ToolResultBytes = 8192,
+            TimeToFirstToolRequestMs = 320,
+            ProviderRetries = 1,
+            ToolArgumentRepairs = 1,
+            AgentHandoffs = 2
+        };
         var record = new InvocationEfficiencyRecord
         {
             InvocationId = Guid.NewGuid(),

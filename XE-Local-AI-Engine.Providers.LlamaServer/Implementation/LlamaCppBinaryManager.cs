@@ -212,7 +212,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
                 // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub.
                 reporter.Complete();
-                return new LlamaBinary(cachedServer, resolvedTag, variant, isPinnedFallback);
+                return new LlamaBinary { ServerExecutablePath = cachedServer, Version = resolvedTag, Variant = variant, IsPinnedFallback = isPinnedFallback };
             }
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
@@ -231,7 +231,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
             reporter.Complete();
-            return new LlamaBinary(serverPath, resolvedTag, variant, isPinnedFallback);
+            return new LlamaBinary { ServerExecutablePath = serverPath, Version = resolvedTag, Variant = variant, IsPinnedFallback = isPinnedFallback };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -311,7 +311,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var cachedServer = ResolveServerPath(variantDir, pin);
         return cachedServer is null
             ? null
-            : new LlamaBinary(cachedServer, resolvedTag, variant, string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal));
+            : new LlamaBinary { ServerExecutablePath = cachedServer, Version = resolvedTag, Variant = variant, IsPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal) };
     }
 
     /// <summary>
@@ -518,7 +518,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
 
             reporter.Complete();
-            return new LlamaBinary(serverPath, tag, variant, IsPinnedFallback: false);
+            return new LlamaBinary { ServerExecutablePath = serverPath, Version = tag, Variant = variant, IsPinnedFallback = false };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

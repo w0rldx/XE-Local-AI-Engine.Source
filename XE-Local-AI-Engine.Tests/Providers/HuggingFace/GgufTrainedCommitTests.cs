@@ -29,7 +29,7 @@ public sealed class GgufTrainedCommitTests
         using var registry = Infra.Registry(options);
         var importer = new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
 
-        var prepared = await importer.PrepareAsync(new GgufImportSource(source), MergedDestination(), progress: null, CancellationToken.None);
+        var prepared = await importer.PrepareAsync(new GgufImportSource { AbsolutePath = source }, MergedDestination(), progress: null, CancellationToken.None);
         var receipt = await importer.CommitAsync(prepared, CancellationToken.None);
 
         var entry = receipt.RegistryEntry;
@@ -59,7 +59,7 @@ public sealed class GgufTrainedCommitTests
         using var registry = Infra.Registry(options);
         var importer = new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
 
-        var prepared = await importer.PrepareAsync(new GgufImportSource(source), AdapterDestination(), progress: null, CancellationToken.None);
+        var prepared = await importer.PrepareAsync(new GgufImportSource { AbsolutePath = source }, AdapterDestination(), progress: null, CancellationToken.None);
         var entry = (await importer.CommitAsync(prepared, CancellationToken.None)).RegistryEntry;
 
         AssertEx.Equal(LocalModelOrigin.Trained, entry.Origin);
@@ -81,7 +81,7 @@ public sealed class GgufTrainedCommitTests
         var options = Infra.Options(paths.ModelsDirectory);
         using var registry = Infra.Registry(options);
         var importer = new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
-        var prepared = await importer.PrepareAsync(new GgufImportSource(source), AdapterDestination(), progress: null, CancellationToken.None);
+        var prepared = await importer.PrepareAsync(new GgufImportSource { AbsolutePath = source }, AdapterDestination(), progress: null, CancellationToken.None);
         var entry = (await importer.CommitAsync(prepared, CancellationToken.None)).RegistryEntry;
 
         var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey(entry.ModelName, ModelRole.Chat),
@@ -108,7 +108,7 @@ public sealed class GgufTrainedCommitTests
         using var registry = Infra.Registry(options);
         var importer = new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
 
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => importer.PrepareAsync(new GgufImportSource(source),
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => importer.PrepareAsync(new GgufImportSource { AbsolutePath = source },
             MergedDestination() with
             {
                 Lineage = null
@@ -128,7 +128,7 @@ public sealed class GgufTrainedCommitTests
         using var registry = Infra.Registry(options);
         var importer = new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
 
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => importer.PrepareAsync(new GgufImportSource(source),
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => importer.PrepareAsync(new GgufImportSource { AbsolutePath = source },
             MergedDestination() with
             {
                 Origin = LocalModelOrigin.Imported
@@ -148,7 +148,7 @@ public sealed class GgufTrainedCommitTests
         using var registry = Infra.Registry(options);
         var importer = new GgufModelImporter(registry, Infra.AbundantSpace(), options, TimeProvider.System);
 
-        var failure = await AssertEx.ThrowsAsync<GgufImportException>(() => importer.PrepareAsync(new GgufImportSource(source),
+        var failure = await AssertEx.ThrowsAsync<GgufImportException>(() => importer.PrepareAsync(new GgufImportSource { AbsolutePath = source },
             MergedDestination(),
             progress: null,
             CancellationToken.None));
@@ -157,22 +157,28 @@ public sealed class GgufTrainedCommitTests
     }
 
     private static GgufImportDestination MergedDestination() =>
-        new("Tuned:Q4_K_M",
-            "Q4_K_M",
-            MergedFileName,
-            MergedFileName + ".xe-model.json",
-            LocalModelOrigin.Trained,
-            ProjectorRelativePath: null,
-            new TrainedModelLineage("meta/base", "main", "v1:dataset"));
+        new()
+        {
+            CanonicalModelName = "Tuned:Q4_K_M",
+            CanonicalQuant = "Q4_K_M",
+            RelativeGgufPath = MergedFileName,
+            RelativeSidecarPath = MergedFileName + ".xe-model.json",
+            Origin = LocalModelOrigin.Trained,
+            ProjectorRelativePath = null,
+            Lineage = new TrainedModelLineage { DerivedFromRepoId = "meta/base", DerivedFromRevision = "main", DerivedFromContentFingerprint = "v1:dataset" }
+        };
 
     private static GgufImportDestination AdapterDestination() =>
-        new("Tuned-Adapter:F16",
-            "F16",
-            AdapterFileName,
-            AdapterFileName + ".xe-model.json",
-            LocalModelOrigin.Trained,
-            ProjectorRelativePath: null,
-            new TrainedModelLineage("meta/base", "main", "v1:dataset", "base:Q4_K_M"));
+        new()
+        {
+            CanonicalModelName = "Tuned-Adapter:F16",
+            CanonicalQuant = "F16",
+            RelativeGgufPath = AdapterFileName,
+            RelativeSidecarPath = AdapterFileName + ".xe-model.json",
+            Origin = LocalModelOrigin.Trained,
+            ProjectorRelativePath = null,
+            Lineage = new TrainedModelLineage { DerivedFromRepoId = "meta/base", DerivedFromRevision = "main", DerivedFromContentFingerprint = "v1:dataset", BaseModelName = "base:Q4_K_M" }
+        };
 
     private static byte[] BuildCausalGguf() =>
         new GgufHeaderBytesBuilder()

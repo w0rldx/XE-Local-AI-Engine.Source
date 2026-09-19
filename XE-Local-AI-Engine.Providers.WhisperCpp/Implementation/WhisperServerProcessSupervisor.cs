@@ -177,7 +177,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         {
             // A transcription or a spawn is in flight. This is the 409 the endpoint reports, with the snapshot that
             // tells the operator what to wait for.
-            return new WhisperServerEvictResult(false, _runtimeActivityGate.GetSnapshot());
+            return new WhisperServerEvictResult { Evicted = false, Activity = _runtimeActivityGate.GetSnapshot() };
         }
 
         await using (reservation.ConfigureAwait(false))
@@ -189,7 +189,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        return new WhisperServerEvictResult(true, _runtimeActivityGate.GetSnapshot());
+        return new WhisperServerEvictResult { Evicted = true, Activity = _runtimeActivityGate.GetSnapshot() };
     }
 
     /// <inheritdoc />
@@ -241,32 +241,41 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         if (running is null || running.Handle.HasExited)
         {
-            return new WhisperRuntimeStatusSnapshot(starting ? WhisperRuntimeState.Starting : WhisperRuntimeState.Stopped,
-                LoadedModelId: null,
-                Backend: null,
-                BinaryVersion: null,
-                BinarySource: null,
-                WhisperFfmpegProbe.IsAvailable);
+            return new WhisperRuntimeStatusSnapshot
+            {
+                State = starting ? WhisperRuntimeState.Starting : WhisperRuntimeState.Stopped,
+                LoadedModelId = null,
+                Backend = null,
+                BinaryVersion = null,
+                BinarySource = null,
+                SupportsTranscode = WhisperFfmpegProbe.IsAvailable
+            };
         }
 
         if (starting)
         {
             // An in-place model switch: the daemon is resident but answering 503, and the model it still holds is the
             // one being replaced. Reporting the old id as Ready would tell the operator a request will be served.
-            return new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Starting,
-                LoadedModelId: null,
-                running.Binary.Backend,
-                running.Binary.Version,
-                ResolveBinarySource(running.Binary),
-                WhisperFfmpegProbe.IsAvailable);
+            return new WhisperRuntimeStatusSnapshot
+            {
+                State = WhisperRuntimeState.Starting,
+                LoadedModelId = null,
+                Backend = running.Binary.Backend,
+                BinaryVersion = running.Binary.Version,
+                BinarySource = ResolveBinarySource(running.Binary),
+                SupportsTranscode = WhisperFfmpegProbe.IsAvailable
+            };
         }
 
-        return new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Ready,
-            running.ModelId,
-            running.Binary.Backend,
-            running.Binary.Version,
-            ResolveBinarySource(running.Binary),
-            WhisperFfmpegProbe.IsAvailable);
+        return new WhisperRuntimeStatusSnapshot
+        {
+            State = WhisperRuntimeState.Ready,
+            LoadedModelId = running.ModelId,
+            Backend = running.Binary.Backend,
+            BinaryVersion = running.Binary.Version,
+            BinarySource = ResolveBinarySource(running.Binary),
+            SupportsTranscode = WhisperFfmpegProbe.IsAvailable
+        };
     }
 
     private RunningServer? Current
@@ -399,7 +408,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
             var generation = Interlocked.Increment(ref _generation);
             var running = new RunningServer(handle,
-                new WhisperServerEndpoint(modelId, generation, spec.BaseAddress),
+                new WhisperServerEndpoint { ModelId = modelId, Generation = generation, BaseAddress = spec.BaseAddress },
                 binary,
                 port,
                 _timeProvider.GetUtcNow(),

@@ -229,7 +229,7 @@ internal sealed class GoldenRecorderSupervisor : IWhisperServerSupervisor
     }
 
     public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct) =>
-        Task.FromResult(new WhisperServerEndpoint(modelId, Generation: 1, _baseAddress));
+        Task.FromResult(new WhisperServerEndpoint { ModelId = modelId, Generation = 1, BaseAddress = _baseAddress });
 
     public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
         throw new NotSupportedException("The recorder does not own the daemon's lifetime.");
@@ -238,7 +238,7 @@ internal sealed class GoldenRecorderSupervisor : IWhisperServerSupervisor
         new NoOpLease();
 
     public WhisperRuntimeStatusSnapshot GetStatus() =>
-        new(WhisperRuntimeState.Ready, LoadedModelId: null, Backend: null, BinaryVersion: null, BinarySource: null, SupportsTranscode: false);
+        new() { State = WhisperRuntimeState.Ready, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = false };
 
     private sealed class NoOpLease : IWhisperTranscriptionLease
     {

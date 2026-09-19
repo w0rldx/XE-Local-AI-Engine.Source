@@ -165,7 +165,7 @@ public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
         {
             binaryManager = Substitute.For<ILlamaCppBinaryManager>();
             binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                         .Returns(Task.FromResult(new LlamaBinary(Path.Combine(bundlePath!, ExecutableName), "b10201", GpuVariant.Cuda, IsPinnedFallback: false)));
+                         .Returns(Task.FromResult(new LlamaBinary { ServerExecutablePath = Path.Combine(bundlePath!, ExecutableName), Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = false }));
         }
 
         var installedRuntimeStore = Substitute.For<IInstalledRuntimeStore>();

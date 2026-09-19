@@ -29,8 +29,11 @@ internal sealed class LlamaServerLaunchCandidateBuilder
             LlamaServerLaunchPlan? cpuReplayPlan = variant == GpuVariant.Cpu && !resolved.ExploreMode
                 ? _launchPolicy.ResolveCpuReplayPlan(resolved)
                 : null;
-            return new LlamaServerLaunchPlanSet(null,
-                [new LlamaServerLaunchCandidate(resolved, cpuReplayPlan, LlamaServerLoadAttemptKind.Primary)]);
+            return new LlamaServerLaunchPlanSet
+            {
+                Allocation = null,
+                Candidates = [new LlamaServerLaunchCandidate { Resolved = resolved, Plan = cpuReplayPlan, AttemptKind = LlamaServerLoadAttemptKind.Primary }]
+            };
         }
 
         ProcessContextAllocation allocation;
@@ -62,32 +65,48 @@ internal sealed class LlamaServerLaunchCandidateBuilder
         // what keeps every safe retry a KV retry, which is what makes the supervisor's fallback attribution sound.
         if (plan.UseKvCacheQuantization)
         {
-            return new LlamaServerLaunchPlanSet(allocation,
-            [
-                new LlamaServerLaunchCandidate(resolved, plan, LlamaServerLoadAttemptKind.Primary),
-                new LlamaServerLaunchCandidate(resolved, plan.WithoutKvCacheQuantization(), LlamaServerLoadAttemptKind.SafeRetry)
-            ]);
+            return new LlamaServerLaunchPlanSet
+            {
+                Allocation = allocation,
+                Candidates = [
+                new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.Primary },
+                new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan.WithoutKvCacheQuantization(), AttemptKind = LlamaServerLoadAttemptKind.SafeRetry }
+            ]
+            };
         }
 
         if (variant != GpuVariant.Cpu && !resolved.ExploreMode && !string.IsNullOrWhiteSpace(resolved.KvTypeK))
         {
-            return new LlamaServerLaunchPlanSet(allocation,
-            [
-                new LlamaServerLaunchCandidate(resolved, plan, LlamaServerLoadAttemptKind.Primary),
-                new LlamaServerLaunchCandidate(resolved.WithoutKvCacheQuantization(), plan, LlamaServerLoadAttemptKind.SafeRetry)
-            ]);
+            return new LlamaServerLaunchPlanSet
+            {
+                Allocation = allocation,
+                Candidates = [
+                new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.Primary },
+                new LlamaServerLaunchCandidate { Resolved = resolved.WithoutKvCacheQuantization(), Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.SafeRetry }
+            ]
+            };
         }
 
-        return new LlamaServerLaunchPlanSet(allocation,
-            [new LlamaServerLaunchCandidate(resolved, plan, LlamaServerLoadAttemptKind.Primary)]);
+        return new LlamaServerLaunchPlanSet
+        {
+            Allocation = allocation,
+            Candidates = [new LlamaServerLaunchCandidate { Resolved = resolved, Plan = plan, AttemptKind = LlamaServerLoadAttemptKind.Primary }]
+        };
     }
 }
 
-internal sealed record LlamaServerLaunchCandidate(
-    ResolvedLaunchArguments Resolved,
-    LlamaServerLaunchPlan? Plan,
-    LlamaServerLoadAttemptKind AttemptKind);
+internal sealed record LlamaServerLaunchCandidate
+{
+    public required ResolvedLaunchArguments Resolved { get; init; }
 
-internal sealed record LlamaServerLaunchPlanSet(
-    ProcessContextAllocation? Allocation,
-    List<LlamaServerLaunchCandidate> Candidates);
+    public required LlamaServerLaunchPlan? Plan { get; init; }
+
+    public required LlamaServerLoadAttemptKind AttemptKind { get; init; }
+}
+
+internal sealed record LlamaServerLaunchPlanSet
+{
+    public required ProcessContextAllocation? Allocation { get; init; }
+
+    public required List<LlamaServerLaunchCandidate> Candidates { get; init; }
+}

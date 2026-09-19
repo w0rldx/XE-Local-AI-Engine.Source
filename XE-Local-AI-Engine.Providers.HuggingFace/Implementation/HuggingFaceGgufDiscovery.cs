@@ -64,14 +64,17 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 continue;
             }
 
-            summaries.Add(new GgufRepoSummary(model.RepoId,
-                model.IsGated,
-                model.Downloads,
-                model.Likes,
-                model.LastModified,
-                model.License,
-                HasUsableGguf: true,
-                GgufPublisherTrust.IsTrustedPublisher(model.RepoId)));
+            summaries.Add(new GgufRepoSummary
+            {
+                RepoId = model.RepoId,
+                IsGated = model.IsGated,
+                Downloads = model.Downloads,
+                Likes = model.Likes,
+                LastModified = model.LastModified,
+                License = model.License,
+                HasUsableGguf = true,
+                IsTrustedPublisher = GgufPublisherTrust.IsTrustedPublisher(model.RepoId)
+            });
         }
 
         return summaries;
@@ -101,7 +104,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
         if (detail is null)
         {
-            return new GgufRepoDetail(repoId, IsGated: false, License: null, []);
+            return new GgufRepoDetail { RepoId = repoId, IsGated = false, License = null, Files = [] };
         }
 
         var usable = new List<UsableFile>();
@@ -136,30 +139,33 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             var (file, quant) = usable[i];
             var header = headers?[i];
 
-            files.Add(new GgufRepoFile(file.FileName,
-                quant,
-                file.SizeBytes,
-                file.Sha256,
-                detail.Revision,
-                header?.Architecture,
-                header?.QuantType,
-                header?.ParamCount,
-                header?.BlockCount,
-                header?.AttentionHeadCount,
-                header?.AttentionHeadCountKV,
-                header?.EmbeddingLength,
-                header?.ContextLength,
-                header?.ExpertCount,
-                header?.ExpertUsedCount,
-                header?.AttentionKeyLength,
-                header?.AttentionValueLength,
-                header?.SlidingWindow,
-                header?.SlidingWindowPattern,
-                header?.AttentionKeyLengthMla,
-                header?.AttentionValueLengthMla));
+            files.Add(new GgufRepoFile
+            {
+                FileName = file.FileName,
+                Quant = quant,
+                SizeBytes = file.SizeBytes,
+                Sha256 = file.Sha256,
+                Revision = detail.Revision,
+                Architecture = header?.Architecture,
+                QuantType = header?.QuantType,
+                ParamCount = header?.ParamCount,
+                BlockCount = header?.BlockCount,
+                AttentionHeadCount = header?.AttentionHeadCount,
+                AttentionHeadCountKV = header?.AttentionHeadCountKV,
+                EmbeddingLength = header?.EmbeddingLength,
+                ContextLength = header?.ContextLength,
+                ExpertCount = header?.ExpertCount,
+                ExpertUsedCount = header?.ExpertUsedCount,
+                AttentionKeyLength = header?.AttentionKeyLength,
+                AttentionValueLength = header?.AttentionValueLength,
+                SlidingWindow = header?.SlidingWindow,
+                SlidingWindowPattern = header?.SlidingWindowPattern,
+                AttentionKeyLengthMla = header?.AttentionKeyLengthMla,
+                AttentionValueLengthMla = header?.AttentionValueLengthMla
+            });
         }
 
-        return new GgufRepoDetail(detail.RepoId, detail.IsGated, detail.License, files);
+        return new GgufRepoDetail { RepoId = detail.RepoId, IsGated = detail.IsGated, License = detail.License, Files = files };
     }
 
     /// <inheritdoc />
@@ -186,7 +192,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
 
         return projector is null
             ? null
-            : new GgufProjectorFile(projector.FileName, projector.SizeBytes, projector.Sha256, detail.Revision);
+            : new GgufProjectorFile { FileName = projector.FileName, SizeBytes = projector.SizeBytes, Sha256 = projector.Sha256, Revision = detail.Revision };
     }
 
     // Ranks a projector filename by encoder precision (higher = preferred): F32 > F16/BF16 > everything else. The markers
@@ -274,7 +280,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 shardGroups[baseName] = group;
             }
 
-            group.Add(new ShardCandidate(entry.File, entry.Quant, match.Groups["part"].Value));
+            group.Add(new ShardCandidate { File = entry.File, Quant = entry.Quant, Part = match.Groups["part"].Value });
         }
 
         if (shardGroups.Count == 0)
@@ -331,5 +337,12 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     private sealed record UsableFile(HubRepoFile File, string Quant);
 
     /// <summary>One split of a sharded GGUF: a <see cref="UsableFile" /> plus its zero-padded part number.</summary>
-    private sealed record ShardCandidate(HubRepoFile File, string Quant, string Part);
+    private sealed record ShardCandidate
+    {
+        public required HubRepoFile File { get; init; }
+
+        public required string Quant { get; init; }
+
+        public required string Part { get; init; }
+    }
 }

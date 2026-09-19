@@ -147,14 +147,20 @@ internal static class TrainingRuntimeTestInfrastructure
 
         public static StubPrerequisiteProbe Satisfied()
         {
-            return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport(CanInstall: true,
-                [new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.Platform, Satisfied: true, "Running on Linux.")]));
+            return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport
+            {
+                CanInstall = true,
+                Items = [new TrainingRuntimePrerequisiteItem { Key = TrainingRuntimePrerequisiteKeys.Platform, Satisfied = true, Detail = "Running on Linux." }]
+            });
         }
 
         public static StubPrerequisiteProbe Unsatisfied(string key)
         {
-            return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport(CanInstall: false,
-                [new TrainingRuntimePrerequisiteItem(key, Satisfied: false, "Not satisfied.")]));
+            return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport
+            {
+                CanInstall = false,
+                Items = [new TrainingRuntimePrerequisiteItem { Key = key, Satisfied = false, Detail = "Not satisfied." }]
+            });
         }
     }
 }

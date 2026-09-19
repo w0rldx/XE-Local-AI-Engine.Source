@@ -1,12 +1,18 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>Compatibility result for a final llama-server launch vector.</summary>
-internal sealed record LlamaServerCapabilityDecision(
-    LlamaServerLaunchSpec Spec,
-    bool IsCompatible,
-    bool CanTrySafeFallback,
-    string? SanitizedError,
-    IReadOnlyList<string> OmittedOptions);
+internal sealed class LlamaServerCapabilityDecision
+{
+    public required LlamaServerLaunchSpec Spec { get; init; }
+
+    public required bool IsCompatible { get; init; }
+
+    public required bool CanTrySafeFallback { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required IReadOnlyList<string> OmittedOptions { get; init; }
+}
 
 /// <summary>
 ///     Refuses a runtime missing correctness/safety flags and removes only explicitly optional optimization or
@@ -118,11 +124,14 @@ internal static class LlamaServerCapabilityGate
         {
             Arguments = arguments
         };
-        return new LlamaServerCapabilityDecision(adjusted,
-            IsCompatible: true,
-            CanTrySafeFallback: false,
-            SanitizedError: null,
-            omitted);
+        return new LlamaServerCapabilityDecision
+        {
+            Spec = adjusted,
+            IsCompatible = true,
+            CanTrySafeFallback = false,
+            SanitizedError = null,
+            OmittedOptions = omitted
+        };
     }
 
     private static bool SupportsLaunchOption(LlamaServerCapabilityManifest manifest, string option)
@@ -191,6 +200,6 @@ internal static class LlamaServerCapabilityGate
         bool canTrySafeFallback = false,
         IReadOnlyList<string>? omitted = null)
     {
-        return new LlamaServerCapabilityDecision(spec, IsCompatible: false, canTrySafeFallback, sanitizedError, omitted ?? []);
+        return new LlamaServerCapabilityDecision { Spec = spec, IsCompatible = false, CanTrySafeFallback = canTrySafeFallback, SanitizedError = sanitizedError, OmittedOptions = omitted ?? [] };
     }
 }

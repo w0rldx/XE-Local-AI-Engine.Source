@@ -29,7 +29,7 @@ public sealed class TrainingRunStartupReaperTests
     };
 
     private static TrainingProcessFacts LiveFacts() =>
-        new(Receipt.Pgid, Receipt.StartTicks, Receipt.ExecutablePath, Receipt.RunToken);
+        new() { Pgid = Receipt.Pgid, StartTicks = Receipt.StartTicks, ExecutablePath = Receipt.ExecutablePath, RunToken = Receipt.RunToken };
 
     [Test]
     public void Matches_WhenEveryFieldAgrees_IsTrue() =>

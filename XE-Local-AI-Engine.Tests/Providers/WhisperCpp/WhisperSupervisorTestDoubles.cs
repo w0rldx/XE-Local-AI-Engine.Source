@@ -158,7 +158,7 @@ internal sealed class FakeWhisperBinaryManager : IWhisperCppBinaryManager
     }
 
     public Task<WhisperBinary> EnsureBinaryAsync(WhisperBackend backend, CancellationToken ct) =>
-        Task.FromResult(new WhisperBinary("/fake/bin/whisper-server", _version, _resolvedBackend, _isPinnedFallback));
+        Task.FromResult(new WhisperBinary { ServerExecutablePath = "/fake/bin/whisper-server", Version = _version, Backend = _resolvedBackend, IsPinnedFallback = _isPinnedFallback });
 }
 
 /// <summary>

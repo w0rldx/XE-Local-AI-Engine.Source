@@ -5,7 +5,12 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     tree-kill + restart it on demand. Mirrors <c>ILlamaServerProcessSupervisor</c> for the image runtime and also
 ///     exposes the operator eject boundary used before managed-runtime mutation.
 /// </summary>
-public sealed record ImageServerEvictAllResult(bool Evicted, ImageRuntimeActivitySnapshot Activity);
+public sealed class ImageServerEvictAllResult
+{
+    public required bool Evicted { get; init; }
+
+    public required ImageRuntimeActivitySnapshot Activity { get; init; }
+}
 
 public interface IImageServerSupervisor
 {

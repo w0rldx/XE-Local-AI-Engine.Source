@@ -175,7 +175,7 @@ public sealed class ModelClassificationServiceTests
     private static void StubDetails(IOllamaModelService ollama, string modelName, params string[] capabilities)
     {
         // The service reads only OllamaModelDetails.Capabilities, so every other field can stay unset.
-        var details = new OllamaModelDetails(MaxContextTokens: null, capabilities);
+        var details = new OllamaModelDetails { MaxContextTokens = null, Capabilities = capabilities };
         ollama.ShowModelDetailsAsync(modelName, Arg.Any<CancellationToken>()).Returns(details);
     }
 

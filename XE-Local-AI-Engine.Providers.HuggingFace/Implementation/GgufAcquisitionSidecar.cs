@@ -54,11 +54,14 @@ internal static class GgufAcquisitionSidecar
 
             var members = new List<GgufModelContentMember>
             {
-                new(GgufFilePath.GetRelativeContainedPath(modelsDirectory, weightPath),
-                    InstalledModelPhysicalMemberRole.Weight,
-                    metadata.WeightSizeBytes,
-                    weightHash,
-                    [metadata.ModelName])
+                new()
+                {
+                    RelativePath = GgufFilePath.GetRelativeContainedPath(modelsDirectory, weightPath),
+                    Role = InstalledModelPhysicalMemberRole.Weight,
+                    SizeBytes = metadata.WeightSizeBytes,
+                    Sha256 = weightHash,
+                    OwningAliases = [metadata.ModelName]
+                }
             };
 
             if (metadata.ProjectorRelativePath is not null)
@@ -80,11 +83,14 @@ internal static class GgufAcquisitionSidecar
                     return null;
                 }
 
-                members.Add(new GgufModelContentMember(metadata.ProjectorRelativePath,
-                    InstalledModelPhysicalMemberRole.Projector,
-                    projectorSize,
-                    projectorHash,
-                    [metadata.ModelName]));
+                members.Add(new GgufModelContentMember
+                {
+                    RelativePath = metadata.ProjectorRelativePath,
+                    Role = InstalledModelPhysicalMemberRole.Projector,
+                    SizeBytes = projectorSize,
+                    Sha256 = projectorHash,
+                    OwningAliases = [metadata.ModelName]
+                });
             }
 
             return string.Equals(GgufModelContentFingerprint.ComputeV1(members), metadata.ModelContentFingerprint, StringComparison.Ordinal)

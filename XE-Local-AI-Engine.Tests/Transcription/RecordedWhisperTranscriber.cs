@@ -161,17 +161,23 @@ internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
         // Back to the provider's contract — fractional seconds, relative to the submitted audio — so that the
         // seconds-to-milliseconds conversion in the segmenter is exercised rather than bypassed.
         var segments = window.Segments
-                             .Select(segment => new WhisperTranscriptSegment((segment.StartMs - window.StartMs) / 1000.0,
-                                 (segment.EndMs - window.StartMs) / 1000.0,
-                                 segment.Text,
-                                 segment.Confidence))
+                             .Select(segment => new WhisperTranscriptSegment
+                             {
+                                 StartSeconds = (segment.StartMs - window.StartMs) / 1000.0,
+                                 EndSeconds = (segment.EndMs - window.StartMs) / 1000.0,
+                                 Text = segment.Text,
+                                 Confidence = segment.Confidence
+                             })
                              .ToList();
 
-        return new WhisperTranscriptionResult(string.Join(' ', segments.Select(segment => segment.Text)).Trim(),
-            segments,
-            window.DetectedLanguageCode,
-            window.DetectedLanguageCode is null ? null : 0.99,
-            durationMs / 1000.0);
+        return new WhisperTranscriptionResult
+        {
+            Text = string.Join(' ', segments.Select(segment => segment.Text)).Trim(),
+            Segments = segments,
+            DetectedLanguageCode = window.DetectedLanguageCode,
+            DetectedLanguageProbability = window.DetectedLanguageCode is null ? null : 0.99,
+            DurationSeconds = durationMs / 1000.0
+        };
     }
 
     /// <summary>Buffers the caller's stream so it can be hashed, then rewinds it: the caller still owns it.</summary>

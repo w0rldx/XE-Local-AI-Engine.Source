@@ -35,13 +35,16 @@ internal sealed class DefaultProcessContextAllocationResolver : IProcessContextA
             source = ProcessContextAllocationSource.FrozenProfile;
         }
 
-        return Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation(tokens,
-            ModelTrainContextTokens: null,
-            source,
-            variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            modelName,
-            $"{modelName}|{role}|{variant}|{tokens}"));
+        return Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation
+        {
+            ProcessContextTokens = tokens,
+            ModelTrainContextTokens = null,
+            Source = source,
+            Placement = variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = modelName,
+            CacheKey = $"{modelName}|{role}|{variant}|{tokens}"
+        });
     }
 
     public bool TryDownTierAfterOutOfMemory(ProcessContextAllocation current, out ProcessContextAllocation downTiered)

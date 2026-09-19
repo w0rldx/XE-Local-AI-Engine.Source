@@ -5,22 +5,33 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 ///     core set claims it. NAMES cross this boundary, never <c>AITool</c>s, so a selector can never hold — let alone
 ///     invoke — an executable.
 /// </summary>
-/// <param name="Name">The tool name as it appears in the outbound <c>tools</c> array.</param>
-/// <param name="Description">The model-visible description, or <see langword="null" /> when the tool carries none.</param>
-/// <param name="IsCore">
-///     Whether the tool is always offered. Core tools are never ranked and never trimmed. Tool AUTHORISATION is never
-///     an input here: the core set is a fixed, node-wide name set, and an approval policy edit must not reshape which
-///     tools a model is shown.
-/// </param>
-public sealed record ToolRelevanceCandidate(string Name, string? Description, bool IsCore);
+public sealed record ToolRelevanceCandidate
+{
+    /// <summary>The tool name as it appears in the outbound <c>tools</c> array.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The model-visible description, or <see langword="null" /> when the tool carries none.</summary>
+    public required string? Description { get; init; }
+
+    /// <summary>
+    ///     Whether the tool is always offered. Core tools are never ranked and never trimmed. Tool AUTHORISATION is never
+    ///     an input here: the core set is a fixed, node-wide name set, and an approval policy edit must not reshape which
+    ///     tools a model is shown.
+    /// </summary>
+    public required bool IsCore { get; init; }
+}
 
 /// <summary>
 ///     One selection decision: which names to offer this turn, and which were held back. Both lists are in the input
 ///     candidate order, so a fixed selected set always serialises to the same <c>tools</c> array — which is what keeps
 ///     the llama.cpp prompt prefix and its compiled GBNF grammar stable across the rounds of one turn.
 /// </summary>
-public sealed record ToolRelevanceSelection(IReadOnlyList<string> OfferedNames, IReadOnlyList<string> HiddenNames)
+public sealed class ToolRelevanceSelection
 {
+    public required IReadOnlyList<string> OfferedNames { get; init; }
+
+    public required IReadOnlyList<string> HiddenNames { get; init; }
+
     /// <summary>
     ///     Builds the selection from the ranked non-core picks by re-imposing the INPUT order over
     ///     <c>core union selected</c>. Every selector shares this step: it is what makes a fixed selected set serialise to
@@ -49,7 +60,7 @@ public sealed record ToolRelevanceSelection(IReadOnlyList<string> OfferedNames, 
             }
         }
 
-        return new ToolRelevanceSelection(offered, hidden);
+        return new ToolRelevanceSelection { OfferedNames = offered, HiddenNames = hidden };
     }
 }
 

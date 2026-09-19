@@ -33,17 +33,23 @@ public enum WhisperCppSourceRevisionMode
 ///     stored repository by round-tripping it through the same normalizer. The service interface, the descriptor, the
 ///     phase/outcome enums and the status record arrive with the source-build lane itself.
 /// </remarks>
-/// <param name="Backend">The acceleration backend to compile for.</param>
-/// <param name="Source">Official or operator-supplied repository.</param>
-/// <param name="Repository">The repository URL; ignored (and pinned by the server) for the official source.</param>
-/// <param name="Commit">The requested commit; rejected for the official source, which uses the engine-pinned revision.</param>
-/// <param name="AcknowledgeCustomSourceRisk">
-///     Operator acknowledgement that a custom repository's build scripts execute with the app user's privileges.
-///     Required for <see cref="WhisperCppSourceSelection.Custom" />.
-/// </param>
-public sealed record WhisperCppSourceBuildRequest(
-    WhisperBackend Backend,
-    WhisperCppSourceSelection Source,
-    string? Repository = null,
-    string? Commit = null,
-    bool AcknowledgeCustomSourceRisk = false);
+public sealed record WhisperCppSourceBuildRequest
+{
+    /// <summary>The acceleration backend to compile for.</summary>
+    public required WhisperBackend Backend { get; init; }
+
+    /// <summary>Official or operator-supplied repository.</summary>
+    public required WhisperCppSourceSelection Source { get; init; }
+
+    /// <summary>The repository URL; ignored (and pinned by the server) for the official source.</summary>
+    public string? Repository { get; init; }
+
+    /// <summary>The requested commit; rejected for the official source, which uses the engine-pinned revision.</summary>
+    public string? Commit { get; init; }
+
+    /// <summary>
+    ///     Operator acknowledgement that a custom repository's build scripts execute with the app user's privileges.
+    ///     Required for <see cref="WhisperCppSourceSelection.Custom" />.
+    /// </summary>
+    public bool AcknowledgeCustomSourceRisk { get; init; }
+}

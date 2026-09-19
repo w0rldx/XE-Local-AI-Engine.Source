@@ -194,7 +194,7 @@ public sealed class InferenceInvalidationEvaluatorTests
         installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<InstalledRuntimeState?>(runtime));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult(new LlamaBinary(binaryPath, runtime.Tag, runtime.Variant, IsPinnedFallback: false)));
+                     .Returns(Task.FromResult(new LlamaBinary { ServerExecutablePath = binaryPath, Version = runtime.Tag, Variant = runtime.Variant, IsPinnedFallback = false }));
         var modelStore = Substitute.For<IGgufModelStore>();
         modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<string?>(null));
@@ -368,13 +368,16 @@ public sealed class InferenceInvalidationEvaluatorTests
                     Arg.Any<GpuVariant>(),
                     Arg.Any<ResolvedLaunchArguments>(),
                     Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation(ProcessContextTokens: 4096,
-                    ModelTrainContextTokens: null,
-                    ProcessContextAllocationSource.FrozenProfile,
-                    placement,
-                    new ResourceFootprint(8 * Gb, 8 * Gb),
-                    ContentIdentity: "content",
-                    CacheKey: "key")));
+                .Returns(Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation
+                {
+                    ProcessContextTokens = 4096,
+                    ModelTrainContextTokens = null,
+                    Source = ProcessContextAllocationSource.FrozenProfile,
+                    Placement = placement,
+                    Footprint = new ResourceFootprint(8 * Gb, 8 * Gb),
+                    ContentIdentity = "content",
+                    CacheKey = "key"
+                }));
         allocationResolver = resolver;
 
         return BuildEvaluator(FrozenBuild,

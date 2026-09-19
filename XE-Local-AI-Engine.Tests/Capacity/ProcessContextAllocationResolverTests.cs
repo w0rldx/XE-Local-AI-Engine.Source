@@ -850,20 +850,23 @@ public sealed class ProcessContextAllocationResolverTests
         long? embeddingLength = 4096,
         long? attentionKeyLengthMla = null,
         long? attentionValueLengthMla = null) =>
-        new(quant,
-            FileSizeBytes: fileSizeBytes,
-            ParamCount: paramCount,
-            BlockCount: blockCount,
-            AttentionHeadCount: attentionHeadCount,
-            AttentionHeadCountKV: attentionHeadCountKv,
-            EmbeddingLength: embeddingLength,
-            ContextLength: contextLength,
-            ContentIdentity: "sha256:model",
-            Architecture: expertCount is > 0 ? "qwen3moe" : "llama",
-            ExpertCount: expertCount,
-            ExpertUsedCount: expertUsedCount,
-            AttentionKeyLengthMla: attentionKeyLengthMla,
-            AttentionValueLengthMla: attentionValueLengthMla);
+        new()
+        {
+            Quant = quant,
+            FileSizeBytes = fileSizeBytes,
+            ParamCount = paramCount,
+            BlockCount = blockCount,
+            AttentionHeadCount = attentionHeadCount,
+            AttentionHeadCountKV = attentionHeadCountKv,
+            EmbeddingLength = embeddingLength,
+            ContextLength = contextLength,
+            ContentIdentity = "sha256:model",
+            Architecture = expertCount is > 0 ? "qwen3moe" : "llama",
+            ExpertCount = expertCount,
+            ExpertUsedCount = expertUsedCount,
+            AttentionKeyLengthMla = attentionKeyLengthMla,
+            AttentionValueLengthMla = attentionValueLengthMla
+        };
 
     // A dense 70B at Q4_K_M: 39.4 GB of weights (36.67 GiB) over 80 layers with GQA (8 kv-heads, head_dim 128). Nothing
     // this size fits a 16 GiB / 32 GiB desktop, which is exactly the point — it exercises the exhausted-tier-walk path.

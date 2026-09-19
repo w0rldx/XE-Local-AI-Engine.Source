@@ -60,16 +60,19 @@ public sealed class NodeMetricsInstrumentPublicationTests
         using var capture = new NodeMeterCapture();
         var telemetry = new NodeMetricsLlamaServerLoadTelemetry();
 
-        telemetry.RecordLoad(new LlamaServerLoadObservation(ModelRole.Chat,
-            GpuVariant.Cuda,
-            RuntimeVersion: "b10375",
-            RuntimeSha256: new string('A', 64),
-            ReadinessDurationMs: 1250.5,
-            LlamaServerReadinessOutcome.Ready,
-            LlamaServerPlacementOutcome.Partial,
-            LlamaServerLoadAttemptKind.SafeRetry,
-            SpeculativeModeClass.MainModelHeads,
-            ModelName: "llama3"));
+        telemetry.RecordLoad(new LlamaServerLoadObservation
+        {
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            RuntimeVersion = "b10375",
+            RuntimeSha256 = new string('A', 64),
+            ReadinessDurationMs = 1250.5,
+            Outcome = LlamaServerReadinessOutcome.Ready,
+            Placement = LlamaServerPlacementOutcome.Partial,
+            AttemptKind = LlamaServerLoadAttemptKind.SafeRetry,
+            SpeculativeModeClass = SpeculativeModeClass.MainModelHeads,
+            ModelName = "llama3"
+        });
 
         var durations = capture.Doubles("llama_server_load_readiness_duration_ms");
         AssertEx.Equal(expected: 1, durations.Count);

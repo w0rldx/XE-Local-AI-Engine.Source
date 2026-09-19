@@ -253,10 +253,13 @@ public sealed class GgufDownloadTransactionTests
             ? Sha(ProjectorBytes)
             : projectorSha;
         var projector = includeProjector
-            ? new GgufProjectorFile("mmproj-model-f16.gguf",
-                ProjectorBytes.Length,
-                resolvedProjectorSha,
-                Infra.Revision)
+            ? new GgufProjectorFile
+            {
+                FileName = "mmproj-model-f16.gguf",
+                SizeBytes = ProjectorBytes.Length,
+                Sha256 = resolvedProjectorSha,
+                Revision = Infra.Revision
+            }
             : null;
         discovery.FindProjectorAsync(Infra.RepoId, Arg.Any<CancellationToken>()).Returns(Task.FromResult(projector));
         return discovery;
@@ -265,11 +268,14 @@ public sealed class GgufDownloadTransactionTests
     private static GgufDownloadDestination Destination(bool withProjector)
     {
         var modelName = GgufModelName.Format(Infra.RepoId, Infra.Quant);
-        return new GgufDownloadDestination(modelName,
-            Infra.Quant,
-            "demo-deterministic.gguf",
-            "demo-deterministic.gguf.xe-model.json",
-            withProjector ? "demo-projector.gguf" : null);
+        return new GgufDownloadDestination
+        {
+            CanonicalModelName = modelName,
+            CanonicalQuant = Infra.Quant,
+            RelativeGgufPath = "demo-deterministic.gguf",
+            RelativeSidecarPath = "demo-deterministic.gguf.xe-model.json",
+            ProjectorRelativePath = withProjector ? "demo-projector.gguf" : null
+        };
     }
 
     private static HttpResponseMessage Download(byte[] bytes) =>

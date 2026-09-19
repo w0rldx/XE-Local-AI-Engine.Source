@@ -114,7 +114,7 @@ public sealed class SeedAssemblyContractTests
 
     private static InvocationAgentDefinition Definition(string userTurn)
     {
-        return new InvocationAgentDefinition("qwen3.5:0.8b", Instructions, [], [new ChatMessage(ChatRole.User, userTurn)]);
+        return new InvocationAgentDefinition { ModelId = "qwen3.5:0.8b", Instructions = Instructions, Tools = [], ConversationContext = [new ChatMessage(ChatRole.User, userTurn)] };
     }
 
     private static StructuredAgentRequest TeacherRequest(string userTurn)

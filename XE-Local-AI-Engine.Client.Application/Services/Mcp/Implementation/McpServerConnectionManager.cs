@@ -282,13 +282,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // Every MCP tool defaults to requiring approval; the per-tool auto-execute opt-in lives in a bound agent
             // definition's ToolApprovals override, applied at projection — never in the catalog.
             const bool requiresApproval = true;
-            var descriptor = new LocalChatToolDescriptor(qualifiedName,
-                named.Description,
-                named.JsonSchema.GetRawText(),
-                requiresApproval,
+            var descriptor = new LocalChatToolDescriptor
+            {
+                Name = qualifiedName,
+                Description = named.Description,
+                ParameterSchema = named.JsonSchema.GetRawText(),
+                RequiresApproval = requiresApproval,
                 // Every MCP tool reaches an external/out-of-process server surface; a PrivilegedHost stdio server also
                 // reaches this host's filesystem and shell. See ResolveToolCategory.
-                category);
+                Category = category
+            };
 
             // Bound the actual server round-trip with the per-call timeout INNERMOST — below arg-repair and the
             // result budget — so only the SDK call is timed; a stall returns a typed tool-failure result and the run
@@ -306,7 +309,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // flood chat history and ApprovalRequiredAIFunction stays the outermost type the approval pipeline detects.
             AIFunction budgeted = new BudgetedToolResultAIFunction(validated, maxToolResultCharacters);
             AITool executable = new ApprovalRequiredAIFunction(budgeted);
-            registered.Add(new McpRegisteredTool(qualifiedName, executable, descriptor));
+            registered.Add(new McpRegisteredTool { Name = qualifiedName, Executable = executable, Descriptor = descriptor });
         }
 
         return registered;

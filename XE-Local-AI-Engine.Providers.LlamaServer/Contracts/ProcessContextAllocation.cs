@@ -3,14 +3,22 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using System.Runtime.InteropServices;
 
 /// <summary>The immutable, shared process-context decision used by both admission sizing and llama-server launch.</summary>
-public sealed record ProcessContextAllocation(
-    int ProcessContextTokens,
-    int? ModelTrainContextTokens,
-    ProcessContextAllocationSource Source,
-    ProcessPlacementMode Placement,
-    ResourceFootprint Footprint,
-    string ContentIdentity,
-    string CacheKey);
+public sealed record ProcessContextAllocation
+{
+    public required int ProcessContextTokens { get; init; }
+
+    public required int? ModelTrainContextTokens { get; init; }
+
+    public required ProcessContextAllocationSource Source { get; init; }
+
+    public required ProcessPlacementMode Placement { get; init; }
+
+    public required ResourceFootprint Footprint { get; init; }
+
+    public required string ContentIdentity { get; init; }
+
+    public required string CacheKey { get; init; }
+}
 
 /// <summary>Dual-axis resources reserved for a process.</summary>
 [StructLayout(LayoutKind.Auto)]

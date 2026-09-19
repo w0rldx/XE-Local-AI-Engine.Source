@@ -93,10 +93,12 @@ public sealed class LlamaFitParamsProcessRunnerTests
     }
 
     private static LlamaServerLaunchSpec CreateSpec(string workingDirectory) =>
-        new("model",
-            ModelRole.Reranker,
-            Path.Combine(workingDirectory, "llama-server"),
-            [
+        new()
+        {
+            ModelName = "model",
+            Role = ModelRole.Reranker,
+            ExecutablePath = Path.Combine(workingDirectory, "llama-server"),
+            Arguments = [
                 "-m", "/models/model.gguf",
                 "--host", "127.0.0.1",
                 "--port", "18080",
@@ -111,8 +113,9 @@ public sealed class LlamaFitParamsProcessRunnerTests
                 "--rerank",
                 "--pooling", "rank"
             ],
-            Port: 18080,
-            workingDirectory);
+            Port = 18080,
+            WorkingDirectory = workingDirectory
+        };
 
     private sealed class TestDirectory : IDisposable
     {

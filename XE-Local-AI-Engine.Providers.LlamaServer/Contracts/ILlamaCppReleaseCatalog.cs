@@ -5,61 +5,68 @@ using System.Runtime.InteropServices;
 /// <summary>
 ///     One resolved release asset from the live GitHub Releases API: the per-variant archive plus its publisher digest.
 /// </summary>
-/// <param name="Name">The release asset file name (for example <c>llama-b9700-bin-win-vulkan-x64.zip</c>).</param>
-/// <param name="DownloadUrl">The asset's direct download URL (<c>browser_download_url</c>).</param>
-/// <param name="Digest">
-///     The asset's GitHub-published digest, normalized to a lowercase hex SHA256 (the <c>sha256:</c> prefix stripped).
-/// </param>
-/// <param name="Size">The asset size in bytes as reported by the API.</param>
-public sealed record LlamaCppReleaseAsset(string Name, Uri DownloadUrl, string Digest, long Size);
+public sealed class LlamaCppReleaseAsset
+{
+    /// <summary>The release asset file name (for example <c>llama-b9700-bin-win-vulkan-x64.zip</c>).</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The asset's direct download URL (<c>browser_download_url</c>).</summary>
+    public required Uri DownloadUrl { get; init; }
+
+    /// <summary>The asset's GitHub-published digest, normalized to a lowercase hex SHA256 (the <c>sha256:</c> prefix stripped).</summary>
+    public required string Digest { get; init; }
+
+    /// <summary>The asset size in bytes as reported by the API.</summary>
+    public required long Size { get; init; }
+}
 
 /// <summary>
 ///     A resolved release-catalog lookup. Carries either a successful payload (a resolved tag and/or asset) or a
 ///     graceful no-live-data signal (<see cref="IsOffline" /> / <see cref="IsRateLimited" />) — the catalog NEVER throws
 ///     into a caller's happy path so the 3-tier resolve can fall through to the disk cache and the pinned floor.
 /// </summary>
-/// <param name="Tag">The resolved release tag, when a tag was requested/resolved; otherwise <see langword="null" />.</param>
-/// <param name="Asset">The resolved asset, when an asset was requested and matched; otherwise <see langword="null" />.</param>
-/// <param name="IsOffline">
-///     <see langword="true" /> when the live API was unreachable (network error / DNS / timeout) — no live data.
-/// </param>
-/// <param name="IsRateLimited">
-///     <see langword="true" /> when the API returned a rate-limit response and the lookup was backed off — no live data.
-/// </param>
-public sealed record LlamaCppReleaseResult(
-    string? Tag,
-    LlamaCppReleaseAsset? Asset,
-    bool IsOffline,
-    bool IsRateLimited)
+public sealed class LlamaCppReleaseResult
 {
+    /// <summary>The resolved release tag, when a tag was requested/resolved; otherwise <see langword="null" />.</summary>
+    public required string? Tag { get; init; }
+
+    /// <summary>The resolved asset, when an asset was requested and matched; otherwise <see langword="null" />.</summary>
+    public required LlamaCppReleaseAsset? Asset { get; init; }
+
+    /// <summary><see langword="true" /> when the live API was unreachable (network error / DNS / timeout) — no live data.</summary>
+    public required bool IsOffline { get; init; }
+
+    /// <summary><see langword="true" /> when the API returned a rate-limit response and the lookup was backed off — no live data.</summary>
+    public required bool IsRateLimited { get; init; }
+
     /// <summary>A successful tag-only resolution (no asset requested).</summary>
     public static LlamaCppReleaseResult ForTag(string tag)
     {
-        return new LlamaCppReleaseResult(tag, Asset: null, IsOffline: false, IsRateLimited: false);
+        return new LlamaCppReleaseResult { Tag = tag, Asset = null, IsOffline = false, IsRateLimited = false };
     }
 
     /// <summary>A successful tag + asset resolution.</summary>
     public static LlamaCppReleaseResult ForAsset(string tag, LlamaCppReleaseAsset asset)
     {
-        return new LlamaCppReleaseResult(tag, asset, IsOffline: false, IsRateLimited: false);
+        return new LlamaCppReleaseResult { Tag = tag, Asset = asset, IsOffline = false, IsRateLimited = false };
     }
 
     /// <summary>The live API was unreachable — fall through to the next acquisition tier.</summary>
     public static LlamaCppReleaseResult Offline()
     {
-        return new LlamaCppReleaseResult(Tag: null, Asset: null, IsOffline: true, IsRateLimited: false);
+        return new LlamaCppReleaseResult { Tag = null, Asset = null, IsOffline = true, IsRateLimited = false };
     }
 
     /// <summary>The live API rate-limited the request — back off, fall through to the next tier.</summary>
     public static LlamaCppReleaseResult RateLimited()
     {
-        return new LlamaCppReleaseResult(Tag: null, Asset: null, IsOffline: false, IsRateLimited: true);
+        return new LlamaCppReleaseResult { Tag = null, Asset = null, IsOffline = false, IsRateLimited = true };
     }
 
     /// <summary>The request succeeded but no matching data was found (no such tag/asset) — fall through.</summary>
     public static LlamaCppReleaseResult NotFound()
     {
-        return new LlamaCppReleaseResult(Tag: null, Asset: null, IsOffline: false, IsRateLimited: false);
+        return new LlamaCppReleaseResult { Tag = null, Asset = null, IsOffline = false, IsRateLimited = false };
     }
 
     /// <summary>True when this result carries no usable live payload (offline, rate-limited, or empty).</summary>

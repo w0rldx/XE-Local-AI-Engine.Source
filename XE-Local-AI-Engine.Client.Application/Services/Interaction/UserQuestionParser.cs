@@ -111,15 +111,21 @@ internal static class UserQuestionParser
                 return false;
             }
 
-            projected.Add(new UserQuestionOption(option.Label.Trim(),
-                string.IsNullOrWhiteSpace(option.Description) ? null : option.Description.Trim(),
-                option.Recommended ?? false));
+            projected.Add(new UserQuestionOption
+            {
+                Label = option.Label.Trim(),
+                Description = string.IsNullOrWhiteSpace(option.Description) ? null : option.Description.Trim(),
+                Recommended = option.Recommended ?? false
+            });
         }
 
-        spec = new UserQuestionSpec(question.Header?.Trim() ?? string.Empty,
-            question.Question.Trim(),
-            question.MultiSelect ?? false,
-            projected);
+        spec = new UserQuestionSpec
+        {
+            Header = question.Header?.Trim() ?? string.Empty,
+            Question = question.Question.Trim(),
+            MultiSelect = question.MultiSelect ?? false,
+            Options = projected
+        };
         error = null;
         return true;
     }

@@ -58,25 +58,42 @@ public sealed record InstalledModelRegistryAliasSnapshot(
     string? SidecarRelativePath);
 
 /// <summary>Optimistic discovery hint used only to choose coordination keys.</summary>
-public sealed record InstalledGgufCandidate(
-    string ModelName,
-    IReadOnlyList<InstalledModelRegistryAliasSnapshot> RegistryAliases,
-    IReadOnlyList<string> MemberRelativePaths);
+public sealed class InstalledGgufCandidate
+{
+    public required string ModelName { get; init; }
+
+    public required IReadOnlyList<InstalledModelRegistryAliasSnapshot> RegistryAliases { get; init; }
+
+    public required IReadOnlyList<string> MemberRelativePaths { get; init; }
+}
 
 /// <summary>Provider-verified installed GGUF snapshot without absolute filesystem paths.</summary>
-public sealed record InstalledGgufSnapshot(
-    string ModelName,
-    string RegistryRevision,
-    IReadOnlyList<InstalledModelRegistryAliasSnapshot> RegistryAliases,
-    string RegistryAliasSetHash,
-    IReadOnlyList<InstalledModelPhysicalMember> Members,
-    string PhysicalMemberSetHash,
-    LocalModelOrigin? Origin,
-    string RepoId,
-    string SourceRevision,
-    string Quantization,
-    GgufRole Role,
-    string ModelContentFingerprint);
+public sealed class InstalledGgufSnapshot
+{
+    public required string ModelName { get; init; }
+
+    public required string RegistryRevision { get; init; }
+
+    public required IReadOnlyList<InstalledModelRegistryAliasSnapshot> RegistryAliases { get; init; }
+
+    public required string RegistryAliasSetHash { get; init; }
+
+    public required IReadOnlyList<InstalledModelPhysicalMember> Members { get; init; }
+
+    public required string PhysicalMemberSetHash { get; init; }
+
+    public required LocalModelOrigin? Origin { get; init; }
+
+    public required string RepoId { get; init; }
+
+    public required string SourceRevision { get; init; }
+
+    public required string Quantization { get; init; }
+
+    public required GgufRole Role { get; init; }
+
+    public required string ModelContentFingerprint { get; init; }
+}
 
 /// <summary>Provider-owned discovery and verification seam used by installed-model coordination.</summary>
 public interface IInstalledGgufSnapshotStore

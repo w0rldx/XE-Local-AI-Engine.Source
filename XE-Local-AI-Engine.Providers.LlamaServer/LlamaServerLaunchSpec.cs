@@ -20,20 +20,26 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///         the parent process environment.
 ///     </para>
 /// </remarks>
-/// <param name="ModelName">Model the process serves.</param>
-/// <param name="Role">Role the process serves (chat vs embedding).</param>
-/// <param name="ExecutablePath">Absolute path to the resolved <c>llama-server</c> executable.</param>
-/// <param name="Arguments">The exact, ordered command-line argument vector.</param>
-/// <param name="Port">The localhost port the process binds.</param>
-/// <param name="WorkingDirectory">The working directory for the child (the binary's own directory).</param>
-internal sealed record LlamaServerLaunchSpec(
-    string ModelName,
-    ModelRole Role,
-    string ExecutablePath,
-    IReadOnlyList<string> Arguments,
-    int Port,
-    string WorkingDirectory)
+internal sealed record LlamaServerLaunchSpec
 {
+    /// <summary>Model the process serves.</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>Role the process serves (chat vs embedding).</summary>
+    public required ModelRole Role { get; init; }
+
+    /// <summary>Absolute path to the resolved <c>llama-server</c> executable.</summary>
+    public required string ExecutablePath { get; init; }
+
+    /// <summary>The exact, ordered command-line argument vector.</summary>
+    public required IReadOnlyList<string> Arguments { get; init; }
+
+    /// <summary>The localhost port the process binds.</summary>
+    public required int Port { get; init; }
+
+    /// <summary>The working directory for the child (the binary's own directory).</summary>
+    public required string WorkingDirectory { get; init; }
+
     /// <summary>The localhost OpenAI-compatible base URL the MEAI OpenAI adapter points at (ends with <c>/v1</c>).</summary>
     public Uri BaseAddress => new($"http://127.0.0.1:{Port}/v1");
 

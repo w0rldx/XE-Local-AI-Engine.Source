@@ -610,25 +610,28 @@ public sealed class LlamaServerLaunchProjectionTests
 
     private static LlamaServerLaunchProjection FullyPopulatedProjection()
     {
-        return new LlamaServerLaunchProjection(AutoFit: false,
-            Metrics: true,
-            ContextTokens: 8192,
-            GpuLayers: 24,
-            TensorSplit: "0.6,0.4",
-            OverrideTensor: "exps=CPU",
-            CpuMoe: true,
-            KvCacheTypeK: "q8_0",
-            KvCacheTypeV: "q8_0",
-            LlamaServerLaunchProjection.FlashAttentionOn,
-            Threads: 6,
-            ThreadsBatch: 8,
-            BatchSize: 2048,
-            UbatchSize: 2048,
-            Parallel: 1,
-            CacheReuse: 256,
-            CacheRamMiB: 512,
-            Jinja: true,
-            Pooling: "mean");
+        return new LlamaServerLaunchProjection
+        {
+            AutoFit = false,
+            Metrics = true,
+            ContextTokens = 8192,
+            GpuLayers = 24,
+            TensorSplit = "0.6,0.4",
+            OverrideTensor = "exps=CPU",
+            CpuMoe = true,
+            KvCacheTypeK = "q8_0",
+            KvCacheTypeV = "q8_0",
+            FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionOn,
+            Threads = 6,
+            ThreadsBatch = 8,
+            BatchSize = 2048,
+            UbatchSize = 2048,
+            Parallel = 1,
+            CacheReuse = 256,
+            CacheRamMiB = 512,
+            Jinja = true,
+            Pooling = "mean"
+        };
     }
 
     private static LlamaServerLaunchPolicy NewPolicy(int cpuThreads, int cpuThreadsBatch)

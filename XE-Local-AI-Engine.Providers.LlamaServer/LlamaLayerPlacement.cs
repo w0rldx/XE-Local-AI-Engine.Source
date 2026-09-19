@@ -11,12 +11,20 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///     healthy-looking while the second is partial: on a box whose VRAM cannot hold the whole model, llama.cpp's
 ///     auto-fit spills the remaining layers to system RAM and serves correctly, just several times slower.
 /// </remarks>
-/// <param name="ModelName">The model whose load produced this observation.</param>
-/// <param name="Role">The role the observed process serves.</param>
-/// <param name="OffloadedLayers">Layers the runtime placed on the GPU.</param>
-/// <param name="TotalLayers">Total layers in the model (always positive).</param>
-public sealed record LlamaLayerPlacement(string ModelName, ModelRole Role, int OffloadedLayers, int TotalLayers)
+public sealed record LlamaLayerPlacement
 {
+    /// <summary>The model whose load produced this observation.</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>The role the observed process serves.</summary>
+    public required ModelRole Role { get; init; }
+
+    /// <summary>Layers the runtime placed on the GPU.</summary>
+    public required int OffloadedLayers { get; init; }
+
+    /// <summary>Total layers in the model (always positive).</summary>
+    public required int TotalLayers { get; init; }
+
     /// <summary>
     ///     <see langword="true" /> when some layers stayed in system RAM. Serving still works; throughput does not.
     ///     This is NOT a CPU fallback — the GPU is in use, just not for the whole model.

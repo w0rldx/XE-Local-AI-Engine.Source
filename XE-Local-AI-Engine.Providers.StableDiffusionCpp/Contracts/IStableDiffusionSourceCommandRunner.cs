@@ -11,4 +11,11 @@ internal interface IStableDiffusionSourceCommandRunner
         CancellationToken ct);
 }
 
-internal sealed record StableDiffusionSourceCommandResult(int ExitCode, string StandardOutput, string StandardError);
+internal sealed class StableDiffusionSourceCommandResult
+{
+    public required int ExitCode { get; init; }
+
+    public required string StandardOutput { get; init; }
+
+    public required string StandardError { get; init; }
+}

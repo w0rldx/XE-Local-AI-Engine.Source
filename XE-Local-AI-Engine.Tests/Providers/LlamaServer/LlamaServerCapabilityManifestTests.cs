@@ -363,18 +363,23 @@ public sealed class LlamaServerCapabilityManifestTests
 
     private static LlamaCommandResult VersionResult()
     {
-        return new LlamaCommandResult(0, "version: 10201 (b10201)\n", string.Empty);
+        return new LlamaCommandResult { ExitCode = 0, StandardOutput = "version: 10201 (b10201)\n", StandardError = string.Empty };
     }
 
     private static LlamaCommandResult HelpResult()
     {
-        return new LlamaCommandResult(0, FullHelp, string.Empty);
+        return new LlamaCommandResult { ExitCode = 0, StandardOutput = FullHelp, StandardError = string.Empty };
     }
 
     private static LlamaServerCapabilityManifest ManifestFromHelp(string help)
     {
-        return LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cuda,
-                IsPinnedFallback: true),
+        return LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary
+        {
+            ServerExecutablePath = "/fake/bin/llama-server",
+            Version = "b10201",
+            Variant = GpuVariant.Cuda,
+            IsPinnedFallback = true
+        },
             executableLengthBytes: 123,
             executableLastWriteUtc: DateTimeOffset.UnixEpoch,
             executableSha256: new string('a', 64),
@@ -384,7 +389,7 @@ public sealed class LlamaServerCapabilityManifestTests
 
     private static LlamaServerLaunchSpec ChatSpec(IReadOnlyList<string> arguments)
     {
-        return new LlamaServerLaunchSpec("model", ModelRole.Chat, "/fake/bin/llama-server", arguments, 12345, "/fake/bin");
+        return new LlamaServerLaunchSpec { ModelName = "model", Role = ModelRole.Chat, ExecutablePath = "/fake/bin/llama-server", Arguments = arguments, Port = 12345, WorkingDirectory = "/fake/bin" };
     }
 
     private sealed class FakeCommandRunner : ILlamaCommandProcessRunner
@@ -475,7 +480,7 @@ public sealed class LlamaServerCapabilityManifestTests
 
         public LlamaBinary AsBinary()
         {
-            return new LlamaBinary(Path, "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
+            return new LlamaBinary { ServerExecutablePath = Path, Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
         }
 
         public void ReplaceContents(string contents, DateTime? lastWriteUtc = null)

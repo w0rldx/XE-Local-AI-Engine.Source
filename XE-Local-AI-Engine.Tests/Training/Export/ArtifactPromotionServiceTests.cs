@@ -412,11 +412,14 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                             return Task.FromResult(Prepared(callInfo.Arg<GgufImportDestination>()));
                         });
             _ = importer.CommitAsync(Arg.Any<PreparedGgufImport>(), Arg.Any<CancellationToken>())
-                        .Returns(callInfo => Task.FromResult(new GgufImportCommitReceipt(callInfo.Arg<PreparedGgufImport>().RegistryEntry,
-                            "/models/tuned.gguf",
-                            "/models/tuned.gguf.xe-model.json",
-                            "member",
-                            "v1:content")));
+                        .Returns(callInfo => Task.FromResult(new GgufImportCommitReceipt
+                        {
+                            RegistryEntry = callInfo.Arg<PreparedGgufImport>().RegistryEntry,
+                            FinalGgufPath = "/models/tuned.gguf",
+                            FinalSidecarPath = "/models/tuned.gguf.xe-model.json",
+                            WeightMemberFingerprint = "member",
+                            ModelContentFingerprint = "v1:content"
+                        }));
 
             harness._service = new ArtifactPromotionService(store, baseArtifacts, models, preflight, importer,
                 NullLogger<ArtifactPromotionService>.Instance);
@@ -529,12 +532,21 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                         });
 
         public GgufImportCommitReceipt CommitReceipt() =>
-            new(Prepared(Destination ?? new GgufImportDestination("tuned:Q4_K_M", "Q4_K_M", "tuned.gguf", "tuned.json",
-                    LocalModelOrigin.Trained)).RegistryEntry,
-                "/models/tuned.gguf",
-                "/models/tuned.gguf.xe-model.json",
-                "member",
-                "v1:content");
+            new()
+            {
+                RegistryEntry = Prepared(Destination ?? new GgufImportDestination
+            {
+                CanonicalModelName = "tuned:Q4_K_M",
+                CanonicalQuant = "Q4_K_M",
+                RelativeGgufPath = "tuned.gguf",
+                RelativeSidecarPath = "tuned.json",
+                Origin = LocalModelOrigin.Trained
+            }).RegistryEntry,
+                FinalGgufPath = "/models/tuned.gguf",
+                FinalSidecarPath = "/models/tuned.gguf.xe-model.json",
+                WeightMemberFingerprint = "member",
+                ModelContentFingerprint = "v1:content"
+            };
 
         public void ThrowPartialCommit(GgufImportCommitReceipt receipt) =>
             _ = Importer.CommitAsync(Arg.Any<PreparedGgufImport>(), CancellationToken.None)
@@ -551,11 +563,13 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         private static PreparedGgufImport Prepared(GgufImportDestination destination,
             string? sha256 = null,
             long sizeBytes = 4) =>
-            new("op",
-                destination,
-                "/tmp/tuned.gguf.part",
-                "/tmp/tuned.gguf.xe-model.json.part",
-                new GgufModelRegistryEntry
+            new()
+            {
+                OperationId = "op",
+                Destination = destination,
+                TemporaryGgufPath = "/tmp/tuned.gguf.part",
+                TemporarySidecarPath = "/tmp/tuned.gguf.xe-model.json.part",
+                RegistryEntry = new GgufModelRegistryEntry
                 {
                     ModelName = destination.CanonicalModelName,
                     RepoId = destination.CanonicalModelName,
@@ -568,9 +582,10 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                     DownloadedAtUtc = DateTimeOffset.UnixEpoch,
                     Origin = destination.Origin
                 },
-                Sidecar(destination),
-                "member",
-                "v1:content");
+                Sidecar = Sidecar(destination),
+                WeightMemberFingerprint = "member",
+                ModelContentFingerprint = "v1:content"
+            };
 
         private static GgufAcquisitionMetadata Sidecar(GgufImportDestination destination) =>
             new()

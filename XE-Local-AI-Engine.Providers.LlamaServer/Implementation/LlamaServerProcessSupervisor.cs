@@ -246,7 +246,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 var external = _externalEndpoints.Resolve(modelName, role);
                 if (external is not null)
                 {
-                    return new LlamaServerEndpoint(modelName, role, external);
+                    return new LlamaServerEndpoint { ModelName = modelName, Role = role, BaseAddress = external };
                 }
 
                 if (_sourceBuildActivity.ActiveBuildId is not null)
@@ -464,7 +464,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
 
-        return new InflightSpawn(completion, admission, launchTicket);
+        return new InflightSpawn { Completion = completion, Admission = admission, LaunchTicket = launchTicket };
     }
 
     private void StartDetachedSpawn(ProcessKey key, InflightSpawn inflight)
@@ -546,11 +546,14 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
     }
 
-    private sealed record InflightSpawn(
-        TaskCompletionSource<RunningProcess> Completion,
-        ProcessLaunchAdmission? Admission,
-        IProcessLaunchTicket LaunchTicket)
+    private sealed record InflightSpawn
     {
+        public required TaskCompletionSource<RunningProcess> Completion { get; init; }
+
+        public required ProcessLaunchAdmission? Admission { get; init; }
+
+        public required IProcessLaunchTicket LaunchTicket { get; init; }
+
         public Task<RunningProcess> Task => Completion.Task;
     }
 

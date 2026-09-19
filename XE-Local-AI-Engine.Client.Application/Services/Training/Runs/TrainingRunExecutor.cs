@@ -192,10 +192,13 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
             return;
         }
 
-        using var handle = _spawner.Spawn(new TrainingSpawnRequest(interpreter,
-            [scriptPath, "--config", jobPath],
-            _workspace.WorkDirectory(run.Id),
-            Guid.NewGuid().ToString("N")));
+        using var handle = _spawner.Spawn(new TrainingSpawnRequest
+        {
+            ExecutablePath = interpreter,
+            Arguments = [scriptPath, "--config", jobPath],
+            WorkingDirectory = _workspace.WorkDirectory(run.Id),
+            RunToken = Guid.NewGuid().ToString("N")
+        });
 
         // Durable BEFORE the first line is read: a host that dies now must still be able to prove which process is
         // this run's and reap it on the next boot.

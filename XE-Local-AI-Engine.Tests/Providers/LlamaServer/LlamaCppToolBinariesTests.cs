@@ -46,7 +46,7 @@ public sealed class LlamaCppToolBinariesTests
         using var dir = new TempDirectory();
         var server = Path.Combine(dir.Path, "llama-server");
         File.WriteAllText(server, "server");
-        var binary = new LlamaBinary(server, "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
+        var binary = new LlamaBinary { ServerExecutablePath = server, Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
 
         // Evaluated on read: the same record flips from null to a path the moment the helper lands beside the server.
         AssertEx.Null(binary.PerplexityExecutablePath);

@@ -158,12 +158,15 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
 
     private static LocalChatToolDescriptor BuildDescriptor(CustomToolRecord tool, string schema)
     {
-        return new LocalChatToolDescriptor(tool.Name,
-            tool.Description,
-            schema,
-            RequiresApproval: true,
-            CategoryFor(tool.Kind),
-            tool.Mode == CustomToolMode.Fixed);
+        return new LocalChatToolDescriptor
+        {
+            Name = tool.Name,
+            Description = tool.Description,
+            ParameterSchema = schema,
+            RequiresApproval = true,
+            Category = CategoryFor(tool.Kind),
+            IsFixedCustomTool = tool.Mode == CustomToolMode.Fixed
+        };
     }
 
     private AITool BuildExecutable(CustomToolRecord tool, string schema, ICustomToolExecutor executor)

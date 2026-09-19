@@ -180,7 +180,7 @@ public sealed class LocalModelsGgufMappingTests
     {
         var ollama = new[]
         {
-            new OllamaModelSummary("qwen3:8b")
+            new OllamaModelSummary { Name = "qwen3:8b" }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
@@ -209,7 +209,7 @@ public sealed class LocalModelsGgufMappingTests
     {
         var ollama = new[]
         {
-            new OllamaModelSummary("shared-model")
+            new OllamaModelSummary { Name = "shared-model" }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {

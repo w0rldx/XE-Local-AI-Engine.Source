@@ -4,7 +4,14 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///     A single GPU device as reported by <c>llama-server --list-devices</c>: its name and, where the build prints them,
 ///     its total / currently-free VRAM in bytes (either may be <see langword="null" /> when a build omits the column).
 /// </summary>
-public sealed record LlamaGpuDevice(string Name, long? TotalBytes, long? FreeBytes);
+public sealed class LlamaGpuDevice
+{
+    public required string Name { get; init; }
+
+    public required long? TotalBytes { get; init; }
+
+    public required long? FreeBytes { get; init; }
+}
 
 /// <summary>
 ///     The devices a specific llama.cpp binary actually enumerates for a given acceleration variant — the structured

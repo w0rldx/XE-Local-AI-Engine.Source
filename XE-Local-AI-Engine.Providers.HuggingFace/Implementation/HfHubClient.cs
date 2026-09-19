@@ -108,13 +108,16 @@ internal sealed class HfHubClient
                 continue;
             }
 
-            summaries.Add(new HubModelSummary(repoId,
-                ParseGated(element),
-                GetInt64(element, "downloads") ?? 0L,
-                (int)(GetInt64(element, "likes") ?? 0L),
-                GetDate(element, "lastModified") ?? DateTimeOffset.MinValue,
-                ExtractLicense(element),
-                ReadSiblingFileNames(element)));
+            summaries.Add(new HubModelSummary
+            {
+                RepoId = repoId,
+                IsGated = ParseGated(element),
+                Downloads = GetInt64(element, "downloads") ?? 0L,
+                Likes = (int)(GetInt64(element, "likes") ?? 0L),
+                LastModified = GetDate(element, "lastModified") ?? DateTimeOffset.MinValue,
+                License = ExtractLicense(element),
+                FileNames = ReadSiblingFileNames(element)
+            });
         }
 
         return summaries;
@@ -186,15 +189,18 @@ internal sealed class HfHubClient
                 }
 
                 var size = lfsSize ?? GetInt64(sibling, "size") ?? 0L;
-                files.Add(new HubRepoFile(fileName, size, sha256));
+                files.Add(new HubRepoFile { FileName = fileName, SizeBytes = size, Sha256 = sha256 });
             }
         }
 
-        return new HubModelDetail(GetString(root, "id") ?? repoId,
-            ParseGated(root),
-            ExtractLicense(root),
-            GetString(root, "sha") ?? string.Empty,
-            files);
+        return new HubModelDetail
+        {
+            RepoId = GetString(root, "id") ?? repoId,
+            IsGated = ParseGated(root),
+            License = ExtractLicense(root),
+            Revision = GetString(root, "sha") ?? string.Empty,
+            Files = files
+        };
     }
 
     private async Task<JsonDocument?> GetJsonAsync(string url, string context, CancellationToken ct)

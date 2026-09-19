@@ -478,13 +478,16 @@ public sealed class InvocationResumeRegistryTests
             CallId = callId,
             ToolName = "ask_user",
             Questions = [
-                new UserQuestionSpec("Auth",
-                    "Which auth method?",
-                    MultiSelect: false,
-                    [
-                        new UserQuestionOption("OAuth", Description: null, Recommended: true),
-                        new UserQuestionOption("API key", Description: null, Recommended: false)
-                    ])
+                new UserQuestionSpec
+                {
+                    Header = "Auth",
+                    Question = "Which auth method?",
+                    MultiSelect = false,
+                    Options = [
+                        new UserQuestionOption { Label = "OAuth", Description = null, Recommended = true },
+                        new UserQuestionOption { Label = "API key", Description = null, Recommended = false }
+                    ]
+                }
             ],
             RequestedAt = DateTimeOffset.UtcNow
         };

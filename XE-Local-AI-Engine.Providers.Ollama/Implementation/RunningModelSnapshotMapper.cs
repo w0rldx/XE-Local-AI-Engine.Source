@@ -17,11 +17,14 @@ public static class RunningModelSnapshotMapper
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return new RunningModelSnapshot(model.Name,
-            model.ModelName,
-            NormalizeExpiresAt(model.ExpiresAt),
-            NormalizeNonNegative(model.Size),
-            NormalizeNonNegative(model.SizeVram));
+        return new RunningModelSnapshot
+        {
+            Name = model.Name,
+            ModelName = model.ModelName,
+            ExpiresAt = NormalizeExpiresAt(model.ExpiresAt),
+            SizeBytes = NormalizeNonNegative(model.Size),
+            SizeVramBytes = NormalizeNonNegative(model.SizeVram)
+        };
     }
 
     // Ollama reports size/size_vram as raw byte counts. A zero or negative value means "not reported"; surface those as

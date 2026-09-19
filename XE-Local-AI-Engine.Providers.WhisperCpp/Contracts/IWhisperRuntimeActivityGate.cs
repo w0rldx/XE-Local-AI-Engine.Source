@@ -1,13 +1,18 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>A process-wide snapshot of transcription-runtime activity that can conflict with runtime mutation.</summary>
-public sealed record WhisperRuntimeActivitySnapshot(
-    int ActiveTranscriptionCount,
-    int SpawnReadinessCount,
-    int ResidentProcessCount,
-    bool MutationReserved,
-    bool EvictionReserved)
+public sealed class WhisperRuntimeActivitySnapshot
 {
+    public required int ActiveTranscriptionCount { get; init; }
+
+    public required int SpawnReadinessCount { get; init; }
+
+    public required int ResidentProcessCount { get; init; }
+
+    public required bool MutationReserved { get; init; }
+
+    public required bool EvictionReserved { get; init; }
+
     /// <summary>Whether anything at all is holding the runtime; the single flag the 409 envelope reports.</summary>
     public bool IsBusy =>
         MutationReserved

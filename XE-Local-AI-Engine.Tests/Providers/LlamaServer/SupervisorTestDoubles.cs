@@ -222,18 +222,18 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     /// <summary>Serves a build of a variant the caller did not ask for, as a recorded source build does.</summary>
     public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", _servedVariant ?? variant, IsPinnedFallback: true));
+        return Task.FromResult(new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b9692", Variant = _servedVariant ?? variant, IsPinnedFallback = true });
     }
 
     /// <summary>The fake binary is always "already there" — this double downloads nothing, so ensure and lookup agree.</summary>
     public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        return Task.FromResult<LlamaBinary?>(new LlamaBinary("/fake/bin/llama-server", "b9692", _servedVariant ?? variant, IsPinnedFallback: true));
+        return Task.FromResult<LlamaBinary?>(new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b9692", Variant = _servedVariant ?? variant, IsPinnedFallback = true });
     }
 
     public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
     {
-        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", tag, variant, IsPinnedFallback: false));
+        return Task.FromResult(new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = tag, Variant = variant, IsPinnedFallback = false });
     }
 
     public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct)
@@ -388,12 +388,12 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
         EnsureCalls++;
         if (EnsureEndpointSequence.Count > 0)
         {
-            return Task.FromResult(new LlamaServerEndpoint(modelName, role, EnsureEndpointSequence.Dequeue()));
+            return Task.FromResult(new LlamaServerEndpoint { ModelName = modelName, Role = role, BaseAddress = EnsureEndpointSequence.Dequeue() });
         }
 
         if (EnsureEndpoint is { } endpoint)
         {
-            return Task.FromResult(new LlamaServerEndpoint(modelName, role, endpoint));
+            return Task.FromResult(new LlamaServerEndpoint { ModelName = modelName, Role = role, BaseAddress = endpoint });
         }
 
         throw new NotSupportedException("FakeProcessSupervisor does not ensure-run.");
@@ -444,7 +444,7 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>One responsive chat process health entry — a convenience for "a model is running" gate tests.</summary>
     public static LlamaServerProcessHealth RunningChat(string modelName = "demo-model")
     {
-        return new LlamaServerProcessHealth(modelName, ModelRole.Chat, IsResponsive: true, Detail: "running");
+        return new LlamaServerProcessHealth { ModelName = modelName, Role = ModelRole.Chat, IsResponsive = true, Detail = "running" };
     }
 }
 

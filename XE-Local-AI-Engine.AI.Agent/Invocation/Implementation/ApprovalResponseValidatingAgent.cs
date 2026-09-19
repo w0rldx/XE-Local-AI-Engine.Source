@@ -153,7 +153,7 @@ internal sealed class ApprovalResponseValidatingAgent : DelegatingAIAgent
                 _responseStates[requestId] = ApprovalResponseState.Reserved;
             }
 
-            return new ValidatedRun(materialized, reservations);
+            return new ValidatedRun { Messages = materialized, ReservedRequestIds = reservations };
         }
     }
 
@@ -196,14 +196,23 @@ internal sealed class ApprovalResponseValidatingAgent : DelegatingAIAgent
         Resolved
     }
 
-    private sealed record ValidatedRun(IReadOnlyList<ChatMessage> Messages, IReadOnlyList<string> ReservedRequestIds);
-
-    private sealed record ToolCallSnapshot(
-        Type RuntimeType,
-        string? CallId,
-        string FunctionName,
-        JsonElement? Arguments)
+    private sealed record ValidatedRun
     {
+        public required IReadOnlyList<ChatMessage> Messages { get; init; }
+
+        public required IReadOnlyList<string> ReservedRequestIds { get; init; }
+    }
+
+    private sealed record ToolCallSnapshot
+    {
+        public required Type RuntimeType { get; init; }
+
+        public required string? CallId { get; init; }
+
+        public required string FunctionName { get; init; }
+
+        public required JsonElement? Arguments { get; init; }
+
         internal static ToolCallSnapshot Capture(ToolCallContent toolCall)
         {
             ArgumentNullException.ThrowIfNull(toolCall);
@@ -212,10 +221,13 @@ internal sealed class ApprovalResponseValidatingAgent : DelegatingAIAgent
                 throw new InvalidOperationException($"Approval validation does not support tool-call type '{toolCall.GetType().FullName}'.");
             }
 
-            return new ToolCallSnapshot(toolCall.GetType(),
-                toolCall.CallId,
-                functionCall.Name,
-                CaptureArguments(functionCall.Arguments));
+            return new ToolCallSnapshot
+            {
+                RuntimeType = toolCall.GetType(),
+                CallId = toolCall.CallId,
+                FunctionName = functionCall.Name,
+                Arguments = CaptureArguments(functionCall.Arguments)
+            };
         }
 
         internal bool Matches(ToolCallContent actual)

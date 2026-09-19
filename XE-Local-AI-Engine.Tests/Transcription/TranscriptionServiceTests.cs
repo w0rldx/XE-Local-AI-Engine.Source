@@ -56,14 +56,17 @@ public sealed class TranscriptionServiceTests
     public async Task TranscribeFile_WhenSucceeded_LeavesTempDirectoryEmpty()
     {
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
-        harness.Transcriber.Result = new WhisperTranscriptionResult("hello there",
-            [
-                new WhisperTranscriptSegment(0.0, 1.5, "hello", 0.8),
-                new WhisperTranscriptSegment(1.5, 2.25, "there", 0.7)
+        harness.Transcriber.Result = new WhisperTranscriptionResult
+        {
+            Text = "hello there",
+            Segments = [
+                new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 1.5, Text = "hello", Confidence = 0.8 },
+                new WhisperTranscriptSegment { StartSeconds = 1.5, EndSeconds = 2.25, Text = "there", Confidence = 0.7 }
             ],
-            "en",
-            0.99,
-            2.25);
+            DetectedLanguageCode = "en",
+            DetectedLanguageProbability = 0.99,
+            DurationSeconds = 2.25
+        };
 
         var (sessionId, slot) = await harness.BeginAsync(TranscriptionAudioFixtures.Wav);
         TranscribeFileResult result;

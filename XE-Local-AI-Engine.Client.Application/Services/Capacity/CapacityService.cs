@@ -142,7 +142,7 @@ public sealed class CapacityService : ICapacityService
         var ollamaWarning = isOllama && running.Count > 0;
         var launchSnapshot = isLlamaServer
             ? _launchAdmissions.Snapshot(modelName, role)
-            : new ProcessLaunchAdmissionSnapshot(new HashSet<ProcessLaunchAdmissionKey>(), HasRequestedKey: false, HasGlobalBlocker: false);
+            : new ProcessLaunchAdmissionSnapshot { AdmittedKeys = new HashSet<ProcessLaunchAdmissionKey>(), HasRequestedKey = false, HasGlobalBlocker = false };
         if (launchSnapshot.HasRequestedKey || launchSnapshot.HasGlobalBlocker)
         {
             return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };

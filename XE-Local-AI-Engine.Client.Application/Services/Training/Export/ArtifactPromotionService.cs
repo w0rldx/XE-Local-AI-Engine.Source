@@ -115,15 +115,18 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
 
         await using var reservation = await ReserveAsync(modelName, quantization, cancellationToken);
         var identity = reservation.Identity;
-        var destination = new GgufImportDestination(identity.CanonicalModelName,
-            identity.CanonicalQuantization,
-            identity.RelativeGgufPath,
-            identity.RelativeSidecarPath,
-            LocalModelOrigin.Trained,
-            ProjectorRelativePath: null,
-            lineage);
+        var destination = new GgufImportDestination
+        {
+            CanonicalModelName = identity.CanonicalModelName,
+            CanonicalQuant = identity.CanonicalQuantization,
+            RelativeGgufPath = identity.RelativeGgufPath,
+            RelativeSidecarPath = identity.RelativeSidecarPath,
+            Origin = LocalModelOrigin.Trained,
+            ProjectorRelativePath = null,
+            Lineage = lineage
+        };
 
-        var prepared = await _importer.PrepareAsync(new GgufImportSource(artifact.Path), destination, progress: null, cancellationToken);
+        var prepared = await _importer.PrepareAsync(new GgufImportSource { AbsolutePath = artifact.Path }, destination, progress: null, cancellationToken);
         if (!string.Equals(prepared.RegistryEntry.Sha256, artifact.Sha256, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(prepared.RegistryEntry.Sha256, decision.ArtifactSha256, StringComparison.OrdinalIgnoreCase)
             || prepared.RegistryEntry.SizeBytes != artifact.SizeBytes)
@@ -247,11 +250,14 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
         }
 
         var checkpoint = await _baseArtifacts.GetAsync(run.BaseArtifactId, cancellationToken);
-        return new TrainedModelLineage(checkpoint?.RepoId,
-            checkpoint?.Revision,
+        return new TrainedModelLineage
+        {
+            DerivedFromRepoId = checkpoint?.RepoId,
+            DerivedFromRevision = checkpoint?.Revision,
             // Nullable by contract: a run created before the linked-model fingerprint was recorded still has full
             // checkpoint lineage, and refusing the promotion over the missing half would help nobody.
-            run.LinkedModelContentFingerprint,
-            baseModelName);
+            DerivedFromContentFingerprint = run.LinkedModelContentFingerprint,
+            BaseModelName = baseModelName
+        };
     }
 }

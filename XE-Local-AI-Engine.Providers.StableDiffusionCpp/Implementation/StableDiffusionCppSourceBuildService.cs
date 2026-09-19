@@ -136,7 +136,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
                 if (_isRunning)
                 {
-                    return new StableDiffusionCppSourceBuildStartResult(StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning);
+                    return new StableDiffusionCppSourceBuildStartResult { Outcome = StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning };
                 }
             }
 
@@ -148,15 +148,18 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 var outcome = prerequisites.Items.Any(static item => item.Key == "free-disk" && !item.Satisfied)
                     ? StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk
                     : StableDiffusionCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new StableDiffusionCppSourceBuildStartResult(outcome, prerequisites);
+                return new StableDiffusionCppSourceBuildStartResult { Outcome = outcome, Prerequisites = prerequisites };
             }
 
             var mutationReservation = _activityGate.TryAcquireMutationReservation();
             if (mutationReservation is null)
             {
-                return new StableDiffusionCppSourceBuildStartResult(StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy,
-                    prerequisites,
-                    _activityGate.GetSnapshot());
+                return new StableDiffusionCppSourceBuildStartResult
+                {
+                    Outcome = StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy,
+                    Prerequisites = prerequisites,
+                    Activity = _activityGate.GetSnapshot()
+                };
             }
 
             var revisionMode = normalized.Source == StableDiffusionCppSourceSelection.Official
@@ -167,15 +170,16 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 revisionMode = StableDiffusionCppSourceRevisionMode.DefaultBranch;
             }
 
-            var descriptor = new StableDiffusionCppSourceBuildDescriptor(normalized.Backend,
-                normalized.Source,
-                normalized.Repository!,
-                revisionMode,
-                normalized.Commit,
-                revisionMode == StableDiffusionCppSourceRevisionMode.EnginePinned
-                    ? StableDiffusionReleasePins.PinnedSourceCommitSha
-                    : null)
+            var descriptor = new StableDiffusionCppSourceBuildDescriptor
             {
+                Backend = normalized.Backend,
+                Source = normalized.Source,
+                Repository = normalized.Repository!,
+                RevisionMode = revisionMode,
+                RequestedCommit = normalized.Commit,
+                ResolvedCommit = revisionMode == StableDiffusionCppSourceRevisionMode.EnginePinned
+                    ? StableDiffusionReleasePins.PinnedSourceCommitSha
+                    : null,
                 BuildId = Guid.NewGuid()
             };
 
@@ -227,7 +231,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
 
         startSignal.SetResult();
-        return new StableDiffusionCppSourceBuildStartResult(StableDiffusionCppSourceBuildStartOutcome.Started);
+        return new StableDiffusionCppSourceBuildStartResult { Outcome = StableDiffusionCppSourceBuildStartOutcome.Started };
     }
 
     public async Task<StableDiffusionCppSourceBuildRemoveResult> RemoveAsync(CancellationToken ct)
@@ -239,22 +243,28 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             {
                 if (_isRunning)
                 {
-                    return new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
-                        _activityGate.GetSnapshot());
+                    return new StableDiffusionCppSourceBuildRemoveResult
+                    {
+                        Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
+                        Activity = _activityGate.GetSnapshot()
+                    };
                 }
             }
 
             await using var mutation = _activityGate.TryAcquireMutationReservation();
             if (mutation is null)
             {
-                return new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
-                    _activityGate.GetSnapshot());
+                return new StableDiffusionCppSourceBuildRemoveResult
+                {
+                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
+                    Activity = _activityGate.GetSnapshot()
+                };
             }
 
             var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (installed is null)
             {
-                return new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled);
+                return new StableDiffusionCppSourceBuildRemoveResult { Outcome = StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled };
             }
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Removing);
@@ -262,7 +272,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             await _runtimeStore.DeleteAsync(ct).ConfigureAwait(false);
             _managedSignal.Clear();
             SetTerminal(StableDiffusionCppSourceBuildPhase.Completed, error: null);
-            return new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.Removed);
+            return new StableDiffusionCppSourceBuildRemoveResult { Outcome = StableDiffusionCppSourceBuildRemoveOutcome.Removed };
         }
         finally
         {
@@ -274,17 +284,20 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
     {
         lock (_stateLock)
         {
-            return new StableDiffusionCppSourceBuildStatus(_phase,
-                _isRunning,
-                _phase is StableDiffusionCppSourceBuildPhase.Completed
+            return new StableDiffusionCppSourceBuildStatus
+            {
+                Phase = _phase,
+                IsRunning = _isRunning,
+                Terminal = _phase is StableDiffusionCppSourceBuildPhase.Completed
                     or StableDiffusionCppSourceBuildPhase.Cancelled
                     or StableDiffusionCppSourceBuildPhase.Failed,
-                [.. _logLines],
-                _logStartSequence,
-                _sanitizedError,
-                _currentBuild,
-                _startedAtUtc,
-                _completedAtUtc);
+                LogLines = [.. _logLines],
+                LogStartSequence = _logStartSequence,
+                SanitizedError = _sanitizedError,
+                CurrentBuild = _currentBuild,
+                StartedAtUtc = _startedAtUtc,
+                CompletedAtUtc = _completedAtUtc
+            };
         }
     }
 
@@ -442,23 +455,29 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Adopting);
             await _adoption.AdoptAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
-            return new BuildCompletion(StableDiffusionCppSourceBuildPhase.Completed, Error: null);
+            return new BuildCompletion { Phase = StableDiffusionCppSourceBuildPhase.Completed, Error = null };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new BuildCompletion(StableDiffusionCppSourceBuildPhase.Cancelled, Error: null);
+            return new BuildCompletion { Phase = StableDiffusionCppSourceBuildPhase.Cancelled, Error = null };
         }
         catch (TimeoutException exception)
         {
             _logger.LogWarning(exception, "stable-diffusion.cpp source build timed out.");
-            return new BuildCompletion(StableDiffusionCppSourceBuildPhase.Failed,
-                "A stable-diffusion.cpp source-build command timed out. Review the sanitized build log.");
+            return new BuildCompletion
+            {
+                Phase = StableDiffusionCppSourceBuildPhase.Failed,
+                Error = "A stable-diffusion.cpp source-build command timed out. Review the sanitized build log."
+            };
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "stable-diffusion.cpp source build failed.");
-            return new BuildCompletion(StableDiffusionCppSourceBuildPhase.Failed,
-                "The stable-diffusion.cpp source build failed. Review the sanitized build log.");
+            return new BuildCompletion
+            {
+                Phase = StableDiffusionCppSourceBuildPhase.Failed,
+                Error = "The stable-diffusion.cpp source build failed. Review the sanitized build log."
+            };
         }
         finally
         {
@@ -568,14 +587,17 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
     private StableDiffusionCppSourceBuildStatusEvent CreateEventUnderLock(IReadOnlyList<string> appended, long startSequence)
     {
-        return new StableDiffusionCppSourceBuildStatusEvent(_phase,
-            appended,
-            startSequence,
-            _phase is StableDiffusionCppSourceBuildPhase.Completed
+        return new StableDiffusionCppSourceBuildStatusEvent
+        {
+            Phase = _phase,
+            AppendedLogLines = appended,
+            AppendedLogStartSequence = startSequence,
+            Terminal = _phase is StableDiffusionCppSourceBuildPhase.Completed
                 or StableDiffusionCppSourceBuildPhase.Cancelled
                 or StableDiffusionCppSourceBuildPhase.Failed,
-            _sanitizedError,
-            _currentBuild);
+            SanitizedError = _sanitizedError,
+            CurrentBuild = _currentBuild
+        };
     }
 
     private void QueuePublish(StableDiffusionCppSourceBuildStatusEvent statusEvent)
@@ -769,5 +791,10 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
-    private sealed record BuildCompletion(StableDiffusionCppSourceBuildPhase Phase, string? Error);
+    private sealed record BuildCompletion
+    {
+        public required StableDiffusionCppSourceBuildPhase Phase { get; init; }
+
+        public required string? Error { get; init; }
+    }
 }

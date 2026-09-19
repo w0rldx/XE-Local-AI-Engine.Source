@@ -74,7 +74,7 @@ public sealed class CodexAuthService : ICodexAuthService
 
         // The callback wait + code exchange runs in the background; the endpoint returns the URL immediately.
         var completion = CompleteLoginAsync(listener, verifier, state, cancellationToken);
-        return new CodexLoginHandle(authorizeUrl, completion);
+        return new CodexLoginHandle { AuthorizeUrl = authorizeUrl, Completion = completion };
     }
 
     public async Task<CodexTokens> LoginAsync(CancellationToken cancellationToken = default)

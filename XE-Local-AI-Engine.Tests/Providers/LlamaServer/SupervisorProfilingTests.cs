@@ -20,18 +20,24 @@ public sealed class SupervisorProfilingTests
     {
         const string modelName = "llama3";
         var registry = new ProcessLaunchAdmissionRegistry();
-        var allocation = new ProcessContextAllocation(8192,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            ContentIdentity: $"{modelName}:0",
-            CacheKey: $"cache:{modelName}");
-        using var consumer = registry.Acquire(new ProcessLaunchAdmission(modelName,
-            ModelRole.Chat,
-            GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore(),
-            allocation));
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = $"{modelName}:0",
+            CacheKey = $"cache:{modelName}"
+        };
+        using var consumer = registry.Acquire(new ProcessLaunchAdmission
+        {
+            ModelName = modelName,
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        });
         AssertEx.NotNull(consumer);
         await using var supervisor = SupervisorFactory.Create(launchAdmissions: registry);
 
@@ -47,11 +53,14 @@ public sealed class SupervisorProfilingTests
         var released = registry.Snapshot(modelName, ModelRole.Chat);
         AssertEx.False(released.HasRequestedKey);
         AssertEx.False(released.HasGlobalBlocker);
-        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission(modelName,
-            ModelRole.Chat,
-            GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore(),
-            allocation), out var next));
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission
+        {
+            ModelName = modelName,
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        }, out var next));
         next!.Dispose();
     }
 
@@ -304,14 +313,14 @@ public sealed class SupervisorProfilingTests
                 chatEvictedAtCapture = chatHandle.WasTreeKilled;
                 embeddingEvictedAtCapture = embeddingHandle.WasTreeKilled;
                 launchCountAtCapture = launcher.LaunchCount;
-                return Task.FromResult(new LlamaServerProfilingVramSnapshot(6, 8));
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6, ProcessBudgetBytes = 8 });
             });
 
         AssertEx.True(chatEvictedAtCapture, "The target-role warm process must be evicted before ambient VRAM is captured.");
         AssertEx.True(embeddingEvictedAtCapture, "Every sibling-role warm process for the model must be evicted before ambient VRAM is captured.");
         AssertEx.Equal(expected: 2, launchCountAtCapture); // only the two warm processes have launched at capture time.
         AssertEx.Equal(expected: 3, launchCountAtBody); // two warm processes + exclusive profiling spawn.
-        AssertEx.Equal(new LlamaServerProfilingVramSnapshot(6, 8), capturedPreSpawnVram);
+        AssertEx.Equal(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6, ProcessBudgetBytes = 8 }, capturedPreSpawnVram);
     }
 
     [Test]
@@ -338,7 +347,7 @@ public sealed class SupervisorProfilingTests
             {
                 captureEntered = true;
                 siblingEvictedAtCapture = launcher.Handles.Single().WasTreeKilled;
-                return Task.FromResult(new LlamaServerProfilingVramSnapshot(6, 8));
+                return Task.FromResult(new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = 6, ProcessBudgetBytes = 8 });
             });
 
         await AssertEx.SettleAsync();
@@ -454,7 +463,7 @@ public sealed class SupervisorProfilingTests
                                                  -ctv, --cache-type-v TYPE
                                                      allowed values: f16, q8_0
                                                  """;
-        var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
+        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,

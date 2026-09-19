@@ -188,8 +188,13 @@ public sealed record ImageModelRegistryEntry
 ///     A present, resolved image model — the local part paths plus the family/kind the runtime needs to build its
 ///     launch args. Every <see cref="Parts" /> path is verified present when this handle is returned.
 /// </summary>
-public sealed record ImageModelHandle(
-    string ModelName,
-    ImageModelFamily Family,
-    ImageModelKind Kind,
-    IReadOnlyList<ImageModelPart> Parts);
+public sealed class ImageModelHandle
+{
+    public required string ModelName { get; init; }
+
+    public required ImageModelFamily Family { get; init; }
+
+    public required ImageModelKind Kind { get; init; }
+
+    public required IReadOnlyList<ImageModelPart> Parts { get; init; }
+}

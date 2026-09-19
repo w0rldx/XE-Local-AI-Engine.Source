@@ -329,7 +329,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
             var staged = workspace.StagedDirectory(runId);
             var scripted = lines.Select(line => line.Replace("__STAGED__", staged, StringComparison.Ordinal)).ToArray();
 
-            var receipt = new TrainingLaunchReceipt(Pid, Pgid, "/venv/bin/python", StartTicks: 42, RunToken: "token");
+            var receipt = new TrainingLaunchReceipt { Pid = Pid, Pgid = Pgid, ExecutablePath = "/venv/bin/python", StartTicks = 42, RunToken = "token" };
             var handle = new FakeTrainingProcessHandle(receipt, scripted, exitCode, exitsOnStreamClose);
             var spawner = new FakeTrainingProcessSpawner(handle);
 
@@ -376,15 +376,18 @@ public sealed class TrainingRunExecutorTests : IDisposable
             var runtime = Substitute.For<ITrainingRuntimeService>();
             _ = runtime.ResolveInterpreterPath().Returns(runtimeReady ? "/venv/bin/python" : null);
             _ = runtime.GetStatus()
-                       .Returns(new TrainingRuntimeStatus(runtimeReady ? TrainingRuntimePhase.Ready : TrainingRuntimePhase.Idle,
-                           IsRunning: false,
-                           Terminal: true,
-                           [],
-                           LogStartSequence: 0,
-                           SanitizedError: null,
-                           Installed: null,
-                           StartedAtUtc: null,
-                           CompletedAtUtc: null));
+                       .Returns(new TrainingRuntimeStatus
+                       {
+                           Phase = runtimeReady ? TrainingRuntimePhase.Ready : TrainingRuntimePhase.Idle,
+                           IsRunning = false,
+                           Terminal = true,
+                           LogLines = [],
+                           LogStartSequence = 0,
+                           SanitizedError = null,
+                           Installed = null,
+                           StartedAtUtc = null,
+                           CompletedAtUtc = null
+                       });
 
             var cancellations = new TrainingRunCancellationRegistry();
             var executor = new TrainingRunExecutor(store,

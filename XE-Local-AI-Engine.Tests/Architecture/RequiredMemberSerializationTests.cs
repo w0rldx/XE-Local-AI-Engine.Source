@@ -4,10 +4,21 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Capabilities;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
+using XE_Local_AI_Engine.Providers.HuggingFace;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -23,14 +34,30 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class RequiredMemberSerializationTests
 {
-    /// <summary>The product assemblies whose types can reach a JSON payload.</summary>
+    /// <summary>
+    ///     The product assemblies whose types can reach a JSON payload. Every assembly that declares a
+    ///     <c>required</c> member belongs here: the rule is about the member, not about where it lives, and an
+    ///     assembly outside this list is not scanned at all, so a violation in it passes in silence. The provider
+    ///     assemblies each own the wire shape of one runtime or model source and were the gap.
+    /// </summary>
     private static readonly Assembly[] ProductAssemblies =
     [
         typeof(WorkerHealthCheck).Assembly,
         typeof(RuntimePackageValidationResult).Assembly,
         typeof(NodeChatDbContext).Assembly,
         typeof(IInvocationAgentFactory).Assembly,
-        typeof(ILocalModelProvider).Assembly
+        typeof(TelemetrySourceNames).Assembly,
+        typeof(ILocalModelProvider).Assembly,
+        typeof(IProcessLaunchAdmissionLease).Assembly,
+        typeof(WhisperCppReleasePins).Assembly,
+        typeof(IStableDiffusionManagedSourceBuildSignal).Assembly,
+        typeof(GgufMetadataReaderServiceCollectionExtensions).Assembly,
+        typeof(ITrainingProcessHandle).Assembly,
+        typeof(RunningModelSnapshotMapper).Assembly,
+        typeof(ICodexAuthService).Assembly,
+        typeof(CapabilitiesServiceCollectionExtensions).Assembly,
+        typeof(ExternalProviderConstants).Assembly,
+        typeof(OpenAICompatibleRequestBody).Assembly
     ];
 
     /// <summary>

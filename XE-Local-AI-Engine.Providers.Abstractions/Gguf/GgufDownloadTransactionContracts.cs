@@ -3,55 +3,94 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>Exact, provider-resolved remote facts used by acquisition preflight and staging.</summary>
-public sealed record ResolvedGgufDownload(
-    string ModelBaseName,
-    string CanonicalQuant,
-    string RepoId,
-    string ResolvedRevision,
-    string SourceDisplayName,
-    long SourceSizeBytes,
-    string SourceSha256,
-    GgufRole Role,
-    ResolvedGgufProjectorDownload? Projector);
+public sealed record ResolvedGgufDownload
+{
+    public required string ModelBaseName { get; init; }
+
+    public required string CanonicalQuant { get; init; }
+
+    public required string RepoId { get; init; }
+
+    public required string ResolvedRevision { get; init; }
+
+    public required string SourceDisplayName { get; init; }
+
+    public required long SourceSizeBytes { get; init; }
+
+    public required string SourceSha256 { get; init; }
+
+    public required GgufRole Role { get; init; }
+
+    public required ResolvedGgufProjectorDownload? Projector { get; init; }
+}
 
 /// <summary>Exact optional projector companion resolved at the same source revision as the weights.</summary>
-public sealed record ResolvedGgufProjectorDownload(
-    string SourceDisplayName,
-    long SourceSizeBytes,
-    string SourceSha256);
+public sealed record ResolvedGgufProjectorDownload
+{
+    public required string SourceDisplayName { get; init; }
+
+    public required long SourceSizeBytes { get; init; }
+
+    public required string SourceSha256 { get; init; }
+}
 
 /// <summary>Application-owned deterministic destination, revalidated by the provider.</summary>
-public sealed record GgufDownloadDestination(
-    string CanonicalModelName,
-    string CanonicalQuant,
-    string RelativeGgufPath,
-    string RelativeSidecarPath,
-    string? ProjectorRelativePath);
+public sealed class GgufDownloadDestination
+{
+    public required string CanonicalModelName { get; init; }
+
+    public required string CanonicalQuant { get; init; }
+
+    public required string RelativeGgufPath { get; init; }
+
+    public required string RelativeSidecarPath { get; init; }
+
+    public required string? ProjectorRelativePath { get; init; }
+}
 
 /// <summary>Prepared, non-visible download staged in operation-owned temporary files.</summary>
-public sealed record PreparedGgufDownload(
-    string OperationId,
-    ResolvedGgufDownload Source,
-    GgufDownloadDestination Destination,
-    string TemporaryGgufPath,
-    string TemporarySidecarPath,
-    string? TemporaryProjectorPath,
-    GgufModelRegistryEntry RegistryEntry,
-    GgufAcquisitionMetadata Sidecar,
-    string WeightMemberFingerprint,
-    string? ProjectorMemberFingerprint,
-    string ModelContentFingerprint);
+public sealed class PreparedGgufDownload
+{
+    public required string OperationId { get; init; }
+
+    public required ResolvedGgufDownload Source { get; init; }
+
+    public required GgufDownloadDestination Destination { get; init; }
+
+    public required string TemporaryGgufPath { get; init; }
+
+    public required string TemporarySidecarPath { get; init; }
+
+    public required string? TemporaryProjectorPath { get; init; }
+
+    public required GgufModelRegistryEntry RegistryEntry { get; init; }
+
+    public required GgufAcquisitionMetadata Sidecar { get; init; }
+
+    public required string WeightMemberFingerprint { get; init; }
+
+    public required string? ProjectorMemberFingerprint { get; init; }
+
+    public required string ModelContentFingerprint { get; init; }
+}
 
 /// <summary>Exact provider-owned artifacts created by a successful download commit.</summary>
-public sealed record GgufDownloadCommitReceipt(
-    GgufModelRegistryEntry RegistryEntry,
-    string FinalGgufPath,
-    string FinalSidecarPath,
-    string? FinalProjectorPath,
-    string WeightMemberFingerprint,
-    string? ProjectorMemberFingerprint,
-    string ModelContentFingerprint)
+public sealed class GgufDownloadCommitReceipt
 {
+    public required GgufModelRegistryEntry RegistryEntry { get; init; }
+
+    public required string FinalGgufPath { get; init; }
+
+    public required string FinalSidecarPath { get; init; }
+
+    public required string? FinalProjectorPath { get; init; }
+
+    public required string WeightMemberFingerprint { get; init; }
+
+    public required string? ProjectorMemberFingerprint { get; init; }
+
+    public required string ModelContentFingerprint { get; init; }
+
     /// <summary>Whether this operation created the final weight path.</summary>
     public bool OwnsFinalGguf { get; init; } = true;
 

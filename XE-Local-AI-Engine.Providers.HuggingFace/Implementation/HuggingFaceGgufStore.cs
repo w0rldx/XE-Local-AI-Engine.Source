@@ -124,7 +124,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             throw new GgufAdapterBaseModelMissingException("The base model this adapter applies to is not installed. Reinstall the base model or delete the adapter.");
         }
 
-        return new GgufAdapterLaunch(baseEntry.LocalPath, entry.LocalPath, entry.AdapterSizeBytes ?? entry.SizeBytes);
+        return new GgufAdapterLaunch { BaseModelFilePath = baseEntry.LocalPath, AdapterFilePath = entry.LocalPath, AdapterSizeBytes = entry.AdapterSizeBytes ?? entry.SizeBytes };
     }
 
     /// <inheritdoc />
@@ -141,24 +141,27 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         // Quant + file size come from the registry entry (authoritative); the weight/KV inputs come from one tolerant
         // header read. A header failure yields all-null inputs, so the consumer degrades to the file-size weights term.
         var inputs = await ResolveFootprintInputsAsync(entry, ct).ConfigureAwait(false);
-        return new GgufModelFootprintFacts(entry.Quant,
-            entry.SizeBytes,
-            inputs.ParamCount,
-            inputs.BlockCount,
-            inputs.AttentionHeadCount,
-            inputs.AttentionHeadCountKV,
-            inputs.EmbeddingLength,
-            inputs.ContextLength,
-            inputs.AttentionKeyLength,
-            inputs.AttentionValueLength,
-            inputs.SlidingWindow,
-            inputs.SlidingWindowPattern,
-            ContentIdentity: entry.Sha256 ?? $"{entry.SourceRevision}:{entry.FileName}:{entry.SizeBytes}",
-            inputs.Architecture,
-            inputs.ExpertCount,
-            inputs.ExpertUsedCount,
-            inputs.AttentionKeyLengthMla,
-            inputs.AttentionValueLengthMla);
+        return new GgufModelFootprintFacts
+        {
+            Quant = entry.Quant,
+            FileSizeBytes = entry.SizeBytes,
+            ParamCount = inputs.ParamCount,
+            BlockCount = inputs.BlockCount,
+            AttentionHeadCount = inputs.AttentionHeadCount,
+            AttentionHeadCountKV = inputs.AttentionHeadCountKV,
+            EmbeddingLength = inputs.EmbeddingLength,
+            ContextLength = inputs.ContextLength,
+            AttentionKeyLength = inputs.AttentionKeyLength,
+            AttentionValueLength = inputs.AttentionValueLength,
+            SlidingWindow = inputs.SlidingWindow,
+            SlidingWindowPattern = inputs.SlidingWindowPattern,
+            ContentIdentity = entry.Sha256 ?? $"{entry.SourceRevision}:{entry.FileName}:{entry.SizeBytes}",
+            Architecture = inputs.Architecture,
+            ExpertCount = inputs.ExpertCount,
+            ExpertUsedCount = inputs.ExpertUsedCount,
+            AttentionKeyLengthMla = inputs.AttentionKeyLengthMla,
+            AttentionValueLengthMla = inputs.AttentionValueLengthMla
+        };
     }
 
     /// <inheritdoc />
@@ -250,15 +253,18 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var weightRelativePath = GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, result.LocalPath);
             var contentMembers = new List<GgufModelContentMember>
             {
-                new(weightRelativePath, InstalledModelPhysicalMemberRole.Weight, result.SizeBytes, weightHash, [modelName])
+                new() { RelativePath = weightRelativePath, Role = InstalledModelPhysicalMemberRole.Weight, SizeBytes = result.SizeBytes, Sha256 = weightHash, OwningAliases = [modelName] }
             };
             if (projector.LocalPath is not null)
             {
-                contentMembers.Add(new GgufModelContentMember(projector.RelativePath!,
-                    InstalledModelPhysicalMemberRole.Projector,
-                    projector.SizeBytes!.Value,
-                    projector.ContentSha256!,
-                    [modelName]));
+                contentMembers.Add(new GgufModelContentMember
+                {
+                    RelativePath = projector.RelativePath!,
+                    Role = InstalledModelPhysicalMemberRole.Projector,
+                    SizeBytes = projector.SizeBytes!.Value,
+                    Sha256 = projector.ContentSha256!,
+                    OwningAliases = [modelName]
+                });
             }
 
             var modelContentFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
@@ -448,14 +454,17 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             _logger.LogInformation("Downloaded the multimodal projector {ProjectorFile} for {RepoId}; image input is available.",
                 projector.FileName, repoId);
             var contentSha = await GgufAcquisitionSidecar.ComputeSha256Async(result.LocalPath, ct).ConfigureAwait(false);
-            return new ProjectorDownloadResult(projector.FileName,
-                localRelativePath,
-                result.LocalPath,
-                result.SizeBytes,
-                contentSha,
-                NormalizeSha256(projector.Sha256),
-                projector.SizeBytes,
-                GgufMemberFingerprint.Compute(contentSha, result.SizeBytes));
+            return new ProjectorDownloadResult
+            {
+                SourceDisplayName = projector.FileName,
+                RelativePath = localRelativePath,
+                LocalPath = result.LocalPath,
+                SizeBytes = result.SizeBytes,
+                ContentSha256 = contentSha,
+                SourceSha256 = NormalizeSha256(projector.Sha256),
+                SourceSizeBytes = projector.SizeBytes,
+                MemberFingerprint = GgufMemberFingerprint.Compute(contentSha, result.SizeBytes)
+            };
         }
         catch (OperationCanceledException)
         {
@@ -560,21 +569,24 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         try
         {
             var metadata = await _headerReader.ReadHeaderFromFileAsync(entry.LocalPath, ct).ConfigureAwait(false);
-            resolved = new GgufHeaderFootprintInputs(metadata.ParamCount,
-                metadata.BlockCount,
-                metadata.AttentionHeadCount,
-                metadata.AttentionHeadCountKV,
-                metadata.EmbeddingLength,
-                metadata.ContextLength,
-                metadata.AttentionKeyLength,
-                metadata.AttentionValueLength,
-                metadata.SlidingWindow,
-                metadata.SlidingWindowPattern,
-                metadata.Architecture,
-                metadata.ExpertCount,
-                metadata.ExpertUsedCount,
-                metadata.AttentionKeyLengthMla,
-                metadata.AttentionValueLengthMla);
+            resolved = new GgufHeaderFootprintInputs
+            {
+                ParamCount = metadata.ParamCount,
+                BlockCount = metadata.BlockCount,
+                AttentionHeadCount = metadata.AttentionHeadCount,
+                AttentionHeadCountKV = metadata.AttentionHeadCountKV,
+                EmbeddingLength = metadata.EmbeddingLength,
+                ContextLength = metadata.ContextLength,
+                AttentionKeyLength = metadata.AttentionKeyLength,
+                AttentionValueLength = metadata.AttentionValueLength,
+                SlidingWindow = metadata.SlidingWindow,
+                SlidingWindowPattern = metadata.SlidingWindowPattern,
+                Architecture = metadata.Architecture,
+                ExpertCount = metadata.ExpertCount,
+                ExpertUsedCount = metadata.ExpertUsedCount,
+                AttentionKeyLengthMla = metadata.AttentionKeyLengthMla,
+                AttentionValueLengthMla = metadata.AttentionValueLengthMla
+            };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -594,13 +606,16 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     private static GgufModelHandle ToHandle(GgufModelRegistryEntry entry)
     {
-        return new GgufModelHandle(entry.ModelName,
-            entry.LocalPath,
-            entry.Quant,
-            entry.SizeBytes,
-            entry.Sha256,
-            entry.SourceRevision,
-            entry.Role);
+        return new GgufModelHandle
+        {
+            ModelName = entry.ModelName,
+            LocalPath = entry.LocalPath,
+            Quant = entry.Quant,
+            SizeBytes = entry.SizeBytes,
+            Sha256 = entry.Sha256,
+            SourceRevision = entry.SourceRevision,
+            Role = entry.Role
+        };
     }
 
     // Untrusted repo input: reject any file name that could escape the models directory before we ever open a handle.
@@ -617,17 +632,25 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // result (e.g. for a replaced quant at the same path) can never be served from the cache.
     private readonly record struct HeaderFactsCacheKey(string LocalPath, long SizeBytes, DateTimeOffset DownloadedAtUtc);
 
-    private sealed record ProjectorDownloadResult(
-        string? SourceDisplayName,
-        string? RelativePath,
-        string? LocalPath,
-        long? SizeBytes,
-        string? ContentSha256,
-        string? SourceSha256,
-        long? SourceSizeBytes,
-        string? MemberFingerprint)
+    private sealed record ProjectorDownloadResult
     {
-        public static ProjectorDownloadResult None { get; } = new(null, null, null, null, null, null, null, null);
+        public required string? SourceDisplayName { get; init; }
+
+        public required string? RelativePath { get; init; }
+
+        public required string? LocalPath { get; init; }
+
+        public required long? SizeBytes { get; init; }
+
+        public required string? ContentSha256 { get; init; }
+
+        public required string? SourceSha256 { get; init; }
+
+        public required long? SourceSizeBytes { get; init; }
+
+        public required string? MemberFingerprint { get; init; }
+
+        public static ProjectorDownloadResult None { get; } = new() { SourceDisplayName = null, RelativePath = null, LocalPath = null, SizeBytes = null, ContentSha256 = null, SourceSha256 = null, SourceSizeBytes = null, MemberFingerprint = null };
     }
 
     // The per-file header facts surfaced onto the descriptor, derived from one tolerant header read.
@@ -651,26 +674,56 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     // The per-file GGUF header inputs the memory-fit estimator consumes (weights param count + KV-cache dimensions),
     // derived from one tolerant header read. All-null when the header could not be parsed → file-size weights fallback.
-    private sealed record GgufHeaderFootprintInputs(
-        long? ParamCount,
-        long? BlockCount,
-        long? AttentionHeadCount,
-        long? AttentionHeadCountKV,
-        long? EmbeddingLength,
-        long? ContextLength,
-        long? AttentionKeyLength = null,
-        long? AttentionValueLength = null,
-        long? SlidingWindow = null,
-        long? SlidingWindowPattern = null,
-        string? Architecture = null,
-        long? ExpertCount = null,
-        long? ExpertUsedCount = null,
-        long? AttentionKeyLengthMla = null,
-        long? AttentionValueLengthMla = null)
+    private sealed record GgufHeaderFootprintInputs
     {
-        public static GgufHeaderFootprintInputs Empty { get; } = new(ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
-            EmbeddingLength: null, ContextLength: null, AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
-            Architecture: null, ExpertCount: null, ExpertUsedCount: null, AttentionKeyLengthMla: null, AttentionValueLengthMla: null);
+        public required long? ParamCount { get; init; }
+
+        public required long? BlockCount { get; init; }
+
+        public required long? AttentionHeadCount { get; init; }
+
+        public required long? AttentionHeadCountKV { get; init; }
+
+        public required long? EmbeddingLength { get; init; }
+
+        public required long? ContextLength { get; init; }
+
+        public long? AttentionKeyLength { get; init; }
+
+        public long? AttentionValueLength { get; init; }
+
+        public long? SlidingWindow { get; init; }
+
+        public long? SlidingWindowPattern { get; init; }
+
+        public string? Architecture { get; init; }
+
+        public long? ExpertCount { get; init; }
+
+        public long? ExpertUsedCount { get; init; }
+
+        public long? AttentionKeyLengthMla { get; init; }
+
+        public long? AttentionValueLengthMla { get; init; }
+
+        public static GgufHeaderFootprintInputs Empty { get; } = new()
+        {
+            ParamCount = null,
+            BlockCount = null,
+            AttentionHeadCount = null,
+            AttentionHeadCountKV = null,
+            EmbeddingLength = null,
+            ContextLength = null,
+            AttentionKeyLength = null,
+            AttentionValueLength = null,
+            SlidingWindow = null,
+            SlidingWindowPattern = null,
+            Architecture = null,
+            ExpertCount = null,
+            ExpertUsedCount = null,
+            AttentionKeyLengthMla = null,
+            AttentionValueLengthMla = null
+        };
     }
 
     /// <summary>The concrete repo file a model request resolves to, with the revision the download will pin.</summary>

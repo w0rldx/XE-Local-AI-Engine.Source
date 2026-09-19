@@ -320,7 +320,7 @@ internal sealed class HfDownloadClient
             CompletedBytes = finalSize
         });
 
-        return new HfDownloadResult(destinationPath, finalSize, verifiedSha, resolvedRevision);
+        return new HfDownloadResult { LocalPath = destinationPath, SizeBytes = finalSize, Sha256 = verifiedSha, ResolvedRevision = resolvedRevision };
     }
 
     /// <summary>
@@ -383,7 +383,7 @@ internal sealed class HfDownloadClient
         {
             RandomAccess.SetLength(handle, total);
 
-            var context = new ChunkContext(chunkUri, handle, state, modelName, total, chunkSize, progress, probe.Revision);
+            var context = new ChunkContext { RequestUri = chunkUri, Handle = handle, State = state, ModelName = modelName, TotalBytes = total, ChunkSize = chunkSize, Progress = progress, Revision = probe.Revision };
             using var failureCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             // Chunks capture their own failure rather than faulting, so one dead connection cannot leave a sibling's
             // exception unobserved and the real cause is still the one that surfaces.
@@ -428,7 +428,7 @@ internal sealed class HfDownloadClient
 
         var total = response.Content.Headers.ContentRange?.Length;
         return total == expectedSizeBytes && total > 0
-            ? new RangeProbe(total.Value, ReadRepoCommit(response) ?? string.Empty, ReadLinkedSha256(response))
+            ? new RangeProbe { TotalBytes = total.Value, Revision = ReadRepoCommit(response) ?? string.Empty, LinkedSha = ReadLinkedSha256(response) }
             : null;
     }
 
@@ -635,7 +635,7 @@ internal sealed class HfDownloadClient
         return await RangeResumeState.TryReadRecordAsync(partPath + RangeSidecarSuffix, ct).ConfigureAwait(false) is { Cursors.Length: 1 } record
                && record.Total == expectedSizeBytes
                && record.Cursors[0] == partBytes
-            ? new SingleStreamResume(partBytes, record.Revision)
+            ? new SingleStreamResume { Bytes = partBytes, Revision = record.Revision }
             : null;
     }
 
@@ -990,21 +990,42 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>What the one-byte range probe learned: the authoritative length, the pinned revision, and any LFS OID.</summary>
-    private sealed record RangeProbe(long TotalBytes, string Revision, string? LinkedSha);
+    private sealed record RangeProbe
+    {
+        public required long TotalBytes { get; init; }
+
+        public required string Revision { get; init; }
+
+        public required string? LinkedSha { get; init; }
+    }
 
     /// <summary>A single-stream partial the record beside it vouches for: its contiguous length and the writing commit.</summary>
-    private sealed record SingleStreamResume(long Bytes, string Revision);
+    private sealed record SingleStreamResume
+    {
+        public required long Bytes { get; init; }
+
+        public required string Revision { get; init; }
+    }
 
     /// <summary>Everything a chunk needs that is identical for every chunk of one parallel download.</summary>
-    private sealed record ChunkContext(
-        Uri RequestUri,
-        SafeFileHandle Handle,
-        RangeResumeState State,
-        string ModelName,
-        long TotalBytes,
-        long ChunkSize,
-        IProgress<PullProgress>? Progress,
-        string Revision);
+    private sealed record ChunkContext
+    {
+        public required Uri RequestUri { get; init; }
+
+        public required SafeFileHandle Handle { get; init; }
+
+        public required RangeResumeState State { get; init; }
+
+        public required string ModelName { get; init; }
+
+        public required long TotalBytes { get; init; }
+
+        public required long ChunkSize { get; init; }
+
+        public required IProgress<PullProgress>? Progress { get; init; }
+
+        public required string Revision { get; init; }
+    }
 
     /// <summary>
     ///     Per-chunk resume cursors plus the aggregate byte count for one parallel download.

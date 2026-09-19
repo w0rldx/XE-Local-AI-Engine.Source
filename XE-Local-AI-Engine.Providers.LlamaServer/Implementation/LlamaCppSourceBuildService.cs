@@ -155,20 +155,21 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 revisionMode = LlamaCppSourceRevisionMode.EnginePinned;
             }
 
-            var descriptor = new LlamaCppSourceBuildDescriptor(variant,
-                normalized.Source,
-                normalized.Repository!,
-                revisionMode,
-                normalized.Commit,
-                ResolvedCommit: revisionMode == LlamaCppSourceRevisionMode.EnginePinned ? LlamaCppReleasePins.PinnedSourceCommitSha : null)
+            var descriptor = new LlamaCppSourceBuildDescriptor
             {
+                Variant = variant,
+                Source = normalized.Source,
+                Repository = normalized.Repository!,
+                RevisionMode = revisionMode,
+                RequestedCommit = normalized.Commit,
+                ResolvedCommit = revisionMode == LlamaCppSourceRevisionMode.EnginePinned ? LlamaCppReleasePins.PinnedSourceCommitSha : null,
                 BuildId = Guid.NewGuid()
             };
             lock (_stateLock)
             {
                 if (_isRunning)
                 {
-                    return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.AlreadyRunning);
+                    return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.AlreadyRunning };
                 }
             }
 
@@ -182,7 +183,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                     string.Equals(item.Key, "free-disk", StringComparison.Ordinal) && !item.Satisfied)
                     ? LlamaCppSourceBuildStartOutcome.InsufficientDisk
                     : LlamaCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new LlamaCppSourceBuildStartResult(outcome, report);
+                return new LlamaCppSourceBuildStartResult { Outcome = outcome, Prerequisites = report };
             }
 
             var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
@@ -190,15 +191,15 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 var processCount = _supervisor.CountRunningProcesses();
                 return processCount > 0
-                    ? new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.ProcessesRunning, RunningProcessCount: processCount)
-                    : new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.RuntimeBusy);
+                    ? new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.ProcessesRunning, RunningProcessCount = processCount }
+                    : new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.RuntimeBusy };
             }
 
             await using (mutationLease.ConfigureAwait(false))
             {
                 if (!_buildActivity.TryReserve(descriptor.BuildId))
                 {
-                    return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.RuntimeBusy);
+                    return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.RuntimeBusy };
                 }
 
                 try
@@ -245,7 +246,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
         // Release the start transaction before allowing the detached build to touch its work tree.
         startSignal.SetResult();
-        return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.Started);
+        return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.Started };
     }
 
     /// <inheritdoc />
@@ -292,15 +293,18 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     {
         lock (_stateLock)
         {
-            return new LlamaCppSourceBuildStatus(_phase,
-                _isRunning,
-                Terminal: _phase is LlamaCppSourceBuildPhase.Completed or LlamaCppSourceBuildPhase.Cancelled or LlamaCppSourceBuildPhase.Failed,
-                LogLines: [.. _logLines],
-                _logStartSequence,
-                _sanitizedError,
-                _currentBuild,
-                _startedAtUtc,
-                _completedAtUtc);
+            return new LlamaCppSourceBuildStatus
+            {
+                Phase = _phase,
+                IsRunning = _isRunning,
+                Terminal = _phase is LlamaCppSourceBuildPhase.Completed or LlamaCppSourceBuildPhase.Cancelled or LlamaCppSourceBuildPhase.Failed,
+                LogLines = [.. _logLines],
+                LogStartSequence = _logStartSequence,
+                SanitizedError = _sanitizedError,
+                CurrentBuild = _currentBuild,
+                StartedAtUtc = _startedAtUtc,
+                CompletedAtUtc = _completedAtUtc
+            };
         }
     }
 
@@ -1065,12 +1069,15 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         lock (_stateLock)
         {
             _phase = phase;
-            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(),
-                [],
-                _nextLogSequence,
-                Terminal: false,
-                SanitizedError: null,
-                _currentBuild));
+            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent
+            {
+                Phase = phase.ToString(),
+                AppendedLogLines = [],
+                AppendedLogStartSequence = _nextLogSequence,
+                Terminal = false,
+                SanitizedError = null,
+                CurrentBuild = _currentBuild
+            });
         }
     }
 
@@ -1083,12 +1090,15 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _isRunning = false;
             _sanitizedError = sanitizedError;
             _completedAtUtc = _timeProvider.GetUtcNow();
-            publish = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(),
-                [],
-                _nextLogSequence,
-                Terminal: true,
-                sanitizedError,
-                _currentBuild));
+            publish = QueuePublish(new LlamaCppSourceBuildStatusHubEvent
+            {
+                Phase = phase.ToString(),
+                AppendedLogLines = [],
+                AppendedLogStartSequence = _nextLogSequence,
+                Terminal = true,
+                SanitizedError = sanitizedError,
+                CurrentBuild = _currentBuild
+            });
         }
 
         await publish.ConfigureAwait(false);
@@ -1110,12 +1120,15 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
             _logStartSequence = _nextLogSequence - _logLines.Count;
 
-            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(_phase.ToString(),
-                [redacted],
-                appendedSequence,
-                Terminal: false,
-                SanitizedError: null,
-                _currentBuild));
+            _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent
+            {
+                Phase = _phase.ToString(),
+                AppendedLogLines = [redacted],
+                AppendedLogStartSequence = appendedSequence,
+                Terminal = false,
+                SanitizedError = null,
+                CurrentBuild = _currentBuild
+            });
         }
     }
 

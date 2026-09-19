@@ -69,7 +69,7 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
         ExternalProviderModelDescriptor model,
         string? apiKey = null)
     {
-        _registrations.Add(new ExternalProviderModelRegistration(connection, model));
+        _registrations.Add(new ExternalProviderModelRegistration { Connection = connection, Model = model });
         _apiKeys[connection.Id] = apiKey;
         return this;
     }
@@ -109,8 +109,11 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
             return null;
         }
 
-        return new ExternalProviderTransportBinding(new ExternalProviderBinding(Generation, registration),
-            _apiKeys.GetValueOrDefault(registration.Connection.Id));
+        return new ExternalProviderTransportBinding
+        {
+            Binding = new ExternalProviderBinding { Generation = Generation, Registration = registration },
+            ApiKey = _apiKeys.GetValueOrDefault(registration.Connection.Id)
+        };
     }
 }
 

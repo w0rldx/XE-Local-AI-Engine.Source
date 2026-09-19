@@ -41,7 +41,7 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
                                    .Distinct(StringComparer.OrdinalIgnoreCase)
                                    .OrderBy(static path => path, StringComparer.Ordinal)
                                    .ToArray();
-            return new InstalledGgufCandidate(requested.ModelName, Array.AsReadOnly(snapshots), Array.AsReadOnly(members));
+            return new InstalledGgufCandidate { ModelName = requested.ModelName, RegistryAliases = Array.AsReadOnly(snapshots), MemberRelativePaths = Array.AsReadOnly(members) };
         }
         catch (OperationCanceledException)
         {
@@ -78,11 +78,14 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
             var members = await LoadMembersAsync(current.RegistryAliases, cancellationToken).ConfigureAwait(false);
             var contentMembers = members.Where(static member => member.Role is InstalledModelPhysicalMemberRole.Weight
                                             or InstalledModelPhysicalMemberRole.Projector)
-                                        .Select(static member => new GgufModelContentMember(member.RelativePath,
-                                            member.Role,
-                                            member.SizeBytes,
-                                            member.Sha256,
-                                            member.OwningAliases))
+                                        .Select(static member => new GgufModelContentMember
+                                        {
+                                            RelativePath = member.RelativePath,
+                                            Role = member.Role,
+                                            SizeBytes = member.SizeBytes,
+                                            Sha256 = member.Sha256,
+                                            OwningAliases = member.OwningAliases
+                                        })
                                         .ToArray();
             var modelContentFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
             if (requested.RegistryValue.ModelContentFingerprint is not null
@@ -92,18 +95,21 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
                     "The installed model content no longer matches its recorded fingerprint.");
             }
 
-            return new InstalledGgufSnapshot(requested.ModelName,
-                requested.RegistryRevision,
-                current.RegistryAliases,
-                GgufRegistryAliasSetHash.ComputeV1(current.RegistryAliases),
-                members,
-                GgufPhysicalMemberSetHash.ComputeV1(members),
-                requested.RegistryValue.Origin,
-                requested.RegistryValue.RepoId,
-                requested.RegistryValue.SourceRevision,
-                requested.RegistryValue.Quant,
-                requested.RegistryValue.Role,
-                modelContentFingerprint);
+            return new InstalledGgufSnapshot
+            {
+                ModelName = requested.ModelName,
+                RegistryRevision = requested.RegistryRevision,
+                RegistryAliases = current.RegistryAliases,
+                RegistryAliasSetHash = GgufRegistryAliasSetHash.ComputeV1(current.RegistryAliases),
+                Members = members,
+                PhysicalMemberSetHash = GgufPhysicalMemberSetHash.ComputeV1(members),
+                Origin = requested.RegistryValue.Origin,
+                RepoId = requested.RegistryValue.RepoId,
+                SourceRevision = requested.RegistryValue.SourceRevision,
+                Quantization = requested.RegistryValue.Quant,
+                Role = requested.RegistryValue.Role,
+                ModelContentFingerprint = modelContentFingerprint
+            };
         }
         catch (OperationCanceledException)
         {
@@ -327,11 +333,16 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
             return;
         }
 
-        observations[relativePath] = new MemberObservation(relativePath, role, metadataSchemaVersion,
-            new HashSet<string>(StringComparer.Ordinal)
+        observations[relativePath] = new MemberObservation
+        {
+            RelativePath = relativePath,
+            Role = role,
+            MetadataSchemaVersion = metadataSchemaVersion,
+            OwningAliases = new HashSet<string>(StringComparer.Ordinal)
             {
                 alias
-            });
+            }
+        };
     }
 
     /// <summary>
@@ -374,9 +385,14 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
         }
     }
 
-    private sealed record MemberObservation(
-        string RelativePath,
-        InstalledModelPhysicalMemberRole Role,
-        int? MetadataSchemaVersion,
-        HashSet<string> OwningAliases);
+    private sealed record MemberObservation
+    {
+        public required string RelativePath { get; init; }
+
+        public required InstalledModelPhysicalMemberRole Role { get; init; }
+
+        public required int? MetadataSchemaVersion { get; init; }
+
+        public required HashSet<string> OwningAliases { get; init; }
+    }
 }

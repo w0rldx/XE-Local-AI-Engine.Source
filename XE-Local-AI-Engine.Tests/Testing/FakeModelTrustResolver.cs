@@ -48,7 +48,7 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
             DefaultReasoningEffort = defaultReasoningEffort
         };
 
-        var registration = new ExternalProviderModelRegistration(connection, model);
+        var registration = new ExternalProviderModelRegistration { Connection = connection, Model = model };
         _registrations[registration.ModelId] = registration;
         return this;
     }

@@ -127,9 +127,12 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
 
         return
         [
-            .. DeviceRegex().Matches(output).Select(static match => new LlamaGpuDevice(NormalizeName(match.Groups["name"].Value),
-                ParseMibToBytes(match.Groups["total"].Value),
-                ParseMibToBytes(match.Groups["free"].Value)))
+            .. DeviceRegex().Matches(output).Select(static match => new LlamaGpuDevice
+            {
+                Name = NormalizeName(match.Groups["name"].Value),
+                TotalBytes = ParseMibToBytes(match.Groups["total"].Value),
+                FreeBytes = ParseMibToBytes(match.Groups["free"].Value)
+            })
         ];
     }
 

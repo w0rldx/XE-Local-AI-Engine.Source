@@ -19,10 +19,17 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 ///         tool (see <c>SessionApprovalEligibility</c>). It is <see langword="false" /> for every non-custom tool.
 ///     </para>
 /// </summary>
-internal sealed record LocalChatToolDescriptor(
-    string Name,
-    string Description,
-    string? ParameterSchema,
-    bool RequiresApproval,
-    ToolCategory Category = ToolCategory.Unknown,
-    bool IsFixedCustomTool = false);
+internal sealed class LocalChatToolDescriptor
+{
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string? ParameterSchema { get; init; }
+
+    public required bool RequiresApproval { get; init; }
+
+    public ToolCategory Category { get; init; } = ToolCategory.Unknown;
+
+    public bool IsFixedCustomTool { get; init; }
+}

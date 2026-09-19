@@ -528,7 +528,7 @@ public sealed partial class LlamaServerProcessSupervisor
                         handle.ProcessId,
                         capabilityDecision.OmittedOptions).ConfigureAwait(false);
 
-                var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
+                var endpoint = new LlamaServerEndpoint { ModelName = key.ModelName, Role = key.Role, BaseAddress = spec.BaseAddress };
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
                     EffectiveContextTokens = effectiveContext,
@@ -751,18 +751,19 @@ public sealed partial class LlamaServerProcessSupervisor
         int processId,
         IReadOnlyList<string>? omittedOptions = null)
     {
-        return new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion,
-            variant,
-            DescribeOperatingSystem(),
-            executableVersion,
-            await TryComputeRunningImageSha256Async(processId).ConfigureAwait(false),
-            manifestSha256,
-            launchProjection,
-            auxAssets,
-            placement,
-            effectiveContextTokens,
-            benchmarkLaunchPolicy)
+        return new LlamaServerLaunchReceipt
         {
+            ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+            Variant = variant,
+            Os = DescribeOperatingSystem(),
+            ExecutableVersion = executableVersion,
+            ExecutableSha256 = await TryComputeRunningImageSha256Async(processId).ConfigureAwait(false),
+            ManifestSha256 = manifestSha256,
+            LaunchProjection = launchProjection,
+            AuxAssets = auxAssets,
+            Placement = placement,
+            EffectiveContextTokens = effectiveContextTokens,
+            BenchmarkLaunchPolicy = benchmarkLaunchPolicy,
             OmittedOptions = omittedOptions ?? []
         };
     }
@@ -868,18 +869,21 @@ public sealed partial class LlamaServerProcessSupervisor
         // under its decision gate, and the GPU bytes it reserved. Nothing is probed here: a load must not pay for a
         // second nvidia-smi call, and a figure measured after the weights landed would answer a different question.
         // An unadmitted spawn (direct, profiling, test) or one whose variant moved off the admission reports neither.
-        var observation = new LlamaServerLoadObservation(key.Role,
-            variant,
-            runtimeVersion,
-            runtimeSha256,
-            Math.Max(0d, readinessDuration.TotalMilliseconds),
-            outcome,
-            placement,
-            attemptKind,
-            speculativeModeClass,
-            key.ModelName,
-            admitted?.GlobalFreeVramBytesAtAdmission,
-            admitted?.Allocation.Footprint.GpuBytes);
+        var observation = new LlamaServerLoadObservation
+        {
+            Role = key.Role,
+            Variant = variant,
+            RuntimeVersion = runtimeVersion,
+            RuntimeSha256 = runtimeSha256,
+            ReadinessDurationMs = Math.Max(0d, readinessDuration.TotalMilliseconds),
+            Outcome = outcome,
+            Placement = placement,
+            AttemptKind = attemptKind,
+            SpeculativeModeClass = speculativeModeClass,
+            ModelName = key.ModelName,
+            GlobalFreeVramBytesAtLoad = admitted?.GlobalFreeVramBytesAtAdmission,
+            AdmittedVramBytes = admitted?.Allocation.Footprint.GpuBytes
+        };
         return observation;
     }
 

@@ -288,12 +288,15 @@ public sealed class LlamaServerLaunchPolicyTests
         int? modelTrainContextTokens = null,
         ProcessContextAllocationSource source = ProcessContextAllocationSource.HardwareTier)
     {
-        return new ProcessContextAllocation(processContextTokens,
-            modelTrainContextTokens,
-            source,
-            placement,
-            ResourceFootprint.Zero,
-            ContentIdentity: "test-content",
-            CacheKey: "test-cache");
+        return new ProcessContextAllocation
+        {
+            ProcessContextTokens = processContextTokens,
+            ModelTrainContextTokens = modelTrainContextTokens,
+            Source = source,
+            Placement = placement,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "test-content",
+            CacheKey = "test-cache"
+        };
     }
 }

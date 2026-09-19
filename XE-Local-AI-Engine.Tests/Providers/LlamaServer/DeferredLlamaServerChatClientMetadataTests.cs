@@ -58,7 +58,7 @@ public sealed class DeferredLlamaServerChatClientMetadataTests
     {
         var binding = Substitute.For<ILlamaServerEndpointBinding>();
         binding.GetBoundEndpoint(ModelName, ModelRole.Chat)
-               .Returns(new LlamaServerEndpoint(ModelName, ModelRole.Chat, DeadEndpoint));
+               .Returns(new LlamaServerEndpoint { ModelName = ModelName, Role = ModelRole.Chat, BaseAddress = DeadEndpoint });
         using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor(),
             ModelName,
             NetworkTimeout,

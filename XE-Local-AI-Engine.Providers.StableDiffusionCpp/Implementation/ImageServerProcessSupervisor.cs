@@ -164,7 +164,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         var reservation = _runtimeActivityGate.TryAcquireEvictionReservation();
         if (reservation is null)
         {
-            return new ImageServerEvictAllResult(false, _runtimeActivityGate.GetSnapshot());
+            return new ImageServerEvictAllResult { Evicted = false, Activity = _runtimeActivityGate.GetSnapshot() };
         }
 
         await using (reservation.ConfigureAwait(false))
@@ -192,7 +192,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             KillDetachedProcesses(detached);
         }
 
-        return new ImageServerEvictAllResult(true, _runtimeActivityGate.GetSnapshot());
+        return new ImageServerEvictAllResult { Evicted = true, Activity = _runtimeActivityGate.GetSnapshot() };
     }
 
     /// <inheritdoc />
@@ -387,7 +387,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             _logger.LogInformation("sd-server ready for model {ModelName} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
                 modelName, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
-            var endpoint = new ImageServerEndpoint(modelName, spec.BaseAddress);
+            var endpoint = new ImageServerEndpoint { ModelName = modelName, BaseAddress = spec.BaseAddress };
             var residentLease = _runtimeActivityGate.TryAcquireResidentProcessLease()
                                 ?? throw new StableDiffusionRuntimeException("The image runtime became busy before the server process could be registered.");
             var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow(), residentLease);

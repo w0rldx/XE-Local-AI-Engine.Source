@@ -19,7 +19,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     the adapter it applies as <c>--lora</c>. <see cref="AdapterSizeBytes" /> is the adapter's on-disk size, which the
 ///     launch path adds to the base weight size wherever the main model file size is accounted for.
 /// </summary>
-public sealed record GgufAdapterLaunch(string BaseModelFilePath, string AdapterFilePath, long AdapterSizeBytes);
+public sealed class GgufAdapterLaunch
+{
+    public required string BaseModelFilePath { get; init; }
+
+    public required string AdapterFilePath { get; init; }
+
+    public required long AdapterSizeBytes { get; init; }
+}
 
 /// <summary>
 ///     A registered adapter whose base model is missing, renamed, or itself unreadable. Non-retryable: the launch cannot

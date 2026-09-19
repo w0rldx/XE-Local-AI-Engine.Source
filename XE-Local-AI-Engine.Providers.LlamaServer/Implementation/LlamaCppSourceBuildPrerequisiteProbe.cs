@@ -58,14 +58,14 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         {
             var osOnly = new[]
             {
-                new LlamaCppSourceBuildPrerequisiteItem("os-is-linux", Satisfied: false, "In-app source builds are available on Linux only.")
+                new LlamaCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = false, Detail = "In-app source builds are available on Linux only." }
             };
-            return new LlamaCppSourceBuildPrerequisiteReport(CanBuild: false, osOnly);
+            return new LlamaCppSourceBuildPrerequisiteReport { CanBuild = false, Items = osOnly };
         }
 
         var items = new List<LlamaCppSourceBuildPrerequisiteItem>
         {
-            new("os-is-linux", Satisfied: true, "Linux host detected."),
+            new() { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
             await ProbeToolAsync("cmake", ["--version"], "CMake", ct).ConfigureAwait(false),
             await ProbeToolAsync("gcc", ["--version"], "C compiler (gcc)", ct).ConfigureAwait(false),
             await ProbeToolAsync("g++", ["--version"], "C++ compiler (g++)", ct).ConfigureAwait(false),
@@ -77,8 +77,12 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         if (backend == LlamaCppSourceBackend.Cuda)
         {
             var nvidiaPresent = await DetectNvidiaAsync(ct).ConfigureAwait(false);
-            items.Insert(1, new LlamaCppSourceBuildPrerequisiteItem("nvidia-gpu", nvidiaPresent,
-                nvidiaPresent ? "NVIDIA GPU/driver detected." : "No NVIDIA GPU or driver detected."));
+            items.Insert(1, new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = "nvidia-gpu",
+                Satisfied = nvidiaPresent,
+                Detail = nvidiaPresent ? "NVIDIA GPU/driver detected." : "No NVIDIA GPU or driver detected."
+            });
             items.Insert(2, await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ct).ConfigureAwait(false));
             items.Insert(3, await ProbeToolAsync("nvidia-smi", ["--query-gpu=compute_cap", "--format=csv,noheader"], "NVIDIA driver probe", ct).ConfigureAwait(false));
         }
@@ -89,7 +93,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         }
 
         var canBuild = items.TrueForAll(static item => item.Satisfied);
-        return new LlamaCppSourceBuildPrerequisiteReport(canBuild, items);
+        return new LlamaCppSourceBuildPrerequisiteReport { CanBuild = canBuild, Items = items };
     }
 
     private async Task<bool> DetectNvidiaAsync(CancellationToken ct)
@@ -116,24 +120,24 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         var make = await TryProbeAsync("make", ["--version"], ct).ConfigureAwait(false);
         if (make is { Length: > 0 })
         {
-            return new LlamaCppSourceBuildPrerequisiteItem("make-or-ninja", Satisfied: true, "make detected.");
+            return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = true, Detail = "make detected." };
         }
 
         var ninja = await TryProbeAsync("ninja", ["--version"], ct).ConfigureAwait(false);
         if (ninja is { Length: > 0 })
         {
-            return new LlamaCppSourceBuildPrerequisiteItem("make-or-ninja", Satisfied: true, "ninja detected.");
+            return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = true, Detail = "ninja detected." };
         }
 
-        return new LlamaCppSourceBuildPrerequisiteItem("make-or-ninja", Satisfied: false, "Neither make nor ninja was found.");
+        return new LlamaCppSourceBuildPrerequisiteItem { Key = "make-or-ninja", Satisfied = false, Detail = "Neither make nor ninja was found." };
     }
 
     private static async Task<LlamaCppSourceBuildPrerequisiteItem> ProbeToolAsync(string fileName, IReadOnlyList<string> args, string displayName, CancellationToken ct)
     {
         var banner = await TryProbeAsync(fileName, args, ct).ConfigureAwait(false);
         return banner is { Length: > 0 }
-            ? new LlamaCppSourceBuildPrerequisiteItem(fileName, Satisfied: true, $"{displayName} detected: {banner}")
-            : new LlamaCppSourceBuildPrerequisiteItem(fileName, Satisfied: false, $"{displayName} was not found on PATH.");
+            ? new LlamaCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = true, Detail = $"{displayName} detected: {banner}" }
+            : new LlamaCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = false, Detail = $"{displayName} was not found on PATH." };
     }
 
     // Spawns `<fileName> <args>` (no shell, argv only), bounded + tree-killed, and returns the trimmed first stdout/stderr
@@ -209,16 +213,19 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
             var satisfied = freeBytes >= _requiredFreeDiskBytes;
             var freeGb = freeBytes / (1024.0 * 1024 * 1024);
             var requiredGb = _requiredFreeDiskBytes / (1024.0 * 1024 * 1024);
-            return new LlamaCppSourceBuildPrerequisiteItem("free-disk",
-                satisfied,
-                satisfied
+            return new LlamaCppSourceBuildPrerequisiteItem
+            {
+                Key = "free-disk",
+                Satisfied = satisfied,
+                Detail = satisfied
                     ? $"{freeGb:F1} GB free (need {requiredGb:F0} GB)."
-                    : $"Only {freeGb:F1} GB free; {requiredGb:F0} GB required.");
+                    : $"Only {freeGb:F1} GB free; {requiredGb:F0} GB required."
+            };
         }
         catch (Exception)
         {
             // A disk query failure must not throw out of the probe; report it as unsatisfied so the build stays gated.
-            return new LlamaCppSourceBuildPrerequisiteItem("free-disk", Satisfied: false, "Free disk space could not be determined.");
+            return new LlamaCppSourceBuildPrerequisiteItem { Key = "free-disk", Satisfied = false, Detail = "Free disk space could not be determined." };
         }
     }
 

@@ -435,15 +435,18 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         private readonly TaskCompletionSource _releasePrepare = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task<ResolvedGgufDownload> ResolveAsync(GgufModelRequest request, CancellationToken cancellationToken) =>
-            Task.FromResult(new ResolvedGgufDownload(Repo,
-                Quant,
-                Repo,
-                "revision",
-                request.FileName ?? "model.gguf",
-                1,
-                Hash,
-                GgufRole.Chat,
-                Projector: null));
+            Task.FromResult(new ResolvedGgufDownload
+            {
+                ModelBaseName = Repo,
+                CanonicalQuant = Quant,
+                RepoId = Repo,
+                ResolvedRevision = "revision",
+                SourceDisplayName = request.FileName ?? "model.gguf",
+                SourceSizeBytes = 1,
+                SourceSha256 = Hash,
+                Role = GgufRole.Chat,
+                Projector = null
+            });
 
         public async Task<PreparedGgufDownload> PrepareAsync(ResolvedGgufDownload source,
             GgufDownloadDestination destination,
@@ -468,29 +471,35 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             }
 
             var entry = Entry(destination);
-            return new PreparedGgufDownload("operation",
-                source,
-                destination,
-                "/fake/temp.gguf",
-                "/fake/temp.json",
-                TemporaryProjectorPath: null,
-                entry,
-                Sidecar(entry),
-                GgufMemberFingerprint.Compute(Hash, 1),
-                ProjectorMemberFingerprint: null,
-                entry.ModelContentFingerprint!);
+            return new PreparedGgufDownload
+            {
+                OperationId = "operation",
+                Source = source,
+                Destination = destination,
+                TemporaryGgufPath = "/fake/temp.gguf",
+                TemporarySidecarPath = "/fake/temp.json",
+                TemporaryProjectorPath = null,
+                RegistryEntry = entry,
+                Sidecar = Sidecar(entry),
+                WeightMemberFingerprint = GgufMemberFingerprint.Compute(Hash, 1),
+                ProjectorMemberFingerprint = null,
+                ModelContentFingerprint = entry.ModelContentFingerprint!
+            };
         }
 
         public Task<GgufDownloadCommitReceipt> CommitAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
         {
             WasCommitted = true;
-            var receipt = new GgufDownloadCommitReceipt(preparedDownload.RegistryEntry,
-                "/fake/final.gguf",
-                "/fake/final.json",
-                FinalProjectorPath: null,
-                preparedDownload.WeightMemberFingerprint,
-                ProjectorMemberFingerprint: null,
-                preparedDownload.ModelContentFingerprint);
+            var receipt = new GgufDownloadCommitReceipt
+            {
+                RegistryEntry = preparedDownload.RegistryEntry,
+                FinalGgufPath = "/fake/final.gguf",
+                FinalSidecarPath = "/fake/final.json",
+                FinalProjectorPath = null,
+                WeightMemberFingerprint = preparedDownload.WeightMemberFingerprint,
+                ProjectorMemberFingerprint = null,
+                ModelContentFingerprint = preparedDownload.ModelContentFingerprint
+            };
             if (ThrowPartialCommit)
             {
                 throw new GgufDownloadCommitException(receipt,
@@ -521,7 +530,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         private static GgufModelRegistryEntry Entry(GgufDownloadDestination destination)
         {
             var fingerprint = GgufModelContentFingerprint.ComputeV1([
-                new GgufModelContentMember(destination.RelativeGgufPath, InstalledModelPhysicalMemberRole.Weight, 1, Hash, [destination.CanonicalModelName])
+                new GgufModelContentMember { RelativePath = destination.RelativeGgufPath, Role = InstalledModelPhysicalMemberRole.Weight, SizeBytes = 1, Sha256 = Hash, OwningAliases = [destination.CanonicalModelName] }
             ]);
             return new GgufModelRegistryEntry
             {

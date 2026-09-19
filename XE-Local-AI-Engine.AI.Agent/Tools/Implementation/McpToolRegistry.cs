@@ -57,11 +57,15 @@ internal sealed class McpToolRegistry : IMcpToolRegistry
             descriptors.Add(tool.Descriptor);
         }
 
-        _snapshot = new Snapshot(executables.ToImmutable(), descriptors.ToImmutable());
+        _snapshot = new Snapshot { Executables = executables.ToImmutable(), Descriptors = descriptors.ToImmutable() };
     }
 
-    private sealed record Snapshot(ImmutableDictionary<string, AITool> Executables, ImmutableArray<LocalChatToolDescriptor> Descriptors)
+    private sealed record Snapshot
     {
-        public static Snapshot Empty { get; } = new(ImmutableDictionary<string, AITool>.Empty.WithComparers(StringComparer.Ordinal), []);
+        public required ImmutableDictionary<string, AITool> Executables { get; init; }
+
+        public required ImmutableArray<LocalChatToolDescriptor> Descriptors { get; init; }
+
+        public static Snapshot Empty { get; } = new() { Executables = ImmutableDictionary<string, AITool>.Empty.WithComparers(StringComparer.Ordinal), Descriptors = [] };
     }
 }

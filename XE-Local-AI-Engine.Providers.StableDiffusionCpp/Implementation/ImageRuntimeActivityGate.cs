@@ -92,7 +92,7 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
 
     private ImageRuntimeActivitySnapshot SnapshotUnderLock()
     {
-        return new ImageRuntimeActivitySnapshot(_activeJobs, _spawnReadiness, _residentProcesses, _mutationReserved, _evictionReserved);
+        return new ImageRuntimeActivitySnapshot { ActiveJobCount = _activeJobs, SpawnReadinessCount = _spawnReadiness, ResidentProcessCount = _residentProcesses, MutationReserved = _mutationReserved, EvictionReserved = _evictionReserved };
     }
 
     private void Release(LeaseKind kind)

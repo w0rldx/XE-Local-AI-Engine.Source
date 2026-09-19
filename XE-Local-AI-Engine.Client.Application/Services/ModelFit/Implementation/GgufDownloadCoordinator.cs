@@ -368,11 +368,14 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             {
                 SetStatus(operationId, GgufAcquisitionPhase.Downloading, isInitialOrTerminal: true);
                 prepared = await _downloadTransaction.PrepareAsync(source,
-                    new GgufDownloadDestination(modelName,
-                        identity.CanonicalQuantization,
-                        identity.RelativeGgufPath,
-                        identity.RelativeSidecarPath,
-                        identity.ProjectorRelativePath),
+                    new GgufDownloadDestination
+                    {
+                        CanonicalModelName = modelName,
+                        CanonicalQuant = identity.CanonicalQuantization,
+                        RelativeGgufPath = identity.RelativeGgufPath,
+                        RelativeSidecarPath = identity.RelativeSidecarPath,
+                        ProjectorRelativePath = identity.ProjectorRelativePath
+                    },
                     progress,
                     token);
                 token.ThrowIfCancellationRequested();

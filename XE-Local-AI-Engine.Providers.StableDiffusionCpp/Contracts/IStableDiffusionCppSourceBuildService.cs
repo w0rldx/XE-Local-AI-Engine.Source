@@ -13,21 +13,33 @@ public enum StableDiffusionCppSourceRevisionMode
     ExplicitCommit = 2
 }
 
-public sealed record StableDiffusionCppSourceBuildRequest(
-    SdGpuBackend Backend,
-    StableDiffusionCppSourceSelection Source,
-    string? Repository = null,
-    string? Commit = null,
-    bool AcknowledgeCustomSourceRisk = false);
-
-public sealed record StableDiffusionCppSourceBuildDescriptor(
-    SdGpuBackend Backend,
-    StableDiffusionCppSourceSelection Source,
-    string Repository,
-    StableDiffusionCppSourceRevisionMode RevisionMode,
-    string? RequestedCommit,
-    string? ResolvedCommit)
+public sealed record StableDiffusionCppSourceBuildRequest
 {
+    public required SdGpuBackend Backend { get; init; }
+
+    public required StableDiffusionCppSourceSelection Source { get; init; }
+
+    public string? Repository { get; init; }
+
+    public string? Commit { get; init; }
+
+    public bool AcknowledgeCustomSourceRisk { get; init; }
+}
+
+public sealed record StableDiffusionCppSourceBuildDescriptor
+{
+    public required SdGpuBackend Backend { get; init; }
+
+    public required StableDiffusionCppSourceSelection Source { get; init; }
+
+    public required string Repository { get; init; }
+
+    public required StableDiffusionCppSourceRevisionMode RevisionMode { get; init; }
+
+    public required string? RequestedCommit { get; init; }
+
+    public required string? ResolvedCommit { get; init; }
+
     public Guid BuildId { get; init; }
 }
 
@@ -84,26 +96,42 @@ public enum StableDiffusionCppSourceBuildRemoveOutcome
     RuntimeBusy = 2
 }
 
-public sealed record StableDiffusionCppSourceBuildStartResult(
-    StableDiffusionCppSourceBuildStartOutcome Outcome,
-    StableDiffusionCppSourceBuildPrerequisiteReport? Prerequisites = null,
-    ImageRuntimeActivitySnapshot? Activity = null);
-
-public sealed record StableDiffusionCppSourceBuildRemoveResult(
-    StableDiffusionCppSourceBuildRemoveOutcome Outcome,
-    ImageRuntimeActivitySnapshot? Activity = null);
-
-public sealed record StableDiffusionCppSourceBuildStatus(
-    StableDiffusionCppSourceBuildPhase Phase,
-    bool IsRunning,
-    bool Terminal,
-    IReadOnlyList<string> LogLines,
-    long LogStartSequence,
-    string? SanitizedError,
-    StableDiffusionCppSourceBuildDescriptor? CurrentBuild,
-    DateTimeOffset? StartedAtUtc,
-    DateTimeOffset? CompletedAtUtc)
+public sealed class StableDiffusionCppSourceBuildStartResult
 {
+    public required StableDiffusionCppSourceBuildStartOutcome Outcome { get; init; }
+
+    public StableDiffusionCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
+
+    public ImageRuntimeActivitySnapshot? Activity { get; init; }
+}
+
+public sealed class StableDiffusionCppSourceBuildRemoveResult
+{
+    public required StableDiffusionCppSourceBuildRemoveOutcome Outcome { get; init; }
+
+    public ImageRuntimeActivitySnapshot? Activity { get; init; }
+}
+
+public sealed class StableDiffusionCppSourceBuildStatus
+{
+    public required StableDiffusionCppSourceBuildPhase Phase { get; init; }
+
+    public required bool IsRunning { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required IReadOnlyList<string> LogLines { get; init; }
+
+    public required long LogStartSequence { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required StableDiffusionCppSourceBuildDescriptor? CurrentBuild { get; init; }
+
+    public required DateTimeOffset? StartedAtUtc { get; init; }
+
+    public required DateTimeOffset? CompletedAtUtc { get; init; }
+
     public Guid? BuildId => CurrentBuild?.BuildId;
 }
 

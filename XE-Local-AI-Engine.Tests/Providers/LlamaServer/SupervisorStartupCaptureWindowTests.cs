@@ -85,20 +85,26 @@ public sealed class SupervisorStartupCaptureWindowTests
     public async Task EnsureRunning_AdmittedOomDownTier_RemainsLowerAcrossOuterRestart()
     {
         const string modelName = "qwen3-14b";
-        var initial = new ProcessContextAllocation(16384,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            ContentIdentity: $"{modelName}:0",
-            CacheKey: "cache:qwen3-14b");
+        var initial = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 16384,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = $"{modelName}:0",
+            CacheKey = "cache:qwen3-14b"
+        };
         var resolver = new SingleDownTierAllocationResolver(initial);
         var registry = new ProcessLaunchAdmissionRegistry();
-        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission(modelName,
-            ModelRole.Chat,
-            GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore(),
-            initial), out var consumer));
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission
+        {
+            ModelName = modelName,
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = initial
+        }, out var consumer));
         var launcher = new FakeProcessLauncher
         {
             StartupLines = [CudaOutOfMemoryLine]

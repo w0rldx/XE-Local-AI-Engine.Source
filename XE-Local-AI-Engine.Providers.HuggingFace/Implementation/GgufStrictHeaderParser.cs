@@ -88,7 +88,7 @@ internal static class GgufStrictHeaderParser
                 || !reader.TryReadUInt32(out var type)
                 || !TryReadValue(ref reader, type, out var value))
             {
-                return new StrictHeader(version, values, IsComplete: false);
+                return new StrictHeader { Version = version, Values = values, IsComplete = false };
             }
 
             if (value is not null)
@@ -97,7 +97,7 @@ internal static class GgufStrictHeaderParser
             }
         }
 
-        return new StrictHeader(version, values, IsComplete: true);
+        return new StrictHeader { Version = version, Values = values, IsComplete = true };
     }
 
     public static string? ResolveQuantization(StrictHeader header)
@@ -171,11 +171,20 @@ internal static class GgufStrictHeaderParser
         return true;
     }
 
-    internal sealed record StrictHeader(uint? Version, IReadOnlyDictionary<string, object> Values, bool IsComplete)
+    internal sealed class StrictHeader
     {
-        public static StrictHeader Invalid { get; } = new(null,
-            new Dictionary<string, object>(StringComparer.Ordinal),
-            IsComplete: false);
+        public required uint? Version { get; init; }
+
+        public required IReadOnlyDictionary<string, object> Values { get; init; }
+
+        public required bool IsComplete { get; init; }
+
+        public static StrictHeader Invalid { get; } = new()
+        {
+            Version = null,
+            Values = new Dictionary<string, object>(StringComparer.Ordinal),
+            IsComplete = false
+        };
 
         public string? GetString(string key) =>
             Values.TryGetValue(key, out var value) ? value as string : null;

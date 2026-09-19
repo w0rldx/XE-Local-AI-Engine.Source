@@ -375,7 +375,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                 new FakeHealthProbe(),
                 NullLogger<TransientLlamaServerLauncher>.Instance);
 
-            await transient.RunAsync(new TransientLlamaServerRequest(modelPath, AdapterFilePath: null, ContextTokens: 2048, TimeSpan.FromSeconds(5)),
+            await transient.RunAsync(new TransientLlamaServerRequest { ModelFilePath = modelPath, AdapterFilePath = null, ContextTokens = 2048, ReadinessTimeout = TimeSpan.FromSeconds(5) },
                 static (_, _) => Task.FromResult(true), CancellationToken.None);
 
             AssertEx.True(launcher.Launches.TryDequeue(out var spec));
@@ -437,11 +437,14 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
     }
 
     private static TransientLlamaServerEvaluationRequest Request(string modelPath) =>
-        new(modelPath,
-            AdapterFilePath: null,
-            ContextTokens: 4096,
-            TimeSpan.FromMinutes(1),
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+        new()
+        {
+            ModelFilePath = modelPath,
+            AdapterFilePath = null,
+            ContextTokens = 4096,
+            ReadinessTimeout = TimeSpan.FromMinutes(1),
+            LaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+        };
 
     private static Task WaitUntilAsync(Func<bool> predicate) =>
         AssertEx.EventuallyAsync(predicate, TestBudgets.Contended, "The awaited harness state never arrived.");

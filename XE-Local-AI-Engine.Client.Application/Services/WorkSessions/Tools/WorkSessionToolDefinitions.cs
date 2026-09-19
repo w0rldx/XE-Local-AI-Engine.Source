@@ -186,25 +186,37 @@ internal static class WorkSessionToolCatalog
 {
     public static readonly IReadOnlyList<LocalChatToolDescriptor> Descriptors =
     [
-        new(WorkSessionToolDefinitions.UpdateWorkPlan.ToolName,
-            WorkSessionToolDefinitions.UpdateWorkPlan.Description,
-            WorkSessionToolDefinitions.UpdateWorkPlan.ParameterSchema,
-            RequiresApproval: false,
-            ToolCategory.WriteExecute),
-        new(WorkSessionToolDefinitions.RecordFinding.ToolName,
-            WorkSessionToolDefinitions.RecordFinding.Description,
-            WorkSessionToolDefinitions.RecordFinding.ParameterSchema,
-            RequiresApproval: false,
-            ToolCategory.WriteExecute),
-        new(WorkSessionToolDefinitions.SaveArtifact.ToolName,
-            WorkSessionToolDefinitions.SaveArtifact.Description,
-            WorkSessionToolDefinitions.SaveArtifact.ParameterSchema,
-            RequiresApproval: false,
-            ToolCategory.WriteExecute),
-        new(WorkSessionToolDefinitions.CompleteWorkSession.ToolName,
-            WorkSessionToolDefinitions.CompleteWorkSession.Description,
-            WorkSessionToolDefinitions.CompleteWorkSession.ParameterSchema,
-            RequiresApproval: false,
-            ToolCategory.WriteExecute)
+        new()
+        {
+            Name = WorkSessionToolDefinitions.UpdateWorkPlan.ToolName,
+            Description = WorkSessionToolDefinitions.UpdateWorkPlan.Description,
+            ParameterSchema = WorkSessionToolDefinitions.UpdateWorkPlan.ParameterSchema,
+            RequiresApproval = false,
+            Category = ToolCategory.WriteExecute
+        },
+        new()
+        {
+            Name = WorkSessionToolDefinitions.RecordFinding.ToolName,
+            Description = WorkSessionToolDefinitions.RecordFinding.Description,
+            ParameterSchema = WorkSessionToolDefinitions.RecordFinding.ParameterSchema,
+            RequiresApproval = false,
+            Category = ToolCategory.WriteExecute
+        },
+        new()
+        {
+            Name = WorkSessionToolDefinitions.SaveArtifact.ToolName,
+            Description = WorkSessionToolDefinitions.SaveArtifact.Description,
+            ParameterSchema = WorkSessionToolDefinitions.SaveArtifact.ParameterSchema,
+            RequiresApproval = false,
+            Category = ToolCategory.WriteExecute
+        },
+        new()
+        {
+            Name = WorkSessionToolDefinitions.CompleteWorkSession.ToolName,
+            Description = WorkSessionToolDefinitions.CompleteWorkSession.Description,
+            ParameterSchema = WorkSessionToolDefinitions.CompleteWorkSession.ParameterSchema,
+            RequiresApproval = false,
+            Category = ToolCategory.WriteExecute
+        }
     ];
 }

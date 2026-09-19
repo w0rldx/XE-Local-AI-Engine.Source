@@ -108,10 +108,10 @@ public static class TrainingLifecycleE2ETestDoubles
     public sealed class Runtime : ITrainingRuntimeService
     {
         public Task<TrainingRuntimeInstallResult> InstallAsync(CancellationToken ct) =>
-            Task.FromResult(new TrainingRuntimeInstallResult(TrainingRuntimeInstallOutcome.AlreadyRunning));
+            Task.FromResult(new TrainingRuntimeInstallResult { Outcome = TrainingRuntimeInstallOutcome.AlreadyRunning });
 
         public TrainingRuntimeStatus GetStatus() =>
-            new(TrainingRuntimePhase.Ready, false, true, [], 0, null, null, null, null);
+            new() { Phase = TrainingRuntimePhase.Ready, IsRunning = false, Terminal = true, LogLines = [], LogStartSequence = 0, SanitizedError = null, Installed = null, StartedAtUtc = null, CompletedAtUtc = null };
 
         public Task<bool> RemoveAsync(CancellationToken ct) =>
             Task.FromResult(false);
@@ -183,7 +183,7 @@ public static class TrainingLifecycleE2ETestDoubles
                 _lines = lines;
             }
 
-            public TrainingLaunchReceipt Receipt { get; } = new(4242, 4242, "/e2e/python", 1, "e2e-token");
+            public TrainingLaunchReceipt Receipt { get; } = new() { Pid = 4242, Pgid = 4242, ExecutablePath = "/e2e/python", StartTicks = 1, RunToken = "e2e-token" };
 
             public async IAsyncEnumerable<string> ReadOutputAsync([EnumeratorCancellation] CancellationToken ct)
             {
@@ -207,7 +207,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class ConvertScripts : IConvertScriptProvisioner
     {
-        private static readonly ConvertScriptPaths Paths = new("/e2e/convert_hf_to_gguf.py", "/e2e/convert_lora_to_gguf.py", "/e2e/gguf-py", "e2e");
+        private static readonly ConvertScriptPaths Paths = new() { HfToGgufScriptPath = "/e2e/convert_hf_to_gguf.py", LoraToGgufScriptPath = "/e2e/convert_lora_to_gguf.py", GgufPyDirectory = "/e2e/gguf-py", SourceCommit = "e2e" };
 
         public ConvertScriptPaths TryResolve() =>
             Paths;
@@ -230,14 +230,14 @@ public static class TrainingLifecycleE2ETestDoubles
         }
 
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
-            Task.FromResult(new LlamaBinary(_server, "e2e", GpuVariant.Cpu, true));
+            Task.FromResult(new LlamaBinary { ServerExecutablePath = _server, Version = "e2e", Variant = GpuVariant.Cpu, IsPinnedFallback = true });
 
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, ILlamaServerRuntimeMutationLease lease, CancellationToken ct) =>
             EnsureBinaryAsync(variant, ct);
 
         // The fixture writes the server file in its constructor, so it is genuinely already installed.
         public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
-            Task.FromResult<LlamaBinary?>(new LlamaBinary(_server, "e2e", GpuVariant.Cpu, true));
+            Task.FromResult<LlamaBinary?>(new LlamaBinary { ServerExecutablePath = _server, Version = "e2e", Variant = GpuVariant.Cpu, IsPinnedFallback = true });
 
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digest, long size, GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
@@ -258,8 +258,17 @@ public static class TrainingLifecycleE2ETestDoubles
     public sealed class Inspector : IGgufImportInspector
     {
         public Task<GgufImportInspection> InspectAsync(GgufImportSource source, GgufImportInspectionMode mode, CancellationToken ct) =>
-            Task.FromResult(new GgufImportInspection(new FileInfo(source.AbsolutePath).Length, 3, "llama", GgufImportWorkload.CausalChat,
-                "Q4_K_M", Path.GetFileName(source.AbsolutePath), [], []));
+            Task.FromResult(new GgufImportInspection
+            {
+                SizeBytes = new FileInfo(source.AbsolutePath).Length,
+                GgufVersion = 3,
+                Architecture = "llama",
+                Workload = GgufImportWorkload.CausalChat,
+                DetectedQuantization = "Q4_K_M",
+                SourceDisplayName = Path.GetFileName(source.AbsolutePath),
+                Rejections = [],
+                Warnings = []
+            });
     }
 
     public sealed class TransientLauncher : ITransientLlamaServerLauncher
@@ -273,7 +282,7 @@ public static class TrainingLifecycleE2ETestDoubles
                 throw new InvalidOperationException("Smoke was invoked without staged bytes.");
             }
 
-            return body(new TransientLlamaServerSession(new Uri("http://127.0.0.1:1/v1"), Path.GetFileName(request.ModelFilePath)), ct);
+            return body(new TransientLlamaServerSession { BaseAddress = new Uri("http://127.0.0.1:1/v1"), ModelId = Path.GetFileName(request.ModelFilePath) }, ct);
         }
     }
 
@@ -385,32 +394,72 @@ public static class TrainingLifecycleE2ETestDoubles
         {
             var model = await IdentityAsync(request.ModelFilePath, request.AdapterFilePath, ct);
             var launch = LaunchReceipt();
-            await bind(new TransientLlamaServerEvaluationProvenance(model, launch), ct);
-            var session = new TransientLlamaServerEvaluationSession(new Uri("http://127.0.0.1:1/v1"), model.ModelId, model, launch);
+            await bind(new TransientLlamaServerEvaluationProvenance { Model = model, Launch = launch }, ct);
+            var session = new TransientLlamaServerEvaluationSession { BaseAddress = new Uri("http://127.0.0.1:1/v1"), ModelId = model.ModelId, Model = model, Launch = launch };
             var value = await body(session, ct);
-            return new TransientLlamaServerEvaluationResult<T>(value, model, launch,
-                new TransientLlamaServerTeardownEvidence(4242, true, true, false, true));
+            return new TransientLlamaServerEvaluationResult<T>
+            {
+                Value = value,
+                Model = model,
+                Launch = launch,
+                Teardown = new TransientLlamaServerTeardownEvidence { ProcessId = 4242, TreeKillRequested = true, ProcessExitObserved = true, ExitObservationTimedOut = false, HandleDisposed = true }
+            };
         }
 
         private static async Task<TransientLlamaServerModelProvenance> IdentityAsync(string modelPath, string? adapterPath, CancellationToken ct)
         {
             var model = await File.ReadAllBytesAsync(modelPath, ct);
             var adapter = adapterPath is null ? null : await File.ReadAllBytesAsync(adapterPath, ct);
-            return new(Path.GetFileName(modelPath), model.LongLength, Convert.ToHexStringLower(SHA256.HashData(model)),
-                adapterPath is null ? null : Path.GetFileName(adapterPath), adapter?.LongLength,
-                adapter is null ? null : Convert.ToHexStringLower(SHA256.HashData(adapter)));
+            return new()
+            {
+                ModelId = Path.GetFileName(modelPath),
+                ModelSizeBytes = model.LongLength,
+                ModelSha256 = Convert.ToHexStringLower(SHA256.HashData(model)),
+                AdapterId = adapterPath is null ? null : Path.GetFileName(adapterPath),
+                AdapterSizeBytes = adapter?.LongLength,
+                AdapterSha256 = adapter is null ? null : Convert.ToHexStringLower(SHA256.HashData(adapter))
+            };
         }
 
         private static LlamaServerLaunchReceipt LaunchReceipt()
         {
-            var projection = new LlamaServerLaunchProjection(false, true, 4096, null, null, null, false, null, null,
-                LlamaServerLaunchProjection.FlashAttentionAuto, 4, 4, 512, 512, 1, null, 0, true, null);
+            var projection = new LlamaServerLaunchProjection
+            {
+                AutoFit = false,
+                Metrics = true,
+                ContextTokens = 4096,
+                GpuLayers = null,
+                TensorSplit = null,
+                OverrideTensor = null,
+                CpuMoe = false,
+                KvCacheTypeK = null,
+                KvCacheTypeV = null,
+                FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionAuto,
+                Threads = 4,
+                ThreadsBatch = 4,
+                BatchSize = 512,
+                UbatchSize = 512,
+                Parallel = 1,
+                CacheReuse = null,
+                CacheRamMiB = 0,
+                Jinja = true,
+                Pooling = null
+            };
             var exactBinaryIdentity = new string('e', 64);
-            return new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion, GpuVariant.Cpu, "linux", "e2e",
-                exactBinaryIdentity, exactBinaryIdentity, projection,
-                new LlamaServerLaunchAuxAssets(false, false, false),
-                new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Unknown, null, null), 4096,
-                LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+            return new LlamaServerLaunchReceipt
+            {
+                ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+                Variant = GpuVariant.Cpu,
+                Os = "linux",
+                ExecutableVersion = "e2e",
+                ExecutableSha256 = exactBinaryIdentity,
+                ManifestSha256 = exactBinaryIdentity,
+                LaunchProjection = projection,
+                AuxAssets = new LlamaServerLaunchAuxAssets(false, false, false),
+                Placement = new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Unknown, null, null),
+                EffectiveContextTokens = 4096,
+                BenchmarkLaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+            };
         }
     }
 
@@ -491,15 +540,30 @@ public static class TrainingLifecycleE2ETestDoubles
                 Role = GgufRole.Chat,
                 ModelContentFingerprint = "e2e-promoted"
             };
-            return new PreparedGgufImport("e2e", destination, source.AbsolutePath + ".part", source.AbsolutePath + ".json.part",
-                entry, sidecar, "e2e-member", "e2e-promoted");
+            return new PreparedGgufImport
+            {
+                OperationId = "e2e",
+                Destination = destination,
+                TemporaryGgufPath = source.AbsolutePath + ".part",
+                TemporarySidecarPath = source.AbsolutePath + ".json.part",
+                RegistryEntry = entry,
+                Sidecar = sidecar,
+                WeightMemberFingerprint = "e2e-member",
+                ModelContentFingerprint = "e2e-promoted"
+            };
         }
 
         public Task<GgufImportCommitReceipt> CommitAsync(PreparedGgufImport prepared, CancellationToken ct)
         {
             _verdicts.Record(Stage.Promoted);
-            return Task.FromResult(new GgufImportCommitReceipt(prepared.RegistryEntry, prepared.RegistryEntry.LocalPath,
-                prepared.RegistryEntry.LocalPath + ".xe-model.json", prepared.WeightMemberFingerprint, prepared.ModelContentFingerprint));
+            return Task.FromResult(new GgufImportCommitReceipt
+            {
+                RegistryEntry = prepared.RegistryEntry,
+                FinalGgufPath = prepared.RegistryEntry.LocalPath,
+                FinalSidecarPath = prepared.RegistryEntry.LocalPath + ".xe-model.json",
+                WeightMemberFingerprint = prepared.WeightMemberFingerprint,
+                ModelContentFingerprint = prepared.ModelContentFingerprint
+            });
         }
 
         public Task RollbackCommittedAsync(GgufImportCommitReceipt receipt, CancellationToken ct) =>

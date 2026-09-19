@@ -233,13 +233,14 @@ public sealed class WhisperSourceRuntimeFoundationTests
     // ever use one commit — and these tests need two distinct ones to tell a rollback from a no-op.
     private static WhisperCppSourceBuildDescriptor Descriptor(string resolvedCommit)
     {
-        return new WhisperCppSourceBuildDescriptor(WhisperBackend.Cuda,
-            WhisperCppSourceSelection.Custom,
-            WhisperCppSourceBuildRequestValidation.OfficialRepository,
-            WhisperCppSourceRevisionMode.ExplicitCommit,
-            resolvedCommit,
-            resolvedCommit)
+        return new WhisperCppSourceBuildDescriptor
         {
+            Backend = WhisperBackend.Cuda,
+            Source = WhisperCppSourceSelection.Custom,
+            Repository = WhisperCppSourceBuildRequestValidation.OfficialRepository,
+            RevisionMode = WhisperCppSourceRevisionMode.ExplicitCommit,
+            RequestedCommit = resolvedCommit,
+            ResolvedCommit = resolvedCommit,
             BuildId = Guid.NewGuid()
         };
     }

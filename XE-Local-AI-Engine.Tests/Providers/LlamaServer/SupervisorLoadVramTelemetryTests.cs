@@ -76,16 +76,22 @@ public sealed class SupervisorLoadVramTelemetryTests
     }
 
     private static ProcessLaunchAdmission Admission(string modelName, long? globalFreeVramBytes) =>
-        new(modelName,
-            ModelRole.Chat,
-            GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore(),
-            new ProcessContextAllocation(8192,
-                ModelTrainContextTokens: 131072,
-                ProcessContextAllocationSource.HardwareTier,
-                ProcessPlacementMode.GpuResident,
-                new ResourceFootprint(AdmittedBytes, RamBytes: 0),
-                ContentIdentity: $"{modelName}:0",
-                CacheKey: $"cache:{modelName}"),
-            globalFreeVramBytes);
+        new()
+        {
+            ModelName = modelName,
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cpu,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = new ProcessContextAllocation
+            {
+                ProcessContextTokens = 8192,
+                ModelTrainContextTokens = 131072,
+                Source = ProcessContextAllocationSource.HardwareTier,
+                Placement = ProcessPlacementMode.GpuResident,
+                Footprint = new ResourceFootprint(AdmittedBytes, RamBytes: 0),
+                ContentIdentity = $"{modelName}:0",
+                CacheKey = $"cache:{modelName}"
+            },
+            GlobalFreeVramBytesAtAdmission = globalFreeVramBytes
+        };
 }

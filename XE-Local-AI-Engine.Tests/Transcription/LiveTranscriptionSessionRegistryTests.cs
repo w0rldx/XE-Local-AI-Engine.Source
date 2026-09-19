@@ -560,8 +560,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // a partial and each has to be refused on its own.
         var transcriber = new GatedWhisperTranscriber(static _ =>
         [
-            new WhisperTranscriptSegment(0.0, 0.8, "committed", 0.9),
-            new WhisperTranscriptSegment(0.8, 1.2, "provisional", 0.9)
+            new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.8, Text = "committed", Confidence = 0.9 },
+            new WhisperTranscriptSegment { StartSeconds = 0.8, EndSeconds = 1.2, Text = "provisional", Confidence = 0.9 }
         ])
         {
             IgnoresCancellation = true
@@ -949,7 +949,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
     {
         // A guard wider than the window holds every returned segment back, so each tick produces the same provisional
         // text and nothing ever commits.
-        var transcriber = new ScriptedWhisperTranscriber(static _ => [new WhisperTranscriptSegment(0.0, 0.1, "still talking", 0.9)]);
+        var transcriber = new ScriptedWhisperTranscriber(static _ => [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.1, Text = "still talking", Confidence = 0.9 }]);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
 
@@ -1114,7 +1114,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
     private static readonly TranscriptChannel[] TwoLanes = [TranscriptChannel.You, TranscriptChannel.Others];
 
     private static IReadOnlyList<WhisperTranscriptSegment> OneSegment(SubmittedWindow window) =>
-        [new WhisperTranscriptSegment(0.0, window.DurationMs / 1000.0, $"w{window.StartMs}-{window.EndMs}", 0.9)];
+        [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = window.DurationMs / 1000.0, Text = $"w{window.StartMs}-{window.EndMs}", Confidence = 0.9 }];
 
     /// <summary>A producer that never pushes and records whether it was asked to stop.</summary>
     private sealed class SilentProducer : ILiveAudioProducer

@@ -56,15 +56,18 @@ public sealed class BenchmarkLaunchBackendTests
             []);
 
     private static LlamaServerLaunchReceipt Receipt(GpuVariant variant, string operatingSystem, LlamaServerPlacementOutcome placement) =>
-        new(LlamaServerLaunchReceipt.CurrentVersion,
-            variant,
-            operatingSystem,
-            "b10201",
-            "exe-sha",
-            "manifest-sha",
-            LlamaServerLaunchProjection.From(variant, ResolvedLaunchArguments.Replay(4096), plan: null),
-            new LlamaServerLaunchAuxAssets(false, false, false),
-            new LlamaServerLaunchPlacement(placement, null, null),
-            4096,
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+        new()
+        {
+            ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+            Variant = variant,
+            Os = operatingSystem,
+            ExecutableVersion = "b10201",
+            ExecutableSha256 = "exe-sha",
+            ManifestSha256 = "manifest-sha",
+            LaunchProjection = LlamaServerLaunchProjection.From(variant, ResolvedLaunchArguments.Replay(4096), plan: null),
+            AuxAssets = new LlamaServerLaunchAuxAssets(false, false, false),
+            Placement = new LlamaServerLaunchPlacement(placement, null, null),
+            EffectiveContextTokens = 4096,
+            BenchmarkLaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+        };
 }

@@ -73,7 +73,7 @@ public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
         // adapter on top, which is exactly how a promoted adapter entry would later be served.
         var modelPath = artifact.BaseModelFilePath ?? artifact.ArtifactPath;
         var adapterPath = artifact.BaseModelFilePath is null ? null : artifact.ArtifactPath;
-        var request = new TransientLlamaServerRequest(modelPath, adapterPath, SmokeContextTokens, ReadinessTimeout);
+        var request = new TransientLlamaServerRequest { ModelFilePath = modelPath, AdapterFilePath = adapterPath, ContextTokens = SmokeContextTokens, ReadinessTimeout = ReadinessTimeout };
 
         try
         {

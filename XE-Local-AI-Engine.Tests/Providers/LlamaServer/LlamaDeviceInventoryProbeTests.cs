@@ -82,7 +82,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         // (ProbeSucceeded false), NOT a determinate empty list, so the audit never mistakes a probe failure for "no GPU".
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<LlamaBinary?>(new LlamaBinary("/nonexistent/bin/llama-server", "b9692", GpuVariant.Vulkan, IsPinnedFallback: true)));
+                     .Returns(Task.FromResult<LlamaBinary?>(new LlamaBinary { ServerExecutablePath = "/nonexistent/bin/llama-server", Version = "b9692", Variant = GpuVariant.Vulkan, IsPinnedFallback = true }));
         var probe = new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance);
 
         var inventory = await probe.GetDeviceInventoryAsync(GpuVariant.Vulkan, CancellationToken.None);
@@ -124,7 +124,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(null),
-                         Task.FromResult<LlamaBinary?>(new LlamaBinary("/nonexistent/bin/llama-server", "b9692", GpuVariant.Vulkan, IsPinnedFallback: true)));
+                         Task.FromResult<LlamaBinary?>(new LlamaBinary { ServerExecutablePath = "/nonexistent/bin/llama-server", Version = "b9692", Variant = GpuVariant.Vulkan, IsPinnedFallback = true }));
         var probe = new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance);
 
         var first = await probe.GetDeviceInventoryAsync(GpuVariant.Vulkan, CancellationToken.None);

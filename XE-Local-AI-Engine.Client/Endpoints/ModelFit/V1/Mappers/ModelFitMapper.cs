@@ -330,11 +330,14 @@ internal static class ModelFitMapper
 
     public static LlamaCppSourceBuildRequest ToContract(this StartLlamaCppSourceBuildRequest request)
     {
-        return new LlamaCppSourceBuildRequest(request.Backend.ToContract(),
-            (LlamaCppSourceSelection)(int)request.Source,
-            request.Repository,
-            request.Commit,
-            request.AcknowledgeCustomSourceRisk);
+        return new LlamaCppSourceBuildRequest
+        {
+            Backend = request.Backend.ToContract(),
+            Source = (LlamaCppSourceSelection)(int)request.Source,
+            Repository = request.Repository,
+            Commit = request.Commit,
+            AcknowledgeCustomSourceRisk = request.AcknowledgeCustomSourceRisk
+        };
     }
 
     public static LlamaCppSourceBackend ToContract(this LlamaCppSourceBackendDto backend)

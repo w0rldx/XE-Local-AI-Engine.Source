@@ -152,11 +152,14 @@ internal sealed partial record LlamaServerCapabilityManifest
     {
         if (string.IsNullOrWhiteSpace(help))
         {
-            return new ParsedLlamaServerHelp(FrozenSet<string>.Empty,
-                FrozenSet<string>.Empty,
-                FrozenSet<string>.Empty,
-                FrozenSet<string>.Empty,
-                FrozenSet<string>.Empty);
+            return new ParsedLlamaServerHelp
+            {
+                Options = FrozenSet<string>.Empty,
+                SpeculativeModes = FrozenSet<string>.Empty,
+                CacheTypesK = FrozenSet<string>.Empty,
+                CacheTypesV = FrozenSet<string>.Empty,
+                FlashAttentionModes = FrozenSet<string>.Empty
+            };
         }
 
         var options = help.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
@@ -165,11 +168,14 @@ internal sealed partial record LlamaServerCapabilityManifest
                           .Where(static match => match.Success)
                           .SelectMany(static match => match.Groups["option"].Captures.Select(static capture => capture.Value))
                           .ToFrozenSet(StringComparer.Ordinal);
-        return new ParsedLlamaServerHelp(options,
-            ParseCommaSeparatedValues(SpeculativeModesRegex().Match(help)),
-            ParseCommaSeparatedValues(CacheTypesKRegex().Match(help)),
-            ParseCommaSeparatedValues(CacheTypesVRegex().Match(help)),
-            ParsePipeSeparatedValues(FlashAttentionModesRegex().Match(help)));
+        return new ParsedLlamaServerHelp
+        {
+            Options = options,
+            SpeculativeModes = ParseCommaSeparatedValues(SpeculativeModesRegex().Match(help)),
+            CacheTypesK = ParseCommaSeparatedValues(CacheTypesKRegex().Match(help)),
+            CacheTypesV = ParseCommaSeparatedValues(CacheTypesVRegex().Match(help)),
+            FlashAttentionModes = ParsePipeSeparatedValues(FlashAttentionModesRegex().Match(help))
+        };
     }
 
     private static FrozenSet<string> ParseCommaSeparatedValues(Match match)
@@ -215,12 +221,18 @@ internal sealed partial record LlamaServerCapabilityManifest
 }
 
 /// <summary>Immutable parser output used by focused capability tests.</summary>
-internal sealed record ParsedLlamaServerHelp(
-    IReadOnlySet<string> Options,
-    IReadOnlySet<string> SpeculativeModes,
-    IReadOnlySet<string> CacheTypesK,
-    IReadOnlySet<string> CacheTypesV,
-    IReadOnlySet<string> FlashAttentionModes);
+internal sealed class ParsedLlamaServerHelp
+{
+    public required IReadOnlySet<string> Options { get; init; }
+
+    public required IReadOnlySet<string> SpeculativeModes { get; init; }
+
+    public required IReadOnlySet<string> CacheTypesK { get; init; }
+
+    public required IReadOnlySet<string> CacheTypesV { get; init; }
+
+    public required IReadOnlySet<string> FlashAttentionModes { get; init; }
+}
 
 /// <summary>Resolves and caches the actual option surface of a selected llama-server executable.</summary>
 internal interface ILlamaServerCapabilityManifestProbe
@@ -256,17 +268,20 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
     public async Task<LlamaServerCapabilityManifest> GetManifestAsync(LlamaBinary binary, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(binary);
-        ExecutableIdentitySnapshot snapshot = new(0, DateTimeOffset.UnixEpoch);
+        ExecutableIdentitySnapshot snapshot = new() { LengthBytes = 0, LastWriteUtc = DateTimeOffset.UnixEpoch };
         try
         {
             snapshot = ReadIdentitySnapshot(binary.ServerExecutablePath);
             var executableSha256 = await ComputeSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false);
-            var key = new CapabilityCacheKey(binary.Variant,
-                binary.Version,
-                Path.GetFullPath(binary.ServerExecutablePath),
-                snapshot.LengthBytes,
-                snapshot.LastWriteUtc.UtcTicks,
-                executableSha256);
+            var key = new CapabilityCacheKey
+            {
+                Variant = binary.Variant,
+                RequestedVersion = binary.Version,
+                ExecutablePath = Path.GetFullPath(binary.ServerExecutablePath),
+                LengthBytes = snapshot.LengthBytes,
+                LastWriteUtcTicks = snapshot.LastWriteUtc.UtcTicks,
+                ExecutableSha256 = executableSha256
+            };
             var gate = _probeGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try
@@ -370,12 +385,12 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
         {
             var info = new FileInfo(executablePath);
             return info.Exists
-                ? new ExecutableIdentitySnapshot(info.Length, new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero))
-                : new ExecutableIdentitySnapshot(0, DateTimeOffset.UnixEpoch);
+                ? new ExecutableIdentitySnapshot { LengthBytes = info.Length, LastWriteUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero) }
+                : new ExecutableIdentitySnapshot { LengthBytes = 0, LastWriteUtc = DateTimeOffset.UnixEpoch };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            return new ExecutableIdentitySnapshot(0, DateTimeOffset.UnixEpoch);
+            return new ExecutableIdentitySnapshot { LengthBytes = 0, LastWriteUtc = DateTimeOffset.UnixEpoch };
         }
     }
 
@@ -393,13 +408,25 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
                      .FirstOrDefault() ?? "unknown";
     }
 
-    private sealed record ExecutableIdentitySnapshot(long LengthBytes, DateTimeOffset LastWriteUtc);
+    private sealed record ExecutableIdentitySnapshot
+    {
+        public required long LengthBytes { get; init; }
 
-    private sealed record CapabilityCacheKey(
-        GpuVariant Variant,
-        string RequestedVersion,
-        string ExecutablePath,
-        long LengthBytes,
-        long LastWriteUtcTicks,
-        string ExecutableSha256);
+        public required DateTimeOffset LastWriteUtc { get; init; }
+    }
+
+    private sealed record CapabilityCacheKey
+    {
+        public required GpuVariant Variant { get; init; }
+
+        public required string RequestedVersion { get; init; }
+
+        public required string ExecutablePath { get; init; }
+
+        public required long LengthBytes { get; init; }
+
+        public required long LastWriteUtcTicks { get; init; }
+
+        public required string ExecutableSha256 { get; init; }
+    }
 }

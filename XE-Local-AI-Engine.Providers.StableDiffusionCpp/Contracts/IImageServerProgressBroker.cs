@@ -35,11 +35,20 @@ internal interface IImageServerProgressBroker
 ///     One parsed fine-progress observation: the phase, plus the sampling step counters when the observed line was a
 ///     sampler step. Deliberately carries no text — see <see cref="IImageServerProgressBroker" /> on prompt privacy.
 /// </summary>
-/// <param name="Phase">The fine phase the observed line implies.</param>
-/// <param name="Step">Completed sampling steps, or <see langword="null" /> outside a sampler step line.</param>
-/// <param name="TotalSteps">Total sampling steps, or <see langword="null" /> outside a sampler step line.</param>
-/// <param name="SecondsPerIteration">
-///     Measured seconds per sampling iteration. sd-server prints the rate as <c>s/it</c> below 1 it/s and as
-///     <c>it/s</c> above it; both are normalized to seconds here so the consumer never has to know which it read.
-/// </param>
-internal sealed record SdProgressObservation(ImageGenPhase Phase, int? Step = null, int? TotalSteps = null, double? SecondsPerIteration = null);
+internal sealed class SdProgressObservation
+{
+    /// <summary>The fine phase the observed line implies.</summary>
+    public required ImageGenPhase Phase { get; init; }
+
+    /// <summary>Completed sampling steps, or <see langword="null" /> outside a sampler step line.</summary>
+    public int? Step { get; init; }
+
+    /// <summary>Total sampling steps, or <see langword="null" /> outside a sampler step line.</summary>
+    public int? TotalSteps { get; init; }
+
+    /// <summary>
+    ///     Measured seconds per sampling iteration. sd-server prints the rate as <c>s/it</c> below 1 it/s and as
+    ///     <c>it/s</c> above it; both are normalized to seconds here so the consumer never has to know which it read.
+    /// </summary>
+    public double? SecondsPerIteration { get; init; }
+}

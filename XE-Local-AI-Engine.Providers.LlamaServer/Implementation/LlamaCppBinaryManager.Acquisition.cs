@@ -70,13 +70,16 @@ public sealed partial class LlamaCppBinaryManager
 
             // Only a real report arms the terminal statuses — see the cache-hit note on the type.
             _reported = true;
-            _registry.Report(new RuntimeAcquisitionUpdate(phase,
-                _variant.ToString(),
-                _tag,
-                completedBytes,
-                totalBytes,
-                stepIndex,
-                _stepCount));
+            _registry.Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = phase,
+                Variant = _variant.ToString(),
+                Tag = _tag,
+                CompletedBytes = completedBytes,
+                TotalBytes = totalBytes,
+                StepIndex = stepIndex,
+                StepCount = _stepCount
+            });
         }
 
         /// <summary>Closes a reported acquisition as succeeded. Silent when nothing was acquired (cache hit).</summary>
@@ -87,13 +90,16 @@ public sealed partial class LlamaCppBinaryManager
                 return;
             }
 
-            _registry.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Completed,
-                _variant.ToString(),
-                _tag,
-                CompletedBytes: null,
-                TotalBytes: null,
-                StepIndex: _stepCount,
-                _stepCount));
+            _registry.Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Completed,
+                Variant = _variant.ToString(),
+                Tag = _tag,
+                CompletedBytes = null,
+                TotalBytes = null,
+                StepIndex = _stepCount,
+                StepCount = _stepCount
+            });
         }
 
         /// <summary>
@@ -109,14 +115,17 @@ public sealed partial class LlamaCppBinaryManager
             }
 
             var reason = exception is LlamaRuntimeException ? exception.Message : GenericFailureReason;
-            _registry.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
-                _variant.ToString(),
-                _tag,
-                CompletedBytes: null,
-                TotalBytes: null,
-                StepIndex: _stepCount,
-                _stepCount,
-                reason));
+            _registry.Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Failed,
+                Variant = _variant.ToString(),
+                Tag = _tag,
+                CompletedBytes = null,
+                TotalBytes = null,
+                StepIndex = _stepCount,
+                StepCount = _stepCount,
+                SanitizedError = reason
+            });
         }
     }
 }

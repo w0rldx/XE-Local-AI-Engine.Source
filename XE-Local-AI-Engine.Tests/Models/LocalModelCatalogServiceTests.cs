@@ -169,7 +169,7 @@ public sealed class LocalModelCatalogServiceTests
 
         public void WithOllamaModels(params string[] modelNames) =>
             ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-                        .Returns(modelNames.Select(static name => new OllamaModelSummary(name)).AsEnumerable());
+                        .Returns(modelNames.Select(static name => new OllamaModelSummary { Name = name }).AsEnumerable());
 
         public void WithInstalledGguf(string modelName) =>
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
@@ -205,17 +205,20 @@ public sealed class LocalModelCatalogServiceTests
         public void WithExternalModel() =>
             ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
                                     .Returns<IReadOnlyList<ExternalProviderModelRegistration>>([
-                                        new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
+                                        new ExternalProviderModelRegistration
+                                        {
+                                            Connection = new ExternalProviderConnectionDescriptor
                                             {
                                                 Id = "unsloth-box",
                                                 DisplayName = "Unsloth box",
                                                 BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
                                                 Locality = ExternalProviderLocality.Local
                                             },
-                                            new ExternalProviderModelDescriptor
+                                            Model = new ExternalProviderModelDescriptor
                                             {
                                                 WireId = "qwen3-27b"
-                                            })
+                                            }
+                                        }
                                     ]);
 
         public LocalModelCatalogService CreateService() =>

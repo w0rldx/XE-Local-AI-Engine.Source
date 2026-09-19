@@ -36,5 +36,5 @@ internal sealed class UnavailableModelCapabilityClient : IModelCapabilityClient
         Task.FromResult<IReadOnlyList<RunningModelSnapshot>>([]);
 
     public Task<ModelCapabilityDetail> GetModelDetailAsync(string modelName, CancellationToken ct) =>
-        Task.FromResult(new ModelCapabilityDetail(MaxContextTokens: null));
+        Task.FromResult(new ModelCapabilityDetail { MaxContextTokens = null });
 }

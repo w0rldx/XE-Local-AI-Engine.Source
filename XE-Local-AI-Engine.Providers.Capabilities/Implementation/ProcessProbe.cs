@@ -64,7 +64,7 @@ internal sealed class ProcessProbe : IProcessProbe
 
             var standardOutput = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token).ConfigureAwait(false);
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            return new ProcessProbeResult(process.ExitCode, standardOutput);
+            return new ProcessProbeResult { ExitCode = process.ExitCode, StandardOutput = standardOutput };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -80,7 +80,7 @@ internal sealed class ProcessProbe : IProcessProbe
             _logger.LogWarning("Hardware probe '{ProbeTool}' exceeded its {TimeoutSeconds:0.###}s deadline; killed the process tree and degrading.",
                 fileName,
                 timeout.TotalSeconds);
-            return new ProcessProbeResult(ExitCode: -1, StandardOutput: string.Empty, TimedOut: true);
+            return new ProcessProbeResult { ExitCode = -1, StandardOutput = string.Empty, TimedOut = true };
         }
         catch (Exception ex)
         {

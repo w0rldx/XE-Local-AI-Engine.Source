@@ -121,9 +121,22 @@ public sealed class ModelFitRefreshServiceTests
         // No param count AND no file size → no weights term → insufficient metadata, dropped.
         discovery.InspectRepoAsync("org/nometa-GGUF", Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(Detail("org/nometa-GGUF",
-                     new GgufRepoFile("model.gguf", "Q4_K_M", SizeBytes: 0, Sha256: null, "main",
-                         Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null,
-                         AttentionHeadCountKV: null, EmbeddingLength: null, ContextLength: null))));
+                     new GgufRepoFile
+                     {
+                         FileName = "model.gguf",
+                         Quant = "Q4_K_M",
+                         SizeBytes = 0,
+                         Sha256 = null,
+                         Revision = "main",
+                         Architecture = null,
+                         QuantType = null,
+                         ParamCount = null,
+                         BlockCount = null,
+                         AttentionHeadCount = null,
+                         AttentionHeadCountKV = null,
+                         EmbeddingLength = null,
+                         ContextLength = null
+                     })));
 
         var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
 
@@ -340,11 +353,11 @@ public sealed class ModelFitRefreshServiceTests
         var store = Substitute.For<IGgufModelStore>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var handle = new GgufModelHandle("org/tiny-GGUF:Q4_K_M", "/models/tiny.gguf", "Q4_K_M", 1 * Gb, Sha256: null, "main", GgufRole.Chat);
+        var handle = new GgufModelHandle { ModelName = "org/tiny-GGUF:Q4_K_M", LocalPath = "/models/tiny.gguf", Quant = "Q4_K_M", SizeBytes = 1 * Gb, Sha256 = null, SourceRevision = "main", Role = GgufRole.Chat };
         store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>?>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(handle));
         supervisor.EnsureRunningAsync("org/tiny-GGUF:Q4_K_M", ModelRole.Chat, Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult(new LlamaServerEndpoint("org/tiny-GGUF:Q4_K_M", ModelRole.Chat, new Uri("http://127.0.0.1:8081/v1"))));
+                  .Returns(Task.FromResult(new LlamaServerEndpoint { ModelName = "org/tiny-GGUF:Q4_K_M", Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:8081/v1") }));
 
         var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb), store, supervisor);
 
@@ -541,31 +554,43 @@ public sealed class ModelFitRefreshServiceTests
 
     private static GgufRepoSummary Summary(string repoId, long downloads = 1000, DateTimeOffset? lastModified = null)
     {
-        return new GgufRepoSummary(repoId, IsGated: false, downloads, Likes: 10, lastModified ?? DateTimeOffset.UnixEpoch, "mit", HasUsableGguf: true,
-            GgufPublisherTrust.IsTrustedPublisher(repoId));
+        return new GgufRepoSummary
+        {
+            RepoId = repoId,
+            IsGated = false,
+            Downloads = downloads,
+            Likes = 10,
+            LastModified = lastModified ?? DateTimeOffset.UnixEpoch,
+            License = "mit",
+            HasUsableGguf = true,
+            IsTrustedPublisher = GgufPublisherTrust.IsTrustedPublisher(repoId)
+        };
     }
 
     private static GgufRepoDetail Detail(string repoId, params GgufRepoFile[] files)
     {
-        return new GgufRepoDetail(repoId, IsGated: false, "mit", files);
+        return new GgufRepoDetail { RepoId = repoId, IsGated = false, License = "mit", Files = files };
     }
 
     private static GgufRepoFile File(string quant, long paramCount)
     {
         // A small, fits-anywhere geometry (4 layers, 2 kv-heads, embedding 16 over 4 heads) so only param-count drives weights.
-        return new GgufRepoFile($"model.{quant}.gguf",
-            quant,
-            1 * Gb,
-            Sha256: null,
-            "main",
-            "llama",
-            quant,
-            paramCount,
-            BlockCount: 4,
-            AttentionHeadCount: 4,
-            AttentionHeadCountKV: 2,
-            EmbeddingLength: 16,
-            ContextLength: 8192);
+        return new GgufRepoFile
+        {
+            FileName = $"model.{quant}.gguf",
+            Quant = quant,
+            SizeBytes = 1 * Gb,
+            Sha256 = null,
+            Revision = "main",
+            Architecture = "llama",
+            QuantType = quant,
+            ParamCount = paramCount,
+            BlockCount = 4,
+            AttentionHeadCount = 4,
+            AttentionHeadCountKV = 2,
+            EmbeddingLength = 16,
+            ContextLength = 8192
+        };
     }
 
     private static HardwareProfile GpuProfile(long vramBytes, long? availableVramBytes = null)

@@ -71,7 +71,7 @@ internal static class ImageServerArgumentBuilder
         args.Add("-v");
 
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? Environment.CurrentDirectory;
-        return new ImageServerLaunchSpec(modelName, executablePath, args, port, workingDirectory);
+        return new ImageServerLaunchSpec { ModelName = modelName, ExecutablePath = executablePath, Arguments = args, Port = port, WorkingDirectory = workingDirectory };
     }
 
     private static void AppendModelArgs(List<string> args, IReadOnlyList<ImageModelPart> parts)

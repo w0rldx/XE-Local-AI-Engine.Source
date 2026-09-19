@@ -4,28 +4,47 @@ namespace XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     Everything the host needs to identify — and later prove the identity of — one trainer process. Persisted as the
 ///     run's <c>launch_receipt_json</c> the moment the spawn returns, before a single line of output is read.
 /// </summary>
-/// <param name="Pid">The spawned process id.</param>
-/// <param name="Pgid">Its process-group id, read from <c>/proc</c> rather than assumed equal to the pid.</param>
-/// <param name="ExecutablePath">The resolved <c>/proc/[pid]/exe</c> target at spawn time.</param>
-/// <param name="StartTicks">Field 22 of <c>/proc/[pid]/stat</c> — the pid-reuse guard.</param>
-/// <param name="RunToken">A per-run nonce handed to the child through its environment and read back from
-///     <c>/proc/[pid]/environ</c>. The one field a recycled pid running the same interpreter cannot forge.</param>
-public sealed record TrainingLaunchReceipt(int Pid, int Pgid, string? ExecutablePath, long StartTicks, string RunToken);
+public sealed class TrainingLaunchReceipt
+{
+    /// <summary>The spawned process id.</summary>
+    public required int Pid { get; init; }
+
+    /// <summary>Its process-group id, read from <c>/proc</c> rather than assumed equal to the pid.</summary>
+    public required int Pgid { get; init; }
+
+    /// <summary>The resolved <c>/proc/[pid]/exe</c> target at spawn time.</summary>
+    public required string? ExecutablePath { get; init; }
+
+    /// <summary>Field 22 of <c>/proc/[pid]/stat</c> — the pid-reuse guard.</summary>
+    public required long StartTicks { get; init; }
+
+    /// <summary>
+    /// A per-run nonce handed to the child through its environment and read back from
+    ///     <c>/proc/[pid]/environ</c>. The one field a recycled pid running the same interpreter cannot forge.
+    /// </summary>
+    public required string RunToken { get; init; }
+}
 
 /// <summary>
 ///     What a spawn needs. The child's environment is NOT passed in: the provider owns the allowlist and the cache
 ///     containment (offline flags, HF/torch/triton cache roots), so no caller can widen it by accident.
 /// </summary>
-/// <param name="GgufPyDirectory">
-///     Set only for an EXPORT subprocess: the vendored <c>gguf-py</c> package directory the llama.cpp conversion
-///     scripts import, placed on the child's <c>PYTHONPATH</c>. Null spawns the plain training environment.
-/// </param>
-public sealed record TrainingSpawnRequest(
-    string ExecutablePath,
-    IReadOnlyList<string> Arguments,
-    string WorkingDirectory,
-    string RunToken,
-    string? GgufPyDirectory = null);
+public sealed class TrainingSpawnRequest
+{
+    public required string ExecutablePath { get; init; }
+
+    public required IReadOnlyList<string> Arguments { get; init; }
+
+    public required string WorkingDirectory { get; init; }
+
+    public required string RunToken { get; init; }
+
+    /// <summary>
+    ///     Set only for an EXPORT subprocess: the vendored <c>gguf-py</c> package directory the llama.cpp conversion
+    ///     scripts import, placed on the child's <c>PYTHONPATH</c>. Null spawns the plain training environment.
+    /// </summary>
+    public string? GgufPyDirectory { get; init; }
+}
 
 /// <summary>
 ///     A spawned, still-running trainer. Distinct from <c>ITrainingProcessRunner</c>, which is run-to-completion and
@@ -59,7 +78,16 @@ public interface ITrainingProcessSpawner
 }
 
 /// <summary>The live facts a reaper compares a persisted <see cref="TrainingLaunchReceipt" /> against.</summary>
-public sealed record TrainingProcessFacts(int Pgid, long StartTicks, string? ExecutablePath, string? RunToken);
+public sealed record TrainingProcessFacts
+{
+    public required int Pgid { get; init; }
+
+    public required long StartTicks { get; init; }
+
+    public required string? ExecutablePath { get; init; }
+
+    public required string? RunToken { get; init; }
+}
 
 /// <summary>Reads process identity out of <c>/proc</c> for a process this host does not own a handle to.</summary>
 public interface ITrainingProcessInspector

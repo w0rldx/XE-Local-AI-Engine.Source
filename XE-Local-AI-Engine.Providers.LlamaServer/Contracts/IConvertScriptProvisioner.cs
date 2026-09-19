@@ -4,19 +4,24 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     The llama.cpp conversion tooling a training export runs, provisioned at a pinned commit under the managed
 ///     runtime directory.
 /// </summary>
-/// <param name="HfToGgufScriptPath">Absolute path to <c>convert_hf_to_gguf.py</c> (merged fine-tune → GGUF).</param>
-/// <param name="LoraToGgufScriptPath">Absolute path to <c>convert_lora_to_gguf.py</c> (LoRA adapter → GGUF).</param>
-/// <param name="GgufPyDirectory">
-///     Absolute path to the <c>gguf-py</c> package directory both scripts import. Put this on <c>PYTHONPATH</c> for the
-///     conversion subprocess — the scripts resolve the package relative to the repository they normally live in, which
-///     this provisioned tree deliberately is not.
-/// </param>
-/// <param name="SourceCommit">The verified upstream commit the three paths were taken from.</param>
-public sealed record ConvertScriptPaths(
-    string HfToGgufScriptPath,
-    string LoraToGgufScriptPath,
-    string GgufPyDirectory,
-    string SourceCommit);
+public sealed class ConvertScriptPaths
+{
+    /// <summary>Absolute path to <c>convert_hf_to_gguf.py</c> (merged fine-tune → GGUF).</summary>
+    public required string HfToGgufScriptPath { get; init; }
+
+    /// <summary>Absolute path to <c>convert_lora_to_gguf.py</c> (LoRA adapter → GGUF).</summary>
+    public required string LoraToGgufScriptPath { get; init; }
+
+    /// <summary>
+    ///     Absolute path to the <c>gguf-py</c> package directory both scripts import. Put this on <c>PYTHONPATH</c> for the
+    ///     conversion subprocess — the scripts resolve the package relative to the repository they normally live in, which
+    ///     this provisioned tree deliberately is not.
+    /// </summary>
+    public required string GgufPyDirectory { get; init; }
+
+    /// <summary>The verified upstream commit the three paths were taken from.</summary>
+    public required string SourceCommit { get; init; }
+}
 
 /// <summary>
 ///     Acquires and adopts the llama.cpp conversion scripts at the exact commit the installed inference runtime is

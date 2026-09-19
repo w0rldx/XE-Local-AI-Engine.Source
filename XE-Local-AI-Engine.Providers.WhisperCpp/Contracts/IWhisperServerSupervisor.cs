@@ -27,16 +27,28 @@ public enum WhisperBinarySource
 }
 
 /// <summary>The result of an eject: whether it happened, and the activity that blocked it when it did not.</summary>
-public sealed record WhisperServerEvictResult(bool Evicted, WhisperRuntimeActivitySnapshot Activity);
+public sealed class WhisperServerEvictResult
+{
+    public required bool Evicted { get; init; }
+
+    public required WhisperRuntimeActivitySnapshot Activity { get; init; }
+}
 
 /// <summary>A sanitized snapshot of the runtime for the operator UI. Carries no path, URL, or port.</summary>
-public sealed record WhisperRuntimeStatusSnapshot(
-    WhisperRuntimeState State,
-    string? LoadedModelId,
-    WhisperBackend? Backend,
-    string? BinaryVersion,
-    WhisperBinarySource? BinarySource,
-    bool SupportsTranscode);
+public sealed class WhisperRuntimeStatusSnapshot
+{
+    public required WhisperRuntimeState State { get; init; }
+
+    public required string? LoadedModelId { get; init; }
+
+    public required WhisperBackend? Backend { get; init; }
+
+    public required string? BinaryVersion { get; init; }
+
+    public required WhisperBinarySource? BinarySource { get; init; }
+
+    public required bool SupportsTranscode { get; init; }
+}
 
 /// <summary>
 ///     A lease held for one in-flight transcription. Holding it keeps the idle reaper and any eject off the daemon for

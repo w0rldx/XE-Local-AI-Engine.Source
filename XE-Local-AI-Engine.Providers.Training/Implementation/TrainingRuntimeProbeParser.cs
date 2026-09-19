@@ -53,16 +53,19 @@ internal static class TrainingRuntimeProbeParser
                 return null;
             }
 
-            return new TrainingRuntimeProbeReport(version,
-                ReadBool(root, "ready"),
-                ReadString(root, "python"),
-                ReadString(root, "torch"),
-                ReadString(root, "unsloth"),
-                ReadString(root, "bitsandbytes"),
-                ReadBool(root, "cudaAvailable"),
-                ReadString(root, "deviceName"),
-                ReadString(root, "deviceCapability"),
-                ReadErrors(root));
+            return new TrainingRuntimeProbeReport
+            {
+                ContractVersion = version,
+                Ready = ReadBool(root, "ready"),
+                PythonVersion = ReadString(root, "python"),
+                TorchVersion = ReadString(root, "torch"),
+                UnslothVersion = ReadString(root, "unsloth"),
+                BitsAndBytesVersion = ReadString(root, "bitsandbytes"),
+                CudaAvailable = ReadBool(root, "cudaAvailable"),
+                DeviceName = ReadString(root, "deviceName"),
+                DeviceCapability = ReadString(root, "deviceCapability"),
+                Errors = ReadErrors(root)
+            };
         }
         catch (JsonException)
         {

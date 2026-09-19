@@ -25,10 +25,10 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     public async Task BoundBenchmarkEndpoint_BypassesSupervisorAndExternalEndpointResolution()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        var externalEndpoint = new LlamaServerEndpoint("model-a", ModelRole.Chat, new Uri("http://external.example/v1"));
+        var externalEndpoint = new LlamaServerEndpoint { ModelName = "model-a", Role = ModelRole.Chat, BaseAddress = new Uri("http://external.example/v1") };
         supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, Arg.Any<CancellationToken>()).Returns(externalEndpoint);
         var binding = Substitute.For<ILlamaServerEndpointBinding>();
-        var pinnedEndpoint = new LlamaServerEndpoint("model-a", ModelRole.Chat, new Uri("http://127.0.0.1:19002/v1"));
+        var pinnedEndpoint = new LlamaServerEndpoint { ModelName = "model-a", Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:19002/v1") };
         binding.GetBoundEndpoint("model-a", ModelRole.Chat).Returns(pinnedEndpoint);
         using var client = new DeferredLlamaServerChatClient(supervisor,
             "model-a",
@@ -202,7 +202,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
             LeaseAcquisition = LlamaServerLeaseAcquisition.ProfilingOwned
         };
         var binding = Substitute.For<ILlamaServerEndpointBinding>();
-        var boundEndpoint = new LlamaServerEndpoint("model-a", ModelRole.Chat, ProfilingEndpoint);
+        var boundEndpoint = new LlamaServerEndpoint { ModelName = "model-a", Role = ModelRole.Chat, BaseAddress = ProfilingEndpoint };
         binding.GetBoundEndpoint("model-a", ModelRole.Chat).Returns(boundEndpoint);
         using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler, binding);
 
@@ -228,7 +228,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         };
         var binding = Substitute.For<ILlamaServerEndpointBinding>();
         binding.GetBoundEndpoint("model-a", ModelRole.Chat)
-               .Returns(new LlamaServerEndpoint("model-a", ModelRole.Chat, ProfilingEndpoint));
+               .Returns(new LlamaServerEndpoint { ModelName = "model-a", Role = ModelRole.Chat, BaseAddress = ProfilingEndpoint });
         using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler, binding);
 
         await AssertEx.ThrowsAsync<Exception>(async () =>

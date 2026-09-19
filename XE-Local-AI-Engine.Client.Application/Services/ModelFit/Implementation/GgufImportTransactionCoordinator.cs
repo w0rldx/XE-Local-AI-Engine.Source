@@ -222,12 +222,15 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                     value.CompletedBytes,
                     value.TotalBytes));
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Copying);
-                prepared = await _importer.PrepareAsync(new GgufImportSource(sourcePath),
-                    new GgufImportDestination(identity.CanonicalModelName,
-                        identity.CanonicalQuantization,
-                        identity.RelativeGgufPath,
-                        identity.RelativeSidecarPath,
-                        LocalModelOrigin.Imported),
+                prepared = await _importer.PrepareAsync(new GgufImportSource { AbsolutePath = sourcePath },
+                    new GgufImportDestination
+                    {
+                        CanonicalModelName = identity.CanonicalModelName,
+                        CanonicalQuant = identity.CanonicalQuantization,
+                        RelativeGgufPath = identity.RelativeGgufPath,
+                        RelativeSidecarPath = identity.RelativeSidecarPath,
+                        Origin = LocalModelOrigin.Imported
+                    },
                     progress,
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -392,7 +395,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     {
         try
         {
-            var inspection = await _inspector.InspectAsync(new GgufImportSource(sourcePath), cancellationToken);
+            var inspection = await _inspector.InspectAsync(new GgufImportSource { AbsolutePath = sourcePath }, cancellationToken);
             var blocking = inspection.Rejections.FirstOrDefault(rejection => !allowQuantizationRequired
                                                                              || rejection != GgufImportRejectionCode.QuantizationRequired);
             if (blocking != default || inspection.Rejections.Contains(GgufImportRejectionCode.InvalidSource))

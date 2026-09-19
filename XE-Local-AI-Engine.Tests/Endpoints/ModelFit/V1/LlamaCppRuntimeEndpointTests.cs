@@ -209,10 +209,13 @@ public sealed class LlamaCppRuntimeEndpointTests
         var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
         releaseCatalog.ResolveAssetAsync(Arg.Any<string>(), Arg.Any<OSPlatform>(), Arg.Any<Architecture>(), Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                       .Returns(LlamaCppReleaseResult.ForAsset("b9700",
-                          new LlamaCppReleaseAsset("llama-b9700-bin-win-cuda-x64.zip",
-                              new Uri("https://example.invalid/llama-b9700-bin-win-cuda-x64.zip"),
-                              new string('a', count: 64),
-                              Size: 1024)));
+                          new LlamaCppReleaseAsset
+                          {
+                              Name = "llama-b9700-bin-win-cuda-x64.zip",
+                              DownloadUrl = new Uri("https://example.invalid/llama-b9700-bin-win-cuda-x64.zip"),
+                              Digest = new string('a', count: 64),
+                              Size = 1024
+                          }));
         await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState(), releaseCatalog, supervisor);
         using var client = factory.CreateClient();
 

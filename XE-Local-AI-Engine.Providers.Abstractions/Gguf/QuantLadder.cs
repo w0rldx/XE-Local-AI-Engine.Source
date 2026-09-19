@@ -34,38 +34,38 @@ public static class QuantLadder
     // picker's GgufQuantQuality falls back to its own family rules for off-ladder tokens (the _L variants, legacy/ARM,…).
     private static readonly QuantRung[] Rungs =
     [
-        new("F32", GgufQuantTier.NearLossless),
-        new("F16", GgufQuantTier.NearLossless),
-        new("Q8_0", GgufQuantTier.NearLossless),
-        new("Q6_K", GgufQuantTier.NearLossless),
-        new("Q5_K_M", GgufQuantTier.SweetSpot),
-        new("Q5_K_S", GgufQuantTier.SweetSpot),
+        new() { Quant = "F32", Tier = GgufQuantTier.NearLossless },
+        new() { Quant = "F16", Tier = GgufQuantTier.NearLossless },
+        new() { Quant = "Q8_0", Tier = GgufQuantTier.NearLossless },
+        new() { Quant = "Q6_K", Tier = GgufQuantTier.NearLossless },
+        new() { Quant = "Q5_K_M", Tier = GgufQuantTier.SweetSpot },
+        new() { Quant = "Q5_K_S", Tier = GgufQuantTier.SweetSpot },
         // Native FP4 (see IsNativeFormat): trained precision, not a lossy requant, so both rank ABOVE Q4_K_M despite
         // sizing narrower than it (4.25 vs 4.5 bits/weight) — the same rank-vs-bytes divergence the IQ4 family shows.
         // Omitting them was a live defect: an off-ladder label takes UnknownRank (just below Q4_K_M), which is exactly
         // one step past the "recommended" gate, so a native-FP4 repo was demoted to "Can run" however well it fit.
         // NVFP4 leads MXFP4 because it carries finer scale granularity (a 16-element block with an FP8 scale against
         // MXFP4's 32-element block with a power-of-two scale) at the same measured on-disk density.
-        new("NVFP4", GgufQuantTier.Balanced),
-        new("MXFP4", GgufQuantTier.Balanced),
-        new("Q4_K_M", GgufQuantTier.Balanced),
-        new("IQ4_NL", GgufQuantTier.Small),
-        new("Q4_K_S", GgufQuantTier.Balanced),
-        new("IQ4_XS", GgufQuantTier.Small),
-        new("Q3_K_L", GgufQuantTier.Small),
-        new("Q3_K_M", GgufQuantTier.Small),
-        new("IQ3_M", GgufQuantTier.Small),
-        new("IQ3_S", GgufQuantTier.Small),
-        new("Q3_K_S", GgufQuantTier.Small),
-        new("IQ3_XS", GgufQuantTier.Small),
-        new("IQ3_XXS", GgufQuantTier.Small),
-        new("Q2_K", GgufQuantTier.Minimal),
-        new("IQ2_M", GgufQuantTier.Minimal),
-        new("IQ2_S", GgufQuantTier.Minimal),
-        new("IQ2_XS", GgufQuantTier.Minimal),
-        new("IQ2_XXS", GgufQuantTier.Minimal),
-        new("IQ1_M", GgufQuantTier.Minimal),
-        new("IQ1_S", GgufQuantTier.Minimal)
+        new() { Quant = "NVFP4", Tier = GgufQuantTier.Balanced },
+        new() { Quant = "MXFP4", Tier = GgufQuantTier.Balanced },
+        new() { Quant = "Q4_K_M", Tier = GgufQuantTier.Balanced },
+        new() { Quant = "IQ4_NL", Tier = GgufQuantTier.Small },
+        new() { Quant = "Q4_K_S", Tier = GgufQuantTier.Balanced },
+        new() { Quant = "IQ4_XS", Tier = GgufQuantTier.Small },
+        new() { Quant = "Q3_K_L", Tier = GgufQuantTier.Small },
+        new() { Quant = "Q3_K_M", Tier = GgufQuantTier.Small },
+        new() { Quant = "IQ3_M", Tier = GgufQuantTier.Small },
+        new() { Quant = "IQ3_S", Tier = GgufQuantTier.Small },
+        new() { Quant = "Q3_K_S", Tier = GgufQuantTier.Small },
+        new() { Quant = "IQ3_XS", Tier = GgufQuantTier.Small },
+        new() { Quant = "IQ3_XXS", Tier = GgufQuantTier.Small },
+        new() { Quant = "Q2_K", Tier = GgufQuantTier.Minimal },
+        new() { Quant = "IQ2_M", Tier = GgufQuantTier.Minimal },
+        new() { Quant = "IQ2_S", Tier = GgufQuantTier.Minimal },
+        new() { Quant = "IQ2_XS", Tier = GgufQuantTier.Minimal },
+        new() { Quant = "IQ2_XXS", Tier = GgufQuantTier.Minimal },
+        new() { Quant = "IQ1_M", Tier = GgufQuantTier.Minimal },
+        new() { Quant = "IQ1_S", Tier = GgufQuantTier.Minimal }
     ];
 
     private static readonly ReadOnlyCollection<string> CanonicalQuantizationValues =
@@ -141,5 +141,10 @@ public static class QuantLadder
     }
 
     /// <summary>One rung of the ladder: the canonical quant token and the coarse tier the download picker badges.</summary>
-    private sealed record QuantRung(string Quant, GgufQuantTier Tier);
+    private sealed record QuantRung
+    {
+        public required string Quant { get; init; }
+
+        public required GgufQuantTier Tier { get; init; }
+    }
 }

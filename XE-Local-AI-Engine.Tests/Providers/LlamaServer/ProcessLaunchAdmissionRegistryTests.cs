@@ -118,17 +118,23 @@ public sealed class ProcessLaunchAdmissionRegistryTests
 
     private static ProcessLaunchAdmission Admission(string modelName)
     {
-        var allocation = new ProcessContextAllocation(8192,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            ContentIdentity: $"{modelName}:0",
-            CacheKey: $"cache:{modelName}");
-        return new ProcessLaunchAdmission(modelName,
-            ModelRole.Chat,
-            GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore(),
-            allocation);
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = $"{modelName}:0",
+            CacheKey = $"cache:{modelName}"
+        };
+        return new ProcessLaunchAdmission
+        {
+            ModelName = modelName,
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        };
     }
 }

@@ -7,17 +7,23 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     the Mixture-of-Experts fields), this projection surfaces <see cref="ExpertCount" /> / <see cref="IsMoe" /> so a
 ///     persisted inference profile records whether the optimizer must measure MoE throughput empirically.
 /// </summary>
-/// <param name="ParamCount">Total parameter count from <c>general.parameter_count</c>, or <see langword="null" /> when absent.</param>
-/// <param name="QuantType">The header's stringified <c>general.file_type</c> quant marker, or <see langword="null" /> when absent.</param>
-/// <param name="ContextLength">The model's native maximum context length, or <see langword="null" /> when absent.</param>
-/// <param name="ExpertCount">The declared expert count for an MoE model (clamped to <see cref="int" />), or <see langword="null" /> for a dense model.</param>
-/// <param name="IsMoe">True when the GGUF declares a positive expert count.</param>
-public sealed record GgufModelMetadata(
-    long? ParamCount,
-    string? QuantType,
-    long? ContextLength,
-    int? ExpertCount,
-    bool IsMoe);
+public sealed class GgufModelMetadata
+{
+    /// <summary>Total parameter count from <c>general.parameter_count</c>, or <see langword="null" /> when absent.</summary>
+    public required long? ParamCount { get; init; }
+
+    /// <summary>The header's stringified <c>general.file_type</c> quant marker, or <see langword="null" /> when absent.</summary>
+    public required string? QuantType { get; init; }
+
+    /// <summary>The model's native maximum context length, or <see langword="null" /> when absent.</summary>
+    public required long? ContextLength { get; init; }
+
+    /// <summary>The declared expert count for an MoE model (clamped to <see cref="int" />), or <see langword="null" /> for a dense model.</summary>
+    public required int? ExpertCount { get; init; }
+
+    /// <summary>True when the GGUF declares a positive expert count.</summary>
+    public required bool IsMoe { get; init; }
+}
 
 /// <summary>
 ///     Reads the standardized header metadata of an INSTALLED, local GGUF file. Tolerant by contract: a missing file,

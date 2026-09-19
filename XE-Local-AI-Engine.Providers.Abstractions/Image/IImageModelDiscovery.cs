@@ -47,30 +47,54 @@ public sealed record ImageModelSearchQuery
 ///     Summary of an image-model repo from a Hub search (popularity + gating + license).
 ///     <see cref="IsTrustedPublisher" /> is the same soft signal the GGUF lane uses — never an exclusion gate.
 /// </summary>
-public sealed record ImageRepoSummary(
-    string RepoId,
-    bool IsGated,
-    long Downloads,
-    int Likes,
-    DateTimeOffset LastModified,
-    string? License,
-    bool HasUsableWeights,
-    bool IsTrustedPublisher);
+public sealed class ImageRepoSummary
+{
+    public required string RepoId { get; init; }
+
+    public required bool IsGated { get; init; }
+
+    public required long Downloads { get; init; }
+
+    public required int Likes { get; init; }
+
+    public required DateTimeOffset LastModified { get; init; }
+
+    public required string? License { get; init; }
+
+    public required bool HasUsableWeights { get; init; }
+
+    public required bool IsTrustedPublisher { get; init; }
+}
 
 /// <summary>
 ///     One selectable weight file inside an image-model repo: its repo-relative name, container format, byte size and
 ///     the part role the file name suggests. <see cref="SuggestedRole" /> is a naming heuristic the picker pre-selects —
 ///     the operator can always override it, and nothing downstream trusts it as fact.
 /// </summary>
-public sealed record ImageRepoFile(
-    string FileName,
-    ImageWeightFormat Format,
-    long SizeBytes,
-    string? Sha256,
-    ImageModelPartRole SuggestedRole);
+public sealed class ImageRepoFile
+{
+    public required string FileName { get; init; }
+
+    public required ImageWeightFormat Format { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required string? Sha256 { get; init; }
+
+    public required ImageModelPartRole SuggestedRole { get; init; }
+}
 
 /// <summary>One inspected image-model repo: gating/license plus every selectable weight file it ships.</summary>
-public sealed record ImageRepoDetail(string RepoId, bool IsGated, string? License, IReadOnlyList<ImageRepoFile> Files);
+public sealed class ImageRepoDetail
+{
+    public required string RepoId { get; init; }
+
+    public required bool IsGated { get; init; }
+
+    public required string? License { get; init; }
+
+    public required IReadOnlyList<ImageRepoFile> Files { get; init; }
+}
 
 /// <summary>
 ///     Queries the Hugging Face Hub for image (diffusion) model repos and inspects their weight files, so the operator

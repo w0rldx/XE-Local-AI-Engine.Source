@@ -67,13 +67,19 @@ public sealed class TranscriptionSourceBuildEndpointTests
         // rather than only "failed".
         var build = new StubSourceBuildService
         {
-            StartResult = new WhisperCppSourceBuildStartResult(WhisperCppSourceBuildStartOutcome.RuntimeBusy,
-                Prerequisites: null,
-                new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 1,
-                    SpawnReadinessCount: 0,
-                    ResidentProcessCount: 1,
-                    MutationReserved: false,
-                    EvictionReserved: false))
+            StartResult = new WhisperCppSourceBuildStartResult
+            {
+                Outcome = WhisperCppSourceBuildStartOutcome.RuntimeBusy,
+                Prerequisites = null,
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 1,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 1,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
+            }
         };
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
@@ -101,9 +107,15 @@ public sealed class TranscriptionSourceBuildEndpointTests
         // a reason code.
         var build = new StubSourceBuildService
         {
-            StartResult = new WhisperCppSourceBuildStartResult(WhisperCppSourceBuildStartOutcome.MissingPrerequisites,
-                new WhisperCppSourceBuildPrerequisiteReport(false,
-                    [new WhisperCppSourceBuildPrerequisiteItem("nvcc", false, "NVIDIA CUDA compiler (nvcc) is not available.")]))
+            StartResult = new WhisperCppSourceBuildStartResult
+            {
+                Outcome = WhisperCppSourceBuildStartOutcome.MissingPrerequisites,
+                Prerequisites = new WhisperCppSourceBuildPrerequisiteReport
+                {
+                    CanBuild = false,
+                    Items = [new WhisperCppSourceBuildPrerequisiteItem { Key = "nvcc", Satisfied = false, Detail = "NVIDIA CUDA compiler (nvcc) is not available." }]
+                }
+            }
         };
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
@@ -172,15 +184,18 @@ public sealed class TranscriptionSourceBuildEndpointTests
     {
         var build = new StubSourceBuildService
         {
-            Status = new WhisperCppSourceBuildStatus(WhisperCppSourceBuildPhase.SmokeTesting,
-                IsRunning: true,
-                Terminal: false,
-                ["> cmake --build .", "[100%] Built target whisper-server"],
-                LogStartSequence: 42,
-                SanitizedError: null,
-                Descriptor(),
-                DateTimeOffset.UnixEpoch,
-                CompletedAtUtc: null)
+            Status = new WhisperCppSourceBuildStatus
+            {
+                Phase = WhisperCppSourceBuildPhase.SmokeTesting,
+                IsRunning = true,
+                Terminal = false,
+                LogLines = ["> cmake --build .", "[100%] Built target whisper-server"],
+                LogStartSequence = 42,
+                SanitizedError = null,
+                CurrentBuild = Descriptor(),
+                StartedAtUtc = DateTimeOffset.UnixEpoch,
+                CompletedAtUtc = null
+            }
         };
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
@@ -206,11 +221,14 @@ public sealed class TranscriptionSourceBuildEndpointTests
         var build = new StubSourceBuildService();
         var probe = new StubPrerequisiteProbe
         {
-            Report = new WhisperCppSourceBuildPrerequisiteReport(false,
-            [
-                new WhisperCppSourceBuildPrerequisiteItem("os-is-linux", true, "Linux host detected."),
-                new WhisperCppSourceBuildPrerequisiteItem("nvcc", false, "NVIDIA CUDA compiler (nvcc) is not available.")
-            ])
+            Report = new WhisperCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = false,
+                Items = [
+                new WhisperCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
+                new WhisperCppSourceBuildPrerequisiteItem { Key = "nvcc", Satisfied = false, Detail = "NVIDIA CUDA compiler (nvcc) is not available." }
+            ]
+            }
         };
         await using var factory = FactoryWith(build, probe);
         using var client = factory.CreateClient();
@@ -248,12 +266,18 @@ public sealed class TranscriptionSourceBuildEndpointTests
     {
         var build = new StubSourceBuildService
         {
-            RemoveResult = new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
-                new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0,
-                    SpawnReadinessCount: 0,
-                    ResidentProcessCount: 1,
-                    MutationReserved: false,
-                    EvictionReserved: false))
+            RemoveResult = new WhisperCppSourceBuildRemoveResult
+            {
+                Outcome = WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
+                Activity = new WhisperRuntimeActivitySnapshot
+                {
+                    ActiveTranscriptionCount = 0,
+                    SpawnReadinessCount = 0,
+                    ResidentProcessCount = 1,
+                    MutationReserved = false,
+                    EvictionReserved = false
+                }
+            }
         };
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
@@ -276,7 +300,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         // "No managed runtime" is what the caller asked for, and it is now true either way.
         var build = new StubSourceBuildService
         {
-            RemoveResult = new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.NotInstalled)
+            RemoveResult = new WhisperCppSourceBuildRemoveResult { Outcome = WhisperCppSourceBuildRemoveOutcome.NotInstalled }
         };
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
@@ -365,13 +389,14 @@ public sealed class TranscriptionSourceBuildEndpointTests
         };
 
     private static WhisperCppSourceBuildDescriptor Descriptor() =>
-        new(WhisperBackend.Cuda,
-            WhisperCppSourceSelection.Official,
-            WhisperCppSourceBuildRequestValidation.OfficialRepository,
-            WhisperCppSourceRevisionMode.EnginePinned,
-            RequestedCommit: null,
-            WhisperCppReleasePins.PinnedSourceCommitSha)
+        new()
         {
+            Backend = WhisperBackend.Cuda,
+            Source = WhisperCppSourceSelection.Official,
+            Repository = WhisperCppSourceBuildRequestValidation.OfficialRepository,
+            RevisionMode = WhisperCppSourceRevisionMode.EnginePinned,
+            RequestedCommit = null,
+            ResolvedCommit = WhisperCppReleasePins.PinnedSourceCommitSha,
             BuildId = Guid.NewGuid()
         };
 
@@ -446,21 +471,24 @@ public sealed class TranscriptionSourceBuildEndpointTests
         public bool CancelCalled { get; private set; }
 
         public WhisperCppSourceBuildStartResult StartResult { get; init; } =
-            new(WhisperCppSourceBuildStartOutcome.Started);
+            new() { Outcome = WhisperCppSourceBuildStartOutcome.Started };
 
         public WhisperCppSourceBuildRemoveResult RemoveResult { get; init; } =
-            new(WhisperCppSourceBuildRemoveOutcome.Removed);
+            new() { Outcome = WhisperCppSourceBuildRemoveOutcome.Removed };
 
         public WhisperCppSourceBuildStatus Status { get; init; } =
-            new(WhisperCppSourceBuildPhase.Idle,
-                IsRunning: false,
-                Terminal: false,
-                [],
-                LogStartSequence: 0,
-                SanitizedError: null,
-                CurrentBuild: null,
-                StartedAtUtc: null,
-                CompletedAtUtc: null);
+            new()
+            {
+                Phase = WhisperCppSourceBuildPhase.Idle,
+                IsRunning = false,
+                Terminal = false,
+                LogLines = [],
+                LogStartSequence = 0,
+                SanitizedError = null,
+                CurrentBuild = null,
+                StartedAtUtc = null,
+                CompletedAtUtc = null
+            };
 
         public Task<WhisperCppSourceBuildStartResult> StartAsync(WhisperCppSourceBuildRequest request, CancellationToken ct)
         {
@@ -495,7 +523,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         public WhisperBackend? RequestedBackend { get; private set; }
 
         public WhisperCppSourceBuildPrerequisiteReport Report { get; init; } =
-            new(true, [new WhisperCppSourceBuildPrerequisiteItem("os-is-linux", true, "Linux host detected.")]);
+            new() { CanBuild = true, Items = [new WhisperCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." }] };
 
         public Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
         {

@@ -390,15 +390,16 @@ public sealed class GgufImportTransactionCoordinatorTests
     }
 
     private static GgufImportInspection AcceptedInspection(string displayName) =>
-        new(42,
-            GgufVersion: 3,
-            Architecture: "llama",
-            GgufImportWorkload.CausalChat,
-            "Q4_K_M",
-            displayName,
-            Array.Empty<GgufImportRejectionCode>(),
-            Array.Empty<string>())
+        new()
         {
+            SizeBytes = 42,
+            GgufVersion = 3,
+            Architecture = "llama",
+            Workload = GgufImportWorkload.CausalChat,
+            DetectedQuantization = "Q4_K_M",
+            SourceDisplayName = displayName,
+            Rejections = Array.Empty<GgufImportRejectionCode>(),
+            Warnings = Array.Empty<string>(),
             SourceIdentityToken = $"v1:{new string('a', 64)}"
         };
 
@@ -614,14 +615,17 @@ public sealed class GgufImportTransactionCoordinatorTests
                 Role = _entry.Role,
                 ModelContentFingerprint = _entry.ModelContentFingerprint!
             };
-            return Task.FromResult(new PreparedGgufImport("operation",
-                destination,
-                "temporary.gguf",
-                "temporary.xe-model.json",
-                _entry,
-                metadata,
-                metadata.WeightMemberFingerprint,
-                metadata.ModelContentFingerprint));
+            return Task.FromResult(new PreparedGgufImport
+            {
+                OperationId = "operation",
+                Destination = destination,
+                TemporaryGgufPath = "temporary.gguf",
+                TemporarySidecarPath = "temporary.xe-model.json",
+                RegistryEntry = _entry,
+                Sidecar = metadata,
+                WeightMemberFingerprint = metadata.WeightMemberFingerprint,
+                ModelContentFingerprint = metadata.ModelContentFingerprint
+            });
         }
 
         public async Task<GgufImportCommitReceipt> CommitAsync(PreparedGgufImport preparedImport,
@@ -629,11 +633,14 @@ public sealed class GgufImportTransactionCoordinatorTests
         {
             CommitEntered.SetResult();
             await ReleaseCommit.Task;
-            var receipt = new GgufImportCommitReceipt(_entry,
-                "final.gguf",
-                "final.xe-model.json",
-                preparedImport.WeightMemberFingerprint,
-                preparedImport.ModelContentFingerprint);
+            var receipt = new GgufImportCommitReceipt
+            {
+                RegistryEntry = _entry,
+                FinalGgufPath = "final.gguf",
+                FinalSidecarPath = "final.xe-model.json",
+                WeightMemberFingerprint = preparedImport.WeightMemberFingerprint,
+                ModelContentFingerprint = preparedImport.ModelContentFingerprint
+            };
             if (ThrowPartialCommit)
             {
                 throw new GgufImportCommitException(receipt,

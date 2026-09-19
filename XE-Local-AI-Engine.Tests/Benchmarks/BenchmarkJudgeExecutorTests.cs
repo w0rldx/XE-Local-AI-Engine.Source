@@ -1056,7 +1056,7 @@ public sealed class BenchmarkJudgeExecutorTests
                   .Returns(call =>
                   {
                       var modelName = call.ArgAt<string>(0);
-                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19001")), []);
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint { ModelName = modelName, Role = ModelRole.Chat, BaseAddress = new Uri("http://127.0.0.1:19001") }, []);
                       return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
                   });
         return supervisor;

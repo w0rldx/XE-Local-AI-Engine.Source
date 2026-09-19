@@ -52,18 +52,19 @@ public sealed class BenchmarkCanonicalJsonTests
     [Test]
     public void Serialize_Receipt_WritesEnumsAsNamesSoAnInsertedMemberCannotRelabelStoredEvidence()
     {
-        var json = BenchmarkCanonicalJson.Serialize(new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion,
-            GpuVariant.Cuda,
-            "linux",
-            "b10201",
-            "exe-sha",
-            "manifest-sha",
-            LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(4096), plan: null),
-            new LlamaServerLaunchAuxAssets(false, false, false),
-            new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.None, 0, 33),
-            4096,
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1)
+        var json = BenchmarkCanonicalJson.Serialize(new LlamaServerLaunchReceipt
         {
+            ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+            Variant = GpuVariant.Cuda,
+            Os = "linux",
+            ExecutableVersion = "b10201",
+            ExecutableSha256 = "exe-sha",
+            ManifestSha256 = "manifest-sha",
+            LaunchProjection = LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Replay(4096), plan: null),
+            AuxAssets = new LlamaServerLaunchAuxAssets(false, false, false),
+            Placement = new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.None, 0, 33),
+            EffectiveContextTokens = 4096,
+            BenchmarkLaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             OmittedOptions = ["--metrics"]
         });
 

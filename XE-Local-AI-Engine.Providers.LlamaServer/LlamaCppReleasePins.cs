@@ -5,24 +5,28 @@ using System.Runtime.InteropServices;
 /// <summary>
 ///     A single pinned, hash-verified llama.cpp prebuilt asset (one OS/arch/variant combination).
 /// </summary>
-/// <param name="AssetName">The release asset file name (for example <c>llama-b10201-bin-win-vulkan-x64.zip</c>).</param>
-/// <param name="Sha256">Lowercase hex SHA256 the downloaded archive must match.</param>
-/// <param name="ServerRelativePath">
-///     Path to <c>llama-server</c> inside the extracted archive (Windows archives nest under <c>build/bin/</c>).
-/// </param>
-/// <param name="CudartAssetName">
-///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin. llama.cpp ships the CUDA runtime
-///     DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>) in a SEPARATE archive from the main
-///     build; without them next to <c>llama-server.exe</c> the ggml-cuda backend fails to load and the server silently
-///     runs CPU-only. <see langword="null" /> for every non-Windows-CUDA pin (no second archive to fetch).
-/// </param>
-/// <param name="CudartSha256">Lowercase hex SHA256 the companion CUDA-runtime archive must match. <see langword="null" /> when <paramref name="CudartAssetName" /> is.</param>
-public sealed record LlamaCppAssetPin(
-    string AssetName,
-    string Sha256,
-    string ServerRelativePath,
-    string? CudartAssetName = null,
-    string? CudartSha256 = null);
+public sealed class LlamaCppAssetPin
+{
+    /// <summary>The release asset file name (for example <c>llama-b10201-bin-win-vulkan-x64.zip</c>).</summary>
+    public required string AssetName { get; init; }
+
+    /// <summary>Lowercase hex SHA256 the downloaded archive must match.</summary>
+    public required string Sha256 { get; init; }
+
+    /// <summary>Path to <c>llama-server</c> inside the extracted archive (Windows archives nest under <c>build/bin/</c>).</summary>
+    public required string ServerRelativePath { get; init; }
+
+    /// <summary>
+    ///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin. llama.cpp ships the CUDA runtime
+    ///     DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>) in a SEPARATE archive from the main
+    ///     build; without them next to <c>llama-server.exe</c> the ggml-cuda backend fails to load and the server silently
+    ///     runs CPU-only. <see langword="null" /> for every non-Windows-CUDA pin (no second archive to fetch).
+    /// </summary>
+    public string? CudartAssetName { get; init; }
+
+    /// <summary>Lowercase hex SHA256 the companion CUDA-runtime archive must match. <see langword="null" /> when <see cref="CudartAssetName" /> is.</summary>
+    public string? CudartSha256 { get; init; }
+}
 
 /// <summary>
 ///     Verified, pinned llama.cpp prebuilt-release table — the recommended-pinned acquisition source for
@@ -74,35 +78,40 @@ public static class LlamaCppReleasePins
             // the b10201 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream, and its digest is
             // unchanged from b9692 because upstream ships the same CUDA 12.4 runtime archive across those releases.
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
-                new("llama-b10201-bin-win-cuda-12.4-x64.zip", "0b25fa35df1acb01a7bf0325fe554cbae1d7be39dfd630e979ad5a5ddc66599b", WindowsServerPath,
-                    CudartAssetName: "cudart-llama-bin-win-cuda-12.4-x64.zip",
-                    CudartSha256: "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
+                new()
+                {
+                    AssetName = "llama-b10201-bin-win-cuda-12.4-x64.zip",
+                    Sha256 = "0b25fa35df1acb01a7bf0325fe554cbae1d7be39dfd630e979ad5a5ddc66599b",
+                    ServerRelativePath = WindowsServerPath,
+                    CudartAssetName = "cudart-llama-bin-win-cuda-12.4-x64.zip",
+                    CudartSha256 = "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+                },
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
-                new("llama-b10201-bin-win-vulkan-x64.zip", "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42", WindowsServerPath),
+                new() { AssetName = "llama-b10201-bin-win-vulkan-x64.zip", Sha256 = "7284f987944f0700b0d039b1b2f786302308f1479b8f1d61efa0a0ba35acea42", ServerRelativePath = WindowsServerPath },
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
-                new("llama-b10201-bin-win-cpu-x64.zip", "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833", WindowsServerPath),
+                new() { AssetName = "llama-b10201-bin-win-cpu-x64.zip", Sha256 = "8b8d4f0f6738e11842dd5250de0736052de41b0ef4de8d3fb119c37335de2833", ServerRelativePath = WindowsServerPath },
 
             // Windows arm64 (CPU floor only)
             [new PinKey(OSPlatform.Windows, Architecture.Arm64, GpuVariant.Cpu)] =
-                new("llama-b10201-bin-win-cpu-arm64.zip", "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8", WindowsServerPath),
+                new() { AssetName = "llama-b10201-bin-win-cpu-arm64.zip", Sha256 = "e1b97a489cb66d04f92f53d2c633ede0721c4e26dc0bfdcf7ec6f4e31091f1a8", ServerRelativePath = WindowsServerPath },
 
             // Linux x64 (no prebuilt CUDA exists upstream)
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)] =
-                new("llama-b10201-bin-ubuntu-vulkan-x64.tar.gz", "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57", UnixServerPath),
+                new() { AssetName = "llama-b10201-bin-ubuntu-vulkan-x64.tar.gz", Sha256 = "ac495ca88439c0218a226b01120526aa051ed5adaacc6abe207c753931b03a57", ServerRelativePath = UnixServerPath },
             [new PinKey(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)] =
-                new("llama-b10201-bin-ubuntu-x64.tar.gz", "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797", UnixServerPath),
+                new() { AssetName = "llama-b10201-bin-ubuntu-x64.tar.gz", Sha256 = "7a985be324ebbce0de698fe34e830990838fce13ddb90a92c7f87ea2532ba797", ServerRelativePath = UnixServerPath },
 
             // Linux arm64
             [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Vulkan)] =
-                new("llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz", "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533", UnixServerPath),
+                new() { AssetName = "llama-b10201-bin-ubuntu-vulkan-arm64.tar.gz", Sha256 = "5e350769055d053a204b9d4479af560b3b8e9c71729bb1da8b03f2aa70d19533", ServerRelativePath = UnixServerPath },
             [new PinKey(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)] =
-                new("llama-b10201-bin-ubuntu-arm64.tar.gz", "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7", UnixServerPath),
+                new() { AssetName = "llama-b10201-bin-ubuntu-arm64.tar.gz", Sha256 = "8e001059da48a95bfb17ebab2d7e118ad15878b69840458d7cbbf443591af9e7", ServerRelativePath = UnixServerPath },
 
             // macOS (CPU floor; llama.cpp uses Metal at runtime within the universal build)
             [new PinKey(OSPlatform.OSX, Architecture.Arm64, GpuVariant.Cpu)] =
-                new("llama-b10201-bin-macos-arm64.tar.gz", "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e", UnixServerPath),
+                new() { AssetName = "llama-b10201-bin-macos-arm64.tar.gz", Sha256 = "4c323231709d670d7282ed1efdc4b479831305d7e8a6ba3c18bb0cff2dae401e", ServerRelativePath = UnixServerPath },
             [new PinKey(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
-                new("llama-b10201-bin-macos-x64.tar.gz", "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf", UnixServerPath)
+                new() { AssetName = "llama-b10201-bin-macos-x64.tar.gz", Sha256 = "ab3f2f59dbc06914dcceb062a8aef8f56bf303eacfa008cc27f8fb0e9206e1bf", ServerRelativePath = UnixServerPath }
         };
 
     /// <summary>Builds the absolute download URL for a named asset in the given release tag.</summary>

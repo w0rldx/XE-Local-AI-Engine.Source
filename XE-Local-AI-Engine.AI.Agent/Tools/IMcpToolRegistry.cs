@@ -36,9 +36,16 @@ internal interface IMcpToolRegistry
 }
 
 /// <summary>
-///     One registered MCP tool: the offered (qualified) <paramref name="Name" />, the executable
-///     <paramref name="Executable" /> (already approval-wrapped when required), and the
-///     <paramref name="Descriptor" /> the offer list carries. The connection manager constructs these; the registry
+///     One registered MCP tool: the offered (qualified) <see cref="Name" />, the executable
+///     <see cref="Executable" /> (already approval-wrapped when required), and the
+///     <see cref="Descriptor" /> the offer list carries. The connection manager constructs these; the registry
 ///     just stores them.
 /// </summary>
-internal sealed record McpRegisteredTool(string Name, AITool Executable, LocalChatToolDescriptor Descriptor);
+internal sealed class McpRegisteredTool
+{
+    public required string Name { get; init; }
+
+    public required AITool Executable { get; init; }
+
+    public required LocalChatToolDescriptor Descriptor { get; init; }
+}

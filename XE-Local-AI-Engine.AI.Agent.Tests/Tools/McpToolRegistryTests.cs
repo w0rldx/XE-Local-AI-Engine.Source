@@ -55,7 +55,7 @@ public sealed class McpToolRegistryTests
     private static McpRegisteredTool Tool(string name, string description = "desc")
     {
         var executable = AIFunctionFactory.Create((string input) => input, name);
-        var descriptor = new LocalChatToolDescriptor(name, description, ParameterSchema: """{"type":"object"}""", RequiresApproval: true);
-        return new McpRegisteredTool(name, executable, descriptor);
+        var descriptor = new LocalChatToolDescriptor { Name = name, Description = description, ParameterSchema = """{"type":"object"}""", RequiresApproval = true };
+        return new McpRegisteredTool { Name = name, Executable = executable, Descriptor = descriptor };
     }
 }

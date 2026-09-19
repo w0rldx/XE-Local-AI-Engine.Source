@@ -178,17 +178,23 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         var segments = payload.Segments is null
             ? []
             : payload.Segments
-                     .Select(static segment => new WhisperTranscriptSegment(segment.Start,
-                         segment.End,
-                         segment.Text?.Trim() ?? string.Empty,
-                         ToConfidence(segment.AvgLogprob)))
+                     .Select(static segment => new WhisperTranscriptSegment
+                     {
+                         StartSeconds = segment.Start,
+                         EndSeconds = segment.End,
+                         Text = segment.Text?.Trim() ?? string.Empty,
+                         Confidence = ToConfidence(segment.AvgLogprob)
+                     })
                      .ToArray();
 
-        return new WhisperTranscriptionResult(payload.Text?.Trim() ?? string.Empty,
-            segments,
-            ResolveDetectedLanguageCode(payload),
-            payload.DetectedLanguageProbability,
-            payload.Duration);
+        return new WhisperTranscriptionResult
+        {
+            Text = payload.Text?.Trim() ?? string.Empty,
+            Segments = segments,
+            DetectedLanguageCode = ResolveDetectedLanguageCode(payload),
+            DetectedLanguageProbability = payload.DetectedLanguageProbability,
+            DurationSeconds = payload.Duration
+        };
     }
 
     /// <summary>

@@ -225,7 +225,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
             var inode = ReadField(fields, "ino:");
             if (mount is not null && inode is not null)
             {
-                return new SourceIdentity("linux", mount, inode, length);
+                return new SourceIdentity { Platform = "linux", Volume = mount, FileId = inode, Length = length };
             }
         }
         else if (OperatingSystem.IsWindows())
@@ -246,13 +246,16 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 throw new UnauthorizedAccessException("The selected source handle did not resolve to the validated path.");
             }
 
-            return new SourceIdentity("windows",
-                information.VolumeSerialNumber.ToString(CultureInfo.InvariantCulture),
-                string.Create(CultureInfo.InvariantCulture, $"{information.FileIndexHigh:x8}{information.FileIndexLow:x8}"),
-                length);
+            return new SourceIdentity
+            {
+                Platform = "windows",
+                Volume = information.VolumeSerialNumber.ToString(CultureInfo.InvariantCulture),
+                FileId = string.Create(CultureInfo.InvariantCulture, $"{information.FileIndexHigh:x8}{information.FileIndexLow:x8}"),
+                Length = length
+            };
         }
 
-        return new SourceIdentity("best-effort", canonicalPath, File.GetLastWriteTimeUtc(canonicalPath).Ticks.ToString(CultureInfo.InvariantCulture), length);
+        return new SourceIdentity { Platform = "best-effort", Volume = canonicalPath, FileId = File.GetLastWriteTimeUtc(canonicalPath).Ticks.ToString(CultureInfo.InvariantCulture), Length = length };
     }
 
     private static string? ReadField(IEnumerable<string> lines, string prefix)
@@ -334,8 +337,16 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 
     private readonly record struct OpenedHandle(SafeFileHandle Handle, bool IsAsync);
 
-    private sealed record SourceIdentity(string Platform, string Volume, string FileId, long Length)
+    private sealed record SourceIdentity
     {
+        public required string Platform { get; init; }
+
+        public required string Volume { get; init; }
+
+        public required string FileId { get; init; }
+
+        public required long Length { get; init; }
+
         public string ToOpaqueToken(DateTime lastWriteUtc)
         {
             var material = string.Create(CultureInfo.InvariantCulture,

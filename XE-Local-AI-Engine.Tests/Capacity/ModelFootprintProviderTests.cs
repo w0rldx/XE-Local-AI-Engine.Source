@@ -18,13 +18,16 @@ public sealed class ModelFootprintProviderTests
     public async Task Footprint_ProjectsSharedAllocationResources()
     {
         var expected = new ResourceFootprint(6 * Gb, 3 * Gb);
-        var (provider, allocationResolver) = BuildProvider(new ProcessContextAllocation(ProcessContextTokens: 16384,
-            ModelTrainContextTokens: 32768,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.Hybrid,
-            expected,
-            ContentIdentity: "sha256",
-            CacheKey: "cache"));
+        var (provider, allocationResolver) = BuildProvider(new ProcessContextAllocation
+        {
+            ProcessContextTokens = 16384,
+            ModelTrainContextTokens = 32768,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.Hybrid,
+            Footprint = expected,
+            ContentIdentity = "sha256",
+            CacheKey = "cache"
+        });
 
         var footprint = await provider.ResolveFootprintAsync(Model, ModelRole.Chat, GpuProfile(), CancellationToken.None);
 
@@ -53,13 +56,16 @@ public sealed class ModelFootprintProviderTests
     public async Task Footprint_PreservesRoleAndFrozenArguments()
     {
         var frozen = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 42);
-        var expected = new ProcessContextAllocation(8192,
-            32768,
-            ProcessContextAllocationSource.FrozenProfile,
-            ProcessPlacementMode.GpuResident,
-            new ResourceFootprint(4 * Gb, 2 * Gb),
-            "sha256",
-            "cache");
+        var expected = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 32768,
+            Source = ProcessContextAllocationSource.FrozenProfile,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = new ResourceFootprint(4 * Gb, 2 * Gb),
+            ContentIdentity = "sha256",
+            CacheKey = "cache"
+        };
         var (provider, allocationResolver) = BuildProvider(expected, frozen, GpuVariant.Vulkan);
 
         await provider.ResolveFootprintAsync(Model, ModelRole.Reranker, GpuProfile(), CancellationToken.None);
@@ -75,13 +81,16 @@ public sealed class ModelFootprintProviderTests
     [Test]
     public async Task Footprint_AdmissionDownTierProjectsExactAdjustedAllocation()
     {
-        var initial = new ProcessContextAllocation(ProcessContextTokens: 65536,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            new ResourceFootprint(20 * Gb, 0),
-            ContentIdentity: "sha256",
-            CacheKey: "cache");
+        var initial = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 65536,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = new ResourceFootprint(20 * Gb, 0),
+            ContentIdentity = "sha256",
+            CacheKey = "cache"
+        };
         var adjusted = initial with
         {
             ProcessContextTokens = 32768,
@@ -125,13 +134,16 @@ public sealed class ModelFootprintProviderTests
     [Arguments(ProcessContextAllocationSource.DeterministicOverride)]
     public async Task Footprint_CommitFittingImmutableAllocation_PassesThrough(ProcessContextAllocationSource source)
     {
-        var allocation = new ProcessContextAllocation(ProcessContextTokens: 8192,
-            ModelTrainContextTokens: 131072,
-            source,
-            ProcessPlacementMode.GpuResident,
-            new ResourceFootprint(8 * Gb, 0),
-            ContentIdentity: "sha256",
-            CacheKey: "cache");
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = source,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = new ResourceFootprint(8 * Gb, 0),
+            ContentIdentity = "sha256",
+            CacheKey = "cache"
+        };
         var (provider, allocationResolver) = BuildProvider(allocation);
         allocationResolver.TryCommitAdmissionAllocation(allocation, out Arg.Any<ProcessContextAllocation>())
                           .Returns(call =>

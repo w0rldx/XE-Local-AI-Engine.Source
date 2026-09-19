@@ -231,19 +231,22 @@ public sealed class GgufVariantRecommenderTests
 
     private static GgufRepoFile RepoFile(string quant, long sizeBytes)
     {
-        return new GgufRepoFile($"model-{quant}.gguf",
-            quant,
-            sizeBytes,
-            Sha256: null,
-            Revision: "main",
-            Architecture: null,
-            QuantType: null,
-            ParamCount: null,
-            BlockCount: null,
-            AttentionHeadCount: null,
-            AttentionHeadCountKV: null,
-            EmbeddingLength: null,
-            ContextLength: null);
+        return new GgufRepoFile
+        {
+            FileName = $"model-{quant}.gguf",
+            Quant = quant,
+            SizeBytes = sizeBytes,
+            Sha256 = null,
+            Revision = "main",
+            Architecture = null,
+            QuantType = null,
+            ParamCount = null,
+            BlockCount = null,
+            AttentionHeadCount = null,
+            AttentionHeadCountKV = null,
+            EmbeddingLength = null,
+            ContextLength = null
+        };
     }
 
     private static GgufFitVerdict VerdictOf(IReadOnlyList<GgufVariantAnnotation> result, string quant)

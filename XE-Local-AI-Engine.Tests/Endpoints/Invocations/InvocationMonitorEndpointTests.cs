@@ -103,10 +103,16 @@ public sealed class InvocationMonitorEndpointTests
                 CallId = "call-1",
                 ToolName = "ask_user",
                 Questions = [
-                    new UserQuestionSpec("Auth", "Which auth method?", MultiSelect: false, [
-                        new UserQuestionOption("OAuth device flow", Description: null, Recommended: true),
-                        new UserQuestionOption("Personal access token", Description: null, Recommended: false)
-                    ])
+                    new UserQuestionSpec
+                    {
+                        Header = "Auth",
+                        Question = "Which auth method?",
+                        MultiSelect = false,
+                        Options = [
+                        new UserQuestionOption { Label = "OAuth device flow", Description = null, Recommended = true },
+                        new UserQuestionOption { Label = "Personal access token", Description = null, Recommended = false }
+                    ]
+                    }
                 ],
                 RequestedAt = FrozenNow
             }

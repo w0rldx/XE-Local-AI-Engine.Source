@@ -81,14 +81,17 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
                 continue;
             }
 
-            summaries.Add(new ImageRepoSummary(model.RepoId,
-                model.IsGated,
-                model.Downloads,
-                model.Likes,
-                model.LastModified,
-                model.License,
-                HasUsableWeights: true,
-                GgufPublisherTrust.IsTrustedPublisher(model.RepoId)));
+            summaries.Add(new ImageRepoSummary
+            {
+                RepoId = model.RepoId,
+                IsGated = model.IsGated,
+                Downloads = model.Downloads,
+                Likes = model.Likes,
+                LastModified = model.LastModified,
+                License = model.License,
+                HasUsableWeights = true,
+                IsTrustedPublisher = GgufPublisherTrust.IsTrustedPublisher(model.RepoId)
+            });
         }
 
         return summaries;
@@ -102,7 +105,7 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
         var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
         if (detail is null)
         {
-            return new ImageRepoDetail(repoId, IsGated: false, License: null, []);
+            return new ImageRepoDetail { RepoId = repoId, IsGated = false, License = null, Files = [] };
         }
 
         var files = new List<ImageRepoFile>();
@@ -114,14 +117,17 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
                 continue;
             }
 
-            files.Add(new ImageRepoFile(file.FileName,
-                ResolveFormat(file.FileName),
-                file.SizeBytes,
-                file.Sha256,
-                SuggestRole(file.FileName)));
+            files.Add(new ImageRepoFile
+            {
+                FileName = file.FileName,
+                Format = ResolveFormat(file.FileName),
+                SizeBytes = file.SizeBytes,
+                Sha256 = file.Sha256,
+                SuggestedRole = SuggestRole(file.FileName)
+            });
         }
 
-        return new ImageRepoDetail(detail.RepoId, detail.IsGated, detail.License, files);
+        return new ImageRepoDetail { RepoId = detail.RepoId, IsGated = detail.IsGated, License = detail.License, Files = files };
     }
 
     private static string MapSort(ImageModelSearchSort sort)

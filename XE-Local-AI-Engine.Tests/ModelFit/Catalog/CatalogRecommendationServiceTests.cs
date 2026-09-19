@@ -342,7 +342,7 @@ public sealed class CatalogRecommendationServiceTests
 
     private static GgufRepoDetail Detail(string repoId, params GgufRepoFile[] files)
     {
-        return new GgufRepoDetail(repoId, IsGated: false, "mit", files);
+        return new GgufRepoDetail { RepoId = repoId, IsGated = false, License = "mit", Files = files };
     }
 
     private static GgufRepoFile File(string quant,
@@ -356,19 +356,22 @@ public sealed class CatalogRecommendationServiceTests
         // drives weights. Callers override the geometry to force a large KV term or to null a header field (insufficient
         // metadata), which drives the KV-quant-advisory tests.
         var paramCount = (long)(paramCountB * 1_000_000_000d);
-        return new GgufRepoFile($"model.{quant}.gguf",
-            quant,
-            SizeBytes: 1 * Gb,
-            Sha256: null,
-            "main",
-            "llama",
-            quant,
-            paramCount,
-            blockCount,
-            attentionHeadCount,
-            attentionHeadCountKV,
-            embeddingLength,
-            ContextLength: 8192);
+        return new GgufRepoFile
+        {
+            FileName = $"model.{quant}.gguf",
+            Quant = quant,
+            SizeBytes = 1 * Gb,
+            Sha256 = null,
+            Revision = "main",
+            Architecture = "llama",
+            QuantType = quant,
+            ParamCount = paramCount,
+            BlockCount = blockCount,
+            AttentionHeadCount = attentionHeadCount,
+            AttentionHeadCountKV = attentionHeadCountKV,
+            EmbeddingLength = embeddingLength,
+            ContextLength = 8192
+        };
     }
 
     private static HardwareProfile GpuProfile(long vramBytes)

@@ -19,7 +19,7 @@ public sealed class GenerationProgressTrackerTests
         var (tracker, reports) = Build();
         tracker.SetGenerating(isGenerating: true);
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 12, TotalSteps: 20, SecondsPerIteration: 2.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 12, TotalSteps = 20, SecondsPerIteration = 2.0 });
 
         var report = reports[^1];
         AssertEx.Equal(ImageGenPhase.Sampling, report.Phase);
@@ -39,7 +39,7 @@ public sealed class GenerationProgressTrackerTests
         var (tracker, reports) = Build();
         tracker.SetGenerating(isGenerating: true);
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 20, TotalSteps: 20, SecondsPerIteration: 2.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 20, TotalSteps = 20, SecondsPerIteration = 2.0 });
 
         AssertEx.Null(reports[^1].EstimatedRemaining, "The last step leaves only the unmeasurable decode; no honest estimate exists.");
     }
@@ -49,9 +49,9 @@ public sealed class GenerationProgressTrackerTests
     {
         var (tracker, reports) = Build();
         tracker.SetGenerating(isGenerating: true);
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 20, TotalSteps: 20, SecondsPerIteration: 2.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 20, TotalSteps = 20, SecondsPerIteration = 2.0 });
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Decoding));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Decoding });
 
         var report = reports[^1];
         AssertEx.Equal(ImageGenPhase.Decoding, report.Phase);
@@ -69,7 +69,7 @@ public sealed class GenerationProgressTrackerTests
     {
         var (tracker, reports) = Build();
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 5, TotalSteps: 20, SecondsPerIteration: 1.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 5, TotalSteps = 20, SecondsPerIteration = 1.0 });
 
         AssertEx.Empty(reports, "A step observed while this job is still queued belongs to whatever the daemon is really running.");
     }
@@ -80,7 +80,7 @@ public sealed class GenerationProgressTrackerTests
     {
         var (tracker, reports) = Build();
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Loading));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Loading });
 
         AssertEx.Equal(expected: 1, reports.Count);
         AssertEx.Equal(ImageGenPhase.Loading, reports[0].Phase);
@@ -93,10 +93,10 @@ public sealed class GenerationProgressTrackerTests
     {
         var (tracker, reports) = Build();
         tracker.SetGenerating(isGenerating: true);
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 20, TotalSteps: 20, SecondsPerIteration: 1.0));
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Decoding));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 20, TotalSteps = 20, SecondsPerIteration = 1.0 });
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Decoding });
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Loading));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Loading });
 
         AssertEx.Equal(ImageGenPhase.Decoding, reports[^1].Phase, "The decode-side weight load is part of finishing, not a restart.");
     }
@@ -106,11 +106,11 @@ public sealed class GenerationProgressTrackerTests
     {
         var (tracker, reports) = Build();
         tracker.SetGenerating(isGenerating: true);
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 12, TotalSteps: 20, SecondsPerIteration: 1.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 12, TotalSteps = 20, SecondsPerIteration = 1.0 });
         var afterFirst = reports.Count;
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 11, TotalSteps: 20, SecondsPerIteration: 1.0));
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 12, TotalSteps: 20, SecondsPerIteration: 1.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 11, TotalSteps = 20, SecondsPerIteration = 1.0 });
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 12, TotalSteps = 20, SecondsPerIteration = 1.0 });
 
         AssertEx.Equal(afterFirst, reports.Count, "A step at or behind the last one is a stale frame; believing it walks the bar backwards.");
     }
@@ -121,7 +121,7 @@ public sealed class GenerationProgressTrackerTests
     {
         var (tracker, reports) = Build();
         tracker.SetGenerating(isGenerating: true);
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 5, TotalSteps: 20, SecondsPerIteration: 1.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 5, TotalSteps = 20, SecondsPerIteration = 1.0 });
         var afterSampling = reports.Count;
 
         tracker.ReportCoarse(ImageGenPhase.Generating, queuePosition: null);
@@ -152,7 +152,7 @@ public sealed class GenerationProgressTrackerTests
         tracker.ReportCoarse(ImageGenPhase.Completed, queuePosition: null);
         var afterTerminal = reports.Count;
 
-        tracker.ObserveFine(new SdProgressObservation(ImageGenPhase.Sampling, Step: 19, TotalSteps: 20, SecondsPerIteration: 1.0));
+        tracker.ObserveFine(new SdProgressObservation { Phase = ImageGenPhase.Sampling, Step = 19, TotalSteps = 20, SecondsPerIteration = 1.0 });
         tracker.ReportCoarse(ImageGenPhase.Generating, queuePosition: null);
 
         AssertEx.Equal(afterTerminal, reports.Count);

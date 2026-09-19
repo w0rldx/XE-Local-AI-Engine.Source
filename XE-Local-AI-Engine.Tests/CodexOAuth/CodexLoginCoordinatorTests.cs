@@ -118,7 +118,7 @@ public sealed class CodexLoginCoordinatorTests
             var index = Interlocked.Increment(ref _counter);
             var completion = new TaskCompletionSource<CodexTokens>(TaskCreationOptions.RunContinuationsAsynchronously);
             cancellationToken.Register(() => completion.TrySetCanceled(CancellationToken.None));
-            var handle = new CodexLoginHandle(new Uri($"https://auth.openai.com/authorize?attempt={index}"), completion.Task);
+            var handle = new CodexLoginHandle { AuthorizeUrl = new Uri($"https://auth.openai.com/authorize?attempt={index}"), Completion = completion.Task };
             LastHandle = new FakeHandle(handle, completion);
             return handle;
         }

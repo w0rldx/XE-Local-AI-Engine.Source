@@ -388,7 +388,7 @@ internal sealed class WhisperCppRuntimeAdoption
             }
         }
 
-        return new AdoptionPaths(destination, backup, failed, previousInstallRoot, retiredPrevious);
+        return new AdoptionPaths { Destination = destination, Backup = backup, Failed = failed, PreviousInstallRoot = previousInstallRoot, RetiredPrevious = retiredPrevious };
     }
 
     private void CleanupCommitted(AdoptionPaths paths)
@@ -609,12 +609,18 @@ internal sealed class WhisperCppRuntimeAdoption
         }
     }
 
-    private sealed record AdoptionPaths(
-        string Destination,
-        string Backup,
-        string Failed,
-        string? PreviousInstallRoot,
-        string? RetiredPrevious);
+    private sealed record AdoptionPaths
+    {
+        public required string Destination { get; init; }
+
+        public required string Backup { get; init; }
+
+        public required string Failed { get; init; }
+
+        public required string? PreviousInstallRoot { get; init; }
+
+        public required string? RetiredPrevious { get; init; }
+    }
 }
 
 /// <summary>The intent record written before an adoption touches a directory, and the input to its recovery.</summary>

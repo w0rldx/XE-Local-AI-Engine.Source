@@ -25,46 +25,65 @@ using System.Text.Json.Serialization;
 ///         produced; the identity pin test in <c>LlamaServerLaunchProjectionTests</c> fails loudly when that happens.
 ///     </para>
 /// </remarks>
-/// <param name="AutoFit">Whether the spawn hands placement to llama.cpp auto-fit (<c>--fit on</c>); GPU explore only.</param>
-/// <param name="Metrics">Whether the spawn exposes <c>/metrics</c>; every GPU spawn does, a CPU spawn never does.</param>
-/// <param name="ContextTokens">The <c>-c</c> value emitted, or <see langword="null" /> when the spawn emits none.</param>
-/// <param name="GpuLayers">The replayed <c>--n-gpu-layers</c> value, or <see langword="null" />.</param>
-/// <param name="TensorSplit">The replayed <c>-ts</c> expression, or <see langword="null" />.</param>
-/// <param name="OverrideTensor">The replayed <c>-ot</c> expression, or <see langword="null" />.</param>
-/// <param name="CpuMoe">Whether every Mixture-of-Experts weight is pinned to system RAM (<c>--cpu-moe</c>); GPU explore only, and never together with <see cref="OverrideTensor" />.</param>
-/// <param name="KvCacheTypeK">The <c>-ctk</c> element type, or <see langword="null" /> when KV stays at the f16 default.</param>
-/// <param name="KvCacheTypeV">The <c>-ctv</c> element type; always equal to <see cref="KvCacheTypeK" /> or null with it.</param>
-/// <param name="FlashAttentionMode"><c>on</c> when the fused flash-attention path is pinned, otherwise <c>auto</c> (no flag emitted).</param>
-/// <param name="Threads">The CPU generation thread count (<c>-t</c>), or <see langword="null" /> on a GPU build.</param>
-/// <param name="ThreadsBatch">The CPU prompt-batch thread count (<c>-tb</c>), or <see langword="null" /> on a GPU build.</param>
-/// <param name="BatchSize">The pooled-role logical batch size (<c>-b</c>), or <see langword="null" /> for chat.</param>
-/// <param name="UbatchSize">The pooled-role physical micro-batch size (<c>-ub</c>), or <see langword="null" /> for chat.</param>
-/// <param name="Parallel">The <c>--parallel</c> slot count (pinned to 1 by the single-slot serving design).</param>
-/// <param name="CacheReuse">The chat prompt-prefix reuse window (<c>--cache-reuse</c>), or <see langword="null" /> when unset.</param>
-/// <param name="CacheRamMiB">The host prompt-cache budget (<c>--cache-ram</c>); 0 disables it.</param>
-/// <param name="Jinja">Whether the chat template/tool grammar is enabled (<c>--jinja</c>); chat role only.</param>
-/// <param name="Pooling">The pooled-role <c>--pooling</c> value (<c>mean</c>/<c>rank</c>), or <see langword="null" /> for chat.</param>
-public sealed record LlamaServerLaunchProjection(
-    bool AutoFit,
-    bool Metrics,
-    int? ContextTokens,
-    int? GpuLayers,
-    string? TensorSplit,
-    string? OverrideTensor,
-    bool CpuMoe,
-    string? KvCacheTypeK,
-    string? KvCacheTypeV,
-    string FlashAttentionMode,
-    int? Threads,
-    int? ThreadsBatch,
-    int? BatchSize,
-    int? UbatchSize,
-    int Parallel,
-    int? CacheReuse,
-    int CacheRamMiB,
-    bool Jinja,
-    string? Pooling)
+public sealed record LlamaServerLaunchProjection
 {
+    /// <summary>Whether the spawn hands placement to llama.cpp auto-fit (<c>--fit on</c>); GPU explore only.</summary>
+    public required bool AutoFit { get; init; }
+
+    /// <summary>Whether the spawn exposes <c>/metrics</c>; every GPU spawn does, a CPU spawn never does.</summary>
+    public required bool Metrics { get; init; }
+
+    /// <summary>The <c>-c</c> value emitted, or <see langword="null" /> when the spawn emits none.</summary>
+    public required int? ContextTokens { get; init; }
+
+    /// <summary>The replayed <c>--n-gpu-layers</c> value, or <see langword="null" />.</summary>
+    public required int? GpuLayers { get; init; }
+
+    /// <summary>The replayed <c>-ts</c> expression, or <see langword="null" />.</summary>
+    public required string? TensorSplit { get; init; }
+
+    /// <summary>The replayed <c>-ot</c> expression, or <see langword="null" />.</summary>
+    public required string? OverrideTensor { get; init; }
+
+    /// <summary>Whether every Mixture-of-Experts weight is pinned to system RAM (<c>--cpu-moe</c>); GPU explore only, and never together with <see cref="OverrideTensor" />.</summary>
+    public required bool CpuMoe { get; init; }
+
+    /// <summary>The <c>-ctk</c> element type, or <see langword="null" /> when KV stays at the f16 default.</summary>
+    public required string? KvCacheTypeK { get; init; }
+
+    /// <summary>The <c>-ctv</c> element type; always equal to <see cref="KvCacheTypeK" /> or null with it.</summary>
+    public required string? KvCacheTypeV { get; init; }
+
+    /// <summary><c>on</c> when the fused flash-attention path is pinned, otherwise <c>auto</c> (no flag emitted).</summary>
+    public required string FlashAttentionMode { get; init; }
+
+    /// <summary>The CPU generation thread count (<c>-t</c>), or <see langword="null" /> on a GPU build.</summary>
+    public required int? Threads { get; init; }
+
+    /// <summary>The CPU prompt-batch thread count (<c>-tb</c>), or <see langword="null" /> on a GPU build.</summary>
+    public required int? ThreadsBatch { get; init; }
+
+    /// <summary>The pooled-role logical batch size (<c>-b</c>), or <see langword="null" /> for chat.</summary>
+    public required int? BatchSize { get; init; }
+
+    /// <summary>The pooled-role physical micro-batch size (<c>-ub</c>), or <see langword="null" /> for chat.</summary>
+    public required int? UbatchSize { get; init; }
+
+    /// <summary>The <c>--parallel</c> slot count (pinned to 1 by the single-slot serving design).</summary>
+    public required int Parallel { get; init; }
+
+    /// <summary>The chat prompt-prefix reuse window (<c>--cache-reuse</c>), or <see langword="null" /> when unset.</summary>
+    public required int? CacheReuse { get; init; }
+
+    /// <summary>The host prompt-cache budget (<c>--cache-ram</c>); 0 disables it.</summary>
+    public required int CacheRamMiB { get; init; }
+
+    /// <summary>Whether the chat template/tool grammar is enabled (<c>--jinja</c>); chat role only.</summary>
+    public required bool Jinja { get; init; }
+
+    /// <summary>The pooled-role <c>--pooling</c> value (<c>mean</c>/<c>rank</c>), or <see langword="null" /> for chat.</summary>
+    public required string? Pooling { get; init; }
+
     /// <summary>
     ///     The version of the identity SCHEME this type computes. Governed by the same contract as the member list
     ///     above: <strong>the two move together</strong>. A hash computed under one scheme says nothing about a hash
@@ -141,30 +160,33 @@ public sealed record LlamaServerLaunchProjection(
 
         var isChat = role == ModelRole.Chat;
 
-        return new LlamaServerLaunchProjection(isGpuExplore,
-            isGpu,
-            contextTokens,
-            isGpuReplay ? resolved.NGpuLayers : null,
-            isGpuReplay ? NullIfBlank(resolved.TensorSplit) : null,
-            isGpuReplay ? NullIfBlank(resolved.OverrideTensor) : null,
-            isGpuExplore && plan?.CpuMoe == true,
-            kvCacheTypeK,
-            kvCacheTypeV,
-            kvCacheTypeK is null ? FlashAttentionAuto : FlashAttentionOn,
-            isGpu ? null : plan?.CpuThreads,
-            isGpu ? null : plan?.CpuThreadsBatch,
-            batchSize,
-            batchSize,
-            Parallel: 1,
-            isChat && chatCacheReuse > 0 ? chatCacheReuse : null,
-            isChat ? chatCacheRamMiB : 0,
-            isChat,
-            role switch
+        return new LlamaServerLaunchProjection
+        {
+            AutoFit = isGpuExplore,
+            Metrics = isGpu,
+            ContextTokens = contextTokens,
+            GpuLayers = isGpuReplay ? resolved.NGpuLayers : null,
+            TensorSplit = isGpuReplay ? NullIfBlank(resolved.TensorSplit) : null,
+            OverrideTensor = isGpuReplay ? NullIfBlank(resolved.OverrideTensor) : null,
+            CpuMoe = isGpuExplore && plan?.CpuMoe == true,
+            KvCacheTypeK = kvCacheTypeK,
+            KvCacheTypeV = kvCacheTypeV,
+            FlashAttentionMode = kvCacheTypeK is null ? FlashAttentionAuto : FlashAttentionOn,
+            Threads = isGpu ? null : plan?.CpuThreads,
+            ThreadsBatch = isGpu ? null : plan?.CpuThreadsBatch,
+            BatchSize = batchSize,
+            UbatchSize = batchSize,
+            Parallel = 1,
+            CacheReuse = isChat && chatCacheReuse > 0 ? chatCacheReuse : null,
+            CacheRamMiB = isChat ? chatCacheRamMiB : 0,
+            Jinja = isChat,
+            Pooling = role switch
             {
                 ModelRole.Embedding => "mean",
                 ModelRole.Reranker => "rank",
                 _ => null
-            });
+            }
+        };
     }
 
     /// <summary>
@@ -340,25 +362,28 @@ public sealed record LlamaServerLaunchProjection(
             }
         }
 
-        return new LlamaServerLaunchProjection(autoFit,
-            metrics,
-            contextTokens,
-            gpuLayers,
-            tensorSplit,
-            overrideTensor,
-            cpuMoe,
-            kvCacheTypeK,
-            kvCacheTypeV,
-            flashAttention ?? FlashAttentionAuto,
-            threads,
-            threadsBatch,
-            batchSize,
-            ubatchSize,
-            parallel,
-            cacheReuse is > 0 ? cacheReuse : null,
-            cacheRamMiB,
-            jinja,
-            pooling);
+        return new LlamaServerLaunchProjection
+        {
+            AutoFit = autoFit,
+            Metrics = metrics,
+            ContextTokens = contextTokens,
+            GpuLayers = gpuLayers,
+            TensorSplit = tensorSplit,
+            OverrideTensor = overrideTensor,
+            CpuMoe = cpuMoe,
+            KvCacheTypeK = kvCacheTypeK,
+            KvCacheTypeV = kvCacheTypeV,
+            FlashAttentionMode = flashAttention ?? FlashAttentionAuto,
+            Threads = threads,
+            ThreadsBatch = threadsBatch,
+            BatchSize = batchSize,
+            UbatchSize = ubatchSize,
+            Parallel = parallel,
+            CacheReuse = cacheReuse is > 0 ? cacheReuse : null,
+            CacheRamMiB = cacheRamMiB,
+            Jinja = jinja,
+            Pooling = pooling
+        };
     }
 
     /// <summary>

@@ -39,45 +39,56 @@ public readonly record struct LlamaServerLaunchPlacement(
 ///         executable is identified by digest and version only.
 ///     </para>
 /// </remarks>
-/// <param name="ReceiptVersion">Schema version of this receipt; <see cref="LlamaServerLaunchReceipt.CurrentVersion" /> is what a spawn on this build writes.</param>
-/// <param name="Variant">The llama.cpp build the spawn ran on.</param>
-/// <param name="Os">Host operating system token (<c>linux</c>/<c>windows</c>/<c>macos</c>/<c>unknown</c>).</param>
-/// <param name="ExecutableVersion">The llama.cpp release the executable reported, or <see langword="null" />.</param>
-/// <param name="ExecutableSha256">
-///     Lowercase SHA-256 of the image the launched process is RUNNING, read back from the live process rather than from
-///     the path the launch resolved. <see langword="null" /> when the running image could not be read.
-/// </param>
-/// <param name="ManifestSha256">
-///     The digest the capability probe recorded for the executable it inspected. A mismatch against
-///     <see cref="ExecutableSha256" /> means the binary changed between capability probe and launch.
-/// </param>
-/// <param name="LaunchProjection">
-///     The allow-listed launch shape this spawn EMITTED, read back from the final argument vector the process was
-///     started with (<see cref="LlamaServerLaunchProjection.TryFromArguments" />), falling back to the intended
-///     projection only when that vector could not be parsed. The intended shape is the
-///     <see cref="LlamaServerLaunchProjection.From" /> identity a caller computes before the spawn; when the two
-///     identities differ, <see cref="OmittedOptions" /> usually says why.
-/// </param>
-/// <param name="AuxAssets">Whether anything beyond the base weights was loaded.</param>
-/// <param name="Placement">Measured layer placement plus its raw counts.</param>
-/// <param name="EffectiveContextTokens">
-///     The per-slot context the server reported after loading, or <see langword="null" /> when <c>/props</c> was
-///     unavailable. This is the window the model actually got, which a clamp can make smaller than the requested one.
-/// </param>
-/// <param name="BenchmarkLaunchPolicy">The frozen benchmark-only server settings this spawn ran under.</param>
-public sealed record LlamaServerLaunchReceipt(
-    int ReceiptVersion,
-    GpuVariant Variant,
-    string Os,
-    string? ExecutableVersion,
-    string? ExecutableSha256,
-    string? ManifestSha256,
-    LlamaServerLaunchProjection LaunchProjection,
-    LlamaServerLaunchAuxAssets AuxAssets,
-    LlamaServerLaunchPlacement Placement,
-    int? EffectiveContextTokens,
-    LlamaServerBenchmarkLaunchPolicy BenchmarkLaunchPolicy)
+public sealed record LlamaServerLaunchReceipt
 {
+    /// <summary>Schema version of this receipt; <see cref="LlamaServerLaunchReceipt.CurrentVersion" /> is what a spawn on this build writes.</summary>
+    public required int ReceiptVersion { get; init; }
+
+    /// <summary>The llama.cpp build the spawn ran on.</summary>
+    public required GpuVariant Variant { get; init; }
+
+    /// <summary>Host operating system token (<c>linux</c>/<c>windows</c>/<c>macos</c>/<c>unknown</c>).</summary>
+    public required string Os { get; init; }
+
+    /// <summary>The llama.cpp release the executable reported, or <see langword="null" />.</summary>
+    public required string? ExecutableVersion { get; init; }
+
+    /// <summary>
+    ///     Lowercase SHA-256 of the image the launched process is RUNNING, read back from the live process rather than from
+    ///     the path the launch resolved. <see langword="null" /> when the running image could not be read.
+    /// </summary>
+    public required string? ExecutableSha256 { get; init; }
+
+    /// <summary>
+    ///     The digest the capability probe recorded for the executable it inspected. A mismatch against
+    ///     <see cref="ExecutableSha256" /> means the binary changed between capability probe and launch.
+    /// </summary>
+    public required string? ManifestSha256 { get; init; }
+
+    /// <summary>
+    ///     The allow-listed launch shape this spawn EMITTED, read back from the final argument vector the process was
+    ///     started with (<see cref="LlamaServerLaunchProjection.TryFromArguments" />), falling back to the intended
+    ///     projection only when that vector could not be parsed. The intended shape is the
+    ///     <see cref="LlamaServerLaunchProjection.From" /> identity a caller computes before the spawn; when the two
+    ///     identities differ, <see cref="OmittedOptions" /> usually says why.
+    /// </summary>
+    public required LlamaServerLaunchProjection LaunchProjection { get; init; }
+
+    /// <summary>Whether anything beyond the base weights was loaded.</summary>
+    public required LlamaServerLaunchAuxAssets AuxAssets { get; init; }
+
+    /// <summary>Measured layer placement plus its raw counts.</summary>
+    public required LlamaServerLaunchPlacement Placement { get; init; }
+
+    /// <summary>
+    ///     The per-slot context the server reported after loading, or <see langword="null" /> when <c>/props</c> was
+    ///     unavailable. This is the window the model actually got, which a clamp can make smaller than the requested one.
+    /// </summary>
+    public required int? EffectiveContextTokens { get; init; }
+
+    /// <summary>The frozen benchmark-only server settings this spawn ran under.</summary>
+    public required LlamaServerBenchmarkLaunchPolicy BenchmarkLaunchPolicy { get; init; }
+
     /// <summary>The schema version every receipt this build produces carries.</summary>
     public const int CurrentVersion = 2;
 

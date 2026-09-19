@@ -85,7 +85,7 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
         }
 
         var apiKey = snapshot.KeysByConnectionId.GetValueOrDefault(registration.Connection.Id);
-        return new ExternalProviderTransportBinding(new ExternalProviderBinding(snapshot.Generation, registration), apiKey);
+        return new ExternalProviderTransportBinding { Binding = new ExternalProviderBinding { Generation = snapshot.Generation, Registration = registration }, ApiKey = apiKey };
     }
 
     /// <inheritdoc />

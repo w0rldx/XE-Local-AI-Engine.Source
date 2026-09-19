@@ -57,20 +57,26 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         // binary answering a question the platform item has already refused.
         items.Add(OperatingSystem.IsLinux()
             ? await ProbeNvidiaDriverAsync(ct).ConfigureAwait(false)
-            : new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.NvidiaDriver,
-                Satisfied: false,
-                "The NVIDIA driver was not checked because training is available on Linux only."));
+            : new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
+                Satisfied = false,
+                Detail = "The NVIDIA driver was not checked because training is available on Linux only."
+            });
 
-        return new TrainingRuntimePrerequisiteReport(items.TrueForAll(static item => item.Satisfied), items);
+        return new TrainingRuntimePrerequisiteReport { CanInstall = items.TrueForAll(static item => item.Satisfied), Items = items };
     }
 
     private static TrainingRuntimePrerequisiteItem ProbePlatform()
     {
         return OperatingSystem.IsLinux()
-            ? new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.Platform, Satisfied: true, "Running on Linux.")
-            : new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.Platform,
-                Satisfied: false,
-                "Training is available on Linux only.");
+            ? new TrainingRuntimePrerequisiteItem { Key = TrainingRuntimePrerequisiteKeys.Platform, Satisfied = true, Detail = "Running on Linux." }
+            : new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.Platform,
+                Satisfied = false,
+                Detail = "Training is available on Linux only."
+            };
     }
 
     private TrainingRuntimePrerequisiteItem ProbeDisk()
@@ -80,21 +86,30 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         {
             var available = FreeSpace.GetAvailableFreeBytes(_cacheRoot);
             return available >= RequiredFreeDiskBytes
-                ? new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.FreeDisk,
-                    Satisfied: true,
-                    $"{FormatGigabytes(available)} free ({required} required).")
-                : new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.FreeDisk,
-                    Satisfied: false,
-                    $"Only {FormatGigabytes(available)} free; {required} is required.");
+                ? new TrainingRuntimePrerequisiteItem
+                {
+                    Key = TrainingRuntimePrerequisiteKeys.FreeDisk,
+                    Satisfied = true,
+                    Detail = $"{FormatGigabytes(available)} free ({required} required)."
+                }
+                : new TrainingRuntimePrerequisiteItem
+                {
+                    Key = TrainingRuntimePrerequisiteKeys.FreeDisk,
+                    Satisfied = false,
+                    Detail = $"Only {FormatGigabytes(available)} free; {required} is required."
+                };
         }
         // InvalidOperationException is the shared probe's "nothing exists at or above the cache root", which is the
         // same "could not be determined" row the null-ancestor branch reported.
         catch (Exception exception)
             when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.FreeDisk,
-                Satisfied: false,
-                "The free disk space could not be determined.");
+            return new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.FreeDisk,
+                Satisfied = false,
+                Detail = "The free disk space could not be determined."
+            };
         }
     }
 
@@ -104,18 +119,27 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         var total = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         if (total <= 0)
         {
-            return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.SystemMemory,
-                Satisfied: false,
-                "The installed system memory could not be determined.");
+            return new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.SystemMemory,
+                Satisfied = false,
+                Detail = "The installed system memory could not be determined."
+            };
         }
 
         return total >= RequiredSystemMemoryBytes
-            ? new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.SystemMemory,
-                Satisfied: true,
-                $"{FormatGigabytes(total)} of system memory ({required} required).")
-            : new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.SystemMemory,
-                Satisfied: false,
-                $"Only {FormatGigabytes(total)} of system memory; {required} is required.");
+            ? new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.SystemMemory,
+                Satisfied = true,
+                Detail = $"{FormatGigabytes(total)} of system memory ({required} required)."
+            }
+            : new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.SystemMemory,
+                Satisfied = false,
+                Detail = $"Only {FormatGigabytes(total)} of system memory; {required} is required."
+            };
     }
 
     private TrainingRuntimePrerequisiteItem ProbeLockfile()
@@ -125,14 +149,20 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         var probe = Path.Combine(_scriptsDirectory, TrainingRuntimeLayout.ProbeScriptName);
         if (File.Exists(lockfile) && File.Exists(project) && File.Exists(probe))
         {
-            return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.Lockfile,
-                Satisfied: true,
-                "The pinned training runtime lockfile is present.");
+            return new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.Lockfile,
+                Satisfied = true,
+                Detail = "The pinned training runtime lockfile is present."
+            };
         }
 
-        return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.Lockfile,
-            Satisfied: false,
-            "The pinned training runtime lockfile is missing from this installation.");
+        return new TrainingRuntimePrerequisiteItem
+        {
+            Key = TrainingRuntimePrerequisiteKeys.Lockfile,
+            Satisfied = false,
+            Detail = "The pinned training runtime lockfile is missing from this installation."
+        };
     }
 
     private async Task<TrainingRuntimePrerequisiteItem> ProbeNvidiaDriverAsync(CancellationToken ct)
@@ -152,9 +182,12 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
 
             if (exitCode != 0 || lines.Count == 0)
             {
-                return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.NvidiaDriver,
-                    Satisfied: false,
-                    "No NVIDIA driver was detected. Training requires a CUDA-capable GPU.");
+                return new TrainingRuntimePrerequisiteItem
+                {
+                    Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
+                    Satisfied = false,
+                    Detail = "No NVIDIA driver was detected. Training requires a CUDA-capable GPU."
+                };
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -163,15 +196,21 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         }
         catch (Exception exception) when (exception is TrainingRuntimeException or IOException or UnauthorizedAccessException)
         {
-            return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.NvidiaDriver,
-                Satisfied: false,
-                "No NVIDIA driver was detected. Training requires a CUDA-capable GPU.");
+            return new TrainingRuntimePrerequisiteItem
+            {
+                Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
+                Satisfied = false,
+                Detail = "No NVIDIA driver was detected. Training requires a CUDA-capable GPU."
+            };
         }
 
         // "999.99, NVIDIA GeForce RTX 5090" — reported back verbatim; it names hardware, not a path or a secret.
-        return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.NvidiaDriver,
-            Satisfied: true,
-            $"NVIDIA driver detected: {lines[0].Trim()}.");
+        return new TrainingRuntimePrerequisiteItem
+        {
+            Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
+            Satisfied = true,
+            Detail = $"NVIDIA driver detected: {lines[0].Trim()}."
+        };
     }
 
     private static string FormatGigabytes(long bytes)

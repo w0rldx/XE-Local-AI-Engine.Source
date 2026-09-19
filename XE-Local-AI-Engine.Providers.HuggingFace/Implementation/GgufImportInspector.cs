@@ -146,15 +146,16 @@ internal sealed class GgufImportInspector : IGgufImportInspector
                 "This model's chat template exposes a thinking channel but renders no reasoning end marker, so llama.cpp cannot enforce a per-request thinking budget for it. Reasoning effort still applies; the token cap does not."
             ];
 
-        return new GgufImportInspection(size,
-            header.Version,
-            architecture,
-            workloadRejected ? null : workload,
-            quant,
-            displayName,
-            rejections.Distinct().ToArray(),
-            warnings)
+        return new GgufImportInspection
         {
+            SizeBytes = size,
+            GgufVersion = header.Version,
+            Architecture = architecture,
+            Workload = workloadRejected ? null : workload,
+            DetectedQuantization = quant,
+            SourceDisplayName = displayName,
+            Rejections = rejections.Distinct().ToArray(),
+            Warnings = warnings,
             ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable
         };
     }
@@ -193,6 +194,6 @@ internal sealed class GgufImportInspector : IGgufImportInspector
     // its inert TRUE default (the rejection is what the caller acts on).
     private static GgufImportInspection Rejected(string displayName, long size, GgufImportRejectionCode code)
     {
-        return new GgufImportInspection(size, null, null, null, null, displayName, [code], []);
+        return new GgufImportInspection { SizeBytes = size, GgufVersion = null, Architecture = null, Workload = null, DetectedQuantization = null, SourceDisplayName = displayName, Rejections = [code], Warnings = [] };
     }
 }

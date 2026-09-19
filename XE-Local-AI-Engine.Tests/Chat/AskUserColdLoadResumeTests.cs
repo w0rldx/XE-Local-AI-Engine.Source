@@ -57,13 +57,16 @@ public sealed class AskUserColdLoadResumeTests
             ToolName = AskUserTool.ToolName,
             Questions =
             [
-                new UserQuestionSpec("Auth method",
-                    "Which auth method?",
-                    MultiSelect: false,
-                    [
-                        new UserQuestionOption("OAuth device flow", "No password to store.", Recommended: true),
-                        new UserQuestionOption("API key", Description: null, Recommended: false)
-                    ])
+                new UserQuestionSpec
+                {
+                    Header = "Auth method",
+                    Question = "Which auth method?",
+                    MultiSelect = false,
+                    Options = [
+                        new UserQuestionOption { Label = "OAuth device flow", Description = "No password to store.", Recommended = true },
+                        new UserQuestionOption { Label = "API key", Description = null, Recommended = false }
+                    ]
+                }
             ]
         });
 
@@ -97,9 +100,9 @@ public sealed class AskUserColdLoadResumeTests
         // Answering from the re-attached client must release the run that is still parked server-side.
         var answers = new[]
         {
-            new UserQuestionAnswer("Which auth method?", ["OAuth device flow"], Other: null)
+            new UserQuestionAnswer { Question = "Which auth method?", Selected = ["OAuth device flow"], Other = null }
         };
-        await dispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent("question-1", answers));
+        await dispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent { RequestId = "question-1", Answers = answers });
 
         runner.Received(1).ResolveUserQuestionResult(Arg.Is<UserQuestionAnsweredEvent>(evt =>
             evt.RequestId == "question-1" && evt.Answers.Count == 1 && evt.Answers[0].Selected[0] == "OAuth device flow"));

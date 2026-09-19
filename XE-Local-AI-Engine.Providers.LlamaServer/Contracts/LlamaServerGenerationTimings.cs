@@ -21,21 +21,26 @@ using OpenAI.Chat;
 ///         <c>timings</c> (any cloud provider, Ollama) yields <see langword="null" /> rather than an exception.
 ///     </para>
 /// </summary>
-/// <param name="PromptTokens">Prompt tokens the server evaluated (<c>prompt_n</c>), excluding cached tokens.</param>
-/// <param name="PromptMs">Milliseconds spent on prompt processing (<c>prompt_ms</c>).</param>
-/// <param name="GenerationTokens">Tokens the server decoded (<c>predicted_n</c>).</param>
-/// <param name="GenerationMs">Milliseconds spent decoding (<c>predicted_ms</c>).</param>
-/// <param name="CachedPromptTokens">
-///     Prompt tokens served from the KV cache instead of being evaluated (<c>cache_n</c>). Zero for a genuinely cold
-///     prefill; a non-zero value on a repeat of the same prompt means the pp number is NOT a cold-prefill measurement.
-/// </param>
-public sealed record LlamaServerGenerationTimings(
-    int? PromptTokens,
-    double? PromptMs,
-    int? GenerationTokens,
-    double? GenerationMs,
-    int? CachedPromptTokens)
+public sealed class LlamaServerGenerationTimings
 {
+    /// <summary>Prompt tokens the server evaluated (<c>prompt_n</c>), excluding cached tokens.</summary>
+    public required int? PromptTokens { get; init; }
+
+    /// <summary>Milliseconds spent on prompt processing (<c>prompt_ms</c>).</summary>
+    public required double? PromptMs { get; init; }
+
+    /// <summary>Tokens the server decoded (<c>predicted_n</c>).</summary>
+    public required int? GenerationTokens { get; init; }
+
+    /// <summary>Milliseconds spent decoding (<c>predicted_ms</c>).</summary>
+    public required double? GenerationMs { get; init; }
+
+    /// <summary>
+    ///     Prompt tokens served from the KV cache instead of being evaluated (<c>cache_n</c>). Zero for a genuinely cold
+    ///     prefill; a non-zero value on a repeat of the same prompt means the pp number is NOT a cold-prefill measurement.
+    /// </summary>
+    public required int? CachedPromptTokens { get; init; }
+
     /// <summary>
     ///     Reads the timings off one streamed update's raw representation, or <see langword="null" /> when this update
     ///     carries none. Accepts the raw representation of either a Microsoft.Extensions.AI
@@ -63,11 +68,14 @@ public sealed record LlamaServerGenerationTimings(
         // token count. Everything else is read independently so a future field removal degrades one member, not all.
         var promptTokens = NonNegative(ReadInt(ref patch, "$.timings.prompt_n"u8));
         var generationTokens = NonNegative(ReadInt(ref patch, "$.timings.predicted_n"u8));
-        var timings = new LlamaServerGenerationTimings(promptTokens,
-            NonNegative(ReadDouble(ref patch, "$.timings.prompt_ms"u8)),
-            generationTokens,
-            NonNegative(ReadDouble(ref patch, "$.timings.predicted_ms"u8)),
-            NonNegative(ReadInt(ref patch, "$.timings.cache_n"u8)));
+        var timings = new LlamaServerGenerationTimings
+        {
+            PromptTokens = promptTokens,
+            PromptMs = NonNegative(ReadDouble(ref patch, "$.timings.prompt_ms"u8)),
+            GenerationTokens = generationTokens,
+            GenerationMs = NonNegative(ReadDouble(ref patch, "$.timings.predicted_ms"u8)),
+            CachedPromptTokens = NonNegative(ReadInt(ref patch, "$.timings.cache_n"u8))
+        };
 #pragma warning restore SCME0001
 
         return timings.PromptTokens is null && timings.GenerationTokens is null ? null : timings;

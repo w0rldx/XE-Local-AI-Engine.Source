@@ -27,10 +27,10 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         var environment = BuildScrubbedGitEnvironment(destinationDirectory);
         IReadOnlyList<GitStep> steps =
         [
-            new(["-C", destinationDirectory, "init", "--quiet"], ShortCommandTimeout),
-            new(["-C", destinationDirectory, "remote", "add", "origin", Repository], ShortCommandTimeout),
-            new(["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], FetchTimeout),
-            new(["-C", destinationDirectory, "checkout", "--detach", commitSha], ShortCommandTimeout)
+            new() { Args = ["-C", destinationDirectory, "init", "--quiet"], Timeout = ShortCommandTimeout },
+            new() { Args = ["-C", destinationDirectory, "remote", "add", "origin", Repository], Timeout = ShortCommandTimeout },
+            new() { Args = ["-C", destinationDirectory, "fetch", "--depth", "1", "--no-tags", "origin", commitSha], Timeout = FetchTimeout },
+            new() { Args = ["-C", destinationDirectory, "checkout", "--detach", commitSha], Timeout = ShortCommandTimeout }
         ];
 
         foreach (var step in steps)
@@ -142,5 +142,10 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
     }
 
     /// <summary>One git invocation of the pinned fetch sequence: its argument vector and the timeout it may take.</summary>
-    private sealed record GitStep(IReadOnlyList<string> Args, TimeSpan Timeout);
+    private sealed record GitStep
+    {
+        public required IReadOnlyList<string> Args { get; init; }
+
+        public required TimeSpan Timeout { get; init; }
+    }
 }

@@ -47,7 +47,7 @@ public sealed class LocalModelsCloudMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary("qwen3:8b")
+            new OllamaModelSummary { Name = "qwen3:8b" }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
@@ -70,7 +70,7 @@ public sealed class LocalModelsCloudMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary("qwen3:8b")
+            new OllamaModelSummary { Name = "qwen3:8b" }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {

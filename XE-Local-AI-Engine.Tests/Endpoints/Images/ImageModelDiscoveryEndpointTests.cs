@@ -102,14 +102,17 @@ public sealed class ImageModelDiscoveryEndpointTests
         {
             Summaries =
             [
-                new ImageRepoSummary("QuantStack/Qwen-Image-GGUF",
-                    IsGated: false,
-                    Downloads: 4321,
-                    Likes: 21,
-                    new DateTimeOffset(year: 2026, month: 7, day: 1, hour: 0, minute: 0, second: 0, TimeSpan.Zero),
-                    "apache-2.0",
-                    HasUsableWeights: true,
-                    IsTrustedPublisher: false)
+                new ImageRepoSummary
+                {
+                    RepoId = "QuantStack/Qwen-Image-GGUF",
+                    IsGated = false,
+                    Downloads = 4321,
+                    Likes = 21,
+                    LastModified = new DateTimeOffset(year: 2026, month: 7, day: 1, hour: 0, minute: 0, second: 0, TimeSpan.Zero),
+                    License = "apache-2.0",
+                    HasUsableWeights = true,
+                    IsTrustedPublisher = false
+                }
             ]
         };
         await using var factory = FactoryWithDiscovery(discovery, registry: null);
@@ -154,13 +157,16 @@ public sealed class ImageModelDiscoveryEndpointTests
     {
         var discovery = new StubImageModelDiscovery
         {
-            Detail = new ImageRepoDetail("second-state/FLUX.1-schnell-GGUF",
-                IsGated: false,
-                "apache-2.0",
-                [
-                    new ImageRepoFile("flux1-schnell-Q4_0.gguf", ImageWeightFormat.Gguf, SizeBytes: 6_688_845_536L, "aa", ImageModelPartRole.Diffusion),
-                    new ImageRepoFile("ae.safetensors", ImageWeightFormat.Safetensors, SizeBytes: 335_304_388L, Sha256: null, ImageModelPartRole.Vae)
-                ])
+            Detail = new ImageRepoDetail
+            {
+                RepoId = "second-state/FLUX.1-schnell-GGUF",
+                IsGated = false,
+                License = "apache-2.0",
+                Files = [
+                    new ImageRepoFile { FileName = "flux1-schnell-Q4_0.gguf", Format = ImageWeightFormat.Gguf, SizeBytes = 6_688_845_536L, Sha256 = "aa", SuggestedRole = ImageModelPartRole.Diffusion },
+                    new ImageRepoFile { FileName = "ae.safetensors", Format = ImageWeightFormat.Safetensors, SizeBytes = 335_304_388L, Sha256 = null, SuggestedRole = ImageModelPartRole.Vae }
+                ]
+            }
         };
         await using var factory = FactoryWithDiscovery(discovery, registry: null);
         using var client = factory.CreateClient();
@@ -236,7 +242,7 @@ public sealed class ImageModelDiscoveryEndpointTests
     {
         public IReadOnlyList<ImageRepoSummary> Summaries { get; init; } = [];
 
-        public ImageRepoDetail Detail { get; init; } = new("owner/repo", IsGated: false, License: null, []);
+        public ImageRepoDetail Detail { get; init; } = new() { RepoId = "owner/repo", IsGated = false, License = null, Files = [] };
 
         public Func<Exception>? Failure { get; init; }
 

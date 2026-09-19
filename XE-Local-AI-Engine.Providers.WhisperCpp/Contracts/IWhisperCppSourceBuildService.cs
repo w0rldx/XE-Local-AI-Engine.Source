@@ -8,20 +8,26 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     this lane does. That is the one place the whisper layout departs from the image-runtime precedent, which keeps
 ///     its enums inside the service interface file.
 /// </remarks>
-/// <param name="Backend">The acceleration backend being compiled for.</param>
-/// <param name="Source">Official or operator-supplied repository.</param>
-/// <param name="Repository">The canonical repository URL the build fetches from.</param>
-/// <param name="RevisionMode">How the revision was chosen.</param>
-/// <param name="RequestedCommit">The commit the operator asked for, when they asked for one.</param>
-/// <param name="ResolvedCommit">The commit the checkout actually landed on; null until the verify phase.</param>
-public sealed record WhisperCppSourceBuildDescriptor(
-    WhisperBackend Backend,
-    WhisperCppSourceSelection Source,
-    string Repository,
-    WhisperCppSourceRevisionMode RevisionMode,
-    string? RequestedCommit,
-    string? ResolvedCommit)
+public sealed record WhisperCppSourceBuildDescriptor
 {
+    /// <summary>The acceleration backend being compiled for.</summary>
+    public required WhisperBackend Backend { get; init; }
+
+    /// <summary>Official or operator-supplied repository.</summary>
+    public required WhisperCppSourceSelection Source { get; init; }
+
+    /// <summary>The canonical repository URL the build fetches from.</summary>
+    public required string Repository { get; init; }
+
+    /// <summary>How the revision was chosen.</summary>
+    public required WhisperCppSourceRevisionMode RevisionMode { get; init; }
+
+    /// <summary>The commit the operator asked for, when they asked for one.</summary>
+    public required string? RequestedCommit { get; init; }
+
+    /// <summary>The commit the checkout actually landed on; null until the verify phase.</summary>
+    public required string? ResolvedCommit { get; init; }
+
     /// <summary>Identifies this build across its status polls and its adoption journal.</summary>
     public Guid BuildId { get; init; }
 }
@@ -87,36 +93,52 @@ public enum WhisperCppSourceBuildRemoveOutcome
 }
 
 /// <summary>The answer to a start request, carrying whatever explains a refusal.</summary>
-public sealed record WhisperCppSourceBuildStartResult(
-    WhisperCppSourceBuildStartOutcome Outcome,
-    WhisperCppSourceBuildPrerequisiteReport? Prerequisites = null,
-    WhisperRuntimeActivitySnapshot? Activity = null);
+public sealed class WhisperCppSourceBuildStartResult
+{
+    public required WhisperCppSourceBuildStartOutcome Outcome { get; init; }
+
+    public WhisperCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
+
+    public WhisperRuntimeActivitySnapshot? Activity { get; init; }
+}
 
 /// <summary>The answer to a remove request.</summary>
-public sealed record WhisperCppSourceBuildRemoveResult(
-    WhisperCppSourceBuildRemoveOutcome Outcome,
-    WhisperRuntimeActivitySnapshot? Activity = null);
+public sealed class WhisperCppSourceBuildRemoveResult
+{
+    public required WhisperCppSourceBuildRemoveOutcome Outcome { get; init; }
+
+    public WhisperRuntimeActivitySnapshot? Activity { get; init; }
+}
 
 /// <summary>
 ///     A poll-shaped snapshot of the running or last-finished build, including a bounded, sanitized tail of its log.
 /// </summary>
-/// <param name="LogLines">The retained tail; older lines are dropped as the build talks.</param>
-/// <param name="LogStartSequence">
-///     Sequence number of <see cref="LogLines" />' first entry, so a client that polls can tell a dropped prefix from
-///     a rewound one.
-/// </param>
-/// <param name="SanitizedError">Display-safe failure reason; never a path, URL or command line.</param>
-public sealed record WhisperCppSourceBuildStatus(
-    WhisperCppSourceBuildPhase Phase,
-    bool IsRunning,
-    bool Terminal,
-    IReadOnlyList<string> LogLines,
-    long LogStartSequence,
-    string? SanitizedError,
-    WhisperCppSourceBuildDescriptor? CurrentBuild,
-    DateTimeOffset? StartedAtUtc,
-    DateTimeOffset? CompletedAtUtc)
+public sealed class WhisperCppSourceBuildStatus
 {
+    public required WhisperCppSourceBuildPhase Phase { get; init; }
+
+    public required bool IsRunning { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    /// <summary>The retained tail; older lines are dropped as the build talks.</summary>
+    public required IReadOnlyList<string> LogLines { get; init; }
+
+    /// <summary>
+    ///     Sequence number of <see cref="LogLines" />' first entry, so a client that polls can tell a dropped prefix from
+    ///     a rewound one.
+    /// </summary>
+    public required long LogStartSequence { get; init; }
+
+    /// <summary>Display-safe failure reason; never a path, URL or command line.</summary>
+    public required string? SanitizedError { get; init; }
+
+    public required WhisperCppSourceBuildDescriptor? CurrentBuild { get; init; }
+
+    public required DateTimeOffset? StartedAtUtc { get; init; }
+
+    public required DateTimeOffset? CompletedAtUtc { get; init; }
+
     /// <summary>The running or last-finished build's id, when there has been one.</summary>
     public Guid? BuildId => CurrentBuild?.BuildId;
 }

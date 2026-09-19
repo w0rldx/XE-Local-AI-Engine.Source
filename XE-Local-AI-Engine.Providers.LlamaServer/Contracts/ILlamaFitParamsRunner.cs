@@ -14,19 +14,22 @@ internal enum LlamaFitParamsRunStatus
 }
 
 /// <summary>Machine-readable stdout acquisition result from <c>llama-fit-params</c>.</summary>
-internal sealed record LlamaFitParamsRunResult(
-    LlamaFitParamsRunStatus Status,
-    IReadOnlyList<string> StandardOutput,
-    string? FailureReason)
+internal sealed class LlamaFitParamsRunResult
 {
+    public required LlamaFitParamsRunStatus Status { get; init; }
+
+    public required IReadOnlyList<string> StandardOutput { get; init; }
+
+    public required string? FailureReason { get; init; }
+
     public static LlamaFitParamsRunResult Success(IReadOnlyList<string> standardOutput) =>
-        new(LlamaFitParamsRunStatus.Succeeded, standardOutput, FailureReason: null);
+        new() { Status = LlamaFitParamsRunStatus.Succeeded, StandardOutput = standardOutput, FailureReason = null };
 
     public static LlamaFitParamsRunResult Missing() =>
-        new(LlamaFitParamsRunStatus.MissingCapability, StandardOutput: [], FailureReason: null);
+        new() { Status = LlamaFitParamsRunStatus.MissingCapability, StandardOutput = [], FailureReason = null };
 
     public static LlamaFitParamsRunResult Failure(string reason) =>
-        new(LlamaFitParamsRunStatus.Failed, StandardOutput: [], reason);
+        new() { Status = LlamaFitParamsRunStatus.Failed, StandardOutput = [], FailureReason = reason };
 }
 
 /// <summary>

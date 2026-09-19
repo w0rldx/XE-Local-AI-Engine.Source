@@ -148,7 +148,7 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
             timeoutCts.CancelAfter(requestTimeout);
 
             using var response = await _httpClient
-                                       .PostAsJsonAsync(requestUri, new RerankRequest(query, documents), SerializerOptions, timeoutCts.Token)
+                                       .PostAsJsonAsync(requestUri, new RerankRequest { Query = query, Documents = documents }, SerializerOptions, timeoutCts.Token)
                                        .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
@@ -223,11 +223,14 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         return scores;
     }
 
-    private sealed record RerankRequest(
-        [property: JsonPropertyName("query")]
-        string Query,
-        [property: JsonPropertyName("documents")]
-        IReadOnlyList<string> Documents);
+    private sealed record RerankRequest
+    {
+        [JsonPropertyName("query")]
+        public required string Query { get; init; }
+
+        [JsonPropertyName("documents")]
+        public required IReadOnlyList<string> Documents { get; init; }
+    }
 
     private sealed record RerankResponse(
         [property: JsonPropertyName("results")]

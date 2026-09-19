@@ -59,15 +59,18 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [Test]
     public void StatusMapper_UsesCamelCasePhaseAndSanitizedManagedRuntime()
     {
-        var status = new StableDiffusionCppSourceBuildStatus(StableDiffusionCppSourceBuildPhase.SmokeTesting,
-            IsRunning: true,
-            Terminal: false,
-            LogLines: [],
-            LogStartSequence: 0,
-            SanitizedError: null,
-            CurrentBuild: null,
-            StartedAtUtc: null,
-            CompletedAtUtc: null);
+        var status = new StableDiffusionCppSourceBuildStatus
+        {
+            Phase = StableDiffusionCppSourceBuildPhase.SmokeTesting,
+            IsRunning = true,
+            Terminal = false,
+            LogLines = [],
+            LogStartSequence = 0,
+            SanitizedError = null,
+            CurrentBuild = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null
+        };
         var installed = new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Invalid,
             SdGpuBackend.Cuda,
             "https://github.com/example/fork",
@@ -94,12 +97,15 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [RunOn(OS.Linux)]
     public async Task StartEndpoint_RuntimeBusy_ReturnsStableConflictShape()
     {
-        var activity = new ImageRuntimeActivitySnapshot(2, 1, 1, false, false);
+        var activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 2, SpawnReadinessCount = 1, ResidentProcessCount = 1, MutationReserved = false, EvictionReserved = false };
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         service.StartAsync(Arg.Any<StableDiffusionCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-               .Returns(new StableDiffusionCppSourceBuildStartResult(StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy,
-                   Activity: activity));
+               .Returns(new StableDiffusionCppSourceBuildStartResult
+               {
+                   Outcome = StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy,
+                   Activity = activity
+               });
         var gate = Substitute.For<IImageRuntimeActivityGate>();
         gate.GetSnapshot().Returns(activity);
 
@@ -130,7 +136,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [RunOn(OS.Linux)]
     public async Task StartEndpoint_SourceBuildExceptionDoesNotMisreportPrerequisites()
     {
-        var activity = new ImageRuntimeActivitySnapshot(0, 0, 0, false, false);
+        var activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false };
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         service.StartAsync(Arg.Any<StableDiffusionCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
@@ -176,17 +182,18 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                  payload = call.ArgAt<object?[]>(1)[0];
                  return Task.CompletedTask;
              });
-        var descriptor = new StableDiffusionCppSourceBuildDescriptor(SdGpuBackend.Vulkan,
-            StableDiffusionCppSourceSelection.Custom,
-            "https://github.com/example/fork",
-            StableDiffusionCppSourceRevisionMode.DefaultBranch,
-            null,
-            new string('a', 40))
+        var descriptor = new StableDiffusionCppSourceBuildDescriptor
         {
+            Backend = SdGpuBackend.Vulkan,
+            Source = StableDiffusionCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork",
+            RevisionMode = StableDiffusionCppSourceRevisionMode.DefaultBranch,
+            RequestedCommit = null,
+            ResolvedCommit = new string('a', 40),
             BuildId = Guid.Parse("11111111-1111-4111-8111-111111111111")
         };
 
-        await publisher.PublishStatusAsync(new StableDiffusionCppSourceBuildStatusEvent(StableDiffusionCppSourceBuildPhase.SmokeTesting, ["line"], 9, false, null, descriptor));
+        await publisher.PublishStatusAsync(new StableDiffusionCppSourceBuildStatusEvent { Phase = StableDiffusionCppSourceBuildPhase.SmokeTesting, AppendedLogLines = ["line"], AppendedLogStartSequence = 9, Terminal = false, SanitizedError = null, CurrentBuild = descriptor });
 
         var payloadJson = JsonSerializer.Serialize(payload, payload!.GetType(), WebJsonOptions);
         using var body = JsonDocument.Parse(payloadJson);
@@ -200,14 +207,14 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [Test]
     public async Task EjectEndpoint_Busy_ReturnsActivityConflictWithoutRetrying()
     {
-        var activity = new ImageRuntimeActivitySnapshot(1, 0, 1, false, false);
+        var activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 1, SpawnReadinessCount = 0, ResidentProcessCount = 1, MutationReserved = false, EvictionReserved = false };
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         var gate = Substitute.For<IImageRuntimeActivityGate>();
         gate.GetSnapshot().Returns(activity);
         var supervisor = Substitute.For<IImageServerSupervisor>();
         supervisor.EvictAllAsync(Arg.Any<CancellationToken>())
-                  .Returns(new ImageServerEvictAllResult(false, activity));
+                  .Returns(new ImageServerEvictAllResult { Evicted = false, Activity = activity });
         var store = Substitute.For<IStableDiffusionInstalledRuntimeStore>();
 
         await using var factory = CreateFactory(service, gate, supervisor, store);
@@ -234,7 +241,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [Test]
     public async Task CreateImageJobEndpoint_RuntimeMutationActive_ReturnsOperatorSafeConflict()
     {
-        var activity = new ImageRuntimeActivitySnapshot(0, 0, 0, true, false);
+        var activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = true, EvictionReserved = false };
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         var gate = Substitute.For<IImageRuntimeActivityGate>();
@@ -270,7 +277,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // The SPA branches on managedRuntime being absent to offer the build, so "nothing installed" must arrive as an
         // explicit null and not as a zeroed record.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate);
         using var client = factory.CreateClient();
@@ -288,7 +295,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // gate — so a single read has to prove they are both projected, and the counts are what a mutation refusal
         // later explains itself with.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(2, 1, 3, true, false));
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 2, SpawnReadinessCount = 1, ResidentProcessCount = 3, MutationReserved = true, EvictionReserved = false });
         var store = Substitute.For<IStableDiffusionInstalledRuntimeStore>();
         store.ReadAsync(Arg.Any<CancellationToken>())
              .Returns(new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Active,
@@ -329,9 +336,12 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // snapshot has to win.
         var service = CreateBuildService();
         service.RemoveAsync(Arg.Any<CancellationToken>())
-               .Returns(new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
-                   new ImageRuntimeActivitySnapshot(3, 0, 0, false, false)));
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+               .Returns(new StableDiffusionCppSourceBuildRemoveResult
+               {
+                   Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
+                   Activity = new ImageRuntimeActivitySnapshot { ActiveJobCount = 3, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+               });
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate);
         using var client = factory.CreateClient();
@@ -354,8 +364,8 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // envelope still has to name what is holding the runtime, or the operator is told only "busy".
         var service = CreateBuildService();
         service.RemoveAsync(Arg.Any<CancellationToken>())
-               .Returns(new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy));
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 4, false, false));
+               .Returns(new StableDiffusionCppSourceBuildRemoveResult { Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy });
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 4, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate);
         using var client = factory.CreateClient();
@@ -380,8 +390,8 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // status rather than a bespoke body, so a second GET is never needed to refresh the page.
         var service = CreateBuildService();
         service.RemoveAsync(Arg.Any<CancellationToken>())
-               .Returns(new StableDiffusionCppSourceBuildRemoveResult(outcome));
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+               .Returns(new StableDiffusionCppSourceBuildRemoveResult { Outcome = outcome });
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate);
         using var client = factory.CreateClient();
@@ -404,7 +414,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // route stays a 200 and hands back the status instead of an error the SPA would have to special-case.
         var service = CreateBuildService();
         service.Cancel().Returns(false);
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate);
         using var client = factory.CreateClient();
@@ -430,7 +440,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // Enum.IsDefined rule never runs on this route, and asserting its message here would only pin a body the
         // binder does not produce.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
         var probe = Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
 
         await using var factory = CreateFactory(service, gate, probe: probe);
@@ -452,12 +462,15 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // The backend travels as a query-string name and comes back on the response, so a binding that silently fell
         // back to the first enum member would report a CPU checklist under a CUDA heading.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
-        var probe = StubProbe(new StableDiffusionCppSourceBuildPrerequisiteReport(false,
-        [
-            new StableDiffusionCppSourceBuildPrerequisiteItem("os-is-linux", true, "Linux host detected."),
-            new StableDiffusionCppSourceBuildPrerequisiteItem("nvcc", false, "NVIDIA CUDA compiler (nvcc) is not available.")
-        ]));
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
+        var probe = StubProbe(new StableDiffusionCppSourceBuildPrerequisiteReport
+        {
+            CanBuild = false,
+            Items = [
+            new StableDiffusionCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
+            new StableDiffusionCppSourceBuildPrerequisiteItem { Key = "nvcc", Satisfied = false, Detail = "NVIDIA CUDA compiler (nvcc) is not available." }
+        ]
+        });
 
         await using var factory = CreateFactory(service, gate, probe: probe);
         using var client = factory.CreateClient();
@@ -477,24 +490,28 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     {
         // The status route is the SPA's reconnect path: it has to answer the same projection the hub pushes, log
         // window included, or a client that missed events cannot resynchronize.
-        var service = CreateBuildService(new StableDiffusionCppSourceBuildStatus(StableDiffusionCppSourceBuildPhase.SmokeTesting,
-            IsRunning: true,
-            Terminal: false,
-            ["> cmake --build .", "[100%] Built target sd-server"],
-            LogStartSequence: 42,
-            SanitizedError: null,
-            new StableDiffusionCppSourceBuildDescriptor(SdGpuBackend.Cuda,
-                StableDiffusionCppSourceSelection.Official,
-                "https://github.com/leejet/stable-diffusion.cpp",
-                StableDiffusionCppSourceRevisionMode.EnginePinned,
-                RequestedCommit: null,
-                new string('e', 40))
+        var service = CreateBuildService(new StableDiffusionCppSourceBuildStatus
+        {
+            Phase = StableDiffusionCppSourceBuildPhase.SmokeTesting,
+            IsRunning = true,
+            Terminal = false,
+            LogLines = ["> cmake --build .", "[100%] Built target sd-server"],
+            LogStartSequence = 42,
+            SanitizedError = null,
+            CurrentBuild = new StableDiffusionCppSourceBuildDescriptor
             {
+                Backend = SdGpuBackend.Cuda,
+                Source = StableDiffusionCppSourceSelection.Official,
+                Repository = "https://github.com/leejet/stable-diffusion.cpp",
+                RevisionMode = StableDiffusionCppSourceRevisionMode.EnginePinned,
+                RequestedCommit = null,
+                ResolvedCommit = new string('e', 40),
                 BuildId = Guid.Parse("22222222-2222-4222-8222-222222222222")
             },
-            DateTimeOffset.UnixEpoch,
-            CompletedAtUtc: null));
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+            StartedAtUtc = DateTimeOffset.UnixEpoch,
+            CompletedAtUtc = null
+        });
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate);
         using var client = factory.CreateClient();
@@ -525,8 +542,8 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // downgraded to plain authentication, and the operator control keeps the 403 from passing vacuously.
         var service = CreateBuildService();
         service.RemoveAsync(Arg.Any<CancellationToken>())
-               .Returns(new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled));
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot(0, 0, 0, false, false));
+               .Returns(new StableDiffusionCppSourceBuildRemoveResult { Outcome = StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled });
+        var gate = CreateGate(new ImageRuntimeActivitySnapshot { ActiveJobCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false });
 
         await using var factory = CreateFactory(service, gate, probe: StubProbe());
         using var client = factory.CreateClient();
@@ -588,15 +605,18 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         service.GetStatus()
-               .Returns(status ?? new StableDiffusionCppSourceBuildStatus(StableDiffusionCppSourceBuildPhase.Idle,
-                   IsRunning: false,
-                   Terminal: false,
-                   LogLines: [],
-                   LogStartSequence: 0,
-                   SanitizedError: null,
-                   CurrentBuild: null,
-                   StartedAtUtc: null,
-                   CompletedAtUtc: null));
+               .Returns(status ?? new StableDiffusionCppSourceBuildStatus
+               {
+                   Phase = StableDiffusionCppSourceBuildPhase.Idle,
+                   IsRunning = false,
+                   Terminal = false,
+                   LogLines = [],
+                   LogStartSequence = 0,
+                   SanitizedError = null,
+                   CurrentBuild = null,
+                   StartedAtUtc = null,
+                   CompletedAtUtc = null
+               });
         return service;
     }
 
@@ -618,8 +638,11 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     {
         var probe = Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
         probe.ProbeAsync(Arg.Any<SdGpuBackend>(), Arg.Any<CancellationToken>())
-             .Returns(report ?? new StableDiffusionCppSourceBuildPrerequisiteReport(false,
-                 [new StableDiffusionCppSourceBuildPrerequisiteItem("os-is-linux", true, "Linux host detected.")]));
+             .Returns(report ?? new StableDiffusionCppSourceBuildPrerequisiteReport
+             {
+                 CanBuild = false,
+                 Items = [new StableDiffusionCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." }]
+             });
         return probe;
     }
 

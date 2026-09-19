@@ -57,7 +57,7 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
         // input order, which is a worse answer than simply offering everything.
         if (candidates.Count <= threshold || queryTokens.Count == 0)
         {
-            return Task.FromResult(new ToolRelevanceSelection([.. candidates.Select(static candidate => candidate.Name)], []));
+            return Task.FromResult(new ToolRelevanceSelection { OfferedNames = [.. candidates.Select(static candidate => candidate.Name)], HiddenNames = [] });
         }
 
         var coreCount = candidates.Count(static candidate => candidate.IsCore);

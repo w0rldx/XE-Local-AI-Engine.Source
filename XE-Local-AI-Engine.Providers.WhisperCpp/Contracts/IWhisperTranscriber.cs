@@ -50,27 +50,42 @@ public sealed record WhisperTranscriptionRequest
 }
 
 /// <summary>One transcribed segment. Times are seconds from the start of the submitted audio.</summary>
-/// <param name="StartSeconds">Segment start, in seconds.</param>
-/// <param name="EndSeconds">Segment end, in seconds.</param>
-/// <param name="Text">The segment's text, trimmed.</param>
-/// <param name="Confidence">
-///     A 0..1 confidence derived from the model's average log probability, or <see langword="null" /> when the model
-///     reported none. The daemon has no confidence field of its own; this is a derived value, not a reported one.
-/// </param>
-public sealed record WhisperTranscriptSegment(double StartSeconds, double EndSeconds, string Text, double? Confidence);
+public sealed class WhisperTranscriptSegment
+{
+    /// <summary>Segment start, in seconds.</summary>
+    public required double StartSeconds { get; init; }
+
+    /// <summary>Segment end, in seconds.</summary>
+    public required double EndSeconds { get; init; }
+
+    /// <summary>The segment's text, trimmed.</summary>
+    public required string Text { get; init; }
+
+    /// <summary>
+    ///     A 0..1 confidence derived from the model's average log probability, or <see langword="null" /> when the model
+    ///     reported none. The daemon has no confidence field of its own; this is a derived value, not a reported one.
+    /// </summary>
+    public required double? Confidence { get; init; }
+}
 
 /// <summary>The result of one transcription.</summary>
-/// <param name="Text">The full transcript.</param>
-/// <param name="Segments">The timed segments, in order.</param>
-/// <param name="DetectedLanguageCode">The detected ISO language code, or <see langword="null" /> when not requested.</param>
-/// <param name="DetectedLanguageProbability">The detector's confidence, when one was reported.</param>
-/// <param name="DurationSeconds">The duration of the audio the model processed.</param>
-public sealed record WhisperTranscriptionResult(
-    string Text,
-    IReadOnlyList<WhisperTranscriptSegment> Segments,
-    string? DetectedLanguageCode,
-    double? DetectedLanguageProbability,
-    double DurationSeconds);
+public sealed class WhisperTranscriptionResult
+{
+    /// <summary>The full transcript.</summary>
+    public required string Text { get; init; }
+
+    /// <summary>The timed segments, in order.</summary>
+    public required IReadOnlyList<WhisperTranscriptSegment> Segments { get; init; }
+
+    /// <summary>The detected ISO language code, or <see langword="null" /> when not requested.</summary>
+    public required string? DetectedLanguageCode { get; init; }
+
+    /// <summary>The detector's confidence, when one was reported.</summary>
+    public required double? DetectedLanguageProbability { get; init; }
+
+    /// <summary>The duration of the audio the model processed.</summary>
+    public required double DurationSeconds { get; init; }
+}
 
 /// <summary>
 ///     The only thing the engine ever calls to transcribe audio. Everything about how the daemon is reached — the

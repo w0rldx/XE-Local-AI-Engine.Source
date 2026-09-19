@@ -25,16 +25,19 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
     {
         var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
 
-        return models.Select(static model => new OllamaModelSummary(model.ReadModelName(),
-                         model.Digest ?? string.Empty,
-                         model.Size,
-                         // Explicit ctor (MA0132) with the same semantics the endpoint mapper applied per call
-                         // site before this type existed: the daemon reports UTC, so stamp the kind rather than
-                         // letting the local-time conversion shift the instant.
-                         new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)),
-                         model.Details?.Family,
-                         model.Details?.ParameterSize,
-                         model.Details?.QuantizationLevel))
+        return models.Select(static model => new OllamaModelSummary
+        {
+            Name = model.ReadModelName(),
+            Digest = model.Digest ?? string.Empty,
+            SizeBytes = model.Size,
+            // Explicit ctor (MA0132) with the same semantics the endpoint mapper applied per call
+            // site before this type existed: the daemon reports UTC, so stamp the kind rather than
+            // letting the local-time conversion shift the instant.
+            ModifiedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)),
+            Family = model.Details?.Family,
+            ParameterSize = model.Details?.ParameterSize,
+            QuantizationLevel = model.Details?.QuantizationLevel
+        })
                      .ToArray();
     }
 
@@ -47,11 +50,14 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
             ? contextLength
             : (int?)null;
 
-        return new OllamaModelDetails(maxContextTokens,
-            response.Capabilities ?? [],
-            response.Template,
-            response.System,
-            response.License);
+        return new OllamaModelDetails
+        {
+            MaxContextTokens = maxContextTokens,
+            Capabilities = response.Capabilities ?? [],
+            Template = response.Template,
+            System = response.System,
+            License = response.License
+        };
     }
 
     public async IAsyncEnumerable<PullProgress> PullModelAsync(string modelName,

@@ -1593,7 +1593,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(models);
         provider.When(runtime => runtime.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())).Do(_ => warmed = true);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(_ => servedContextTokens is { } served && warmed ? new LocalModelRuntimeInfo(served) : null);
+                .Returns(_ => servedContextTokens is { } served && warmed ? new LocalModelRuntimeInfo { EffectiveContextTokens = served } : null);
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;

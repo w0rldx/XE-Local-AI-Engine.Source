@@ -156,11 +156,14 @@ internal static class LlamaGrammarToolOffer
             return
             [
                 .. Catalog.GetLocalChatToolDescriptors(),
-                new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName,
-                    AgentHomeToolDefinition.Description,
-                    AgentHomeToolDefinition.ParameterSchema,
-                    RequiresApproval: true,
-                    ToolCategory.Unknown)
+                new LocalChatToolDescriptor
+                {
+                    Name = AgentHomeToolDefinition.ToolName,
+                    Description = AgentHomeToolDefinition.Description,
+                    ParameterSchema = AgentHomeToolDefinition.ParameterSchema,
+                    RequiresApproval = true,
+                    Category = ToolCategory.Unknown
+                }
             ];
         }
     }

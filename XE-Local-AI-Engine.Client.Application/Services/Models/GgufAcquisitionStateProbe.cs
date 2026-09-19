@@ -153,16 +153,22 @@ public sealed class GgufAcquisitionStateProbe
             return false;
         }
 
-        var expectedMembers = weight.Select(member => new GgufModelContentMember(member.RelativePath,
-                                        member.Role,
-                                        download.DeclaredSizeBytes,
-                                        download.DeclaredSha256,
-                                        member.OwningAliases))
-                                    .Concat(projectors.Select(member => new GgufModelContentMember(member.RelativePath,
-                                        member.Role,
-                                        projector!.DeclaredSizeBytes,
-                                        projector.DeclaredSha256,
-                                        member.OwningAliases)));
+        var expectedMembers = weight.Select(member => new GgufModelContentMember
+        {
+            RelativePath = member.RelativePath,
+            Role = member.Role,
+            SizeBytes = download.DeclaredSizeBytes,
+            Sha256 = download.DeclaredSha256,
+            OwningAliases = member.OwningAliases
+        })
+                                    .Concat(projectors.Select(member => new GgufModelContentMember
+                                    {
+                                        RelativePath = member.RelativePath,
+                                        Role = member.Role,
+                                        SizeBytes = projector!.DeclaredSizeBytes,
+                                        Sha256 = projector.DeclaredSha256,
+                                        OwningAliases = member.OwningAliases
+                                    }));
         return string.Equals(GgufModelContentFingerprint.ComputeV1(expectedMembers),
             snapshot.ModelContentFingerprint,
             StringComparison.Ordinal);
@@ -201,11 +207,14 @@ public sealed class GgufAcquisitionStateProbe
         {
             var contentMembers = snapshot.Members.Where(static member => member.Role is InstalledModelPhysicalMemberRole.Weight
                                              or InstalledModelPhysicalMemberRole.Projector)
-                                         .Select(static member => new GgufModelContentMember(member.RelativePath,
-                                             member.Role,
-                                             member.SizeBytes,
-                                             member.Sha256,
-                                             member.OwningAliases));
+                                         .Select(static member => new GgufModelContentMember
+                                         {
+                                             RelativePath = member.RelativePath,
+                                             Role = member.Role,
+                                             SizeBytes = member.SizeBytes,
+                                             Sha256 = member.Sha256,
+                                             OwningAliases = member.OwningAliases
+                                         });
             return snapshot.Members.Where(static member => member.Role != InstalledModelPhysicalMemberRole.Sidecar)
                            .All(static member => GgufMemberFingerprint.IsCanonical(member.MemberFingerprint))
                    && string.Equals(GgufRegistryAliasSetHash.ComputeV1(snapshot.RegistryAliases),

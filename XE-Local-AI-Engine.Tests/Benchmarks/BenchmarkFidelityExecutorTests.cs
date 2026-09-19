@@ -364,7 +364,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         {
             var binaries = Substitute.For<ILlamaCppBinaryManager>();
             _ = binaries.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                        .Returns(call => new LlamaBinary(serverPath, "b10201", call.Arg<GpuVariant>(), false));
+                        .Returns(call => new LlamaBinary { ServerExecutablePath = serverPath, Version = "b10201", Variant = call.Arg<GpuVariant>(), IsPinnedFallback = false });
             return binaries;
         }
 

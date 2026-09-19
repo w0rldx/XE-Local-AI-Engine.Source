@@ -31,7 +31,7 @@ public sealed class SupervisorSpawnArgsTests
                                            --jinja
                                            --cache-ram N
                                            """;
-        var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cpu, IsPinnedFallback: true);
+        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cpu, IsPinnedFallback = true };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,
@@ -139,13 +139,16 @@ public sealed class SupervisorSpawnArgsTests
     public async Task EnsureRunning_GpuExploreWithExpertOffloadPlacement_EmitsCpuMoeBesideAutoFit()
     {
         var launcher = new FakeProcessLauncher();
-        var allocation = new ProcessContextAllocation(ProcessContextTokens: 8192,
-            ModelTrainContextTokens: null,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.ExpertOffload,
-            ResourceFootprint.Zero,
-            ContentIdentity: "moe-model:0",
-            CacheKey: "moe-cache");
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = null,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.ExpertOffload,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "moe-model:0",
+            CacheKey = "moe-cache"
+        };
         var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
         allocationResolver.ResolveAsync(Arg.Any<string>(),
                               Arg.Any<ModelRole>(),
@@ -171,13 +174,16 @@ public sealed class SupervisorSpawnArgsTests
     public async Task EnsureRunning_UsesAdmissionAdjustedAllocationContext()
     {
         var launcher = new FakeProcessLauncher();
-        var initial = new ProcessContextAllocation(ProcessContextTokens: 65536,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            ContentIdentity: "llama3:0",
-            CacheKey: "cache");
+        var initial = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 65536,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "llama3:0",
+            CacheKey = "cache"
+        };
         var selected = initial with
         {
             ProcessContextTokens = 16384
@@ -207,11 +213,14 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.True(allocationResolver.TryCommitAdmissionAllocation(selected, out var committed));
         AssertEx.Equal(selected, committed);
         var launchAdmissions = new ProcessLaunchAdmissionRegistry();
-        var admission = new ProcessLaunchAdmission("llama3",
-            ModelRole.Chat,
-            GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore(),
-            committed);
+        var admission = new ProcessLaunchAdmission
+        {
+            ModelName = "llama3",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = committed
+        };
         AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
@@ -237,21 +246,27 @@ public sealed class SupervisorSpawnArgsTests
     public async Task EnsureRunning_AdmittedVariantOutrankedByServedBuild_ReResolvesArgs()
     {
         var launcher = new FakeProcessLauncher();
-        var allocation = new ProcessContextAllocation(16384,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            "llama3:0",
-            CacheKey: "cache");
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 16384,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "llama3:0",
+            CacheKey = "cache"
+        };
         var launchAdmissions = new ProcessLaunchAdmissionRegistry();
 
         // Admitted as Vulkan with Explore args; the serve hands back the recorded CUDA build instead.
-        var admission = new ProcessLaunchAdmission("llama3",
-            ModelRole.Chat,
-            GpuVariant.Vulkan,
-            ResolvedLaunchArguments.Explore(),
-            allocation);
+        var admission = new ProcessLaunchAdmission
+        {
+            ModelName = "llama3",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Vulkan,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        };
         AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Vulkan),
@@ -275,13 +290,16 @@ public sealed class SupervisorSpawnArgsTests
     public async Task EnsureRunning_AdmittedCpuAllocationOutrankedByServedBuild_ReResolvesAllocation()
     {
         var launcher = new FakeProcessLauncher();
-        var cpuAllocation = new ProcessContextAllocation(4096,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.Cpu,
-            ResourceFootprint.Zero,
-            "llama3:0",
-            CacheKey: "cpu-cache");
+        var cpuAllocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 4096,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.Cpu,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "llama3:0",
+            CacheKey = "cpu-cache"
+        };
         var gpuAllocation = cpuAllocation with
         {
             ProcessContextTokens = 32768,
@@ -299,11 +317,14 @@ public sealed class SupervisorSpawnArgsTests
         // Admitted as a CPU launch; the serve hands back the recorded CUDA build instead. Reusing the CPU allocation
         // would go through TryGetEffectiveCommittedAllocation, which this resolver never satisfies.
         var launchAdmissions = new ProcessLaunchAdmissionRegistry();
-        var admission = new ProcessLaunchAdmission("llama3",
-            ModelRole.Chat,
-            GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore(),
-            cpuAllocation);
+        var admission = new ProcessLaunchAdmission
+        {
+            ModelName = "llama3",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cpu,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = cpuAllocation
+        };
         AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
@@ -331,18 +352,24 @@ public sealed class SupervisorSpawnArgsTests
     {
         var launcher = new FakeProcessLauncher();
         var registry = new ProcessLaunchAdmissionRegistry();
-        var allocation = new ProcessContextAllocation(8192,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            contentIdentity,
-            CacheKey: "cache");
-        using var consumer = registry.Acquire(new ProcessLaunchAdmission("llama3",
-            ModelRole.Chat,
-            GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore(),
-            allocation));
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = contentIdentity,
+            CacheKey = "cache"
+        };
+        using var consumer = registry.Acquire(new ProcessLaunchAdmission
+        {
+            ModelName = "llama3",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        });
         AssertEx.NotNull(consumer);
         await using var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: new FakeVariantSelector(actualVariant),

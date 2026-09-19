@@ -170,7 +170,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
                 if (_isRunning)
                 {
-                    return new WhisperCppSourceBuildStartResult(WhisperCppSourceBuildStartOutcome.AlreadyRunning);
+                    return new WhisperCppSourceBuildStartResult { Outcome = WhisperCppSourceBuildStartOutcome.AlreadyRunning };
                 }
             }
 
@@ -184,15 +184,18 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 var outcome = prerequisites.Items.Any(static item => item.Key == "free-disk" && !item.Satisfied)
                     ? WhisperCppSourceBuildStartOutcome.InsufficientDisk
                     : WhisperCppSourceBuildStartOutcome.MissingPrerequisites;
-                return new WhisperCppSourceBuildStartResult(outcome, prerequisites);
+                return new WhisperCppSourceBuildStartResult { Outcome = outcome, Prerequisites = prerequisites };
             }
 
             var mutationReservation = _activityGate.TryAcquireMutationReservation();
             if (mutationReservation is null)
             {
-                return new WhisperCppSourceBuildStartResult(WhisperCppSourceBuildStartOutcome.RuntimeBusy,
-                    prerequisites,
-                    _activityGate.GetSnapshot());
+                return new WhisperCppSourceBuildStartResult
+                {
+                    Outcome = WhisperCppSourceBuildStartOutcome.RuntimeBusy,
+                    Prerequisites = prerequisites,
+                    Activity = _activityGate.GetSnapshot()
+                };
             }
 
             var revisionMode = normalized.Source == WhisperCppSourceSelection.Official
@@ -203,15 +206,16 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 revisionMode = WhisperCppSourceRevisionMode.DefaultBranch;
             }
 
-            var descriptor = new WhisperCppSourceBuildDescriptor(normalized.Backend,
-                normalized.Source,
-                normalized.Repository!,
-                revisionMode,
-                normalized.Commit,
-                revisionMode == WhisperCppSourceRevisionMode.EnginePinned
-                    ? WhisperCppReleasePins.PinnedSourceCommitSha
-                    : null)
+            var descriptor = new WhisperCppSourceBuildDescriptor
             {
+                Backend = normalized.Backend,
+                Source = normalized.Source,
+                Repository = normalized.Repository!,
+                RevisionMode = revisionMode,
+                RequestedCommit = normalized.Commit,
+                ResolvedCommit = revisionMode == WhisperCppSourceRevisionMode.EnginePinned
+                    ? WhisperCppReleasePins.PinnedSourceCommitSha
+                    : null,
                 BuildId = Guid.NewGuid()
             };
 
@@ -267,7 +271,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         }
 
         startSignal.SetResult();
-        return new WhisperCppSourceBuildStartResult(WhisperCppSourceBuildStartOutcome.Started);
+        return new WhisperCppSourceBuildStartResult { Outcome = WhisperCppSourceBuildStartOutcome.Started };
     }
 
     /// <inheritdoc />
@@ -280,22 +284,28 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             {
                 if (_isRunning)
                 {
-                    return new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
-                        _activityGate.GetSnapshot());
+                    return new WhisperCppSourceBuildRemoveResult
+                    {
+                        Outcome = WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
+                        Activity = _activityGate.GetSnapshot()
+                    };
                 }
             }
 
             await using var mutation = _activityGate.TryAcquireMutationReservation();
             if (mutation is null)
             {
-                return new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
-                    _activityGate.GetSnapshot());
+                return new WhisperCppSourceBuildRemoveResult
+                {
+                    Outcome = WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
+                    Activity = _activityGate.GetSnapshot()
+                };
             }
 
             var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (installed is null)
             {
-                return new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.NotInstalled);
+                return new WhisperCppSourceBuildRemoveResult { Outcome = WhisperCppSourceBuildRemoveOutcome.NotInstalled };
             }
 
             SetPhase(WhisperCppSourceBuildPhase.Removing);
@@ -303,7 +313,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             await _runtimeStore.DeleteAsync(ct).ConfigureAwait(false);
             _managedSignal.Clear();
             SetTerminal(WhisperCppSourceBuildPhase.Completed, error: null);
-            return new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.Removed);
+            return new WhisperCppSourceBuildRemoveResult { Outcome = WhisperCppSourceBuildRemoveOutcome.Removed };
         }
         finally
         {
@@ -316,17 +326,20 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     {
         lock (_stateLock)
         {
-            return new WhisperCppSourceBuildStatus(_phase,
-                _isRunning,
-                _phase is WhisperCppSourceBuildPhase.Completed
+            return new WhisperCppSourceBuildStatus
+            {
+                Phase = _phase,
+                IsRunning = _isRunning,
+                Terminal = _phase is WhisperCppSourceBuildPhase.Completed
                     or WhisperCppSourceBuildPhase.Cancelled
                     or WhisperCppSourceBuildPhase.Failed,
-                [.. _logLines],
-                _logStartSequence,
-                _sanitizedError,
-                _currentBuild,
-                _startedAtUtc,
-                _completedAtUtc);
+                LogLines = [.. _logLines],
+                LogStartSequence = _logStartSequence,
+                SanitizedError = _sanitizedError,
+                CurrentBuild = _currentBuild,
+                StartedAtUtc = _startedAtUtc,
+                CompletedAtUtc = _completedAtUtc
+            };
         }
     }
 
@@ -614,23 +627,29 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
             SetPhase(WhisperCppSourceBuildPhase.Adopting);
             await _adoption.AdoptAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
-            return new BuildCompletion(WhisperCppSourceBuildPhase.Completed, Error: null);
+            return new BuildCompletion { Phase = WhisperCppSourceBuildPhase.Completed, Error = null };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new BuildCompletion(WhisperCppSourceBuildPhase.Cancelled, Error: null);
+            return new BuildCompletion { Phase = WhisperCppSourceBuildPhase.Cancelled, Error = null };
         }
         catch (TimeoutException exception)
         {
             _logger.LogWarning(exception, "whisper.cpp source build timed out.");
-            return new BuildCompletion(WhisperCppSourceBuildPhase.Failed,
-                "A whisper.cpp source-build command timed out. Review the sanitized build log.");
+            return new BuildCompletion
+            {
+                Phase = WhisperCppSourceBuildPhase.Failed,
+                Error = "A whisper.cpp source-build command timed out. Review the sanitized build log."
+            };
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "whisper.cpp source build failed.");
-            return new BuildCompletion(WhisperCppSourceBuildPhase.Failed,
-                "The whisper.cpp source build failed. Review the sanitized build log.");
+            return new BuildCompletion
+            {
+                Phase = WhisperCppSourceBuildPhase.Failed,
+                Error = "The whisper.cpp source build failed. Review the sanitized build log."
+            };
         }
         finally
         {
@@ -777,14 +796,17 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
     private WhisperCppSourceBuildStatusEvent CreateEventUnderLock(IReadOnlyList<string> appended, long startSequence)
     {
-        return new WhisperCppSourceBuildStatusEvent(_phase,
-            appended,
-            startSequence,
-            _phase is WhisperCppSourceBuildPhase.Completed
+        return new WhisperCppSourceBuildStatusEvent
+        {
+            Phase = _phase,
+            AppendedLogLines = appended,
+            AppendedLogStartSequence = startSequence,
+            Terminal = _phase is WhisperCppSourceBuildPhase.Completed
                 or WhisperCppSourceBuildPhase.Cancelled
                 or WhisperCppSourceBuildPhase.Failed,
-            _sanitizedError,
-            _currentBuild);
+            SanitizedError = _sanitizedError,
+            CurrentBuild = _currentBuild
+        };
     }
 
     private void QueuePublish(WhisperCppSourceBuildStatusEvent statusEvent)
@@ -946,5 +968,10 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     [GeneratedRegex(@"^(?<major>\d+)\.(?<minor>\d+)$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]
     private static partial Regex ComputeCapabilityRegex();
 
-    private sealed record BuildCompletion(WhisperCppSourceBuildPhase Phase, string? Error);
+    private sealed record BuildCompletion
+    {
+        public required WhisperCppSourceBuildPhase Phase { get; init; }
+
+        public required string? Error { get; init; }
+    }
 }

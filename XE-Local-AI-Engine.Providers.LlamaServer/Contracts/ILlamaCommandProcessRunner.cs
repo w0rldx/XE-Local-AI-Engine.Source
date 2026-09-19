@@ -1,8 +1,14 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Result of a bounded, read-only llama.cpp command probe.</summary>
-internal sealed record LlamaCommandResult(int ExitCode, string StandardOutput, string StandardError)
+internal sealed class LlamaCommandResult
 {
+    public required int ExitCode { get; init; }
+
+    public required string StandardOutput { get; init; }
+
+    public required string StandardError { get; init; }
+
     /// <summary>Both redirected streams, preserving diagnostics written to stderr by llama.cpp.</summary>
     public string CombinedOutput => string.Concat(StandardOutput, "\n", StandardError);
 }

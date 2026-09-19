@@ -364,8 +364,8 @@ public sealed class TranscriptionModelEndpointTests
             Task.FromResult(new TranscriptionRuntimeView
             {
                 Enabled = true,
-                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
-                Activity = new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false),
+                Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true },
+                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false },
                 ManagedRuntime = null,
                 SelectedModelId = Catalog.SelectedModelId,
                 RecommendedModelId = Catalog.RecommendedModelId,
@@ -375,8 +375,11 @@ public sealed class TranscriptionModelEndpointTests
             });
 
         public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) =>
-            Task.FromResult(new WhisperServerEvictResult(Evicted: true,
-                new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false)));
+            Task.FromResult(new WhisperServerEvictResult
+            {
+                Evicted = true,
+                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+            });
 
         public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>
             Task.FromResult(Catalog);

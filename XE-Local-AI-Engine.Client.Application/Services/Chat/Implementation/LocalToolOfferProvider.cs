@@ -107,11 +107,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         //     strict audited auto-approval boundary. If ask_user is selected there, its handler's no-answer fail-safe
         //     returns immediately rather than creating a human wait that an unattended caller cannot satisfy.
         //   * ToolCategory.ReadLocal: it reads an answer from the node-local operator and has no side effect of its own.
-        var askUserDescriptor = new LocalChatToolDescriptor(AskUserTool.ToolName,
-            AskUserTool.Description,
-            AskUserTool.ParameterSchema,
-            RequiresApproval: true,
-            ToolCategory.ReadLocal);
+        var askUserDescriptor = new LocalChatToolDescriptor
+        {
+            Name = AskUserTool.ToolName,
+            Description = AskUserTool.Description,
+            ParameterSchema = AskUserTool.ParameterSchema,
+            RequiresApproval = true,
+            Category = ToolCategory.ReadLocal
+        };
 
         // Each tool's Id is derived deterministically from its name so the offer list is byte-identical across sends
         // (the config hash ignores the Id, but a stable Id keeps client-side rendering and equality predictable).

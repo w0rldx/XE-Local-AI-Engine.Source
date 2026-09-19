@@ -16,10 +16,14 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 ///         configuration edit mid-invocation is detected rather than silently applied.
 ///     </para>
 /// </remarks>
-/// <param name="Generation">The registry snapshot epoch this binding was read from. Monotonically increasing.</param>
-/// <param name="Registration">The connection and model declarations, as of <paramref name="Generation" />.</param>
-public sealed record ExternalProviderBinding(long Generation, ExternalProviderModelRegistration Registration)
+public sealed class ExternalProviderBinding
 {
+    /// <summary>The registry snapshot epoch this binding was read from. Monotonically increasing.</summary>
+    public required long Generation { get; init; }
+
+    /// <summary>The connection and model declarations, as of <see cref="Generation" />.</summary>
+    public required ExternalProviderModelRegistration Registration { get; init; }
+
     /// <summary>
     ///     The connection's FULL normalized base address — scheme, host, port AND path — as a pinned invocation
     ///     verifies it has not moved underneath the turn.
@@ -46,9 +50,14 @@ public sealed record ExternalProviderBinding(long Generation, ExternalProviderMo
 ///     route, gate or render take the key-free <see cref="ExternalProviderBinding" /> (or the descriptors themselves)
 ///     and are structurally incapable of leaking it.
 /// </remarks>
-/// <param name="Binding">The endpoint and trust facts.</param>
-/// <param name="ApiKey">
-///     The decrypted key, or <see langword="null" /> for a keyless connection. Keyless is first-class: it means "send NO
-///     <c>Authorization</c> header", never "send an empty one".
-/// </param>
-public sealed record ExternalProviderTransportBinding(ExternalProviderBinding Binding, string? ApiKey);
+public sealed class ExternalProviderTransportBinding
+{
+    /// <summary>The endpoint and trust facts.</summary>
+    public required ExternalProviderBinding Binding { get; init; }
+
+    /// <summary>
+    ///     The decrypted key, or <see langword="null" /> for a keyless connection. Keyless is first-class: it means "send NO
+    ///     <c>Authorization</c> header", never "send an empty one".
+    /// </summary>
+    public required string? ApiKey { get; init; }
+}

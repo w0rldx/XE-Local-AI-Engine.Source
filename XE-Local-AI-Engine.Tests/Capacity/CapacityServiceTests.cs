@@ -223,8 +223,8 @@ public sealed class CapacityServiceTests
             MaxLoadedProcesses = 2,
             RunningLlama =
             [
-                new LlamaServerProcessHealth("running/a:Q4_K_M", ModelRole.Chat, IsResponsive: true, "ok"),
-                new LlamaServerProcessHealth("running/b:Q4_K_M", ModelRole.Chat, IsResponsive: true, "ok")
+                new LlamaServerProcessHealth { ModelName = "running/a:Q4_K_M", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" },
+                new LlamaServerProcessHealth { ModelName = "running/b:Q4_K_M", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }
             ]
         };
         var service = harness.Build();
@@ -278,9 +278,12 @@ public sealed class CapacityServiceTests
     {
         var registry = Substitute.For<IProcessLaunchAdmissionRegistry>();
         registry.Snapshot(Arg.Any<string>(), Arg.Any<ModelRole>())
-                .Returns(new ProcessLaunchAdmissionSnapshot(new HashSet<ProcessLaunchAdmissionKey>(),
-                    HasRequestedKey: false,
-                    HasGlobalBlocker: false));
+                .Returns(new ProcessLaunchAdmissionSnapshot
+                {
+                    AdmittedKeys = new HashSet<ProcessLaunchAdmissionKey>(),
+                    HasRequestedKey = false,
+                    HasGlobalBlocker = false
+                });
         registry.Acquire(Arg.Any<ProcessLaunchAdmission>())
                 .Returns((IProcessLaunchAdmissionLease?)null);
         var harness = new Harness
@@ -321,7 +324,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth(Model, ModelRole.Chat, IsResponsive: true, "ok")]
+            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]
         };
         var service = harness.Build();
 
@@ -345,7 +348,7 @@ public sealed class CapacityServiceTests
         {
             Profile = GpuProfile(64 * Gb),
             Footprint = GpuFootprint(1 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth(Model, ModelRole.Chat, IsResponsive: false, "Process has exited.", HasExited: true)]
+            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = false, Detail = "Process has exited.", HasExited = true }]
         };
         var service = harness.Build();
 
@@ -363,7 +366,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth(Model, ModelRole.Chat, IsResponsive: false, "Not responding to health probe.")]
+            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model, Role = ModelRole.Chat, IsResponsive = false, Detail = "Not responding to health probe." }]
         };
         var service = harness.Build();
 
@@ -378,7 +381,7 @@ public sealed class CapacityServiceTests
         var harness = new Harness
         {
             Profile = GpuProfile(64 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth(Model.ToUpperInvariant(), ModelRole.Chat, IsResponsive: true, "ok")]
+            RunningLlama = [new LlamaServerProcessHealth { ModelName = Model.ToUpperInvariant(), Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]
         };
         var service = harness.Build();
 
@@ -518,7 +521,7 @@ public sealed class CapacityServiceTests
             Profile = CpuProfile(availableRam: 10 * Gb),
             Footprint = CpuFootprint(8 * Gb),
             MaxLoadedProcesses = 5,
-            RunningLlama = [new LlamaServerProcessHealth("resident/big:Q4_K_M", ModelRole.Chat, IsResponsive: true, "ok")]
+            RunningLlama = [new LlamaServerProcessHealth { ModelName = "resident/big:Q4_K_M", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }]
         };
         var service = harness.Build();
 
@@ -633,7 +636,7 @@ public sealed class CapacityServiceTests
                 GpuVendor = GpuVendor.Amd
             },
             Footprint = GpuFootprint(8 * Gb),
-            RunningLlama = [new LlamaServerProcessHealth("resident/model", ModelRole.Chat, IsResponsive: true, "ok")],
+            RunningLlama = [new LlamaServerProcessHealth { ModelName = "resident/model", Role = ModelRole.Chat, IsResponsive = true, Detail = "ok" }],
             MaxLoadedProcesses = 5
         };
         var service = harness.Build();
@@ -761,7 +764,7 @@ public sealed class CapacityServiceTests
             Footprint = GpuFootprint(40 * Gb),
             RunningOllama =
             [
-                new RunningModelSnapshot("other-model", "other-model", ExpiresAt: null, SizeBytes: 3 * Gb, SizeVramBytes: 3 * Gb)
+                new RunningModelSnapshot { Name = "other-model", ModelName = "other-model", ExpiresAt = null, SizeBytes = 3 * Gb, SizeVramBytes = 3 * Gb }
             ]
         };
         var service = harness.Build();
@@ -833,18 +836,24 @@ public sealed class CapacityServiceTests
         string modelName,
         GpuVariant variant)
     {
-        var allocation = new ProcessContextAllocation(contextTokens,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
-            resources,
-            ContentIdentity: $"{modelName}:0",
-            CacheKey: $"capacity-test:{modelName}");
-        return ModelFootprint.Known(new ProcessLaunchAdmission(modelName,
-            ModelRole.Chat,
-            variant,
-            ResolvedLaunchArguments.Explore(),
-            allocation));
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = contextTokens,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
+            Footprint = resources,
+            ContentIdentity = $"{modelName}:0",
+            CacheKey = $"capacity-test:{modelName}"
+        };
+        return ModelFootprint.Known(new ProcessLaunchAdmission
+        {
+            ModelName = modelName,
+            Role = ModelRole.Chat,
+            Variant = variant,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        });
     }
 
     // An empty-GPU profile: the measured free-VRAM baseline equals total, so existing fit expectations are unchanged.

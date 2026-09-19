@@ -50,12 +50,15 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
         // the load" at zero extra cost. Nothing downstream may branch on it — the fit arithmetic stays in the gate.
         return allocation is null || requiredContextTokens is <= 0 || requiredContextTokens > allocation.ProcessContextTokens
             ? ModelFootprint.Unknown
-            : ModelFootprint.Known(new ProcessLaunchAdmission(modelName,
-                role,
-                variant,
-                resolved,
-                allocation,
-                profile.AvailableVramBytes));
+            : ModelFootprint.Known(new ProcessLaunchAdmission
+            {
+                ModelName = modelName,
+                Role = role,
+                Variant = variant,
+                ResolvedArguments = resolved,
+                Allocation = allocation,
+                GlobalFreeVramBytesAtAdmission = profile.AvailableVramBytes
+            });
     }
 
     public bool TryDownTierForAdmission(ModelFootprint current, out ModelFootprint downTiered)

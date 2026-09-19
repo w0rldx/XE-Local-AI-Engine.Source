@@ -29,14 +29,15 @@ internal sealed class LlamaServerLaunchCapabilityInspector : ILlamaServerLaunchC
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
         var manifest = await _manifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
 
-        return new LlamaServerLaunchCapabilities(variant,
-            manifest.ProbeSucceeded,
-            manifest.Version,
-            manifest.ExecutableSha256,
-            manifest.CacheTypesK,
-            manifest.CacheTypesV,
-            manifest.FlashAttentionModes)
+        return new LlamaServerLaunchCapabilities
         {
+            Variant = variant,
+            ProbeSucceeded = manifest.ProbeSucceeded,
+            ExecutableVersion = manifest.Version,
+            ManifestSha256 = manifest.ExecutableSha256,
+            CacheTypesK = manifest.CacheTypesK,
+            CacheTypesV = manifest.CacheTypesV,
+            FlashAttentionModes = manifest.FlashAttentionModes,
             SupportsAllValues = manifest.SupportsAllOptions
         };
     }

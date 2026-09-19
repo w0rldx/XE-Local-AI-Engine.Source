@@ -41,8 +41,8 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
         ArgumentOutOfRangeException.ThrowIfNegative(offloadedLayers);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(totalLayers);
 
-        var placement = new LlamaLayerPlacement(modelName, role, offloadedLayers, totalLayers);
-        var observation = new Observation(placement, Interlocked.Increment(ref _sequence));
+        var placement = new LlamaLayerPlacement { ModelName = modelName, Role = role, OffloadedLayers = offloadedLayers, TotalLayers = totalLayers };
+        var observation = new Observation { Placement = placement, Sequence = Interlocked.Increment(ref _sequence) };
         _observations[new ObservationKey(modelName, role, variant)] = observation;
     }
 
@@ -73,5 +73,10 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
             HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), Role, Variant);
     }
 
-    private sealed record Observation(LlamaLayerPlacement Placement, long Sequence);
+    private sealed record Observation
+    {
+        public required LlamaLayerPlacement Placement { get; init; }
+
+        public required long Sequence { get; init; }
+    }
 }

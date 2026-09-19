@@ -220,8 +220,8 @@ public sealed class TranscriptionCaptureEndpointTests
             Runtime = new TranscriptionRuntimeView
             {
                 Enabled = true,
-                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
-                Activity = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false),
+                Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true },
+                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false },
                 ManagedRuntime = null,
                 SelectedModelId = null,
                 RecommendedModelId = "base",

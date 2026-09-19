@@ -145,12 +145,13 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
         var scored = TrainingEvaluationResults.Read(running.ResultsJson).Select(entry => entry.SampleId).ToHashSet();
 
         await using var target = await ResolveExecutionTargetAsync(running, cancellationToken);
-        var request = new TransientLlamaServerEvaluationRequest(target.ModelPath,
-            target.AdapterPath,
-            EvaluationContextTokens,
-            TimeSpan.FromMinutes(10),
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1)
+        var request = new TransientLlamaServerEvaluationRequest
         {
+            ModelFilePath = target.ModelPath,
+            AdapterFilePath = target.AdapterPath,
+            ContextTokens = EvaluationContextTokens,
+            ReadinessTimeout = TimeSpan.FromMinutes(10),
+            LaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1,
             TeardownTimeout = TimeSpan.FromSeconds(5)
         };
         var result = await _evaluationHarness.RunAsync(request,

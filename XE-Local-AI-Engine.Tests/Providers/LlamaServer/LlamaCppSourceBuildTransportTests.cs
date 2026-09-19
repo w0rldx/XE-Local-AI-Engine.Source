@@ -95,7 +95,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
-               .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
+               .Returns(new LlamaCppSourceBuildStartResult { Outcome = outcome, RunningProcessCount = runningProcessCount });
         var prerequisiteProbe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         await using var factory = new TestServerWebAppFactory
@@ -193,17 +193,20 @@ public sealed class LlamaCppSourceBuildTransportTests
                {
                    // Mirrors what the production service does with whatever the endpoint handed it.
                    _ = LlamaCppSourceBuildRequestValidation.Normalize(call.Arg<LlamaCppSourceBuildRequest>());
-                   return new LlamaCppSourceBuildStartResult(LlamaCppSourceBuildStartOutcome.Started);
+                   return new LlamaCppSourceBuildStartResult { Outcome = LlamaCppSourceBuildStartOutcome.Started };
                });
-        service.GetStatus().Returns(new LlamaCppSourceBuildStatus(LlamaCppSourceBuildPhase.Cloning,
-            IsRunning: true,
-            Terminal: false,
-            LogLines: [],
-            LogStartSequence: 0,
-            SanitizedError: null,
-            CurrentBuild: null,
-            StartedAtUtc: null,
-            CompletedAtUtc: null));
+        service.GetStatus().Returns(new LlamaCppSourceBuildStatus
+        {
+            Phase = LlamaCppSourceBuildPhase.Cloning,
+            IsRunning = true,
+            Terminal = false,
+            LogLines = [],
+            LogStartSequence = 0,
+            SanitizedError = null,
+            CurrentBuild = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null
+        });
         await using var factory = new TestServerWebAppFactory
         {
             EnableDevelopmentMode = true,
@@ -250,15 +253,18 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Test]
     public void StatusMapper_PreservesLogStartSequence()
     {
-        var status = new LlamaCppSourceBuildStatus(LlamaCppSourceBuildPhase.Building,
-            true,
-            false,
-            ["line"],
-            37,
-            null,
-            null,
-            null,
-            null);
+        var status = new LlamaCppSourceBuildStatus
+        {
+            Phase = LlamaCppSourceBuildPhase.Building,
+            IsRunning = true,
+            Terminal = false,
+            LogLines = ["line"],
+            LogStartSequence = 37,
+            SanitizedError = null,
+            CurrentBuild = null,
+            StartedAtUtc = null,
+            CompletedAtUtc = null
+        };
 
         var response = status.ToResponse();
 
@@ -385,16 +391,17 @@ public sealed class LlamaCppSourceBuildTransportTests
                     });
 
         var buildId = Guid.Parse("11111111-1111-4111-8111-111111111111");
-        var custom = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu,
-            LlamaCppSourceSelection.Custom,
-            "https://github.com/example/fork",
-            LlamaCppSourceRevisionMode.DefaultBranch,
-            null,
-            new string('a', 40))
+        var custom = new LlamaCppSourceBuildDescriptor
         {
+            Variant = GpuVariant.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork",
+            RevisionMode = LlamaCppSourceRevisionMode.DefaultBranch,
+            RequestedCommit = null,
+            ResolvedCommit = new string('a', 40),
             BuildId = buildId
         };
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", [], 41, false, null, custom));
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent { Phase = "Building", AppendedLogLines = [], AppendedLogStartSequence = 41, Terminal = false, SanitizedError = null, CurrentBuild = custom });
 
         await genericProxy.Received(1).SendCoreAsync(LlamaCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
         var payloadJson = JsonSerializer.Serialize(genericPayload, genericPayload!.GetType(), WebJsonOptions);
@@ -406,13 +413,16 @@ public sealed class LlamaCppSourceBuildTransportTests
         AssertEx.Equal("defaultBranch", currentBuild.GetProperty("revisionMode").GetString());
         AssertEx.Equal(expected: 41L, payload.RootElement.GetProperty("appendedLogStartSequence").GetInt64());
 
-        var legacy = new LlamaCppSourceBuildDescriptor(GpuVariant.Cuda,
-            LlamaCppSourceSelection.Official,
-            LlamaCppSourceBuildRequestValidation.OfficialRepository,
-            LlamaCppSourceRevisionMode.EnginePinned,
-            null,
-            LlamaCppReleasePins.PinnedSourceCommitSha);
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", ["line"], 42, false, null, legacy));
+        var legacy = new LlamaCppSourceBuildDescriptor
+        {
+            Variant = GpuVariant.Cuda,
+            Source = LlamaCppSourceSelection.Official,
+            Repository = LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            RevisionMode = LlamaCppSourceRevisionMode.EnginePinned,
+            RequestedCommit = null,
+            ResolvedCommit = LlamaCppReleasePins.PinnedSourceCommitSha
+        };
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent { Phase = "Building", AppendedLogLines = ["line"], AppendedLogStartSequence = 42, Terminal = false, SanitizedError = null, CurrentBuild = legacy });
 
         // A pinned-official CUDA build is not special-cased: it reaches the same hub under the same event name.
         await genericProxy.Received(2).SendCoreAsync(LlamaCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
@@ -446,11 +456,14 @@ public sealed class LlamaCppSourceBuildTransportTests
     {
         var probe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
         probe.ProbeAsync(LlamaCppSourceBackend.Vulkan, Arg.Any<CancellationToken>())
-             .Returns(new LlamaCppSourceBuildPrerequisiteReport(CanBuild: true,
-             [
-                 new LlamaCppSourceBuildPrerequisiteItem("cmake", Satisfied: true, "4.0.1"),
-                 new LlamaCppSourceBuildPrerequisiteItem("vulkan-sdk", Satisfied: true, "1.4")
-             ]));
+             .Returns(new LlamaCppSourceBuildPrerequisiteReport
+             {
+                 CanBuild = true,
+                 Items = [
+                 new LlamaCppSourceBuildPrerequisiteItem { Key = "cmake", Satisfied = true, Detail = "4.0.1" },
+                 new LlamaCppSourceBuildPrerequisiteItem { Key = "vulkan-sdk", Satisfied = true, Detail = "1.4" }
+             ]
+             });
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
                                      SourceBuildPrerequisitesRoute + "?backend=vulkan",

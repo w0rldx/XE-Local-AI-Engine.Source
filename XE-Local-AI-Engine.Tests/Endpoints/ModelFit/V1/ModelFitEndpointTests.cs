@@ -287,27 +287,33 @@ public sealed class ModelFitEndpointTests
         const string repoId = "org/vision-GGUF";
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.ListRepoFilesAsync(repoId, Arg.Any<CancellationToken>())
-                 .Returns(new GgufRepoDetail(repoId,
-                     IsGated: false,
-                     License: null,
-                     [
-                         new GgufRepoFile("model-Q4_K_M.gguf",
-                             "Q4_K_M",
-                             SizeBytes: 4096,
-                             Sha256: new string('a', 64),
-                             "rev-1",
-                             Architecture: null,
-                             QuantType: null,
-                             ParamCount: null,
-                             BlockCount: null,
-                             AttentionHeadCount: null,
-                             AttentionHeadCountKV: null,
-                             EmbeddingLength: null,
-                             ContextLength: null)
-                     ]));
+                 .Returns(new GgufRepoDetail
+                 {
+                     RepoId = repoId,
+                     IsGated = false,
+                     License = null,
+                     Files = [
+                         new GgufRepoFile
+                         {
+                             FileName = "model-Q4_K_M.gguf",
+                             Quant = "Q4_K_M",
+                             SizeBytes = 4096,
+                             Sha256 = new string('a', 64),
+                             Revision = "rev-1",
+                             Architecture = null,
+                             QuantType = null,
+                             ParamCount = null,
+                             BlockCount = null,
+                             AttentionHeadCount = null,
+                             AttentionHeadCountKV = null,
+                             EmbeddingLength = null,
+                             ContextLength = null
+                         }
+                     ]
+                 });
         discovery.FindProjectorAsync(repoId, Arg.Any<CancellationToken>())
                  .Returns(repoHasProjector
-                     ? new GgufProjectorFile("mmproj-model-f16.gguf", SizeBytes: 1234, new string('b', 64), "rev-1")
+                     ? new GgufProjectorFile { FileName = "mmproj-model-f16.gguf", SizeBytes = 1234, Sha256 = new string('b', 64), Revision = "rev-1" }
                      : (GgufProjectorFile?)null);
         await using var factory = new TestServerWebAppFactory
         {

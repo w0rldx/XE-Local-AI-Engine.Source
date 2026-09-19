@@ -148,7 +148,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             {
                 if (_isRunning)
                 {
-                    return new TrainingRuntimeInstallResult(TrainingRuntimeInstallOutcome.AlreadyRunning);
+                    return new TrainingRuntimeInstallResult { Outcome = TrainingRuntimeInstallOutcome.AlreadyRunning };
                 }
             }
 
@@ -162,7 +162,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                     string.Equals(item.Key, TrainingRuntimePrerequisiteKeys.FreeDisk, StringComparison.Ordinal) && !item.Satisfied)
                     ? TrainingRuntimeInstallOutcome.InsufficientDisk
                     : TrainingRuntimeInstallOutcome.MissingPrerequisites;
-                return new TrainingRuntimeInstallResult(outcome, report);
+                return new TrainingRuntimeInstallResult { Outcome = outcome, Prerequisites = report };
             }
 
             var cts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
@@ -200,7 +200,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
         // Release the start transaction before letting the detached install touch the work tree.
         startSignal.SetResult();
-        return new TrainingRuntimeInstallResult(TrainingRuntimeInstallOutcome.Started);
+        return new TrainingRuntimeInstallResult { Outcome = TrainingRuntimeInstallOutcome.Started };
     }
 
     /// <inheritdoc />
@@ -208,15 +208,18 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     {
         lock (_stateLock)
         {
-            return new TrainingRuntimeStatus(_phase,
-                _isRunning,
-                Terminal: _phase is TrainingRuntimePhase.Ready or TrainingRuntimePhase.Failed or TrainingRuntimePhase.Idle,
-                LogLines: [.. _logLines],
-                _logStartSequence,
-                _sanitizedError,
-                _installed,
-                _startedAtUtc,
-                _completedAtUtc);
+            return new TrainingRuntimeStatus
+            {
+                Phase = _phase,
+                IsRunning = _isRunning,
+                Terminal = _phase is TrainingRuntimePhase.Ready or TrainingRuntimePhase.Failed or TrainingRuntimePhase.Idle,
+                LogLines = [.. _logLines],
+                LogStartSequence = _logStartSequence,
+                SanitizedError = _sanitizedError,
+                Installed = _installed,
+                StartedAtUtc = _startedAtUtc,
+                CompletedAtUtc = _completedAtUtc
+            };
         }
     }
 
@@ -616,11 +619,14 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         lock (_stateLock)
         {
             _phase = phase;
-            _ = QueuePublish(new TrainingRuntimeStatusHubEvent(phase.ToString(),
-                [],
-                _nextLogSequence,
-                Terminal: false,
-                SanitizedError: null));
+            _ = QueuePublish(new TrainingRuntimeStatusHubEvent
+            {
+                Phase = phase.ToString(),
+                AppendedLogLines = [],
+                AppendedLogStartSequence = _nextLogSequence,
+                Terminal = false,
+                SanitizedError = null
+            });
         }
     }
 
@@ -640,11 +646,14 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             _completedAtUtc = _timeProvider.GetUtcNow();
             _installed = installed;
 
-            publish = QueuePublish(new TrainingRuntimeStatusHubEvent(phase.ToString(),
-                [],
-                _nextLogSequence,
-                Terminal: true,
-                sanitizedError));
+            publish = QueuePublish(new TrainingRuntimeStatusHubEvent
+            {
+                Phase = phase.ToString(),
+                AppendedLogLines = [],
+                AppendedLogStartSequence = _nextLogSequence,
+                Terminal = true,
+                SanitizedError = sanitizedError
+            });
         }
 
         await publish.ConfigureAwait(false);
@@ -654,7 +663,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     {
         lock (_stateLock)
         {
-            return QueuePublish(new TrainingRuntimeStatusHubEvent(phase.ToString(), [], _nextLogSequence, terminal, sanitizedError));
+            return QueuePublish(new TrainingRuntimeStatusHubEvent { Phase = phase.ToString(), AppendedLogLines = [], AppendedLogStartSequence = _nextLogSequence, Terminal = terminal, SanitizedError = sanitizedError });
         }
     }
 
@@ -673,11 +682,14 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             }
 
             _logStartSequence = _nextLogSequence - _logLines.Count;
-            _ = QueuePublish(new TrainingRuntimeStatusHubEvent(_phase.ToString(),
-                [redacted],
-                appendedSequence,
-                Terminal: false,
-                SanitizedError: null));
+            _ = QueuePublish(new TrainingRuntimeStatusHubEvent
+            {
+                Phase = _phase.ToString(),
+                AppendedLogLines = [redacted],
+                AppendedLogStartSequence = appendedSequence,
+                Terminal = false,
+                SanitizedError = null
+            });
         }
     }
 

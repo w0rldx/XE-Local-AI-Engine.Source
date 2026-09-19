@@ -24,22 +24,34 @@ public enum LlamaCppSourceRevisionMode
 }
 
 /// <summary>An immutable, validated source-build request.</summary>
-public sealed record LlamaCppSourceBuildRequest(
-    LlamaCppSourceBackend Backend,
-    LlamaCppSourceSelection Source,
-    string? Repository = null,
-    string? Commit = null,
-    bool AcknowledgeCustomSourceRisk = false);
+public sealed record LlamaCppSourceBuildRequest
+{
+    public required LlamaCppSourceBackend Backend { get; init; }
+
+    public required LlamaCppSourceSelection Source { get; init; }
+
+    public string? Repository { get; init; }
+
+    public string? Commit { get; init; }
+
+    public bool AcknowledgeCustomSourceRisk { get; init; }
+}
 
 /// <summary>Exact provenance and revision intent for one build run.</summary>
-public sealed record LlamaCppSourceBuildDescriptor(
-    GpuVariant Variant,
-    LlamaCppSourceSelection Source,
-    string Repository,
-    LlamaCppSourceRevisionMode RevisionMode,
-    string? RequestedCommit,
-    string? ResolvedCommit)
+public sealed record LlamaCppSourceBuildDescriptor
 {
+    public required GpuVariant Variant { get; init; }
+
+    public required LlamaCppSourceSelection Source { get; init; }
+
+    public required string Repository { get; init; }
+
+    public required LlamaCppSourceRevisionMode RevisionMode { get; init; }
+
+    public required string? RequestedCommit { get; init; }
+
+    public required string? ResolvedCommit { get; init; }
+
     /// <summary>Immutable identity of this concrete run, distinct even when revision intent is repeated.</summary>
     public Guid BuildId { get; init; }
 }
@@ -67,22 +79,35 @@ public enum LlamaCppSourceBuildStartOutcome
     RuntimeBusy = 5
 }
 
-public sealed record LlamaCppSourceBuildStartResult(
-    LlamaCppSourceBuildStartOutcome Outcome,
-    LlamaCppSourceBuildPrerequisiteReport? Prerequisites = null,
-    int RunningProcessCount = 0);
-
-public sealed record LlamaCppSourceBuildStatus(
-    LlamaCppSourceBuildPhase Phase,
-    bool IsRunning,
-    bool Terminal,
-    IReadOnlyList<string> LogLines,
-    long LogStartSequence,
-    string? SanitizedError,
-    LlamaCppSourceBuildDescriptor? CurrentBuild,
-    DateTimeOffset? StartedAtUtc,
-    DateTimeOffset? CompletedAtUtc)
+public sealed class LlamaCppSourceBuildStartResult
 {
+    public required LlamaCppSourceBuildStartOutcome Outcome { get; init; }
+
+    public LlamaCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
+
+    public int RunningProcessCount { get; init; }
+}
+
+public sealed class LlamaCppSourceBuildStatus
+{
+    public required LlamaCppSourceBuildPhase Phase { get; init; }
+
+    public required bool IsRunning { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required IReadOnlyList<string> LogLines { get; init; }
+
+    public required long LogStartSequence { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required LlamaCppSourceBuildDescriptor? CurrentBuild { get; init; }
+
+    public required DateTimeOffset? StartedAtUtc { get; init; }
+
+    public required DateTimeOffset? CompletedAtUtc { get; init; }
+
     public Guid? BuildId => CurrentBuild?.BuildId;
 }
 

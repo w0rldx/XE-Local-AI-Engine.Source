@@ -343,26 +343,35 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         var memberArray = members.ToArray();
         var contentFingerprint = GgufModelContentFingerprint.ComputeV1(memberArray
                                                                        .Where(static member => member.Role != InstalledModelPhysicalMemberRole.Sidecar)
-                                                                       .Select(static member => new GgufModelContentMember(member.RelativePath,
-                                                                           member.Role,
-                                                                           member.SizeBytes,
-                                                                           member.Sha256,
-                                                                           member.OwningAliases)));
-        var snapshot = new InstalledGgufSnapshot(modelName,
-            "registry-r1",
-            aliases,
-            GgufRegistryAliasSetHash.ComputeV1(aliases),
-            memberArray,
-            GgufPhysicalMemberSetHash.ComputeV1(memberArray),
-            origin,
-            "org/repo",
-            "source-r1",
-            "Q4_K_M",
-            GgufRole.Chat,
-            contentFingerprint);
-        var candidate = new InstalledGgufCandidate(modelName,
-            aliases,
-            memberArray.Select(static member => member.RelativePath).ToArray());
+                                                                       .Select(static member => new GgufModelContentMember
+                                                                       {
+                                                                           RelativePath = member.RelativePath,
+                                                                           Role = member.Role,
+                                                                           SizeBytes = member.SizeBytes,
+                                                                           Sha256 = member.Sha256,
+                                                                           OwningAliases = member.OwningAliases
+                                                                       }));
+        var snapshot = new InstalledGgufSnapshot
+        {
+            ModelName = modelName,
+            RegistryRevision = "registry-r1",
+            RegistryAliases = aliases,
+            RegistryAliasSetHash = GgufRegistryAliasSetHash.ComputeV1(aliases),
+            Members = memberArray,
+            PhysicalMemberSetHash = GgufPhysicalMemberSetHash.ComputeV1(memberArray),
+            Origin = origin,
+            RepoId = "org/repo",
+            SourceRevision = "source-r1",
+            Quantization = "Q4_K_M",
+            Role = GgufRole.Chat,
+            ModelContentFingerprint = contentFingerprint
+        };
+        var candidate = new InstalledGgufCandidate
+        {
+            ModelName = modelName,
+            RegistryAliases = aliases,
+            MemberRelativePaths = memberArray.Select(static member => member.RelativePath).ToArray()
+        };
         return new SnapshotFixture(snapshot,
             aliases,
             owners,

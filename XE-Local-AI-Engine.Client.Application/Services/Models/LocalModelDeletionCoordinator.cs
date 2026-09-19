@@ -259,18 +259,21 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
     }
 
     private static InstalledGgufSnapshot ToProviderSnapshot(InstalledModelSnapshot snapshot) =>
-        new(snapshot.ModelName,
-            snapshot.RegistryRevision,
-            snapshot.RegistryAliases,
-            snapshot.RegistryAliasSetHash,
-            snapshot.Members,
-            snapshot.PhysicalMemberSetHash,
-            snapshot.Origin,
-            snapshot.RepoId,
-            snapshot.SourceRevision,
-            snapshot.Quantization,
-            snapshot.Role,
-            snapshot.ModelContentFingerprint);
+        new()
+        {
+            ModelName = snapshot.ModelName,
+            RegistryRevision = snapshot.RegistryRevision,
+            RegistryAliases = snapshot.RegistryAliases,
+            RegistryAliasSetHash = snapshot.RegistryAliasSetHash,
+            Members = snapshot.Members,
+            PhysicalMemberSetHash = snapshot.PhysicalMemberSetHash,
+            Origin = snapshot.Origin,
+            RepoId = snapshot.RepoId,
+            SourceRevision = snapshot.SourceRevision,
+            Quantization = snapshot.Quantization,
+            Role = snapshot.Role,
+            ModelContentFingerprint = snapshot.ModelContentFingerprint
+        };
 
     private sealed record DeletionAliasMapping(string ModelName, ModelProviderMapRecord? Mapping);
 

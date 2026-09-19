@@ -628,18 +628,21 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     private static LlamaServerLoadObservation LoadObservation(string modelName, long? globalFree, long? admitted) =>
-        new(ModelRole.Chat,
-            GpuVariant.Cuda,
-            RuntimeVersion: "b10375",
-            RuntimeSha256: null,
-            ReadinessDurationMs: 1_200,
-            LlamaServerReadinessOutcome.Ready,
-            LlamaServerPlacementOutcome.Full,
-            LlamaServerLoadAttemptKind.Primary,
-            SpeculativeModeClass.Disabled,
-            modelName,
-            globalFree,
-            admitted);
+        new()
+        {
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cuda,
+            RuntimeVersion = "b10375",
+            RuntimeSha256 = null,
+            ReadinessDurationMs = 1_200,
+            Outcome = LlamaServerReadinessOutcome.Ready,
+            Placement = LlamaServerPlacementOutcome.Full,
+            AttemptKind = LlamaServerLoadAttemptKind.Primary,
+            SpeculativeModeClass = SpeculativeModeClass.Disabled,
+            ModelName = modelName,
+            GlobalFreeVramBytesAtLoad = globalFree,
+            AdmittedVramBytes = admitted
+        };
 
     private static AgentWorkSessionSnapshot Session(Guid sessionId, Guid conversationId) =>
         new()

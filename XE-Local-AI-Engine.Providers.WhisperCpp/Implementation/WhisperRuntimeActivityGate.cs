@@ -102,11 +102,14 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
 
     private WhisperRuntimeActivitySnapshot SnapshotUnderLock()
     {
-        return new WhisperRuntimeActivitySnapshot(_activeTranscriptions,
-            _spawnReadiness,
-            _residentProcesses,
-            _mutationReserved,
-            _evictionReserved);
+        return new WhisperRuntimeActivitySnapshot
+        {
+            ActiveTranscriptionCount = _activeTranscriptions,
+            SpawnReadinessCount = _spawnReadiness,
+            ResidentProcessCount = _residentProcesses,
+            MutationReserved = _mutationReserved,
+            EvictionReserved = _evictionReserved
+        };
     }
 
     private void Release(LeaseKind kind)

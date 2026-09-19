@@ -453,7 +453,7 @@ public sealed class RuntimeAcquisitionProgressTests
         public Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct)
         {
             return Task.FromResult(LlamaCppReleaseResult.ForAsset(_companionTag,
-                new LlamaCppReleaseAsset(_companionAsset, LlamaCppReleasePins.DownloadUri(_companionTag, _companionAsset), _companionDigest, _companionSize)));
+                new LlamaCppReleaseAsset { Name = _companionAsset, DownloadUrl = LlamaCppReleasePins.DownloadUri(_companionTag, _companionAsset), Digest = _companionDigest, Size = _companionSize }));
         }
     }
 

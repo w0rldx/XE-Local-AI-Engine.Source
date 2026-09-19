@@ -700,10 +700,13 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
         store.ReadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<InstalledRuntimeState?>(runtime));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult(new LlamaBinary(binaryPath,
-                         binaryVersion ?? runtime.Tag,
-                         runtime.Variant,
-                         IsPinnedFallback: false)));
+                     .Returns(Task.FromResult(new LlamaBinary
+                     {
+                         ServerExecutablePath = binaryPath,
+                         Version = binaryVersion ?? runtime.Tag,
+                         Variant = runtime.Variant,
+                         IsPinnedFallback = false
+                     }));
         var modelStore = Substitute.For<IGgufModelStore>();
         modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult(resolvedDraftPath));

@@ -18,15 +18,21 @@ public static class WhisperCppSourceBuildEvents
 /// <summary>
 ///     One change in the build's state: the phase now, and only the log lines appended since the last event.
 /// </summary>
-/// <param name="AppendedLogLines">The new lines, never the whole retained tail.</param>
-/// <param name="AppendedLogStartSequence">Sequence number of the first appended line, so a subscriber can spot a gap.</param>
-public sealed record WhisperCppSourceBuildStatusEvent(
-    WhisperCppSourceBuildPhase Phase,
-    IReadOnlyList<string> AppendedLogLines,
-    long AppendedLogStartSequence,
-    bool Terminal,
-    string? SanitizedError,
-    WhisperCppSourceBuildDescriptor? CurrentBuild)
+public sealed class WhisperCppSourceBuildStatusEvent
 {
+    public required WhisperCppSourceBuildPhase Phase { get; init; }
+
+    /// <summary>The new lines, never the whole retained tail.</summary>
+    public required IReadOnlyList<string> AppendedLogLines { get; init; }
+
+    /// <summary>Sequence number of the first appended line, so a subscriber can spot a gap.</summary>
+    public required long AppendedLogStartSequence { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required WhisperCppSourceBuildDescriptor? CurrentBuild { get; init; }
+
     public Guid? BuildId => CurrentBuild?.BuildId;
 }

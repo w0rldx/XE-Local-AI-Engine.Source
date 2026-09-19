@@ -306,17 +306,20 @@ public sealed partial class InvocationRunner
         IReadOnlyList<ChatMessage> messages,
         int? effectiveContextTokens)
     {
-        return new InvocationAgentDefinition(resolvedModel,
-            package.ResolvedSystemPrompt,
-            BuildInvocationTools(package),
-            messages,
-            package.ReasoningEffort,
-            package.SupportsThinking,
-            MapSamplingOptions(package.SamplingOptions),
-            MapSkills(package.Skills),
-            effectiveContextTokens,
-            package.ResponseJsonSchema,
-            package.ReasoningBudgetEnforceable);
+        return new InvocationAgentDefinition
+        {
+            ModelId = resolvedModel,
+            Instructions = package.ResolvedSystemPrompt,
+            Tools = BuildInvocationTools(package),
+            ConversationContext = messages,
+            ReasoningEffort = package.ReasoningEffort,
+            SupportsThinking = package.SupportsThinking,
+            Sampling = MapSamplingOptions(package.SamplingOptions),
+            Skills = MapSkills(package.Skills),
+            EffectiveContextTokens = effectiveContextTokens,
+            ResponseJsonSchema = package.ResponseJsonSchema,
+            ReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable
+        };
     }
 
     /// <summary>
@@ -468,14 +471,17 @@ public sealed partial class InvocationRunner
 
         return
         [
-            .. skills.Select(static skill => new InvocationSkill(skill.Name,
-                skill.Description,
-                skill.Body,
-                skill.License,
-                skill.Compatibility,
-                skill.AllowedTools,
-                skill.Metadata,
-                MapSkillResources(skill.Resources)))
+            .. skills.Select(static skill => new InvocationSkill
+            {
+                Name = skill.Name,
+                Description = skill.Description,
+                Body = skill.Body,
+                License = skill.License,
+                Compatibility = skill.Compatibility,
+                AllowedTools = skill.AllowedTools,
+                Metadata = skill.Metadata,
+                Resources = MapSkillResources(skill.Resources)
+            })
         ];
     }
 
@@ -490,7 +496,7 @@ public sealed partial class InvocationRunner
             return null;
         }
 
-        return [.. resources.Select(static resource => new InvocationSkillResource(resource.Name, resource.Description, resource.MediaType, resource.Content))];
+        return [.. resources.Select(static resource => new InvocationSkillResource { Name = resource.Name, Description = resource.Description, MediaType = resource.MediaType, Content = resource.Content })];
     }
 
     /// <summary>

@@ -4,25 +4,32 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     What the llama-server executable this node would launch right now actually accepts, as reported by the
 ///     executable itself. Nothing addressable is exposed: the binary is identified by variant, version and digest.
 /// </summary>
-/// <param name="Variant">The llama.cpp build the host selects.</param>
-/// <param name="ProbeSucceeded">
-///     Whether the executable could be interrogated at all. When <see langword="false" /> every support answer is
-///     <see langword="false" /> and the caller must treat the surface as unknown rather than unsupported.
-/// </param>
-/// <param name="ExecutableVersion">The release the executable reported, or <see langword="null" />.</param>
-/// <param name="ManifestSha256">The digest of the inspected executable, or <see langword="null" />.</param>
-/// <param name="CacheTypesK">Element types the executable accepts for <c>-ctk</c>.</param>
-/// <param name="CacheTypesV">Element types the executable accepts for <c>-ctv</c>.</param>
-/// <param name="FlashAttentionModes">Values the executable accepts for <c>-fa</c>.</param>
-public sealed record LlamaServerLaunchCapabilities(
-    GpuVariant Variant,
-    bool ProbeSucceeded,
-    string? ExecutableVersion,
-    string? ManifestSha256,
-    IReadOnlySet<string> CacheTypesK,
-    IReadOnlySet<string> CacheTypesV,
-    IReadOnlySet<string> FlashAttentionModes)
+public sealed class LlamaServerLaunchCapabilities
 {
+    /// <summary>The llama.cpp build the host selects.</summary>
+    public required GpuVariant Variant { get; init; }
+
+    /// <summary>
+    ///     Whether the executable could be interrogated at all. When <see langword="false" /> every support answer is
+    ///     <see langword="false" /> and the caller must treat the surface as unknown rather than unsupported.
+    /// </summary>
+    public required bool ProbeSucceeded { get; init; }
+
+    /// <summary>The release the executable reported, or <see langword="null" />.</summary>
+    public required string? ExecutableVersion { get; init; }
+
+    /// <summary>The digest of the inspected executable, or <see langword="null" />.</summary>
+    public required string? ManifestSha256 { get; init; }
+
+    /// <summary>Element types the executable accepts for <c>-ctk</c>.</summary>
+    public required IReadOnlySet<string> CacheTypesK { get; init; }
+
+    /// <summary>Element types the executable accepts for <c>-ctv</c>.</summary>
+    public required IReadOnlySet<string> CacheTypesV { get; init; }
+
+    /// <summary>Values the executable accepts for <c>-fa</c>.</summary>
+    public required IReadOnlySet<string> FlashAttentionModes { get; init; }
+
     /// <summary>
     ///     Set only by the test-support manifest, which stands in for a binary whose full option surface is assumed.
     ///     A real probe always enumerates the values it parsed.

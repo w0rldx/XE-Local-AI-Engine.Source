@@ -728,8 +728,8 @@ public sealed class EvaluationRunExecutorTests : IDisposable
                        var model = await FileIdentityAsync(request.ModelFilePath, request.AdapterFilePath);
                        var launch = LaunchReceipt();
                        var binder = call.ArgAt<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(1);
-                       await binder(new TransientLlamaServerEvaluationProvenance(model, launch), CancellationToken.None);
-                       var session = new TransientLlamaServerEvaluationSession(new Uri("http://127.0.0.1:18080/v1"), model.ModelId, model, launch);
+                       await binder(new TransientLlamaServerEvaluationProvenance { Model = model, Launch = launch }, CancellationToken.None);
+                       var session = new TransientLlamaServerEvaluationSession { BaseAddress = new Uri("http://127.0.0.1:18080/v1"), ModelId = model.ModelId, Model = model, Launch = launch };
                        var body = call.ArgAt<Func<TransientLlamaServerEvaluationSession, CancellationToken,
                            Task<TransientLlamaServerEvaluationSession>>>(2);
                        var value = await body(session, CancellationToken.None);
@@ -739,14 +739,20 @@ public sealed class EvaluationRunExecutorTests : IDisposable
                                ExecutableVersion = "different"
                            }
                            : launch;
-                       return new TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession>(value,
-                           model,
-                           returnedLaunch,
-                           new TransientLlamaServerTeardownEvidence(42,
-                               TreeKillRequested: true,
-                               ProcessExitObserved: completeTeardown,
-                               ExitObservationTimedOut: !completeTeardown,
-                               HandleDisposed: true));
+                       return new TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession>
+                       {
+                           Value = value,
+                           Model = model,
+                           Launch = returnedLaunch,
+                           Teardown = new TransientLlamaServerTeardownEvidence
+                           {
+                               ProcessId = 42,
+                               TreeKillRequested = true,
+                               ProcessExitObserved = completeTeardown,
+                               ExitObservationTimedOut = !completeTeardown,
+                               HandleDisposed = true
+                           }
+                       };
                    });
         return harness;
     }
@@ -755,47 +761,56 @@ public sealed class EvaluationRunExecutorTests : IDisposable
     {
         var modelBytes = await File.ReadAllBytesAsync(modelPath);
         var adapterBytes = adapterPath is null ? null : await File.ReadAllBytesAsync(adapterPath);
-        return new TransientLlamaServerModelProvenance(Path.GetFileName(modelPath),
-            modelBytes.LongLength,
-            Convert.ToHexStringLower(SHA256.HashData(modelBytes)),
-            adapterPath is null ? null : Path.GetFileName(adapterPath),
-            adapterBytes?.LongLength,
-            adapterBytes is null ? null : Convert.ToHexStringLower(SHA256.HashData(adapterBytes)));
+        return new TransientLlamaServerModelProvenance
+        {
+            ModelId = Path.GetFileName(modelPath),
+            ModelSizeBytes = modelBytes.LongLength,
+            ModelSha256 = Convert.ToHexStringLower(SHA256.HashData(modelBytes)),
+            AdapterId = adapterPath is null ? null : Path.GetFileName(adapterPath),
+            AdapterSizeBytes = adapterBytes?.LongLength,
+            AdapterSha256 = adapterBytes is null ? null : Convert.ToHexStringLower(SHA256.HashData(adapterBytes))
+        };
     }
 
     private static LlamaServerLaunchReceipt LaunchReceipt()
     {
-        var projection = new LlamaServerLaunchProjection(AutoFit: false,
-            Metrics: true,
-            ContextTokens: 4096,
-            GpuLayers: null,
-            TensorSplit: null,
-            OverrideTensor: null,
-            CpuMoe: false,
-            KvCacheTypeK: null,
-            KvCacheTypeV: null,
-            LlamaServerLaunchProjection.FlashAttentionAuto,
-            Threads: 4,
-            ThreadsBatch: 4,
-            BatchSize: 512,
-            UbatchSize: 512,
-            Parallel: 1,
-            CacheReuse: null,
-            CacheRamMiB: 0,
-            Jinja: true,
-            Pooling: null);
+        var projection = new LlamaServerLaunchProjection
+        {
+            AutoFit = false,
+            Metrics = true,
+            ContextTokens = 4096,
+            GpuLayers = null,
+            TensorSplit = null,
+            OverrideTensor = null,
+            CpuMoe = false,
+            KvCacheTypeK = null,
+            KvCacheTypeV = null,
+            FlashAttentionMode = LlamaServerLaunchProjection.FlashAttentionAuto,
+            Threads = 4,
+            ThreadsBatch = 4,
+            BatchSize = 512,
+            UbatchSize = 512,
+            Parallel = 1,
+            CacheReuse = null,
+            CacheRamMiB = 0,
+            Jinja = true,
+            Pooling = null
+        };
         var executableSha256 = new string('e', 64);
-        return new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion,
-            GpuVariant.Cuda,
-            "linux",
-            "v1",
-            executableSha256,
-            executableSha256,
-            projection,
-            new LlamaServerLaunchAuxAssets(HasLora: false, HasMmproj: false, HasDraft: false),
-            new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Unknown, null, null),
-            EffectiveContextTokens: 4096,
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+        return new LlamaServerLaunchReceipt
+        {
+            ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+            Variant = GpuVariant.Cuda,
+            Os = "linux",
+            ExecutableVersion = "v1",
+            ExecutableSha256 = executableSha256,
+            ManifestSha256 = executableSha256,
+            LaunchProjection = projection,
+            AuxAssets = new LlamaServerLaunchAuxAssets(HasLora: false, HasMmproj: false, HasDraft: false),
+            Placement = new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Unknown, null, null),
+            EffectiveContextTokens = 4096,
+            BenchmarkLaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+        };
     }
 
     public enum FrozenFixtureMode

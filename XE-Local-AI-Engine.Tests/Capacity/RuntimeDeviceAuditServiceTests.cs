@@ -336,7 +336,7 @@ public sealed class RuntimeDeviceAuditServiceTests
         {
             Variant = variant,
             ProbeSucceeded = true,
-            Devices = [new LlamaGpuDevice("GPU0", 16 * Gb, 15 * Gb)]
+            Devices = [new LlamaGpuDevice { Name = "GPU0", TotalBytes = 16 * Gb, FreeBytes = 15 * Gb }]
         };
     }
 

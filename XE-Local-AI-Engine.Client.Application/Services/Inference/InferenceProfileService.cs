@@ -387,12 +387,12 @@ public sealed class InferenceProfileService : IInferenceProfileService
     {
         if (string.Equals(backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
         {
-            return new LlamaServerProfilingVramSnapshot(GlobalFreeBytes: null, ProcessBudgetBytes: null);
+            return new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = null, ProcessBudgetBytes = null };
         }
 
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
         var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
-        return new LlamaServerProfilingVramSnapshot(hardware.AvailableVramBytes, processBudget);
+        return new LlamaServerProfilingVramSnapshot { GlobalFreeBytes = hardware.AvailableVramBytes, ProcessBudgetBytes = processBudget };
     }
 
     /// <inheritdoc />

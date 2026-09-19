@@ -94,7 +94,7 @@ internal sealed class ListToolsFunction : AIFunction
         }
 
         var listing = decision.HiddenNames
-                              .Select(name => new HiddenTool(name, DescribeTool(name)))
+                              .Select(name => new HiddenTool { Name = name, Description = DescribeTool(name) })
                               .ToList();
 
         // Reveal AFTER the listing is materialised, on the decision this instance was bound to and on no other.
@@ -113,5 +113,10 @@ internal sealed class ListToolsFunction : AIFunction
         return description.Length <= MaxDescriptionLength ? description : description[..MaxDescriptionLength];
     }
 
-    private sealed record HiddenTool(string Name, string Description);
+    private sealed record HiddenTool
+    {
+        public required string Name { get; init; }
+
+        public required string Description { get; init; }
+    }
 }

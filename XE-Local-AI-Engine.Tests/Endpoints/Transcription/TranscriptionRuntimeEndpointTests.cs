@@ -29,13 +29,16 @@ public sealed class TranscriptionRuntimeEndpointTests
             Runtime = new TranscriptionRuntimeView
             {
                 Enabled = true,
-                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Ready,
-                    "base",
-                    WhisperBackend.Cuda,
-                    "b5130",
-                    WhisperBinarySource.Pinned,
-                    SupportsTranscode: true),
-                Activity = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 1, MutationReserved: false, EvictionReserved: false),
+                Runtime = new WhisperRuntimeStatusSnapshot
+                {
+                    State = WhisperRuntimeState.Ready,
+                    LoadedModelId = "base",
+                    Backend = WhisperBackend.Cuda,
+                    BinaryVersion = "b5130",
+                    BinarySource = WhisperBinarySource.Pinned,
+                    SupportsTranscode = true
+                },
+                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 1, MutationReserved = false, EvictionReserved = false },
                 ManagedRuntime = null,
                 SelectedModelId = "large-v3-turbo",
                 RecommendedModelId = "large-v3-turbo-q8_0",
@@ -90,7 +93,7 @@ public sealed class TranscriptionRuntimeEndpointTests
         {
             Runtime = StoppedRuntime() with
             {
-                Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: false)
+                Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = false }
             }
         };
         await using var factory = FactoryWith(service);
@@ -160,10 +163,10 @@ public sealed class TranscriptionRuntimeEndpointTests
     [Test]
     public async Task Eject_WhileATranscriptionIsRunning_Returns409RuntimeBusyWithTheActivitySnapshot()
     {
-        var busy = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 1, SpawnReadinessCount: 0, ResidentProcessCount: 1, MutationReserved: false, EvictionReserved: false);
+        var busy = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 1, SpawnReadinessCount = 0, ResidentProcessCount = 1, MutationReserved = false, EvictionReserved = false };
         var service = new StubTranscriptionRuntimeService
         {
-            EvictResult = new WhisperServerEvictResult(Evicted: false, busy)
+            EvictResult = new WhisperServerEvictResult { Evicted = false, Activity = busy }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -187,8 +190,11 @@ public sealed class TranscriptionRuntimeEndpointTests
     {
         var service = new StubTranscriptionRuntimeService
         {
-            EvictResult = new WhisperServerEvictResult(Evicted: true,
-                new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false))
+            EvictResult = new WhisperServerEvictResult
+            {
+                Evicted = true,
+                Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -314,8 +320,8 @@ public sealed class TranscriptionRuntimeEndpointTests
         new()
         {
             Enabled = true,
-            Runtime = new WhisperRuntimeStatusSnapshot(WhisperRuntimeState.Stopped, null, null, null, null, SupportsTranscode: true),
-            Activity = new WhisperRuntimeActivitySnapshot(ActiveTranscriptionCount: 0, SpawnReadinessCount: 0, ResidentProcessCount: 0, MutationReserved: false, EvictionReserved: false),
+            Runtime = new WhisperRuntimeStatusSnapshot { State = WhisperRuntimeState.Stopped, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true },
+            Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false },
             ManagedRuntime = null,
             SelectedModelId = null,
             RecommendedModelId = "base",
@@ -329,7 +335,7 @@ public sealed class TranscriptionRuntimeEndpointTests
         public TranscriptionRuntimeView Runtime { get; init; } = StoppedRuntime();
 
         public WhisperServerEvictResult EvictResult { get; init; } =
-            new(Evicted: true, new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false));
+            new() { Evicted = true, Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false } };
 
         public WhisperModelEntry Recommended { get; init; } = WhisperModelCatalog.Models[0];
 

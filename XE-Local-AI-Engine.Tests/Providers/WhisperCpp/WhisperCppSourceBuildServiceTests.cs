@@ -320,7 +320,7 @@ public sealed class WhisperCppSourceBuildServiceTests
             "The echoed command line must be scrubbed like every other surfaced line.");
     }
 
-    private static WhisperCppSourceBuildRequest OfficialCudaRequest => new(WhisperBackend.Cuda, WhisperCppSourceSelection.Official);
+    private static WhisperCppSourceBuildRequest OfficialCudaRequest => new() { Backend = WhisperBackend.Cuda, Source = WhisperCppSourceSelection.Official };
 
     private static string Readelf(string entry) =>
         "Dynamic section at offset 0x2d18 contains 30 entries:\n"
@@ -482,7 +482,7 @@ public sealed class WhisperCppSourceBuildServiceTests
                 stdout = string.Empty;
             }
 
-            return new WhisperSourceCommandResult(ExitCode: 0, stdout, StandardError: string.Empty);
+            return new WhisperSourceCommandResult { ExitCode = 0, StandardOutput = stdout, StandardError = string.Empty };
         }
     }
 
@@ -490,8 +490,11 @@ public sealed class WhisperCppSourceBuildServiceTests
     {
         public Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
         {
-            return Task.FromResult(new WhisperCppSourceBuildPrerequisiteReport(true,
-                [new WhisperCppSourceBuildPrerequisiteItem("os-is-linux", true, "Linux host detected.")]));
+            return Task.FromResult(new WhisperCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = true,
+                Items = [new WhisperCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." }]
+            });
         }
     }
 }

@@ -17,7 +17,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
     {
         // The caller does not get to name the official repository: the server fills it in, so a request that lies
         // about what "official" means cannot be smuggled through.
-        var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cuda, WhisperCppSourceSelection.Official));
+        var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest { Backend = WhisperBackend.Cuda, Source = WhisperCppSourceSelection.Official });
 
         AssertEx.Equal(WhisperCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
         AssertEx.Null(normalized.Commit, "The official source builds the engine-pinned revision, never a caller's commit.");
@@ -32,9 +32,12 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
     public void Normalize_OfficialSourceWithACommit_Throws()
     {
         var exception = AssertEx.Throws<WhisperRuntimeException>(() =>
-            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cuda,
-                WhisperCppSourceSelection.Official,
-                Commit: new string(c: 'a', count: 40))));
+            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
+            {
+                Backend = WhisperBackend.Cuda,
+                Source = WhisperCppSourceSelection.Official,
+                Commit = new string(c: 'a', count: 40)
+            }));
 
         AssertEx.Contains(exception.Message, "engine-pinned revision");
     }
@@ -44,10 +47,13 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
     {
         // The acknowledgement is the whole point: a custom repository's build scripts execute locally.
         var exception = AssertEx.Throws<WhisperRuntimeException>(() =>
-            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cuda,
-                WhisperCppSourceSelection.Custom,
-                "https://github.com/someone/whisper.cpp",
-                AcknowledgeCustomSourceRisk: false)));
+            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
+            {
+                Backend = WhisperBackend.Cuda,
+                Source = WhisperCppSourceSelection.Custom,
+                Repository = "https://github.com/someone/whisper.cpp",
+                AcknowledgeCustomSourceRisk = false
+            }));
 
         AssertEx.Contains(exception.Message, "acknowledgement");
     }
@@ -63,10 +69,13 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
     public void Normalize_NonGitHubRepository_Throws(string repository, string because)
     {
         _ = AssertEx.Throws<WhisperRuntimeException>(() =>
-            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cuda,
-                WhisperCppSourceSelection.Custom,
-                repository,
-                AcknowledgeCustomSourceRisk: true)));
+            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
+            {
+                Backend = WhisperBackend.Cuda,
+                Source = WhisperCppSourceSelection.Custom,
+                Repository = repository,
+                AcknowledgeCustomSourceRisk = true
+            }));
 
         AssertEx.NotEmpty(because);
     }
@@ -80,11 +89,14 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
         // Only a full 40-character SHA identifies a revision unambiguously; an abbreviation can become ambiguous as
         // the repository grows.
         var exception = AssertEx.Throws<WhisperRuntimeException>(() =>
-            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cuda,
-                WhisperCppSourceSelection.Custom,
-                "https://github.com/owner/repo",
-                commit,
-                AcknowledgeCustomSourceRisk: true)));
+            WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
+            {
+                Backend = WhisperBackend.Cuda,
+                Source = WhisperCppSourceSelection.Custom,
+                Repository = "https://github.com/owner/repo",
+                Commit = commit,
+                AcknowledgeCustomSourceRisk = true
+            }));
 
         AssertEx.Contains(exception.Message, "40-character");
     }
@@ -92,11 +104,14 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
     [Test]
     public void Normalize_CustomSource_CanonicalizesTheRepositoryAndTheCommit()
     {
-        var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cpu,
-            WhisperCppSourceSelection.Custom,
-            "https://github.com/Owner/Repo.git",
-            new string(c: 'A', count: 40),
-            AcknowledgeCustomSourceRisk: true));
+        var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
+        {
+            Backend = WhisperBackend.Cpu,
+            Source = WhisperCppSourceSelection.Custom,
+            Repository = "https://github.com/Owner/Repo.git",
+            Commit = new string(c: 'A', count: 40),
+            AcknowledgeCustomSourceRisk = true
+        });
 
         AssertEx.Equal("https://github.com/Owner/Repo", normalized.Repository);
         AssertEx.Equal(new string(c: 'a', count: 40), normalized.Commit);

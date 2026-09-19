@@ -301,23 +301,26 @@ internal sealed class GgufHeaderReader
         // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
         var chatTemplate = GetString(values, "tokenizer.chat_template");
 
-        return new GgufHeaderMetadata(architecture,
-            quantType,
-            paramCount,
-            blockCount,
-            headCount,
-            headCountKv,
-            embeddingLength,
-            contextLength,
-            chatTemplate,
-            expertCount,
-            expertUsedCount,
-            attentionKeyLength,
-            attentionValueLength,
-            slidingWindow,
-            slidingWindowPattern,
-            attentionKeyLengthMla,
-            attentionValueLengthMla);
+        return new GgufHeaderMetadata
+        {
+            Architecture = architecture,
+            QuantType = quantType,
+            ParamCount = paramCount,
+            BlockCount = blockCount,
+            AttentionHeadCount = headCount,
+            AttentionHeadCountKV = headCountKv,
+            EmbeddingLength = embeddingLength,
+            ContextLength = contextLength,
+            ChatTemplate = chatTemplate,
+            ExpertCount = expertCount,
+            ExpertUsedCount = expertUsedCount,
+            AttentionKeyLength = attentionKeyLength,
+            AttentionValueLength = attentionValueLength,
+            SlidingWindow = slidingWindow,
+            SlidingWindowPattern = slidingWindowPattern,
+            AttentionKeyLengthMla = attentionKeyLengthMla,
+            AttentionValueLengthMla = attentionValueLengthMla
+        };
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
@@ -629,29 +632,62 @@ internal sealed class GgufHeaderReader
 ///     Standardized GGUF header metadata extracted via a range read. Any field absent from the header is
 ///     <see langword="null" />.
 /// </summary>
-internal sealed record GgufHeaderMetadata(
-    string? Architecture,
-    string? QuantType,
-    long? ParamCount,
-    long? BlockCount,
-    long? AttentionHeadCount,
-    long? AttentionHeadCountKV,
-    long? EmbeddingLength,
-    long? ContextLength,
-    string? ChatTemplate,
-    long? ExpertCount,
-    long? ExpertUsedCount,
-    long? AttentionKeyLength = null,
-    long? AttentionValueLength = null,
-    long? SlidingWindow = null,
-    long? SlidingWindowPattern = null,
-    long? AttentionKeyLengthMla = null,
-    long? AttentionValueLengthMla = null)
+internal sealed class GgufHeaderMetadata
 {
-    public static GgufHeaderMetadata Empty { get; } = new(Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
-        EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null, ExpertUsedCount: null,
-        AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
-        AttentionKeyLengthMla: null, AttentionValueLengthMla: null);
+    public required string? Architecture { get; init; }
+
+    public required string? QuantType { get; init; }
+
+    public required long? ParamCount { get; init; }
+
+    public required long? BlockCount { get; init; }
+
+    public required long? AttentionHeadCount { get; init; }
+
+    public required long? AttentionHeadCountKV { get; init; }
+
+    public required long? EmbeddingLength { get; init; }
+
+    public required long? ContextLength { get; init; }
+
+    public required string? ChatTemplate { get; init; }
+
+    public required long? ExpertCount { get; init; }
+
+    public required long? ExpertUsedCount { get; init; }
+
+    public long? AttentionKeyLength { get; init; }
+
+    public long? AttentionValueLength { get; init; }
+
+    public long? SlidingWindow { get; init; }
+
+    public long? SlidingWindowPattern { get; init; }
+
+    public long? AttentionKeyLengthMla { get; init; }
+
+    public long? AttentionValueLengthMla { get; init; }
+
+    public static GgufHeaderMetadata Empty { get; } = new()
+    {
+        Architecture = null,
+        QuantType = null,
+        ParamCount = null,
+        BlockCount = null,
+        AttentionHeadCount = null,
+        AttentionHeadCountKV = null,
+        EmbeddingLength = null,
+        ContextLength = null,
+        ChatTemplate = null,
+        ExpertCount = null,
+        ExpertUsedCount = null,
+        AttentionKeyLength = null,
+        AttentionValueLength = null,
+        SlidingWindow = null,
+        SlidingWindowPattern = null,
+        AttentionKeyLengthMla = null,
+        AttentionValueLengthMla = null
+    };
 
     /// <summary>True when the GGUF declares a positive expert count — a Mixture-of-Experts model (dense models omit it).</summary>
     public bool IsMoe => ExpertCount is > 0;

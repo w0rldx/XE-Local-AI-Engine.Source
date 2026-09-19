@@ -47,8 +47,8 @@ public sealed class LexicalToolRelevanceSelectorTests
     {
         List<ToolRelevanceCandidate> candidates =
         [
-            new("ask_user", "Asks the user a question.", IsCore: true),
-            new("record_finding", "Records a finding.", IsCore: true),
+            new() { Name = "ask_user", Description = "Asks the user a question.", IsCore = true },
+            new() { Name = "record_finding", Description = "Records a finding.", IsCore = true },
             .. BuildNonCore(count: 20)
         ];
 
@@ -63,7 +63,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     [Test]
     public async Task SelectAsync_WhenEveryCandidateIsCoreAndExceedsTheThreshold_HidesNothing()
     {
-        List<ToolRelevanceCandidate> candidates = [.. Enumerable.Range(0, 20).Select(index => new ToolRelevanceCandidate($"core_{index}", "A core tool.", IsCore: true))];
+        List<ToolRelevanceCandidate> candidates = [.. Enumerable.Range(0, 20).Select(index => new ToolRelevanceCandidate { Name = $"core_{index}", Description = "A core tool.", IsCore = true })];
 
         var selection = await BuildSelector().SelectAsync("anything", candidates, Threshold, CancellationToken.None);
 
@@ -79,7 +79,7 @@ public sealed class LexicalToolRelevanceSelectorTests
         // threshold: the threshold is a trigger, not a cap.
         List<ToolRelevanceCandidate> candidates =
         [
-            .. Enumerable.Range(0, 9).Select(index => new ToolRelevanceCandidate($"core_{index}", "A core tool.", IsCore: true)),
+            .. Enumerable.Range(0, 9).Select(index => new ToolRelevanceCandidate { Name = $"core_{index}", Description = "A core tool.", IsCore = true }),
             .. BuildNonCore(count: 20)
         ];
 
@@ -121,7 +121,7 @@ public sealed class LexicalToolRelevanceSelectorTests
         List<ToolRelevanceCandidate> candidates =
         [
             .. BuildNonCore(count: 20),
-            new("search_knowledge_base", "Searches the node knowledge base for matching passages.", IsCore: false)
+            new() { Name = "search_knowledge_base", Description = "Searches the node knowledge base for matching passages.", IsCore = false }
         ];
 
         var selection = await BuildSelector().SelectAsync("search the knowledge base for the pin", candidates, Threshold, CancellationToken.None);
@@ -170,9 +170,13 @@ public sealed class LexicalToolRelevanceSelectorTests
         // is ABOUT converting currency beats the essay that merely mentions it.
         List<ToolRelevanceCandidate> candidates =
         [
-            new("workspace_notes", $"A general workspace note reader. {string.Join(' ', Enumerable.Range(0, 60).Select(index => $"topic{index}"))} It can also convert a currency figure in passing.",
-                IsCore: false),
-            new("currency_convert", "Converts a currency amount between two currencies.", IsCore: false),
+            new()
+            {
+                Name = "workspace_notes",
+                Description = $"A general workspace note reader. {string.Join(' ', Enumerable.Range(0, 60).Select(index => $"topic{index}"))} It can also convert a currency figure in passing.",
+                IsCore = false
+            },
+            new() { Name = "currency_convert", Description = "Converts a currency amount between two currencies.", IsCore = false },
             .. BuildNonCore(count: 3)
         ];
 
@@ -198,44 +202,60 @@ public sealed class LexicalToolRelevanceSelectorTests
 
         return
         [
-            new("GetCurrentTime", "Returns the current UTC time, the local time, and today's date. Use it whenever the user asks what time or what day it is.", IsCore: false),
-            new("Calculate", "Evaluates a basic arithmetic expression using +, -, *, / and parentheses, then returns the numeric result. Use it for any calculation the user asks for.", IsCore: false),
-            new("list_files", "List files and folders in the read-only project workspace. Returns workspace-relative paths only; secrets and heavy generated directories are excluded.", IsCore: false),
-            new("read_file", "Read a UTF-8 text file from the read-only project workspace. Optionally read a line range. Binary files are refused and oversized files are truncated.", IsCore: false),
-            new("search_text", "Search the read-only project workspace for a text or regex pattern. Returns matches as relative/path:line: text; secret files and directories are excluded.",
-                IsCore: false),
-            new("search_knowledge_base",
-                "Search the node-local knowledge base (the operator's own uploaded documents) for passages relevant to a question, and use ONLY the returned passages to ground a document-specific answer. "
+            new() { Name = "GetCurrentTime", Description = "Returns the current UTC time, the local time, and today's date. Use it whenever the user asks what time or what day it is.", IsCore = false },
+            new() { Name = "Calculate", Description = "Evaluates a basic arithmetic expression using +, -, *, / and parentheses, then returns the numeric result. Use it for any calculation the user asks for.", IsCore = false },
+            new() { Name = "list_files", Description = "List files and folders in the read-only project workspace. Returns workspace-relative paths only; secrets and heavy generated directories are excluded.", IsCore = false },
+            new() { Name = "read_file", Description = "Read a UTF-8 text file from the read-only project workspace. Optionally read a line range. Binary files are refused and oversized files are truncated.", IsCore = false },
+            new()
+            {
+                Name = "search_text",
+                Description = "Search the read-only project workspace for a text or regex pattern. Returns matches as relative/path:line: text; secret files and directories are excluded.",
+                IsCore = false
+            },
+            new()
+            {
+                Name = "search_knowledge_base",
+                Description = "Search the node-local knowledge base (the operator's own uploaded documents) for passages relevant to a question, and use ONLY the returned passages to ground a document-specific answer. "
                 + "Prefer this tool whenever the question is about the operator's documents or local knowledge. Answering policy: rely solely on the retrieved passages for document-grounded claims; do not "
                 + "invent facts or fill gaps from prior knowledge; if the results do not contain enough information to answer, say so plainly instead of guessing. Typical flow: search first, then pass the "
                 + "returned collectionId to read_surrounding_chunks around a promising hit, or to read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, "
                 + "content, score, and chunkIndex; an empty result set means the knowledge base has nothing matching the query.",
-                IsCore: false),
-            new("read_document",
-                "Read a single knowledge-base document end to end by its documentId and collectionId (usually obtained from a search_knowledge_base hit). Returns the document's non-sensitive metadata plus "
+                IsCore = false
+            },
+            new()
+            {
+                Name = "read_document",
+                Description = "Read a single knowledge-base document end to end by its documentId and collectionId (usually obtained from a search_knowledge_base hit). Returns the document's non-sensitive metadata plus "
                 + "its ordered chunks. The content is bounded: a very large document is truncated and the result flags that truncation, so read the specific sections you need rather than assuming the whole "
                 + "document is present. Use the returned passages only to ground document-specific claims; do not invent content that is not present.",
-                IsCore: false),
-            new("read_surrounding_chunks",
-                "Read the chunks surrounding a specific chunk within a document, to recover context that straddles a chunk boundary. Identify the target by its documentId, collectionId, and the chunkIndex "
+                IsCore = false
+            },
+            new()
+            {
+                Name = "read_surrounding_chunks",
+                Description = "Read the chunks surrounding a specific chunk within a document, to recover context that straddles a chunk boundary. Identify the target by its documentId, collectionId, and the chunkIndex "
                 + "of a search_knowledge_base hit, and request how many chunks to include before and after it. Returns the neighbor window in document order. Use the returned passages only to ground "
                 + "document-specific claims.",
-                IsCore: false),
-            new("ask_user", "Asks the user a clarifying question and waits for the answer.", IsCore: true),
-            new("spawn_subagent",
-                "Spawn a sub-agent bound to a model to handle a delegated task and return its result. Provide exactly one of subAgentKey (a saved agent's id or name) or modelId (a model to bind directly). "
+                IsCore = false
+            },
+            new() { Name = "ask_user", Description = "Asks the user a clarifying question and waits for the answer.", IsCore = true },
+            new()
+            {
+                Name = "spawn_subagent",
+                Description = "Spawn a sub-agent bound to a model to handle a delegated task and return its result. Provide exactly one of subAgentKey (a saved agent's id or name) or modelId (a model to bind directly). "
                 + "Spawns are capacity-gated: a spawn that would exceed the node's memory or concurrency limits is declined with a reason. Sub-agents cannot themselves spawn.",
-                IsCore: false),
-            new("run_python", "Runs a Python snippet in the node sandbox and returns its output.", IsCore: true),
-            new("update_work_plan", "Updates the work session's plan.", IsCore: true),
-            new("record_finding", "Records a finding on the work session.", IsCore: true),
-            new("save_artifact", "Saves an artifact on the work session.", IsCore: true),
-            new("complete_work_session", "Completes the work session.", IsCore: true),
-            new("custom__currency_convert", string.Format(CultureInfo.InvariantCulture, Stub, "currency_convert"), IsCore: false),
-            new("custom__translate_text", string.Format(CultureInfo.InvariantCulture, Stub, "translate_text"), IsCore: false),
-            new("custom__weather_lookup", string.Format(CultureInfo.InvariantCulture, Stub, "weather_lookup"), IsCore: false),
-            new("custom__stock_quote", string.Format(CultureInfo.InvariantCulture, Stub, "stock_quote"), IsCore: false),
-            new("list_tools", "Lists every tool the agent can call, including any held back from this turn's offer.", IsCore: true)
+                IsCore = false
+            },
+            new() { Name = "run_python", Description = "Runs a Python snippet in the node sandbox and returns its output.", IsCore = true },
+            new() { Name = "update_work_plan", Description = "Updates the work session's plan.", IsCore = true },
+            new() { Name = "record_finding", Description = "Records a finding on the work session.", IsCore = true },
+            new() { Name = "save_artifact", Description = "Saves an artifact on the work session.", IsCore = true },
+            new() { Name = "complete_work_session", Description = "Completes the work session.", IsCore = true },
+            new() { Name = "custom__currency_convert", Description = string.Format(CultureInfo.InvariantCulture, Stub, "currency_convert"), IsCore = false },
+            new() { Name = "custom__translate_text", Description = string.Format(CultureInfo.InvariantCulture, Stub, "translate_text"), IsCore = false },
+            new() { Name = "custom__weather_lookup", Description = string.Format(CultureInfo.InvariantCulture, Stub, "weather_lookup"), IsCore = false },
+            new() { Name = "custom__stock_quote", Description = string.Format(CultureInfo.InvariantCulture, Stub, "stock_quote"), IsCore = false },
+            new() { Name = "list_tools", Description = "Lists every tool the agent can call, including any held back from this turn's offer.", IsCore = true }
         ];
     }
 
@@ -246,6 +266,6 @@ public sealed class LexicalToolRelevanceSelectorTests
 
     private static List<ToolRelevanceCandidate> BuildNonCore(int count)
     {
-        return [.. Enumerable.Range(0, count).Select(index => new ToolRelevanceCandidate($"tool_{index}", $"Filler tool number {index}.", IsCore: false))];
+        return [.. Enumerable.Range(0, count).Select(index => new ToolRelevanceCandidate { Name = $"tool_{index}", Description = $"Filler tool number {index}.", IsCore = false })];
     }
 }

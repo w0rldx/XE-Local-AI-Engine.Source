@@ -79,10 +79,14 @@ public sealed record ExternalProviderModelDescriptor
 ///     A resolved <c>ext:{connectionId}/{wireId}</c> identity: the connection that serves the model plus the model's own
 ///     declarations. The single value every consumer needs to route, gate, or render one external model.
 /// </summary>
-/// <param name="Connection">The connection serving <paramref name="Model" />.</param>
-/// <param name="Model">The registered model's declarations.</param>
-public sealed record ExternalProviderModelRegistration(ExternalProviderConnectionDescriptor Connection, ExternalProviderModelDescriptor Model)
+public sealed class ExternalProviderModelRegistration
 {
+    /// <summary>The connection serving <see cref="Model" />.</summary>
+    public required ExternalProviderConnectionDescriptor Connection { get; init; }
+
+    /// <summary>The registered model's declarations.</summary>
+    public required ExternalProviderModelDescriptor Model { get; init; }
+
     /// <summary>The canonical namespaced model id this registration is addressed by.</summary>
     public string ModelId => ExternalModelId.Format(Connection.Id, Model.WireId);
 }

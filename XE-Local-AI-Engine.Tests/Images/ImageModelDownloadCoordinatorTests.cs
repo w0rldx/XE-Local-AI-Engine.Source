@@ -217,7 +217,7 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         protected static ImageModelHandle Handle(ImageModelRequest request)
         {
-            return new ImageModelHandle(request.ModelName, request.Family, request.Kind, []);
+            return new ImageModelHandle { ModelName = request.ModelName, Family = request.Family, Kind = request.Kind, Parts = [] };
         }
     }
 

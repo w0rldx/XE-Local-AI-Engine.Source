@@ -25,26 +25,40 @@ public enum TrainingRuntimeInstallOutcome
     MissingPrerequisites = 3
 }
 
-public sealed record TrainingRuntimeInstallResult(
-    TrainingRuntimeInstallOutcome Outcome,
-    TrainingRuntimePrerequisiteReport? Prerequisites = null);
+public sealed class TrainingRuntimeInstallResult
+{
+    public required TrainingRuntimeInstallOutcome Outcome { get; init; }
+
+    public TrainingRuntimePrerequisiteReport? Prerequisites { get; init; }
+}
 
 /// <summary>
 ///     What <c>probe.py</c> reported from inside the provisioned venv. Every version field is optional because the probe
 ///     is deliberately written to emit a partial report when an import fails rather than to die with a traceback — a
 ///     runtime that is merely missing a package must produce an actionable message, not an empty one.
 /// </summary>
-public sealed record TrainingRuntimeProbeReport(
-    int ContractVersion,
-    bool Ready,
-    string? PythonVersion,
-    string? TorchVersion,
-    string? UnslothVersion,
-    string? BitsAndBytesVersion,
-    bool CudaAvailable,
-    string? DeviceName,
-    string? DeviceCapability,
-    IReadOnlyDictionary<string, string> Errors);
+public sealed class TrainingRuntimeProbeReport
+{
+    public required int ContractVersion { get; init; }
+
+    public required bool Ready { get; init; }
+
+    public required string? PythonVersion { get; init; }
+
+    public required string? TorchVersion { get; init; }
+
+    public required string? UnslothVersion { get; init; }
+
+    public required string? BitsAndBytesVersion { get; init; }
+
+    public required bool CudaAvailable { get; init; }
+
+    public required string? DeviceName { get; init; }
+
+    public required string? DeviceCapability { get; init; }
+
+    public required IReadOnlyDictionary<string, string> Errors { get; init; }
+}
 
 /// <summary>The persisted record of what is installed, read back on every status call.</summary>
 public sealed record InstalledTrainingRuntimeState(
@@ -58,16 +72,26 @@ public sealed record InstalledTrainingRuntimeState(
     string? UnslothVersion = null,
     string? DeviceName = null);
 
-public sealed record TrainingRuntimeStatus(
-    TrainingRuntimePhase Phase,
-    bool IsRunning,
-    bool Terminal,
-    IReadOnlyList<string> LogLines,
-    long LogStartSequence,
-    string? SanitizedError,
-    InstalledTrainingRuntimeState? Installed,
-    DateTimeOffset? StartedAtUtc,
-    DateTimeOffset? CompletedAtUtc);
+public sealed class TrainingRuntimeStatus
+{
+    public required TrainingRuntimePhase Phase { get; init; }
+
+    public required bool IsRunning { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required IReadOnlyList<string> LogLines { get; init; }
+
+    public required long LogStartSequence { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required InstalledTrainingRuntimeState? Installed { get; init; }
+
+    public required DateTimeOffset? StartedAtUtc { get; init; }
+
+    public required DateTimeOffset? CompletedAtUtc { get; init; }
+}
 
 /// <summary>
 ///     Single-flight provisioning of the uv-managed Python training runtime (ADR 0005 decision 1). Linux-only, machine
@@ -102,12 +126,18 @@ public static class TrainingRuntimeHubEvents
 ///     One status push. Carries only the lines appended since the last push plus their starting sequence, so a client
 ///     that reconnects can splice its local log at a known offset instead of re-rendering the whole ring.
 /// </summary>
-public sealed record TrainingRuntimeStatusHubEvent(
-    string Phase,
-    IReadOnlyList<string> AppendedLogLines,
-    long AppendedLogStartSequence,
-    bool Terminal,
-    string? SanitizedError);
+public sealed class TrainingRuntimeStatusHubEvent
+{
+    public required string Phase { get; init; }
+
+    public required IReadOnlyList<string> AppendedLogLines { get; init; }
+
+    public required long AppendedLogStartSequence { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required string? SanitizedError { get; init; }
+}
 
 /// <summary>
 ///     Transport seam for <see cref="ITrainingRuntimeService" />. The provider stays transport-agnostic; the Client host

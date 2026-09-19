@@ -153,7 +153,7 @@ internal static class LlamaServerLaunchArgumentComposer
         }
 
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? Environment.CurrentDirectory;
-        return new LlamaServerLaunchSpec(key.ModelName, key.Role, executablePath, args, port, workingDirectory);
+        return new LlamaServerLaunchSpec { ModelName = key.ModelName, Role = key.Role, ExecutablePath = executablePath, Arguments = args, Port = port, WorkingDirectory = workingDirectory };
     }
 
     /// <summary>

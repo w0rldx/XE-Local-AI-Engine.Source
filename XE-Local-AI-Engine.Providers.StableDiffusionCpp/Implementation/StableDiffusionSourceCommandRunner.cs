@@ -67,9 +67,12 @@ internal sealed class StableDiffusionSourceCommandRunner : IStableDiffusionSourc
             throw;
         }
 
-        return new StableDiffusionSourceCommandResult(process.ExitCode,
-            stdout.ToString(),
-            stderr.ToString());
+        return new StableDiffusionSourceCommandResult
+        {
+            ExitCode = process.ExitCode,
+            StandardOutput = stdout.ToString(),
+            StandardError = stderr.ToString()
+        };
     }
 
     private static string FindIsolationRoot(string workingDirectory)

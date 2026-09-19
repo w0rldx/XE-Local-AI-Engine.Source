@@ -491,11 +491,14 @@ public sealed class ImageJobCoordinatorTests
 
         public ImageRuntimeActivitySnapshot GetSnapshot()
         {
-            return new ImageRuntimeActivitySnapshot(ActiveLeaseCount,
-                SpawnReadinessCount: 0,
-                ResidentProcessCount: 0,
-                MutationReserved: !_admitJobs,
-                EvictionReserved: false);
+            return new ImageRuntimeActivitySnapshot
+            {
+                ActiveJobCount = ActiveLeaseCount,
+                SpawnReadinessCount = 0,
+                ResidentProcessCount = 0,
+                MutationReserved = !_admitJobs,
+                EvictionReserved = false
+            };
         }
 
         public IImageRuntimeActivityLease? TryAcquireJobLease()

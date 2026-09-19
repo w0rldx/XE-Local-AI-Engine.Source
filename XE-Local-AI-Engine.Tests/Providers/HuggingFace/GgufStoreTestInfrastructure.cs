@@ -125,7 +125,7 @@ internal static class GgufStoreTestInfrastructure
         // both with the same canned detail so either resolution path sees the seeded files.
         Task<GgufRepoDetail> Detail(CallInfo callInfo)
         {
-            return Task.FromResult(new GgufRepoDetail(callInfo.ArgAt<string>(0), IsGated: false, "apache-2.0", files));
+            return Task.FromResult(new GgufRepoDetail { RepoId = callInfo.ArgAt<string>(0), IsGated = false, License = "apache-2.0", Files = files });
         }
 
         discovery.ListRepoFilesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Detail);
@@ -135,19 +135,22 @@ internal static class GgufStoreTestInfrastructure
 
     public static GgufRepoFile RepoFile(string fileName, string quant, long sizeBytes, string? sha256 = null)
     {
-        return new GgufRepoFile(fileName,
-            quant,
-            sizeBytes,
-            sha256,
-            Revision,
-            "llama",
-            quant,
-            ParamCount: null,
-            BlockCount: null,
-            AttentionHeadCount: null,
-            AttentionHeadCountKV: null,
-            EmbeddingLength: null,
-            ContextLength: null);
+        return new GgufRepoFile
+        {
+            FileName = fileName,
+            Quant = quant,
+            SizeBytes = sizeBytes,
+            Sha256 = sha256,
+            Revision = Revision,
+            Architecture = "llama",
+            QuantType = quant,
+            ParamCount = null,
+            BlockCount = null,
+            AttentionHeadCount = null,
+            AttentionHeadCountKV = null,
+            EmbeddingLength = null,
+            ContextLength = null
+        };
     }
 
     public static string Sha256Upper(byte[] data)

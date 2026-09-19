@@ -1055,7 +1055,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 };
             var inspector = Substitute.For<ILlamaServerLaunchCapabilityInspector>();
             inspector.InspectAsync(Arg.Any<CancellationToken>())
-                     .Returns(new LlamaServerLaunchCapabilities(variant, probeSucceeded, "b10201", "manifest-sha", cacheTypes, cacheTypes, flashAttention));
+                     .Returns(new LlamaServerLaunchCapabilities { Variant = variant, ProbeSucceeded = probeSucceeded, ExecutableVersion = "b10201", ManifestSha256 = "manifest-sha", CacheTypesK = cacheTypes, CacheTypesV = cacheTypes, FlashAttentionModes = flashAttention });
             return inspector;
         }
 

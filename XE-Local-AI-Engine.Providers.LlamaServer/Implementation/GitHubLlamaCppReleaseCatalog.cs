@@ -147,7 +147,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
             return LlamaCppReleaseResult.NotFound();
         }
 
-        return LlamaCppReleaseResult.ForAsset(release.TagName ?? tag, new LlamaCppReleaseAsset(chosen.Name, downloadUrl, digest, chosen.Size));
+        return LlamaCppReleaseResult.ForAsset(release.TagName ?? tag, new LlamaCppReleaseAsset { Name = chosen.Name, DownloadUrl = downloadUrl, Digest = digest, Size = chosen.Size });
     }
 
     /// <summary>
@@ -189,7 +189,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
             return null;
         }
 
-        return new LlamaCppReleaseAsset(chosen.Name, downloadUrl, digest, chosen.Size);
+        return new LlamaCppReleaseAsset { Name = chosen.Name, DownloadUrl = downloadUrl, Digest = digest, Size = chosen.Size };
     }
 
     /// <summary>
@@ -316,7 +316,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
             }
 
             var etag = response.Headers.ETag?.ToString();
-            _cache[requestUrl] = new CachedRelease(etag, release, _timeProvider.GetUtcNow());
+            _cache[requestUrl] = new CachedRelease { ETag = etag, Release = release, FetchedAtUtc = _timeProvider.GetUtcNow() };
             return new ReleaseLookup(release, Signal: null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -403,7 +403,14 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     [GeneratedRegex(@"^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 2000)]
     private static partial Regex AssetNameRegex();
 
-    private sealed record CachedRelease(string? ETag, GitHubRelease? Release, DateTimeOffset FetchedAtUtc);
+    private sealed record CachedRelease
+    {
+        public required string? ETag { get; init; }
+
+        public required GitHubRelease? Release { get; init; }
+
+        public required DateTimeOffset FetchedAtUtc { get; init; }
+    }
 
     private sealed record GitHubRelease(
         [property: JsonPropertyName("tag_name")]

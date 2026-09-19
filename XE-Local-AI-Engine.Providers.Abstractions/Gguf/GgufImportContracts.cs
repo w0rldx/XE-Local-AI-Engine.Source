@@ -3,35 +3,50 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>Operator-selected local source, scoped to the in-process provider call.</summary>
-public sealed record GgufImportSource(string AbsolutePath);
+public sealed record GgufImportSource
+{
+    public required string AbsolutePath { get; init; }
+}
 
 /// <summary>
 ///     What a locally trained artifact was derived from, carried onto its registry entry and sidecar so a promoted
 ///     model can always name the checkpoint and dataset behind it.
 /// </summary>
-/// <param name="DerivedFromRepoId">Base checkpoint repository the run trained on.</param>
-/// <param name="DerivedFromRevision">Resolved revision of <paramref name="DerivedFromRepoId" />.</param>
-/// <param name="DerivedFromContentFingerprint">Frozen dataset content fingerprint the run consumed, when recorded.</param>
-/// <param name="BaseModelName">
-///     Set ONLY for a LoRA-adapter promotion: the installed model the adapter is applied on top of. Its presence is
-///     what makes the destination an adapter rather than a standalone (merged) model.
-/// </param>
-public sealed record TrainedModelLineage(
-    string? DerivedFromRepoId,
-    string? DerivedFromRevision,
-    string? DerivedFromContentFingerprint,
-    string? BaseModelName = null);
+public sealed class TrainedModelLineage
+{
+    /// <summary>Base checkpoint repository the run trained on.</summary>
+    public required string? DerivedFromRepoId { get; init; }
+
+    /// <summary>Resolved revision of <see cref="DerivedFromRepoId" />.</summary>
+    public required string? DerivedFromRevision { get; init; }
+
+    /// <summary>Frozen dataset content fingerprint the run consumed, when recorded.</summary>
+    public required string? DerivedFromContentFingerprint { get; init; }
+
+    /// <summary>
+    ///     Set ONLY for a LoRA-adapter promotion: the installed model the adapter is applied on top of. Its presence is
+    ///     what makes the destination an adapter rather than a standalone (merged) model.
+    /// </summary>
+    public string? BaseModelName { get; init; }
+}
 
 /// <summary>Application-resolved, provider-revalidated import destination.</summary>
-public sealed record GgufImportDestination(
-    string CanonicalModelName,
-    string CanonicalQuant,
-    string RelativeGgufPath,
-    string RelativeSidecarPath,
-    LocalModelOrigin Origin,
-    string? ProjectorRelativePath = null,
-    TrainedModelLineage? Lineage = null)
+public sealed record GgufImportDestination
 {
+    public required string CanonicalModelName { get; init; }
+
+    public required string CanonicalQuant { get; init; }
+
+    public required string RelativeGgufPath { get; init; }
+
+    public required string RelativeSidecarPath { get; init; }
+
+    public required LocalModelOrigin Origin { get; init; }
+
+    public string? ProjectorRelativePath { get; init; }
+
+    public TrainedModelLineage? Lineage { get; init; }
+
     /// <summary>True when this destination commits a LoRA adapter rather than a standalone model.</summary>
     public bool IsAdapter => Lineage?.BaseModelName is { Length: > 0 };
 }
@@ -79,16 +94,24 @@ public enum GgufImportRejectionCode
 }
 
 /// <summary>Safe strict-inspection result; never carries the operator path.</summary>
-public sealed record GgufImportInspection(
-    long SizeBytes,
-    uint? GgufVersion,
-    string? Architecture,
-    GgufImportWorkload? Workload,
-    string? DetectedQuantization,
-    string SourceDisplayName,
-    IReadOnlyList<GgufImportRejectionCode> Rejections,
-    IReadOnlyList<string> Warnings)
+public sealed record GgufImportInspection
 {
+    public required long SizeBytes { get; init; }
+
+    public required uint? GgufVersion { get; init; }
+
+    public required string? Architecture { get; init; }
+
+    public required GgufImportWorkload? Workload { get; init; }
+
+    public required string? DetectedQuantization { get; init; }
+
+    public required string SourceDisplayName { get; init; }
+
+    public required IReadOnlyList<GgufImportRejectionCode> Rejections { get; init; }
+
+    public required IReadOnlyList<string> Warnings { get; init; }
+
     /// <summary>
     ///     Opaque identity of the exact validated source file. Callers may compare it across preview/start without
     ///     learning the source path or platform file identifier.
@@ -121,27 +144,46 @@ public interface IGgufImportInspector
 }
 
 /// <summary>Copy progress for an import preparation.</summary>
-public sealed record GgufImportProgress(long CompletedBytes, long TotalBytes);
+public sealed class GgufImportProgress
+{
+    public required long CompletedBytes { get; init; }
+
+    public required long TotalBytes { get; init; }
+}
 
 /// <summary>Prepared, non-visible import staged in operation-owned temporary files.</summary>
-public sealed record PreparedGgufImport(
-    string OperationId,
-    GgufImportDestination Destination,
-    string TemporaryGgufPath,
-    string TemporarySidecarPath,
-    GgufModelRegistryEntry RegistryEntry,
-    GgufAcquisitionMetadata Sidecar,
-    string WeightMemberFingerprint,
-    string ModelContentFingerprint);
+public sealed record PreparedGgufImport
+{
+    public required string OperationId { get; init; }
+
+    public required GgufImportDestination Destination { get; init; }
+
+    public required string TemporaryGgufPath { get; init; }
+
+    public required string TemporarySidecarPath { get; init; }
+
+    public required GgufModelRegistryEntry RegistryEntry { get; init; }
+
+    public required GgufAcquisitionMetadata Sidecar { get; init; }
+
+    public required string WeightMemberFingerprint { get; init; }
+
+    public required string ModelContentFingerprint { get; init; }
+}
 
 /// <summary>Exact provider-owned artifacts created by a successful import commit.</summary>
-public sealed record GgufImportCommitReceipt(
-    GgufModelRegistryEntry RegistryEntry,
-    string FinalGgufPath,
-    string FinalSidecarPath,
-    string WeightMemberFingerprint,
-    string ModelContentFingerprint)
+public sealed record GgufImportCommitReceipt
 {
+    public required GgufModelRegistryEntry RegistryEntry { get; init; }
+
+    public required string FinalGgufPath { get; init; }
+
+    public required string FinalSidecarPath { get; init; }
+
+    public required string WeightMemberFingerprint { get; init; }
+
+    public required string ModelContentFingerprint { get; init; }
+
     /// <summary>Whether this operation created the final weight path.</summary>
     public bool OwnsFinalGguf { get; init; } = true;
 

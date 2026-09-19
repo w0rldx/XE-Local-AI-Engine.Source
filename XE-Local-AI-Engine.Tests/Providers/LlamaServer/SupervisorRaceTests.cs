@@ -184,18 +184,24 @@ public sealed class SupervisorRaceTests
     {
         var health = new GatedHealthProbe();
         var registry = new ProcessLaunchAdmissionRegistry();
-        var allocation = new ProcessContextAllocation(8192,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.GpuResident,
-            ResourceFootprint.Zero,
-            ContentIdentity: "model-a:0",
-            CacheKey: "cache:model-a");
-        using var consumer = registry.Acquire(new ProcessLaunchAdmission("model-a",
-            ModelRole.Chat,
-            GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore(),
-            allocation));
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.GpuResident,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "model-a:0",
+            CacheKey = "cache:model-a"
+        };
+        using var consumer = registry.Acquire(new ProcessLaunchAdmission
+        {
+            ModelName = "model-a",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cpu,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        });
         AssertEx.NotNull(consumer);
         await using var supervisor = SupervisorFactory.Create(healthProbe: health,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
@@ -208,15 +214,18 @@ public sealed class SupervisorRaceTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => ensure);
         consumer!.Dispose();
         AssertEx.True(registry.Snapshot("model-b", ModelRole.Chat).HasGlobalBlocker);
-        AssertEx.False(registry.TryAcquire(new ProcessLaunchAdmission("model-b",
-            ModelRole.Chat,
-            GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore(),
-            allocation with
+        AssertEx.False(registry.TryAcquire(new ProcessLaunchAdmission
+        {
+            ModelName = "model-b",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cpu,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation with
             {
                 ContentIdentity = "model-b:0",
                 CacheKey = "cache:model-b"
-            }), out _));
+            }
+        }, out _));
 
         health.Release();
         await WaitUntilAsync(() => !registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
@@ -229,18 +238,24 @@ public sealed class SupervisorRaceTests
         var launcher = new FakeProcessLauncher();
         var telemetry = new FakeLlamaServerLoadTelemetry();
         var registry = new ProcessLaunchAdmissionRegistry();
-        var allocation = new ProcessContextAllocation(8192,
-            ModelTrainContextTokens: 131072,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.Cpu,
-            ResourceFootprint.Zero,
-            ContentIdentity: "model-a:0",
-            CacheKey: "cache:model-a");
-        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission("model-a",
-            ModelRole.Chat,
-            GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore(),
-            allocation), out var consumer));
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = 131072,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.Cpu,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "model-a:0",
+            CacheKey = "cache:model-a"
+        };
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission
+        {
+            ModelName = "model-a",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cpu,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation
+        }, out var consumer));
         var supervisor = SupervisorFactory.Create(launcher,
             healthProbe: health,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
@@ -262,15 +277,18 @@ public sealed class SupervisorRaceTests
         AssertEx.Equal(LlamaServerReadinessOutcome.Cancelled, observations[0].Outcome);
         AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observations[0].AttemptKind);
         AssertEx.False(registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
-        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission("model-b",
-            ModelRole.Chat,
-            GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore(),
-            allocation with
+        AssertEx.True(registry.TryAcquire(new ProcessLaunchAdmission
+        {
+            ModelName = "model-b",
+            Role = ModelRole.Chat,
+            Variant = GpuVariant.Cpu,
+            ResolvedArguments = ResolvedLaunchArguments.Explore(),
+            Allocation = allocation with
             {
                 ContentIdentity = "model-b:0",
                 CacheKey = "cache:model-b"
-            }), out var next));
+            }
+        }, out var next));
         next!.Dispose();
     }
 

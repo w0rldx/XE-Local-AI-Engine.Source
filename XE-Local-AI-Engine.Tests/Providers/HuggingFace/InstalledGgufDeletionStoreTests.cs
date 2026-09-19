@@ -96,19 +96,22 @@ public sealed class InstalledGgufDeletionStoreTests
             Member("survive-Q4_K_M.gguf", InstalledModelPhysicalMemberRole.Weight, hash, ["survive"]),
             Member("shared-mmproj.gguf", InstalledModelPhysicalMemberRole.Projector, hash, ["remove", "survive"])
         };
-        var snapshot = new InstalledGgufSnapshot("remove",
-            aliases[0].RegistryRevision,
-            aliases,
-            GgufRegistryAliasSetHash.ComputeV1(aliases),
-            members,
-            GgufPhysicalMemberSetHash.ComputeV1(members),
-            Origin: null,
-            RepoId: "remove",
-            SourceRevision: string.Empty,
-            Quantization: "Q4_K_M",
-            GgufRole.Chat,
-            GgufModelContentFingerprint.ComputeV1(members.Select(static member =>
-                new GgufModelContentMember(member.RelativePath, member.Role, member.SizeBytes, member.Sha256, member.OwningAliases))));
+        var snapshot = new InstalledGgufSnapshot
+        {
+            ModelName = "remove",
+            RegistryRevision = aliases[0].RegistryRevision,
+            RegistryAliases = aliases,
+            RegistryAliasSetHash = GgufRegistryAliasSetHash.ComputeV1(aliases),
+            Members = members,
+            PhysicalMemberSetHash = GgufPhysicalMemberSetHash.ComputeV1(members),
+            Origin = null,
+            RepoId = "remove",
+            SourceRevision = string.Empty,
+            Quantization = "Q4_K_M",
+            Role = GgufRole.Chat,
+            ModelContentFingerprint = GgufModelContentFingerprint.ComputeV1(members.Select(static member =>
+                new GgufModelContentMember { RelativePath = member.RelativePath, Role = member.Role, SizeBytes = member.SizeBytes, Sha256 = member.Sha256, OwningAliases = member.OwningAliases }))
+        };
 
         var receipt = GgufDeletionStageReceipt.Create(snapshot, Guid.NewGuid());
 

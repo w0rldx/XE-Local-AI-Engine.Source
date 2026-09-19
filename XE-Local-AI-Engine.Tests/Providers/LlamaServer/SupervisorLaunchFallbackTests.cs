@@ -172,7 +172,7 @@ public sealed class SupervisorLaunchFallbackTests
                             --cache-type-v TYPE
                                 allowed values: f16, q8_0
                             """;
-        var binary = new LlamaBinary("/fake/bin/llama-server", "b10201", GpuVariant.Cuda, IsPinnedFallback: true);
+        var binary = new LlamaBinary { ServerExecutablePath = "/fake/bin/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true };
         var manifest = LlamaServerCapabilityManifest.FromSuccessfulProbe(binary,
             executableLengthBytes: 1,
             DateTimeOffset.UnixEpoch,
@@ -269,13 +269,16 @@ public sealed class SupervisorLaunchFallbackTests
     /// <summary>An allocation resolver that always places the experts in system RAM.</summary>
     private static IProcessContextAllocationResolver ExpertOffloadAllocationResolver()
     {
-        var allocation = new ProcessContextAllocation(ProcessContextTokens: 8192,
-            ModelTrainContextTokens: null,
-            ProcessContextAllocationSource.HardwareTier,
-            ProcessPlacementMode.ExpertOffload,
-            ResourceFootprint.Zero,
-            ContentIdentity: "moe-model:0",
-            CacheKey: "moe-cache");
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 8192,
+            ModelTrainContextTokens = null,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.ExpertOffload,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "moe-model:0",
+            CacheKey = "moe-cache"
+        };
         var resolver = Substitute.For<IProcessContextAllocationResolver>();
         resolver.ResolveAsync(Arg.Any<string>(),
                     Arg.Any<ModelRole>(),

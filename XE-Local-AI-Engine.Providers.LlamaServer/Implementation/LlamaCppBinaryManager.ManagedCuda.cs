@@ -69,7 +69,7 @@ public sealed partial class LlamaCppBinaryManager
                 return null;
             }
 
-            return new LlamaBinary(serverPath, installed.Tag, installed.Variant, IsPinnedFallback: false);
+            return new LlamaBinary { ServerExecutablePath = serverPath, Version = installed.Tag, Variant = installed.Variant, IsPinnedFallback = false };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

@@ -22,4 +22,11 @@ internal interface IProcessProbe
 ///     probe was killed for exceeding its wall-clock deadline (the caller degrades rather than trusting a partial read);
 ///     the exit code is then non-zero and the stdout empty.
 /// </summary>
-internal sealed record ProcessProbeResult(int ExitCode, string StandardOutput, bool TimedOut = false);
+internal sealed class ProcessProbeResult
+{
+    public required int ExitCode { get; init; }
+
+    public required string StandardOutput { get; init; }
+
+    public bool TimedOut { get; init; }
+}

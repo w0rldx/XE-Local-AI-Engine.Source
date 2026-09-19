@@ -103,16 +103,19 @@ public sealed class LlamaServerLastLoadVramTests
         LlamaServerReadinessOutcome outcome,
         long? globalFree,
         long? admitted) =>
-        new(role,
-            GpuVariant.Cuda,
-            RuntimeVersion: "b10375",
-            RuntimeSha256: null,
-            ReadinessDurationMs: 1_000,
-            outcome,
-            LlamaServerPlacementOutcome.Full,
-            LlamaServerLoadAttemptKind.Primary,
-            SpeculativeModeClass.Disabled,
-            modelName,
-            globalFree,
-            admitted);
+        new()
+        {
+            Role = role,
+            Variant = GpuVariant.Cuda,
+            RuntimeVersion = "b10375",
+            RuntimeSha256 = null,
+            ReadinessDurationMs = 1_000,
+            Outcome = outcome,
+            Placement = LlamaServerPlacementOutcome.Full,
+            AttemptKind = LlamaServerLoadAttemptKind.Primary,
+            SpeculativeModeClass = SpeculativeModeClass.Disabled,
+            ModelName = modelName,
+            GlobalFreeVramBytesAtLoad = globalFree,
+            AdmittedVramBytes = admitted
+        };
 }

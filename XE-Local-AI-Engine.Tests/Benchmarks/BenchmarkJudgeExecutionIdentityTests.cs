@@ -175,22 +175,25 @@ public sealed class BenchmarkJudgeExecutionIdentityTests
         string os = "linux",
         int contextTokens = 4096,
         LlamaServerLaunchAuxAssets auxAssets = default) =>
-        new(LlamaServerLaunchReceipt.CurrentVersion,
-            variant,
-            os,
-            "b10201",
-            omitExecutableSha ? null : executableSha ?? new string('e', count: 64),
-            new string('m', count: 64),
-            LlamaServerLaunchProjection.From(variant,
+        new()
+        {
+            ReceiptVersion = LlamaServerLaunchReceipt.CurrentVersion,
+            Variant = variant,
+            Os = os,
+            ExecutableVersion = "b10201",
+            ExecutableSha256 = omitExecutableSha ? null : executableSha ?? new string('e', count: 64),
+            ManifestSha256 = new string('m', count: 64),
+            LaunchProjection = LlamaServerLaunchProjection.From(variant,
                 ResolvedLaunchArguments.Replay(contextTokens),
                 plan: null,
                 ModelRole.Chat,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheReuse,
                 LlamaServerBenchmarkLaunchPolicy.DeterministicV1.ChatCacheRamMiB),
-            auxAssets,
-            new LlamaServerLaunchPlacement(outcome, offloaded, total),
-            contextTokens,
-            LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
+            AuxAssets = auxAssets,
+            Placement = new LlamaServerLaunchPlacement(outcome, offloaded, total),
+            EffectiveContextTokens = contextTokens,
+            BenchmarkLaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
+        };
 
     private static RuntimeEnvironmentFactsV1 Environment(long capturedAtUtc = 1_700_000_000_000,
         string? bundleIdentity = "bundle-identity",

@@ -206,15 +206,18 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         {
             _modelPath = modelPath;
             _sizeBytes = sizeBytes;
-            _facts = new(Quant: "Q4_K_M",
-                FileSizeBytes: sizeBytes,
-                ParamCount: null,
-                BlockCount: null,
-                AttentionHeadCount: null,
-                AttentionHeadCountKV: null,
-                EmbeddingLength: null,
-                ContextLength: 32_768,
-                ContentIdentity: contentIdentity);
+            _facts = new()
+            {
+                Quant = "Q4_K_M",
+                FileSizeBytes = sizeBytes,
+                ParamCount = null,
+                BlockCount = null,
+                AttentionHeadCount = null,
+                AttentionHeadCountKV = null,
+                EmbeddingLength = null,
+                ContextLength = 32_768,
+                ContentIdentity = contentIdentity
+            };
         }
 
         public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)

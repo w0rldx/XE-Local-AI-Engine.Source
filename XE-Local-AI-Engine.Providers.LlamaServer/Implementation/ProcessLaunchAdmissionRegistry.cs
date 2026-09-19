@@ -14,12 +14,15 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
         var requested = new ProcessLaunchAdmissionKey(modelName, role);
         lock (_sync)
         {
-            return new ProcessLaunchAdmissionSnapshot(_entries
+            return new ProcessLaunchAdmissionSnapshot
+            {
+                AdmittedKeys = _entries
                                                       .Where(static pair => pair.Value.Admission is not null)
                                                       .Select(static pair => pair.Key)
                                                       .ToHashSet(),
-                _entries.ContainsKey(requested),
-                _entries.Values.Any(static entry => entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true }));
+                HasRequestedKey = _entries.ContainsKey(requested),
+                HasGlobalBlocker = _entries.Values.Any(static entry => entry is { LaunchReferences: > 0, IsUnbound: true } or { IsOrphaned: true })
+            };
         }
     }
 

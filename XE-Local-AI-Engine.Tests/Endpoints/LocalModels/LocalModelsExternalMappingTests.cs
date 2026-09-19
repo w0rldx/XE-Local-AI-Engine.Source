@@ -99,7 +99,7 @@ public sealed class LocalModelsExternalMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary("qwen3:8b")
+            new OllamaModelSummary { Name = "qwen3:8b" }
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
@@ -170,8 +170,8 @@ public sealed class LocalModelsExternalMappingTests
         // against a process this node does not own.
         var running = new[]
         {
-            new RunningModelSnapshot("qwen3:8b", "qwen3:8b", ExpiresAt: null),
-            new RunningModelSnapshot("ext:unsloth-box/qwen3-27b", "ext:unsloth-box/qwen3-27b", ExpiresAt: null)
+            new RunningModelSnapshot { Name = "qwen3:8b", ModelName = "qwen3:8b", ExpiresAt = null },
+            new RunningModelSnapshot { Name = "ext:unsloth-box/qwen3-27b", ModelName = "ext:unsloth-box/qwen3-27b", ExpiresAt = null }
         };
 
         var response = LocalModelsMapper.ToRunningResponse(running, ollamaConfigured: true);
@@ -185,14 +185,16 @@ public sealed class LocalModelsExternalMappingTests
         bool supportsReasoning = false,
         bool supportsReasoningEffort = false)
     {
-        return new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
+        return new ExternalProviderModelRegistration
+        {
+            Connection = new ExternalProviderConnectionDescriptor
             {
                 Id = "unsloth-box",
                 DisplayName = "Unsloth box",
                 BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
                 Locality = locality
             },
-            new ExternalProviderModelDescriptor
+            Model = new ExternalProviderModelDescriptor
             {
                 WireId = "qwen3-27b",
                 DisplayName = "Qwen3 27B",
@@ -201,6 +203,7 @@ public sealed class LocalModelsExternalMappingTests
                 SupportsVision = supportsVision,
                 SupportsReasoning = supportsReasoning,
                 SupportsReasoningEffort = supportsReasoningEffort
-            });
+            }
+        };
     }
 }

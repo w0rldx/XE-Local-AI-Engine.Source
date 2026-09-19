@@ -16,18 +16,23 @@ public enum WhisperArchiveKind
 /// <summary>
 ///     A single pinned, hash-verified whisper.cpp prebuilt asset (one OS/arch/backend combination).
 /// </summary>
-/// <param name="AssetName">The release asset file name (for example <c>whisper-bin-x64.zip</c>).</param>
-/// <param name="Sha256">Lowercase hex SHA256 the downloaded archive must match.</param>
-/// <param name="ServerRelativePath">
-///     Path to <c>whisper-server</c> inside the extracted archive. The Windows archives nest everything under
-///     <c>Release/</c>; the Linux tarball has a single top-level <c>whisper-bin-ubuntu-x64/</c> directory.
-/// </param>
-/// <param name="ArchiveKind">The container the asset ships in, which selects the extraction path.</param>
-public sealed record WhisperAssetPin(
-    string AssetName,
-    string Sha256,
-    string ServerRelativePath,
-    WhisperArchiveKind ArchiveKind);
+public sealed class WhisperAssetPin
+{
+    /// <summary>The release asset file name (for example <c>whisper-bin-x64.zip</c>).</summary>
+    public required string AssetName { get; init; }
+
+    /// <summary>Lowercase hex SHA256 the downloaded archive must match.</summary>
+    public required string Sha256 { get; init; }
+
+    /// <summary>
+    ///     Path to <c>whisper-server</c> inside the extracted archive. The Windows archives nest everything under
+    ///     <c>Release/</c>; the Linux tarball has a single top-level <c>whisper-bin-ubuntu-x64/</c> directory.
+    /// </summary>
+    public required string ServerRelativePath { get; init; }
+
+    /// <summary>The container the asset ships in, which selects the extraction path.</summary>
+    public required WhisperArchiveKind ArchiveKind { get; init; }
+}
 
 /// <summary>
 ///     Verified, pinned whisper.cpp prebuilt-release table — the acquisition source for
@@ -81,22 +86,31 @@ public static class WhisperCppReleasePins
         {
             // Windows x64 — the cuBLAS build bundles its own CUDA runtime DLLs, so there is no companion archive.
             [new PinKey(OSPlatform.Windows, Architecture.X64, WhisperBackend.Cuda)] =
-                new("whisper-cublas-12.4.0-bin-x64.zip",
-                    "af520ddd034d985b55dfeea3e465ed93653ba2aee1a55e865033edc548c272a7",
-                    WindowsServerPath,
-                    WhisperArchiveKind.Zip),
+                new()
+                {
+                    AssetName = "whisper-cublas-12.4.0-bin-x64.zip",
+                    Sha256 = "af520ddd034d985b55dfeea3e465ed93653ba2aee1a55e865033edc548c272a7",
+                    ServerRelativePath = WindowsServerPath,
+                    ArchiveKind = WhisperArchiveKind.Zip
+                },
             [new PinKey(OSPlatform.Windows, Architecture.X64, WhisperBackend.Cpu)] =
-                new("whisper-bin-x64.zip",
-                    "f9ec6c52a2e949b62ab51fa21d0d497958f9e41c3010c157c4e42932d5316f3c",
-                    WindowsServerPath,
-                    WhisperArchiveKind.Zip),
+                new()
+                {
+                    AssetName = "whisper-bin-x64.zip",
+                    Sha256 = "f9ec6c52a2e949b62ab51fa21d0d497958f9e41c3010c157c4e42932d5316f3c",
+                    ServerRelativePath = WindowsServerPath,
+                    ArchiveKind = WhisperArchiveKind.Zip
+                },
 
             // Linux x64 — CPU only upstream; the managed source build provides the CUDA lane.
             [new PinKey(OSPlatform.Linux, Architecture.X64, WhisperBackend.Cpu)] =
-                new("whisper-bin-ubuntu-x64.tar.gz",
-                    "53e7fd8b5764edad916b8848dd0af6abb1ff1d3b86c899e79c78652412536c32",
-                    LinuxServerPath,
-                    WhisperArchiveKind.TarGz)
+                new()
+                {
+                    AssetName = "whisper-bin-ubuntu-x64.tar.gz",
+                    Sha256 = "53e7fd8b5764edad916b8848dd0af6abb1ff1d3b86c899e79c78652412536c32",
+                    ServerRelativePath = LinuxServerPath,
+                    ArchiveKind = WhisperArchiveKind.TarGz
+                }
         };
 
     /// <summary>Builds the absolute download URL for a named asset in the given release tag.</summary>

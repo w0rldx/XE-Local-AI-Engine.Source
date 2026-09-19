@@ -44,12 +44,15 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
         return
         [
             .. tools.OfType<AIFunction>()
-                    .Select(static function => new LocalChatToolDescriptor(function.Name,
-                        function.Description,
-                        function.JsonSchema.GetRawText(),
-                        CatalogRequiresApproval,
+                    .Select(static function => new LocalChatToolDescriptor
+                    {
+                        Name = function.Name,
+                        Description = function.Description,
+                        ParameterSchema = function.JsonSchema.GetRawText(),
+                        RequiresApproval = CatalogRequiresApproval,
                         // GetCurrentTime / Calculate are side-effect-free node-local reads.
-                        ToolCategory.ReadLocal))
+                        Category = ToolCategory.ReadLocal
+                    })
         ];
     }
 

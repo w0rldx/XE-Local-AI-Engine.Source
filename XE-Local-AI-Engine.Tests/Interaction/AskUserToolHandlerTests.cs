@@ -34,7 +34,7 @@ public sealed class AskUserToolHandlerTests
     public async Task ExecuteAsync_WhenTheRunnerStashedAnAnswer_ReturnsItForTheMatchingCallId()
     {
         var stash = new UserQuestionAnswerStash(TimeProvider.System);
-        var expected = UserQuestionResults.Answered([new UserQuestionAnswer("Which auth method?", ["OAuth device flow"], Other: null)]);
+        var expected = UserQuestionResults.Answered([new UserQuestionAnswer { Question = "Which auth method?", Selected = ["OAuth device flow"], Other = null }]);
         stash.Stash("call-ask-user", expected);
         var handler = CreateHandler(stash);
 
@@ -74,7 +74,7 @@ public sealed class AskUserToolHandlerTests
     public async Task ExecuteAsync_WhenCalledTwiceForOneCallId_TheSecondCallGetsTheFailSafe()
     {
         var stash = new UserQuestionAnswerStash(TimeProvider.System);
-        stash.Stash("call-ask-user", UserQuestionResults.Answered([new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        stash.Stash("call-ask-user", UserQuestionResults.Answered([new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }]));
         var handler = CreateHandler(stash);
 
         var first = await WithCurrentCallAsync("call-ask-user", () => handler.ExecuteAsync("{}"));

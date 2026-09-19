@@ -102,8 +102,8 @@ public sealed class WorkSessionOfferProjectionTests
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)
     {
         var registry = new FakeAgentToolRegistry([
-            new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", RequiresApproval: true),
-            new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
+            new LocalChatToolDescriptor { Name = AgentHomeToolDefinition.ToolName, Description = "Runs an agent task.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = true },
+            new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = "{\"type\":\"object\"}", RequiresApproval = false }
         ]);
 
         return new LocalToolOfferProvider(registry,

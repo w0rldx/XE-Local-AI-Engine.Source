@@ -98,11 +98,14 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
             // but forks when this host already leads a session, and every guarantee the reaper makes rests on the
             // recorded pgid being the one that will actually be signalled.
             var stat = LinuxTrainingProcessInspector.TryReadStat(process.Id);
-            var receipt = new TrainingLaunchReceipt(process.Id,
-                stat?.Pgid ?? process.Id,
-                LinuxTrainingProcessInspector.ResolveExecutablePath(process.Id),
-                stat?.StartTicks ?? 0,
-                request.RunToken);
+            var receipt = new TrainingLaunchReceipt
+            {
+                Pid = process.Id,
+                Pgid = stat?.Pgid ?? process.Id,
+                ExecutablePath = LinuxTrainingProcessInspector.ResolveExecutablePath(process.Id),
+                StartTicks = stat?.StartTicks ?? 0,
+                RunToken = request.RunToken
+            };
             return new LinuxTrainingProcessHandle(process, receipt, output);
         }
         catch

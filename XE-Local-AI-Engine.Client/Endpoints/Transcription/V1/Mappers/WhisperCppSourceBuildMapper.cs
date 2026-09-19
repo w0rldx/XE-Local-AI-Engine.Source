@@ -9,13 +9,16 @@ internal static class WhisperCppSourceBuildMapper
     public static WhisperCppSourceBuildRequest ToContract(this StartWhisperCppSourceBuildRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return new WhisperCppSourceBuildRequest(request.Backend.ToContract(),
-            request.Source == TranscriptionSourceSelectionDto.Official
+        return new WhisperCppSourceBuildRequest
+        {
+            Backend = request.Backend.ToContract(),
+            Source = request.Source == TranscriptionSourceSelectionDto.Official
                 ? WhisperCppSourceSelection.Official
                 : WhisperCppSourceSelection.Custom,
-            request.Repository,
-            request.Commit,
-            request.AcknowledgeCustomSourceRisk);
+            Repository = request.Repository,
+            Commit = request.Commit,
+            AcknowledgeCustomSourceRisk = request.AcknowledgeCustomSourceRisk
+        };
     }
 
     public static WhisperBackend ToContract(this TranscriptionBackendDto backend)

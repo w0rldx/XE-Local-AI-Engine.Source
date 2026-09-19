@@ -10,21 +10,26 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 ///     under <c>PlacementConventionTests</c>' public-interface rule. Do not widen it for consistency with the public
 ///     contracts beside it.
 /// </remarks>
-/// <param name="ModelId">The catalogue id the process is being started for.</param>
-/// <param name="ExecutablePath">Absolute path to the resolved <c>whisper-server</c> executable.</param>
-/// <param name="Arguments">The exact, ordered command-line argument vector.</param>
-/// <param name="Port">The loopback port the process binds.</param>
-/// <param name="WorkingDirectory">
-///     The child's working directory — the binary's own directory, so co-located runtime libraries resolve through the
-///     <c>$ORIGIN</c> RUNPATH on Linux and through DLL co-location on Windows.
-/// </param>
-internal sealed record WhisperServerLaunchSpec(
-    string ModelId,
-    string ExecutablePath,
-    IReadOnlyList<string> Arguments,
-    int Port,
-    string WorkingDirectory)
+internal sealed class WhisperServerLaunchSpec
 {
+    /// <summary>The catalogue id the process is being started for.</summary>
+    public required string ModelId { get; init; }
+
+    /// <summary>Absolute path to the resolved <c>whisper-server</c> executable.</summary>
+    public required string ExecutablePath { get; init; }
+
+    /// <summary>The exact, ordered command-line argument vector.</summary>
+    public required IReadOnlyList<string> Arguments { get; init; }
+
+    /// <summary>The loopback port the process binds.</summary>
+    public required int Port { get; init; }
+
+    /// <summary>
+    ///     The child's working directory — the binary's own directory, so co-located runtime libraries resolve through the
+    ///     <c>$ORIGIN</c> RUNPATH on Linux and through DLL co-location on Windows.
+    /// </summary>
+    public required string WorkingDirectory { get; init; }
+
     /// <summary>The loopback server-root base URL every whisper-server route hangs off.</summary>
     public Uri BaseAddress => new($"http://127.0.0.1:{Port}/");
 }

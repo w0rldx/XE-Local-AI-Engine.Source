@@ -26,10 +26,13 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ReturnsContextWithSeedMessages()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [new ChatMessage(ChatRole.User, "hello")]);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [new ChatMessage(ChatRole.User, "hello")]
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -47,10 +50,13 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_AppliesResolvedModelToChatOptions()
     {
-        var definition = new InvocationAgentDefinition("llama3.2:3b",
-            "Be helpful.",
-            [],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "llama3.2:3b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -75,11 +81,14 @@ public sealed class InvocationAgentFactoryTests
         // adapter maps ChatOptions.ResponseFormat onto response_format.json_schema.schema, which is the only path
         // llama-server reads before compiling the schema into a grammar.
         using var schema = JsonDocument.Parse("""{"type":"object","properties":{"score":{"type":"integer"}}}""");
-        var definition = new InvocationAgentDefinition("llama3.2:3b",
-            "Be helpful.",
-            [],
-            [],
-            ResponseJsonSchema: schema.RootElement.Clone());
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "llama3.2:3b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ResponseJsonSchema = schema.RootElement.Clone()
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -98,7 +107,7 @@ public sealed class InvocationAgentFactoryTests
     {
         // The no-override guarantee: every path but the judge leaves this null, and null must send no response_format
         // at all rather than a permissive one.
-        var definition = new InvocationAgentDefinition("llama3.2:3b", "Be helpful.", [], []);
+        var definition = new InvocationAgentDefinition { ModelId = "llama3.2:3b", Instructions = "Be helpful.", Tools = [], ConversationContext = [] };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -113,11 +122,14 @@ public sealed class InvocationAgentFactoryTests
     {
         // The runtime's effective context window is carried as num_ctx so the inner provider-round budgeter
         // sizes against the same window the outer conversation budgeter uses. No per-send override is set here.
-        var definition = new InvocationAgentDefinition("llama3.2:3b",
-            "Be helpful.",
-            [],
-            [],
-            EffectiveContextTokens: 16384);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "llama3.2:3b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            EffectiveContextTokens = 16384
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -134,15 +146,18 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WhenPerSendNumCtxIsSmaller_PreservesIt()
     {
         // A per-send num_ctx override must win over the runtime effective-context fallback.
-        var definition = new InvocationAgentDefinition("llama3.2:3b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "llama3.2:3b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 NumCtx = 4096
             },
-            EffectiveContextTokens: 16384);
+            EffectiveContextTokens = 16384
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -158,16 +173,19 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenPerSendNumCtxExceedsProcess_ClampsIt()
     {
-        var definition = new InvocationAgentDefinition("llama3.2:3b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "llama3.2:3b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 NumCtx = 65536,
                 MaxOutputTokens = 32768
             },
-            EffectiveContextTokens: 8192);
+            EffectiveContextTokens = 8192
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -184,12 +202,15 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSupportsThinkingFalse_SendsThinkFalseToSuppressTemplateReasoning()
     {
-        var definition = new InvocationAgentDefinition("gemma:12b",
-            "Be helpful.",
-            [],
-            [],
-            ReasoningEffort: null,
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "gemma:12b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = null,
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -212,12 +233,15 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSupportsThinkingFalseAndReasoningOn_OmitsThinkOption()
     {
-        var definition = new InvocationAgentDefinition("gemma:12b",
-            "Be helpful.",
-            [],
-            [],
-            "on",
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "gemma:12b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "on",
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -241,12 +265,15 @@ public sealed class InvocationAgentFactoryTests
     [Arguments("high")]
     public async Task CreateAsync_WhenSupportsThinkingFalseAndGradedEffort_OmitsThinkOption(string effort)
     {
-        var definition = new InvocationAgentDefinition("gemma:12b",
-            "Be helpful.",
-            [],
-            [],
-            effort,
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "gemma:12b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort,
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -282,12 +309,15 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WhenNativeReasoningModel_OmitsThinkAndNeverDisablesTemplateThinking(string effort)
     {
         // A native-reasoning model reaches the factory exactly as gpt-oss does today: SupportsThinking FALSE.
-        var definition = new InvocationAgentDefinition("unsloth/gpt-oss-20b-GGUF:Q5_K_M",
-            "Be helpful.",
-            [],
-            [],
-            effort,
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "unsloth/gpt-oss-20b-GGUF:Q5_K_M",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort,
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -309,12 +339,15 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSupportsThinkingFalseAndReasoningNone_SendsThinkFalse()
     {
-        var definition = new InvocationAgentDefinition("gemma:12b",
-            "Be helpful.",
-            [],
-            [],
-            "none",
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "gemma:12b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "none",
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -335,11 +368,14 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSupportsThinkingTrue_IncludesThinkOption()
     {
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            "high");
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "high"
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -367,11 +403,14 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenEffortIsAuto_ProducesTheUnrecognizedValueBehaviour()
     {
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            "auto");
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "auto"
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -395,11 +434,14 @@ public sealed class InvocationAgentFactoryTests
         // Reasoning OFF on a thinking-capable model. think:false suppresses reasoning on the Ollama wire, but
         // the llama.cpp OpenAI adapter drops think, so the factory also flags the turn for the llama.cpp chat client to
         // inject chat_template_kwargs.enable_thinking=false — otherwise a Qwen3-class template keeps emitting reasoning.
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            "none");
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "none"
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -422,11 +464,14 @@ public sealed class InvocationAgentFactoryTests
     {
         // Reasoning ON (a graded level, or the default when unspecified) must NOT disable thinking — the marker is absent
         // so the request stays byte-identical and the model reasons.
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            effort);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -450,11 +495,14 @@ public sealed class InvocationAgentFactoryTests
         // window is exhausted and the turn returns no final answer; the marker is what the llama.cpp chat client patches
         // onto the body as reasoning_budget_tokens. "xhigh" is capped at the same budget as "high" so a Codex-only level
         // pinned onto a local model cannot buy MORE thinking than the highest local level.
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            effort);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -475,11 +523,14 @@ public sealed class InvocationAgentFactoryTests
     {
         // No explicit graded effort → no budget at all, preserving the unrestricted pre-budget behavior (and, for
         // "none", reasoning is being turned off outright, where a budget would be meaningless).
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            effort);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -499,12 +550,15 @@ public sealed class InvocationAgentFactoryTests
         // A model without the graded thinking capability (including the native-reasoning harmony family) has no
         // think-end tag for llama-server to close the reasoning phase on, so the budget would be a no-op — it is never
         // set, keeping that path byte-identical.
-        var definition = new InvocationAgentDefinition("gemma:12b",
-            "Be helpful.",
-            [],
-            [],
-            effort,
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "gemma:12b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort,
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -520,12 +574,15 @@ public sealed class InvocationAgentFactoryTests
     {
         // A non-thinking model has no default reasoning to disable — think:false alone is enough and no llama.cpp
         // enable_thinking switch is meaningful, so the marker is never set (the else branch takes no action).
-        var definition = new InvocationAgentDefinition("gemma:12b",
-            "Be helpful.",
-            [],
-            [],
-            "none",
-            SupportsThinking: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "gemma:12b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "none",
+            SupportsThinking = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -545,11 +602,14 @@ public sealed class InvocationAgentFactoryTests
         // minimal/xhigh are Codex-only OpenAI Responses levels. Ollama 400s on them as a think level, so the factory
         // collapses think to TRUE (safe on the Ollama path) while preserving the un-collapsed level on the Codex side
         // channel so the Codex boundary can map it with full fidelity.
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            [],
-            effort);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -567,10 +627,13 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WhenSupportsThinkingTrueAndNoEffort_OmitsCodexSideChannel()
     {
         // Blank/unspecified effort: only `think` is set (no side channel). Guards the no-override byte-identical path.
-        var definition = new InvocationAgentDefinition("qwen3:8b",
-            "Be helpful.",
-            [],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -587,10 +650,13 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WithOfferedNameInRegistry_EnablesToolsAndResolvesExecutable()
     {
         var registry = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.CreateOfferPlaceholder("Calculate")],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder("Calculate")],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, registry);
@@ -605,10 +671,13 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WithOfferedNameNotInRegistry_SkipsToolAndDisablesTools()
     {
         var registry = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.Create("echo", (input, _) => Task.FromResult(input))],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.Create("echo", (input, _) => Task.FromResult(input))],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, registry);
@@ -623,10 +692,13 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WithOfferedClientLocalName_ResolvesFromClientLocalRegistry()
     {
         var clientLocalRegistry = new FakeClientLocalToolRegistry(AIFunctionFactory.Create((string input) => input, "run_in_agent_home"));
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, clientLocalToolRegistry: clientLocalRegistry);
@@ -650,10 +722,13 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.True(resolved);
         AssertEx.True(wrapped is ApprovalRequiredAIFunction, "the high-risk handler must resolve approval-wrapped");
 
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, clientLocalToolRegistry: registry);
@@ -667,10 +742,13 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WithOfferedNameInNeitherRegistry_DisablesTools()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -686,10 +764,13 @@ public sealed class InvocationAgentFactoryTests
         // Option C: an offered MCP-qualified name that matches neither the built-in nor the ClientLocal registry
         // resolves against the MCP tool registry's cached executable.
         var mcpRegistry = new FakeMcpToolRegistry(AIFunctionFactory.Create((string input) => input, "mcp__weather__get_forecast"));
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.CreateOfferPlaceholder("mcp__weather__get_forecast")],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder("mcp__weather__get_forecast")],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, mcpToolRegistry: mcpRegistry);
@@ -708,9 +789,12 @@ public sealed class InvocationAgentFactoryTests
         var wrapped = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, "mcp__files__write_file"));
         var snapshot = new[]
         {
-            new McpRegisteredTool("mcp__files__write_file",
-                wrapped,
-                new LocalChatToolDescriptor("mcp__files__write_file", "Writes a file.", ParameterSchema: """{"type":"object"}""", RequiresApproval: true))
+            new McpRegisteredTool
+            {
+                Name = "mcp__files__write_file",
+                Executable = wrapped,
+                Descriptor = new LocalChatToolDescriptor { Name = "mcp__files__write_file", Description = "Writes a file.", ParameterSchema = """{"type":"object"}""", RequiresApproval = true }
+            }
         };
         var mcpRegistry = new FakeMcpToolRegistry();
         mcpRegistry.ReplaceSnapshot(snapshot);
@@ -719,10 +803,13 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.True(resolved);
         AssertEx.True(executable is ApprovalRequiredAIFunction, "the MCP tool must resolve approval-wrapped");
 
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [InvocationToolBridge.CreateOfferPlaceholder("mcp__files__write_file")],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder("mcp__files__write_file")],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, mcpToolRegistry: mcpRegistry);
@@ -736,13 +823,16 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_OrdersConversationContext_WhenBuildingSeedMessages()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [
                 new ChatMessage(ChatRole.User, "first"),
                 new ChatMessage(ChatRole.Assistant, "second")
-            ]);
+            ]
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -756,11 +846,13 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSamplingProvided_AppliesNativeChatOptions()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 Temperature = 0.3f,
                 TopP = 0.85f,
@@ -770,7 +862,8 @@ public sealed class InvocationAgentFactoryTests
                 FrequencyPenalty = 0.1f,
                 Seed = 7,
                 Stop = ["END"]
-            });
+            }
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -791,17 +884,20 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSamplingProvided_AddsOllamaAdditionalProperties()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 MinP = 0.05f,
                 RepeatPenalty = 1.2f,
                 RepeatLastN = 128,
                 NumCtx = 8192
-            });
+            }
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -824,10 +920,13 @@ public sealed class InvocationAgentFactoryTests
     {
         // No-override guarantee: with no sampling, the factory sets only `think` (the pre-sampling behavior) and leaves
         // every native sampling property null and adds no Ollama option keys.
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            []);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = []
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -853,15 +952,18 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenMaxOutputTokensExceedsNumCtx_ClampsToContextWindow()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 MaxOutputTokens = 16384,
                 NumCtx = 4096
-            });
+            }
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -877,11 +979,13 @@ public sealed class InvocationAgentFactoryTests
     {
         // Defensive guards: NaN/negative/out-of-range values are treated as "no override" and dropped. Covers both the
         // lower bounds (negative/zero) and the upper bounds (temperature > 2, penalty |x| > 2, seed < -1).
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 Temperature = 2.5f,
                 TopP = 1.5f,
@@ -890,7 +994,8 @@ public sealed class InvocationAgentFactoryTests
                 PresencePenalty = 3f,
                 FrequencyPenalty = -3f,
                 Seed = -2
-            });
+            }
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -912,17 +1017,20 @@ public sealed class InvocationAgentFactoryTests
     {
         // The boundary edges are inclusive: temperature 2, penalties ±2, and seed -1 (Ollama's random-seed sentinel)
         // are all valid and must be applied, not dropped.
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [],
-            Sampling: new InvocationSamplingOptions
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Sampling = new InvocationSamplingOptions
             {
                 Temperature = 2f,
                 PresencePenalty = 2f,
                 FrequencyPenalty = -2f,
                 Seed = -1
-            });
+            }
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -949,7 +1057,7 @@ public sealed class InvocationAgentFactoryTests
 
         // No skills: the agent is built via the positional constructor, so no context providers are attached
         // (AIContextProviders is null per MAF when none are configured) — byte-identical to the pre-skills build.
-        var noSkills = new InvocationAgentDefinition("qwen3.5:0.8b", "Be helpful.", [], []);
+        var noSkills = new InvocationAgentDefinition { ModelId = "qwen3.5:0.8b", Instructions = "Be helpful.", Tools = [], ConversationContext = [] };
         await using var noSkillsContext = await sut.CreateAsync(noSkills);
         var noSkillsAgent = ResolveChatClientAgent(noSkillsContext.Agent);
         AssertEx.True(noSkillsAgent.AIContextProviders is null or { Count: 0 },
@@ -959,15 +1067,17 @@ public sealed class InvocationAgentFactoryTests
         // carries NO instructions on either path — the system instructions are delivered once by the seed system
         // message (see the InstructionsDeliveredOnce wire tests), so the skills path must match the no-skills path and
         // leave the agent's Instructions null. Only the agent's name/identity flows through the options ctor.
-        var withSkills = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [],
-            [],
-            Skills:
-            [
-                new InvocationSkill("kubernetes-debug", "Debug k8s issues", "## Body"),
-                new InvocationSkill("log-triage", "Triage logs", "## Logs")
-            ]);
+        var withSkills = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            Skills = [
+                new InvocationSkill { Name = "kubernetes-debug", Description = "Debug k8s issues", Body = "## Body" },
+                new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" }
+            ]
+        };
         await using var withSkillsContext = await sut.CreateAsync(withSkills);
         var withSkillsAgent = ResolveChatClientAgent(withSkillsContext.Agent);
         var providers = AssertEx.NotNull(withSkillsAgent.AIContextProviders, "A skills agent must attach a context provider.");
@@ -984,21 +1094,23 @@ public sealed class InvocationAgentFactoryTests
         // Behaviour, not registration order: MAF renders the <available_resources> block from the resources present when
         // the skill's content is built, so a resource registered too late would be readable but never advertised — the
         // model would have no way to learn it exists. Assert the generated content actually names them.
-        var skill = new InvocationSkill("kubernetes-debug",
-            "Debug k8s issues",
-            "## Body",
-            License: "MIT",
-            Compatibility: "any Agent Skills host",
-            AllowedTools: "read_file search_knowledge_base",
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+        var skill = new InvocationSkill
+        {
+            Name = "kubernetes-debug",
+            Description = "Debug k8s issues",
+            Body = "## Body",
+            License = "MIT",
+            Compatibility = "any Agent Skills host",
+            AllowedTools = "read_file search_knowledge_base",
+            Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["author"] = "acme"
             },
-            Resources:
-            [
-                new InvocationSkillResource("references/runbook.md", "Escalation runbook", "text/markdown", "step one"),
-                new InvocationSkillResource("references/faq.md", "Frequently asked questions", "text/markdown", "answer one")
-            ]);
+            Resources = [
+                new InvocationSkillResource { Name = "references/runbook.md", Description = "Escalation runbook", MediaType = "text/markdown", Content = "step one" },
+                new InvocationSkillResource { Name = "references/faq.md", Description = "Frequently asked questions", MediaType = "text/markdown", Content = "answer one" }
+            ]
+        };
 
         var inlineSkill = InvocationAgentFactory.BuildInlineSkill(skill);
         var content = await inlineSkill.GetContentAsync(CancellationToken.None);
@@ -1020,7 +1132,7 @@ public sealed class InvocationAgentFactoryTests
     {
         // The 3-argument constructor this replaced IS the full constructor taking its defaults, so a skill carrying
         // neither frontmatter nor resources must build exactly what it built before either existed.
-        var skill = new InvocationSkill("log-triage", "Triage logs", "## Logs");
+        var skill = new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" };
 
         var built = InvocationAgentFactory.BuildInlineSkill(skill);
         var baseline = new AgentInlineSkill("log-triage", "Triage logs", "## Logs");
@@ -1035,10 +1147,13 @@ public sealed class InvocationAgentFactoryTests
     public async Task RunStreamingAsync_NoSkills_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
     {
         const string instructions = "You are the worker. Follow the playbook exactly.";
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            instructions,
-            [],
-            [new ChatMessage(ChatRole.User, "Summarise the deployment status.")]);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = instructions,
+            Tools = [],
+            ConversationContext = [new ChatMessage(ChatRole.User, "Summarise the deployment status.")]
+        };
 
         using var chatClient = new CapturingChatClient();
         var sut = CreateSut(chatClient);
@@ -1057,15 +1172,17 @@ public sealed class InvocationAgentFactoryTests
     public async Task RunStreamingAsync_WithSkills_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
     {
         const string instructions = "You are the worker. Follow the playbook exactly.";
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            instructions,
-            [],
-            [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
-            Skills:
-            [
-                new InvocationSkill("kubernetes-debug", "Debug k8s issues", "## Body"),
-                new InvocationSkill("log-triage", "Triage logs", "## Logs")
-            ]);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = instructions,
+            Tools = [],
+            ConversationContext = [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
+            Skills = [
+                new InvocationSkill { Name = "kubernetes-debug", Description = "Debug k8s issues", Body = "## Body" },
+                new InvocationSkill { Name = "log-triage", Description = "Triage logs", Body = "## Logs" }
+            ]
+        };
 
         using var chatClient = new CapturingChatClient();
         var sut = CreateSut(chatClient);
@@ -1181,11 +1298,14 @@ public sealed class InvocationAgentFactoryTests
     {
         var names = Enumerable.Range(0, toolCount).Select(static index => $"tool_{index}").ToList();
         var registry = new FakeToolRegistry([.. names.Select(static name => AIFunctionFactory.Create((string input) => input, name))]);
-        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
-            "Be helpful.",
-            [.. names.Select(name => InvocationToolBridge.CreateOfferPlaceholder(name, requiresApproval))],
-            [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
-            Skills: withSkills ? [new InvocationSkill("kubernetes-debug", "Debug k8s issues", "## Body")] : null);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "Be helpful.",
+            Tools = [.. names.Select(name => InvocationToolBridge.CreateOfferPlaceholder(name, requiresApproval))],
+            ConversationContext = [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
+            Skills = withSkills ? [new InvocationSkill { Name = "kubernetes-debug", Description = "Debug k8s issues", Body = "## Body" }] : null
+        };
 
         var sut = CreateSut(chatClient, registry);
         await using var context = await sut.CreateAsync(definition);
@@ -1251,12 +1371,15 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ThinkingCapableButBudgetNotEnforceable_OmitsTheReasoningBudget()
     {
-        var definition = new InvocationAgentDefinition("factory-unenforceable-budget-model-a",
-            "Be helpful.",
-            [],
-            [],
-            "high",
-            ReasoningBudgetEnforceable: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "factory-unenforceable-budget-model-a",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "high",
+            ReasoningBudgetEnforceable = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -1281,12 +1404,15 @@ public sealed class InvocationAgentFactoryTests
     {
         const string modelId = "factory-unenforceable-budget-model-b";
         var logger = new RecordingLogger<InvocationAgentFactory>();
-        var definition = new InvocationAgentDefinition(modelId,
-            "Be helpful.",
-            [],
-            [],
-            "medium",
-            ReasoningBudgetEnforceable: false);
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = modelId,
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "medium",
+            ReasoningBudgetEnforceable = false
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, logger: logger);
@@ -1313,11 +1439,14 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_EnforceableBudgetIsTheDefault_CarriesTheBudgetAndLogsNothing()
     {
         var logger = new RecordingLogger<InvocationAgentFactory>();
-        var definition = new InvocationAgentDefinition("factory-enforceable-budget-model",
-            "Be helpful.",
-            [],
-            [],
-            "low");
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "factory-enforceable-budget-model",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = "low"
+        };
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient, logger: logger);
@@ -1392,7 +1521,7 @@ public sealed class InvocationAgentFactoryTests
             return
             [
                 .. _tools.OfType<AIFunction>()
-                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), RequiresApproval: false))
+                         .Select(static function => new LocalChatToolDescriptor { Name = function.Name, Description = function.Description, ParameterSchema = function.JsonSchema.GetRawText(), RequiresApproval = false })
             ];
         }
     }
@@ -1437,7 +1566,7 @@ public sealed class InvocationAgentFactoryTests
             return
             [
                 .. _tools.Values.OfType<AIFunction>()
-                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), RequiresApproval: true))
+                         .Select(static function => new LocalChatToolDescriptor { Name = function.Name, Description = function.Description, ParameterSchema = function.JsonSchema.GetRawText(), RequiresApproval = true })
             ];
         }
 

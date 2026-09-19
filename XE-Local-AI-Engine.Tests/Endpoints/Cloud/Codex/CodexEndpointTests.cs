@@ -96,7 +96,7 @@ public sealed class CodexEndpointTests
         tokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         var coordinator = Substitute.For<ICodexLoginCoordinator>();
         coordinator.GetStatus()
-                   .Returns(new CodexLoginStatus(CodexLoginState.Pending, new Uri("https://auth.openai.com/authorize")));
+                   .Returns(new CodexLoginStatus { State = CodexLoginState.Pending, AuthorizeUrl = new Uri("https://auth.openai.com/authorize") });
         await using var factory = CreateFactory(tokenStore, coordinator);
         using var client = factory.CreateClient();
 

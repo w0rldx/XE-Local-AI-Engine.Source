@@ -81,7 +81,7 @@ public sealed class LlamaServerCapabilityGateTests
     }
 
     private static LlamaServerCapabilityManifest Manifest(string help) =>
-        LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary("/opt/llama/llama-server", "b10201", GpuVariant.Cuda, IsPinnedFallback: false),
+        LlamaServerCapabilityManifest.FromSuccessfulProbe(new LlamaBinary { ServerExecutablePath = "/opt/llama/llama-server", Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = false },
             executableLengthBytes: 1024,
             DateTimeOffset.UnixEpoch,
             new string('a', 64),
@@ -89,10 +89,13 @@ public sealed class LlamaServerCapabilityGateTests
             help);
 
     private static LlamaServerLaunchSpec Spec(string[] arguments) =>
-        new("llama3",
-            ModelRole.Chat,
-            "/opt/llama/llama-server",
-            ["-m", "/models/llama3.gguf", "--host", "127.0.0.1", "--port", "8080", .. arguments],
-            8080,
-            "/opt/llama");
+        new()
+        {
+            ModelName = "llama3",
+            Role = ModelRole.Chat,
+            ExecutablePath = "/opt/llama/llama-server",
+            Arguments = ["-m", "/models/llama3.gguf", "--host", "127.0.0.1", "--port", "8080", .. arguments],
+            Port = 8080,
+            WorkingDirectory = "/opt/llama"
+        };
 }

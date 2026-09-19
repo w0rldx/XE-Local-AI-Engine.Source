@@ -299,25 +299,28 @@ public sealed class ProviderCallBudget
         var rejected = Volatile.Read(ref _providerRoundsRejected);
         var firstToolRequestMicroseconds = Interlocked.Read(ref _firstToolRequestMicroseconds);
 
-        return new ProviderCallEfficiencySnapshot(ProviderCalls: Math.Max(0, attempts - rejected),
-            ProviderRoundsRejected: rejected,
-            EstimatedInputTokens: Math.Max(0, Interlocked.Read(ref _cumulativeInputTokens) - Interlocked.Read(ref _rejectedInputTokens)),
-            MaximumEstimatedInputTokens: Volatile.Read(ref _maximumEstimatedInputTokens),
-            ToolSchemaTokens: Interlocked.Read(ref _toolSchemaTokens),
-            MaximumToolSchemaTokens: Volatile.Read(ref _maximumToolSchemaTokens),
-            ProviderRoundElapsedMs: FromMicroseconds(Interlocked.Read(ref _providerRoundElapsedMicroseconds)),
-            MessagesDropped: Interlocked.Read(ref _messagesDropped),
-            ToolResultsTruncated: Interlocked.Read(ref _toolResultsTruncated),
-            CharsTruncated: Interlocked.Read(ref _charsTruncated),
-            ToolCallsRequested: Volatile.Read(ref _toolCallsRequested),
-            ToolCallsCompleted: Volatile.Read(ref _toolCallsCompleted),
-            ToolCallsFailed: Volatile.Read(ref _toolCallsFailed),
-            ToolRequestToResultMs: FromMicroseconds(Interlocked.Read(ref _toolRequestToResultMicroseconds)),
-            ToolResultBytes: Interlocked.Read(ref _toolResultBytes),
-            TimeToFirstToolRequestMs: firstToolRequestMicroseconds < 0 ? null : FromMicroseconds(firstToolRequestMicroseconds),
-            ProviderRetries: Volatile.Read(ref _providerRetries),
-            ToolArgumentRepairs: Volatile.Read(ref _toolArgumentRepairs),
-            AgentHandoffs: Volatile.Read(ref _agentHandoffs));
+        return new ProviderCallEfficiencySnapshot
+        {
+            ProviderCalls = Math.Max(0, attempts - rejected),
+            ProviderRoundsRejected = rejected,
+            EstimatedInputTokens = Math.Max(0, Interlocked.Read(ref _cumulativeInputTokens) - Interlocked.Read(ref _rejectedInputTokens)),
+            MaximumEstimatedInputTokens = Volatile.Read(ref _maximumEstimatedInputTokens),
+            ToolSchemaTokens = Interlocked.Read(ref _toolSchemaTokens),
+            MaximumToolSchemaTokens = Volatile.Read(ref _maximumToolSchemaTokens),
+            ProviderRoundElapsedMs = FromMicroseconds(Interlocked.Read(ref _providerRoundElapsedMicroseconds)),
+            MessagesDropped = Interlocked.Read(ref _messagesDropped),
+            ToolResultsTruncated = Interlocked.Read(ref _toolResultsTruncated),
+            CharsTruncated = Interlocked.Read(ref _charsTruncated),
+            ToolCallsRequested = Volatile.Read(ref _toolCallsRequested),
+            ToolCallsCompleted = Volatile.Read(ref _toolCallsCompleted),
+            ToolCallsFailed = Volatile.Read(ref _toolCallsFailed),
+            ToolRequestToResultMs = FromMicroseconds(Interlocked.Read(ref _toolRequestToResultMicroseconds)),
+            ToolResultBytes = Interlocked.Read(ref _toolResultBytes),
+            TimeToFirstToolRequestMs = firstToolRequestMicroseconds < 0 ? null : FromMicroseconds(firstToolRequestMicroseconds),
+            ProviderRetries = Volatile.Read(ref _providerRetries),
+            ToolArgumentRepairs = Volatile.Read(ref _toolArgumentRepairs),
+            AgentHandoffs = Volatile.Read(ref _agentHandoffs)
+        };
     }
 
     /// <summary>Restores the ambient call cap a <see cref="ProviderCallCapScope" /> replaced, on its dispose.</summary>
@@ -441,13 +444,16 @@ public sealed class ProviderCallCapScope : IDisposable
             toolNames.UnionWith(budget.ToolNames);
         }
 
-        return new ProviderCallConsumption(providerCalls,
-            estimatedInputTokens,
-            toolCallsCompleted,
-            MaxProviderCalls,
-            budgets.Length,
-            toolSchemaTokens,
-            [.. toolNames.Take(ProviderCallBudget.MaxDistinctToolNames)]);
+        return new ProviderCallConsumption
+        {
+            ProviderCalls = providerCalls,
+            EstimatedInputTokens = estimatedInputTokens,
+            ToolCallsCompleted = toolCallsCompleted,
+            ProviderCallCap = MaxProviderCalls,
+            AttachedBudgets = budgets.Length,
+            ToolSchemaTokens = toolSchemaTokens,
+            ToolNames = [.. toolNames.Take(ProviderCallBudget.MaxDistinctToolNames)]
+        };
     }
 
     /// <summary>
@@ -496,57 +502,85 @@ public sealed class ProviderCallCapScope : IDisposable
 ///     the work-session supervisor does with it so a per-step cap can be sized from recorded data rather than guessed,
 ///     and so a cost rollup can answer "which tools" as well as "how many calls" once the run's budget is long gone.
 /// </summary>
-/// <param name="ProviderCalls">Raw provider rounds that were admitted (the rejected one that tripped a ceiling is not counted), summed over every attached budget.</param>
-/// <param name="EstimatedInputTokens">Estimated input tokens across those rounds — an estimate from the character profile, not the provider's count.</param>
-/// <param name="ToolCallsCompleted">Tool invocations that returned, successfully or not.</param>
-/// <param name="ProviderCallCap">
-///     The ceiling the caller seeded. It bounds EACH attached budget, not their sum, so it is only a denominator for
-///     <paramref name="ProviderCalls" /> while <paramref name="AttachedBudgets" /> is 1.
-/// </param>
-/// <param name="AttachedBudgets">
-///     How many invocations ran under the scope — 1 for an ordinary run, more when it spawned sub-agent invocations,
-///     each of which got its own budget and its own ceiling. Reported so nobody reads a summed call count as a
-///     breached cap.
-/// </param>
-/// <param name="ToolSchemaTokens">
-///     Tool-schema tokens SHIPPED ACROSS ROUNDS — every round re-sends the whole offer, so this grows with the number
-///     of rounds and is not the size of the offer. The largest single round is a different number.
-/// </param>
-/// <param name="ToolNames">
-///     The distinct tool names the run called, ordinal-sorted and capped at
-///     <c>ProviderCallBudget.MaxDistinctToolNames</c> across every attached budget. Names only.
-/// </param>
-public sealed record ProviderCallConsumption(
-    int ProviderCalls,
-    long EstimatedInputTokens,
-    int ToolCallsCompleted,
-    int ProviderCallCap,
-    int AttachedBudgets,
-    long ToolSchemaTokens = 0,
-    IReadOnlyList<string>? ToolNames = null);
+public sealed class ProviderCallConsumption
+{
+    /// <summary>Raw provider rounds that were admitted (the rejected one that tripped a ceiling is not counted), summed over every attached budget.</summary>
+    public required int ProviderCalls { get; init; }
+
+    /// <summary>Estimated input tokens across those rounds — an estimate from the character profile, not the provider's count.</summary>
+    public required long EstimatedInputTokens { get; init; }
+
+    /// <summary>Tool invocations that returned, successfully or not.</summary>
+    public required int ToolCallsCompleted { get; init; }
+
+    /// <summary>
+    ///     The ceiling the caller seeded. It bounds EACH attached budget, not their sum, so it is only a denominator for
+    ///     <see cref="ProviderCalls" /> while <see cref="AttachedBudgets" /> is 1.
+    /// </summary>
+    public required int ProviderCallCap { get; init; }
+
+    /// <summary>
+    ///     How many invocations ran under the scope — 1 for an ordinary run, more when it spawned sub-agent invocations,
+    ///     each of which got its own budget and its own ceiling. Reported so nobody reads a summed call count as a
+    ///     breached cap.
+    /// </summary>
+    public required int AttachedBudgets { get; init; }
+
+    /// <summary>
+    ///     Tool-schema tokens SHIPPED ACROSS ROUNDS — every round re-sends the whole offer, so this grows with the number
+    ///     of rounds and is not the size of the offer. The largest single round is a different number.
+    /// </summary>
+    public long ToolSchemaTokens { get; init; }
+
+    /// <summary>
+    ///     The distinct tool names the run called, ordinal-sorted and capped at
+    ///     <c>ProviderCallBudget.MaxDistinctToolNames</c> across every attached budget. Names only.
+    /// </summary>
+    public IReadOnlyList<string>? ToolNames { get; init; }
+}
 
 /// <summary>
 ///     Immutable, content-free aggregate of the expensive work performed during one root agent invocation. It contains
 ///     counts, durations, and estimated sizes only — never prompts, model output, tool identities, arguments, results,
 ///     paths, or schemas — so the invocation runner can export it safely through bounded telemetry.
 /// </summary>
-internal sealed record ProviderCallEfficiencySnapshot(
-    int ProviderCalls,
-    int ProviderRoundsRejected,
-    long EstimatedInputTokens,
-    int MaximumEstimatedInputTokens,
-    long ToolSchemaTokens,
-    int MaximumToolSchemaTokens,
-    double ProviderRoundElapsedMs,
-    long MessagesDropped,
-    long ToolResultsTruncated,
-    long CharsTruncated,
-    int ToolCallsRequested,
-    int ToolCallsCompleted,
-    int ToolCallsFailed,
-    double ToolRequestToResultMs,
-    long ToolResultBytes,
-    double? TimeToFirstToolRequestMs,
-    int ProviderRetries,
-    int ToolArgumentRepairs,
-    int AgentHandoffs);
+internal sealed class ProviderCallEfficiencySnapshot
+{
+    public required int ProviderCalls { get; init; }
+
+    public required int ProviderRoundsRejected { get; init; }
+
+    public required long EstimatedInputTokens { get; init; }
+
+    public required int MaximumEstimatedInputTokens { get; init; }
+
+    public required long ToolSchemaTokens { get; init; }
+
+    public required int MaximumToolSchemaTokens { get; init; }
+
+    public required double ProviderRoundElapsedMs { get; init; }
+
+    public required long MessagesDropped { get; init; }
+
+    public required long ToolResultsTruncated { get; init; }
+
+    public required long CharsTruncated { get; init; }
+
+    public required int ToolCallsRequested { get; init; }
+
+    public required int ToolCallsCompleted { get; init; }
+
+    public required int ToolCallsFailed { get; init; }
+
+    public required double ToolRequestToResultMs { get; init; }
+
+    public required long ToolResultBytes { get; init; }
+
+    public required double? TimeToFirstToolRequestMs { get; init; }
+
+    public required int ProviderRetries { get; init; }
+
+    public required int ToolArgumentRepairs { get; init; }
+
+    public required int AgentHandoffs { get; init; }
+}

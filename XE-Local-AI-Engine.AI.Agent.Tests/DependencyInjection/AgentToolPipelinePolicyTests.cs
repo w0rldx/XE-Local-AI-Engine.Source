@@ -315,7 +315,7 @@ public sealed class AgentToolPipelinePolicyTests
                     Arg.Any<IReadOnlyList<ToolRelevanceCandidate>>(),
                     Arg.Any<int>(),
                     Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult(new ToolRelevanceSelection([ListToolsFunction.ToolName], [HiddenToolName])));
+                .Returns(Task.FromResult(new ToolRelevanceSelection { OfferedNames = [ListToolsFunction.ToolName], HiddenNames = [HiddenToolName] }));
         using var inner = new ScriptedChatClient((call, _, _) => call switch
         {
             1 => FunctionCall(ListToolsFunction.ToolName, call),

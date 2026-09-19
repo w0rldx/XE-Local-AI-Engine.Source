@@ -14,7 +14,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments(LlamaCppSourceBackend.Cuda)]
     public void Normalize_OfficialBackendWithoutCommit_UsesCanonicalRepository(LlamaCppSourceBackend backend)
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(backend, LlamaCppSourceSelection.Official));
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest { Backend = backend, Source = LlamaCppSourceSelection.Official });
 
         AssertEx.Equal(LlamaCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
         AssertEx.Null(normalized.Commit);
@@ -28,7 +28,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     {
         // Regression: the transport edge and ILlamaCppSourceBuildService.StartAsync both normalize, so the second pass
         // sees the canonical repository the first pass wrote. Rejecting it there failed EVERY official build with a 409.
-        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(backend, LlamaCppSourceSelection.Official));
+        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest { Backend = backend, Source = LlamaCppSourceSelection.Official });
 
         var twice = LlamaCppSourceBuildRequestValidation.Normalize(once);
 
@@ -40,11 +40,14 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomAppliedTwice_IsIdempotent()
     {
-        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
-            LlamaCppSourceSelection.Custom,
-            "https://github.com/example/fork.git",
-            "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
-            AcknowledgeCustomSourceRisk: true));
+        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cuda,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork.git",
+            Commit = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
+            AcknowledgeCustomSourceRisk = true
+        });
 
         var twice = LlamaCppSourceBuildRequestValidation.Normalize(once);
 
@@ -57,17 +60,23 @@ public sealed class LlamaCppSourceBuildCoreTests
     public void Normalize_OfficialWithForeignRepository_StillRejects()
     {
         // Idempotency only admits the canonical repository — a client-chosen one is still an override attempt.
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Official,
-            "https://github.com/example/fork")));
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official,
+            Repository = "https://github.com/example/fork"
+        }));
     }
 
     [Test]
     public void Normalize_OfficialWithWellFormedCommit_AcceptsAndCanonicalizes()
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Official,
-            Commit: "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"));
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official,
+            Commit = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+        });
 
         AssertEx.Equal(LlamaCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
         AssertEx.Equal("abcdefabcdefabcdefabcdefabcdefabcdefabcd", normalized.Commit);
@@ -81,9 +90,12 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("not-a-commit-sha-not-a-commit-sha-not-a-")]
     public void Normalize_OfficialWithMalformedCommit_Rejects(string commit)
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Official,
-            Commit: commit)));
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official,
+            Commit = commit
+        }));
     }
 
     [Test]
@@ -129,11 +141,14 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomOfficialRepositoryWithCommitAndAcknowledgement_Accepts()
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Custom,
-            LlamaCppSourceBuildRequestValidation.OfficialRepository,
-            new string('a', 40),
-            AcknowledgeCustomSourceRisk: true));
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            Commit = new string('a', 40),
+            AcknowledgeCustomSourceRisk = true
+        });
 
         AssertEx.Equal(LlamaCppSourceSelection.Custom, normalized.Source);
         AssertEx.Equal(new string('a', 40), normalized.Commit);
@@ -142,11 +157,14 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void Normalize_CustomRepositoryAndUppercaseCommit_CanonicalizesBoth()
     {
-        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Custom,
-            "https://github.com/example/fork.git",
-            "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
-            AcknowledgeCustomSourceRisk: true));
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork.git",
+            Commit = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
+            AcknowledgeCustomSourceRisk = true
+        });
 
         AssertEx.Equal("https://github.com/example/fork", normalized.Repository);
         AssertEx.Equal("abcdefabcdefabcdefabcdefabcdefabcdefabcd", normalized.Commit);
@@ -162,18 +180,24 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("git@github.com:example/fork.git")]
     public void Normalize_CustomUnsafeRepository_Rejects(string repository)
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Custom,
-            repository,
-            AcknowledgeCustomSourceRisk: true)));
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = repository,
+            AcknowledgeCustomSourceRisk = true
+        }));
     }
 
     [Test]
     public void Normalize_CustomWithoutAcknowledgement_Rejects()
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Custom,
-            "https://github.com/example/fork")));
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork"
+        }));
     }
 
     [Test]
@@ -181,9 +205,12 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("gggggggggggggggggggggggggggggggggggggggg")]
     public void Normalize_InvalidCommit_Rejects(string commit)
     {
-        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu,
-            LlamaCppSourceSelection.Official,
-            Commit: commit)));
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official,
+            Commit = commit
+        }));
     }
 
     [Test]
@@ -199,9 +226,15 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void CloneCommands_OfficialPinned_UsesPinnedTagWithoutSubmodules()
     {
-        var descriptor = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu, LlamaCppSourceSelection.Official,
-            LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppSourceRevisionMode.EnginePinned, null,
-            LlamaCppReleasePins.PinnedSourceCommitSha);
+        var descriptor = new LlamaCppSourceBuildDescriptor
+        {
+            Variant = GpuVariant.Cpu,
+            Source = LlamaCppSourceSelection.Official,
+            Repository = LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            RevisionMode = LlamaCppSourceRevisionMode.EnginePinned,
+            RequestedCommit = null,
+            ResolvedCommit = LlamaCppReleasePins.PinnedSourceCommitSha
+        };
         var command = LlamaCppSourceBuildService.BuildCloneCommands(descriptor, "/clone").Single();
         AssertEx.Contains(command, "--no-recurse-submodules");
         AssertEx.Contains(command, LlamaCppReleasePins.PinnedTag);
@@ -210,8 +243,15 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Test]
     public void CloneCommands_CustomDefault_ClonesDefaultHeadWithoutInjectedRef()
     {
-        var descriptor = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu, LlamaCppSourceSelection.Custom,
-            "https://github.com/example/fork", LlamaCppSourceRevisionMode.DefaultBranch, null, null);
+        var descriptor = new LlamaCppSourceBuildDescriptor
+        {
+            Variant = GpuVariant.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork",
+            RevisionMode = LlamaCppSourceRevisionMode.DefaultBranch,
+            RequestedCommit = null,
+            ResolvedCommit = null
+        };
         var command = LlamaCppSourceBuildService.BuildCloneCommands(descriptor, "/clone").Single();
         AssertEx.Contains(command, "https://github.com/example/fork");
         AssertEx.False(command.Contains("--branch"));
@@ -221,8 +261,15 @@ public sealed class LlamaCppSourceBuildCoreTests
     public void CloneCommands_ExplicitCommit_FetchesShaAndChecksOutDetached()
     {
         var sha = new string('a', 40);
-        var descriptor = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu, LlamaCppSourceSelection.Custom,
-            "https://github.com/example/fork", LlamaCppSourceRevisionMode.ExplicitCommit, sha, null);
+        var descriptor = new LlamaCppSourceBuildDescriptor
+        {
+            Variant = GpuVariant.Cpu,
+            Source = LlamaCppSourceSelection.Custom,
+            Repository = "https://github.com/example/fork",
+            RevisionMode = LlamaCppSourceRevisionMode.ExplicitCommit,
+            RequestedCommit = sha,
+            ResolvedCommit = null
+        };
         var commands = LlamaCppSourceBuildService.BuildCloneCommands(descriptor, "/clone");
         AssertEx.True(commands.Any(command => command.Contains("fetch") && command.Contains(sha)));
         AssertEx.True(commands.Any(command => command.Contains("checkout") && command.Contains("--detach") && command.Contains(sha)));

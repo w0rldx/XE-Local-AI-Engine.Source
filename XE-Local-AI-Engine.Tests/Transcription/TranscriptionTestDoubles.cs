@@ -28,7 +28,7 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
 
     /// <summary>What every call returns when <see cref="Failure" /> and <see cref="Gate" /> are unset.</summary>
     public WhisperTranscriptionResult Result { get; set; } =
-        new("hello", [new WhisperTranscriptSegment(0.0, 1.25, "hello", 0.9)], "en", 0.99, 1.25);
+        new() { Text = "hello", Segments = [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 1.25, Text = "hello", Confidence = 0.9 }], DetectedLanguageCode = "en", DetectedLanguageProbability = 0.99, DurationSeconds = 1.25 };
 
     /// <summary>Thrown instead of returning, when set.</summary>
     public Exception? Failure { get; set; }
@@ -98,18 +98,21 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
     public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct)
     {
         _ensureRunningCalls.Add(modelId);
-        return Task.FromResult(new WhisperServerEndpoint(modelId, Generation: 1, new Uri("http://127.0.0.1:9/")));
+        return Task.FromResult(new WhisperServerEndpoint { ModelId = modelId, Generation = 1, BaseAddress = new Uri("http://127.0.0.1:9/") });
     }
 
     public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
-        Task.FromResult(new WhisperServerEvictResult(Evicted: true,
-            new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false)));
+        Task.FromResult(new WhisperServerEvictResult
+        {
+            Evicted = true,
+            Activity = new WhisperRuntimeActivitySnapshot { ActiveTranscriptionCount = 0, SpawnReadinessCount = 0, ResidentProcessCount = 0, MutationReserved = false, EvictionReserved = false }
+        });
 
     public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
         null;
 
     public WhisperRuntimeStatusSnapshot GetStatus() =>
-        new(WhisperRuntimeState.Ready, "tiny", Backend: null, BinaryVersion: null, BinarySource: null, SupportsTranscode: true);
+        new() { State = WhisperRuntimeState.Ready, LoadedModelId = "tiny", Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true };
 }
 
 /// <summary>

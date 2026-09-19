@@ -10,13 +10,19 @@ public static class StableDiffusionCppSourceBuildEvents
     public const string StatusChanged = "stableDiffusionCppSourceBuild.statusChanged";
 }
 
-public sealed record StableDiffusionCppSourceBuildStatusEvent(
-    StableDiffusionCppSourceBuildPhase Phase,
-    IReadOnlyList<string> AppendedLogLines,
-    long AppendedLogStartSequence,
-    bool Terminal,
-    string? SanitizedError,
-    StableDiffusionCppSourceBuildDescriptor? CurrentBuild)
+public sealed class StableDiffusionCppSourceBuildStatusEvent
 {
+    public required StableDiffusionCppSourceBuildPhase Phase { get; init; }
+
+    public required IReadOnlyList<string> AppendedLogLines { get; init; }
+
+    public required long AppendedLogStartSequence { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required StableDiffusionCppSourceBuildDescriptor? CurrentBuild { get; init; }
+
     public Guid? BuildId => CurrentBuild?.BuildId;
 }

@@ -51,15 +51,18 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         // checklist shape everywhere and a Windows operator is told why the lane is unavailable.
         if (!OperatingSystem.IsLinux())
         {
-            return new WhisperCppSourceBuildPrerequisiteReport(false,
-            [
-                new WhisperCppSourceBuildPrerequisiteItem("os-is-linux", false, "In-app source builds are available on Linux only.")
-            ]);
+            return new WhisperCppSourceBuildPrerequisiteReport
+            {
+                CanBuild = false,
+                Items = [
+                new WhisperCppSourceBuildPrerequisiteItem { Key = "os-is-linux", Satisfied = false, Detail = "In-app source builds are available on Linux only." }
+            ]
+            };
         }
 
         var items = new List<WhisperCppSourceBuildPrerequisiteItem>
         {
-            new("os-is-linux", true, "Linux host detected."),
+            new() { Key = "os-is-linux", Satisfied = true, Detail = "Linux host detected." },
             await ProbeToolAsync("cmake", ["--version"], "CMake", ProbeIsolationRoot, ct).ConfigureAwait(false),
             await ProbeToolAsync("gcc", ["--version"], "C compiler (gcc)", ProbeIsolationRoot, ct).ConfigureAwait(false),
             await ProbeToolAsync("g++", ["--version"], "C++ compiler (g++)", ProbeIsolationRoot, ct).ConfigureAwait(false),
@@ -83,7 +86,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
                     .ConfigureAwait(false));
         }
 
-        return new WhisperCppSourceBuildPrerequisiteReport(items.TrueForAll(static item => item.Satisfied), items);
+        return new WhisperCppSourceBuildPrerequisiteReport { CanBuild = items.TrueForAll(static item => item.Satisfied), Items = items };
     }
 
     internal static Task<WhisperCppSourceBuildPrerequisiteItem> ProbeToolForTestsAsync(string fileName,
@@ -127,15 +130,18 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
             Directory.CreateDirectory(_cacheRoot);
 
             var available = FreeSpace.GetAvailableFreeBytes(_cacheRoot);
-            return new WhisperCppSourceBuildPrerequisiteItem("free-disk",
-                available >= _requiredFreeDiskBytes,
-                available >= _requiredFreeDiskBytes
+            return new WhisperCppSourceBuildPrerequisiteItem
+            {
+                Key = "free-disk",
+                Satisfied = available >= _requiredFreeDiskBytes,
+                Detail = available >= _requiredFreeDiskBytes
                     ? "Sufficient free disk space detected."
-                    : "At least 15 GiB of free disk space is required.");
+                    : "At least 15 GiB of free disk space is required."
+            };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            return new WhisperCppSourceBuildPrerequisiteItem("free-disk", false, "Free disk space could not be verified.");
+            return new WhisperCppSourceBuildPrerequisiteItem { Key = "free-disk", Satisfied = false, Detail = "Free disk space could not be verified." };
         }
     }
 
@@ -186,7 +192,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
                                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                 .FirstOrDefault();
                 return process.ExitCode == 0
-                    ? new WhisperCppSourceBuildPrerequisiteItem(fileName, true, firstLine ?? $"{displayName} detected.")
+                    ? new WhisperCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = true, Detail = firstLine ?? $"{displayName} detected." }
                     : Missing(fileName, displayName);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -194,7 +200,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
                 TryKill(process);
                 await IgnoreCancellationAsync(outputTask).ConfigureAwait(false);
                 await IgnoreCancellationAsync(errorTask).ConfigureAwait(false);
-                return new WhisperCppSourceBuildPrerequisiteItem(fileName, false, $"{displayName} probe timed out.");
+                return new WhisperCppSourceBuildPrerequisiteItem { Key = fileName, Satisfied = false, Detail = $"{displayName} probe timed out." };
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -212,7 +218,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
 
     private static WhisperCppSourceBuildPrerequisiteItem Missing(string key, string displayName)
     {
-        return new WhisperCppSourceBuildPrerequisiteItem(key, false, $"{displayName} is not available.");
+        return new WhisperCppSourceBuildPrerequisiteItem { Key = key, Satisfied = false, Detail = $"{displayName} is not available." };
     }
 
     private static async Task IgnoreCancellationAsync(Task task)

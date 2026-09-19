@@ -46,7 +46,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         AssertEx.True(result.Accepted);
         AssertEx.True(calls.SequenceEqual(["lease", "ensure"], StringComparer.Ordinal),
             "the mutation lease must be held before the acquisition task is accepted.");
-        completion.SetResult(new LlamaBinary("/tmp/llama-server", "b1", GpuVariant.Cpu, true));
+        completion.SetResult(new LlamaBinary { ServerExecutablePath = "/tmp/llama-server", Version = "b1", Variant = GpuVariant.Cpu, IsPinnedFallback = true });
         await lease.Disposed;
         AssertEx.Equal(1, lease.DisposeCount);
     }

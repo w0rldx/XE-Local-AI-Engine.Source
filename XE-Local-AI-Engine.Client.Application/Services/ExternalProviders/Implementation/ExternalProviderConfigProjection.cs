@@ -46,7 +46,7 @@ internal static class ExternalProviderConfigProjection
             }
 
             registrations.AddRange(connection.Models.Select(model =>
-                new ExternalProviderModelRegistration(descriptor, ExternalProviderStore.ToDescriptor(model))));
+                new ExternalProviderModelRegistration { Connection = descriptor, Model = ExternalProviderStore.ToDescriptor(model) }));
         }
 
         return (registrations, keys);

@@ -36,12 +36,15 @@ public sealed class ResolveUserQuestionEndpoint : Endpoint<ResolveUserQuestionRe
         // DispatchUserQuestionAnsweredAsync is idempotent/safe when no question is pending for this id (it logs and
         // no-ops), so a duplicate submit or an answer posted after the turn already moved on never faults the run.
         var answers = req.Answers
-                         .Select(static answer => new UserQuestionAnswer(answer.Question,
-                             answer.Selected is null ? [] : [.. answer.Selected],
-                             answer.Other))
+                         .Select(static answer => new UserQuestionAnswer
+                         {
+                             Question = answer.Question,
+                             Selected = answer.Selected is null ? [] : [.. answer.Selected],
+                             Other = answer.Other
+                         })
                          .ToArray();
 
-        await _eventDispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent(req.RequestId, answers));
+        await _eventDispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent { RequestId = req.RequestId, Answers = answers });
 
         // The answers are the operator's words: the response echoes the correlation id and a count only, never content.
         await Send.OkAsync(new ResolveUserQuestionResponse

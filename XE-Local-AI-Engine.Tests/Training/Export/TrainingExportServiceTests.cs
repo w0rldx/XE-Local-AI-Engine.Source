@@ -96,14 +96,17 @@ public sealed class TrainingExportServiceTests : IDisposable
     public async Task Export_WhenTheArchitectureIsNotSupported_SkipsSmokeWithAVisibleReason()
     {
         using var harness = Harness.Create(this,
-            inspection: new GgufImportInspection(SizeBytes: 4,
-                GgufVersion: 3,
-                "mamba",
-                Workload: null,
-                "Q4_K_M",
-                "merged-Q4_K_M.gguf",
-                [GgufImportRejectionCode.UnsupportedArchitecture],
-                []));
+            inspection: new GgufImportInspection
+            {
+                SizeBytes = 4,
+                GgufVersion = 3,
+                Architecture = "mamba",
+                Workload = null,
+                DetectedQuantization = "Q4_K_M",
+                SourceDisplayName = "merged-Q4_K_M.gguf",
+                Rejections = [GgufImportRejectionCode.UnsupportedArchitecture],
+                Warnings = []
+            });
         harness.ScriptMergedPipeline();
 
         _ = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
@@ -396,15 +399,28 @@ public sealed class TrainingExportServiceTests : IDisposable
             var runtime = Substitute.For<ITrainingRuntimeService>();
             _ = runtime.ResolveInterpreterPath().Returns("/venv/bin/python");
             _ = runtime.GetStatus()
-                       .Returns(new TrainingRuntimeStatus(TrainingRuntimePhase.Ready, IsRunning: false, Terminal: true, [],
-                           LogStartSequence: 0, SanitizedError: null, Installed: null, StartedAtUtc: null, CompletedAtUtc: null));
+                       .Returns(new TrainingRuntimeStatus
+                       {
+                           Phase = TrainingRuntimePhase.Ready,
+                           IsRunning = false,
+                           Terminal = true,
+                           LogLines = [],
+                           LogStartSequence = 0,
+                           SanitizedError = null,
+                           Installed = null,
+                           StartedAtUtc = null,
+                           CompletedAtUtc = null
+                       });
 
             var convertScripts = Substitute.For<IConvertScriptProvisioner>();
             _ = convertScripts.EnsureAsync(Arg.Any<CancellationToken>())
-                              .Returns(new ConvertScriptPaths("/opt/llama.cpp/convert_hf_to_gguf.py",
-                                  "/opt/llama.cpp/convert_lora_to_gguf.py",
-                                  GgufPyDirectory,
-                                  "abc123"));
+                              .Returns(new ConvertScriptPaths
+                              {
+                                  HfToGgufScriptPath = "/opt/llama.cpp/convert_hf_to_gguf.py",
+                                  LoraToGgufScriptPath = "/opt/llama.cpp/convert_lora_to_gguf.py",
+                                  GgufPyDirectory = GgufPyDirectory,
+                                  SourceCommit = "abc123"
+                              });
 
             // The quantizer is located by NAME beside the resolved server, so its presence is modelled the way the
             // product resolves it: a real sibling file, or the absence of one.
@@ -419,7 +435,7 @@ public sealed class TrainingExportServiceTests : IDisposable
 
             var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
             _ = binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                             .Returns(new LlamaBinary(serverPath, "b10201", GpuVariant.Cuda, IsPinnedFallback: true));
+                             .Returns(new LlamaBinary { ServerExecutablePath = serverPath, Version = "b10201", Variant = GpuVariant.Cuda, IsPinnedFallback = true });
             var variantSelector = Substitute.For<IGpuVariantSelector>();
             _ = variantSelector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(GpuVariant.Cuda);
 
@@ -536,16 +552,19 @@ public sealed class TrainingExportServiceTests : IDisposable
             _provider.Dispose();
 
         private static GgufImportInspection Accepted(GgufImportSource source) =>
-            new(SizeBytes: 4,
-                GgufVersion: 3,
-                "llama",
-                Path.GetFileName(source.AbsolutePath).StartsWith("adapter", StringComparison.Ordinal)
+            new()
+            {
+                SizeBytes = 4,
+                GgufVersion = 3,
+                Architecture = "llama",
+                Workload = Path.GetFileName(source.AbsolutePath).StartsWith("adapter", StringComparison.Ordinal)
                     ? GgufImportWorkload.LoraAdapter
                     : GgufImportWorkload.CausalChat,
-                "Q4_K_M",
-                Path.GetFileName(source.AbsolutePath),
-                [],
-                []);
+                DetectedQuantization = "Q4_K_M",
+                SourceDisplayName = Path.GetFileName(source.AbsolutePath),
+                Rejections = [],
+                Warnings = []
+            };
 
         private static void ConfigureStore(ITrainingRunStore store,
             Guid runId,

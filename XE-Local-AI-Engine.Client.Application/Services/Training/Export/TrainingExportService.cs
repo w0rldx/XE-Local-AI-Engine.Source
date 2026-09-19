@@ -566,11 +566,14 @@ public sealed class TrainingExportService : ITrainingExportService
         string step,
         CancellationToken cancellationToken)
     {
-        using var handle = _spawner.Spawn(new TrainingSpawnRequest(executable,
-            arguments,
-            _workspace.WorkDirectory(plan.RunId),
-            Guid.NewGuid().ToString("N"),
-            ggufPyDirectory));
+        using var handle = _spawner.Spawn(new TrainingSpawnRequest
+        {
+            ExecutablePath = executable,
+            Arguments = arguments,
+            WorkingDirectory = _workspace.WorkDirectory(plan.RunId),
+            RunToken = Guid.NewGuid().ToString("N"),
+            GgufPyDirectory = ggufPyDirectory
+        });
         await using var registration = cancellationToken.Register(handle.KillGroup);
 
         string? protocolError = null;
@@ -607,7 +610,7 @@ public sealed class TrainingExportService : ITrainingExportService
     /// </summary>
     private async Task<string?> RejectUnsupportedShapeAsync(ExportPlan plan, CancellationToken cancellationToken)
     {
-        var inspection = await _inspector.InspectAsync(new GgufImportSource(plan.OutputPath),
+        var inspection = await _inspector.InspectAsync(new GgufImportSource { AbsolutePath = plan.OutputPath },
                                              GgufImportInspectionMode.InProcessTrainedCommit,
                                              cancellationToken);
         var expected = plan.Kind == TrainingArtifactKind.AdapterGguf ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;

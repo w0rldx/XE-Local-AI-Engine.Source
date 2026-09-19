@@ -33,20 +33,29 @@ public interface IRuntimeAcquisitionStatusRegistry
 /// <summary>
 ///     One status write. The sequence is stamped by the registry, never by the caller.
 /// </summary>
-/// <param name="Phase">The lifecycle stage being reported.</param>
-/// <param name="Variant">The <see cref="GpuVariant" /> name, when known.</param>
-/// <param name="Tag">The release tag, when resolved.</param>
-/// <param name="CompletedBytes">Bytes written so far, for <see cref="RuntimeAcquisitionPhase.Downloading" />.</param>
-/// <param name="TotalBytes">The total size when a <c>Content-Length</c> was supplied.</param>
-/// <param name="StepIndex">1-based index of the archive being acquired.</param>
-/// <param name="StepCount">Total archives this acquisition fetches.</param>
-/// <param name="SanitizedError">A user-safe failure reason; only set with <see cref="RuntimeAcquisitionPhase.Failed" />.</param>
-public sealed record RuntimeAcquisitionUpdate(
-    RuntimeAcquisitionPhase Phase,
-    string? Variant = null,
-    string? Tag = null,
-    long? CompletedBytes = null,
-    long? TotalBytes = null,
-    int StepIndex = 1,
-    int StepCount = 1,
-    string? SanitizedError = null);
+public sealed class RuntimeAcquisitionUpdate
+{
+    /// <summary>The lifecycle stage being reported.</summary>
+    public required RuntimeAcquisitionPhase Phase { get; init; }
+
+    /// <summary>The <see cref="GpuVariant" /> name, when known.</summary>
+    public string? Variant { get; init; }
+
+    /// <summary>The release tag, when resolved.</summary>
+    public string? Tag { get; init; }
+
+    /// <summary>Bytes written so far, for <see cref="RuntimeAcquisitionPhase.Downloading" />.</summary>
+    public long? CompletedBytes { get; init; }
+
+    /// <summary>The total size when a <c>Content-Length</c> was supplied.</summary>
+    public long? TotalBytes { get; init; }
+
+    /// <summary>1-based index of the archive being acquired.</summary>
+    public int StepIndex { get; init; } = 1;
+
+    /// <summary>Total archives this acquisition fetches.</summary>
+    public int StepCount { get; init; } = 1;
+
+    /// <summary>A user-safe failure reason; only set with <see cref="RuntimeAcquisitionPhase.Failed" />.</summary>
+    public string? SanitizedError { get; init; }
+}

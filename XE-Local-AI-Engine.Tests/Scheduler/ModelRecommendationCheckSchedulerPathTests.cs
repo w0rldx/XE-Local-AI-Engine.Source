@@ -140,15 +140,43 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
-                     new GgufRepoSummary("org/qwen-GGUF", IsGated: false, Downloads: 1000, Likes: 10, DateTimeOffset.UnixEpoch, "apache-2.0", HasUsableGguf: true,
-                         IsTrustedPublisher: false)
+                     new GgufRepoSummary
+                     {
+                         RepoId = "org/qwen-GGUF",
+                         IsGated = false,
+                         Downloads = 1000,
+                         Likes = 10,
+                         LastModified = DateTimeOffset.UnixEpoch,
+                         License = "apache-2.0",
+                         HasUsableGguf = true,
+                         IsTrustedPublisher = false
+                     }
                  ]));
         discovery.InspectRepoAsync("org/qwen-GGUF", Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new GgufRepoDetail("org/qwen-GGUF", IsGated: false, "apache-2.0",
-                 [
-                     new GgufRepoFile("qwen.Q4_K_M.gguf", "Q4_K_M", 4 * Gb, Sha256: null, "main",
-                         "qwen2", "Q4_K_M", ParamCount: 7_000_000_000L, BlockCount: 28, AttentionHeadCount: 28, AttentionHeadCountKV: 4, EmbeddingLength: 3584, ContextLength: 32768)
-                 ])));
+                 .Returns(Task.FromResult(new GgufRepoDetail
+                 {
+                     RepoId = "org/qwen-GGUF",
+                     IsGated = false,
+                     License = "apache-2.0",
+                     Files = [
+                     new GgufRepoFile
+                     {
+                         FileName = "qwen.Q4_K_M.gguf",
+                         Quant = "Q4_K_M",
+                         SizeBytes = 4 * Gb,
+                         Sha256 = null,
+                         Revision = "main",
+                         Architecture = "qwen2",
+                         QuantType = "Q4_K_M",
+                         ParamCount = 7_000_000_000L,
+                         BlockCount = 28,
+                         AttentionHeadCount = 28,
+                         AttentionHeadCountKV = 4,
+                         EmbeddingLength = 3584,
+                         ContextLength = 32768
+                     }
+                 ]
+                 }));
 
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.ListAsync(Arg.Any<CancellationToken>())

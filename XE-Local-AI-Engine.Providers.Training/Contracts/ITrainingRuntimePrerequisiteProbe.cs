@@ -1,14 +1,26 @@
 namespace XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
-///     One prerequisite and whether it is satisfied. <paramref name="Key" /> is a stable machine token the UI and
+///     One prerequisite and whether it is satisfied. <see cref="Key" /> is a stable machine token the UI and
 ///     <see cref="ITrainingRuntimeService" /> both key on (see <see cref="TrainingRuntimePrerequisiteKeys" />);
-///     <paramref name="Detail" /> is the operator-facing explanation and must stay path- and secret-free.
+///     <see cref="Detail" /> is the operator-facing explanation and must stay path- and secret-free.
 /// </summary>
-public sealed record TrainingRuntimePrerequisiteItem(string Key, bool Satisfied, string Detail);
+public sealed class TrainingRuntimePrerequisiteItem
+{
+    public required string Key { get; init; }
+
+    public required bool Satisfied { get; init; }
+
+    public required string Detail { get; init; }
+}
 
 /// <summary>Per-item prerequisite report. <see cref="CanInstall" /> is false when any required item is unsatisfied.</summary>
-public sealed record TrainingRuntimePrerequisiteReport(bool CanInstall, IReadOnlyList<TrainingRuntimePrerequisiteItem> Items);
+public sealed class TrainingRuntimePrerequisiteReport
+{
+    public required bool CanInstall { get; init; }
+
+    public required IReadOnlyList<TrainingRuntimePrerequisiteItem> Items { get; init; }
+}
 
 /// <summary>
 ///     The stable item keys. <see cref="FreeDisk" /> is compared by ordinal equality in

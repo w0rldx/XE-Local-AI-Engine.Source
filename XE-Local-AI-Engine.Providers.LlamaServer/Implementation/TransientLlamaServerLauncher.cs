@@ -76,7 +76,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         try
         {
             await WaitForReadyOrExitAsync(handle, spec.BaseAddress, request.ReadinessTimeout, ct).ConfigureAwait(false);
-            return await body(new TransientLlamaServerSession(spec.BaseAddress, modelId), ct).ConfigureAwait(false);
+            return await body(new TransientLlamaServerSession { BaseAddress = spec.BaseAddress, ModelId = modelId }, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -201,7 +201,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
                 request.LaunchPolicy,
                 processId,
                 capabilityDecision.OmittedOptions).ConfigureAwait(false);
-            var session = new TransientLlamaServerEvaluationSession(spec.BaseAddress, endpointModelAlias, model, receipt);
+            var session = new TransientLlamaServerEvaluationSession { BaseAddress = spec.BaseAddress, ModelId = endpointModelAlias, Model = model, Launch = receipt };
             await bindProvenance(session.Provenance, ct).ConfigureAwait(false);
             value = await body(session, ct).ConfigureAwait(false);
         }
@@ -227,14 +227,20 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             }
         }
 
-        return new TransientLlamaServerEvaluationResult<T>(value,
-            model,
-            receipt,
-            new TransientLlamaServerTeardownEvidence(processId,
-                treeKillRequested,
-                processExitObserved,
-                ExitObservationTimedOut: !processExitObserved,
-                HandleDisposed: true));
+        return new TransientLlamaServerEvaluationResult<T>
+        {
+            Value = value,
+            Model = model,
+            Launch = receipt,
+            Teardown = new TransientLlamaServerTeardownEvidence
+            {
+                ProcessId = processId,
+                TreeKillRequested = treeKillRequested,
+                ProcessExitObserved = processExitObserved,
+                ExitObservationTimedOut = !processExitObserved,
+                HandleDisposed = true
+            }
+        };
     }
 
     private static async Task<TransientLlamaServerModelProvenance> CaptureModelProvenanceAsync(string modelPath,
@@ -244,21 +250,27 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         var model = await CaptureFileAsync(modelPath, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(adapterPath))
         {
-            return new TransientLlamaServerModelProvenance(Path.GetFileName(modelPath),
-                model.SizeBytes,
-                model.Sha256,
-                AdapterId: null,
-                AdapterSizeBytes: null,
-                AdapterSha256: null);
+            return new TransientLlamaServerModelProvenance
+            {
+                ModelId = Path.GetFileName(modelPath),
+                ModelSizeBytes = model.SizeBytes,
+                ModelSha256 = model.Sha256,
+                AdapterId = null,
+                AdapterSizeBytes = null,
+                AdapterSha256 = null
+            };
         }
 
         var adapter = await CaptureFileAsync(adapterPath, ct).ConfigureAwait(false);
-        return new TransientLlamaServerModelProvenance(Path.GetFileName(modelPath),
-            model.SizeBytes,
-            model.Sha256,
-            Path.GetFileName(adapterPath),
-            adapter.SizeBytes,
-            adapter.Sha256);
+        return new TransientLlamaServerModelProvenance
+        {
+            ModelId = Path.GetFileName(modelPath),
+            ModelSizeBytes = model.SizeBytes,
+            ModelSha256 = model.Sha256,
+            AdapterId = Path.GetFileName(adapterPath),
+            AdapterSizeBytes = adapter.SizeBytes,
+            AdapterSha256 = adapter.Sha256
+        };
     }
 
     private static async Task<FileIdentity> CaptureFileAsync(string path, CancellationToken ct)

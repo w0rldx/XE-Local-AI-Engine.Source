@@ -192,7 +192,7 @@ public sealed class TrainedModelSmokeGateTests
             _capture(request);
             return _failure is not null
                 ? Task.FromException<T>(_failure)
-                : body(new TransientLlamaServerSession(new Uri("http://127.0.0.1:18080/v1"), Path.GetFileName(request.ModelFilePath)), ct);
+                : body(new TransientLlamaServerSession { BaseAddress = new Uri("http://127.0.0.1:18080/v1"), ModelId = Path.GetFileName(request.ModelFilePath) }, ct);
         }
     }
 

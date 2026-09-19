@@ -54,33 +54,44 @@ public enum LlamaServerLoadAttemptKind
 ///         bridge deliberately tags role/variant/outcome only).
 ///     </para>
 /// </remarks>
-/// <param name="ModelName">
-///     The model this load was for. Carried for keying only; never a metric tag.
-/// </param>
-/// <param name="GlobalFreeVramBytesAtLoad">
-///     Machine-global free VRAM as the capacity gate measured it immediately before admitting THIS load — its forced
-///     hardware re-probe under the decision gate, carried here rather than re-measured (see
-///     <c>ProcessLaunchAdmission.GlobalFreeVramBytesAtAdmission</c>). Null when the load carried no capacity admission
-///     (a direct, profiling or test spawn), when the box has no readable global-free figure (a non-NVIDIA or CPU-only
-///     host), or when the selected runtime variant moved off the one the admission was granted against.
-/// </param>
-/// <param name="AdmittedVramBytes">
-///     The GPU bytes the capacity gate RESERVED for this process — the admitted allocation's footprint, NOT llama.cpp's
-///     own <c>--list-devices</c> process budget (a different axis, and not read on this path). Zero is a real answer for
-///     a CPU-placed allocation; null means there was no admission to read.
-/// </param>
-public sealed record LlamaServerLoadObservation(
-    ModelRole Role,
-    GpuVariant Variant,
-    string RuntimeVersion,
-    string? RuntimeSha256,
-    double ReadinessDurationMs,
-    LlamaServerReadinessOutcome Outcome,
-    LlamaServerPlacementOutcome Placement,
-    LlamaServerLoadAttemptKind AttemptKind,
-    SpeculativeModeClass SpeculativeModeClass,
+public sealed class LlamaServerLoadObservation
+{
+    public required ModelRole Role { get; init; }
+
+    public required GpuVariant Variant { get; init; }
+
+    public required string RuntimeVersion { get; init; }
+
+    public required string? RuntimeSha256 { get; init; }
+
+    public required double ReadinessDurationMs { get; init; }
+
+    public required LlamaServerReadinessOutcome Outcome { get; init; }
+
+    public required LlamaServerPlacementOutcome Placement { get; init; }
+
+    public required LlamaServerLoadAttemptKind AttemptKind { get; init; }
+
+    public required SpeculativeModeClass SpeculativeModeClass { get; init; }
+
     // Required: every construction site must supply the model name. Only the two long? members below are
     // trailing-optional, so a caller that measured nothing keeps constructing as it always did.
-    string ModelName,
-    long? GlobalFreeVramBytesAtLoad = null,
-    long? AdmittedVramBytes = null);
+    /// <summary>The model this load was for. Carried for keying only; never a metric tag.</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>
+    ///     Machine-global free VRAM as the capacity gate measured it immediately before admitting THIS load — its forced
+    ///     hardware re-probe under the decision gate, carried here rather than re-measured (see
+    ///     <c>ProcessLaunchAdmission.GlobalFreeVramBytesAtAdmission</c>). Null when the load carried no capacity admission
+    ///     (a direct, profiling or test spawn), when the box has no readable global-free figure (a non-NVIDIA or CPU-only
+    ///     host), or when the selected runtime variant moved off the one the admission was granted against.
+    /// </summary>
+    public long? GlobalFreeVramBytesAtLoad { get; init; }
+
+    /// <summary>
+    ///     The GPU bytes the capacity gate RESERVED for this process — the admitted allocation's footprint, NOT llama.cpp's
+    ///     own <c>--list-devices</c> process budget (a different axis, and not read on this path). Zero is a real answer for
+    ///     a CPU-placed allocation; null means there was no admission to read.
+    /// </summary>
+    public long? AdmittedVramBytes { get; init; }
+}

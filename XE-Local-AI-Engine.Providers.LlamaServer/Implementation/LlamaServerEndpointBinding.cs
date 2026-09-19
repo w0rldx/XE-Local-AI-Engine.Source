@@ -10,7 +10,7 @@ internal sealed class LlamaServerEndpointBinding : ILlamaServerEndpointBinding
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         var prior = _current.Value;
-        var state = new BindingState(endpoint, prior);
+        var state = new BindingState { Endpoint = endpoint, Prior = prior };
         _current.Value = state;
         return new Scope(this, state);
     }
@@ -26,7 +26,12 @@ internal sealed class LlamaServerEndpointBinding : ILlamaServerEndpointBinding
             : null;
     }
 
-    private sealed record BindingState(LlamaServerEndpoint Endpoint, BindingState? Prior);
+    private sealed record BindingState
+    {
+        public required LlamaServerEndpoint Endpoint { get; init; }
+
+        public required BindingState? Prior { get; init; }
+    }
 
     private sealed class Scope : IDisposable
     {

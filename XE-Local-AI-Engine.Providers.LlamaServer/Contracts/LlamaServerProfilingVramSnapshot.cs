@@ -5,9 +5,14 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     the transient profiling server is spawned. The global-free and process-budget values intentionally remain
 ///     separate because they have different semantics under WDDM.
 /// </summary>
-/// <param name="GlobalFreeBytes">Authoritative machine-global free VRAM, or <see langword="null" /> when unavailable.</param>
-/// <param name="ProcessBudgetBytes">
-///     The llama.cpp process residency budget reported by the selected backend, or <see langword="null" /> when
-///     unavailable.
-/// </param>
-public sealed record LlamaServerProfilingVramSnapshot(long? GlobalFreeBytes, long? ProcessBudgetBytes);
+public sealed record LlamaServerProfilingVramSnapshot
+{
+    /// <summary>Authoritative machine-global free VRAM, or <see langword="null" /> when unavailable.</summary>
+    public required long? GlobalFreeBytes { get; init; }
+
+    /// <summary>
+    ///     The llama.cpp process residency budget reported by the selected backend, or <see langword="null" /> when
+    ///     unavailable.
+    /// </summary>
+    public required long? ProcessBudgetBytes { get; init; }
+}

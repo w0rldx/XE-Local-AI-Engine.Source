@@ -17,4 +17,11 @@ internal interface IWhisperSourceCommandRunner
 }
 
 /// <summary>Exit code and, when the caller asked to capture it, the bounded output of one build command.</summary>
-internal sealed record WhisperSourceCommandResult(int ExitCode, string StandardOutput, string StandardError);
+internal sealed class WhisperSourceCommandResult
+{
+    public required int ExitCode { get; init; }
+
+    public required string StandardOutput { get; init; }
+
+    public required string StandardError { get; init; }
+}

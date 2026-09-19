@@ -435,13 +435,16 @@ public sealed class ChatStreamEventMapperTests
             ToolName = toolName,
             Questions =
             [
-                new UserQuestionSpec("Auth",
-                    "Which auth method?",
-                    MultiSelect: false,
-                    [
-                        new UserQuestionOption("OAuth", "Device flow", Recommended: true),
-                        new UserQuestionOption("API key", Description: null, Recommended: false)
-                    ])
+                new UserQuestionSpec
+                {
+                    Header = "Auth",
+                    Question = "Which auth method?",
+                    MultiSelect = false,
+                    Options = [
+                        new UserQuestionOption { Label = "OAuth", Description = "Device flow", Recommended = true },
+                        new UserQuestionOption { Label = "API key", Description = null, Recommended = false }
+                    ]
+                }
             ]
         };
     }

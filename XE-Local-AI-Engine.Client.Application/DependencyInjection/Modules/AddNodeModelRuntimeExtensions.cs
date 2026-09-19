@@ -349,7 +349,7 @@ internal static class AddNodeModelRuntimeExtensions
         {
             var chatConnectionSettings = ResolveChatConnectionSettings(sp, configuration);
             GuardOllamaEndpointIsLoopback(chatConnectionSettings.Endpoint, configuration);
-            return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
+            return new OllamaLocalModelProviderRegistration { Endpoint = chatConnectionSettings.Endpoint, Model = chatConnectionSettings.Model };
         });
 
         // IOllamaModelService's real registration now rides inside AddOllamaLocalModelProvider, next to the

@@ -99,10 +99,13 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
     private ConvertScriptPaths? TryResolve(string commit)
     {
         var final = Path.Combine(ScriptsRoot, commit);
-        var paths = new ConvertScriptPaths(Path.Combine(final, HfToGgufScriptName),
-            Path.Combine(final, LoraToGgufScriptName),
-            Path.Combine(final, GgufPyDirectoryName),
-            commit);
+        var paths = new ConvertScriptPaths
+        {
+            HfToGgufScriptPath = Path.Combine(final, HfToGgufScriptName),
+            LoraToGgufScriptPath = Path.Combine(final, LoraToGgufScriptName),
+            GgufPyDirectory = Path.Combine(final, GgufPyDirectoryName),
+            SourceCommit = commit
+        };
         // A tree adopted before the conversion package was part of the required set is INCOMPLETE, not provisioned:
         // reporting it would let the export reach the script and fail there instead of re-provisioning here.
         return File.Exists(paths.HfToGgufScriptPath)

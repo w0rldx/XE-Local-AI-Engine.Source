@@ -181,12 +181,15 @@ public sealed class WindowsJobObjectTreeKillTests
             + $"Set-Content -LiteralPath '{markerFile}' -Value $g.Id; "
             + "Start-Sleep -Seconds 900";
 
-        return new LlamaServerLaunchSpec("test-model",
-            ModelRole.Chat,
-            powershell,
-            ["-NoProfile", "-NonInteractive", "-Command", script],
-            Port: 0,
-            Path.GetTempPath());
+        return new LlamaServerLaunchSpec
+        {
+            ModelName = "test-model",
+            Role = ModelRole.Chat,
+            ExecutablePath = powershell,
+            Arguments = ["-NoProfile", "-NonInteractive", "-Command", script],
+            Port = 0,
+            WorkingDirectory = Path.GetTempPath()
+        };
     }
 
     private static string NewMarkerPath()

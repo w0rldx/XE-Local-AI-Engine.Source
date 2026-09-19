@@ -199,21 +199,24 @@ public sealed class LocalModelExternalEndpointTests
 
     private static ExternalProviderModelRegistration Registration(bool supportsReasoning = false, bool supportsReasoningEffort = false)
     {
-        return new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
+        return new ExternalProviderModelRegistration
+        {
+            Connection = new ExternalProviderConnectionDescriptor
             {
                 Id = "unsloth-box",
                 DisplayName = "Unsloth box",
                 BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
                 Locality = ExternalProviderLocality.Local
             },
-            new ExternalProviderModelDescriptor
+            Model = new ExternalProviderModelDescriptor
             {
                 WireId = "qwen3-27b",
                 DisplayName = "Qwen3 27B",
                 ContextLength = 32768,
                 SupportsReasoning = supportsReasoning,
                 SupportsReasoningEffort = supportsReasoningEffort
-            });
+            }
+        };
     }
 
     private static TestServerWebAppFactory CreateFactory(IModelTrustResolver? trustResolver = null,

@@ -37,7 +37,7 @@ public sealed class OllamaModelCapabilityClient : IModelCapabilityClient
     public async Task<IReadOnlyList<InstalledModelEntry>> ListInstalledModelsAsync(CancellationToken ct)
     {
         var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
-        return models.Select(model => new InstalledModelEntry(model.Name, model.Digest)).ToArray();
+        return models.Select(model => new InstalledModelEntry { Name = model.Name, Digest = model.Digest }).ToArray();
     }
 
     /// <inheritdoc />
@@ -59,6 +59,6 @@ public sealed class OllamaModelCapabilityClient : IModelCapabilityClient
             ? contextLength
             : (int?)null;
 
-        return new ModelCapabilityDetail(maxContextTokens);
+        return new ModelCapabilityDetail { MaxContextTokens = maxContextTokens };
     }
 }

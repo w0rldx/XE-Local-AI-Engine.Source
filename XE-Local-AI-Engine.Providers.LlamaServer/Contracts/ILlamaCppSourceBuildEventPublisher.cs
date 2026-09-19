@@ -10,13 +10,19 @@ public static class LlamaCppSourceBuildHubEvents
     public const string StatusChanged = "llamaCppSourceBuild.statusChanged";
 }
 
-public sealed record LlamaCppSourceBuildStatusHubEvent(
-    string Phase,
-    IReadOnlyList<string> AppendedLogLines,
-    long AppendedLogStartSequence,
-    bool Terminal,
-    string? SanitizedError,
-    LlamaCppSourceBuildDescriptor? CurrentBuild)
+public sealed class LlamaCppSourceBuildStatusHubEvent
 {
+    public required string Phase { get; init; }
+
+    public required IReadOnlyList<string> AppendedLogLines { get; init; }
+
+    public required long AppendedLogStartSequence { get; init; }
+
+    public required bool Terminal { get; init; }
+
+    public required string? SanitizedError { get; init; }
+
+    public required LlamaCppSourceBuildDescriptor? CurrentBuild { get; init; }
+
     public Guid? BuildId => CurrentBuild?.BuildId;
 }

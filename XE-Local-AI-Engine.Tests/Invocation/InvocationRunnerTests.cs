@@ -2074,8 +2074,11 @@ public sealed class InvocationRunnerTests
         AssertEx.True(surfaced.Questions.Single().Options[0].Recommended);
         AssertEx.False(runTask.IsCompleted, "the turn must hold until the operator answers");
 
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(surfaced.RequestId,
-            [new UserQuestionAnswer("Which auth method?", ["OAuth device flow"], Other: null)]));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent
+        {
+            RequestId = surfaced.RequestId,
+            Answers = [new UserQuestionAnswer { Question = "Which auth method?", Selected = ["OAuth device flow"], Other = null }]
+        });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the answered question must resume the turn threadlessly");
@@ -2139,7 +2142,7 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(AssertEx.NotNull(question).RequestId, [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = AssertEx.NotNull(question).RequestId, Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -2164,12 +2167,12 @@ public sealed class InvocationRunnerTests
         var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).Build());
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
 
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent($"unmatched-{Guid.NewGuid():N}", [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = $"unmatched-{Guid.NewGuid():N}", Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
 
         AssertEx.False(runTask.IsCompleted, "a stale or unknown answer must be a no-op, never a resume");
         AssertEx.Equal(expected: 1, segment);
 
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(AssertEx.NotNull(question).RequestId, [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = AssertEx.NotNull(question).RequestId, Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the matching answer must resume the invocation");
@@ -2203,7 +2206,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the turn must still be parked after the (unextended) invocation deadline would have fired");
-        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent(AssertEx.NotNull(question).RequestId, [new UserQuestionAnswer("Q?", ["A"], Other: null)]));
+        runner.ResolveUserQuestionResult(new UserQuestionAnsweredEvent { RequestId = AssertEx.NotNull(question).RequestId, Answers = [new UserQuestionAnswer { Question = "Q?", Selected = ["A"], Other = null }] });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -3239,7 +3242,7 @@ public sealed class InvocationRunnerTests
 
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(effectiveContextTokens is { } effective
-                    ? new LocalModelRuntimeInfo(effective)
+                    ? new LocalModelRuntimeInfo { EffectiveContextTokens = effective }
                     : null));
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();
@@ -3261,7 +3264,7 @@ public sealed class InvocationRunnerTests
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo => Task.FromResult(windowsByModel.TryGetValue(callInfo.Arg<string>(), out var window)
-                    ? new LocalModelRuntimeInfo(window)
+                    ? new LocalModelRuntimeInfo { EffectiveContextTokens = window }
                     : null));
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();

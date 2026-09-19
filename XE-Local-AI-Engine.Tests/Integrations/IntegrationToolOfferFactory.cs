@@ -20,8 +20,8 @@ internal static class IntegrationToolOfferFactory
 
     public static LocalToolOfferProvider Create(params string[] toolCapableModels) =>
         new(new FakeAgentToolRegistry([
-                new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", """{"type":"object"}""", RequiresApproval: true),
-                new LocalChatToolDescriptor("open_url", "Opens a URL.", """{"type":"object"}""", RequiresApproval: false)
+                new LocalChatToolDescriptor { Name = AgentHomeToolDefinition.ToolName, Description = "Runs an agent task.", ParameterSchema = """{"type":"object"}""", RequiresApproval = true },
+                new LocalChatToolDescriptor { Name = "open_url", Description = "Opens a URL.", ParameterSchema = """{"type":"object"}""", RequiresApproval = false }
             ]),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels.Length == 0 ? [CapableModel] : toolCapableModels).Build(),

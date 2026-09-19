@@ -1,13 +1,18 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>A process-wide snapshot of image-runtime activity that can conflict with runtime mutation.</summary>
-public sealed record ImageRuntimeActivitySnapshot(
-    int ActiveJobCount,
-    int SpawnReadinessCount,
-    int ResidentProcessCount,
-    bool MutationReserved,
-    bool EvictionReserved)
+public sealed class ImageRuntimeActivitySnapshot
 {
+    public required int ActiveJobCount { get; init; }
+
+    public required int SpawnReadinessCount { get; init; }
+
+    public required int ResidentProcessCount { get; init; }
+
+    public required bool MutationReserved { get; init; }
+
+    public required bool EvictionReserved { get; init; }
+
     public bool IsBusy => MutationReserved || EvictionReserved || ActiveJobCount > 0 || SpawnReadinessCount > 0 || ResidentProcessCount > 0;
 }
 

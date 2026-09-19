@@ -71,7 +71,7 @@ public sealed partial class LlamaCppBinaryManager
             throw new LlamaRuntimeException("The operator-supplied llama-server override exposes no GPU device for the requested acceleration variant.");
         }
 
-        return new LlamaBinary(fullPath, "override", options.Variant, IsPinnedFallback: false);
+        return new LlamaBinary { ServerExecutablePath = fullPath, Version = "override", Variant = options.Variant, IsPinnedFallback = false };
     }
 
     /// <summary>
