@@ -685,6 +685,9 @@ public sealed class LlamaCppSourceBuildServiceTests
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
 
+        public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
+            Task.FromResult<LlamaBinary?>(null);
+
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
 

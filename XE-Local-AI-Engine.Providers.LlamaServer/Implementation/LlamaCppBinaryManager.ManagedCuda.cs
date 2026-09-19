@@ -39,7 +39,13 @@ public sealed partial class LlamaCppBinaryManager
     ///     <see langword="null" /> when the recorded build is missing/invalid — in which case the record + cached signal are
     ///     cleared so the caller falls through to the normal path (graceful self-heal; never a silent CPU serve).
     /// </summary>
-    private async Task<LlamaBinary?> TryServeManagedSourceBinaryAsync(InstalledRuntimeState installed, CancellationToken ct)
+    /// <param name="discardInvalidRecord">
+    ///     <see langword="false" /> suppresses that self-heal write for the read-only
+    ///     <see cref="TryGetInstalledBinaryAsync" /> lookup, which must leave <c>installed-runtime.json</c> untouched. The
+    ///     validation itself is identical either way, so a stale record still reads as "not resolvable"; the next
+    ///     <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" /> performs the discard.
+    /// </param>
+    private async Task<LlamaBinary?> TryServeManagedSourceBinaryAsync(InstalledRuntimeState installed, bool discardInvalidRecord, CancellationToken ct)
     {
         var buildBinDir = installed.SourceBuildPath!;
         var serverPath = Path.Combine(buildBinDir, ManagedCudaServerFileName);
@@ -48,7 +54,7 @@ public sealed partial class LlamaCppBinaryManager
         {
             if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
             {
-                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
+                await DiscardManagedSourceRecordIfAllowedAsync(discardInvalidRecord, ct).ConfigureAwait(false);
                 return null;
             }
 
@@ -59,7 +65,7 @@ public sealed partial class LlamaCppBinaryManager
             // Recorded-SHA256 recompare: a swapped binary (same path, different bytes) is rejected.
             if (!await HashMatchesAsync(serverPath, installed.Sha256, ct).ConfigureAwait(false))
             {
-                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
+                await DiscardManagedSourceRecordIfAllowedAsync(discardInvalidRecord, ct).ConfigureAwait(false);
                 return null;
             }
 
@@ -73,9 +79,16 @@ public sealed partial class LlamaCppBinaryManager
         {
             // Any validation or I/O failure invalidates the recorded source runtime. The caller surfaces one sanitized
             // source-build failure and must not fall through to a prebuilt acquisition.
-            await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
+            await DiscardManagedSourceRecordIfAllowedAsync(discardInvalidRecord, ct).ConfigureAwait(false);
             return null;
         }
+    }
+
+    // The self-heal write, applied only when the caller allows one. The read-only TryGetInstalledBinaryAsync lookup
+    // passes false so a diagnostics read never mutates installed-runtime.json; the next ensure does the discard.
+    private Task DiscardManagedSourceRecordIfAllowedAsync(bool discardInvalidRecord, CancellationToken ct)
+    {
+        return discardInvalidRecord ? DiscardManagedSourceRecordAsync(ct) : Task.CompletedTask;
     }
 
     /// <inheritdoc />

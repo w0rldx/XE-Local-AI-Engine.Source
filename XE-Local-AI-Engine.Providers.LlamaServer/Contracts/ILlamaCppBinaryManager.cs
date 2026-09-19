@@ -22,6 +22,43 @@ public interface ILlamaCppBinaryManager
     Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct);
 
     /// <summary>
+    ///     Resolves an ALREADY-AVAILABLE <c>llama-server</c> for <paramref name="variant" /> and returns
+    ///     <see langword="null" /> when none is, instead of acquiring one. Read-only: it never touches the network, never
+    ///     creates a directory, and never writes <c>installed-runtime.json</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This is the surface for diagnostics that only REPORT on the runtime (the device-inventory probe behind the
+    ///         hardware-profile page). A read-only GET must not have a multi-hundred-megabyte side effect, on any external
+    ///         access profile, so those callers ask this instead of
+    ///         <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" /> and degrade to "unknown" when the answer is
+    ///         null.
+    ///     </para>
+    ///     <para>
+    ///         <b>Read-only means, precisely:</b> no network request of any kind; no directory is created (the cache tree
+    ///         is only probed with <see cref="File.Exists(string)" /> / <see cref="Directory.Exists(string)" />); and
+    ///         <c>installed-runtime.json</c> is READ but never written — not to record a resolved runtime, and not to
+    ///         self-heal a stale source-build record (that discard is left to the next ensure, so a stale record simply
+    ///         reads here as "not resolvable").
+    ///     </para>
+    ///     <para>
+    ///         <b>It is not process-free.</b> When an operator bring-your-own override is configured, the override is
+    ///         validated exactly as an ensure validates it, which spawns the binary twice under bounded, tree-killed
+    ///         timeouts: a <c>--version</c> smoke test and, for a GPU variant, a <c>--list-devices</c> GPU-presence check.
+    ///         A configured-but-broken override still THROWS rather than reporting "nothing installed" — that refusal is
+    ///         the operator-actionable answer, not a glitch, and the probe surfaces it as the undetermined-backend reason.
+    ///     </para>
+    ///     <para>
+    ///         <b>It deliberately skips the live-catalog tier</b> of the 3-tier resolve (that tier is a network call, and
+    ///         it can only choose a tag to ACQUIRE — it cannot make a binary appear on disk). So this reports what is
+    ///         installed NOW, which may lag the tag a later explicit
+    ///         <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" /> would resolve and acquire.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="LlamaRuntimeException">A configured bring-your-own override failed validation.</exception>
+    Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct);
+
+    /// <summary>
     ///     Runtime endpoint ensure surface. The caller owns <paramref name="mutationLease" /> through completion; the
     ///     supervisor spawn path uses the non-lease overload because its registered inflight spawn is the exclusion token.
     /// </summary>

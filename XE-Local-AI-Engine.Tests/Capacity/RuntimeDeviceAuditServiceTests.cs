@@ -15,6 +15,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is fine; a CPU variant on a GPU box, or a GPU variant that RAN and saw zero devices, is a fallback; an
 ///     indeterminate probe never raises a false alarm; and a CPU-only host is never flagged. The effective-profile
 ///     projection degrades a fallback box to CPU-mode so the advisor + capacity gate size against RAM, not phantom VRAM.
+///     The audit also never ACQUIRES a runtime: with none installed it answers "undetermined, nothing installed yet"
+///     without touching the binary manager's acquisition surface, and recovers on the first call after an install.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class RuntimeDeviceAuditServiceTests
@@ -115,6 +117,96 @@ public sealed class RuntimeDeviceAuditServiceTests
             "the undetermined reason must not blame a wedged driver as though it were the known cause");
         AssertEx.False(undetermined.Contains("the probe timed out or the binary could not be started", StringComparison.Ordinal),
             "the undetermined reason must not assert a timeout/start failure it did not observe");
+    }
+
+    [Test]
+    public void BuildState_RuntimeNotInstalled_SaysSo_InsteadOfBlamingADriverOrAnOverride()
+    {
+        // A brand-new node has no llama.cpp runtime yet and the device probe deliberately does not fetch one, so
+        // "undetermined" is the ordinary first-boot state. Reusing the malfunction text would send that operator to
+        // diagnose a healthy driver or an override they never configured — the same wrong-diagnosis failure the
+        // override wording above was written to fix.
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Vulkan, LlamaDeviceInventory.RuntimeNotInstalled(GpuVariant.Vulkan));
+
+        AssertEx.False(state.CpuFallback, "nothing was probed, so nothing proves a CPU fallback");
+        AssertEx.Equal("unknown", state.InferenceBackend);
+
+        var undetermined = AssertEx.NotNull(state.BackendUndeterminedReason);
+        AssertEx.True(undetermined.Contains("No llama.cpp runtime is installed yet", StringComparison.Ordinal),
+            "the operator must be told the runtime is simply not installed yet");
+        AssertEx.False(undetermined.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal),
+            "a node with nothing installed must not be sent to debug a bring-your-own override");
+        AssertEx.False(undetermined.Contains("driver", StringComparison.OrdinalIgnoreCase),
+            "a node with nothing installed must not be sent to debug a GPU driver");
+    }
+
+    [Test]
+    public async Task GetAudit_RuntimeNotInstalled_IsNotLatched_AndConvergesOnceInstalled()
+    {
+        // The caching trap in its own right: "unknown because nothing is installed" must not survive the install. The
+        // audit memoizes only a determinate pass, so the first call after the ensure/select endpoint (or first-run
+        // provisioning, or a source-build adoption) lands on the real device list without a forced refresh.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(LlamaDeviceInventory.RuntimeNotInstalled(GpuVariant.Cuda)),
+                 Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe);
+
+        var beforeInstall = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.Equal("unknown", beforeInstall.InferenceBackend);
+
+        var afterInstall = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.Equal("cuda", afterInstall.InferenceBackend);
+        AssertEx.Null(afterInstall.BackendUndeterminedReason);
+    }
+
+    [Test]
+    public async Task GetAudit_NoRuntimeInstalled_AnswersUndetermined_WithoutEverAcquiringOne()
+    {
+        // The whole chain GetHardwareProfileEndpoint drives, with the REAL device probe: a page-load GET must not have a
+        // multi-hundred-megabyte side effect on any external-access profile. EnsureBinaryAsync is the tripwire.
+        var binaryManager = NoRuntimeInstalled();
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia),
+            GpuVariant.Vulkan,
+            new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance));
+
+        var state = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal("unknown", state.InferenceBackend);
+        AssertEx.False(state.CpuFallback);
+        AssertEx.True(AssertEx.NotNull(state.BackendUndeterminedReason).Contains("No llama.cpp runtime is installed yet", StringComparison.Ordinal));
+        await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
+    }
+
+    [Test]
+    public async Task GetEffectiveProfile_TranscriptionStatusPath_NoRuntimeInstalled_AcquiresNothing()
+    {
+        // TranscriptionRuntimeService.GetRecommendedModelAsync — behind GET transcription/runtime, which the
+        // Transcription page loads — reaches the llama.cpp device probe through exactly this call. It must be as inert
+        // as the hardware-profile GET, and must still return a usable profile to size the whisper recommendation with.
+        var binaryManager = NoRuntimeInstalled();
+        var raw = GpuProfile(GpuVendor.Nvidia);
+        using var service = BuildService(raw,
+            GpuVariant.Vulkan,
+            new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance));
+
+        var effective = await service.GetEffectiveProfileAsync(forceRefreshProfile: false, CancellationToken.None);
+
+        // Unknown is not a proven fallback, so the raw profile stands (unchanged behaviour for an indeterminate probe).
+        AssertEx.Equal(raw.VramBytes, effective.VramBytes);
+        AssertEx.Equal(raw.AvailableRamBytes, effective.AvailableRamBytes);
+        await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
+    }
+
+    /// <summary>A binary manager with nothing on disk whose acquisition surface fails the test the moment it is used.</summary>
+    private static ILlamaCppBinaryManager NoRuntimeInstalled()
+    {
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<LlamaBinary?>(null));
+        binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("A device audit must never acquire a llama.cpp runtime."));
+        return binaryManager;
     }
 
     [Test]

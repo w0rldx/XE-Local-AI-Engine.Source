@@ -7,8 +7,9 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaDeviceInventoryProbe" />. Resolves the hash-verified llama.cpp binary for the requested
-///     variant, runs a short-lived <c>--list-devices</c> probe (via <see cref="LlamaListDevicesProcessRunner" />), and
+///     Default <see cref="ILlamaDeviceInventoryProbe" />. Resolves an ALREADY-AVAILABLE hash-verified llama.cpp binary
+///     for the requested variant (<see cref="ILlamaCppBinaryManager.TryGetInstalledBinaryAsync" /> — it never acquires
+///     one), runs a short-lived <c>--list-devices</c> probe (via <see cref="LlamaListDevicesProcessRunner" />), and
 ///     parses each device line's <c>&lt;name&gt; (&lt;total&gt; MiB, &lt;free&gt; MiB free)</c> column into a structured
 ///     inventory. The answer is a pure function of the resolved binary, so a SUCCESSFUL probe is cached per
 ///     (variant, binary path, binary mtime) — it only changes when the binary changes (an operator installing a CUDA
@@ -16,8 +17,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     Degrade, never throw: a spawn failure or the per-probe timeout yields <see cref="LlamaDeviceInventory.Unknown" />,
-///     which the audit treats as "don't know" (never a false CPU-fallback alarm). A failed probe is NOT cached, so a
-///     transient glitch self-heals on the next demand; only a determinate result is memoized.
+///     and no installed runtime at all yields <see cref="LlamaDeviceInventory.RuntimeNotInstalled" />; the audit treats
+///     both as "don't know" (never a false CPU-fallback alarm). Neither is cached, so a transient glitch — and a node
+///     that acquires its runtime a moment later — self-heals on the next demand; only a determinate result is memoized.
 /// </remarks>
 public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryProbe
 {
@@ -51,7 +53,18 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
 
         try
         {
-            var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+            // NEVER EnsureBinaryAsync here. This probe answers a read-only diagnostic (the hardware-profile GET the app
+            // shell fires on every authenticated page), and Ensure would DOWNLOAD a multi-hundred-megabyte runtime as a
+            // side effect of a page load — on an Offline / Manual node too, which is the defect this replaces. The
+            // runtime is reported on only once something else has installed it; until then the answer is "unknown".
+            var binary = await _binaryManager.TryGetInstalledBinaryAsync(variant, ct).ConfigureAwait(false);
+            if (binary is null)
+            {
+                // Not cached (Unknown never is), so the first probe AFTER an install — by provisioning, the ensure/select
+                // endpoint, a source-build adoption or a BYO override — sees the new runtime and inventories it.
+                return LlamaDeviceInventory.RuntimeNotInstalled(variant);
+            }
+
             var cacheKey = BuildCacheKey(variant, binary.ServerExecutablePath);
             if (_cache.TryGetValue(cacheKey, out var cached))
             {

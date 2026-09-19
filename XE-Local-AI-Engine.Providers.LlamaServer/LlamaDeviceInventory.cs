@@ -28,6 +28,14 @@ public sealed record LlamaDeviceInventory
     /// <summary>The enumerated GPU devices (empty when none, or when <see cref="ProbeSucceeded" /> is false).</summary>
     public required IReadOnlyList<LlamaGpuDevice> Devices { get; init; }
 
+    /// <summary>
+    ///     <see langword="true" /> for the one indeterminate case that is NOT a malfunction: no llama.cpp runtime is
+    ///     available locally yet, so nothing was probed. The probe never acquires one (a page-load diagnostic must not
+    ///     download hundreds of megabytes), so this is the ordinary state of a brand-new node — and the operator-facing
+    ///     "why is the backend undetermined" text must say that instead of blaming a driver or an override.
+    /// </summary>
+    public bool RuntimeMissing { get; init; }
+
     /// <summary><see langword="true" /> when the probe ran and enumerated at least one GPU device.</summary>
     public bool HasGpuDevice => ProbeSucceeded && Devices.Count > 0;
 
@@ -50,6 +58,22 @@ public sealed record LlamaDeviceInventory
             Variant = variant,
             ProbeSucceeded = false,
             Devices = []
+        };
+    }
+
+    /// <summary>
+    ///     Indeterminate because no runtime is installed yet — the probe resolved no binary and deliberately did not
+    ///     acquire one. Identical to <see cref="Unknown" /> for every consumer that only reads
+    ///     <see cref="ProbeSucceeded" />; <see cref="RuntimeMissing" /> exists so the explanation can be truthful.
+    /// </summary>
+    public static LlamaDeviceInventory RuntimeNotInstalled(GpuVariant variant)
+    {
+        return new LlamaDeviceInventory
+        {
+            Variant = variant,
+            ProbeSucceeded = false,
+            Devices = [],
+            RuntimeMissing = true
         };
     }
 }

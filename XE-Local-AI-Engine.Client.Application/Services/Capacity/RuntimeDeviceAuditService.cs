@@ -191,7 +191,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             CpuFallback = cpuFallback,
             Reason = fallbackText?.Reason,
             Remediation = fallbackText?.Remediation,
-            BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant) : null,
+            BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant, inventory.RuntimeMissing) : null,
             Devices = [.. inventory.Devices.Select(static device => new RuntimeAuditDevice(device.Name, device.TotalBytes, device.FreeBytes))]
         };
     }
@@ -207,8 +207,21 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     // refusal arrives here as an exception the probe cannot tell apart from a glitch. The old text then sent the
     // operator to diagnose a driver that was working perfectly, while the real fix was their own override. Naming the
     // override case first is what makes this actionable; a truthful list beats a confident wrong guess.
-    private static string BuildUndeterminedText(GpuVariant variant)
+    //
+    // The runtimeMissing branch is the one case where the cause IS known: no llama.cpp runtime is installed yet, and the
+    // device probe deliberately does not acquire one (a page-load diagnostic must not download hundreds of megabytes,
+    // least of all on an Offline / Manual node). Sending that operator to check a driver or an override would be a wrong
+    // diagnosis for the ordinary state of a brand-new node, so it gets its own honest, actionable sentence.
+    private static string BuildUndeterminedText(GpuVariant variant, bool runtimeMissing)
     {
+        if (runtimeMissing)
+        {
+            return $"No llama.cpp runtime is installed yet, so the {VariantName(variant)} GPU devices have not been "
+                   + "listed and whether inference will use the GPU is unknown. Model sizing on this page still assumes "
+                   + "the GPU's VRAM is usable. The runtime is downloaded when you install it from Node Settings, or the "
+                   + "first time you start a chat, benchmark or training run; this page never downloads it by itself.";
+        }
+
         return $"The {VariantName(variant)} llama.cpp runtime is selected, but its GPU devices could not be listed, so "
                + "whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM "
                + "is usable. Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override that was rejected because "

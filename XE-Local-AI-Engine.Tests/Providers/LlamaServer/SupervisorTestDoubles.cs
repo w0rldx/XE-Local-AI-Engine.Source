@@ -225,6 +225,12 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
         return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", _servedVariant ?? variant, IsPinnedFallback: true));
     }
 
+    /// <summary>The fake binary is always "already there" — this double downloads nothing, so ensure and lookup agree.</summary>
+    public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return Task.FromResult<LlamaBinary?>(new LlamaBinary("/fake/bin/llama-server", "b9692", _servedVariant ?? variant, IsPinnedFallback: true));
+    }
+
     public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
     {
         return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", tag, variant, IsPinnedFallback: false));

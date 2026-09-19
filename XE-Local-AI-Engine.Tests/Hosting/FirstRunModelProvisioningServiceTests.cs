@@ -484,6 +484,13 @@ public sealed class FirstRunModelProvisioningServiceTests
             return Task.FromResult(new LlamaBinary("/fake/llama-server", "b9692", variant, IsPinnedFallback: true));
         }
 
+        // Nothing is on disk until an ensure runs, and this lookup never acquires — so it must also never flip
+        // EnsureCalled, which is exactly what the provisioning assertions read.
+        public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
+        {
+            return Task.FromResult(EnsureCalled ? new LlamaBinary("/fake/llama-server", "b9692", variant, IsPinnedFallback: true) : null);
+        }
+
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
         {
             return Task.FromResult(new LlamaBinary("/fake/llama-server", tag, variant, IsPinnedFallback: false));

@@ -228,6 +228,10 @@ public static class TrainingLifecycleE2ETestDoubles
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, ILlamaServerRuntimeMutationLease lease, CancellationToken ct) =>
             EnsureBinaryAsync(variant, ct);
 
+        // The fixture writes the server file in its constructor, so it is genuinely already installed.
+        public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
+            Task.FromResult<LlamaBinary?>(new LlamaBinary(_server, "e2e", GpuVariant.Cpu, true));
+
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digest, long size, GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
 

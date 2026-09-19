@@ -164,7 +164,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 _managedCudaSignal?.SetActive(installed.Variant);
             }
 
-            var managed = await TryServeManagedSourceBinaryAsync(installed, ct).ConfigureAwait(false);
+            var managed = await TryServeManagedSourceBinaryAsync(installed, discardInvalidRecord: true, ct).ConfigureAwait(false);
             if (managed is not null)
             {
                 return managed;
@@ -256,6 +256,62 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     {
         ArgumentNullException.ThrowIfNull(mutationLease);
         return EnsureBinaryAsync(variant, ct);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Mirrors <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" />'s RESOLVE order — override, recorded
+    ///     source build, cached prebuilt — and stops where that method would start acquiring. Concretely, this method
+    ///     issues no HTTP request, creates no directory (the cache tree is only probed for existence), and never writes
+    ///     <c>installed-runtime.json</c>: neither <c>RecordResolvedRuntimeAsync</c> nor the source-record discard runs
+    ///     here. It also skips the live-catalog tier of the tag resolve, which is a network call that can only pick a tag
+    ///     to acquire — so the answer describes what is installed now and may lag a later explicit ensure. The one thing
+    ///     it DOES spawn is the bring-your-own override's own validation (<c>--version</c>, plus <c>--list-devices</c> for
+    ///     a GPU variant), both bounded and tree-killed, because serving an unvalidated override would break the
+    ///     no-silent-CPU invariant.
+    /// </remarks>
+    public async Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
+    {
+        if (_overrideOptions?.IsActive == true)
+        {
+            // Unchanged semantics: a configured-but-broken override throws its sanitized refusal. That is a deliberate,
+            // operator-actionable decision the caller must surface, not a "nothing installed yet".
+            return await ResolveOverrideBinaryAsync(_overrideOptions, ct).ConfigureAwait(false);
+        }
+
+        var installed = _installedRuntimeStore is null
+            ? null
+            : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+
+        if (installed?.SourceBuildPath is { Length: > 0 })
+        {
+            // Full re-validation (path chain + recorded SHA256), but discardInvalidRecord:false — a read-only lookup must
+            // not rewrite installed-runtime.json. A record the next Ensure will discard simply reads as "not resolvable".
+            return await TryServeManagedSourceBinaryAsync(installed, discardInvalidRecord: false, ct).ConfigureAwait(false);
+        }
+
+        // Tier 2 (the recorded installed tag) then tier 3 (the pinned floor). The live catalog tier is deliberately
+        // skipped: it is a network call, and it only ever selects a tag to ACQUIRE — it cannot make a binary appear.
+        var resolvedTag = installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) ? installed.Tag : _activeTag;
+
+        var pin = variant == GpuVariant.Cpu
+            ? LlamaCppReleasePins.Resolve(_os, _arch, variant)
+            : LlamaCppReleasePins.TryResolveExact(_os, _arch, variant);
+        if (pin is null)
+        {
+            // No prebuilt exists for this (os, arch, variant) — e.g. Linux CUDA. Nothing can be on disk under that name.
+            return null;
+        }
+
+        var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
+
+        // ResolveServerPath only probes the filesystem (File.Exists, then an enumerate guarded by Directory.Exists) — it
+        // creates nothing. A cached CUDA dir missing its cudart companion is NOT topped up here (that downloads); it
+        // reads as installed, exactly as the supervisor's own ensure will find it before it spawns anything.
+        var cachedServer = ResolveServerPath(variantDir, pin);
+        return cachedServer is null
+            ? null
+            : new LlamaBinary(cachedServer, resolvedTag, variant, string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal));
     }
 
     /// <summary>

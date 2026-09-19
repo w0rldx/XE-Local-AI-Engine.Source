@@ -11,8 +11,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The device-inventory probe: its pure <c>--list-devices</c> parser turns each device line into a
 ///     structured {name, total, free}, a <c>cpu</c> variant short-circuits to a determinate empty list WITHOUT touching
 ///     the binary manager (no process spawned), and every real-probe failure (a non-existent binary) degrades to
-///     <see cref="LlamaDeviceInventory.Unknown" /> rather than a false "no GPU". The process launch itself is not
-///     exercised here — the parser is the unit; the no-spawn + degrade guards are proven via a substituted binary manager.
+///     <see cref="LlamaDeviceInventory.Unknown" /> rather than a false "no GPU". It also never ACQUIRES a runtime: with
+///     none installed it reports <see cref="LlamaDeviceInventory.RuntimeNotInstalled" /> and leaves the download to the
+///     explicit paths, and that answer is never cached, so an install is seen immediately. The process launch itself is
+///     not exercised here — the parser is the unit; the no-spawn + no-acquire + degrade guards are proven via a
+///     substituted binary manager.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaDeviceInventoryProbeTests
@@ -78,14 +81,61 @@ public sealed class LlamaDeviceInventoryProbeTests
         // The resolved binary path does not exist, so the --list-devices launch fails — the probe must report Unknown
         // (ProbeSucceeded false), NOT a determinate empty list, so the audit never mistakes a probe failure for "no GPU".
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult(new LlamaBinary("/nonexistent/bin/llama-server", "b9692", GpuVariant.Vulkan, IsPinnedFallback: true)));
+        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<LlamaBinary?>(new LlamaBinary("/nonexistent/bin/llama-server", "b9692", GpuVariant.Vulkan, IsPinnedFallback: true)));
         var probe = new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance);
 
         var inventory = await probe.GetDeviceInventoryAsync(GpuVariant.Vulkan, CancellationToken.None);
 
         AssertEx.False(inventory.ProbeSucceeded);
+        AssertEx.False(inventory.RuntimeMissing, "a runtime that IS installed but unprobeable is a malfunction, not a missing runtime");
         AssertEx.Equal(0, inventory.Devices.Count);
         AssertEx.Equal(GpuVariant.Vulkan, inventory.Variant);
+    }
+
+    [Test]
+    public async Task GetDeviceInventory_NoRuntimeInstalled_ReportsRuntimeMissing_AndNeverAcquiresOne()
+    {
+        // The defect this pins: a read-only diagnostic (the hardware-profile GET the app shell fires on every
+        // authenticated page) downloaded a multi-hundred-megabyte llama.cpp runtime, including on a node whose operator
+        // had just chosen the Offline / Manual profile. The probe must report "unknown, because nothing is installed"
+        // and leave acquisition to the explicit paths. EnsureBinaryAsync is the tripwire: reaching it is the defect.
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<LlamaBinary?>(null));
+        binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("The device probe must never acquire a runtime."));
+        var probe = new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance);
+
+        var inventory = await probe.GetDeviceInventoryAsync(GpuVariant.Vulkan, CancellationToken.None);
+
+        AssertEx.False(inventory.ProbeSucceeded);
+        AssertEx.True(inventory.RuntimeMissing);
+        AssertEx.Equal(0, inventory.Devices.Count);
+        await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
+    }
+
+    [Test]
+    public async Task GetDeviceInventory_MissingRuntime_IsNotCached_SoAnInstallIsSeenOnTheNextCall()
+    {
+        // The caching trap: "unknown because nothing is installed" must not outlive the install. Only a SUCCESSFUL probe
+        // is memoized, so the probe must re-ask the binary manager every time it got nothing — proven here by the second
+        // lookup happening at all (the second call resolves a binary, which is exactly the post-install state).
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<LlamaBinary?>(null),
+                         Task.FromResult<LlamaBinary?>(new LlamaBinary("/nonexistent/bin/llama-server", "b9692", GpuVariant.Vulkan, IsPinnedFallback: true)));
+        var probe = new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance);
+
+        var first = await probe.GetDeviceInventoryAsync(GpuVariant.Vulkan, CancellationToken.None);
+        AssertEx.True(first.RuntimeMissing);
+
+        var second = await probe.GetDeviceInventoryAsync(GpuVariant.Vulkan, CancellationToken.None);
+
+        // The runtime is now resolvable, so the answer is no longer "nothing installed" — this one failed its spawn
+        // (the fake path does not exist), which is the ordinary unknown, not the missing-runtime one.
+        AssertEx.False(second.RuntimeMissing);
+        await binaryManager.Received(2).TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+        await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
     }
 }

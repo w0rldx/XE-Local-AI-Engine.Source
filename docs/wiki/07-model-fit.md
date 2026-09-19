@@ -198,7 +198,7 @@ Routes under `model-fit/*` (`LocalApiRoutes.ModelFit`, mapped in `Endpoints/Mode
 |---|---|---|---|
 | `RecommendationsLatest` | `model-fit/recommendations/latest` | `GetLatestRecommendationsEndpoint` | **Cache-read only.** Filtered by `useCase`. |
 | `RecommendationsRefresh` | `model-fit/recommendations/refresh` | `RefreshRecommendationsEndpoint` | Fires the scheduler trigger; returns 200 immediately. |
-| `HardwareProfile` | `model-fit/hardware-profile` | `GetHardwareProfileEndpoint` | Sanitized aggregates; `?refresh=true` re-probes. |
+| `HardwareProfile` | `model-fit/hardware-profile` | `GetHardwareProfileEndpoint` | Sanitized aggregates; `?refresh=true` re-probes. Read-only: the device audit behind it never acquires a llama.cpp runtime ([03](03-local-runtime-and-providers.md)), so with none installed the backend reads `unknown`. |
 | `GgufBrowse` / `GgufInspect` | `model-fit/gguf/browse` · `…/inspect` | `BrowseGgufRepositoriesEndpoint` · `InspectGgufRepositoryEndpoint` | HF GGUF discovery + per-repo quant/size inspection. **Inspect** annotates each file with quality tier + fit verdict + the ★ recommended variant (`IGgufVariantRecommender`). |
 | `Download` / `DownloadCancel` | `model-fit/download` · `…/cancel` | `StartGgufDownloadEndpoint` · `CancelGgufDownloadEndpoint` | Background, cancellable, keyed by model name. |
 | `Downloads` / `DownloadStatus` / `DownloadOperationStatus` | `model-fit/gguf/downloads` · `…/{modelName}` · `…/operations/{operationId}` | `GetGgufDownloadsEndpoint` · `GetGgufDownloadStatusEndpoint` · `GetGgufDownloadOperationStatusEndpoint` | One-shot hydrate for the download list/one download/one operation. The per-second poll is gone — progress arrives over `GgufDownloadHub` ([API & hubs](09-api-and-hubs.md)). |
