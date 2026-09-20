@@ -147,9 +147,8 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
                 MaxOutputTokens = contextBudget.RoundOutputTokens,
                 AllowMultipleToolCalls = false,
 
-                // The served window travels as the option the provider-round budgeter prefers, exactly as the chat and
-                // orchestration lanes carry it, so a round is measured against the context the model really has. A
-                // runtime that reports none sends no override, the same fallback every other lane takes.
+                // The served window travels as the option the provider-round budgeter prefers, as chat and orchestration
+                // carry it, so a round is measured against the real context; a runtime reporting none sends no override.
                 AdditionalProperties = contextBudget.Served
                     ? new AdditionalPropertiesDictionary
                     {
@@ -224,17 +223,11 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
     ///     node-local.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Dev Mode hands the model a workspace: real files, real patches, real command evidence. The plan's
-    ///         non-goal is explicit — no dev-mode support at all for declared-cloud external models, under EITHER egress
-    ///         policy — and UNRESOLVED is refused with them, because a connection deleted mid-attempt or a store that
-    ///         will not decrypt tells us nothing about where the prompt would have gone.
-    ///     </para>
-    ///     <para>
-    ///         Refused here rather than folded into <c>isCloud</c>: a declared-cloud external model has no CloudScoped
-    ///         route either, so treating it as cloud would send it down the route-verification branch and fail with a
-    ///         message about a mismatched authorized route rather than the real reason.
-    ///     </para>
+    ///     Dev Mode hands the model a workspace: real files, real patches, real command evidence. A declared-cloud
+    ///     external model has no dev-mode support under either egress policy, and UNRESOLVED is refused with it,
+    ///     because a connection deleted mid-attempt or a store that will not decrypt says nothing about where the
+    ///     prompt would have gone. Refused here rather than folded into <c>isCloud</c>: such a model has no
+    ///     CloudScoped route either, so the route-verification branch would report a mismatch, not the real reason.
     /// </remarks>
     private async Task RejectExternalModelAsync(string modelId, CancellationToken cancellationToken)
     {
@@ -317,12 +310,8 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
 
             if (!Enum.TryParse<DevelopmentReviewDisposition>(disposition, ignoreCase: true, out var parsed))
             {
-                // Handed BACK as a tool result rather than thrown, the way a rejected command id is. A thrown
-                // ArgumentException here terminalizes the WHOLE reviewer attempt and costs the node one of its three —
-                // measured live on 2026-09-02, three attempts in a row on one task, from a model that had produced a
-                // valid Approved review on the same subject minutes earlier. A mis-spelled enum is a formatting flake,
-                // and the model can answer a correction; it cannot answer a discarded attempt. The round still ends
-                // unsubmitted if it never corrects itself, which is the existing missing-submission failure.
+                // Handed back as a tool result, the way a rejected command id is: a throw terminalizes the whole attempt
+                // and spends a node retry on a formatting flake. An uncorrected round still fails as missing-submission.
                 _liveProgress?.ToolCompleted("submit_review");
                 return "submit_review was not accepted: disposition must be exactly \"Approved\" or \"ChangesRequested\". "
                        + "Call submit_review again with one of those two values.";

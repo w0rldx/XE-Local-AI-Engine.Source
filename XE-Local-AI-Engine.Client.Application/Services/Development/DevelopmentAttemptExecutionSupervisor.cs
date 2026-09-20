@@ -148,11 +148,8 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
             var completed = (await store.ListAttemptsAsync(execution.TaskId, CancellationToken.None))
                 .Single(attempt => attempt.Id == attemptId);
 
-            // The literal words "attempt finished" open the message on purpose: they are what an operator greps the
-            // backend stdout for, and an interpolated id between them would break the search. The same phrase is
-            // repeated verbatim in both catch blocks below, because a grep that only hits on healthy runs would miss
-            // exactly the runs this item exists for — the failing ones. Both runners rethrow after terminalizing, so
-            // this statement is reachable only for Succeeded.
+            // "attempt finished" opens the message verbatim because an operator greps backend stdout for it; both
+            // catch blocks repeat it so failing runs hit too. Runners rethrow, so this line is reached on Succeeded.
             _logger.LogInformation("Development attempt finished: role={Role} attempt={AttemptId} task={TaskId} status={Status}.",
                 role,
                 attemptId,
@@ -175,12 +172,8 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
         }
         catch (Exception exception)
         {
-            // Derived exactly as both runners derive the status they terminalize with, rather than assumed to be
-            // Failed: a runner's OWN deadline expiring is an OperationCanceledException that does not satisfy the
-            // filter above, so calling it Failed here would contradict the attempt row it just wrote. The one
-            // terminal status never logged from this method is Interrupted, which no attempt run produces — it is
-            // written by DevelopmentStore.ReconcileRunningAttemptsAsync at host startup, for attempts whose process
-            // died before any catch here could run.
+            // Status derived as both runners derive it, never assumed Failed: a runner's own deadline is an
+            // OperationCanceledException the filter above misses. Only startup reconciliation writes Interrupted.
             _logger.LogError(exception,
                 "Development attempt finished: role={Role} attempt={AttemptId} task={TaskId} status={Status}.",
                 role,
@@ -255,10 +248,8 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
             var result = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
                                     .RunAsync(taskId, repository, cancellationToken);
 
-            // The gate's verdict was computed and returned all along and then discarded here, which is why a live
-            // scan of the backend log found zero hits for "Deterministic validation" across three full rounds. The
-            // runner's result carries no failure reason of its own, so the failing gate's own complaint stays where
-            // it already lives: the ValidationReport artifact and the task's blocked reason.
+            // The verdict is logged here or a scan of the backend log finds no "Deterministic validation" at all. The
+            // result carries no reason of its own; the gate's complaint lives in ValidationReport and blocked_reason.
             _logger.LogInformation("Deterministic validation for task {TaskId} finished: passed={Passed} target={Target}.",
                 taskId,
                 result.Passed,

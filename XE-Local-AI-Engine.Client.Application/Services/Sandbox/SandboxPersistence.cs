@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     Whether anything a workload writes has to outlive the sandbox that wrote it. Provider-neutral, and expressed as
-///     a requirement rather than as a preference: a backend that cannot preserve a trusted host workspace must not be
-///     handed a workload whose whole point is the tree it leaves behind.
-/// </summary>
+/// <summary>Whether anything a workload writes has to outlive the sandbox that wrote it.</summary>
+/// <remarks>
+///     Provider-neutral, and expressed as a requirement rather than a preference: a backend that cannot preserve a trusted host workspace
+///     must not be handed a workload whose whole point is the tree it leaves behind.
+/// </remarks>
 public enum SandboxPersistence
 {
     /// <summary>

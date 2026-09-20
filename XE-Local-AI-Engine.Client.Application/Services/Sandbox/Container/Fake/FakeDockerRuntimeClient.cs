@@ -6,20 +6,16 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Services.Containers;
 
 /// <summary>
-///     A deterministic in-memory <see cref="IDockerRuntimeClient" /> for unit coverage of everything above the wire:
-///     endpoint classification, daemon attestation, and — the reason it exists — the Docker hardening contract's fail-closed read-back.
-///     <para>
-///         Its defining feature is <see cref="SettingsMutator" />: a hook that rewrites the settings the fake reports
-///         back from a "created" container. A real daemon cannot be asked to silently drop <c>--cap-drop ALL</c> or
-///         to quietly ignore a memory ceiling, so without a client that can, the branch which refuses an unverifiable
-///         container would never execute in a test. A fail-closed control whose failure path is untested is a
-///         fail-closed control on paper only.
-///     </para>
-///     <para>
-///         Production-resident by design, matching <c>FakeSandboxRuntimeProvider</c>: it is a configuration-selected
-///         double rather than a test-project type, so the seam it exercises is the same seam production uses.
-///     </para>
+///     A deterministic in-memory <see cref="IDockerRuntimeClient" /> for coverage of everything above the wire:
+///     endpoint classification, daemon attestation and the hardening contract's fail-closed read-back.
 /// </summary>
+/// <remarks>
+///     Its defining feature is <see cref="SettingsMutator" />, a hook rewriting the settings the fake reports back
+///     from a "created" container: a real daemon cannot be asked to silently drop <c>--cap-drop ALL</c> or ignore a
+///     memory ceiling, so without it the branch refusing an unverifiable container never executes in a test, and a
+///     fail-closed control whose failure path is untested is one on paper only. Production-resident by design, as
+///     <c>FakeSandboxRuntimeProvider</c> is: a configuration-selected double exercising the seam production uses.
+/// </remarks>
 public sealed class FakeDockerRuntimeClient : IContainerRuntime
 {
     private readonly ConcurrentDictionary<string, ContainerRecord> _containers = new(StringComparer.Ordinal);
@@ -43,14 +39,13 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
 
     /// <summary>
     ///     Whether a <c>touch</c> of a path under a bind mount really creates the file on the host side of that mount.
-    ///     <para>
-    ///         On by default because a conformant daemon does exactly this, and the provider's create-time mapping
-    ///         probe depends on it — a fake that could not write through a mount would fail every create for a reason
-    ///         that has nothing to do with what the test is about. Turning it off is how a test reproduces the
-    ///         rootless-mapping failure this machine's daemon cannot be asked to produce on demand: a container that
-    ///         reports success while nothing appears on the host.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     On by default because a conformant daemon does exactly this and the provider's create-time mapping probe
+    ///     depends on it, a fake that could not write through a mount failing every create for an unrelated reason.
+    ///     Turning it off reproduces the rootless-mapping failure no daemon can be asked to produce on demand: a
+    ///     container that reports success while nothing appears on the host.
+    /// </remarks>
     public bool WritesThroughBindMounts { get; set; } = true;
 
     /// <summary>Every <see cref="DockerExecutionRequest" /> this client was handed, in order.</summary>
@@ -108,10 +103,8 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
 
         var record = GetRecord(containerId);
 
-        // Assigned here and retained, the way a daemon assigns a host port when it binds one. Computing it per
-        // inspection meant a container whose specification left the host port unset reported a DIFFERENT binding
-        // every time it was read, so a caller that inspected twice — a post-start verification followed by a status
-        // read — saw its own application move ports without anything having happened.
+        // Assigned once and retained, the way a daemon assigns a host port when it binds one. Computed per inspection,
+        // an unset host port reports a different binding every read and an application appears to move ports.
         if (record.ApplicationSpecification is { } specification)
         {
             record.PublishedPorts ??= PublishedPortsOf(specification);
@@ -223,10 +216,13 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
     }
 
     /// <summary>
-    ///     Emulates the one wire effect this fake cannot leave unmodelled: a <c>touch</c> of a path inside a bind mount
-    ///     appears on the host side of that mount. Only <c>touch</c>, and only under a declared mount — everything else
-    ///     stays a scripted outcome, because a fake that started really running commands would stop being a fake.
+    ///     Emulates the one wire effect this fake cannot leave unmodelled: a <c>touch</c> of a path inside a bind
+    ///     mount appears on the host side of that mount.
     /// </summary>
+    /// <remarks>
+    ///     Only <c>touch</c>, and only under a declared mount; everything else stays a scripted outcome, because a
+    ///     fake that started really running commands would stop being a fake.
+    /// </remarks>
     private void TouchThroughBindMount(DockerContainerSpecification specification, DockerExecutionRequest request)
     {
         if (!WritesThroughBindMounts
@@ -276,18 +272,15 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
     }
 
 
-    // ---------------------------------------------------------------------------------------------------------
-    // IContainerRuntime — the application-container surface, with a programmable lie behind every read-back field.
-    // Each hook is something a real daemon cannot be asked to do on demand, and each one makes a fail-closed branch
-    // of the layer above reachable. Defaults are conformant: with no hook installed this behaves like a daemon that
-    // did exactly what it was told.
-    // ---------------------------------------------------------------------------------------------------------
+    // IContainerRuntime — the application-container surface, with a programmable lie behind every read-back field:
+    // each hook reaches a fail-closed branch above. With no hook installed this is a conformant daemon.
 
-    /// <summary>
-    ///     Rewrites what <see cref="InspectAsync" /> reports. The one hook that reaches every read-back check at once:
-    ///     a daemon reporting a capability nobody asked for, a writable root filesystem, a device, or — the case the
-    ///     loopback rule exists for — a published port bound to <c>0.0.0.0</c>.
-    /// </summary>
+    /// <summary>Rewrites what <see cref="InspectAsync" /> reports.</summary>
+    /// <remarks>
+    ///     The one hook that reaches every read-back check at once: a daemon reporting a capability nobody asked for,
+    ///     a writable root filesystem, a device, or — the case the loopback rule exists for — a published port bound
+    ///     to <c>0.0.0.0</c>.
+    /// </remarks>
     public Func<ContainerInspection, ContainerInspection>? InspectionMutator { get; set; }
 
     /// <summary>
@@ -328,14 +321,13 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
 
     /// <summary>
     ///     For a container whose command RUNS TO COMPLETION rather than serving: the exit code it finishes with the
-    ///     instant it is started, or null to keep the container running like every other one.
-    ///     <para>
-    ///         A one-shot container is a shape this fake had no way to express — <see cref="StartContainerAsync" />
-    ///         only ever made a container running, forever — so a caller that starts one and waits for it to exit
-    ///         could never be tested against it. Keyed on the SPECIFICATION rather than on an id, because the caller
-    ///         creates the container itself and a test never sees the id before the wait begins.
-    ///     </para>
+    ///     instant it is started, or null to keep it running like every other one.
     /// </summary>
+    /// <remarks>
+    ///     Without it <see cref="StartContainerAsync" /> only ever makes a container running forever, so a caller
+    ///     that starts a one-shot and waits for it to exit cannot be tested at all. Keyed on the SPECIFICATION rather
+    ///     than an id, because the caller creates the container itself and a test never sees the id before the wait.
+    /// </remarks>
     public Func<ContainerSpecification, long?>? OneShotExitCode { get; set; }
 
     /// <summary>
@@ -407,10 +399,8 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
             throw failure;
         }
 
-        // The three refusals a daemon makes on the state it holds rather than on the request. A fake that created a
-        // container from an image it never pulled, on a network nobody created, under a name already taken would let
-        // a pipeline prove an ordering it does not have: all three are 404/409 on the wire, which the real client
-        // classifies through one mapping.
+        // The three refusals a daemon makes on the state it holds rather than on the request: an unpulled image, an
+        // uncreated network, a taken name. Without them a pipeline proves an ordering it does not have.
         if (!_images.ContainsKey(specification.Image))
         {
             throw Rejected("NotFound", $"No such image: {specification.Image}");
@@ -748,9 +738,8 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
         var exit = ExitState?.Invoke(containerId);
         var running = exit?.Running ?? (record.Started && record.FinishedWith is null);
 
-        // "created" is the daemon's own word for a container that has never been started, and the reconciler and the
-        // observer render this string verbatim. Collapsing it into "exited" would report a container the engine
-        // created and never started as one that ran and died.
+        // "created" is the daemon's own word for a never-started container, rendered verbatim by the reconciler and
+        // the observer. Collapsed into "exited" it reports a container that never ran as one that ran and died.
         var state = "created";
         if (running)
         {
@@ -761,9 +750,8 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
             state = "exited";
         }
 
-        // Null is "the daemon did not say", and is never read as 0 — that would report a crash as a clean exit. A
-        // one-shot that has finished DID say, through the same field InspectAsync reports it from: the two reads of
-        // one container must not disagree about whether it left an exit code behind.
+        // Null is "the daemon did not say" and is never read as 0, which would report a crash as a clean exit. A
+        // finished one-shot DID say, through the field InspectAsync reports from, so the two reads cannot disagree.
         int? exitCode = null;
         if (exit is not null)
         {
@@ -845,11 +833,12 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
             : throw new DockerRuntimeException($"No fake container '{containerId}' exists.");
     }
 
-    /// <summary>
-    ///     One "created" container. It holds whichever specification created it — Development Mode's or the
-    ///     application runtime's — and never both, because the two surfaces create different things and a record that
-    ///     pretended otherwise would let a test inspect a container through the surface that did not make it.
-    /// </summary>
+    /// <summary>One "created" container.</summary>
+    /// <remarks>
+    ///     It holds whichever specification created it — Development Mode's or the application runtime's — and never
+    ///     both, because the two surfaces create different things and a record pretending otherwise would let a test
+    ///     inspect a container through the surface that did not make it.
+    /// </remarks>
     private sealed class ContainerRecord
     {
         public ContainerRecord(DockerContainerSpecification specification)

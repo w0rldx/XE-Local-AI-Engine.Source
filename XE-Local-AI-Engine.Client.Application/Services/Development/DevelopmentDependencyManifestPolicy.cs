@@ -2,23 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 /// <summary>
 ///     The dependency-manifest policy: an attempt may not change any file that decides what <c>restore</c> resolves.
-///     <para>
-///         This policy makes denying the agent-facing sandbox's egress a hardening win rather than an outage. The
-///         engine warms the package cache from the <em>base commit</em>'s manifests before the agent can
-///         write anything (<c>DevelopmentWorkspaceProvider</c>'s warm restore), so an attempt that changed a manifest
-///         would need a resolve the sandbox can no longer perform. Rejecting the change is what keeps the warmed cache
-///         a complete answer instead of an approximate one.
-///     </para>
-///     <para>
-///         <strong>A verdict, not a <see cref="DevelopmentWorkspaceSecurityException" />, on purpose.</strong> The
-///         sibling <see cref="DevelopmentTestWritePolicy" /> throws, because "delete the failing test" is an attack and
-///         there is no legitimate reading of it. "Add a package" is the opposite: a perfectly reasonable task this
-///         version cannot serve. Surfacing it as a verdict returns the task to
-///         <c>DevelopmentTaskStatus.InProgress</c> carrying the reason, so the agent can retry without the package —
-///         and the difference between "you may not" and "not yet" stays visible in the shape of the failure rather
-///         than only in its wording.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The engine warms the package cache from the base commit's manifests before the agent can write, so a changed
+///     manifest would need a resolve the egress-denied sandbox cannot perform; rejecting it keeps the warmed cache a
+///     complete answer. It is a verdict, not the <see cref="DevelopmentWorkspaceSecurityException" />
+///     <see cref="DevelopmentTestWritePolicy" /> throws, because "add a package" is a reasonable task this version
+///     cannot serve: the task returns to <c>InProgress</c> with its reason, so "not yet" does not read "you may not".
+/// </remarks>
 internal static class DevelopmentDependencyManifestPolicy
 {
     /// <summary>How many offending paths the operator-facing detail names before it elides the rest.</summary>
@@ -27,13 +18,13 @@ internal static class DevelopmentDependencyManifestPolicy
     /// <summary>
     ///     The failing verdict for an attempt that touched a dependency manifest, or <see langword="null" /> when it
     ///     did not.
-    ///     <para>
-    ///         EVERY change type counts, including <c>added</c> — a repository with no
-    ///         <c>Directory.Packages.props</c> gains central package management the moment one appears, which changes
-    ///         resolution for the whole tree. A rename is checked against its previous path as well as its new one,
-    ///         because renaming a manifest out of the set changes resolution exactly as much as editing it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Every change type counts, <c>added</c> included: a repository with no <c>Directory.Packages.props</c> gains
+    ///     central package management the moment one appears, which changes resolution for the whole tree. A rename is
+    ///     checked against its previous path as well as its new one, because renaming a manifest out of the set
+    ///     changes resolution exactly as much as editing it.
+    /// </remarks>
     public static DevelopmentValidationVerdict? Evaluate(DevelopmentPatchEvidence evidence)
     {
         ArgumentNullException.ThrowIfNull(evidence);
@@ -64,12 +55,12 @@ internal static class DevelopmentDependencyManifestPolicy
         };
     }
 
-    /// <summary>
-    ///     True when a repository-relative path names a dependency manifest. Paths arrive from
-    ///     <c>git diff --name-status</c>, so they are repository-relative with forward slashes; the normalization
-    ///     mirrors <see cref="DevelopmentCommandProfile.IsProtectedTestPath" /> so the two policies read the same
-    ///     evidence the same way.
-    /// </summary>
+    /// <summary>True when a repository-relative path names a dependency manifest.</summary>
+    /// <remarks>
+    ///     Paths arrive from <c>git diff --name-status</c>, repository-relative with forward slashes, and the
+    ///     normalization mirrors <see cref="DevelopmentCommandProfile.IsProtectedTestPath" /> so the two policies read
+    ///     the same evidence the same way.
+    /// </remarks>
     public static bool IsDependencyManifest(string? repositoryRelativePath)
     {
         if (string.IsNullOrWhiteSpace(repositoryRelativePath))

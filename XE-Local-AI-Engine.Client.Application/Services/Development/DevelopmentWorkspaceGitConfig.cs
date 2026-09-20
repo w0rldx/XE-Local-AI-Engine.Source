@@ -6,68 +6,28 @@ using System.Text;
 /// <summary>
 ///     Rewrites the managed workspace's <c>.git/config</c> to a known-good minimal file immediately before the engine
 ///     runs host-side Git against that workspace.
-///     <para>
-///         <b>Why this exists.</b> A repository-local <c>.git/config</c> can make Git execute arbitrary commands on the
-///         machine that runs it — <c>core.fsmonitor</c> on any index refresh, and a <c>filter.&lt;driver&gt;.clean</c>
-///         selected by an in-tree <c>.gitattributes</c> on <c>git add</c>. The engine runs <c>reset</c> and
-///         <c>add -A</c> on the HOST against this workspace, so those are host-side execution, not sandbox-side.
-///         <c>AgentHomeGit</c>'s <c>-c</c> pins close <c>core.fsmonitor</c> and outrank every include chain, but they
-///         cannot close <c>filter.*.clean</c>: driver names are arbitrary, so there is no finite set of keys to pin, and
-///         Git has no flag that disables attribute processing.
-///     </para>
-///     <para>
-///         <b>Why rewriting works where pinning cannot.</b> A filter driver has to be <em>defined in config</em> to run.
-///         An in-tree <c>.gitattributes</c> naming an undefined driver is a no-op. So removing every definition closes
-///         <c>filter.*.clean</c>, <c>core.fsmonitor</c> and any future exec-bearing key at once, without enumerating key
-///         names — which is the same property the read-only <c>.git/config</c> bind mount gets on the container side.
-///         This half is provider-independent, and that matters: the standalone clone turned
-///         <c>&lt;workspace&gt;/.git/config</c> into a real, agent-writable file inside the jail, on the process
-///         provider that Development actually runs on today.
-///     </para>
-///     <para>
-///         <b>Why minimal is not empty.</b> A clone of a repository using a newer format carries
-///         <c>extensions.*</c> keys that Git <em>refuses to operate without</em>, and
-///         <c>core.repositoryformatversion</c> is what selects that rule. Truncating the file would turn a security fix
-///         into an outage on exactly the repositories most likely to matter. <c>core.filemode</c> and <c>core.bare</c>
-///         are preserved for the same reason in miniature: they describe the repository, and a wrong value changes what
-///         a diff says.
-///     </para>
-///     <para>
-///         <b>What is deliberately not preserved.</b> <c>origin</c>: the clone drops it on purpose (it points straight
-///         back at the trusted source repository), and a test asserts the workspace has no remote — so restoring it here
-///         would quietly undo the standalone clone's isolation. And <c>extensions.worktreeConfig</c>, because it makes Git read a
-///         <em>second</em> config file (<c>.git/config.worktree</c>) that this rewrite does not cover; that file is
-///         removed alongside rather than sanitised, since a standalone clone has no linked worktrees to need it.
-///     </para>
-///     <para>
-///         <b>This allow-list is NOT what drops the repository's <c>core.whitespace</c> / <c>core.autocrlf</c>.</b> The
-///         question comes up because the managed workspace behaves differently from the operator's own checkout, and
-///         this file looks like the cause. It is not: the workspace is a standalone CLONE, and <c>git clone</c> copies
-///         no <c>core.*</c> from the source repository — verified, a source repository carrying both keys produces a
-///         clone whose config carries neither — so those keys were never here to preserve. The workspace is
-///         additionally more deterministic than the host checkout on purpose, because commands run with <c>HOME</c>
-///         pointed at a per-task runtime directory and therefore see no user <c>~/.gitconfig</c>. Both are intended.
-///         The consequence that mattered — the validation gate's first command failing on a repository that
-///         legitimately stores CRLF — is answered by DERIVING the policy from the repository's own index rather than by
-///         inheriting a setting; see <see cref="DevelopmentWorkspaceWhitespacePolicy" />. Do not "fix" it by adding
-///         <c>whitespace</c> or <c>autocrlf</c> to <see cref="PreservedCoreKeys" />: there is nothing to preserve, and
-///         a key an agent-writable file supplies is exactly what this allow-list exists to refuse.
-///     </para>
-///     <para>
-///         <b>TOCTOU.</b> There is no meaningful window: evidence export runs after the attempt has finished, with no
-///         agent command in flight, and workspace preparation runs before any command has started.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A repository-local config can make Git execute arbitrary commands on the machine running it, and a <c>-c</c>
+///     pin cannot close <c>filter.*.clean</c> because driver names are arbitrary; removing every definition closes
+///     that, <c>core.fsmonitor</c> and any future exec-bearing key at once. Minimal is not empty, because Git refuses
+///     to operate on a repository whose <c>extensions.*</c> keys are missing. What is kept and why is in
+///     <c>docs/wiki/12-security-and-privacy.md</c> ("The managed workspace's Git configuration is engine-owned").
+/// </remarks>
 internal static class DevelopmentWorkspaceGitConfig
 {
     private const string CoreSection = "core";
     private const string ExtensionsSection = "extensions";
 
     /// <summary>
-    ///     The <c>core</c> keys that describe the repository rather than instructing Git to run something. Everything
-    ///     else in <c>core</c> is dropped, which is what makes this an allow-list rather than a block-list: a key nobody
-    ///     has thought of yet is dropped by default instead of surviving until someone remembers to name it.
+    ///     The <c>core</c> keys that describe the repository rather than instructing Git to run something.
     /// </summary>
+    /// <remarks>
+    ///     Everything else in <c>core</c> is dropped, which makes this an allow-list rather than a block-list: a key
+    ///     nobody has thought of yet is dropped by default instead of surviving until someone remembers to name it.
+    ///     Never add <c>whitespace</c> or <c>autocrlf</c> — a clone carries neither, and a key an agent-writable file
+    ///     supplies is what this list exists to refuse.
+    /// </remarks>
     private static readonly string[] PreservedCoreKeys = ["repositoryformatversion", "filemode", "bare", "symlinks", "ignorecase"];
 
     /// <summary>
@@ -85,10 +45,8 @@ internal static class DevelopmentWorkspaceGitConfig
         var gitDirectory = Path.Combine(workspacePath, ".git");
         if (!Directory.Exists(gitDirectory))
         {
-            // Either the workspace has not been materialised yet, or its .git is the pointer FILE a linked worktree
-            // gets — in which case repository-local config lives elsewhere and there is nothing here to rewrite. The
-            // standalone-clone assertion in DevelopmentWorkspaceProvider is what rejects the second case; this is not
-            // the place to duplicate it.
+            // Either the workspace is not materialised yet, or its .git is a linked worktree's pointer FILE, whose
+            // repository-local config lives elsewhere. The standalone-clone assertion rejects that second case.
             return;
         }
 
@@ -104,9 +62,8 @@ internal static class DevelopmentWorkspaceGitConfig
         // file — a link's target is not this repository's configuration and must not be carried forward.
         var preserved = config.Exists && config.LinkTarget is null ? ReadPreservedEntries(configPath) : [];
 
-        // Deleted rather than overwritten in place: a command inside the workspace can replace the file with a symlink,
-        // and an ordinary write would then follow it out of the workspace. Deleting the link removes the redirection
-        // before anything is written through it.
+        // Deleted rather than overwritten in place: a command inside the workspace can replace the file with a symlink
+        // that an ordinary write would follow out. Deleting removes the redirection before anything is written.
         DeleteIfPresent(configPath);
         DeleteIfPresent(Path.Combine(gitDirectory, "config.worktree"));
 
@@ -128,15 +85,12 @@ internal static class DevelopmentWorkspaceGitConfig
         }
     }
 
-    /// <summary>
-    ///     Parses the existing config far enough to keep the preserved keys, and no further.
-    ///     <para>
-    ///         Deliberately naive about Git's odder syntax (backslash line continuation, quoted values spanning a
-    ///         newline). It can afford to be, because the allow-list makes every parse error fail in the safe direction:
-    ///         a continuation line misread as a section header can only cause a key to be <em>dropped</em>, never an
-    ///         exec-bearing key to be kept — there is no key outside the allow-list that any misreading can admit.
-    ///     </para>
-    /// </summary>
+    /// <summary>Parses the existing config far enough to keep the preserved keys, and no further.</summary>
+    /// <remarks>
+    ///     Deliberately naive about Git's odder syntax — backslash line continuation, a quoted value spanning a
+    ///     newline. It can afford to be, because the allow-list makes every parse error fail safe: a continuation
+    ///     line misread as a section header can only drop a key, never admit an exec-bearing one.
+    /// </remarks>
     private static List<PreservedEntry> ReadPreservedEntries(string configPath)
     {
         var entries = new List<PreservedEntry>();

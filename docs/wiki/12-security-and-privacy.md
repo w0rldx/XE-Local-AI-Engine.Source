@@ -627,6 +627,35 @@ What a security reader needs from this page:
   status code. It does not stop running containers and does not hide the navigation group, which is compile-time.
   The safe order is **stop or uninstall every instance, then disable**.
 
+### 7.4 The seccomp profile every sandbox container carries
+
+`DockerSeccompProfile` ships Docker's own default seccomp profile as an embedded resource and passes it explicitly
+on every container create. Three things about that are worth having written down, because each answers an obvious
+"why not do it the simpler way".
+
+**Provenance, in full.** The bytes in `seccomp-default.json` are copied verbatim from
+`https://github.com/moby/profiles/blob/seccomp/v0.2.3/seccomp/default.json` — tag `seccomp/v0.2.3`, commit
+`836ae4d37ef2ec995c77c99fc55f5b5f3af3a897`, SHA-256
+`536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74`, fetched 2026-08-25. That module is what the
+daemon itself vendors: `moby/moby`'s `vendor/modules.txt` pins `github.com/moby/profiles/seccomp v0.2.3`. So the
+profile shipped here is the daemon's builtin, not a hand-written approximation.
+
+**Why this cites `moby/profiles` and not `moby/moby`.** The profile moved out of `moby/moby`'s
+`profiles/seccomp/default.json` after v28.0.x, and that path 404s on current tags. The split-out repository is the
+live source; citing the daemon repository would give a reader a dead link and no way to re-verify the SHA-256.
+
+**Why ship a copy at all, when the daemon applies this by default.** Because "by default" is not verifiable. A
+container created with no `seccomp=` option reads back with `SecurityOpt: null` (measured against a current Docker
+Engine), which is the *same* read-back as a daemon started with seccomp disabled entirely. Asking for the profile
+explicitly is the only way the fail-closed read-back in `DockerSandboxHardening.VerifySecurityOptions` can tell a
+confined container from an unconfined one.
+
+**Why it is an embedded resource and not a file on disk.** The Engine API takes profile **content**, not a path.
+The `docker` CLI reads the file named by `--security-opt seccomp=<path>` and sends its JSON; the daemon never opens
+a host path on the client's behalf. Measured against a current Docker Engine, a container created with
+`--security-opt seccomp=/tmp/default.json` inspects back as `seccomp={"defaultAction":…}` — the compacted JSON —
+and never as the path. There is therefore nothing to materialize in the node data directory for the daemon to read.
+
 ### Development Mode source and execution boundary
 
 Development Mode ships enabled by default. `Development:Enabled=false` is the backend emergency switch for an
@@ -708,7 +737,10 @@ two sandboxes, not one sandbox with two postures.
    `DevelopmentWorkspaceSecurityException`**: the task moves to `ChangesRequested` carrying the reason, because
    "delete the failing test" is an attack and "add a package" is a legitimate task this version cannot serve.
    The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`; a packaging system
-   missing from it is a hole, not a gap in coverage.
+   missing from it is a hole, not a gap in coverage. `Directory.Build.props` and `Directory.Build.targets` are build
+   configuration rather than dependency manifests, but either can carry a `PackageReference`, so both are in the set
+   — a different control from `EnsureBuildConfigurationBarrier`, which bounds MSBuild's upward search to
+   configuration from *above* the workspace.
 
    That `ChangesRequested` hop is written by `DevelopmentStore.FinalizeValidationAsync` as a
    **`ValidationFinalized`** event, not a `TaskTransitioned` one — it is a status-changing event all the same, and
@@ -805,6 +837,121 @@ this page. What the decision fixes, and what a reviewer should hold it to:
   resolution and network inputs all stay variable. Do not describe digest pinning as reproducibility.
 - **The scope is narrow by construction, and widening it is a new operator decision**, not an implementation
   detail.
+
+#### The managed workspace's Git configuration is engine-owned
+
+The engine runs `git reset` and `git add -A` **on the host** against the managed worktree, so anything a repository's
+own `.git/config` can make Git execute runs on the machine running the engine — `core.fsmonitor` on any index
+refresh, and a `filter.<driver>.clean` selected by an in-tree `.gitattributes` on `git add`. The standalone clone
+made `<workspace>/.git/config` a real, agent-writable file inside the jail, on the process provider Development runs
+on by default.
+
+`-c` pins are not enough. They close `core.fsmonitor` and outrank every include chain, but they cannot close
+`filter.*.clean`: driver names are arbitrary, so there is no finite set of keys to pin, and Git has no flag that
+disables attribute processing. `DevelopmentWorkspaceGitConfig.RestoreMinimalAsync` therefore **rewrites** the file to
+a minimal one immediately before the first host-side Git command. A filter driver has to be *defined in config* to
+run, and an in-tree `.gitattributes` naming an undefined driver is a no-op, so removing every definition closes
+`filter.*.clean`, `core.fsmonitor` and any future exec-bearing key at once without enumerating key names. That is the
+same property the read-only `.git/config` bind mount gets on the container side, and it is provider-independent.
+
+Minimal is not empty. A clone of a repository using a newer format carries `extensions.*` keys Git *refuses to
+operate without*, selected by `core.repositoryformatversion`, and `core.filemode` and `core.bare` describe the
+repository, where a wrong value changes what a diff says. Everything else in `core` is dropped, which makes
+`PreservedCoreKeys` an allow-list: a key nobody has thought of yet is dropped by default rather than surviving until
+someone remembers to name it. Two things are deliberately **not** preserved — `origin`, because the clone drops it on
+purpose and restoring it would undo the standalone clone's isolation, and `extensions.worktreeConfig`, because it
+makes Git read a second config file (`.git/config.worktree`) the rewrite does not cover; that file is removed
+alongside rather than sanitised, a standalone clone having no linked worktrees to need it.
+
+There is no meaningful TOCTOU window: evidence export runs after the attempt has finished with no agent command in
+flight, and workspace preparation runs before any command has started. Both files are deleted rather than overwritten
+in place, because a command can replace one with a symbolic link and an ordinary write would then follow it out of
+the workspace.
+
+##### The whitespace policy is derived from the index
+
+Every .NET validation profile begins with `git diff --check HEAD -- .`. Git's default rules count the CR of a CRLF
+pair as trailing whitespace, so a repository that legitimately stores CRLF blobs — the norm for a Windows-native
+project — reports `trailing whitespace` on every changed line and exits 2, failing the gate at command one on a
+perfectly correct change. Reproduced on a current Git release: a three-line CRLF file plus one added line exits 2
+under the default rules and 0 under `cr-at-eol`.
+
+Setting `core.whitespace=cr-at-eol` is not the answer, because it is repository-wide and the answer is not. On an LF
+repository where a change introduces one CRLF line — the genuine defect the check exists to catch — `cr-at-eol`
+silences it too; deleting the whitespace command and setting the option globally are the same mistake in two
+spellings. Whole-repository classification is not enough either, because mixed repositories are the common case
+rather than the exotic one: this engine's own repository stores 4243 files as LF and exactly one as CRLF.
+
+`DevelopmentWorkspaceWhitespacePolicy` therefore grants Git's per-path `whitespace` attribute to the paths whose
+**index** content is CRLF and to nothing else; every other path keeps the full default rule set, CR included. The
+index is the right signal because `core.autocrlf=true`, which Git for Windows' system config commonly sets, leaves
+the worktree CRLF while the blob is LF, and `diff --check` compares against the blob — sampling the worktree would
+hand `cr-at-eol` to an ordinary LF repository on every Windows box.
+
+It is written to `.git/info/attributes` rather than into the profile's argument vector, because the profile is
+snapshotted and re-derived from the code-owned catalog, so a per-repository argument would need a catalog version
+bump that invalidates every stored profile. `$GIT_DIR/info/attributes` outranks an in-tree `.gitattributes`, so a
+hostile repository can neither revoke the policy nor grant itself one: the file is engine-written and rewritten from
+the index on every preparation. Above `MaxExplicitPaths` (2048) CRLF paths it names `*` instead of every path,
+because Git walks the pattern list for every lookup, so an exhaustive list on a large all-CRLF repository is
+quadratic work on every diff — and a repository with that many CRLF blobs is a CRLF repository.
+
+**The repository's own config is not the source, and could not be.** The managed workspace is a standalone clone, and
+`git clone` copies no `core.*` from the source repository — verified: a source carrying `core.whitespace=cr-at-eol`
+and `core.autocrlf=input` produces a clone whose config carries neither. The minimal-config allow-list is not what
+removes them; they were never there. The workspace is also deliberately more deterministic than the operator's
+checkout, because commands run with `HOME` pointed at a per-task runtime directory and see no user `~/.gitconfig`.
+Do not "fix" the difference by adding `whitespace` or `autocrlf` to `PreservedCoreKeys`: there is nothing to
+preserve, and a key an agent-writable file supplies is exactly what that allow-list exists to refuse.
+
+#### The per-task CLI environment, and the PATH it must not leak into
+
+Every sandboxed Development command runs with `HOME`, `TMPDIR`, `NUGET_PACKAGES` and `DOTNET_CLI_HOME` pointed at
+per-task runtime directories, expressed in the sandbox's own path namespace. Two of the variables beside them are
+there to stop that per-task state escaping the task, and both were paid for.
+
+**`MSBUILDDISABLENODEREUSE=1`.** MSBuild's reusable worker nodes (`MSBuild.dll /nodemode:1`) survive the `dotnet`
+process that started them and keep the per-task `NUGET_PACKAGES` path in their environment. On the process provider
+they are ordinary host processes, so a *later* restore anywhere on the same host can attach to one and write the
+by-then-deleted packages path into `obj/*.dgspec.json`. Measured twice, as `NU5037` and then as `CS0006`, both
+naming a temporary directory no command had asked for. One task per node, no reuse.
+
+**`DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=0`.** Without it, the .NET CLI's first-run experience appends
+`$DOTNET_CLI_HOME/.dotnet/tools` to the **persisted** per-user PATH — on Windows, the `HKCU\Environment` registry
+value. `DOTNET_CLI_HOME` is a fresh per-task directory, so every task leaks one more entry that outlives the
+directory it names. Measured on Windows 11: **153 dead entries, 28,387 characters**, and the count still climbing
+within a single session. The damage is not untidiness — `cmd.exe` silently receives an **empty** `%PATH%` once the
+variable grows past its limit, so every bare-name command run through it fails. That broke three sandbox tests
+whose fixture is `cmd /c ping -n 31`: `ping` could not resolve, the command exited instantly, and
+cancel/timeout/tree-kill had nothing left to kill. Stripping the dead entries took PATH to 847 characters and the
+same tests went green with no code change.
+
+> **`DOTNET_SKIP_FIRST_TIME_EXPERIENCE` is not an alternative** — it is a no-op in .NET 10. This is the obvious fix
+> a reader will reach for; it does nothing.
+
+#### The test-write policy's protected-path set
+
+`DevelopmentCommandProfileCatalog.DefaultProtectedPaths` names the paths an agent may create but may not modify,
+delete or rename once they existed at the attempt's base commit. The set is grounded in the measured layout of this
+repository, `XE-Framework` and the synthetic fixture rather than assumed, and each part of it answers for itself.
+
+- **The filename rules carry most of the weight.** `*Tests.cs` matches 543 files across both real repositories with
+  zero false positives.
+- **The directory rules exist only to close the shared-helper hole.** Without them an agent can gut `AssertEx.cs` so
+  that every assertion silently passes — a shorter path to green than deleting a test, and exactly the move the
+  policy exists to stop.
+- **The directory rules are scoped to `*.cs` on purpose.** Freezing whole test directories would freeze the test
+  `.csproj` files too, so an agent could never add a package reference to an existing test project, which blocks the
+  "implement a feature and its tests" case the policy explicitly permits.
+- **`**/*.Tests/**` is never used alone**, because alone it is a trap: no directory in `XE-Framework` ends in
+  `.Tests` (its projects are `XeFramework.Tests.UnitTests` and siblings), and it misses this repository's own
+  `XE-Local-AI-Engine.Tests.E2ETests`. On its own it protects zero tests here.
+- **Two patterns are deliberately left out, each for a measured reason.** `*Spec.cs` has three false positives
+  across the two repositories (`OrchestrationSpec.cs`, `LlamaServerLaunchSpec.cs`, `ImageServerLaunchSpec.cs`) and
+  zero true positives; `*Test.cs` singular matches nothing in either repository.
+
+The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`, so widening or narrowing
+it is a source change plus a version bump, never configuration.
 
 ### Backend selection: a feature declares what it needs, and never names a backend
 

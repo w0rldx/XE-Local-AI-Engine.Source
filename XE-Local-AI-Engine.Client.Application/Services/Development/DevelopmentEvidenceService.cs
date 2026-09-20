@@ -19,20 +19,14 @@ internal interface IDevelopmentEvidenceService
         string sanitizedReason,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Writes an artifact and stamps it with two independent dimensions.
-    ///     <para>
-    ///         <paramref name="commandProfileVersion" /> is the artifact <em>protocol</em> version
-    ///         (<c>development-workspace-v1</c>, <c>development-validation-v2</c>, <c>development-review-v1</c>). It
-    ///         describes the shape of the artifact and is what the apply and reviewer compatibility gates compare.
-    ///     </para>
-    ///     <para>
-    ///         <paramref name="commandProfileDigest" /> is the SHA-256 of the canonical command profile that actually
-    ///         produced the evidence. It describes which commands ran. These are not the same thing and must not be
-    ///         collapsed into one field: replacing the protocol version with the digest would delete a compatibility
-    ///         safeguard and replace it with something that does not validate artifact shape at all.
-    ///     </para>
-    /// </summary>
+    /// <summary>Writes an artifact and stamps it with two independent dimensions.</summary>
+    /// <remarks>
+    ///     <paramref name="commandProfileVersion" /> is the artifact protocol version
+    ///     (<c>development-workspace-v1</c>, <c>development-validation-v2</c>, <c>development-review-v1</c>): it
+    ///     describes the artifact's shape and is what the apply and reviewer compatibility gates compare.
+    ///     <paramref name="commandProfileDigest" /> is the SHA-256 of the canonical command profile that produced the
+    ///     evidence, and describes which commands ran. Collapsing the two would drop the shape check entirely.
+    /// </remarks>
     Task<DevelopmentPreparedArtifact> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
         DevelopmentArtifactKind kind,
         ReadOnlyMemory<byte> content,

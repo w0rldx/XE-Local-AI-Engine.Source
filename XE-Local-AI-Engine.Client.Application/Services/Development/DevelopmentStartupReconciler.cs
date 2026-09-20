@@ -16,9 +16,8 @@ public sealed class DevelopmentStartupReconciler : IHostedService
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
         _ = await coordinator.ReconcileStartupAsync(cancellationToken);
 
-        // Projects created before the command-profile column existed carry no profile and cannot execute. Filling them
-        // here covers every such project in one pass; the same service also runs on project load, so a repository that
-        // happened to be offline at boot does not need a restart to become usable.
+        // A project created before the command-profile column carries no profile and cannot execute; one pass fills
+        // every such project. The same service runs on project load, so an offline repository needs no restart.
         var backfill = scope.ServiceProvider.GetRequiredService<IDevelopmentProfileBackfillService>();
         _ = await backfill.BackfillAllAsync(cancellationToken);
     }

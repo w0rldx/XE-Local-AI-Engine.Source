@@ -66,24 +66,23 @@ public sealed class DevelopmentOptions
     ///     The wall-clock budget for one of the engine's own fixed helper commands inside the sandbox — directory
     ///     listing, text search, patch check and apply, diff export, and the workspace-invariant probes that run after
     ///     every catalog command.
-    ///     <para>
-    ///         Build and test budgets do <em>not</em> come from here. Those are per-command values carried by the
-    ///         project's command profile, because a restore and a full test run have nothing in common and neither has
-    ///         anything in common with a <c>grep</c>. Previously all three shared
-    ///         <see cref="MaxAttemptDurationSeconds" />, so any single command could consume the entire attempt budget.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Build and test budgets do not come from here: those are per-command values carried by the project's command
+    ///     profile, because a restore, a full test run and a <c>grep</c> have nothing in common. Sharing
+    ///     <see cref="MaxAttemptDurationSeconds" /> instead lets any single command consume the whole attempt budget.
+    /// </remarks>
     [Range(1, 86400)]
     public int ToolCommandTimeoutSeconds { get; init; } = 300;
 
     /// <summary>
     ///     The wall-clock budget for one step of a template materialization (clone, init, add, commit).
-    ///     <para>
-    ///         Its own budget rather than <see cref="MaxAttemptDurationSeconds" />: this runs on the host at project
-    ///         creation with an operator waiting on an HTTP response, not inside an attempt. A large template's shallow
-    ///         clone is the step that dominates it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Its own budget rather than <see cref="MaxAttemptDurationSeconds" />: this runs on the host at project
+    ///     creation with an operator waiting on an HTTP response, not inside an attempt, and a large template's
+    ///     shallow clone is the step that dominates it.
+    /// </remarks>
     [Range(1, 86400)]
     public int TemplateMaterializationTimeoutSeconds { get; init; } = 600;
 }

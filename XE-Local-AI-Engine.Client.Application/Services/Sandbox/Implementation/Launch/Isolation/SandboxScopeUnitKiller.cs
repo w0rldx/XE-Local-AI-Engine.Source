@@ -5,11 +5,11 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 
-/// <summary>
-///     The seam the transient-scope kill authority is reached through, so the startup sweep's DECISIONS — which unit
-///     is claimed by a live worker, which is an orphan, which name is not one this engine generated — can be tested
-///     without a systemd user manager and without signalling anything real.
-/// </summary>
+/// <summary>The seam the transient-scope kill authority is reached through.</summary>
+/// <remarks>
+///     It exists so the startup sweep's DECISIONS — which unit is claimed by a live worker, which is an orphan, which name this engine did
+///     not generate — can be tested without a systemd user manager and without signalling anything real.
+/// </remarks>
 internal interface ISandboxScopeUnitKiller
 {
     /// <summary>Signals every process in the unit's cgroup and waits for it to empty.</summary>
@@ -21,13 +21,12 @@ internal interface ISandboxScopeUnitKiller
 
 /// <summary>
 ///     One engine-owned transient scope as the startup sweep sees it: its unit name, and how long it has been active.
-///     <para>
-///         The age is what lets the sweep tell a scope a previous run abandoned from one a worker created seconds ago
-///         and has not finished registering. It is <see langword="null" /> when the manager did not answer for that
-///         unit, and the sweep treats an unmeasurable age as a reason NOT to signal: killing another instance's live
-///         command is unrecoverable, while leaving an orphan costs one <c>RuntimeMaxSec</c> of runtime.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The age is what tells a scope a previous run abandoned from one a worker created seconds ago and has not finished registering. It
+///     is <see langword="null" /> when the manager did not answer, and the sweep reads an unmeasurable age as a reason NOT to signal:
+///     killing another instance's live command is unrecoverable, while leaving an orphan costs one <c>RuntimeMaxSec</c>.
+/// </remarks>
 internal sealed class SandboxScopeUnitStatus
 {
     public required string UnitName { get; init; }
@@ -36,26 +35,15 @@ internal sealed class SandboxScopeUnitStatus
 }
 
 /// <summary>
-///     The kill authority for an isolated command: <c>systemctl --user kill --kill-whom=cgroup --signal=SIGKILL
-///     --wait &lt;unit&gt;</c>.
-///     <para>
-///         Why the cgroup and not the process. An isolated command runs in its own PID namespace, so the engine cannot
-///         see the workload's processes at all, and the pid it holds belongs to <c>setsid</c> — three execs and one
-///         namespace away from anything the workload started. <c>Process.Kill(entireProcessTree)</c> walks a tree the
-///         engine cannot see; <c>kill(-pgid)</c> reaches the group, which a workload can leave with one
-///         <c>setsid</c> of its own. The transient scope's cgroup is the one container nothing inside can leave, and
-///         signalling it by unit name is the only mechanism that is complete.
-///     </para>
-///     <para>
-///         <c>--wait</c> is not cosmetic either: without it the call returns before the processes are gone, and the
-///         jail directory the caller deletes next is still being written to.
-///     </para>
-///     <para>
-///         Every method is best-effort and total. A unit that has already been collected, a manager that cannot be
-///         reached, a <c>systemctl</c> that fails — all mean "nothing left to kill here", and the PGID tree-kill the
-///         provider performs alongside this remains the fallback.
-///     </para>
+///     The kill authority for an isolated command: <c>systemctl --user kill --kill-whom=cgroup --signal=SIGKILL --wait &lt;unit&gt;</c>.
 /// </summary>
+/// <remarks>
+///     The cgroup, not the process: an isolated command runs in its own PID namespace, so a tree walk sees nothing and
+///     <c>kill(-pgid)</c> reaches only a group the workload can leave with one <c>setsid</c> of its own, while the transient scope's
+///     cgroup is the one container nothing inside can leave. <c>--wait</c> is not cosmetic either — without it the call returns before the
+///     processes are gone and the jail directory the caller deletes next is still being written to. Every method is best-effort and total:
+///     an already-collected unit, an unreachable manager or a failing <c>systemctl</c> all mean "nothing left to kill here".
+/// </remarks>
 internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
 {
     // Bounded so a wedged user manager cannot stall a teardown path. --wait normally returns as soon as the cgroup is
@@ -129,11 +117,12 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
     }
 
     /// <summary>
-    ///     Lists the transient scopes this engine owns that are still loaded on the user manager, each with the age the
-    ///     manager reports for it. Used by the startup sweep; anything whose name fails
-    ///     <see cref="SandboxScopeUnit.IsEngineOwned" /> is dropped here rather than later, so a caller cannot act on a
-    ///     name the sweep would refuse to signal anyway.
+    ///     Lists the transient scopes this engine owns that are still loaded on the user manager, each with the age the manager reports.
     /// </summary>
+    /// <remarks>
+    ///     Used by the startup sweep; anything whose name fails <see cref="SandboxScopeUnit.IsEngineOwned" /> is dropped here rather than
+    ///     later, so a caller cannot act on a name the sweep would refuse to signal anyway.
+    /// </remarks>
     /// <inheritdoc />
     public IReadOnlyList<SandboxScopeUnitStatus> ListEngineOwnedUnits()
     {
@@ -166,19 +155,13 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
         return [.. names.Select(name => new SandboxScopeUnitStatus { UnitName = name, ActiveFor = ages.TryGetValue(name, out var age) ? age : null })];
     }
 
-    /// <summary>
-    ///     Asks the user manager how long each unit has been active, in ONE <c>systemctl show</c> call.
-    ///     <para>
-    ///         <c>ActiveEnterTimestampMonotonic</c> is microseconds on <c>CLOCK_MONOTONIC</c>, which is why the
-    ///         reference clock here is <c>clock_gettime(CLOCK_MONOTONIC)</c> rather than <c>/proc/uptime</c>
-    ///         (<c>CLOCK_BOOTTIME</c>, which counts time spent suspended and would report every scope as older than it
-    ///         is) or a wall clock (which a time step would move underneath us).
-    ///     </para>
-    ///     <para>
-    ///         A unit the manager does not answer for simply gets no entry: the caller reads a missing age as "do not
-    ///         signal this", so a parse that goes wrong fails towards leaving processes alone.
-    ///     </para>
-    /// </summary>
+    /// <summary>Asks the user manager how long each unit has been active, in ONE <c>systemctl show</c> call.</summary>
+    /// <remarks>
+    ///     <c>ActiveEnterTimestampMonotonic</c> is microseconds on <c>CLOCK_MONOTONIC</c>, which is why the reference clock is
+    ///     <c>clock_gettime(CLOCK_MONOTONIC)</c> rather than <c>/proc/uptime</c> — <c>CLOCK_BOOTTIME</c> counts suspended time and would
+    ///     report every scope as older than it is — or a wall clock a time step could move underneath us. A unit the manager does not
+    ///     answer for gets no entry, and the caller reads a missing age as "do not signal this", so a bad parse leaves processes alone.
+    /// </remarks>
     private Dictionary<string, TimeSpan> ReadActiveDurations(IReadOnlyList<string> unitNames)
     {
         var durations = new Dictionary<string, TimeSpan>(StringComparer.Ordinal);
@@ -213,9 +196,8 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
             return durations;
         }
 
-        // One blank-line-separated block per unit, in the order they were asked for. The blocks are correlated by the
-        // Id property rather than by position, so a manager that drops or reorders one cannot shift every age onto the
-        // wrong unit.
+        // One blank-line-separated block per unit, in the order asked for. The blocks are correlated by the Id property rather than by
+        // position, so a manager that drops or reorders one cannot shift every age onto the wrong unit.
         string? id = null;
         long? activeEnter = null;
         foreach (var line in output.Split('\n'))

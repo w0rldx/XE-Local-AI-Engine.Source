@@ -23,9 +23,11 @@ internal sealed class DevelopmentPreparedArtifact
 }
 
 /// <summary>
-///     An artifact row paired with what was read out of it — raw bytes, or a report deserialized from them. The row
-///     travels with the payload because every authorization check downstream compares BOTH (the report's own claims and
-///     the artifact row's stamped protocol version, profile digest and attempt id), and reading them apart is how the
-///     two drift.
+///     An artifact row paired with what was read out of it — raw bytes, or a report deserialized from them.
 /// </summary>
+/// <remarks>
+///     The row travels with the payload because every downstream authorization check compares both the report's own
+///     claims and the row's stamped protocol version, profile digest and attempt id; reading them apart is how the
+///     two drift.
+/// </remarks>
 internal sealed record DevelopmentArtifactWith<TPayload>(DevelopmentArtifactSnapshot Artifact, TPayload Payload);

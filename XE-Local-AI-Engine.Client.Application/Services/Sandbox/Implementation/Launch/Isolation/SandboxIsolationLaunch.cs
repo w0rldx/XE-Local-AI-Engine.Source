@@ -3,21 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isola
 using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
-///     One prepared isolated launch: the descriptors and sealed memory files it needs, and the argument vector that
-///     references them by number.
-///     <para>
-///         This is the IMPURE half of the isolated launch — it opens things — kept apart from
-///         <see cref="SandboxIsolatedChain" />, which decides what the vector says. Splitting them is what makes the
-///         chain assertable byte for byte in a unit test while the opening, which cannot be, stays small enough to
-///         read.
-///     </para>
-///     <para>
-///         <b>Disposal frees descriptors, not the child.</b> The descriptors must stay open until the process has been
-///         started (the child inherits copies at that moment and keeps them through all three execs); closing them
-///         afterwards is correct and required, because a leaked descriptor per command would exhaust the engine's
-///         descriptor table over a long session.
-///     </para>
+///     One prepared isolated launch: the descriptors and sealed memory files it needs, and the argument vector that references them by
+///     number.
 /// </summary>
+/// <remarks>
+///     The IMPURE half of the isolated launch — it opens things — kept apart from <see cref="SandboxIsolatedChain" />, which decides what
+///     the vector says, so the chain is assertable byte for byte while the opening, which cannot be, stays small enough to read. Disposal
+///     frees DESCRIPTORS, not the child: they must stay open until the process has started, the child inheriting copies at that moment and
+///     keeping them through all three execs, and closing them afterwards is required because a leaked descriptor per command would exhaust
+///     the engine's table over a long session.
+/// </remarks>
 internal sealed class SandboxIsolationLaunch : IDisposable
 {
     // The jail subdirectories the chain assumes: HOME inside the sandbox and the jail-backed /tmp. Both live under the
@@ -59,9 +54,8 @@ internal sealed class SandboxIsolationLaunch : IDisposable
         var resources = new List<IDisposable>();
         try
         {
-            // 0700 on the jail itself, not only on what is created under it. The jail is the workload's single
-            // writable surface and the descriptor opener refuses anything looser, so a default-umask 0755 directory
-            // would turn a perfectly capable host into an unexplained launch failure.
+            // 0700 on the jail itself, not only on what is created under it: it is the workload's single writable surface and the
+            // descriptor opener refuses anything looser, so a default-umask 0755 directory would fail an otherwise capable host.
             var jailRoot = EnsurePrivateDirectory(Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.JailRoot)));
             // HOME inside the sandbox is /work/home; this is the host directory behind it.
             _ = EnsurePrivateDirectory(Path.Combine(jailRoot, HomeDirectoryName));
@@ -159,9 +153,8 @@ internal sealed class SandboxIsolationLaunch : IDisposable
             var directory = Directory.CreateDirectory(path);
             if (OperatingSystem.IsLinux())
             {
-                // Created 0700 explicitly rather than left to the umask: the descriptor opener REQUIRES 0700 on the
-                // jail and its temp, and a loose umask would otherwise turn a working host into an unexplained
-                // capability failure.
+                // Created 0700 explicitly rather than left to the umask: the descriptor opener REQUIRES 0700 on the jail and its temp, and
+                // a loose umask would otherwise turn a working host into an unexplained capability failure.
                 File.SetUnixFileMode(path, PrivateDirectoryMode);
             }
 

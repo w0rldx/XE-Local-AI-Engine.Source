@@ -4,11 +4,13 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     File-backed <see cref="IDockerDaemonAttestationStore" />, writing a single JSON document under the node data
-///     directory. Writes go through a temporary file and an atomic move so a crash mid-write leaves the previous
-///     approval intact rather than a truncated one — a corrupt attestation would present to the operator as "your
-///     daemon changed", which is the one message that must never be spurious.
+///     File-backed <see cref="IDockerDaemonAttestationStore" />, writing a single JSON document under the node data directory.
 /// </summary>
+/// <remarks>
+///     Writes go through a temporary file and an atomic move, so a crash mid-write leaves the previous approval intact rather than a
+///     truncated one: a corrupt attestation would present to the operator as "your daemon changed", the one message that must never be
+///     spurious.
+/// </remarks>
 internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationStore, IDisposable
 {
     internal const string DirectoryName = "development";
@@ -50,9 +52,8 @@ internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationSto
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {
-            // Treat an unreadable record as "never approved" rather than as "changed". The operator is then asked to
-            // approve the daemon they are actually on, which is a recoverable prompt; reporting a change they did not
-            // make would teach them to click through the one warning that is supposed to stop them.
+            // Treat an unreadable record as "never approved" rather than "changed": the operator is then asked to approve the daemon they
+            // are actually on, a recoverable prompt, where reporting a change they did not make teaches them to click through it.
             _logger.LogWarning(exception,
                 "The Docker daemon attestation at {AttestationPath} could not be read and is being treated as absent.",
                 _filePath);

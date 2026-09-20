@@ -1,20 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
-/// <summary>
-///     The structured outcome of a profile's test command, as read back by a code-owned result adapter.
-///     <para>
-///         Exit code alone cannot answer the question the validation gate actually asks. A test command that ran
-///         nothing exits 0 on some runners, and a suite that was silently reduced to zero tests looks identical to a
-///         suite that passed. So the gate needs counts, and it needs to know when it could not get them:
-///         <see cref="Parsed" /> false means the adapter could not read a result, which fails validation. It never
-///         means "assume it passed".
-///     </para>
-///     <para>
-///         There is deliberately no portable assertion counter here. No such contract exists across TUnit, Vitest,
-///         pytest and Cargo, and inventing one would be a fiction. What is portable is the four-number shape below;
-///         each profile family's adapter is responsible for producing it from whatever its runner actually emits.
-///     </para>
-/// </summary>
+/// <summary>The structured outcome of a profile's test command, read back by a code-owned result adapter.</summary>
+/// <remarks>
+///     Exit code alone cannot answer what the gate asks: a command that ran nothing exits 0 on some runners, so a
+///     suite silently reduced to zero tests looks like one that passed. A false <see cref="Parsed" /> means the
+///     adapter could not read a result and validation fails; it never means "assume it passed". No portable
+///     assertion counter exists across TUnit, Vitest, pytest and Cargo, so each adapter fills this four-number shape.
+/// </remarks>
 /// <param name="Adapter">The code-owned adapter that produced this, for evidence and for debugging a bad parse.</param>
 /// <param name="Parsed">Whether counts were read. False means the counts are meaningless and validation fails.</param>
 /// <param name="Discovered">Tests the runner knew about, including skipped ones.</param>
@@ -59,17 +51,13 @@ internal static class DevelopmentTestParseFailureCodes
     public const string OutputTruncated = "output_truncated";
 }
 
-/// <summary>
-///     Reads a structured test result out of one profile command's raw output.
-///     <para>
-///         <strong>Adapters are code-owned per profile family and a profile may not supply one.</strong> That is a
-///         reward-hacking control, not an architectural preference: a user-supplied success classifier is a
-///         user-supplied definition of "green", and the whole point of the deterministic gate is that the definition
-///         is the engine's. <see cref="DevelopmentTestResultAdapters.Resolve" /> therefore maps a profile id to an
-///         adapter through code alone — there is no configuration seam to add one, and a custom profile resolves to
-///         no adapter rather than to a caller-defined one.
-///     </para>
-/// </summary>
+/// <summary>Reads a structured test result out of one profile command's raw output.</summary>
+/// <remarks>
+///     Adapters are code-owned per profile family and a profile may not supply one — a reward-hacking control, not a
+///     preference: a user-supplied success classifier is a user-supplied definition of "green", and the gate's whole
+///     point is that the definition is the engine's. <see cref="DevelopmentTestResultAdapters.Resolve" /> maps a
+///     profile id to an adapter through code alone, so a custom profile resolves to no adapter at all.
+/// </remarks>
 internal interface IDevelopmentTestResultAdapter
 {
     /// <summary>The adapter's stable name, recorded on the outcome.</summary>
@@ -78,12 +66,12 @@ internal interface IDevelopmentTestResultAdapter
     /// <summary>Whether this adapter reads results for the given command of the given profile.</summary>
     bool Handles(DevelopmentCommandProfile profile, string commandId);
 
-    /// <summary>
-    ///     Reads counts from the command's <em>untruncated</em> output. The caller must pass raw output: the summary a
-    ///     runner emits is at the end, and the evidence copy is head-truncated to
-    ///     <see cref="DevelopmentOptions.MaxCommandOutputBytes" />, so parsing the persisted copy would silently lose
-    ///     the very lines this reads on any verbose repository.
-    /// </summary>
+    /// <summary>Reads counts from the command's <em>untruncated</em> output.</summary>
+    /// <remarks>
+    ///     The caller must pass raw output: a runner emits its summary at the end, and the evidence copy is
+    ///     head-truncated to <see cref="DevelopmentOptions.MaxCommandOutputBytes" />, so parsing the persisted copy
+    ///     would silently lose the very lines this reads on any verbose repository.
+    /// </remarks>
     DevelopmentTestOutcome Parse(string standardOutput, string standardError, bool outputTruncated);
 }
 
@@ -103,9 +91,8 @@ internal static class DevelopmentTestResultAdapters
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandId);
 
-        // A custom profile never resolves an adapter. It cannot run today either — DevelopmentCommandProfileCatalog
-        // .ResolveStored rejects IsCustom outright — but stating it here keeps the control where the decision lives
-        // rather than depending on a rejection in another class continuing to exist.
+        // A custom profile never resolves an adapter. Stated here so the control lives with the decision rather than
+        // depending on DevelopmentCommandProfileCatalog.ResolveStored continuing to reject IsCustom outright.
         return profile.IsCustom
             ? null
             : Array.Find(All, adapter => adapter.Handles(profile, commandId));
@@ -114,29 +101,14 @@ internal static class DevelopmentTestResultAdapters
 
 /// <summary>
 ///     Reads <c>dotnet test</c> results for the code-owned <c>dotnet-slnx</c> and <c>dotnet-csproj</c> profiles.
-///     <para>
-///         It parses the Microsoft.Testing.Platform run summary rather than a TRX file. TRX is not available: under
-///         MTP a <c>.trx</c> report requires the <em>target repository</em> to reference
-///         <c>Microsoft.Testing.Extensions.TrxReport</c>, which a foreign repository cannot be required to do, and
-///         adding a reporter argument would change the profile's canonical argv and therefore its digest. The summary
-///         block is emitted by the platform itself for every MTP run.
-///     </para>
-///     <para>
-///         Measured against the SDK's MTP runner on 2026-07-29, the summary is emitted on <strong>stdout</strong>
-///         while the per-test lines go to <strong>stderr</strong>, and <c>No test projects were found.</c> is
-///         stderr-only. Both streams are therefore searched. The shape parsed is:
-///     </para>
-///     <code>
-///     Test run summary: Failed!
-///       &lt;per-module lines&gt;
-///
-///       total: 5
-///       failed: 1
-///       succeeded: 3
-///       skipped: 1
-///       duration: 705ms
-///     </code>
 /// </summary>
+/// <remarks>
+///     It parses the Microsoft.Testing.Platform run summary — the <c>total</c>, <c>failed</c>, <c>succeeded</c> and
+///     <c>skipped</c> lines under a "Test run summary:" banner, which the platform emits for every MTP run — rather
+///     than a TRX file, which needs the target repository to reference <c>Microsoft.Testing.Extensions.TrxReport</c>
+///     and a reporter argument that would change the profile's canonical argv and digest. Both streams are searched:
+///     the summary goes to stdout, the per-test lines to stderr, and "No test projects were found." is stderr-only.
+/// </remarks>
 internal sealed class DotnetTestResultAdapter : IDevelopmentTestResultAdapter
 {
     private const string SummaryMarker = "Test run summary:";
@@ -192,9 +164,8 @@ internal sealed class DotnetTestResultAdapter : IDevelopmentTestResultAdapter
                 "The test run summary did not carry every count the gate needs (total, failed, succeeded, skipped).");
         }
 
-        // Fail closed on a shape the adapter does not fully understand. A runner that grows a fifth bucket — a timed
-        // out or cancelled test — would otherwise be silently dropped from `executed`, and a test that did not finish
-        // must never be counted as one that passed.
+        // Fail closed on a shape the adapter does not fully understand: a fifth bucket, a timed-out or cancelled test,
+        // would drop silently out of the executed count, and a test that did not finish is never one that passed.
         if (succeeded + failed + skipped != total)
         {
             return DevelopmentTestOutcome.ParseFailure(Name,
@@ -205,11 +176,11 @@ internal sealed class DotnetTestResultAdapter : IDevelopmentTestResultAdapter
         return DevelopmentTestOutcome.Counts(Name, total, succeeded + failed, succeeded, failed);
     }
 
-    /// <summary>
-    ///     Reads the counts that follow the last summary marker. The last one is taken because the marker is a
-    ///     per-run banner: a multi-module run emits one aggregate block, but taking the last is correct either way,
-    ///     whereas taking the first would read one module's numbers as the whole run's.
-    /// </summary>
+    /// <summary>Reads the counts that follow the LAST summary marker.</summary>
+    /// <remarks>
+    ///     The marker is a per-run banner and a multi-module run emits one aggregate block, so taking the last is
+    ///     correct either way, whereas taking the first would read one module's numbers as the whole run's.
+    /// </remarks>
     private static SummaryCounts? ReadSummary(string text)
     {
         var markerIndex = text.LastIndexOf(SummaryMarker, StringComparison.Ordinal);

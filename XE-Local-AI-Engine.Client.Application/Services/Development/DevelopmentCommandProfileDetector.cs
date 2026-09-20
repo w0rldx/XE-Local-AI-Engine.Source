@@ -30,19 +30,14 @@ public interface IDevelopmentCommandProfileDetector
 
 /// <summary>
 ///     Detects which code-owned command profile fits a registered repository.
-///     <para>
-///         Detection is a <em>proposal</em>. It runs against the trusted host repository root at registration time and
-///         its result is shown to the operator for confirmation; nothing here is authoritative on its own. That matters
-///         because a repository the agent can write must never be able to choose its own build commands.
-///     </para>
-///     <para>
-///         A repository with no recognizable .NET build system resolves to
-///         <see cref="DevelopmentCommandProfileCatalog.GenericGit" />, whose validation profile is the whitespace check
-///         alone. That is deliberately a visible, operator-confirmed downgrade rather than a silent one: the profile is
-///         named in the confirmation step and stamped on every artifact the gate produces, so a report that only
-///         checked whitespace says so.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Detection is a proposal: it runs against the trusted host repository root at registration time and its result
+///     is shown to the operator for confirmation, because a repository the agent can write must never choose its own
+///     build commands. A repository with no recognizable .NET build system resolves to
+///     <see cref="DevelopmentCommandProfileCatalog.GenericGit" />, named in the confirmation step and stamped on
+///     every artifact the gate produces, so a report that checked only whitespace says so.
+/// </remarks>
 internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandProfileDetector
 {
     /// <summary>
@@ -80,9 +75,12 @@ internal sealed class DevelopmentCommandProfileDetector : IDevelopmentCommandPro
 
     /// <summary>
     ///     Enumerates matching files as repository-relative forward-slash paths, ordered so detection is deterministic
-    ///     for a given tree — a non-deterministic first candidate would make the confirmed profile depend on filesystem
-    ///     enumeration order, and therefore make its digest unstable across machines.
+    ///     for a given tree.
     /// </summary>
+    /// <remarks>
+    ///     A non-deterministic first candidate would make the confirmed profile depend on filesystem enumeration
+    ///     order, and so make its digest unstable across machines.
+    /// </remarks>
     private static IEnumerable<string> EnumerateRelative(string root, string pattern, int maxDepth)
     {
         var options = new EnumerationOptions

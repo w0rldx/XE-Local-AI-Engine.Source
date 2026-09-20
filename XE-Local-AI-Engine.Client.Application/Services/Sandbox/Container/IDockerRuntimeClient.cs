@@ -1,15 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     The narrow slice of the Docker Engine API this product uses, expressed in this product's own types.
-///     <para>
-///         It exists so that <see cref="Implementation.DockerSandboxRuntimeProvider" /> can be tested against a client
-///         that <em>lies</em>. The hardening contract is fail-closed on read-back — the provider must reject a container
-///         whose settings did not take — and the only way to prove it rejects is to hand it an inspect result that
-///         does not match what was asked for. A test cannot make a real daemon silently drop <c>--cap-drop ALL</c>, so
-///         without this seam the fail-closed branch would be unreachable and therefore unverified.
-///     </para>
-/// </summary>
+/// <summary>The narrow slice of the Docker Engine API this product uses, expressed in this product's own types.</summary>
+/// <remarks>
+///     It exists so <see cref="Implementation.DockerSandboxRuntimeProvider" /> can be tested against a client that LIES. The hardening
+///     contract is fail-closed on read-back, and the only way to prove the provider rejects is to hand it an inspect result that does not
+///     match what was asked for. A test cannot make a real daemon silently drop <c>--cap-drop ALL</c>, so without this seam the
+///     fail-closed branch would be unreachable and therefore unverified.
+/// </remarks>
 public interface IDockerRuntimeClient : IAsyncDisposable
 {
     /// <summary>The endpoint this client was built against.</summary>
@@ -30,14 +27,12 @@ public interface IDockerRuntimeClient : IAsyncDisposable
     /// </summary>
     Task<DockerContainerSettings> InspectContainerAsync(string containerId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Ids of every container — running or stopped — carrying <em>all</em> of <paramref name="labels" />.
-    ///     <para>
-    ///         Filtered daemon-side rather than listed-then-filtered here, because the difference is a security
-    ///         property and not an optimisation: the caller removes what this returns, so a filter applied after the
-    ///         fact would be one more place a foreign container could reach the removal loop.
-    ///     </para>
-    /// </summary>
+    /// <summary>Ids of every container, running or stopped, carrying ALL of <paramref name="labels" />.</summary>
+    /// <remarks>
+    ///     Filtered daemon-side rather than listed-then-filtered here, because the difference is a security property and not an
+    ///     optimisation: the caller removes what this returns, so a filter applied after the fact would be one more place a foreign
+    ///     container could reach the removal loop.
+    /// </remarks>
     Task<IReadOnlyList<string>> ListContainersAsync(IReadOnlyDictionary<string, string> labels, CancellationToken cancellationToken = default);
 
     /// <summary>Force-remove a container. Best-effort by contract: a container that is already gone is not an error.</summary>
@@ -191,16 +186,12 @@ public sealed record DockerExecutionRequest
     /// <summary>Optional environment additions for this command.</summary>
     public IReadOnlyDictionary<string, string>? Environment { get; init; }
 
-    /// <summary>
-    ///     Optional standard input piped to the command, after which the write side is closed so the child sees EOF.
-    ///     <para>
-    ///         Load-bearing, not a convenience. Development Mode pipes patches to <c>git apply -</c>; a client that
-    ///         dropped this would leave git reading EOF from an unattached stdin, and <c>git apply</c> given nothing
-    ///         to apply <em>exits 0</em>. The caller would be told the patch applied while nothing changed, which is
-    ///         a silent false green rather than a visible failure — so this field exists to make that impossible
-    ///         rather than to make stdin available.
-    ///     </para>
-    /// </summary>
+    /// <summary>Optional standard input piped to the command, after which the write side is closed so the child sees EOF.</summary>
+    /// <remarks>
+    ///     Load-bearing, not a convenience: Development Mode pipes patches to <c>git apply -</c>, and a client dropping this would leave
+    ///     git reading EOF from an unattached stdin, where <c>git apply</c> given nothing to apply EXITS 0. The caller would be told the
+    ///     patch applied while nothing changed, so this field exists to make that silent false green impossible.
+    /// </remarks>
     public string? StandardInput { get; init; }
 
     /// <summary>Captured-output ceiling per stream, in bytes.</summary>

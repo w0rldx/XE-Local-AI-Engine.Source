@@ -1,73 +1,51 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     One engine-generated mount request: "make this host path visible inside the sandbox".
-///     <para>
-///         Provider-neutral by construction, and it has to be. The engine knows which host directories a build needs
-///         (HOME, temp, the package cache, the tool state root); it does not, and must not, know how a given provider
-///         makes them reachable. A container binds them; a host-process jail already sees them and does nothing at all.
-///         Putting a container mount type on the create request would leak a Docker concept into the contract every
-///         other provider implements — which <c>SandboxContractGuardTests</c> fails the build for, correctly.
-///     </para>
-///     <para>
-///         <see cref="SandboxPath" /> is a <em>requested</em> target, not a promise. A provider is free to place the
-///         mount elsewhere — the process provider necessarily does, because a host child sees the host path and nothing
-///         else — so the resolved answer is read back off <see cref="SandboxHandle.Mounts" /> rather than assumed here.
-///     </para>
-/// </summary>
+/// <summary>One engine-generated mount request: "make this host path visible inside the sandbox".</summary>
+/// <remarks>
+///     Provider-neutral by construction: the engine knows which host directories a build needs (HOME, temp, the package cache, the tool
+///     state root) and must not know how a provider makes them reachable — a container binds them, a host-process jail already sees them.
+///     A container mount type on the create request would leak a Docker concept into the contract every provider implements, which
+///     <c>SandboxContractGuardTests</c> fails the build for. <see cref="SandboxPath" /> is a REQUESTED target, not a promise; the resolved
+///     answer is read back off <see cref="SandboxHandle.Mounts" />.
+/// </remarks>
 public sealed record SandboxMount
 {
     /// <summary>Absolute host path to expose. Must exist before the sandbox is created.</summary>
     public required string HostPath { get; init; }
 
-    /// <summary>
-    ///     The absolute in-sandbox path the caller would like this to appear at, expressed POSIX-style. Providers that
-    ///     cannot honour it (the process jail) report what they did instead; providers that can (the container) use it
-    ///     verbatim after validating it against every other mount target.
-    /// </summary>
+    /// <summary>The absolute in-sandbox path the caller would like this to appear at, expressed POSIX-style.</summary>
+    /// <remarks>
+    ///     A provider that cannot honour it (the process jail) reports what it did instead; one that can (the container) uses it verbatim
+    ///     after validating it against every other mount target.
+    /// </remarks>
     public required string SandboxPath { get; init; }
 
     /// <summary>
-    ///     Whether <see cref="SandboxPath" /> names a path RELATIVE TO THE TRUSTED HOST WORKSPACE ROOT rather than a
-    ///     target the provider derives from <see cref="HostPath" />.
-    ///     <para>
-    ///         A provider with a mount layer normally derives the target of a mount whose host path lies inside the
-    ///         workspace from that host path — which is how the engine asks for a nested <c>.git/config</c> without
-    ///         knowing what the workspace is called inside a container. Derivation can express "put THIS file where it
-    ///         already is"; it cannot express "put file A where file B is", and there is exactly one case that needs
-    ///         that: shadowing a committed credential with engine-generated empty content, where the mount SOURCE has
-    ///         to live outside the workspace precisely so the real file is left byte-unchanged.
-    ///     </para>
-    ///     <para>
-    ///         A separate opt-in rather than a change to how <see cref="SandboxPath" /> is read, because the per-task
-    ///         HOME, temp and package roots are mounts whose host paths sit outside the workspace and whose targets
-    ///         must stay outside it too. Reading every such target as workspace-relative would place the package cache
-    ///         inside the repository work tree.
-    ///     </para>
-    ///     <para>
-    ///         A provider with no mount layer ignores it, exactly as it ignores <see cref="SandboxPath" /> itself: it
-    ///         reports the host path, and nothing is shadowed. That is why a caller requests a shadow only where
-    ///         <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" /> is advertised.
-    ///     </para>
+    ///     Whether <see cref="SandboxPath" /> names a path RELATIVE TO THE TRUSTED HOST WORKSPACE ROOT rather than a target the provider
+    ///     derives from <see cref="HostPath" />.
     /// </summary>
+    /// <remarks>
+    ///     Derivation expresses "put THIS file where it already is", never "put file A where file B is"; one case needs that — shadowing a
+    ///     committed credential with engine-generated empty content, whose mount SOURCE must live outside the workspace so the real file is
+    ///     left byte-unchanged. A separate opt-in because the per-task HOME, temp and package roots sit outside the workspace and must stay
+    ///     there: reading every target as workspace-relative would put the package cache in the work tree. A provider with no mount layer
+    ///     ignores it, so a caller asks only where read-only mounts are advertised.
+    /// </remarks>
     public bool TargetIsWorkspaceRelative { get; init; }
 
-    /// <summary>
-    ///     Whether the mount must be read-only inside the sandbox.
-    ///     <para>
-    ///         Capability-gated on the caller's side: a provider that does not advertise
-    ///         <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" /> rejects this fail-closed rather than
-    ///         quietly serving a writable mount, so a caller must ask for read-only only when the flag is advertised.
-    ///         The alternative — silently downgrading — is exactly the failure the whole capability contract exists to
-    ///         prevent.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether the mount must be read-only inside the sandbox.</summary>
+    /// <remarks>
+    ///     Capability-gated on the caller's side: a provider not advertising
+    ///     <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" /> rejects this fail-closed rather than quietly serving a
+    ///     writable mount, so a caller asks for read-only only where the flag is advertised. Silently downgrading is exactly the failure
+    ///     the capability contract exists to prevent.
+    /// </remarks>
     public bool ReadOnly { get; init; }
 }
 
 /// <summary>
-///     What a mount actually became, reported back on <see cref="SandboxHandle" /> so a caller can answer "what is this
-///     host path called inside the sandbox?" without knowing which provider answered.
+///     What a mount actually became, reported back on <see cref="SandboxHandle" /> so a caller can answer "what is this host path called
+///     inside the sandbox?" without knowing which provider answered.
 /// </summary>
 public sealed class SandboxMountBinding
 {

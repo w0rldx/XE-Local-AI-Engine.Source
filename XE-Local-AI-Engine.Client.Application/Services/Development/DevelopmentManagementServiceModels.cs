@@ -46,10 +46,13 @@ public sealed class DevelopmentProjectAggregate
 }
 
 /// <summary>
-///     <see cref="WorkflowRunId" /> names the development workflow run driving this task, and is null for a task an
-///     operator drives themselves. It is the one thing on this aggregate that is not the task's own row: apply is
-///     approved at that run's gate, so the page has to know it is not the one being asked.
+///     Everything a task page renders in one read, including <see cref="WorkflowRunId" />.
 /// </summary>
+/// <remarks>
+///     <see cref="WorkflowRunId" /> names the development workflow run driving this task and is null for a task an
+///     operator drives themselves — the one thing here that is not the task's own row. Apply is approved at that
+///     run's gate, so the page has to know it is not the one being asked.
+/// </remarks>
 public sealed record DevelopmentTaskAggregate
 {
     public required DevelopmentTaskSnapshot Task { get; init; }

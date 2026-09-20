@@ -3,43 +3,21 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
-/// <summary>
-///     The pure, side-effect-free mapping from (requested policy × measured host containment × the command) to the exact
-///     wrapper chain that will be exec'd. Keeping this a static function of its inputs is what makes the containment
-///     mapping unit-testable without starting a process; <see cref="SandboxLauncher" /> is the thin adapter that applies
-///     a plan to a <see cref="System.Diagnostics.ProcessStartInfo" />.
-///     <para>
-///         The chain, outermost first, with every layer independently optional:
-///     </para>
-///     <code>
-///     setsid                                   ← process group leader (pgid == pid) for group-kill and orphan reaping
-///       systemd-run --scope --user -q          ← memory / PID / CPU ceilings via cgroup v2
-///         -p MemoryMax=…M -p MemorySwapMax=0
-///         -p TasksMax=… -p CPUQuota=…%
-///         -- unshare --user --map-current-user --net   ← empty network namespace: default-deny egress
-///           -- env -u XDG_RUNTIME_DIR -u DBUS_SESSION_BUS_ADDRESS   ← strip the user-bus address (escape guard)
+/// <summary>The pure mapping from policy, measured host containment and the command to the exact wrapper chain that will be exec'd.</summary>
+/// <code>
+///     setsid                                                     process group leader, for group-kill and orphan reaping
+///       systemd-run --scope --user -q -p MemoryMax=…M -p MemorySwapMax=0 -p TasksMax=… -p CPUQuota=…%   cgroup-v2 ceilings
+///         -- unshare --user --map-current-user --net             empty network namespace, default-deny egress
+///           -- env -u XDG_RUNTIME_DIR -u DBUS_SESSION_BUS_ADDRESS   strip the user-bus address, an escape guard
 ///             -- &lt;executable&gt; &lt;arguments…&gt;
-///     </code>
-///     <para>
-///         Ordering is load-bearing and was verified live, not assumed:
-///     </para>
-///     <list type="bullet">
-///         <item>
-///             <c>setsid</c> must be outermost. Started from a .NET <c>Process.Start</c> (a fork/exec whose child is not
-///             already a group leader) <c>setsid</c> EXECs rather than forks, so the started pid IS the process-group id
-///             and the exit code of the whole chain still propagates. Both were measured.
-///         </item>
-///         <item>
-///             <c>systemd-run</c> must sit OUTSIDE <c>unshare</c>: it talks to the user systemd bus, and it must do so
-///             before the namespace is entered.
-///         </item>
-///         <item>
-///             <c>env -u</c> must be innermost, and is emitted only when the <c>systemd-run</c> layer is present — that
-///             layer is the only reason the bus address is in the environment at all. See
-///             <see cref="SandboxContainment.UserBusEnvironment" /> for the escape this closes.
-///         </item>
-///     </list>
-/// </summary>
+/// </code>
+/// <remarks>
+///     A static function of its inputs, so the mapping is unit-testable without starting a process. Ordering is load-bearing and verified
+///     live: <c>setsid</c> is outermost because, started from a .NET <c>Process.Start</c>, it EXECs rather than forks, so the started pid
+///     IS the process-group id and the exit code still propagates; <c>systemd-run</c> sits OUTSIDE <c>unshare</c>, reaching the user bus
+///     before the namespace is entered; <c>env -u</c> is innermost and emitted only under that layer, the only reason the bus address is
+///     present at all — see <see cref="SandboxContainment.UserBusEnvironment" /> for the escape it closes.
+/// </remarks>
 public static class SandboxLaunchPlan
 {
     /// <summary>
@@ -52,11 +30,11 @@ public static class SandboxLaunchPlan
         "DBUS_SESSION_BUS_ADDRESS"
     ];
 
-    /// <summary>
-    ///     Builds the wrapper chain for one command. Never throws: a policy asking for a mechanism the host does not
-    ///     have simply yields a plan without that layer, and the corresponding <c>Applied…</c> flag stays false so the
-    ///     caller can log the degradation honestly.
-    /// </summary>
+    /// <summary>Builds the wrapper chain for one command.</summary>
+    /// <remarks>
+    ///     Never throws: a policy asking for a mechanism the host does not have yields a plan without that layer, and the corresponding
+    ///     <c>Applied…</c> flag stays false so the caller can log the degradation honestly.
+    /// </remarks>
     public static SandboxLaunchDescriptor Create(string executable,
         IReadOnlyList<string> arguments,
         SandboxLaunchPolicy policy,
@@ -113,10 +91,8 @@ public static class SandboxLaunchPlan
         {
             chain.Add(containment.UnsharePath!);
             chain.Add("--user");
-            // --map-current-user, NOT --map-root-user: creating the namespace needs a user namespace either way, but
-            // mapping the real uid keeps the child running as itself. Mapping it to root would make tools that refuse
-            // to run as root (or that change behavior when they think they are root, e.g. git ownership checks) behave
-            // differently inside the sandbox than outside it, for no isolation benefit.
+            // --map-current-user, NOT --map-root-user: the namespace needs a user namespace either way, and mapping the real uid keeps the
+            // child running as itself. Mapping to root changes how tools behave inside versus outside, for no isolation benefit.
             chain.Add("--map-current-user");
             chain.Add("--net");
             chain.Add("--");
@@ -124,9 +100,8 @@ public static class SandboxLaunchPlan
 
         if (applyLimits)
         {
-            // Innermost, and only under the limits layer: drop the user-bus address so the sandboxed executable cannot
-            // reach the per-user systemd manager. A network namespace does not confine UNIX sockets, so without this
-            // the child could start a unit outside its own scope and namespace — verified live.
+            // Innermost, and only under the limits layer: drop the user-bus address so the executable cannot reach the per-user systemd
+            // manager. A network namespace does not confine UNIX sockets, so without this the child starts units outside its own scope.
             chain.Add(containment.EnvPath!);
             foreach (var name in UserBusVariableNames)
             {
@@ -155,20 +130,14 @@ public static class SandboxLaunchPlan
         };
     }
 
-    /// <summary>
-    ///     The ISOLATED layer: the descriptor for a command that runs behind a filesystem boundary. It is a different
-    ///     chain rather than another optional wrapper on the existing one, because the mechanisms overlap — the
-    ///     namespaces <c>bwrap</c> creates subsume what <c>unshare</c> did, and <c>--clearenv</c> subsumes the
-    ///     <c>env -u</c> layer — and composing both would produce a chain in which neither half's guarantees are
-    ///     legible.
-    ///     <para>
-    ///         Everything here is already decided: <paramref name="launch" /> holds the rendered vector and the unit
-    ///         name, and the flags below are facts about that vector rather than a second opinion about the host. A
-    ///         command reaching this point has already been accepted by the registry against a host the probe measured
-    ///         able to isolate, so there is no degradation branch — an isolated launch either happens or the create
-    ///         request was refused.
-    ///     </para>
-    /// </summary>
+    /// <summary>The ISOLATED layer: the descriptor for a command that runs behind a filesystem boundary.</summary>
+    /// <remarks>
+    ///     A different chain rather than another optional wrapper, because the mechanisms overlap — the namespaces <c>bwrap</c> creates
+    ///     subsume <c>unshare</c>, and <c>--clearenv</c> subsumes the <c>env -u</c> layer — and composing both would leave neither half's
+    ///     guarantees legible. Everything is already decided: <paramref name="launch" /> holds the rendered vector and the unit name, and
+    ///     the flags are facts about that vector. A command reaching here was accepted against a host the probe measured able to isolate,
+    ///     so there is no degradation branch — an isolated launch either happens or the create request was refused.
+    /// </remarks>
     internal static SandboxLaunchDescriptor CreateIsolated(SandboxIsolationLaunch launch,
         SandboxLaunchPolicy policy,
         SandboxContainment containment)
@@ -200,15 +169,12 @@ public static class SandboxLaunchPlan
         };
     }
 
-    /// <summary>
-    ///     Maps <see cref="SandboxResourceLimits" /> onto systemd resource-control properties.
-    ///     <para>
-    ///         <c>MemorySwapMax=0</c> accompanies every <c>MemoryMax</c> and is not optional. On a host with swap,
-    ///         <c>memory.max</c> alone does not produce an OOM kill — the kernel reclaims to swap and the child
-    ///         allocates straight past the ceiling. Measured in one local run: 400 MiB allocated successfully under
-    ///         <c>MemoryMax=128M</c>; with <c>MemorySwapMax=0</c> added the same child was SIGKILLed (exit 137).
-    ///     </para>
-    /// </summary>
+    /// <summary>Maps <see cref="SandboxResourceLimits" /> onto systemd resource-control properties.</summary>
+    /// <remarks>
+    ///     <c>MemorySwapMax=0</c> accompanies every <c>MemoryMax</c> and is not optional: on a host with swap, <c>memory.max</c> alone does
+    ///     not produce an OOM kill, the kernel reclaiming to swap while the child allocates straight past the ceiling. Measured — 400 MiB
+    ///     allocated successfully under <c>MemoryMax=128M</c>, and the same child SIGKILLed once <c>MemorySwapMax=0</c> was added.
+    /// </remarks>
     private static IEnumerable<string> BuildScopeProperties(SandboxResourceLimits limits)
     {
         if (limits.MemoryMb is { } memoryMb)
@@ -224,9 +190,8 @@ public static class SandboxLaunchPlan
 
         if (limits.CpuCount is { } cpuCount)
         {
-            // systemd expresses the CPU quota as a percentage of ONE core, so two cores is two hundred percent. Only
-            // whole percentages are accepted, and rounding up keeps a fractional request from being silently tightened
-            // below what the caller asked for.
+            // systemd expresses the CPU quota as a percentage of ONE core, so two cores is two hundred percent. Only whole percentages
+            // are accepted, and rounding up keeps a fractional request from being silently tightened below what was asked for.
             var percent = (long)Math.Ceiling(cpuCount * 100d);
             yield return string.Create(CultureInfo.InvariantCulture, $"CPUQuota={percent}%");
         }

@@ -1,38 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 
 /// <summary>
-///     Startup <see cref="IHostedService" /> that removes Development Mode containers orphaned by a previous run of
-///     THIS installation. The container-provider counterpart to <c>SandboxOrphanReaper</c>, which covers the process
-///     provider's jails and knows nothing about containers.
-///     <para>
-///         Separate from that reaper rather than folded into it, because the two share no mechanism: one reads on-disk
-///         markers and signals process groups, the other queries a daemon by label. Merging them would give the
-///         process provider's sweep a Docker dependency it must not have — provider selection is per feature, and
-///         AgentHome must not acquire a container runtime requirement by association (ADR 0004).
-///     </para>
-///     <para>
-///         <b>Three gates before anything is removed</b>, in this order and for different reasons:
-///     </para>
-///     <list type="number">
-///         <item>
-///             Development Mode must actually resolve to the container provider. The Docker types are registered
-///             unconditionally, so on a node that never opted in (<c>Development:Sandbox:Provider</c> unset, the
-///             shipped default) this must not touch the daemon at all — not even to list.
-///         </item>
-///         <item>
-///             The daemon preflight must be <see cref="DockerDaemonPreflight.Ready" />. It settles reachability,
-///             permission and the daemon-identity pin in one call, so a sweep never runs against a daemon this node
-///             has not approved — which would mean removing containers on a machine the operator never pointed us at.
-///         </item>
-///         <item>
-///             The daemon-side label filter must match this installation, which
-///             <c>DockerSandboxRuntimeProvider.SweepOrphanedContainersAsync</c> applies.
-///         </item>
-///     </list>
-///     <para>
-///         The whole body is guarded: like the process reaper, a sweep failure must never block application start.
-///     </para>
+///     Startup <see cref="IHostedService" /> that removes Development Mode containers orphaned by a previous run of THIS installation, the
+///     container-provider counterpart to <c>SandboxOrphanReaper</c>.
 /// </summary>
+/// <remarks>
+///     Separate from that reaper because the two share no mechanism — one reads on-disk markers and signals process groups, the other
+///     queries a daemon by label — and merging them would give the process provider's sweep a Docker dependency it must not have. Three
+///     gates precede any removal: Development Mode must actually RESOLVE to the container provider, so a node that never opted in does not
+///     touch the daemon even to list; the preflight must be <see cref="DockerDaemonPreflight.Ready" />, settling reachability, permission
+///     and the identity pin; and the daemon-side label filter must match this installation. The whole body is guarded.
+/// </remarks>
 internal sealed class DockerSandboxOrphanSweeper : IHostedService
 {
     private readonly ILogger<DockerSandboxOrphanSweeper> _logger;
@@ -69,9 +47,8 @@ internal sealed class DockerSandboxOrphanSweeper : IHostedService
 
     private async Task SweepAsync(CancellationToken cancellationToken)
     {
-        // Resolved through the selector rather than off the configuration key, so "unset means follow the agent role"
-        // is decided in exactly one place. A node on the process or fake provider returns something that is not the
-        // container provider, and this returns without a single daemon call.
+        // Resolved through the selector rather than off the configuration key, so "unset means follow the agent role" is decided in one
+        // place. A node on the process or fake provider returns something else, and this returns without a single daemon call.
         if (SandboxProviderSelector.ResolveDevelopment(_services) is not DockerSandboxRuntimeProvider provider)
         {
             return;

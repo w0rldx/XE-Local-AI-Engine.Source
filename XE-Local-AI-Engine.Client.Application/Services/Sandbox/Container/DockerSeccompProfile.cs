@@ -4,34 +4,15 @@ using System.Reflection;
 using System.Text.Json;
 
 /// <summary>
-///     The engine-owned seccomp profile every sandbox container is created under, and the <c>security-opt</c> string
-///     that carries it.
-///     <para>
-///         <b>Provenance.</b> The bytes in <c>seccomp-default.json</c> are Docker's own default profile, copied
-///         verbatim from <c>https://github.com/moby/profiles/blob/seccomp/v0.2.3/seccomp/default.json</c> (tag
-///         <c>seccomp/v0.2.3</c>, commit <c>836ae4d37ef2ec995c77c99fc55f5b5f3af3a897</c>, SHA-256
-///         <c>536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74</c>, fetched 2026-08-25). That module
-///         is what the daemon itself vendors — <c>moby/moby</c>'s <c>vendor/modules.txt</c> pins
-///         <c>github.com/moby/profiles/seccomp v0.2.3</c> — so the profile shipped here is the daemon's builtin, not a
-///         hand-written approximation. It moved out of <c>moby/moby</c>'s <c>profiles/seccomp/default.json</c> after
-///         v28.0.x; that path 404s on current tags, which is why this cites the split-out repository.
-///     </para>
-///     <para>
-///         <b>Why ship a copy at all, when the daemon already applies this by default?</b> Because "by default" is not
-///         verifiable. A container created with no <c>seccomp=</c> option reads back with <c>SecurityOpt: null</c>
-///         (measured against a current Docker Engine), which is the <em>same</em> read-back as a daemon started with seccomp
-///         disabled entirely. Asking for the profile explicitly is the only way the fail-closed read-back in
-///         <c>DockerSandboxHardening.VerifySecurityOptions</c> can tell a confined container from an unconfined one.
-///     </para>
-///     <para>
-///         <b>The Engine API takes profile CONTENT, not a path.</b> The <c>docker</c> CLI reads the file named by
-///         <c>--security-opt seccomp=&lt;path&gt;</c> and sends its JSON; the daemon never opens a host path on the
-///         client's behalf. Measured against a current Docker Engine: a container created with
-///         <c>--security-opt seccomp=/tmp/default.json</c> inspects back as <c>seccomp={"defaultAction":…}</c> — the
-///         compacted JSON — and never as the path. So there is nothing to materialize on disk for the daemon to read,
-///         and this profile stays an embedded resource rather than a file written into the node data directory.
-///     </para>
+///     The engine-owned seccomp profile every sandbox container is created under, and the <c>security-opt</c> string that carries it.
 /// </summary>
+/// <remarks>
+///     PROVENANCE: <c>seccomp-default.json</c> is Docker's own default profile, copied verbatim from <c>moby/profiles</c> tag
+///     <c>seccomp/v0.2.3</c>, commit <c>836ae4d37ef2ec995c77c99fc55f5b5f3af3a897</c>, SHA-256
+///     <c>536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74</c> — the split-out repository, not <c>moby/moby</c>, whose
+///     own path 404s on current tags. A copy ships because "applied by default" is not VERIFIABLE: no <c>seccomp=</c> option reads back
+///     <c>SecurityOpt: null</c>, as a seccomp-disabled daemon does. Vendoring evidence and API shape: wiki 12 section 7.4.
+/// </remarks>
 internal static class DockerSeccompProfile
 {
     /// <summary>The <c>security-opt</c> key the daemon renders a seccomp profile under, in both directions.</summary>
@@ -45,12 +26,11 @@ internal static class DockerSeccompProfile
     // Loaded once. The profile is ~13 KB on disk and ~9 KB compacted, and every container create carries it.
     private static readonly Lazy<string> LazyOption = new(BuildOption, LazyThreadSafetyMode.ExecutionAndPublication);
 
-    /// <summary>
-    ///     The <c>seccomp=&lt;profile&gt;</c> security option to pass at create time. Throws
-    ///     <see cref="DockerRuntimeException" /> when the embedded asset is missing or unparseable, because a create
-    ///     that silently dropped the profile would produce a container the read-back cannot distinguish from an
-    ///     unconfined one.
-    /// </summary>
+    /// <summary>The <c>seccomp=&lt;profile&gt;</c> security option to pass at create time.</summary>
+    /// <remarks>
+    ///     Throws <see cref="DockerRuntimeException" /> when the embedded asset is missing or unparseable, because a create that silently
+    ///     dropped the profile would produce a container the read-back cannot distinguish from an unconfined one.
+    /// </remarks>
     internal static string SecurityOption => LazyOption.Value;
 
     /// <summary>
@@ -68,15 +48,12 @@ internal static class DockerSeccompProfile
         return value.Length > 0 && !value.Equals(Unconfined, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    ///     Reads the embedded profile and returns the option string, compacted.
-    ///     <para>
-    ///         Compacted because that is what the daemon stores and echoes back: the CLI runs the file through
-    ///         <c>json.Compact</c> before sending it, so a compacted request makes the inspect read-back
-    ///         byte-identical to what was asked for rather than merely equivalent to it. The whitespace is also ~4 KB
-    ///         per create that nothing reads.
-    ///     </para>
-    /// </summary>
+    /// <summary>Reads the embedded profile and returns the option string, compacted.</summary>
+    /// <remarks>
+    ///     Compacted because that is what the daemon stores and echoes back: the CLI runs the file through <c>json.Compact</c> before
+    ///     sending, so a compacted request makes the inspect read-back byte-identical to what was asked for rather than merely equivalent.
+    ///     The whitespace is also ~4 KB per create that nothing reads.
+    /// </remarks>
     private static string BuildOption()
     {
         var assembly = Assembly.GetExecutingAssembly();

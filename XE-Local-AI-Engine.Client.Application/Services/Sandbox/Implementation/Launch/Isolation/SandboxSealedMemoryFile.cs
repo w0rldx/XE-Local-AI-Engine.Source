@@ -4,20 +4,16 @@ using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
 /// <summary>
-///     An anonymous in-memory file holding one synthetic <c>/etc</c> entry, sealed against modification and handed to
-///     <c>bwrap</c> as a descriptor for <c>--ro-bind-data</c>.
-///     <para>
-///         Why not a real file: the four entries the jail needs (<c>passwd</c>, <c>group</c>, <c>nsswitch.conf</c>,
-///         <c>hosts</c>) must contain what THIS layer decided they contain, and a file on disk is a place where
-///         something else can intervene between writing it and <c>bwrap</c> reading it. A <c>memfd</c> has no name in
-///         any filesystem, so nothing can open it; sealing it with <c>F_SEAL_WRITE</c> and friends means the engine
-///         itself cannot change it afterwards either, so the bytes <c>bwrap</c> reads are provably the bytes this
-///         layer wrote.
-///     </para>
-///     <para>
-///         Like the bind descriptors it is deliberately NOT close-on-exec: <c>bwrap</c> is three execs away.
-///     </para>
+///     An anonymous in-memory file holding one synthetic <c>/etc</c> entry, sealed against modification and handed to <c>bwrap</c> as a
+///     descriptor for <c>--ro-bind-data</c>.
 /// </summary>
+/// <remarks>
+///     Not a real file, because the four entries the jail needs must contain what THIS layer decided they contain and a file on disk is a
+///     place something else can intervene between the write and <c>bwrap</c>'s read. A <c>memfd</c> has no name in any filesystem, so
+///     nothing can open it, and sealing it with <c>F_SEAL_WRITE</c> and friends stops the engine changing it either, so the bytes
+///     <c>bwrap</c> reads are provably the bytes this layer wrote. Like the bind descriptors it is deliberately NOT close-on-exec:
+///     <c>bwrap</c> is three execs away.
+/// </remarks>
 internal sealed class SandboxSealedMemoryFile : IDisposable
 {
     // memfd_create(2) / fcntl(2) sealing.
@@ -91,12 +87,12 @@ internal sealed class SandboxSealedMemoryFile : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Returns the file position to zero. <c>bwrap</c> reads the descriptor to EOF and the position is shared with
-    ///     every process that inherited it, so a descriptor that has already been read once would otherwise deliver an
-    ///     empty file. Each launch builds its own memory files, so this is belt-and-braces rather than load-bearing —
-    ///     but an empty <c>/etc/passwd</c> is a silent, confusing failure and it costs one syscall to make impossible.
-    /// </summary>
+    /// <summary>Returns the file position to zero.</summary>
+    /// <remarks>
+    ///     <c>bwrap</c> reads the descriptor to EOF and the position is shared with every process that inherited it, so one already read
+    ///     would deliver an empty file. Each launch builds its own memory files, so this is belt-and-braces — but an empty
+    ///     <c>/etc/passwd</c> is a silent, confusing failure and one syscall makes it impossible.
+    /// </remarks>
     public void RewindForLaunch()
     {
         if (_fileDescriptor >= 0)

@@ -1,17 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     The node-wide sandbox ceilings, bound from the <c>LocalContainer</c> section. The byte budgets cover the two
-///     directions data enters the jail, which are genuinely different controls: <see cref="MaxCopyFileBytes" /> bounds
-///     what the ENGINE copies in from the host, and <see cref="MaxJailDiskBytes" /> bounds what the sandboxed CHILD
-///     writes for itself. <see cref="ToolchainLimits" /> bounds what it may consume while doing so.
-///     <para>
-///         This is the section a node-wide sandbox ceiling belongs in, and the reason
-///         <see cref="ToolchainLimits" /> lives here rather than in either per-feature sandbox section: AgentHome,
-///         work sessions and Development Mode all read it, and <c>AgentHome:Sandbox</c> / <c>Development:Sandbox</c>
-///         would have had to mirror it and then drift.
-///     </para>
-/// </summary>
+/// <summary>The node-wide sandbox ceilings, bound from the <c>LocalContainer</c> section.</summary>
+/// <remarks>
+///     The byte budgets cover the two directions data enters the jail, which are genuinely different controls:
+///     <see cref="MaxCopyFileBytes" /> bounds what the ENGINE copies in from the host, <see cref="MaxJailDiskBytes" /> what the sandboxed
+///     CHILD writes for itself, and <see cref="ToolchainLimits" /> what it may consume while doing so. That last one lives here rather than
+///     in either per-feature sandbox section because AgentHome, work sessions and Development Mode all read it, and a mirrored copy in each
+///     would drift.
+/// </remarks>
 public sealed record LocalContainerOptions
 {
     public const string SectionName = "LocalContainer";
@@ -26,23 +22,24 @@ public sealed record LocalContainerOptions
     public long MaxCopyFileBytes { get; init; } = DefaultMaxCopyFileBytes;
 
     /// <summary>
-    ///     How many bytes a sandbox's COMMANDS may leave in its jail directory before the one running is terminated.
-    ///     Measured as the jail's occupancy above what it held when the sandbox ran its first command, so a jail that
-    ///     legitimately starts non-empty after copy-in is not charged for content it did not write — and so a sandbox
-    ///     cannot accumulate an unbounded amount by running one command after another, each staying just under the
-    ///     line. Defaults to 512 MiB; a non-positive value disables the watchdog.
-    ///     <para>
-    ///         This is the NODE-WIDE ceiling — the operator's. A single sandbox may ask for a tighter one of its own
-    ///         through <see cref="SandboxCreateRequest.MaxJailDiskBytes" />; nothing can ask for a looser one.
-    ///     </para>
+    ///     How many bytes a sandbox's COMMANDS may leave in its jail directory before the one running is terminated; 512 MiB by default,
+    ///     and a non-positive value disables the watchdog.
     /// </summary>
+    /// <remarks>
+    ///     Measured as the jail's occupancy above what it held when the sandbox ran its first command, so a jail that legitimately starts
+    ///     non-empty after copy-in is not charged for content it did not write, and a sandbox cannot accumulate an unbounded amount by
+    ///     running one command after another just under the line. This is the NODE-WIDE operator ceiling: a sandbox may ask for a tighter
+    ///     one through <see cref="SandboxCreateRequest.MaxJailDiskBytes" />, never a looser one.
+    /// </remarks>
     public long MaxJailDiskBytes { get; init; } = DefaultMaxJailDiskBytes;
 
     /// <summary>
-    ///     CPU / memory / process-count ceilings for every workload that runs a real toolchain — AgentHome, Coder, work
-    ///     sessions and Development Mode. Each member is optional and each unset one is derived from this host at
-    ///     startup; see <see cref="SandboxToolchainLimits" /> for the derivation and for the measurement that made
-    ///     these separate from <c>run_python</c>'s.
+    ///     CPU, memory and process-count ceilings for every workload that runs a real toolchain — AgentHome, Coder, work sessions and
+    ///     Development Mode.
     /// </summary>
+    /// <remarks>
+    ///     Each member is optional and each unset one is derived from this host at startup; <see cref="SandboxToolchainLimits" /> carries
+    ///     the derivation and the measurement that made these separate from <c>run_python</c>'s.
+    /// </remarks>
     public SandboxToolchainLimits ToolchainLimits { get; init; } = new();
 }

@@ -26,6 +26,13 @@ internal sealed class DevelopmentAttemptLiveProgress
     private long _patchByteCount;
     private int _providerRoundCount = 1;
     private int _toolCallCount;
+    /// <summary>
+    ///     Whether the first "model is reasoning" notice has gone out.
+    /// </summary>
+    /// <remarks>
+    ///     A flag rather than a test of <c>_lastOutputPublishAtUtc</c> against 0, because 0 is a real instant (the
+    ///     Unix epoch) and a sentinel colliding with a legal value fires twice when they meet.
+    /// </remarks>
     private bool _hasPublishedReasoning;
 
     public DevelopmentAttemptLiveProgress(DevelopmentExecutionSnapshot execution,
@@ -55,15 +62,8 @@ internal sealed class DevelopmentAttemptLiveProgress
             _pendingOutput.Append(update.Text);
         }
 
-        // Reasoning is NOT part of Text: it arrives as TextReasoningContent, which ChatResponseUpdate.Text does not
-        // concatenate. A reasoning model between two tool calls therefore produced updates that appended nothing,
-        // published nothing, and left the whole live panel — every metric tile, and the stall age itself — frozen on
-        // the last tool call's values while generation ran on. Measured live on 2026-07-31: 32,106 decoded tokens in
-        // one provider round with the UI static for over three minutes and "CONNECTED" still showing.
-        //
-        // The reasoning text itself is deliberately not forwarded as output: it is not the attempt's answer, and the
-        // live channel is bounded. What is forwarded is the fact that the model is still working, which is the part
-        // the operator needs to distinguish "thinking" from "hung".
+        // Reasoning arrives as TextReasoningContent, which ChatResponseUpdate.Text does not concatenate, so without
+        // this probe a reasoning model freezes the whole live panel mid-round: 32,106 decoded tokens, 3 minutes static.
         var reasoning = update.Contents.OfType<TextReasoningContent>().Any(static content => !string.IsNullOrEmpty(content.Text));
         var usage = update.Contents.OfType<UsageContent>().LastOrDefault()?.Details;
         if (_pendingOutput.Length > 0 && (now - _lastOutputPublishAtUtc >= OutputPublishInterval.TotalMilliseconds || usage is not null))
@@ -76,10 +76,8 @@ internal sealed class DevelopmentAttemptLiveProgress
         }
         else if (reasoning && (!_hasPublishedReasoning || now - _lastOutputPublishAtUtc >= OutputPublishInterval.TotalMilliseconds))
         {
-            // The first reasoning update publishes immediately — "the model started thinking" is the transition the
-            // operator is waiting on, and delaying it by a cadence window is exactly the silence being fixed. Tracked
-            // by its own flag rather than by testing _lastOutputPublishAtUtc against 0, because 0 is a real instant
-            // (the Unix epoch) and a sentinel that collides with a legal value fires twice when they meet.
+            // The first reasoning update publishes at once: "the model started thinking" is the transition the operator
+            // waits on. Only that fact goes out — the text is not the attempt's answer and the live channel is bounded.
             _hasPublishedReasoning = true;
             _lastOutputPublishAtUtc = now;
             Publish(DevelopmentAttemptLiveUpdateKind.Progress, "Model is reasoning.");

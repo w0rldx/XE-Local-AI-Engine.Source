@@ -26,19 +26,20 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     private const int WorkspaceManifestVersion = 2;
 
-    /// <summary>
-    ///     The in-sandbox root the per-task runtime directories are requested at. A <em>requested</em> path: the process
-    ///     provider identity-maps and reports the host path instead, and only a provider with a mount layer places
-    ///     anything here. Chosen to sit outside the workspace and the scratch tmpfs so it cannot shadow either.
-    /// </summary>
+    /// <summary>The in-sandbox root the per-task runtime directories are requested at.</summary>
+    /// <remarks>
+    ///     A <em>requested</em> path: the process provider identity-maps and reports the host path instead, and only
+    ///     a provider with a mount layer places anything here. It sits outside the workspace and the scratch tmpfs so
+    ///     it cannot shadow either.
+    /// </remarks>
     private const string RuntimeMountRoot = "/xe-runtime";
 
-    /// <summary>
-    ///     <c>.git/config</c> named in the sandbox-path namespace, whose root IS the workspace. A provider with a mount
-    ///     layer derives the real target from the host path (it is inside the trusted workspace, so the engine must not
-    ///     have to know what that workspace is called inside the sandbox); this is the neutral spelling of the same
-    ///     place.
-    /// </summary>
+    /// <summary><c>.git/config</c> named in the sandbox-path namespace, whose root IS the workspace.</summary>
+    /// <remarks>
+    ///     A provider with a mount layer derives the real target from the host path, which is inside the trusted
+    ///     workspace, so the engine never has to know what that workspace is called inside the sandbox; this is the
+    ///     neutral spelling of the same place.
+    /// </remarks>
     private const string GitConfigSandboxPath = "/.git/config";
 
     /// <summary>Caps the git stderr excerpt carried in a failure message. See <c>RedactGitError</c>.</summary>
@@ -46,9 +47,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     /// <summary>
     ///     The engine-owned directory, inside <c>RuntimePath</c> and never mounted as a directory, holding one empty
-    ///     file per shadowed credential. It sits outside the workspace on purpose: the whole point of the shadow is
-    ///     that the real file is left byte-unchanged, so the substitute must not be in the tree the diff model reads.
+    ///     file per shadowed credential.
     /// </summary>
+    /// <remarks>
+    ///     It sits outside the workspace because the whole point of the shadow is that the real file is left
+    ///     byte-unchanged, so the substitute must not be in the tree the diff model reads.
+    /// </remarks>
     private const string ShadowDirectoryName = "shadow";
 
     /// <summary>
@@ -57,44 +61,28 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// </summary>
     private const int MaxShadowedSecrets = 32;
 
-    /// <summary>
-    ///     The per-task runtime subdirectories a build needs, and the reason the control-manifest exclusion is satisfied at zero cost.
-    ///     <para>
-    ///         <c>workspace.json</c> — the workspace CONTROL MANIFEST — sits directly in <c>RuntimePath</c>, and it
-    ///         must be unreachable from inside any sandbox. Mounting these four named subdirectories rather
-    ///         than their parent is what keeps it out. Nothing inside a sandbox needs it: every accessor is host-side in
-    ///         <see cref="PrepareAsync" /> and runs before the sandbox exists.
-    ///     </para>
-    /// </summary>
+    /// <summary>The per-task runtime subdirectories a build needs.</summary>
+    /// <remarks>
+    ///     <c>workspace.json</c>, the workspace control manifest, sits directly in <c>RuntimePath</c> and must be
+    ///     unreachable from inside any sandbox; mounting these four named subdirectories rather than their parent is
+    ///     what keeps it out. Nothing inside a sandbox needs it, every accessor being host-side in
+    ///     <see cref="PrepareAsync" /> and running before the sandbox exists.
+    /// </remarks>
     private static readonly string[] RuntimeDirectoryNames = ["home", "tmp", "nuget", "dotnet"];
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     The MSBuild and NuGet files whose discovery walks <em>up</em> from a project directory until the first hit,
-    ///     written empty one level above every managed workspace so that walk stops at the workspace instead of
-    ///     escaping into whatever happens to be above the node's data directory.
-    ///     <para>
-    ///         Reproduced live on 2026-07-31 with the process sandbox provider, which is the shipped default. Running
-    ///         from a source checkout puts the node's data root inside this repository, so a registered repository's
-    ///         <c>dotnet restore</c> inherited <em>this</em> repository's <c>Directory.Packages.props</c> and failed
-    ///         <c>NU1008</c> — Central Package Management demanded a <c>PackageVersion</c> item for a package the
-    ///         target repository declares perfectly legally inline. Validation was measuring the host's build
-    ///         configuration, not the repository under test. The container provider never had this: its mount root
-    ///         <em>is</em> the workspace, so the walk already terminated there.
-    ///     </para>
-    ///     <para>
-    ///         A repository that brings its own copy of one of these files is unaffected — MSBuild and NuGet stop at
-    ///         the first file found, which is the repository's own, one level below this barrier. The barrier is only
-    ///         ever read for repositories that declare nothing, and for those "no central package management, no
-    ///         inherited props or targets" is the correct answer rather than an imposed one.
-    ///     </para>
-    ///     <para>
-    ///         It lives one level ABOVE the workspace on purpose. Written inside it, every file here would appear in
-    ///         <c>git status</c> as an untracked change and land in the attempt's changed-file manifest — the evidence
-    ///         the whole feature is built on.
-    ///     </para>
+    ///     The MSBuild and NuGet files whose discovery walks <em>up</em> from a project directory, written empty one
+    ///     level above every managed workspace so that walk stops there.
     /// </summary>
+    /// <remarks>
+    ///     Without it, on the process provider, a node data root inside another repository makes a registered
+    ///     repository's <c>dotnet restore</c> inherit that repository's <c>Directory.Packages.props</c> and fail
+    ///     <c>NU1008</c> — validation measuring the host's build configuration, not the repository under test. A
+    ///     repository bringing its own copy is unaffected, MSBuild and NuGet stopping at the first file found one
+    ///     level below. It lives ABOVE the workspace, or every file here would land in the changed-file manifest.
+    /// </remarks>
     private static readonly ConfigurationFile[] BuildConfigurationBarrier =
     [
         new("Directory.Build.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n"),
@@ -131,15 +119,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _secretsSink = secretsSink ?? throw new ArgumentNullException(nameof(secretsSink));
 
-        // The product's single definition of "this file may hold a credential", shared with the workspace tools' read
-        // gate and AgentHome's copy filter. Defaulted rather than required so a directly constructed provider behaves
-        // exactly as the DI-resolved one does; there is only ever one implementation.
+        // The product's single definition of "this file may hold a credential", shared with the tools' read gate and
+        // AgentHome's copy filter. Defaulted so a directly constructed provider behaves as the DI-resolved one.
         _exclusions = exclusions ?? new SensitiveFileExclusionService();
 
-        // Defaulted for the same reason `exclusions` is: a directly constructed provider must behave exactly as the
-        // DI-resolved one, and both of these are bound unconditionally, so the fallbacks are the shipped values rather
-        // than a second configuration path. The safe posture is also the default one — RequireEgressDenial off, and the
-        // node's own ceilings.
+        // Defaulted for the reason `exclusions` is, and all of these are bound unconditionally, so the fallbacks are
+        // the shipped values rather than a second configuration path, safe posture included.
         _sandboxOptions = (sandboxOptions ?? Options.Create(new DevelopmentSandboxOptions())).Value;
         _ceilingDefaults = (ceilingDefaults ?? Options.Create(new ComputeOptions())).Value;
         _nodeOptions = (nodeOptions ?? Options.Create(new LocalContainerOptions())).Value;
@@ -182,11 +167,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         Directory.CreateDirectory(runtimePath);
         await EnsureBuildConfigurationBarrierAsync(Path.GetDirectoryName(worktreePath)!, cancellationToken);
 
-        // Created HERE and not only in DevelopmentWorkspaceTools, which runs after this method returns. A provider with
-        // a mount layer binds these directories at create time, and a bind source the daemon has to invent is created
-        // with the DAEMON's ownership — under a rootful daemon that is root, and the container then cannot write its
-        // own HOME. The tools' own EnsureRuntimeDirectories stays: it is what keeps a directly constructed tools
-        // instance working, and creating an existing directory costs nothing.
+        // Created here, not only in the tools that run after this returns: a mount layer binds these at create time,
+        // and a bind source the daemon invents gets the daemon's ownership, so the container cannot write its HOME.
         foreach (var name in RuntimeDirectoryNames)
         {
             Directory.CreateDirectory(Path.Combine(runtimePath, name));
@@ -235,11 +217,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             baseCommit = preserved.BaseCommit;
         }
 
-        // BEFORE the first host-side Git command touches a workspace a previous attempt could have written to. The
-        // validation below runs `rev-parse` and `symbolic-ref` on the HOST with this workspace as the working
-        // directory, so a repository-local exec-bearing key would be executing here, not in the sandbox. Also covers
-        // the freshly cloned case, where it is a cheap no-op — the clone's own config already contains nothing but the
-        // preserved keys once `origin` has been removed.
+        // Before the first host-side Git command touches a workspace a previous attempt could have written to: the
+        // validation below runs on the HOST, so a repository-local exec-bearing key would execute here, not sandboxed.
         await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(worktreePath, cancellationToken);
 
         await ValidatePreservedWorktreeAsync(git,
@@ -248,18 +227,15 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             baseCommit,
             cancellationToken);
 
-        // Derived from the index and rewritten every preparation, immediately after the config rewrite above and before
-        // any command of the validation gate runs. Without it, `git diff --check` — the FIRST command of every .NET
-        // profile — reports trailing whitespace on every changed line of a repository that legitimately stores CRLF,
-        // and the gate fails at command one on a correct change.
+        // Derived from the index and rewritten every preparation, after the config rewrite and before the gate's first
+        // command — which is `git diff --check`, and fails every changed line of a CRLF repository without it.
         await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, worktreePath, cancellationToken);
 
         var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken);
         if (manifest.Version != WorkspaceManifestVersion || manifest.SelectedFolderId is null)
         {
-            // Upgrading a v1 manifest in place. Warm state rides along with `with` rather than being dropped by a
-            // fresh construction: a manifest that already records a warm for this base commit must not be made to
-            // look un-warmed by an unrelated version bump.
+            // Upgrading an older manifest in place. Warm state rides along with `with` rather than being dropped by a
+            // fresh construction, or a version bump would make an already-warmed base commit look un-warmed.
             manifest = manifest with
             {
                 Version = WorkspaceManifestVersion,
@@ -327,10 +303,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             },
             Mounts = BuildMounts(runtimePath, worktreePath, secrets),
 
-            // The node's ceilings wherever the backend can impose them, through the helper every create site shares so
-            // this request cannot disagree with the Development declaration. Read
-            // SandboxResourceCeilings before raising or lowering them: the node defaults are sized for a two-second
-            // run_python call and a `dotnet build` needs materially more of both memory and tasks.
+            // The node's ceilings wherever the backend can impose them, through the helper every create site shares.
+            // Read SandboxResourceCeilings first: its defaults are sized for run_python, not for a `dotnet build`.
             ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
                 _sandbox.Capabilities,
                 _ceilingDefaults,
@@ -353,19 +327,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// <summary>
     ///     The committed files in the managed workspace whose names mark them as credential-bearing, as
     ///     repository-relative paths, sorted.
-    ///     <para>
-    ///         Read from <c>git ls-files</c> rather than by walking the directory, and that is the precise question
-    ///         rather than an optimization. The workspace is a CLONE, so only tracked content arrives — an untracked
-    ///         <c>.env</c> in the operator's repository never rides along, and the real exposure is a
-    ///         <em>committed</em> one. Asking the index also bounds the work by the repository's own size instead of by
-    ///         whatever a build has since written into <c>obj/</c> and <c>node_modules/</c>.
-    ///     </para>
-    ///     <para>
-    ///         Every path SEGMENT is tested, not just the file name, so a file under <c>.ssh/</c> or <c>.aws/</c> is
-    ///         found — those entries name directories, and that is how
-    ///         <see cref="ISensitiveFileExclusionService.IsSecret" /> is applied everywhere else.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Read from <c>git ls-files</c> rather than by walking the directory, which is the precise question: only
+    ///     tracked content reaches a clone, a committed credential being the real exposure, and the index bounds the
+    ///     work by the repository's size rather than by what a build wrote into <c>obj/</c>. Every path SEGMENT is
+    ///     tested, so a file under <c>.ssh/</c> is found, as elsewhere for
+    ///     <see cref="ISensitiveFileExclusionService.IsSecret" />.
+    /// </remarks>
     private async Task<IReadOnlyList<string>> DetectCommittedSecretsAsync(HostGitRunner git,
         string worktreePath,
         CancellationToken cancellationToken)
@@ -389,35 +358,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     The egress posture requested for the AGENT-FACING sandbox: <see cref="SandboxNetworkPolicy.None" /> where
     ///     the backend advertises real network confinement, <see cref="SandboxNetworkPolicy.Unrestricted" /> where it
     ///     does not.
-    ///     <para>
-    ///         This used to be an unconditional <c>Unrestricted</c> with a recorded deferral naming two missing halves.
-    ///         Both have landed: <see cref="EnsureWarmRestoreAsync" /> fills the per-task package cache from the base
-    ///         commit before this sandbox exists, and
-    ///         <see cref="DevelopmentDependencyManifestPolicy" /> fails validation for an attempt that changes what
-    ///         would have to be re-resolved. So a denied sandbox now runs <c>--no-restore</c> builds and
-    ///         <c>--no-build</c> tests against a cache that is already complete, and denying egress is a hardening win
-    ///         rather than an outage.
-    ///     </para>
-    ///     <para>
-    ///         <strong>Capability-gated, per the operator's 2026-08-25 ruling (Option B), and this is a real
-    ///         limitation rather than defensive coding.</strong> A backend fails a confinement request it cannot honour
-    ///         CLOSED, so an unconditional <c>None</c> would not harden Development Mode on Windows — or on any Linux
-    ///         host whose <c>unshare</c> probe failed — it would stop it running there at all, since the shipped
-    ///         configuration resolves those nodes to the process backend. The honest consequence is that on such a node
-    ///         the attempt still has egress. What makes that acceptable rather than silent is that the Development
-    ///         status surface reports the posture the provider actually SERVED, so an operator can see which of the two
-    ///         they got. A node that wants Option A instead sets
-    ///         <see cref="DevelopmentSandboxOptions.RequireEgressDenial" />: denial then becomes a precondition, and a
-    ///         node that cannot deny refuses the attempt with a message naming that key rather than running it with the
-    ///         host's network. The warm-restore sandbox is exempt from that switch by design — see the create request in
-    ///         <see cref="EnsureWarmRestoreAsync" />.
-    ///     </para>
-    ///     <para>
-    ///         The decision itself is not made here: <see cref="SandboxEgressPolicy" /> is the one place AgentHome, work
-    ///         sessions and this consumer all read, down to the same capability flag. Three consumers deciding the same
-    ///         question three ways is how one of them silently stops matching what the backend can serve.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Capability-gated, a real limitation rather than defensive coding: a backend fails a request it cannot
+    ///     honour CLOSED, so an unconditional <c>None</c> would remove Development Mode from every node resolved to
+    ///     the process backend, where the attempt therefore still has egress — reported as the posture SERVED.
+    ///     <see cref="DevelopmentSandboxOptions.RequireEgressDenial" /> makes denial a precondition instead, and
+    ///     <see cref="SandboxEgressPolicy" /> holds the decision, so no consumer can stop matching the backend.
+    /// </remarks>
     private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy() =>
         SandboxEgressPolicy.Resolve(_sandbox.Capabilities,
             _sandboxOptions.RequireEgressDenial,
@@ -427,30 +375,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// <summary>
     ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived
     ///     sandbox that has egress, so the agent-facing sandbox created afterwards does not need any.
-    ///     <para>
-    ///         <strong>Why running the repository's own restore with network is sound here and only here.</strong>
-    ///         <c>dotnet restore</c> evaluates repository-authored MSBuild, which is code. At warm time that content is
-    ///         the operator's own base commit — already trusted to the degree the whole feature trusts the registered
-    ///         repository — and the agent has written nothing yet. The gate is therefore not "is this code safe" but
-    ///         "is this tree provably still the base commit", which is what the clean-tracked-tree check below decides.
-    ///         The moment the agent has written anything, this method must not run, and the recorded warm is what
-    ///         stops it.
-    ///     </para>
-    ///     <para>
-    ///         The cache survives the sandbox because it lives in the per-task <c>nuget</c> / <c>dotnet</c> runtime
-    ///         directories (<c>DevelopmentWorkspaceTools.BuildEnvironment</c>) and in the worktree's own
-    ///         <c>obj/</c> trees, none of which the sandbox owns. That is what lets the later <c>--no-restore</c> build
-    ///         and <c>--no-build</c> test work with no network.
-    ///     </para>
-    ///     <para>
-    ///         Warm state lives in <c>workspace.json</c>, which sits in <c>RuntimePath</c> and is never mounted — so
-    ///         "has this base commit been warmed" cannot be answered, or forged, from inside any sandbox.
-    ///     </para>
-    ///     <para>
-    ///         A profile that declares no restore command (<c>generic-git</c>) skips this entirely: there is nothing to
-    ///         warm and a second sandbox would be pure cost.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Running the repository's own restore with network is sound here and only here: at warm time the tree is
+    ///     the operator's base commit and the agent has written nothing, so the gate is not "is this code safe" but
+    ///     "is this tree provably still the base commit", which the clean-tracked-tree check decides. The cache
+    ///     outlives the sandbox in the per-task runtime directories and the worktree's <c>obj/</c> trees, and the warm
+    ///     record lives in the never-mounted <c>workspace.json</c>. A profile with no restore command skips this.
+    /// </remarks>
     private async Task EnsureWarmRestoreAsync(HostGitRunner git,
         DevelopmentExecutionSnapshot snapshot,
         string identity,
@@ -473,9 +405,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             return;
         }
 
-        // Untracked and ignored files are excluded deliberately: a restore writes obj/ and nothing else, so
-        // "no tracked file differs from the base commit" is the precise predicate, and demanding a pristine directory
-        // would refuse every second attempt on a workspace that has legitimately been built once.
+        // Untracked and ignored files are excluded deliberately: a restore writes obj/ and nothing else, so demanding
+        // a pristine directory would refuse every second attempt on a workspace legitimately built once.
         var status = await git.RunAsync(worktreePath,
             AgentHomeGit.Arguments("status", "--porcelain", "--untracked-files=no"),
             cancellationToken);
@@ -483,9 +414,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         if (!string.IsNullOrWhiteSpace(status.StandardOutput))
         {
             // Reachable only after a crash between the clone and the first warm. Refusing is the only safe answer:
-            // warming against agent-written content is exactly the thing this whole design exists to prevent, and a
-            // silent skip would leave the attempt to fail later with "restore could not reach the network", naming
-            // the symptom instead of the cause.
+            // warming against agent-written content is what this design exists to prevent, and a skip names a symptom.
             throw new DevelopmentWorkspaceSecurityException("The managed Development worktree has uncommitted tracked changes and its dependencies have not been warmed for this base "
                                                             + "commit. Reset the task's workspace so the warm restore can run against the base commit alone.");
         }
@@ -502,16 +431,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             },
             RuntimeProfile = WarmRuntimeProfile,
 
-            // The one sandbox in Development Mode that still asks for egress, and the reason the agent-facing one no
-            // longer has to. Unconditional rather than capability-gated: a warm that silently ran without network
-            // would populate nothing and turn every later build into a confusing failure.
-            //
-            // EXEMPT FROM Development:Sandbox:RequireEgressDenial BY DESIGN, and this is the one place that exemption
-            // is implemented. That switch makes denial a precondition for the AGENT-FACING sandbox; applying it here
-            // would deny the network to the very restore whose job is to fill the cache from the base commit, so a
-            // node that set the switch would populate nothing and fail every later --no-restore build. What keeps the
-            // exemption sound is that this sandbox never runs agent-written content: EnsureWarmRestoreAsync refuses
-            // outright unless the worktree still matches the base commit.
+            // The one Development sandbox that asks for egress, unconditionally and exempt from RequireEgressDenial by
+            // design: it never runs agent-written content, and denying it would empty the cache every build relies on.
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
@@ -544,9 +465,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 SandboxHandle = warmHandle
             };
 
-            // Routed through the same tools the attempt uses, so the warm runs under the same environment, the same
-            // per-command budget and the same post-command workspace invariants. Composing a second execution path
-            // here is how the warm would drift from what the attempt later re-runs with --no-restore.
+            // Routed through the same tools the attempt uses, so the warm shares its environment, per-command budget
+            // and post-command invariants; a second execution path is how it would drift from the later --no-restore.
             var tools = new DevelopmentWorkspaceTools(_sandbox, warmSession, Options.Create(_options), profile);
             _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken);
 
@@ -573,29 +493,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             cancellationToken);
     }
 
-    /// <summary>
-    ///     The engine-generated mounts this feature needs beyond the workspace itself.
-    ///     <para>
-    ///         The four runtime subdirectories are named individually rather than by mounting their parent, and that is
-    ///         the whole of the control-state exclusion: <c>workspace.json</c> lives in the parent and stays outside
-    ///         every sandbox because the parent is never mounted.
-    ///     </para>
-    ///     <para>
-    ///         <c>.git/config</c> is requested READ-ONLY, and only from a provider that advertises
-    ///         <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" />. It is a nested file mount layered over
-    ///         the read-write workspace: the work tree stays writable so the agent can edit, <c>.git/index</c> stays
-    ///         writable so <c>git apply --index</c> still works, and <c>.git/config</c> becomes both unwritable and
-    ///         unremovable — a filter driver that cannot be DEFINED cannot run, whatever an in-tree
-    ///         <c>.gitattributes</c> selects.
-    ///     </para>
-    ///     <para>
-    ///         The capability gate is not defensive coding. A provider with no mount layer fails a read-only request
-    ///         closed rather than serving it writable, so requesting it unconditionally would kill Development Mode
-    ///         outright on the process provider it runs on today — which is exactly why the engine-side rewrite in
-    ///         <see cref="DevelopmentWorkspaceGitConfig" /> exists as the provider-independent half rather than as a
-    ///         belt-and-braces extra.
-    ///     </para>
-    /// </summary>
+    /// <summary>The engine-generated mounts this feature needs beyond the workspace itself.</summary>
+    /// <remarks>
+    ///     Naming the four runtime subdirectories individually rather than mounting their parent is the whole of the
+    ///     control-state exclusion, <c>workspace.json</c> living in that unmounted parent. <c>.git/config</c> is a
+    ///     nested read-only file mount over the read-write workspace, requested only where
+    ///     <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" /> is advertised: a filter driver that
+    ///     cannot be DEFINED cannot run, and a provider without a mount layer fails the request closed.
+    /// </remarks>
     private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath, IReadOnlyList<string> detectedSecrets)
     {
         var mounts = RuntimeDirectoryNames
@@ -626,9 +531,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
         if (detectedSecrets.Count > MaxShadowedSecrets)
         {
-            // The cap bounds the MOUNT LIST, so it is checked only where a mount list is being generated. Failing
-            // closed above it rather than shadowing the first 32 is the point: a partial shadow reads as a control
-            // and is not one.
+            // The cap bounds the MOUNT LIST, so it is checked only where one is generated. Failing closed above it
+            // rather than shadowing the first 32 is the point: a partial shadow reads as a control and is not one.
             throw new DevelopmentWorkspaceSecurityException($"The registered repository has {detectedSecrets.Count} committed files whose names mark them as credentials, above the "
                                                             + $"{MaxShadowedSecrets} this engine will neutralize with read-only mounts. Remove them from the repository, or run this "
                                                             + "project on a node whose sandbox has no mount layer, where they are reported rather than shadowed.");
@@ -638,9 +542,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         Directory.CreateDirectory(shadowRoot);
         foreach (var relativePath in detectedSecrets)
         {
-            // One empty file per shadowed path, named by the hash of that path so a second prepare reuses it and two
-            // shadows never share a mount source — a shared source would make SandboxHandle.TryResolveSandboxPath
-            // answer for one of them arbitrarily.
+            // One empty file per shadowed path, named by that path's hash so a second prepare reuses it and no two
+            // shadows share a mount source, which would make the handle's path resolution answer arbitrarily.
             var shadowPath = Path.Combine(shadowRoot, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(relativePath)))[..32]);
             if (!File.Exists(shadowPath))
             {
@@ -651,10 +554,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             {
                 HostPath = shadowPath,
 
-                // Workspace-RELATIVE: the source is engine-generated content outside the workspace and the target is a
-                // path inside it, which is the one shape the provider's host-path derivation cannot express. The real
-                // file on disk is untouched, so the diff model sees no change and an apply cannot delete the
-                // operator's own secret.
+                // Workspace-RELATIVE: an engine-generated source outside the workspace with a target inside it is the
+                // one shape host-path derivation cannot express. The real file is untouched, so no diff, no deletion.
                 SandboxPath = "/" + relativePath,
                 TargetIsWorkspaceRelative = true,
                 ReadOnly = true
@@ -665,14 +566,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     }
 
     /// <summary>
-    ///     Writes <see cref="BuildConfigurationBarrier" /> into the workspace's parent directory, which is engine-owned
-    ///     and outside every sandbox mount.
-    ///     <para>
-    ///         Rewritten on every prepare rather than only on creation: an operator (or a stray build) can delete these,
-    ///         and a silently missing barrier reopens the defect with no symptom until a restore fails confusingly. A
-    ///         file that already holds the expected content is left alone.
-    ///     </para>
+    ///     Writes <see cref="BuildConfigurationBarrier" /> into the workspace's parent directory, which is
+    ///     engine-owned and outside every sandbox mount.
     /// </summary>
+    /// <remarks>
+    ///     Rewritten on every prepare rather than only on creation, because an operator or a stray build can delete
+    ///     these and a silently missing barrier reopens the defect with no symptom until a restore fails confusingly.
+    ///     A file already holding the expected content is left alone.
+    /// </remarks>
     private static async Task EnsureBuildConfigurationBarrierAsync(string workspaceParentPath, CancellationToken cancellationToken)
     {
         foreach (var (fileName, content) in BuildConfigurationBarrier)
@@ -710,17 +611,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         throw new InvalidOperationException($"{message} (git exited {result.ExitCode}: {RedactGitError(result.StandardError)})");
     }
 
-    /// <summary>
-    ///     git's own stderr is the only thing that says <em>why</em> a clone or checkout failed. Dropping it left
-    ///     <see cref="EnsureGitSuccess" /> throwing a bare sentence with the cause unrecoverable — which is exactly what
-    ///     ten Development tests hit on a Windows host, reporting "could not be cloned" and nothing actionable. An
-    ///     operator seeing this in production got the same dead end.
-    ///     <para>
-    ///         Mirrors <c>NodePatchApplyService.Redact</c>: strip the temporary-directory prefix so a workspace path does
-    ///         not ride into an operator-visible message, and bound the length so a runaway git diagnostic cannot become
-    ///         the message.
-    ///     </para>
-    /// </summary>
+    /// <summary>The sanitized excerpt of git's own stderr, which is the only thing saying WHY a git step failed.</summary>
+    /// <remarks>
+    ///     Dropping it leaves <see cref="EnsureGitSuccess" /> throwing a bare sentence with the cause unrecoverable,
+    ///     which is a dead end for an operator and for a failing test alike. Mirrors <c>NodePatchApplyService.Redact</c>:
+    ///     strip the temporary-directory prefix so a workspace path cannot ride into an operator-visible message, and
+    ///     bound the length so a runaway git diagnostic cannot become the message.
+    /// </remarks>
     private static string RedactGitError(string standardError)
     {
         if (string.IsNullOrWhiteSpace(standardError))
@@ -737,23 +634,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// <summary>
     ///     Creates the managed workspace as an engine-owned standalone clone, replacing
     ///     <c>git worktree add --detach</c>.
-    ///     <para>
-    ///         A linked worktree's <c>.git</c> is a pointer <em>file</em> into the trusted source repository, so binding
-    ///         the workspace into a container either breaks git outright or hands the container the user's real
-    ///         repository — refs, config, objects and <c>hooks</c>, which is host-side arbitrary code execution. A clone
-    ///         owns its own <c>.git</c>, so the workspace is self-contained and the trusted source repository is not
-    ///         reachable from it.
-    ///     </para>
-    ///     <para>
-    ///         Three steps here are not optional, and each one fails an assertion that would otherwise pass silently:
-    ///         a clone leaves HEAD <em>attached</em> to the cloned branch, so it must be detached or both this provider's
-    ///         own <c>symbolic-ref</c> check and <c>DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync</c> reject
-    ///         it after the first catalog command; a clone <em>inherits</em> <c>origin</c> pointing at the trusted source
-    ///         repository, which is a live named path straight back to the thing that is supposed to be unreachable
-    ///         (discarding <c>.git</c> gets this for free, and this path deliberately cannot); and the result
-    ///         must still be standing on the base commit that was resolved before the clone.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A linked worktree's <c>.git</c> is a pointer FILE into the trusted source repository, so binding it into a
+    ///     container either breaks git or hands the container the user's real refs, config, objects and <c>hooks</c>,
+    ///     which is host-side code execution; a clone owns its own <c>.git</c>. Three steps are not optional: HEAD is
+    ///     left attached by a clone and must be detached, the inherited <c>origin</c> is a live path back to the
+    ///     source and must go, and the result must still stand on the base commit resolved before the clone.
+    /// </remarks>
     private static async Task CreateStandaloneWorkspaceAsync(HostGitRunner git,
         string canonicalRepositoryRoot,
         string worktreePath,
@@ -775,10 +663,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 throw new DevelopmentWorkspaceSecurityException("The managed Development workspace clone does not own a standalone Git directory.");
             }
 
-            // Detaching onto the pre-resolved base commit rather than the clone's own tip is also what closes the
-            // window between resolving the base branch and cloning it. If the source branch moved in between, the
-            // shallow clone does not contain the recorded commit at all and this fails outright instead of silently
-            // producing a workspace standing on a different base than the one persisted in the manifest.
+            // Detaching onto the pre-resolved base commit rather than the clone's tip closes the window in which the
+            // source branch moved: the shallow clone then lacks that commit and this fails instead of drifting.
             var detach = await git.RunAsync(worktreePath,
                 AgentHomeGit.Arguments("checkout", "--detach", baseCommit),
                 cancellationToken);
@@ -809,32 +695,24 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
         catch
         {
-            // Only reachable when the workspace directory did not exist before this call, so removing it cannot destroy
-            // a preserved workspace. Leaving a half-cloned tree behind would be worse than none: the next attempt takes
-            // the preserved-workspace branch and trusts it.
+            // Only reachable when the workspace directory did not exist before this call, so removing it cannot
+            // destroy a preserved one — and the next attempt would take the preserved branch and trust a half clone.
             StandaloneGitClone.TryDelete(worktreePath);
             throw;
         }
     }
 
     /// <summary>
-    ///     Re-validates a workspace that survived a restart. ADR 0001 decision 3 requires the workspace and its diff to
-    ///     be preserved, so this runs on the reuse path as well as immediately after creation.
-    ///     <para>
-    ///         The <c>--git-common-dir</c> check <em>inverted</em> its meaning once the workspace became a standalone clone. It used to assert the
-    ///         workspace's common directory <em>equals</em> the trusted source repository's, which is what proved the
-    ///         workspace was a linked worktree of the bound repository. A standalone clone must assert the opposite: the
-    ///         common directory resolves <em>inside</em> the workspace, and is explicitly <em>not</em> the trusted
-    ///         source's. The negative is stated separately on purpose — a change that silently re-pointed the workspace
-    ///         at the source repository would otherwise satisfy the first clause by accident on a host where the two
-    ///         paths coincide, and this is exactly the condition this check exists to prevent.
-    ///     </para>
-    ///     <para>
-    ///         <c>rev-parse --git-common-dir</c> prints a <em>relative</em> <c>.git</c> in a clone (it printed an
-    ///         absolute path for a linked worktree), which needs no new plumbing:
-    ///         <see cref="ResolveGitPathAsync" /> already resolves against the working directory.
-    ///     </para>
+    ///     Re-validates a workspace that survived a restart, on the reuse path as well as immediately after creation,
+    ///     because ADR 0001 decision 3 requires the workspace and its diff to be preserved.
     /// </summary>
+    /// <remarks>
+    ///     For a standalone clone the <c>--git-common-dir</c> check asserts that the common directory resolves INSIDE
+    ///     the workspace and is explicitly NOT the trusted source's. The negative is stated separately on purpose: a
+    ///     change that silently re-pointed the workspace at the source repository would satisfy the first clause by
+    ///     accident on a host where the two paths coincide, which is the condition this check exists to prevent. A
+    ///     clone prints a relative <c>.git</c>, which <see cref="ResolveGitPathAsync" /> already resolves.
+    /// </remarks>
     private static async Task ValidatePreservedWorktreeAsync(HostGitRunner git,
         string worktreePath,
         string trustedCommonGitDirectory,
@@ -920,15 +798,15 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private sealed record ConfigurationFile(string FileName, string Content);
 
     /// <summary>
-    ///     The workspace CONTROL MANIFEST. It lives directly in <c>RuntimePath</c>, which is never mounted, so nothing
-    ///     inside any sandbox can read or forge it.
-    ///     <para>
-    ///         <see cref="WarmRestoreCommit" /> is the base commit whose dependency manifests the engine has already
-    ///         restored into this task's package cache, and it is what makes the warm run exactly once per base
-    ///         commit. It is nullable rather than version-gated: a v1 or v2 manifest written before warming existed
-    ///         deserializes with no warm recorded, which is the correct answer for it.
-    ///     </para>
+    ///     The workspace CONTROL MANIFEST, living directly in the never-mounted <c>RuntimePath</c>, so nothing inside
+    ///     any sandbox can read or forge it.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="WarmRestoreCommit" /> is the base commit whose dependency manifests are already restored into
+    ///     this task's package cache, and is what makes the warm run exactly once per base commit. It is nullable
+    ///     rather than version-gated, so a manifest written before warming existed deserializes with no warm
+    ///     recorded, which is the correct answer for it.
+    /// </remarks>
     private sealed record WorkspaceManifest(
         int Version,
         string RepositoryIdentityHash,
@@ -939,11 +817,11 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
         public long? WarmRestoreCompletedAtUtc { get; init; }
 
-        /// <summary>
-        ///     The committed files whose names mark them as credentials, as this prepare found them. Recorded so the
-        ///     finding survives a restart and so the operator-facing event and the mount list are two views of one
-        ///     value rather than two independent walks.
-        /// </summary>
+        /// <summary>The committed files whose names mark them as credentials, as this prepare found them.</summary>
+        /// <remarks>
+        ///     Recorded so the finding survives a restart, and so the operator-facing event and the mount list are two
+        ///     views of one value rather than two independent walks.
+        /// </remarks>
         public IReadOnlyList<string> DetectedSecretPaths { get; init; } = [];
     }
 }

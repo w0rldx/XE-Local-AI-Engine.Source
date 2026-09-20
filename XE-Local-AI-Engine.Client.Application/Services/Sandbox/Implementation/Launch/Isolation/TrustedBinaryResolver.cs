@@ -1,26 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     Resolves the helper binaries the isolated launch chain execs — <c>setsid</c>, <c>systemd-run</c>,
-///     <c>systemctl</c>, <c>bwrap</c> — to an absolute, canonical, ROOT-OWNED path, or to nothing at all.
-///     <para>
-///         <b>PATH is not consulted.</b> Not "consulted last": not consulted. The containment probe's existing
-///         <c>ResolveBinary</c> prefers <c>PATH</c> because a service manager can hand the worker a minimal one, and
-///         for the resource-limit chain that is an availability question. For the FILESYSTEM boundary it is a trust
-///         question, and the answer has to be a binary the engine's own user cannot have written: the chain's whole
-///         job is to keep a sandboxed workload away from the host filesystem, and a workload that could drop a
-///         <c>bwrap</c> earlier on <c>PATH</c> than the real one would be choosing the program that builds its own
-///         jail. Only <see cref="TrustedRoots" /> are searched.
-///     </para>
-///     <para>
-///         Trust is a property of the whole path, not of the leaf. Every component — the leaf included — must be owned
-///         by uid 0 and must not be group- or world-writable, because a writable directory anywhere along the way is a
-///         place to swap the binary. Symlinks are allowed (this is how a usr-merged distribution presents
-///         <c>/bin</c>), but only when the CANONICAL target satisfies the same rule; a symlink's own mode bits are
-///         ignored because on Linux they are always <c>0777</c> and mean nothing. What is returned is the canonical
-///         path, so the chain execs the file that was validated rather than a name that could be re-pointed afterwards.
-///     </para>
+///     Resolves the helper binaries the isolated launch chain execs — <c>setsid</c>, <c>systemd-run</c>, <c>systemctl</c>, <c>bwrap</c> —
+///     to an absolute, canonical, ROOT-OWNED path, or to nothing at all.
 /// </summary>
+/// <remarks>
+///     PATH is not consulted at all, not merely consulted last: for the resource-limit chain it is an availability question, but for the
+///     FILESYSTEM boundary it is a trust question, and a workload that could drop a <c>bwrap</c> earlier on <c>PATH</c> would be choosing
+///     the program that builds its own jail. Only <see cref="TrustedRoots" /> are searched. Trust is a property of the whole path: every
+///     component including the leaf must be uid-0-owned and not group- or world-writable. Symlinks are allowed, as usr-merge needs, but
+///     only when the CANONICAL target passes the same rule, and that canonical path is what is returned and exec'd.
+/// </remarks>
 public static class TrustedBinaryResolver
 {
     /// <summary>
@@ -116,16 +106,14 @@ public static class TrustedBinaryResolver
     }
 
     /// <summary>
-    ///     Walks <paramref name="path" /> one component at a time, checking each against the ownership rule and
-    ///     following any symlink it meets into a recursive validation of its target. Returns the canonical path when
-    ///     every component passes, <see langword="null" /> the moment one does not.
-    ///     <para>
-    ///         It deliberately says nothing about what the leaf IS. A symlink target is validated through this method
-    ///         rather than through <see cref="TryResolveTrusted" /> precisely because the target of a usr-merge link is
-    ///         a directory, and applying the executable-file rule to it would reject the layout every current
-    ///         distribution ships.
-    ///     </para>
+    ///     Walks <paramref name="path" /> one component at a time against the ownership rule, following any symlink into a recursive
+    ///     validation of its target; returns the canonical path, or <see langword="null" /> the moment a component fails.
     /// </summary>
+    /// <remarks>
+    ///     It deliberately says nothing about what the leaf IS. A symlink target is validated through this method rather than through
+    ///     <see cref="TryResolveTrusted" /> because the target of a usr-merge link is a directory, and applying the executable-file rule
+    ///     to it would reject the layout every current distribution ships.
+    /// </remarks>
     private static string? TryCanonicalizeTrusted(string path, int remainingDepth)
     {
         if (remainingDepth <= 0 || !Path.IsPathRooted(path))
@@ -155,9 +143,8 @@ public static class TrustedBinaryResolver
 
             if (entry.IsSymbolicLink)
             {
-                // The link's own mode bits are 0777 on Linux and carry no information, so the target decides. The
-                // target is validated by the SAME rule, recursively, and becomes the path the walk continues from —
-                // which is what makes the returned value canonical.
+                // The link's own mode bits are 0777 on Linux and carry no information, so the target decides: it is validated by the SAME
+                // rule, recursively, and becomes the path the walk continues from, which is what makes the returned value canonical.
                 var target = ResolveLinkTarget(next);
                 if (target is null || TryCanonicalizeTrusted(target, remainingDepth - 1) is not { } canonicalTarget)
                 {
@@ -170,9 +157,8 @@ public static class TrustedBinaryResolver
 
             if (entry.IsGroupOrWorldWritable)
             {
-                // A writable component is a place to swap what comes after it. The sticky-bit exception that makes
-                // /tmp acceptable as a JAIL ancestor is deliberately not extended here: no system binary lives under a
-                // shared writable directory, so allowing it would only widen the rule for cases that never occur.
+                // A writable component is a place to swap what comes after it. The sticky-bit exception that makes /tmp acceptable as a
+                // JAIL ancestor is not extended here: no system binary lives under a shared writable directory.
                 return null;
             }
 
@@ -182,11 +168,11 @@ public static class TrustedBinaryResolver
         return current.Length == 0 ? "/" : current;
     }
 
-    /// <summary>
-    ///     Reads one link's immediate target and makes it absolute against the link's own directory. Only one level is
-    ///     resolved here; the caller re-enters the full rule on the result, so a chain of links is validated link by
+    /// <summary>Reads one link's immediate target and makes it absolute against the link's own directory.</summary>
+    /// <remarks>
+    ///     Only one level is resolved here: the caller re-enters the full rule on the result, so a chain of links is validated link by
     ///     link rather than jumped over.
-    /// </summary>
+    /// </remarks>
     private static string? ResolveLinkTarget(string linkPath)
     {
         try

@@ -4,22 +4,15 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-///     The container-runtime preflight, and the home of every message an operator reads when Development Mode cannot
-///     run.
-///     <para>
-///         ADR 0004 accepts that a user without a container runtime gets no Development Mode at all rather than a
-///         degraded one, and rules out an unisolated fallback so that the product's isolation posture never depends on
-///         what happens to be installed. The consequence is that these messages <em>are</em> the feature for that
-///         user: they are the only thing standing between "Development Mode requires something you do not have" and
-///         "Development Mode is broken". So each case names what was looked for, where, what was found, and the one
-///         action that changes the answer.
-///     </para>
-///     <para>
-///         Deliberately absent from all of them: any suggestion that rootless Docker is required or supplied. On Linux
-///         access to the Docker socket is root-equivalent; ADR 0004 documents that rather than mitigating it, and
-///         rootless Docker is the user's own option which this product neither depends on nor claims.
-///     </para>
+///     The container-runtime preflight, and the home of every message an operator reads when Development Mode cannot run.
 /// </summary>
+/// <remarks>
+///     ADR 0004 gives a user without a container runtime no Development Mode rather than a degraded one, and rules out an unisolated
+///     fallback, so these messages ARE the feature for that user — the only thing standing between "Development Mode requires something
+///     you do not have" and "Development Mode is broken". Each case names what was looked for, where, what was found, and the one action
+///     that changes the answer. Deliberately absent: any suggestion that rootless Docker is required or supplied, the socket being
+///     root-equivalent on Linux either way.
+/// </remarks>
 internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightService
 {
     private readonly IDockerDaemonAttestationStore _attestationStore;
@@ -69,9 +62,8 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             };
         }
 
-        // The engine's own asset, checked before any daemon is contacted: the specification cannot be built without
-        // it, so a broken build would otherwise surface as a failed container create rather than as a preflight that
-        // names the cause. Reading it is a one-off — the profile is cached after the first call.
+        // The engine's own asset, checked before any daemon is contacted: the specification cannot be built without it, so a broken build
+        // would otherwise surface as a failed create rather than a preflight naming the cause. The profile is cached after the first read.
         try
         {
             _ = DockerSeccompProfile.SecurityOption;
@@ -91,12 +83,8 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             };
         }
 
-        // Resolved here rather than left to the probe so that the endpoint can be refused before a client is
-        // constructed. User information, a query string and a fragment are all operator-supplied, none of them
-        // addresses a Docker daemon, and any of the three is somewhere a token fits — a DOCKER_HOST of
-        // tcp://host:2375/?token=… is a value an operator can set. Handing the resolved endpoint on rather than
-        // restating it as a string keeps the source that named it, which is what the pin records. The probe would
-        // resolve exactly this endpoint from the same configured value.
+        // Resolved here rather than in the probe so the endpoint can be refused before a client exists: user information, query and
+        // fragment address no daemon and each is somewhere a token fits. Handing it on unrestated keeps the source the pin records.
         var endpoint = DockerDaemonEndpointResolver.Resolve(options.DaemonEndpoint);
         if (endpoint.DisclosingComponent is { } disclosing)
         {
@@ -111,10 +99,8 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             };
         }
 
-        // Everything from here onwards is the shared mechanism: probe, version- and seccomp-check, compare against the
-        // pin. What stays here is the prose, because ADR 0004 makes these messages the entire Development Mode
-        // experience for a user with no daemon, and the second consumer of the same daemon owes its own users
-        // different words for the same status.
+        // Everything below is the shared mechanism: probe, version and seccomp check, compare against the pin. What stays here is the
+        // prose, ADR 0004 making these messages the whole Development Mode experience for a user with no daemon.
         var outcome = await DockerDaemonProbe.RunAsync(new DockerDaemonProbeRequest
             {
                 ConfiguredEndpoint = options.DaemonEndpoint,
@@ -129,12 +115,8 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             _logger,
             cancellationToken);
 
-        // Switched on the reason rather than on the status: two refusals share ProbeFailed and have different prose,
-        // so a mapping keyed on status alone would have to guess between them. Every named reason has its own arm and
-        // the catch-all only throws — the compiler demands one for an out-of-range cast (CS8524) and would reject the
-        // switch outright if a named reason were missing, so nothing here can silently inherit another case's words.
-        // `DockerDaemonProbeTests.EveryProbeReason_IsMappedToItsOwnDevelopmentModeMessage` enumerates the enum, so a
-        // reason added without an arm is a red test rather than a throw a user meets first.
+        // Switched on the reason, not the status: two refusals share ProbeFailed with different prose, so a status-keyed mapping would
+        // guess. Every named reason has its own arm and the catch-all only throws, and a test enumerates the enum so a missing arm is red.
         return outcome.Reason switch
         {
             DockerDaemonProbeReason.Ready => Ready(outcome.ObservedDaemon!, outcome.Endpoint, outcome.PinnedDaemon!),

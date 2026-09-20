@@ -8,12 +8,12 @@ using System.Text.RegularExpressions;
 /// <summary>
 ///     One command the Development catalog can run, fully materialized: the executable, the exact argument vector, and
 ///     the wall-clock budget for this command alone.
-///     <para>
-///         The arguments are materialized (the build target is already substituted) rather than templated, so the
-///         canonical digest of the owning profile describes exactly what will execute. A templated form would let two
-///         profiles with identical digests run different commands.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The arguments are materialized — the build target is already substituted — rather than templated, so the
+///     canonical digest of the owning profile describes exactly what will execute; a templated form would let two
+///     profiles with identical digests run different commands.
+/// </remarks>
 internal sealed record DevelopmentProfileCommand(
     string CommandId,
     string Executable,
@@ -23,17 +23,14 @@ internal sealed record DevelopmentProfileCommand(
 /// <summary>
 ///     The per-project command profile: which commands exist for this repository, what each one runs, which of them the
 ///     deterministic validation gate executes and in what order, and which paths the test-write policy protects.
-///     <para>
-///         This replaces the former <c>Solution</c> constant and the hardcoded <c>ExecuteCatalogAsync</c> switch, which
-///         named <c>XE-Local-AI-Engine.slnx</c> literally and therefore made Dev Mode able to build and test exactly one
-///         repository while advertising that it could bind any.
-///     </para>
-///     <para>
-///         The profile is snapshotted into the database at project creation and is the only source of truth thereafter.
-///         The worktree copy at <c>.xe-dev/profile.json</c> is an import source, never read during an attempt — the agent
-///         can write to the worktree, so a live read would let it rewrite its own test command to <c>true</c>.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The profile is snapshotted into the database at project creation and is the only source of truth thereafter;
+///     the worktree copy at <c>.xe-dev/profile.json</c> is an import source and is never read during an attempt,
+///     because the agent can write to the worktree and a live read would let it rewrite its own test command to
+///     <c>true</c>. No solution or repository is named in code: a hardcoded one binds Dev Mode to exactly one
+///     repository while advertising that it can bind any.
+/// </remarks>
 internal sealed record DevelopmentCommandProfile(
     string ProfileId,
     string ProfileVersion,
@@ -41,27 +38,27 @@ internal sealed record DevelopmentCommandProfile(
     string? BuildTarget,
     /// <summary>
     ///     SHA-256 of the raw <c>.xe-dev/profile.json</c> bytes this profile was imported from, or null when the
-    ///     repository shipped no such file. Provenance: it records which declaration the operator confirmed, and it
-    ///     participates in the canonical digest so re-importing a changed declaration yields a different profile.
-    ///     <para>
-    ///         It is deliberately NOT what the per-attempt tamper check compares against. This value comes from the
-    ///         operator's live repository working tree at project creation, while the managed worktree is checked out
-    ///         at the attempt's base commit, so the two legitimately differ whenever the file has an uncommitted edit.
-    ///         The tamper check captures its own baseline from the worktree at attempt start — see
-    ///         <c>DevelopmentWorkspaceTools</c>.
-    ///     </para>
+    ///     repository shipped no such file.
     /// </summary>
+    /// <remarks>
+    ///     Provenance: it records which declaration the operator confirmed and participates in the canonical digest,
+    ///     so re-importing a changed declaration yields a different profile. It is deliberately not what the
+    ///     per-attempt tamper check compares against — this value comes from the operator's live working tree at
+    ///     project creation while the managed worktree sits at the attempt's base commit, so an uncommitted edit
+    ///     legitimately differs; that check captures its own baseline from the worktree at attempt start.
+    /// </remarks>
     string? ImportDigest,
     IReadOnlyList<DevelopmentProfileCommand> Commands,
     IReadOnlyList<string> ValidationCommandIds,
     IReadOnlyList<string> ProtectedPaths,
     bool IsCustom)
 {
-    /// <summary>
-    ///     The canonical UTF-8 JSON form. Property order is written explicitly and list order is preserved, so the bytes
-    ///     are stable for a given profile value and can be hashed. Do not switch this to reflection-based serialization:
-    ///     the digest is a security boundary, and property ordering would then depend on member declaration order.
-    /// </summary>
+    /// <summary>The canonical UTF-8 JSON form.</summary>
+    /// <remarks>
+    ///     Property order is written explicitly and list order is preserved, so the bytes are stable for a given
+    ///     profile value and can be hashed. Never switch this to reflection-based serialization: the digest is a
+    ///     security boundary, and property ordering would then follow member declaration order.
+    /// </remarks>
     public byte[] ToCanonicalUtf8()
     {
         var buffer = new MemoryStream();
@@ -143,11 +140,11 @@ internal sealed record DevelopmentCommandProfile(
         return buffer.ToArray();
     }
 
-    /// <summary>
-    ///     Lowercase hex SHA-256 over <see cref="ToCanonicalUtf8" />. 64 characters, which is exactly the width of the
-    ///     existing <c>command_profile_version</c> column — deliberately a separate column, because that one carries an
-    ///     artifact <em>protocol</em> version and the two must not share storage.
-    /// </summary>
+    /// <summary>Lowercase hex SHA-256 over <see cref="ToCanonicalUtf8" />, 64 characters wide.</summary>
+    /// <remarks>
+    ///     Deliberately a column of its own rather than <c>command_profile_version</c>, which is the same width but
+    ///     carries an artifact <em>protocol</em> version; the two must not share storage.
+    /// </remarks>
     public string ComputeDigest() =>
         Convert.ToHexStringLower(SHA256.HashData(ToCanonicalUtf8()));
 
@@ -182,10 +179,12 @@ internal sealed record DevelopmentCommandProfile(
     }
 
     /// <summary>
-    ///     Structural validation applied to every profile before it is trusted, whether it came from the code-owned
-    ///     catalog, the database, or an import. A profile whose validation list names a command it does not define would
-    ///     otherwise fail deep inside an attempt instead of at resolution.
+    ///     Structural validation applied to every profile — catalog, database or import — before it is trusted.
     /// </summary>
+    /// <remarks>
+    ///     A profile whose validation list names a command it does not define would otherwise fail deep inside an
+    ///     attempt instead of at resolution.
+    /// </remarks>
     public DevelopmentCommandProfile Validated()
     {
         if (string.IsNullOrWhiteSpace(ProfileId) || string.IsNullOrWhiteSpace(ProfileVersion))
@@ -218,9 +217,8 @@ internal sealed record DevelopmentCommandProfile(
             }
         }
 
-        // The engine itself routes through these two: GetStatusAsync is the coder's status tool, and the whitespace
-        // check is the one command every profile's validation list is expected to be able to include. A profile that
-        // omitted them would compile and then fail deep inside an attempt, so require them at resolution instead.
+        // The engine routes through these two — the coder's status tool and the whitespace check every validation list
+        // may include — so require them at resolution rather than letting a profile fail deep inside an attempt.
         string[] required = [DevelopmentCommandIds.GitStatus, DevelopmentCommandIds.GitDiffCheck];
         if (required.Any(id => !Commands.Any(command => string.Equals(command.CommandId, id, StringComparison.Ordinal))))
         {
@@ -246,17 +244,14 @@ internal sealed record DevelopmentCommandProfile(
 
 /// <summary>
 ///     A deliberately small glob matcher for the profile's protected-path patterns.
-///     <para>
-///         Hand-rolled rather than taken from <c>Microsoft.Extensions.FileSystemGlobbing</c> for two reasons: that
-///         package is not referenced by this assembly and would need a Central Package Management entry, and the matcher
-///         participates in a security decision whose behaviour must not drift with a transitive package bump.
-///     </para>
-///     <para>
-///         Supported syntax: <c>**</c> spans any number of path segments, <c>*</c> matches within one segment, and
-///         <c>?</c> matches one non-separator character. Matching is case-insensitive so that a rename to
-///         <c>featuretests.cs</c> on a case-sensitive filesystem cannot escape the policy.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Hand-rolled rather than taken from <c>Microsoft.Extensions.FileSystemGlobbing</c>, which this assembly does
+///     not reference and which would need a Central Package Management entry, and because the matcher takes part in
+///     a security decision that must not drift with a transitive package bump. <c>**</c> spans any number of path
+///     segments, <c>*</c> matches within one and <c>?</c> matches one non-separator character; matching is
+///     case-insensitive, so a rename to <c>featuretests.cs</c> cannot escape the policy.
+/// </remarks>
 internal static class DevelopmentGlob
 {
     private static readonly Dictionary<string, Regex> Cache = [];

@@ -96,9 +96,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                     _options.MaxToolCalls);
             var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile, liveProgress);
 
-            // Every attempt on a task is a fresh conversation against ONE preserved workspace, so what an earlier
-            // attempt left behind is invisible to this one unless the prompt says so. Read before the model runs, and
-            // the same set decides both what the coder is told and what ValidateSubmission will forgive.
+            // Every attempt is a fresh conversation against one preserved workspace, so an earlier attempt's leftovers
+            // are invisible unless the prompt says so; this one set feeds both the prompt and ValidateSubmission.
             var carriedFiles = await _patchEvidence.ListChangedPathsAsync(session, timeout.Token);
             var prompt = BuildPrompt(snapshot, session, profile, carriedFiles);
             await PersistPromptAsync(snapshot, prompt, session, repository, profile);
@@ -234,27 +233,15 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     }
 
     /// <summary>
-    ///     Records what this attempt TOLD the model, before the model is called.
-    ///     <para>
-    ///         Before the call is the whole point: the attempts whose prompt an operator most needs are the ones that
-    ///         time out, exhaust their tool loop or lose their evidence check, and none of those reach
-    ///         <see cref="PersistEvidenceAsync" />. It carries a base commit but no subject hash or manifest hash,
-    ///         because at prompt-build time the subject this attempt will produce does not exist yet.
-    ///     </para>
-    ///     <para>
-    ///         Written under <see cref="CancellationToken.None" />, for the same reason
-    ///         <c>TerminalizeAttemptAsync</c> already is on the failure path: the record of what happened must not be
-    ///         cancelled by the thing that made it worth recording. Passing the attempt's own deadline here meant a
-    ///         timed-out attempt — the case named above — still left nothing.
-    ///     </para>
-    ///     <para>
-    ///         Best-effort, and deliberately so: a failure to record an observation must never become a new way for a
-    ///         Development attempt to fail. The blob write enforces <c>MaxArtifactBytes</c> as it does for every other
-    ///         kind, and the sanitizer redacts rather than rejects, so the ordinary outcome of an oversized or
-    ///         path-heavy prompt is a bounded artifact, not a lost attempt. The swallow is logged, because a feature
-    ///         whose own failure is invisible is the defect this item exists to fix, one layer in.
-    ///     </para>
+    ///     Records what this attempt told the model, before the model is called.
     /// </summary>
+    /// <remarks>
+    ///     The prompts an operator most needs belong to attempts that time out, exhaust the tool loop or lose their
+    ///     evidence check, and none of those reach <see cref="PersistEvidenceAsync" />; the record carries a base
+    ///     commit but no subject or manifest hash, which do not exist yet. Written under
+    ///     <see cref="CancellationToken.None" /> so the attempt's own deadline cannot cancel the record of what
+    ///     happened, and best-effort with a logged swallow so recording an observation is never a new way to fail.
+    /// </remarks>
     private async Task PersistPromptAsync(DevelopmentExecutionSnapshot snapshot,
         string prompt,
         DevelopmentWorkspaceSession session,
@@ -388,19 +375,15 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                        .ToHashSet(StringComparer.Ordinal);
         var missing = actualFiles.Except(submittedFiles, StringComparer.Ordinal).ToArray();
 
-        // A path that no longer differs from the base commit but did when this attempt started was changed by an
-        // earlier attempt on this shared workspace and returned to base by this one. The coder read it in its prompt
-        // and is reporting the file it touched, which is honest, not over-reporting — and the persisted manifest is
-        // derived from git rather than from the submission, so accepting the claim cannot corrupt the evidence.
-        // Under-reporting stays fatal: that is the direction in which a silent change escapes review.
+        // A carried path returned to its base content is reported honestly, not over-reported, and the manifest comes
+        // from git rather than the submission. Under-reporting stays fatal: that is how a silent change escapes review.
         var overReported = submittedFiles.Except(actualFiles, StringComparer.Ordinal)
                                          .Where(path => !carriedFiles.Contains(path))
                                          .ToArray();
         if (missing.Length != 0 || overReported.Length != 0)
         {
-            // Naming the difference is the whole point. The generic message this replaced left the operator unable to
-            // tell "the model under-reported" from "an earlier failed attempt left files in this task's preserved
-            // workspace" — which is a real and common cause, because the workspace is per task, not per attempt.
+            // The difference is named because the workspace is per task, not per attempt: without it an operator cannot
+            // tell an under-reporting model from files an earlier failed attempt left in the preserved workspace.
             throw new DevelopmentAttemptEvidenceException(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch,
                 "The Development coder's submitted changed-file list is not exactly the workspace's changed files. "
                 + Describe("Changed but not submitted", missing)
@@ -440,12 +423,12 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
 
     private const int MaxDescribedPaths = 5;
 
-    /// <summary>
-    ///     The prompt's own bound on the carried-file list. Larger than <see cref="MaxDescribedPaths" /> because that
-    ///     one is sized for the 1024-character persisted terminal reason, and a prompt the model has to act on is worth
-    ///     more paths. Nothing else bounds the count: <c>MaxChangedFiles</c> is enforced by the export, not by the
-    ///     listing this renders.
-    /// </summary>
+    /// <summary>The prompt's own bound on the carried-file list.</summary>
+    /// <remarks>
+    ///     Larger than <see cref="MaxDescribedPaths" />, which is sized for the 1024-character persisted terminal
+    ///     reason, because a prompt the model has to act on is worth more paths. Nothing else bounds the count:
+    ///     <c>MaxChangedFiles</c> is enforced by the export, not by the listing this renders.
+    /// </remarks>
     private const int MaxPromptedCarriedPaths = 20;
 
     /// <summary>Internal so the composition can be pinned directly; nothing outside this class calls it.</summary>
@@ -469,10 +452,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             "\nValid run_command ids: ", string.Join(", ", profile.Commands.Select(static command => command.CommandId)),
             "\nUse only the fixed tools. The worktree is detached change isolation, not an OS security boundary.",
 
-            // The submission contract is stated here because ValidateSubmission enforces it exactly, and until now
-            // nothing told the model what it was. Measured live on 2026-07-31: a capable model produced a correct fix,
-            // also wrote two incidental files, listed only the fix in changedFiles, and the whole attempt — including
-            // the correct fix — was discarded for a rule it had never been given.
+            // The submission contract is stated because ValidateSubmission enforces it exactly: an unstated rule cost
+            // a live attempt its correct fix, listed alone in changedFiles beside two incidental writes.
             "\n\nSubmission contract, enforced exactly:",
             "\n- Close the attempt with exactly one submit_implementation call, after all edits are done.",
             "\n- changedFiles must list every workspace file that differs from the base commit at submission time, and nothing else.",
@@ -482,13 +463,12 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             "\n- summary must be non-empty.");
     }
 
-    /// <summary>
-    ///     The files the shared workspace already carries into this attempt. Live on 2026-09-04 a coder reverted a file
-    ///     an earlier attempt had created, reported it as changed, and lost the whole attempt: it was told the rule but
-    ///     never the data, and a fresh conversation cannot know which files those are without spending tool calls to
-    ///     find out. The label attributes nothing, because a repository's own warm restore can leave un-ignored output
-    ///     here on a task's very first attempt.
-    /// </summary>
+    /// <summary>The files the shared workspace already carries into this attempt.</summary>
+    /// <remarks>
+    ///     A fresh conversation cannot know which files those are without spending tool calls, so a coder told the
+    ///     rule but not the data reverts a carried file, reports it as changed and loses the attempt. The label
+    ///     attributes nothing: a repository's own warm restore can leave un-ignored output here on a first attempt.
+    /// </remarks>
     private static string Carried(IReadOnlySet<string> carriedFiles) =>
         carriedFiles.Count == 0
             ? string.Empty
@@ -499,16 +479,15 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 "List them in changedFiles unless you return one to its base-commit content; a file you revert or delete back to the base commit is NOT a changed file.");
 
     /// <summary>
-    ///     What a person told this task to do differently, and that it outranks everything else in the prompt. Live on
-    ///     2026-09-04 the operator's sentence arrived under the "Feedback from the previous round" heading, which reads
-    ///     as one round's note: the coder weighed the task's own requirements higher and did the thing the operator had
-    ///     just told it not to do, three retries running. The requirements are immutable, so an operator who wrote them
-    ///     wrong has no other way to correct them, and saying which one wins is the whole content of the fix.
-    ///     <para>
-    ///         Bounded before it arrives — the decision comment is cut to the workflow's own ceiling on the way onto the
-    ///         node run's inputs — so this only decides whether there is a section at all.
-    ///     </para>
+    ///     What a person told this task to do differently, and that it outranks everything else in the prompt.
     /// </summary>
+    /// <remarks>
+    ///     Under the previous round's heading the same sentence reads as one round's note, and a coder weighs the
+    ///     task's own requirements higher. The requirements are immutable, so an operator who wrote them wrong has no
+    ///     other way to correct them, and saying which one wins is the whole content of this section. The text is
+    ///     bounded before it arrives — cut to the workflow's ceiling onto the node run's inputs — so this only
+    ///     decides whether there is a section at all.
+    /// </remarks>
     private static string OperatorInstruction(string? instruction) =>
         string.IsNullOrWhiteSpace(instruction)
             ? string.Empty
@@ -517,21 +496,21 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 "\nDo what it says. Where it contradicts the requirements above, the operator has amended them: follow the operator, and say in your summary which requirement you are not meeting and why.",
                 "\nIt does not amend the workspace test-write policy, which is enforced and cannot be waived.");
 
-    /// <summary>
-    ///     What the last round was told to fix, when there was one. Without this a rework round is handed the SAME
-    ///     three fields the round before it was handed, and re-implements blind — which is true of an ordinary Dev Mode
-    ///     ChangesRequested round as much as of a workflow's routed one.
-    /// </summary>
+    /// <summary>What the last round was told to fix, when there was one.</summary>
+    /// <remarks>
+    ///     Without it a rework round is handed the same three fields the round before it was, and re-implements blind
+    ///     — as true of an ordinary ChangesRequested round as of a workflow's routed one.
+    /// </remarks>
     private static string Feedback(string? previousRound) =>
         string.IsNullOrWhiteSpace(previousRound)
             ? string.Empty
             : string.Concat("\nFeedback from the previous round:\n", previousRound);
 
-    /// <summary>
-    ///     The rule sets a Development workflow resolved for the node run driving this task, when one does. Rendered and
-    ///     bounded by the workflow before it ever reached the task, so this only decides whether there is a section at
-    ///     all: an empty heading governs nothing and would read as a policy that said nothing.
-    /// </summary>
+    /// <summary>The rule sets a Development workflow resolved for the node run driving this task, when one does.</summary>
+    /// <remarks>
+    ///     Rendered and bounded by the workflow before it reached the task, so this only decides whether there is a
+    ///     section at all: an empty heading governs nothing and would read as a policy that said nothing.
+    /// </remarks>
     private static string Policy(string? workflowPolicy) =>
         string.IsNullOrWhiteSpace(workflowPolicy)
             ? string.Empty
@@ -556,11 +535,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         {
             OperationCanceledException => "The bounded Development coder attempt was cancelled or timed out.",
 
-            // The POLICY's own sentence, not a generic stand-in for it: "violated a workspace security policy" tells an
-            // operator nothing to change, and a workflow node that spends its whole retry budget on a test-write
-            // refusal spends it without anyone ever being told which rule it broke. Sanitized because not every
-            // workspace-security message is authored — some interpolate a path — and a message the sanitizer refuses
-            // falls back to the generic line rather than escaping.
+            // The policy's own sentence, because a generic stand-in leaves a node spending its whole retry budget on a
+            // refusal nobody can name. Sanitized: an unauthored message interpolating a path falls back to the generic.
             DevelopmentWorkspaceSecurityException security => DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused,
                 PolicyReason(security)),
 

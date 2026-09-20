@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     A single command to execute inside a sandbox. The caller supplies
-///     <see cref="ExecutionId" /> so an in-flight command can be targeted by
-///     <see cref="ISandboxRuntimeProvider.CancelCommandAsync" />; the result echoes it back. Provider-neutral — no
-///     shell string is implied; the provider composes the actual invocation from the executable and arguments.
-/// </summary>
+/// <summary>A single command to execute inside a sandbox.</summary>
+/// <remarks>
+///     The caller supplies <see cref="ExecutionId" /> so an in-flight command can be targeted by
+///     <see cref="ISandboxRuntimeProvider.CancelCommandAsync" />, and the result echoes it back. Provider-neutral: no shell string is
+///     implied, and the provider composes the actual invocation from the executable and arguments.
+/// </remarks>
 public sealed record SandboxCommandRequest
 {
     /// <summary>Caller-generated id used to target cancellation and to correlate the result.</summary>

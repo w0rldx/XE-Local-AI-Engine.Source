@@ -6,19 +6,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     The production <see cref="ISandboxContainmentProbe" />: measures what this host can really do by EXERCISING each
-///     mechanism once, not by testing for the presence of a binary. A binary can exist and still fail (no user systemd
-///     bus, no delegated cgroup controllers, user namespaces administratively disabled), and advertising a capability on
-///     the strength of a file existing is precisely the integrity gap this work closes. The probe therefore starts a
-///     real constrained scope and a real empty network namespace, each bounded by a short timeout, and reports a
-///     mechanism as available only when that succeeded.
-///     <para>
-///         The result is cached for the lifetime of the process (<see cref="Lazy{T}" />, thread-safe): the provider is a
-///         DI singleton and host containment does not change under a running worker. Probing is entirely best-effort —
-///         any failure degrades the mechanism to unavailable WITH a reason and never throws into startup or the run
-///         flow.
-///     </para>
+///     The production <see cref="ISandboxContainmentProbe" />: measures what this host can really do by EXERCISING each mechanism once,
+///     never by testing for the presence of a binary.
 /// </summary>
+/// <remarks>
+///     A binary can exist and still fail — no user systemd bus, no delegated cgroup controllers, user namespaces disabled — and
+///     advertising a capability because a file exists is the integrity gap this closes, so the probe starts a real constrained scope and a
+///     real empty network namespace, each under a short timeout, and reports a mechanism available only when that succeeded. The result is
+///     cached for the process lifetime, host containment not changing under a running worker. Probing is best-effort: a failure degrades
+///     the mechanism to unavailable WITH a reason and never throws.
+/// </remarks>
 public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 {
     // Each probe starts a trivial child (`true`) under the mechanism being measured. Generous enough for a loaded box,
@@ -46,9 +43,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     {
     }
 
-    // The filesystem-isolation probe is injectable for one reason: a test has to be able to make it FAIL and show that
-    // the resource-limit and network results survive that failure intact. That independence is a contract, not an
-    // implementation detail, so it is testable rather than asserted in prose.
+    // The filesystem-isolation probe is injectable for one reason: a test must be able to make it FAIL and show the resource-limit and
+    // network results survive intact. That independence is a contract, not an implementation detail, so it is testable.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe)
     {
@@ -85,9 +81,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     {
         if (!OperatingSystem.IsLinux())
         {
-            // Linux is the only enforcement target that shipped. The Windows Job Object containment path was designed
-            // but deliberately not built, so a Windows host contains nothing and must advertise nothing. This is a live
-            // containment gap on Windows, not a temporary state of this file.
+            // Linux is the only enforcement target that shipped: the Windows Job Object path was designed and deliberately not built, so
+            // a Windows host contains nothing and must advertise nothing. A live containment gap, not a temporary state of this file.
             const string reason = "the host is not Linux (the Windows Job Object path is not implemented)";
             return SandboxContainment.None with
             {
@@ -136,16 +131,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         return containment;
     }
 
-    /// <summary>
-    ///     Runs the filesystem-isolation measurement inside its OWN guard.
-    ///     <para>
-    ///         The separate catch is the point. This probe does far more than the other two — it opens descriptors,
-    ///         creates memory files, starts a five-namespace chain and runs a shell script inside it — so it has far
-    ///         more ways to fail, and a shared guard would let one of those failures erase the resource-limit and
-    ///         network-isolation results that were already measured successfully. A host that cannot isolate the
-    ///         filesystem must keep every ceiling and every egress denial it does have.
-    ///     </para>
-    /// </summary>
+    /// <summary>Runs the filesystem-isolation measurement inside its OWN guard.</summary>
+    /// <remarks>
+    ///     The separate catch is the point: this probe opens descriptors, creates memory files, starts a five-namespace chain and runs a
+    ///     script inside it, so it has far more ways to fail, and a shared guard would let one of them erase resource-limit and network
+    ///     results already measured. A host that cannot isolate the filesystem must keep every ceiling and egress denial it does have.
+    /// </remarks>
     private SandboxFilesystemIsolationProbeResult MeasureFilesystemIsolation(IReadOnlyDictionary<string, string> userBusEnvironment)
     {
         try
@@ -161,11 +152,13 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     }
 
     /// <summary>
-    ///     Measures whether a real memory / PID / CPU ceiling can be imposed, by starting a transient
-    ///     <c>systemd-run --scope --user</c> carrying all three properties. A scope that starts proves the user systemd
-    ///     bus is reachable AND that the cgroup-v2 controllers backing those properties are delegated to the user slice —
-    ///     the two conditions a presence check cannot establish.
+    ///     Measures whether a real memory, PID and CPU ceiling can be imposed, by starting a transient
+    ///     <c>systemd-run --scope --user</c> carrying all three properties.
     /// </summary>
+    /// <remarks>
+    ///     A scope that starts proves the user systemd bus is reachable AND that the cgroup-v2 controllers backing those properties are
+    ///     delegated to the user slice — the two conditions a presence check cannot establish.
+    /// </remarks>
     private static ResourceLimitProbe MeasureResourceLimits(string? setsid,
         string? systemdRun,
         string? envBinary,
@@ -180,9 +173,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 
         if (envBinary is null)
         {
-            // The env(1) layer is what strips the user-bus address back out before the sandboxed executable runs.
-            // Without it the resource-limit wrapper would leave the child able to reach the user systemd bus and start a
-            // unit outside its own scope, so the mechanism is refused rather than shipped with that hole.
+            // The env(1) layer strips the user-bus address back out before the sandboxed executable runs; without it the wrapper would
+            // leave the child able to reach the bus and start a unit outside its own scope, so the mechanism is refused, not shipped.
             return new ResourceLimitProbe(Active: false, "env(1) is not installed, so the user-bus address could not be stripped from the child", empty);
         }
 
@@ -199,15 +191,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             return new ResourceLimitProbe(Active: false, "neither XDG_RUNTIME_DIR nor DBUS_SESSION_BUS_ADDRESS is set, so the user systemd bus is unreachable", empty);
         }
 
-        // Exercise the WHOLE chain the launch path builds — scope properties AND the env(1) strip layer — not a
-        // simplified stand-in. A probe that skips a layer can report a mechanism as available while the real chain
-        // fails at exec time, which is the same class of dishonesty as advertising an unenforced capability. (This is
-        // not hypothetical: a non-executable `env` earlier on PATH broke the real chain while a layer-skipping probe
-        // still reported success.)
-        //
-        // MemorySwapMax is included deliberately: with swap available, MemoryMax alone does NOT produce an OOM kill —
-        // the kernel reclaims to swap and the child sails past the ceiling. Both are required for the ceiling to be
-        // real (verified live).
+        // Exercise the WHOLE chain, scope properties AND the env(1) strip layer, never a stand-in: a probe skipping a layer reports a
+        // mechanism available while the chain fails at exec. MemorySwapMax is deliberate — MemoryMax alone reclaims to swap, never kills.
         var probeArguments = new List<string>
         {
             "--scope",
@@ -240,11 +225,11 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             : new ResourceLimitProbe(Active: false, "a transient systemd user scope carrying MemoryMax/TasksMax/CPUQuota could not be started", empty);
     }
 
-    /// <summary>
-    ///     Measures whether a fresh empty network namespace can be created unprivileged, by really creating one. This
-    ///     covers the several ways it can be unavailable that a presence check misses: user namespaces disabled by
-    ///     sysctl or seccomp, an exhausted <c>max_user_namespaces</c>, or a container runtime that blocks the syscall.
-    /// </summary>
+    /// <summary>Measures whether a fresh empty network namespace can be created unprivileged, by really creating one.</summary>
+    /// <remarks>
+    ///     That covers the ways it can be unavailable which a presence check misses: user namespaces disabled by sysctl or seccomp, an
+    ///     exhausted <c>max_user_namespaces</c>, or a container runtime blocking the syscall.
+    /// </remarks>
     private static NetworkIsolationProbe MeasureNetworkIsolation(string? unshare, string trueBinary)
     {
         if (unshare is null)
@@ -346,17 +331,14 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     }
 
     /// <summary>
-    ///     Resolves a wrapper binary to an absolute path, preferring PATH and falling back to the standard system
-    ///     directories. An absolute path is used at launch so the wrapper chain cannot be redirected by a PATH entry the
-    ///     sandboxed workload could influence.
-    ///     <para>
-    ///         The candidate must be EXECUTABLE, not merely present. A bare existence check is what a shell's own
-    ///         lookup does not do, and the difference is not academic: a non-executable file earlier on PATH (a stray
-    ///         <c>~/.local/bin/env</c> is enough) silently shadows the real binary, and the whole wrapper chain then
-    ///         fails at exec time with "Permission denied" — after the probe has already reported the mechanism as
-    ///         available. Skipping it here keeps resolution and advertisement honest together.
-    ///     </para>
+    ///     Resolves a wrapper binary to an absolute path, preferring PATH and otherwise the standard system directories, so the chain
+    ///     cannot be redirected by a PATH entry the sandboxed workload could influence.
     /// </summary>
+    /// <remarks>
+    ///     The candidate must be EXECUTABLE, not merely present, which a shell's own lookup checks and a bare existence check does not: a
+    ///     non-executable file earlier on PATH — a stray <c>~/.local/bin/env</c> is enough — silently shadows the real binary and the
+    ///     wrapper chain then fails at exec time with "Permission denied", after the probe already reported the mechanism available.
+    /// </remarks>
     private static string? ResolveBinary(string name)
     {
         var pathVariable = Environment.GetEnvironmentVariable("PATH");
@@ -384,11 +366,11 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         return null;
     }
 
-    /// <summary>
-    ///     <see langword="true" /> when the path is a regular file carrying at least one execute bit. Any execute bit
-    ///     is accepted rather than resolving the exact owner/group question — the subsequent probe RUNS the resolved
-    ///     chain, so a file that passes here but still cannot be exec'd is caught by measurement rather than believed.
-    /// </summary>
+    /// <summary><see langword="true" /> when the path is a regular file carrying at least one execute bit.</summary>
+    /// <remarks>
+    ///     Any execute bit is accepted rather than resolving the exact owner and group question: the subsequent probe RUNS the resolved
+    ///     chain, so a file that passes here and still cannot be exec'd is caught by measurement rather than believed.
+    /// </remarks>
     private static bool IsExecutableFile(string path)
     {
         try

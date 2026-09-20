@@ -143,9 +143,8 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
                 MaxOutputTokens = contextBudget.RoundOutputTokens,
                 AllowMultipleToolCalls = false,
 
-                // The served window travels as the option the provider-round budgeter prefers, exactly as the chat and
-                // orchestration lanes carry it, so a round is measured against the context the model really has. A
-                // runtime that reports none sends no override, the same fallback every other lane takes.
+                // The served window travels as the option the provider-round budgeter prefers, as chat and orchestration
+                // carry it, so a round is measured against the real context; a runtime reporting none sends no override.
                 AdditionalProperties = contextBudget.Served
                     ? new AdditionalPropertiesDictionary
                     {
@@ -232,17 +231,11 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
     ///     node-local.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Dev Mode hands the model a workspace: real files, real patches, real command evidence. The plan's
-    ///         non-goal is explicit — no dev-mode support at all for declared-cloud external models, under EITHER egress
-    ///         policy — and UNRESOLVED is refused with them, because a connection deleted mid-attempt or a store that
-    ///         will not decrypt tells us nothing about where the prompt would have gone.
-    ///     </para>
-    ///     <para>
-    ///         Refused here rather than folded into <c>isCloud</c>: a declared-cloud external model has no CloudScoped
-    ///         route either, so treating it as cloud would send it down the route-verification branch and fail with a
-    ///         message about a mismatched authorized route rather than the real reason.
-    ///     </para>
+    ///     Dev Mode hands the model a workspace: real files, real patches, real command evidence. A declared-cloud
+    ///     external model has no dev-mode support under either egress policy, and UNRESOLVED is refused with it,
+    ///     because a connection deleted mid-attempt or a store that will not decrypt says nothing about where the
+    ///     prompt would have gone. Refused here rather than folded into <c>isCloud</c>: such a model has no
+    ///     CloudScoped route either, so the route-verification branch would report a mismatch, not the real reason.
     /// </remarks>
     private async Task RejectExternalModelAsync(string modelId, CancellationToken cancellationToken)
     {
@@ -322,10 +315,8 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
             return InvokeAsync("get_diff", null, () => _tools.GetDiffAsync(cancellationToken));
         }
 
-        // Deliberately generic: the set of valid ids is per-project now and comes from the command profile, which is
-        // listed in the system prompt. An attribute cannot interpolate it (it must be a compile-time constant), and
-        // hardcoding one repository's ids here is what this change exists to remove. The closed-enum contract is
-        // enforced by DevelopmentCommandProfile.ResolveCommand, not by this description.
+        // Deliberately generic: valid ids are per-project, come from the command profile and are listed in the system
+        // prompt, and an attribute needs a constant. DevelopmentCommandProfile.ResolveCommand enforces the closed set.
         public Task<string> RunCommandAsync([Description("The id of one command from the project's command profile, exactly as listed in the prompt.")] string commandId,
             CancellationToken cancellationToken)
         {

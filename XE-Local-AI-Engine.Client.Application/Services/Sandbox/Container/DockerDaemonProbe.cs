@@ -1,16 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     Why a <see cref="DockerDaemonProbeOutcome" /> carries the status it carries.
-///     <para>
-///         It exists because two different refusals share one status. A classified transport failure and a daemon that
-///         does not report seccomp are both <see cref="DockerDaemonPreflightStatus.ProbeFailed" />, and each has its
-///         own operator prose in <c>DockerDaemonPreflightService</c>. Without this enum the two would be told apart
-///         only by whether <see cref="DockerDaemonProbeOutcome.ProbeFailure" /> happened to be null — resting a
-///         verbatim-message guarantee on an implicit signal, which is how a message quietly changes later. A consumer
-///         switches on this, so a new refusal has to be given prose rather than inheriting someone else's.
-///     </para>
-/// </summary>
+/// <summary>Why a <see cref="DockerDaemonProbeOutcome" /> carries the status it carries.</summary>
+/// <remarks>
+///     Two different refusals share one status: a classified transport failure and a daemon that does not report seccomp are both
+///     <see cref="DockerDaemonPreflightStatus.ProbeFailed" />, each with its own operator prose. Without this enum they would be told
+///     apart only by whether <see cref="DockerDaemonProbeOutcome.ProbeFailure" /> happened to be null, resting a verbatim-message
+///     guarantee on an implicit signal. A consumer switches on this, so a new refusal has to be given prose rather than inheriting
+///     someone else's.
+/// </remarks>
 internal enum DockerDaemonProbeReason
 {
     /// <summary>A daemon answered, is new enough, reports what was required, and matches this node's pin.</summary>
@@ -32,29 +29,25 @@ internal enum DockerDaemonProbeReason
     ConfirmationRaced = 5
 }
 
-/// <summary>
-///     What one consumer asks the shared daemon probe to check. Deliberately a plain record rather than any consumer's
-///     options type: the probe is shared by Development Mode and the application-container runtime, and a parameter
-///     named for one of them would make the other's timeout or minimum version dead configuration.
-/// </summary>
+/// <summary>What one consumer asks the shared daemon probe to check.</summary>
+/// <remarks>
+///     Deliberately a plain record rather than any consumer's options type: the probe is shared by Development Mode and the
+///     application-container runtime, and a parameter named for one would make the other's timeout or minimum version dead configuration.
+/// </remarks>
 internal sealed record DockerDaemonProbeRequest
 {
     /// <summary>The consumer's explicit endpoint setting, or null to let discovery name one.</summary>
     public required string? ConfiguredEndpoint { get; init; }
 
     /// <summary>
-    ///     The endpoint the consumer has already resolved, when it resolved one itself. Null means "run discovery
-    ///     here", which is what Development Mode does.
-    ///     <para>
-    ///         A consumer that resolves first and then re-states its result as a string loses which of
-    ///         <see cref="DockerDaemonEndpointSource" /> named it: every value round-trips through
-    ///         <see cref="DockerDaemonEndpointResolver" /> as an explicit setting and comes back
-    ///         <see cref="DockerDaemonEndpointSource.Configuration" />. That source is written into the shared
-    ///         trust-on-first-use pin, which an operator is later shown when a daemon is substituted, so the wrong
-    ///         source is a wrong sentence about which socket this node approved. Passing the endpoint itself keeps the
-    ///         source the consumer actually observed.
-    ///     </para>
+    ///     The endpoint the consumer already resolved, when it resolved one itself; null runs discovery here, as Development Mode does.
     /// </summary>
+    /// <remarks>
+    ///     A consumer that resolves first and re-states its result as a string loses which <see cref="DockerDaemonEndpointSource" /> named
+    ///     it: every value round-trips through the resolver as an explicit setting and comes back
+    ///     <see cref="DockerDaemonEndpointSource.Configuration" />. That source is written into the shared trust-on-first-use pin an
+    ///     operator is shown when a daemon is substituted, so a wrong source is a wrong sentence about which socket this node approved.
+    /// </remarks>
     public DockerDaemonEndpoint? ResolvedEndpoint { get; init; }
 
     /// <summary>The oldest Docker Engine API version this consumer accepts, as <c>major.minor</c>.</summary>
@@ -73,11 +66,11 @@ internal sealed record DockerDaemonProbeRequest
     public string? ConfirmingDaemonId { get; init; }
 }
 
-/// <summary>
-///     The evidence one daemon probe produced, and nothing else. There is deliberately no message here: the prose an
-///     operator reads is written by the consumer, because the same status means different things to a user who has
-///     lost Development Mode and to one whose installed application will not start.
-/// </summary>
+/// <summary>The evidence one daemon probe produced, and nothing else.</summary>
+/// <remarks>
+///     There is deliberately no message: the prose an operator reads is written by the consumer, because the same status means different
+///     things to a user who has lost Development Mode and to one whose installed application will not start.
+/// </remarks>
 internal sealed record DockerDaemonProbeOutcome
 {
     /// <summary>The classified outcome, in the vocabulary both consumers already speak.</summary>
@@ -103,44 +96,25 @@ internal sealed record DockerDaemonProbeOutcome
 }
 
 /// <summary>
-///     The mechanism behind every Docker daemon preflight in this engine: resolve an endpoint, probe the daemon, check
-///     the API version and seccomp support, and compare what answered against this node's trust-on-first-use pin.
-///     <para>
-///         A static helper rather than an injected service on purpose. Development Mode's preflight is the home of
-///         operator prose that ADR 0004 treats as the feature for a user with no daemon, and its constructor, its
-///         interface and its message strings must not move because a second consumer appeared. So the mechanism is
-///         extracted and the prose is not: this class produces status and evidence, each consumer writes its own
-///         words.
-///     </para>
-///     <para>
-///         The client is created through a caller-supplied delegate rather than an <see cref="IDockerRuntimeClientFactory" />
-///         for the same reason: an injected factory would be whichever one the container is registered with, so a
-///         second consumer's probe timeout would be configuration nothing reads. The delegate makes each consumer
-///         supply the client it means.
-///     </para>
+///     The mechanism behind every Docker daemon preflight: resolve an endpoint, probe the daemon, check the API version and seccomp
+///     support, and compare what answered against this node's trust-on-first-use pin.
 /// </summary>
+/// <remarks>
+///     A static helper, not an injected service: Development Mode's preflight holds the operator prose ADR 0004 treats as the feature for
+///     a user with no daemon, and its constructor, interface and messages must not move because a second consumer appeared. The client
+///     comes from a caller-supplied delegate for the same reason — an injected factory would be whichever the container registered,
+///     making a second consumer's timeout dead configuration.
+/// </remarks>
 internal static class DockerDaemonProbe
 {
-    /// <summary>
-    ///     Serialises the compare-and-write half of the transaction, process-wide, and nothing else.
-    ///     <para>
-    ///         The attestation store locks one operation at a time, which is not the same thing. Two first-use probes
-    ///         — Development Mode's preflight and the application-container resolver, which run on independent
-    ///         schedules against the same shared pin — can both read an absent pin, each approve whichever daemon
-    ///         answered it, and each write over the other. Trust-on-first-use then approved two daemons and remembers
-    ///         one, chosen by a race. Static because the pin is a per-node singleton: an injected gate would be one
-    ///         instance per consumer, which is exactly the isolation that lets the race happen.
-    ///     </para>
-    ///     <para>
-    ///         It deliberately does NOT span the daemon probe. That hazard is a read-compare-write on the pin; the
-    ///         daemon call is neither, and holding the gate across it made every probe wait out every other probe's
-    ///         transport timeout. Two features probe the same daemon on independent schedules, so a Development Mode
-    ///         page load landing beside the application-container resolver queued for one <c>DaemonProbeTimeoutSeconds</c>
-    ///         before spending its own. Every probe that reaches a daemon does enter the gate, because the compare
-    ///         that decides whether this node approves it has to happen on a pin read after the daemon answered —
-    ///         but it holds only store operations, never the call.
-    ///     </para>
-    /// </summary>
+    /// <summary>Serialises the compare-and-write half of the transaction, process-wide, and nothing else.</summary>
+    /// <remarks>
+    ///     The attestation store locks one operation at a time, which is not the same thing: two first-use probes on independent schedules
+    ///     against one shared pin can both read it absent, each approve whichever daemon answered, and each write over the other, so
+    ///     trust-on-first-use approves two daemons and remembers one by a race. Static because the pin is a per-node singleton. It does
+    ///     NOT span the daemon call, which is no read-compare-write and whose inclusion made every probe wait out another's timeout; every
+    ///     approving path still enters the gate, comparing a pin read AFTER the daemon answered.
+    /// </remarks>
     private static readonly SemaphoreSlim Transaction = new(initialCount: 1, maxCount: 1);
 
     /// <summary>Resolve, probe, and compare against the pin, writing the pin on first use or on a matching confirmation.</summary>
@@ -159,10 +133,8 @@ internal static class DockerDaemonProbe
 
         var endpoint = request.ResolvedEndpoint ?? DockerDaemonEndpointResolver.Resolve(request.ConfiguredEndpoint);
 
-        // Read outside the gate, and used by nothing but the three refusals that return before it — transport
-        // failure, API too old, seccomp unsupported — where it is reported and never acted on. Those may carry a pin
-        // that has since moved; re-reading it would mean taking the gate on paths that approve nothing, which is the
-        // contention the gate is kept short to avoid. Every path that does approve re-reads inside CommitAsync.
+        // Read outside the gate, used only by the three refusals that return before it, where it is reported and never acted on; every
+        // approving path re-reads the pin inside CommitAsync.
         var pinned = await attestationStore.ReadAsync(cancellationToken);
 
         DockerDaemonIdentity identity;
@@ -210,12 +182,8 @@ internal static class DockerDaemonProbe
             };
         }
 
-        // Every outcome that approves a daemon — a match, a first-use pin, a confirmation, or the refusal when none
-        // of those hold — is decided inside the gate, against a pin read AFTER the daemon answered. Deciding a match
-        // out here against the pre-call read would approve a daemon this node no longer trusts: a concurrent
-        // confirmation can move the pin while this probe's transport call is in flight, and the resolver would then
-        // cache Ready for the superseded daemon instead of reporting DaemonIdentityChanged. The gate still holds no
-        // daemon I/O, so a matching probe waits only out the other probe's store operations, never its timeout.
+        // Every outcome approving a daemon is decided inside the gate against a pin read AFTER the daemon answered: deciding out here on
+        // the pre-call read would approve a daemon this node no longer trusts, a concurrent confirmation being able to move the pin.
         await Transaction.WaitAsync(cancellationToken);
         try
         {
@@ -228,12 +196,13 @@ internal static class DockerDaemonProbe
     }
 
     /// <summary>
-    ///     The read-compare-write half, and the only place a daemon is compared against the pin, entered under
-    ///     <see cref="Transaction" />. The pin is read here rather than reused from the caller's earlier read: that
-    ///     read happened before the daemon call, so a concurrent probe may have pinned or re-confirmed a daemon
-    ///     since. The loser of a first-use race must observe the winner's pin instead of writing over it, and a probe
-    ///     whose pin matched before the call must not report Ready for a daemon the pin has since moved away from.
+    ///     The read-compare-write half, and the only place a daemon is compared against the pin, entered under <see cref="Transaction" />.
     /// </summary>
+    /// <remarks>
+    ///     The pin is read here rather than reused from the caller's earlier read, which happened before the daemon call, so a concurrent
+    ///     probe may have pinned or re-confirmed since: the loser of a first-use race must observe the winner's pin instead of writing
+    ///     over it, and a probe whose pin matched before the call must not report Ready for a daemon it has since moved away from.
+    /// </remarks>
     private static async Task<DockerDaemonProbeOutcome> CommitAsync(DockerDaemonProbeRequest request,
         DockerDaemonEndpoint endpoint,
         DockerDaemonIdentity identity,
@@ -244,9 +213,8 @@ internal static class DockerDaemonProbe
     {
         var pinned = await attestationStore.ReadAsync(cancellationToken);
 
-        // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon
-        // against. What it buys is that every subsequent run has something to compare against, which is where the
-        // control actually bites.
+        // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon against. What it buys is that every
+        // subsequent run has something to compare against, which is where the control actually bites.
         if (pinned is null)
         {
             var firstUse = BuildAttestation(identity, endpoint, timeProvider, confirmedByOperator: request.ConfirmingDaemonId is not null);

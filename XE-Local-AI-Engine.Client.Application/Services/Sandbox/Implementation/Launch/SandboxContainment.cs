@@ -3,20 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     What containment the CURRENT host can actually deliver for a sandboxed child, as measured once at startup by
-///     <see cref="ISandboxContainmentProbe" />. This record is the single source of truth for both halves of the
-///     capability-honesty invariant: <c>ProcessSandboxRuntimeProvider.Capabilities</c> advertises a flag only when the
-///     matching mechanism here is active, and the launch path applies only the mechanisms named here. Because both read
-///     the same probe, advertisement and enforcement cannot drift apart.
-///     <para>
-///         Every mechanism is independently optional. A host with <c>setsid</c> but no user systemd still gets
-///         process-group launch; a host with neither degrades to a plain child process and the provider advertises
-///         neither <see cref="SandboxProviderCapabilities.SupportsResourceLimits" /> nor
-///         <see cref="SandboxProviderCapabilities.SupportsNetworkPolicy" />. The <c>…UnavailableReason</c> members carry
-///         the measured reason so a degraded host logs WHY, and so a live-gated test can skip with a reason instead of
-///         silently passing.
-///     </para>
+///     What containment the CURRENT host can actually deliver for a sandboxed child, measured once at startup by
+///     <see cref="ISandboxContainmentProbe" />.
 /// </summary>
+/// <remarks>
+///     The single source of truth for both halves of the capability-honesty invariant: <c>Capabilities</c> advertises a flag only where
+///     the matching mechanism here is active and the launch path applies only the mechanisms named here, so one probe keeps advertisement
+///     and enforcement from drifting. Every mechanism is independently optional — a host with <c>setsid</c> but no user systemd still gets
+///     process-group launch — and the <c>…UnavailableReason</c> members carry the measured reason, so a degraded host logs WHY and a
+///     live-gated test skips with a reason instead of passing silently.
+/// </remarks>
 public sealed record SandboxContainment
 {
     /// <summary>A host that can contain nothing: the plain-child fallback. Used off-Linux and when every probe fails.</summary>
@@ -60,17 +56,15 @@ public sealed record SandboxContainment
     public string? EnvPath { get; init; }
 
     /// <summary>
-    ///     The environment variables <c>systemd-run --user</c> needs in order to reach the per-user systemd bus
-    ///     (<c>XDG_RUNTIME_DIR</c>). Empty when the resource-limit mechanism is inactive.
-    ///     <para>
-    ///         SECURITY: these variables address a UNIX socket, and a network namespace does NOT confine UNIX sockets —
-    ///         a sandboxed child that inherited them could call <c>systemd-run</c> itself and start a unit OUTSIDE its
-    ///         own scope and namespace, escaping both the ceiling and the egress denial. They are therefore injected for
-    ///         the WRAPPER only and stripped by an <c>env -u</c> layer immediately before the sandboxed executable is
-    ///         exec'd. This was verified live: without the strip a child inside the namespace successfully started a
-    ///         unit outside it.
-    ///     </para>
+    ///     The environment variables <c>systemd-run --user</c> needs to reach the per-user systemd bus; empty when the resource-limit
+    ///     mechanism is inactive.
     /// </summary>
+    /// <remarks>
+    ///     SECURITY: these address a UNIX socket, and a network namespace does NOT confine UNIX sockets — a sandboxed child that inherited
+    ///     them could call <c>systemd-run</c> itself and start a unit OUTSIDE its own scope and namespace, escaping both the ceiling and
+    ///     the egress denial, which was verified live. They are injected for the WRAPPER only and stripped by an <c>env -u</c> layer
+    ///     immediately before the sandboxed executable is exec'd.
+    /// </remarks>
     public IReadOnlyDictionary<string, string> UserBusEnvironment { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -80,12 +74,12 @@ public sealed record SandboxContainment
     /// <summary>Measured reason network isolation is unavailable, for logging and skip-with-reason tests.</summary>
     public string? NetworkIsolationUnavailableReason { get; init; }
 
-    /// <summary>
-    ///     <see langword="true" /> when a command can be run with the host filesystem absent from its mount namespace.
-    ///     Defined as "<see cref="FilesystemIsolation" /> is not null" rather than as an independent flag, so
-    ///     advertisement and the values the chain is rendered from are one fact rather than two that could disagree.
-    ///     Gates <see cref="SandboxProviderCapabilities.SupportsFilesystemIsolation" />.
-    /// </summary>
+    /// <summary><see langword="true" /> when a command can run with the host filesystem absent from its mount namespace.</summary>
+    /// <remarks>
+    ///     Defined as "<see cref="FilesystemIsolation" /> is not null" rather than as an independent flag, so advertisement and the values
+    ///     the chain is rendered from are one fact rather than two that could disagree. Gates
+    ///     <see cref="SandboxProviderCapabilities.SupportsFilesystemIsolation" />.
+    /// </remarks>
     public bool SupportsFilesystemIsolation => FilesystemIsolation is not null;
 
     /// <summary>
@@ -95,10 +89,10 @@ public sealed record SandboxContainment
     /// </summary>
     internal SandboxFilesystemIsolation? FilesystemIsolation { get; init; }
 
-    /// <summary>
-    ///     Measured reason the filesystem boundary is unavailable. This is a SEPARATE result from the other two: the
-    ///     filesystem probe is caught on its own, so its failure clears this capability and nothing else. A host that
-    ///     can impose ceilings and deny egress but has no usable <c>bwrap</c> keeps both of those.
-    /// </summary>
+    /// <summary>Measured reason the filesystem boundary is unavailable.</summary>
+    /// <remarks>
+    ///     A SEPARATE result from the other two: the filesystem probe is caught on its own, so its failure clears this capability and
+    ///     nothing else, and a host that can impose ceilings and deny egress but has no usable <c>bwrap</c> keeps both of those.
+    /// </remarks>
     public string? FilesystemIsolationUnavailableReason { get; init; }
 }

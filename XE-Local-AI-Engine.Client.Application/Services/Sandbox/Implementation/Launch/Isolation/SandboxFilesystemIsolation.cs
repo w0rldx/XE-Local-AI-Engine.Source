@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     What the containment probe MEASURED about this host's ability to run a command behind a filesystem boundary:
-///     the four helper binaries, each resolved through <see cref="TrustedBinaryResolver" /> rather than through
-///     <c>PATH</c>, the host's legacy-root layout, and the uid/gid the jail maps.
-///     <para>
-///         Its presence is the capability. <c>SandboxContainment.SupportsFilesystemIsolation</c> is defined as "this
-///         is not null", so there is exactly one thing to be true, and the launch path cannot render a chain out of
-///         values the probe never validated.
-///     </para>
+///     What the containment probe MEASURED about this host's ability to run a command behind a filesystem boundary: the four helper
+///     binaries, each resolved through <see cref="TrustedBinaryResolver" /> rather than <c>PATH</c>, the legacy-root layout, and the
+///     uid and gid the jail maps.
 /// </summary>
+/// <remarks>
+///     Its presence IS the capability: <c>SandboxContainment.SupportsFilesystemIsolation</c> is defined as "this is not null", so there is
+///     exactly one thing to be true and the launch path cannot render a chain out of values the probe never validated.
+/// </remarks>
 internal sealed record SandboxFilesystemIsolation
 {
     public required string SetsidPath { get; init; }

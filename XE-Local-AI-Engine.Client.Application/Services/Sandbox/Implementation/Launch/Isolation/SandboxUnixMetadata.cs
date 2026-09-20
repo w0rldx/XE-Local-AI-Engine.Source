@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isola
 using System.Runtime.InteropServices;
 using System.Text;
 
-/// <summary>
-///     The owner, group and mode of one filesystem object, read through <c>statx(2)</c>. Everything the isolation
-///     layer decides about trust — is this binary root-owned, is this directory writable by anyone but us, is this
-///     component a symlink — is decided from these three numbers, so they are read once and passed around as a value
-///     rather than re-statted per question.
-/// </summary>
+/// <summary>The owner, group and mode of one filesystem object, read through <c>statx(2)</c>.</summary>
+/// <remarks>
+///     Everything the isolation layer decides about trust — is this binary root-owned, is this directory writable by anyone but us, is
+///     this component a symlink — is decided from these three numbers, so they are read once and passed around as a value rather than
+///     re-statted per question.
+/// </remarks>
 [StructLayout(LayoutKind.Auto)]
 internal readonly record struct SandboxUnixFileFacts(uint UserId, uint GroupId, uint Mode)
 {
@@ -44,20 +44,14 @@ internal readonly record struct SandboxUnixFileFacts(uint UserId, uint GroupId, 
     public uint PermissionBits => Mode & 0xFFF;
 }
 
-/// <summary>
-///     Reads <see cref="SandboxUnixFileFacts" /> for a path or for an already-open file descriptor.
-///     <para>
-///         <c>statx(2)</c> rather than <c>stat(2)</c> deliberately, for the reason recorded in
-///         <c>DockerWorkspaceHostFiles</c>: <c>struct statx</c> is a kernel UAPI structure with a byte layout that is
-///         identical on every architecture and every glibc vintage, so the fields can be read out of a raw buffer at
-///         fixed offsets. A <c>struct stat</c> binding would have to know both.
-///     </para>
-///     <para>
-///         The descriptor overload is what makes the trust checks TOCTOU-safe: the isolation layer opens a path
-///         component and then asks about the object it actually opened, so a component swapped between the check and
-///         the use cannot change the answer.
-///     </para>
-/// </summary>
+/// <summary>Reads <see cref="SandboxUnixFileFacts" /> for a path or for an already-open file descriptor.</summary>
+/// <remarks>
+///     <c>statx(2)</c> rather than <c>stat(2)</c> deliberately, for the reason recorded in <c>DockerWorkspaceHostFiles</c>:
+///     <c>struct statx</c> is a kernel UAPI structure whose byte layout is identical on every architecture and glibc vintage, so its
+///     fields can be read out of a raw buffer at fixed offsets, while a <c>struct stat</c> binding would have to know both. The descriptor
+///     overload is what makes the trust checks TOCTOU-safe: the layer opens a path component and then asks about the object it actually
+///     opened, so a component swapped between check and use cannot change the answer.
+/// </remarks>
 internal static class SandboxUnixMetadata
 {
     // AT_FDCWD; every path passed here is absolute, so it only ever means "no directory descriptor".

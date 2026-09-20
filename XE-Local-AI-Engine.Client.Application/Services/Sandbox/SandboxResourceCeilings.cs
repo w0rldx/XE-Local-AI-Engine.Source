@@ -3,52 +3,36 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Compute;
 
 /// <summary>
-///     The ONE derivation of "what CPU / memory / process-count ceiling does this role's sandbox get on this node".
-///     Every create site calls it with its own <see cref="SandboxRequirements" />, so a site cannot pass ceilings its
-///     declaration does not claim, nor claim ceilings it does not pass — which is the half of ADR 0007 Decision 4's
-///     guarantee that <c>SandboxSubstrateSelectionArchitectureTests</c> could not otherwise reach, because that file
-///     constructs no consumer.
-///     <para>
-///         <b>Two sets, picked by the declaration alone.</b>
-///         <see cref="SandboxCeilingProfile.ComputeTool" /> takes the <c>Compute</c> section's tight numbers;
-///         <see cref="SandboxCeilingProfile.HostToolchain" /> takes <c>LocalContainer:ToolchainLimits</c>, derived from
-///         the host wherever the operator has not overridden it. Which applies is a value on the workload's constant,
-///         not a role-name <c>switch</c> here — see <see cref="SandboxCeilingProfile" /> — so adding a workload means
-///         choosing a profile in the one reviewed file rather than editing this function.
-///     </para>
-///     <para>
-///         The reason there are two at all is measured, not argued, and it is recorded on
-///         <see cref="SandboxToolchainLimits" />: one shared set killed <c>dotnet build</c> outright.
-///     </para>
+///     The ONE derivation of "what CPU, memory and process-count ceiling does this role's sandbox get on this node".
 /// </summary>
+/// <remarks>
+///     Every create site calls it with its own <see cref="SandboxRequirements" />, so a site cannot pass ceilings its declaration does not
+///     claim nor claim ceilings it does not pass — the half of ADR 0007 Decision 4's guarantee an architecture test cannot reach, since
+///     that file constructs no consumer. Two sets, picked by the declaration alone: <c>ComputeTool</c> takes the <c>Compute</c> section's
+///     tight numbers, <c>HostToolchain</c> takes <c>LocalContainer:ToolchainLimits</c>. There are two because one shared set killed
+///     <c>dotnet build</c> outright, measured on <see cref="SandboxToolchainLimits" />.
+/// </remarks>
 public static class SandboxResourceCeilings
 {
-    // Derived once, at first use. GC.GetGCMemoryInfo is the same source CapabilityReportComposer and
-    // HardwareProbeEnvironment already use for "how much memory does this machine have", and it is container-aware:
-    // under a cgroup memory limit it reports the limit, so a node inside a constrained container derives a ceiling
-    // that fits it rather than one describing the hardware underneath.
+    // Derived once, at first use, from the same source CapabilityReportComposer and HardwareProbeEnvironment use. It is container-aware:
+    // under a cgroup memory limit it reports the limit, so a constrained node derives a ceiling that fits it, not the hardware underneath.
     private static readonly SandboxResourceLimits HostToolchainDefaults =
         DeriveToolchainDefaults(Environment.ProcessorCount, GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
 
-    /// <summary>
-    ///     The ceiling to put on a create request, or <see langword="null" /> when the role asks for none or the backend
-    ///     cannot impose one.
-    ///     <para>
-    ///         Capability-gated rather than unconditional, and that gate is not defensive coding:
-    ///         <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> REFUSES a create request that carries ceilings to a
-    ///         process backend whose host has no working systemd user scope, so asking unconditionally would stop
-    ///         AgentHome and Development Mode running on such a node rather than harden them. A role that asks and does
-    ///         not get is reported as unbounded by the isolation summary, with the measured probe reason.
-    ///     </para>
-    /// </summary>
+    /// <summary>The ceiling to put on a create request, or <see langword="null" /> when the role asks for none or none can be imposed.</summary>
     /// <param name="requirements">The role's ADR 0007 declaration, which picks the profile.</param>
     /// <param name="capabilities">The resolved backend's advertised capabilities.</param>
     /// <param name="computeDefaults">The <c>Compute</c> section, for <see cref="SandboxCeilingProfile.ComputeTool" />.</param>
     /// <param name="nodeDefaults">
-    ///     The node-wide sandbox section, for <see cref="SandboxCeilingProfile.HostToolchain" />. Both are taken even
-    ///     though a given call uses one, so this stays a pure function of the declaration: a caller cannot change which
-    ///     set a role gets by injecting a different option.
+    ///     The node-wide sandbox section, for <c>HostToolchain</c>. Both are taken although a call uses one, so this stays a pure function
+    ///     of the declaration.
     /// </param>
+    /// <remarks>
+    ///     Capability-gated, and the gate is not defensive coding: <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> REFUSES a request
+    ///     carrying ceilings to a process backend whose host has no working systemd user scope, so asking unconditionally would stop
+    ///     AgentHome and Development Mode running there rather than harden them. A role that asks and does not get is reported as
+    ///     unbounded by the isolation summary, with the probe reason.
+    /// </remarks>
     public static SandboxResourceLimits? Resolve(SandboxRequirements requirements,
         SandboxProviderCapabilities capabilities,
         ComputeOptions computeDefaults,
@@ -76,10 +60,8 @@ public static class SandboxResourceCeilings
         };
     }
 
-    /// <summary>
-    ///     The host-toolchain ceilings this node uses, with each unset member filled from the host. Exposed so callers
-    ///     and tests can state the EFFECTIVE numbers instead of restating the formula.
-    /// </summary>
+    /// <summary>The host-toolchain ceilings this node uses, with each unset member filled from the host.</summary>
+    /// <remarks>Exposed so callers and tests can state the EFFECTIVE numbers instead of restating the formula.</remarks>
     public static SandboxResourceLimits ResolveToolchain(SandboxToolchainLimits configured)
     {
         ArgumentNullException.ThrowIfNull(configured);
@@ -93,17 +75,14 @@ public static class SandboxResourceCeilings
     }
 
     /// <summary>
-    ///     The derivation itself, as a pure function of the two host facts, so it is testable without needing a machine
-    ///     that happens to have the right shape.
-    ///     <para>
-    ///         CPU is every logical core: a build is the workload the operator is waiting on, and the ceiling exists to
-    ///         bound a runaway rather than to reserve headroom the machine is not otherwise using. Memory is 75% of
-    ///         physical RAM — leaving the engine, the model runtime and the OS the rest — floored at
-    ///         <see cref="SandboxToolchainLimits.DefaultMemoryFloorMb" />, because 75% of a small machine is below what
-    ///         a .NET build needs, and capped at physical RAM so the floor cannot promise memory that does not exist. A
-    ///         host that reports no memory at all (the API can return 0) gets the floor.
-    ///     </para>
+    ///     The derivation itself, as a pure function of the two host facts, so it is testable without a machine of the right shape.
     /// </summary>
+    /// <remarks>
+    ///     CPU is every logical core: a build is the workload the operator is waiting on, and the ceiling bounds a runaway rather than
+    ///     reserving headroom. Memory is 75% of physical RAM — leaving the engine, the model runtime and the OS the rest — floored at
+    ///     <see cref="SandboxToolchainLimits.DefaultMemoryFloorMb" />, because 75% of a small machine is under what a .NET build needs, and
+    ///     capped at physical RAM so the floor cannot promise memory that does not exist. A host reporting no memory gets the floor.
+    /// </remarks>
     public static SandboxResourceLimits DeriveToolchainDefaults(int processorCount, long totalPhysicalBytes)
     {
         var physicalMb = totalPhysicalBytes > 0 ? (int)Math.Min(totalPhysicalBytes / (1024 * 1024), int.MaxValue) : 0;

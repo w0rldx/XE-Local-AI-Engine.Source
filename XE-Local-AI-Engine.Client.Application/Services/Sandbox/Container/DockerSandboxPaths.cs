@@ -1,25 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
 /// <summary>
-///     Maps a caller's sandbox-namespace path onto the container path and the host path that actually name the same
-///     bytes, and rejects anything that escapes the workspace mount.
-///     <para>
-///         This mirrors <c>ProcessSandboxRuntimeProvider.ResolveJailPath</c> deliberately, because callers address
-///         files the same way whichever provider is in force: a leading separator means "sandbox-absolute", and the
-///         sandbox root is the workspace — not the container's <c>/</c>. Development Mode passes the literal
-///         <c>"/"</c> as the working directory for every command, so a provider that forwarded that string unmapped
-///         would run <em>every</em> command in the container root rather than in the repository. Divergence between
-///         the two providers here is a security bug rather than a stylistic difference, which is why the escape
-///         rejection throws the same <see cref="UnauthorizedAccessException" /> the process provider throws.
-///     </para>
-///     <para>
-///         Container paths are POSIX regardless of what the engine host is — the engine may be a native Windows
-///         process while the container is always Linux — so the container leg is normalised by this file rather
-///         than by <see cref="Path" />, whose separator and rooting rules would answer for the wrong operating
-///         system. Only the host leg uses <see cref="Path" />, and only after the container leg has proven
-///         containment.
-///     </para>
+///     Maps a caller's sandbox-namespace path onto the container path and the host path that name the same bytes, and rejects anything
+///     that escapes the workspace mount.
 /// </summary>
+/// <remarks>
+///     It mirrors <c>ProcessSandboxRuntimeProvider.ResolveJailPath</c> deliberately, callers addressing files the same way whichever
+///     provider is in force: a leading separator means "sandbox-absolute" and the sandbox root is the WORKSPACE, not the container's
+///     <c>/</c>. Development Mode passes a literal <c>"/"</c> as every command's working directory, so forwarding it unmapped would run
+///     every command in the container root. Divergence here is a security bug, hence the same <see cref="UnauthorizedAccessException" />.
+///     Container paths are POSIX whatever the host is, so only the host leg uses <see cref="Path" />, after containment is proven.
+/// </remarks>
 internal static class DockerSandboxPaths
 {
     /// <summary>The container's path separator, which is POSIX whatever the engine host is.</summary>
@@ -37,9 +28,8 @@ internal static class DockerSandboxPaths
 
         var root = NormalizePosix(mountTarget);
 
-        // A leading separator makes the path sandbox-absolute, which means "relative to the workspace mount", not
-        // "relative to the container root". Both separators are trimmed for parity with the process provider, which
-        // trims both because a caller on Windows may compose a path with either.
+        // A leading separator makes the path sandbox-absolute, meaning relative to the workspace mount and not the container root. Both
+        // separators are trimmed for parity with the process provider, a caller on Windows being able to compose with either.
         var relative = sandboxPath.TrimStart(PosixSeparator, '\\');
         var canonical = NormalizePosix(root + PosixSeparator + relative);
 
@@ -51,12 +41,12 @@ internal static class DockerSandboxPaths
         return canonical;
     }
 
-    /// <summary>
-    ///     Canonicalises a sandbox path into the HOST path backing it — the mount source, not the container path.
-    ///     Containment is proven twice: once in the container namespace and once again on the host after
-    ///     <see cref="Path.GetFullPath(string)" />, because the two normalisations do not have to agree about a
-    ///     component the host filesystem treats specially.
-    /// </summary>
+    /// <summary>Canonicalises a sandbox path into the HOST path backing it — the mount source, not the container path.</summary>
+    /// <remarks>
+    ///     Containment is proven twice, once in the container namespace and again on the host after
+    ///     <see cref="Path.GetFullPath(string)" />, because the two normalisations need not agree about a component the host filesystem
+    ///     treats specially.
+    /// </remarks>
     internal static string ResolveHostPath(string workspaceRoot, string mountTarget, string sandboxPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRoot);

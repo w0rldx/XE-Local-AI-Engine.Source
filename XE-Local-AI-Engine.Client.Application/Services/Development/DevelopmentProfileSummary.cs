@@ -5,14 +5,14 @@ using System.Text.Json;
 /// <summary>
 ///     The publicly projectable facts about a project's stored command profile: which code-owned profile it is, what it
 ///     builds, and the digest that identifies the exact command set.
-///     <para>
-///         Deliberately not the whole profile blob. The endpoint layer cannot see this assembly's internals, so a
-///         projection is needed either way — and this one is chosen to carry nothing host-identifying. The build target
-///         is repository-relative by construction (<c>NormalizeTarget</c> confines it before it can reach an argument
-///         vector), whereas the full profile's argument vectors would put executable names and the whole materialized
-///         command line on the wire for no operator benefit.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately not the whole profile blob: the endpoint layer cannot see this assembly's internals, so a
+///     projection is needed either way, and this one carries nothing host-identifying. The build target is
+///     repository-relative by construction (<c>NormalizeTarget</c> confines it before it reaches an argument vector),
+///     whereas the full profile's argument vectors would put executable names and the whole materialized command
+///     line on the wire for no operator benefit.
+/// </remarks>
 public sealed class DevelopmentProfileSummary
 {
     public required string ProfileId { get; init; }
@@ -23,14 +23,14 @@ public sealed class DevelopmentProfileSummary
 
     /// <summary>
     ///     Projects a stored profile, or null when the project has none or the stored bytes are unreadable.
-    ///     <para>
-    ///         Deliberately lenient, unlike <c>DevelopmentCommandProfileCatalog.ResolveStored</c>. That method is the
-    ///         execution gate and must reject a profile the catalog no longer honours; this one only labels a row in a
-    ///         list. Making a read-only projection strict would take the whole project list down the moment the
-    ///         code-owned catalog drifted, which hides the drift behind an outage instead of surfacing it at the point
-    ///         where it actually matters — starting an attempt.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately lenient, unlike <c>DevelopmentCommandProfileCatalog.ResolveStored</c>: that method is the
+    ///     execution gate and must reject a profile the catalog no longer honours, while this one only labels a row
+    ///     in a list. A strict read-only projection would take the whole project list down the moment the code-owned
+    ///     catalog drifted, hiding the drift behind an outage instead of surfacing it where it matters — at the start
+    ///     of an attempt.
+    /// </remarks>
     public static DevelopmentProfileSummary? TryFrom(string? storedCommandProfileJson)
     {
         if (string.IsNullOrWhiteSpace(storedCommandProfileJson))

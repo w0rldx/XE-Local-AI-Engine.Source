@@ -27,21 +27,14 @@ public interface IDevelopmentTemplateService
 
 /// <summary>
 ///     Creates a new Development repository from a template the operator already has on this host.
-///     <para>
-///         A template is an ordinary Git repository, not a scaffolding engine, and this is deliberately what keeps the
-///         feature small: <c>clone</c> → drop <c>.git</c> → <c>init</c> → one initial commit. There is no token
-///         substitution and no renaming in v1 — a project cloned from <c>XE-Framework</c> is named XE-Framework until
-///         the operator renames it. If substitution is ever added it runs here, in the engine, before the initial
-///         commit, and never as the agent's first task.
-///     </para>
-///     <para>
-///         <c>git worktree</c> is not an option for this. A worktree shares the template's object store, so its
-///         <c>.git</c> is a pointer file and <c>--git-common-dir</c> resolves into the template — which makes the
-///         managed worktree the engine later creates a child of the <em>template's</em> repository, so deleting or
-///         rebasing the template breaks every project made from it, and the inherited <c>origin</c> means a stray push
-///         lands in the template. Dropping <c>.git</c> removes the remote and the template's history along with it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A template is an ordinary Git repository, never a scaffolding engine: <c>clone</c> → drop <c>.git</c> →
+///     <c>init</c> → one initial commit, with no token substitution or renaming, and any substitution added later
+///     runs here in the engine before the initial commit, never as the agent's first task. <c>git worktree</c> is not
+///     an option, because a worktree shares the template's object store, which would make every managed worktree a
+///     child of the template's repository and leave an inherited <c>origin</c> a stray push can land in.
+/// </remarks>
 internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
 {
     private readonly INodeDataDirectory _dataDirectory;
@@ -120,9 +113,8 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             created = true;
             await MaterializeAsync(templateRoot, destination, template.Alias, templateCommit, baseBranch, cancellationToken);
 
-            // Registration is what makes the new folder a bindable Development repository, and it re-runs the same
-            // git-top-level check every registered repository passes — so a materialization that produced something
-            // that is not a canonical repository root fails here rather than at the first attempt.
+            // Registration makes the new folder bindable and re-runs the git-top-level check every registered
+            // repository passes, so a materialization that is not a canonical root fails here, not at the attempt.
             var repository = await _repositoryBindings.RegisterAsync(repositoryAlias, destination, cancellationToken);
             await _templateStore.RecordMaterializationAsync(new DevelopmentTemplateMaterializationSnapshot
             {
@@ -164,10 +156,8 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
         var parent = Path.GetDirectoryName(destination)
                      ?? throw new DevelopmentWorkspaceSecurityException("The destination path has no parent directory.");
 
-        // The transport, the flag set and the standalone assertion are shared with the managed workspace via
-        // StandaloneGitClone — including the reason file:// is mandatory: given a plain local path git SILENTLY IGNORES
-        // --depth ("warning: --depth is ignored in local clones; use file:// instead") and hardlinks the whole object
-        // store instead, which is exactly the shared-objects coupling this design exists to avoid.
+        // Transport, flags and the standalone assertion are shared with the managed workspace via StandaloneGitClone.
+        // file:// is mandatory: on a plain local path git ignores --depth and hardlinks the whole object store.
         var clone = await git.RunAsync(parent,
             AgentHomeGit.Arguments([.. StandaloneGitClone.Arguments(templateRoot, destination)]),
             cancellationToken);
@@ -178,11 +168,8 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             throw new DevelopmentWorkspaceSecurityException("The template clone did not produce a standalone Git directory.");
         }
 
-        // Where the two paths part company, and they must. Dropping .git is what severs the template: it removes the
-        // inherited origin (so a stray push cannot land in the template), the template's history, and any shared object
-        // state. The managed workspace deliberately does NOT do this — it keeps the cloned history and detaches onto
-        // the recorded base commit, because a fabricated initial commit would make its patch unappliable by
-        // construction.
+        // Dropping .git severs the template: the inherited origin, its history and any shared object state go with it.
+        // The managed workspace must not do this — it detaches onto the base commit, or its patch cannot apply.
         StandaloneGitClone.Delete(Path.Combine(destination, ".git"));
 
         var init = await git.RunAsync(destination,
@@ -195,9 +182,8 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
             cancellationToken);
         EnsureGitSuccess(add, "The materialized repository contents could not be staged.");
 
-        // Identity is supplied per-command rather than written into the new repository's config: the operator's own
-        // user.name/user.email may be unset on this host, and a commit that fails for that reason would leave a
-        // repository with no HEAD — which fails the workspace invariants later, far from the cause.
+        // Identity is supplied per command rather than written into the new repository's config: the operator's own
+        // may be unset here, and a commit failing for that leaves a HEADless repository that breaks far from the cause.
         var commit = await git.RunAsync(destination,
             AgentHomeGit.Arguments("-c", $"user.name={CommitAuthorName}",
                 "-c", $"user.email={CommitAuthorEmail}",

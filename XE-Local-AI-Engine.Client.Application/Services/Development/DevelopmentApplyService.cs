@@ -77,11 +77,8 @@ internal sealed class DevelopmentApplyService : IDevelopmentApplyService
                                                                 && attempt.Status == DevelopmentAttemptStatus.Succeeded)
                               ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful independent reviewer attempt.");
 
-        // The profile to judge this evidence by is the one the CODER attempt ran under, not the project's current
-        // value. They are the same until a profile-edit path exists, and they diverge the moment one does: a project
-        // edited after this patch was produced would otherwise make a historical attempt fail to apply because the
-        // digests describe an edit rather than a defect. Selected the same way every other gate selects it, so all of
-        // them agree on which attempt is authoritative.
+        // The profile judging this evidence is the CODER attempt's, not the project's current value: a project edited
+        // later would fail a historical apply over an edit, not a defect. Every gate selects the attempt this way.
         var coderAttempt = attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                                                              && attempt.Status == DevelopmentAttemptStatus.Succeeded)
                            ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful coder attempt.");

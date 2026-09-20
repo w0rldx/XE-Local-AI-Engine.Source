@@ -1,12 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     An opaque reference to a live AgentHome sandbox. Carries the provider name, the
-///     provider's sandbox/container id, the <see cref="SandboxAttachKey" /> it was created/attached under, its
-///     creation time, and the manifest version in force. Immutable: liveness is owned by the provider, so an
-///     operation against a killed sandbox throws <see cref="SandboxHandleInvalidException" /> rather than reading a
-///     stale flag off the handle.
-/// </summary>
+/// <summary>An opaque reference to a live AgentHome sandbox.</summary>
+/// <remarks>
+///     Immutable: liveness is owned by the provider, so an operation against a killed sandbox throws
+///     <see cref="SandboxHandleInvalidException" /> rather than reading a stale flag off the handle.
+/// </remarks>
 public sealed record SandboxHandle
 {
     /// <summary>The provider that owns this sandbox.</summary>
@@ -24,62 +22,49 @@ public sealed record SandboxHandle
     /// <summary>The AgentHome manifest version in force for this sandbox.</summary>
     public required int ManifestVersion { get; init; }
 
-    /// <summary>
-    ///     The isolation the provider ACTUALLY DELIVERED for this sandbox — not what the create request asked for.
-    ///     <para>
-    ///         A caller whose behaviour depends on a filesystem boundary must branch on this rather than on its own
-    ///         request: the request is a preference that a provider may refuse, and the two are only the same value
-    ///         because the process provider rejects an unmeetable isolation request fail-closed. Reading it off the
-    ///         handle is what makes "did I get the boundary?" a fact the sandbox reports rather than an inference the
-    ///         caller re-derives — and the answer a caller needs is about the sandbox it is holding, not about the host.
-    ///     </para>
-    ///     <para>
-    ///         <see cref="SandboxIsolationMode.None" /> is the default, so a provider that does not isolate (the
-    ///         deterministic fake) reports the honest answer without opting in.
-    ///     </para>
-    /// </summary>
+    /// <summary>The isolation the provider ACTUALLY DELIVERED for this sandbox — not what the create request asked for.</summary>
+    /// <remarks>
+    ///     A caller whose behaviour depends on a filesystem boundary must branch on this rather than on its own request: the request is a
+    ///     preference a provider may refuse, and the two only agree because the process provider rejects an unmeetable one fail-closed.
+    ///     Reading it off the handle makes "did I get the boundary?" a fact about the sandbox in hand, not an inference about the host.
+    ///     <see cref="SandboxIsolationMode.None" /> is the default, so a provider that does not isolate reports the honest answer without
+    ///     opting in.
+    /// </remarks>
     public SandboxIsolationMode Isolation { get; init; } = SandboxIsolationMode.None;
 
     /// <summary>
-    ///     Every engine-generated mount this sandbox carries, as the provider RESOLVED it — including the trusted host
-    ///     workspace. This is the answer to "what is this host path called inside the sandbox?", and it is the only
-    ///     honest place to ask: the requested <see cref="SandboxMount.SandboxPath" /> is a preference, and the process
-    ///     provider necessarily ignores it because a host child sees host paths.
+    ///     Every engine-generated mount this sandbox carries, as the provider RESOLVED it, including the trusted host workspace.
     /// </summary>
+    /// <remarks>
+    ///     The only honest answer to "what is this host path called inside the sandbox?": the requested
+    ///     <see cref="SandboxMount.SandboxPath" /> is a preference, and the process provider necessarily ignores it because a host child
+    ///     sees host paths.
+    /// </remarks>
     public IReadOnlyList<SandboxMountBinding> Mounts { get; init; } = [];
 
     /// <summary>
-    ///     The directory this sandbox is rooted at, named the way a COMMAND INSIDE IT sees the path: where a
-    ///     <see cref="SandboxCommandRequest" /> with no <see cref="SandboxCommandRequest.WorkingDirectory" /> starts,
-    ///     and what a sandbox-relative path (the argument to <c>ReadFileAsync</c>, <c>ResetDirectoryAsync</c>, …)
-    ///     resolves against.
-    ///     <para>
-    ///         It is a SANDBOX path, not necessarily a host path — the container provider reports its workspace mount
-    ///         target, which names nothing on the host. Use it to compose a path for the CHILD (an environment
-    ///         variable, an argument); never to open a file from engine code, which is what the provider's own file
-    ///         surface exists for. The process provider identity-maps its jail, so there the two happen to coincide.
-    ///     </para>
-    ///     <para>
-    ///         <see langword="null" /> when the provider has no such directory to name: the deterministic fake backs its
-    ///         sandbox with a virtual filesystem, so there is no path a child could be pointed at. A caller that needs
-    ///         one must read null as "this provider cannot serve me" rather than substituting a path of its own —
-    ///         <c>ComputeToolGateway</c> refuses the call, because the scratch directory it points a script at has to
-    ///         sit inside the jail the disk watchdog meters.
-    ///     </para>
+    ///     The directory this sandbox is rooted at, named the way a COMMAND INSIDE IT sees the path: where a command with no working
+    ///     directory starts, and what a sandbox-relative path resolves against.
     /// </summary>
+    /// <remarks>
+    ///     A SANDBOX path, not necessarily a host path — the container provider reports its workspace mount target, which names nothing on
+    ///     the host. Use it to compose a path for the CHILD, never to open a file from engine code; the process provider identity-maps its
+    ///     jail, so there the two coincide. <see langword="null" /> when the provider has no such directory (the deterministic fake is
+    ///     virtual): read null as "this provider cannot serve me" rather than substituting a path — <c>ComputeToolGateway</c> refuses, its
+    ///     scratch directory having to sit inside the jail the disk watchdog meters.
+    /// </remarks>
     public string? WorkingRoot { get; init; }
 
     /// <summary>
-    ///     Translates a host path into the path that names the same bytes inside this sandbox, or
-    ///     <see langword="null" /> when no mount covers it.
-    ///     <para>
-    ///         Matches the mount root itself and anything beneath it, longest root first, so a nested mount wins over
-    ///         the workspace it sits inside. Deliberately returns null rather than falling back to the host path: a
-    ///         caller that handed a container a host path would produce a command that fails deep inside a build with a
-    ///         "directory not found" that names a path the container has never heard of, which is far harder to read
-    ///         than a refusal at composition time.
-    ///     </para>
+    ///     Translates a host path into the path that names the same bytes inside this sandbox, or <see langword="null" /> when no mount
+    ///     covers it.
     /// </summary>
+    /// <remarks>
+    ///     Matches the mount root itself and anything beneath it, longest root first, so a nested mount wins over the workspace it sits
+    ///     inside. It deliberately returns null rather than falling back to the host path: handing a container a host path produces a
+    ///     command that fails deep inside a build with a "directory not found" naming a path the container never heard of, which is far
+    ///     harder to read than a refusal at composition time.
+    /// </remarks>
     public string? TryResolveSandboxPath(string hostPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);

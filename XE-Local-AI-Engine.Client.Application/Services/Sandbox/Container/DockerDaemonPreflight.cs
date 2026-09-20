@@ -30,14 +30,14 @@ public enum DockerDaemonPreflightStatus
 }
 
 /// <summary>
-///     The result of one container-runtime preflight: a machine-readable status, an operator-actionable message, and
-///     the evidence behind both.
-///     <para>
-///         Per ADR 0004 there is deliberately no unisolated fallback — an operator without a working daemon does not
-///         get a degraded Development Mode, they get none — so this message is the entire user experience of that
-///         failure and is written as a feature rather than as an error string.
-///     </para>
+///     The result of one container-runtime preflight: a machine-readable status, an operator-actionable message, and the evidence behind
+///     both.
 /// </summary>
+/// <remarks>
+///     Per ADR 0004 there is deliberately no unisolated fallback — an operator without a working daemon gets no Development Mode rather
+///     than a degraded one — so this message is the entire user experience of that failure and is written as a feature, not an error
+///     string.
+/// </remarks>
 public sealed record DockerDaemonPreflight
 {
     /// <summary>The distinguishable outcome.</summary>

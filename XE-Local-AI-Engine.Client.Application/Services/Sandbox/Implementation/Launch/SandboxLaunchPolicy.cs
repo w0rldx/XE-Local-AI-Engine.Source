@@ -26,12 +26,12 @@ public sealed record SandboxLaunchPolicy
     /// </summary>
     public bool DenyNetworkEgress { get; init; }
 
-    /// <summary>
-    ///     The filesystem posture this sandbox's commands run under. A policy only ever carries
-    ///     <see cref="SandboxIsolationMode.Filesystem" /> when the host was measured able to deliver it — the registry
-    ///     rejects the create request otherwise — so a value here implies an active boundary, exactly as a non-null
+    /// <summary>The filesystem posture this sandbox's commands run under.</summary>
+    /// <remarks>
+    ///     A policy carries <see cref="SandboxIsolationMode.Filesystem" /> only where the host was measured able to deliver it, the
+    ///     registry rejecting the create request otherwise, so a value here implies an active boundary exactly as a non-null
     ///     <see cref="ResourceLimits" /> implies an active ceiling.
-    /// </summary>
+    /// </remarks>
     public SandboxIsolationMode Isolation { get; init; } = SandboxIsolationMode.None;
 
     /// <summary>Host trees the isolated chain binds read-only. Empty under <see cref="SandboxIsolationMode.None" />.</summary>

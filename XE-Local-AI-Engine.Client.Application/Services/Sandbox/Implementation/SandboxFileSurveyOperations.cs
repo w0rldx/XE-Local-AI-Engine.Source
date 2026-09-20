@@ -5,19 +5,16 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     The sanctioned file surface of the process jail: read, list, search, copy in/out and reset, each entered with a
-///     jail root the caller has already resolved from a live sandbox handle. Every leg runs the same guard pair —
-///     <see cref="SandboxJailPathGuard.ResolveJailPath" /> plus
-///     <see cref="SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail" /> — before it opens anything, which is the
-///     reason <c>list_files</c>/<c>search_text</c> are provider operations here rather than composed <c>find</c>/
-///     <c>grep</c> argument vectors: a new surface added here cannot skip the confinement, and none of it is POSIX-only.
-///     <para>
-///         Secret exclusion is NOT this type's job and is deliberately absent: callers pass their own suppression
-///         predicate in the request and re-apply it to what comes back. Which entries a feature may see is that
-///         feature's policy (Development gates reads on <c>IsSecret</c>, Coder additionally drops its whole copy-filter
-///         set); the jail's job is containment.
-///     </para>
+///     The sanctioned file surface of the process jail — read, list, search, copy in and out, reset — each entered with a jail root the
+///     caller resolved from a live sandbox handle.
 /// </summary>
+/// <remarks>
+///     Every leg runs the same guard pair, <see cref="SandboxJailPathGuard.ResolveJailPath" /> plus
+///     <see cref="SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail" />, before it opens anything, which is why the surveys are
+///     provider operations rather than composed <c>find</c> and <c>grep</c> argument vectors: a new surface here cannot skip the
+///     confinement, and none of it is POSIX-only. Secret exclusion is deliberately NOT this type's job — callers pass their own suppression
+///     predicate and re-apply it, because which entries a feature may see is its policy and the jail's job is containment.
+/// </remarks>
 internal static class SandboxFileSurveyOperations
 {
     public static async Task CopyIntoAsync(string jailRoot,
@@ -27,15 +24,13 @@ internal static class SandboxFileSurveyOperations
     {
         var destination = SandboxJailPathGuard.ResolveJailPath(jailRoot, request.DestinationPath);
 
-        // SECURITY (hard reject): a sandboxed command can plant a symlink inside the jail, so the destination's parent
-        // chain — and the leaf if it already exists — must contain no symlink that would redirect the write outside the
-        // jail. The parent dirs are created first so they exist (and are re-checked) before the no-follow create.
+        // SECURITY (hard reject): a sandboxed command can plant a symlink inside the jail, so the destination's parent chain, and the
+        // leaf if it exists, must hold none. Parent dirs are created first so they exist and are re-checked before the no-follow create.
         var parent = Path.GetDirectoryName(destination);
         if (parent is not null)
         {
-            // Validate the existing prefix BEFORE Directory.CreateDirectory: that API follows an intermediate
-            // symlink, so creating first could mutate an outside directory before the later rejection. Re-check after
-            // creation to cover every newly materialized component and a concurrent swap.
+            // Validate the existing prefix BEFORE Directory.CreateDirectory, which follows an intermediate symlink and could mutate an
+            // outside directory before the later rejection. Re-check after creation for newly materialized components and a concurrent swap.
             SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(jailRoot, parent, request.DestinationPath);
             Directory.CreateDirectory(parent);
             SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(jailRoot, parent, request.DestinationPath);
@@ -43,9 +38,8 @@ internal static class SandboxFileSurveyOperations
 
         SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(jailRoot, destination, request.DestinationPath);
 
-        // Re-open the host source under the no-follow / byte-cap-on-re-read guard ported from the container provider:
-        // never trust a path string sized by an earlier walk. A swap-to-symlink, over-cap file, or growth-after-sizing
-        // throws so the workspace preparation cannot report a successful snapshot for bytes that were never copied.
+        // Re-open the host source under the no-follow and byte-cap-on-re-read guard: never trust a path string sized by an earlier walk.
+        // A swap-to-symlink, over-cap file or growth-after-sizing throws, so preparation cannot report a snapshot of bytes never copied.
         var content = SandboxJailPathGuard.ReadHostFileUnderGuard(request.SourcePath, maxCopyFileBytes);
 
         // No-follow create on Linux: if the leaf was swapped for a symlink between the component check and the write,
@@ -94,17 +88,13 @@ internal static class SandboxFileSurveyOperations
         return Encoding.UTF8.GetString(bytes);
     }
 
-    /// <summary>
-    ///     Lists the jail's regular files. Resolves the directory through the SAME two controls a read goes through —
-    ///     <c>ResolveJailPath</c> for the lexical escape and <c>EnsureNoSymlinkComponentsUnderJail</c> for a planted
-    ///     link — and then walks it with <see cref="WorkspaceFileScanner" />, which follows no link it meets on the way
-    ///     down either.
-    ///     <para>
-    ///         This used to be the caller's <c>find</c> shell-out. Doing it here is what makes the operation exist on a
-    ///         host with no findutils, and it also moves the confinement from an argument vector the caller had to get
-    ///         right into the provider that owns the jail.
-    ///     </para>
-    /// </summary>
+    /// <summary>Lists the jail's regular files.</summary>
+    /// <remarks>
+    ///     Resolves the directory through the SAME two controls a read goes through — <c>ResolveJailPath</c> for the lexical escape and
+    ///     <c>EnsureNoSymlinkComponentsUnderJail</c> for a planted link — then walks it with <see cref="WorkspaceFileScanner" />, which
+    ///     follows no link on the way down either. Doing it here rather than through a <c>find</c> shell-out makes the operation exist on a
+    ///     host with no findutils, and moves the confinement from an argument vector the caller had to get right into the jail's owner.
+    /// </remarks>
     public static IReadOnlyList<string> ListFiles(string jailRoot, SandboxListFilesRequest request, CancellationToken cancellationToken)
     {
         var root = ResolveSurveyDirectory(jailRoot, request.DirectoryPath);
@@ -147,11 +137,11 @@ internal static class SandboxFileSurveyOperations
         await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken);
     }
 
-    /// <summary>
-    ///     The survey's own confinement, identical to the read leg's. Kept in one place so the two surveys cannot drift
-    ///     apart from each other or from <see cref="ReadFileAsync" />. The handle-side checks (live sandbox, non-blank
-    ///     path, cancellation) run in the provider before the jail root reaches here.
-    /// </summary>
+    /// <summary>The survey's own confinement, identical to the read leg's.</summary>
+    /// <remarks>
+    ///     Kept in one place so the two surveys cannot drift from each other or from <see cref="ReadFileAsync" />. The handle-side checks —
+    ///     live sandbox, non-blank path, cancellation — run in the provider before the jail root reaches here.
+    /// </remarks>
     private static string ResolveSurveyDirectory(string jailRoot, string directoryPath)
     {
         var resolved = SandboxJailPathGuard.ResolveJailPath(jailRoot, directoryPath);

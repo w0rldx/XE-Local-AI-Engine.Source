@@ -161,6 +161,16 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
         return read.Content;
     }
 
+    /// <summary>
+    ///     Runs one Git command under the same hardened <c>-c</c> vector <c>DevelopmentPatchEvidenceService</c> uses.
+    /// </summary>
+    /// <remarks>
+    ///     The approved <c>PatchHash</c> comes from <c>diff --cached --binary</c> taken with
+    ///     <c>core.attributesfile=/dev/null</c> and <c>core.quotePath=false</c>, and this port recomputes it, so a
+    ///     <c>.gitattributes</c> defining a clean filter or a text conversion makes the two disagree and the apply
+    ///     reports a result mismatch that has nothing to do with the patch. The pins also stop a repository-local
+    ///     <c>core.fsmonitor</c> executing on the index refresh <c>status</c> performs.
+    /// </remarks>
     private async Task<GitBytesResult> RunGitAsync(string workingDirectory,
         IReadOnlyList<string> arguments,
         ReadOnlyMemory<byte>? standardInput,
@@ -178,22 +188,8 @@ internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPor
             UseShellExecute = false,
             CreateNoWindow = true
         };
-        // Prefixed with the SAME hardened `-c` vector DevelopmentPatchEvidenceService runs under, and it was missing
-        // here. Two consequences, and the second is the one that bites first.
-        //
-        // Byte drift: the evidence service computes the approved PatchHash from `diff --cached --binary` taken WITH
-        // core.attributesfile=/dev/null and core.quotePath=false, and this port recomputes the same diff and compares
-        // hashes. A `.gitattributes` in the trusted repository defining a clean filter or a text conversion made the
-        // two disagree, and the apply then reported "did not reach the exact approved result" for a reason that had
-        // nothing to do with the patch.
-        //
-        // Exec suppression: `status` refreshes the index, so a repository-local core.fsmonitor executes here. This is
-        // the operator's OWN repository rather than an agent-writable one, so it is defence in depth rather than a
-        // closed hole — but it costs nothing and it stops a later command re-opening it.
-        //
-        // NOTE this port runs against `repositoryRoot`, the operator's registered repository — NOT the managed
-        // workspace. The engine-side .git/config REWRITE therefore deliberately does not run here: it would rewrite the
-        // user's own repository configuration, which the engine does not own and the agent cannot reach.
+        // This port runs against repositoryRoot, the operator's registered repository, not the managed workspace, so
+        // the engine-side .git/config rewrite deliberately does not run here. See this method's remarks for the pins.
         foreach (var argument in AgentHomeGit.Arguments([.. arguments]))
         {
             startInfo.ArgumentList.Add(argument);

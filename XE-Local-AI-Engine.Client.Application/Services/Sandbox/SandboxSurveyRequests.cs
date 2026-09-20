@@ -1,13 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     A request to list the regular files under one sandbox directory.
-///     <para>
-///         Every bound is the caller's, because the caller is the one that knows what its model can usefully read:
-///         these surveys have no defaults of their own to fall back on, and a provider inventing one would silently
-///         change what a tool returns.
-///     </para>
-/// </summary>
+/// <summary>A request to list the regular files under one sandbox directory.</summary>
+/// <remarks>
+///     Every bound is the caller's, because the caller knows what its model can usefully read: these surveys have no defaults of their own
+///     to fall back on, and a provider inventing one would silently change what a tool returns.
+/// </remarks>
 public sealed record SandboxListFilesRequest
 {
     /// <summary>The sandbox-absolute directory to survey. The provider confines it exactly as it confines a read.</summary>
@@ -16,12 +13,12 @@ public sealed record SandboxListFilesRequest
     /// <summary>The emitted-entry ceiling. The survey stops once it is reached rather than listing and truncating.</summary>
     public required int MaxEntries { get; init; }
 
-    /// <summary>
-    ///     Optional caller policy applied before the emitted-entry ceiling. The value receives a path relative to
-    ///     <see cref="DirectoryPath" /> and must return <see langword="true" /> for entries that should be neither
-    ///     descended into nor emitted. Applying it inside the bounded walk prevents an excluded subtree from consuming
-    ///     the whole survey budget before usable files are reached.
-    /// </summary>
+    /// <summary>Optional caller policy applied before the emitted-entry ceiling.</summary>
+    /// <remarks>
+    ///     The value receives a path relative to <see cref="DirectoryPath" /> and returns <see langword="true" /> for entries that should
+    ///     be neither descended into nor emitted. Applying it inside the bounded walk stops an excluded subtree consuming the whole survey
+    ///     budget before usable files are reached.
+    /// </remarks>
     public Func<string, bool>? IsPathSuppressed { get; init; }
 
     /// <summary>

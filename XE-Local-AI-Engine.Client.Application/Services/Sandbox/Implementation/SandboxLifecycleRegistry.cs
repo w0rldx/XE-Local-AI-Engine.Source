@@ -8,24 +8,16 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     Owns the live process-jail set of one <see cref="ProcessSandboxRuntimeProvider" />: create-or-attach by key,
-///     reconnect, lookup, owner-conflict eviction and termination. The provider keeps command execution and process
-///     control; everything that decides which jails exist lives here.
-///     <para>
-///         There is exactly ONE dictionary and ONE lock, and they are here — the provider holds no copy and takes no
-///         second lock. Every provider operation reaches a <see cref="JailState" /> through
-///         <see cref="GetAliveState" />, <see cref="FindState" />, <see cref="RemoveAndTerminate" /> or
-///         <see cref="TerminateAll" />, so the create/attach/evict/kill decisions stay serialized against each other
-///         exactly as they were when they shared the provider's class body.
-///     </para>
-///     <para>
-///         Attach is idempotent by <see cref="SandboxAttachKey" />: a create request that matches a live jail returns
-///         that jail's handle instead of a second one, after checking the trusted-host-workspace binding still agrees
-///         and letting a stricter jail-disk ceiling tighten the live one (<see cref="JailState.TightenMaxJailDiskBytes" />).
-///         A same-node request under a DIFFERENT owner is not an attach — the old jail is killed and removed before
-///         the new one is created, so one user's sandbox is never handed to another.
-///     </para>
+///     Owns the live process-jail set of one <see cref="ProcessSandboxRuntimeProvider" />: create-or-attach by key, reconnect, lookup,
+///     owner-conflict eviction and termination. The provider keeps command execution and process control.
 /// </summary>
+/// <remarks>
+///     There is exactly ONE dictionary and ONE lock, both here: the provider holds no copy and every provider operation reaches a
+///     <see cref="JailState" /> through this type, so create, attach, evict and kill stay serialized against each other. Attach is
+///     idempotent by <see cref="SandboxAttachKey" /> — a create matching a live jail returns that jail's handle once the
+///     trusted-host-workspace binding still agrees and a stricter disk ceiling has tightened the live one. A same-node request under a
+///     DIFFERENT owner is not an attach: the old jail is killed and removed first, so one user's sandbox never reaches another.
+/// </remarks>
 internal sealed class SandboxLifecycleRegistry
 {
     private readonly string _jailRoot;
@@ -46,9 +38,8 @@ internal sealed class SandboxLifecycleRegistry
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Fail-closed capability contract, resolved against what this HOST can actually do. Anything the provider
-        // cannot deliver here is refused up front rather than silently downgraded; anything it can is captured in the
-        // launch policy and applied to every command this sandbox runs.
+        // Fail-closed capability contract, resolved against what this HOST can actually do: anything the provider cannot deliver is
+        // refused up front rather than silently downgraded, and anything it can is captured in the launch policy for every command.
         var launchPolicy = BuildLaunchPolicy(request);
 
         lock (_sync)
@@ -58,9 +49,8 @@ internal sealed class SandboxLifecycleRegistry
             {
                 EnsureCompatibleWorkspaceBinding(attached, request.TrustedHostWorkspace);
 
-                // The disk ceiling is a CREATE-TIME property of the sandbox, so an attach cannot re-specify it — but it
-                // can ask for LESS, and refusing that would be the wrong asymmetry: the request that wants a tighter
-                // bound is the one being careful. It takes effect for future commands only (see the method's docs).
+                // The disk ceiling is a CREATE-TIME property, so an attach cannot re-specify it, but it can ask for LESS: refusing that
+                // would be the wrong asymmetry, the tighter request being the careful one. Future commands only (see the method's docs).
                 attached.TightenMaxJailDiskBytes(request.MaxJailDiskBytes);
                 return Task.FromResult(attached.Handle);
             }
@@ -86,14 +76,8 @@ internal sealed class SandboxLifecycleRegistry
                 // What the launch policy RESOLVED to, after every fail-closed refusal above — so the handle reports
                 // the boundary the sandbox really has rather than the one its caller asked for.
                 Isolation = launchPolicy.Isolation,
-                // A host child sees host paths, so the jail directory names the same bytes inside and out. That
-                // identity is what lets a caller compose a child-visible path UNDER the jail — which is where anything
-                // the jail disk watchdog is supposed to meter has to live.
-                //
-                // Under SandboxIsolationMode.Filesystem the CHILD sees the jail at SandboxIsolatedPaths.Work instead,
-                // and this stays the HOST path deliberately: it is how the engine reaches the same bytes from outside
-                // the namespace (the workspace copy, the survey operations, the git-config rewrite before export all
-                // need it). A caller composing a path for the CHILD under isolation must use SandboxIsolatedPaths.
+                // A host child sees host paths, so the jail names the same bytes inside and out, which is what lets a caller compose a
+                // child-visible path under it. Under isolation the CHILD sees it at SandboxIsolatedPaths.Work; this stays the HOST path.
                 WorkingRoot = jailDirectory
             };
             _sandboxes[sandboxId] = new JailState(handle,
@@ -164,11 +148,13 @@ internal sealed class SandboxLifecycleRegistry
     }
 
     /// <summary>
-    ///     The enforcement half of the capability-honesty invariant: a guarantee this host cannot deliver is refused up
-    ///     front, so a caller can never believe it received isolation the provider did not apply. It reads the same
-    ///     containment probe as <see cref="ProcessSandboxRuntimeProvider.Capabilities" />, so what is rejected here is
-    ///     exactly what is not advertised there.
+    ///     The enforcement half of the capability-honesty invariant: a guarantee this host cannot deliver is refused up front, so a caller
+    ///     can never believe it received isolation the provider did not apply.
     /// </summary>
+    /// <remarks>
+    ///     It reads the same containment probe as <see cref="ProcessSandboxRuntimeProvider.Capabilities" />, so what is rejected here is
+    ///     exactly what is not advertised there.
+    /// </remarks>
     private SandboxLaunchPolicy BuildLaunchPolicy(SandboxCreateRequest request)
     {
         var containment = _launcher.Containment;
@@ -181,9 +167,8 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider has no network allow-list mechanism and cannot honor NetworkPolicy.Restricted. Use NetworkPolicy.None for default-deny egress, or an OS-isolated provider for an allow-list."));
         }
 
-        // A filesystem boundary is the one request that is never a preference: a caller asking for it is asking to be
-        // TOLD when it is not there, because everything it does next depends on the answer. Rejected fail-closed on a
-        // host the probe could not measure it on, with the measured reason attached.
+        // A filesystem boundary is never a preference: a caller asking for it is asking to be TOLD when it is absent, since everything it
+        // does next depends on the answer. Rejected fail-closed where the probe could not measure it, with the measured reason attached.
         var wantsIsolation = request.Isolation == SandboxIsolationMode.Filesystem;
         if (wantsIsolation && !containment.SupportsFilesystemIsolation)
         {
@@ -191,27 +176,24 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot isolate the host filesystem on this host ({containment.FilesystemIsolationUnavailableReason ?? "no mechanism is available"}), so SandboxIsolationMode.Filesystem cannot be honored. Gate the request on SupportsFilesystemIsolation, or use a provider that advertises it."));
         }
 
-        // An isolated jail is tightened to 0700 and is never exposed at its host pathname, neither of which is a
-        // thing to do to a user's own checkout. The two features are therefore refused together rather than one
-        // silently reshaping the other's directory.
+        // An isolated jail is tightened to 0700 and never exposed at its host pathname, neither of which is a thing to do to a user's own
+        // checkout, so the two features are refused together rather than one silently reshaping the other's directory.
         if (wantsIsolation && request.TrustedHostWorkspace is not null)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot combine SandboxIsolationMode.Filesystem with a trusted host workspace: the isolated jail is private to one sandbox and is not reachable at its host path, which is the opposite of what a preserved workspace is for."));
         }
 
-        // Read-only trees only mean something inside a mount namespace. Under the non-isolated mode the sandbox can
-        // already read the whole host filesystem, so accepting the list would advertise a narrowing that did not
-        // happen — the same silent downgrade the branches around it exist to prevent.
+        // Read-only trees only mean something inside a mount namespace: the non-isolated mode already reads the whole host filesystem, so
+        // accepting the list would advertise a narrowing that did not happen — the downgrade the branches around it exist to prevent.
         if (!wantsIsolation && request.ReadOnlyTrees is { Count: > 0 })
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider only binds read-only trees under SandboxIsolationMode.Filesystem; without it the sandbox already reads the whole host filesystem and the list would mean nothing."));
         }
 
-        // Rejected at CREATE time as well as at launch time: a caller that named an unbindable tree has made a
-        // configuration mistake, and finding out at the first command — after provisioning, in a result string — is
-        // far worse than finding out when the sandbox is asked for.
+        // Rejected at CREATE time as well as at launch time: naming an unbindable tree is a configuration mistake, and finding out at the
+        // first command — after provisioning, in a result string — is far worse than finding out when the sandbox is asked for.
         var shadowed = (request.ReadOnlyTrees ?? [])
             .FirstOrDefault(tree => !SandboxIsolatedChain.CanBindReadOnlyTree(Path.TrimEndingDirectorySeparator(Path.GetFullPath(tree))));
         if (shadowed is not null)
@@ -220,10 +202,8 @@ internal sealed class SandboxLifecycleRegistry
                 $"The read-only tree '{shadowed}' lies under a mount point the isolated sandbox owns ({string.Join(", ", SandboxIsolatedChain.ReservedMountPoints)}); it would be shadowed by the sandbox's own mounts rather than visible inside it."));
         }
 
-        // None means no egress. Honored when the host can create an empty network namespace; rejected fail-closed when
-        // it cannot, rather than handing back a sandbox that silently shares the host network. Under the isolated mode
-        // the denial comes from bwrap's own --unshare-net — which the probe positively controlled with a loopback
-        // connect — so the separate unshare(1) mechanism is not additionally required.
+        // None means no egress: honoured where the host can create an empty network namespace, rejected fail-closed where it cannot
+        // rather than silently sharing the host network. Under isolation the denial is bwrap's own --unshare-net, probe-controlled.
         var denyEgress = request.NetworkPolicy == SandboxNetworkPolicy.None;
         if (denyEgress && !wantsIsolation && !containment.SupportsNetworkIsolation)
         {
@@ -231,9 +211,8 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot deny network egress on this host ({containment.NetworkIsolationUnavailableReason ?? "no mechanism is available"}), so NetworkPolicy.None cannot be honored. Use NetworkPolicy.Unrestricted to accept a shared host network, or an OS-isolated provider."));
         }
 
-        // Resource limits are honored when a transient systemd user scope can impose them, and rejected fail-closed
-        // when it cannot — running without the ceiling the caller asked for is exactly the silent downgrade this
-        // contract exists to prevent.
+        // Resource limits are honoured where a transient systemd user scope can impose them and rejected fail-closed where it cannot:
+        // running without the ceiling the caller asked for is exactly the silent downgrade this contract exists to prevent.
         var limits = request.ResourceLimits;
         var wantsLimits = limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue);
         if (wantsLimits && !wantsIsolation && !containment.SupportsResourceLimits)
@@ -242,12 +221,8 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot enforce resource limits (CPU/memory/PID) on this host ({containment.ResourceLimitsUnavailableReason ?? "no mechanism is available"}). Remove SandboxResourceLimits or use a provider that advertises SupportsResourceLimits."));
         }
 
-        // A read-only mount needs a mount layer, and this provider has none — the child runs on the host filesystem
-        // with ordinary permissions. Rejected rather than served writable: a caller that asked for read-only and got
-        // read-write would believe a file was protected that anything in the sandbox can overwrite, which is the same
-        // silent downgrade the network and resource-limit branches above exist to prevent. Callers that want this
-        // where it exists must gate the request on SupportsReadOnlyMounts, exactly as AgentHome gates its egress
-        // request on SupportsNetworkPolicy.
+        // A read-only mount needs a mount layer and this provider has none. Rejected rather than served writable, because a caller would
+        // believe a file protected that anything can overwrite; callers gate the request on SupportsReadOnlyMounts.
         if (request.Mounts?.Any(static mount => mount.ReadOnly) == true)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
@@ -266,19 +241,15 @@ internal sealed class SandboxLifecycleRegistry
     }
 
     /// <summary>
-    ///     Resolves the engine's requested mounts as an IDENTITY map: a host child already sees the host filesystem, so
-    ///     every requested host path is reachable under its own name and nothing is mounted anywhere.
-    ///     <para>
-    ///         The requested <see cref="SandboxMount.SandboxPath" /> is therefore <em>discarded</em>, not honoured, and
-    ///         the handle reports the host path instead. That is the honest answer rather than a shortcut: a caller that
-    ///         put the requested path into a child's environment would name a directory this provider never created.
-    ///     </para>
-    ///     <para>
-    ///         This deliberately does NOT start confining anything. The mount list is a description of what the sandbox
-    ///         can reach, and under this provider that set was already the whole host filesystem; narrowing it here
-    ///         would change the preserved-workspace contract under callers that never asked for it.
-    ///     </para>
+    ///     Resolves the engine's requested mounts as an IDENTITY map: a host child already sees the host filesystem, so every requested
+    ///     host path is reachable under its own name and nothing is mounted anywhere.
     /// </summary>
+    /// <remarks>
+    ///     The requested <see cref="SandboxMount.SandboxPath" /> is DISCARDED rather than honoured and the handle reports the host path,
+    ///     which is the honest answer: a caller putting the requested path into a child's environment would name a directory this provider
+    ///     never created. It deliberately confines nothing — the mount list describes what the sandbox can reach, already the whole host
+    ///     filesystem here, and narrowing it would change the preserved-workspace contract under callers that never asked.
+    /// </remarks>
     private static IReadOnlyList<SandboxMountBinding> ResolveIdentityMounts(SandboxCreateRequest request, string jailDirectory)
     {
         var bindings = new List<SandboxMountBinding>();
@@ -363,9 +334,8 @@ internal sealed class SandboxLifecycleRegistry
 
     private static string BuildSandboxId(SandboxAttachKey attachKey)
     {
-        // Hash the complete attach scope. Owner/node alone is insufficient because AgentHome and Development may use
-        // different runtime profiles or manifest versions for the same logical node and must coexist without one
-        // dictionary entry overwriting the other.
+        // Hash the complete attach scope: owner and node alone are insufficient, because AgentHome and Development may use different
+        // runtime profiles or manifest versions for one logical node and must coexist without overwriting each other's entry.
         var scope = string.Concat(attachKey.OwnerUserId, "\0",
             attachKey.NodeId, "\0",
             attachKey.ProviderName, "\0",
@@ -404,10 +374,8 @@ internal sealed class SandboxLifecycleRegistry
             // Signal the in-flight ExecuteAsync that its command was cancelled (Completed=false) AND tree-kill the
             // process so a sandbox kill terminates every running command immediately.
             inFlight.RequestCancel();
-            // For an isolated command the tree-kill alone is not enough: its processes live in a PID namespace this
-            // process cannot see, so the scope's cgroup is signalled FIRST and the tree-kill is what finishes the
-            // outer helpers. Synchronous on purpose — the jail directory is deleted a few lines below, and deleting a
-            // directory processes are still writing to is how a teardown leaves a half-removed jail behind.
+            // For an isolated command a tree-kill alone is not enough — its processes live in a PID namespace this one cannot see — so the
+            // scope's cgroup is signalled FIRST. Synchronous: the jail is deleted below, and deleting it mid-write half-removes it.
             if (inFlight.ScopeUnitName is { } unitName)
             {
 #pragma warning disable MA0045 // forced sync: the jail directory is deleted below, see the comment above

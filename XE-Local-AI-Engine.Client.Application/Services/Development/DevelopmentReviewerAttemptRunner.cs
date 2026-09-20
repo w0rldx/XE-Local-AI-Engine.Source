@@ -208,14 +208,13 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         }
     }
 
-    /// <summary>
-    ///     Records what this round TOLD the reviewer, before the reviewer is called. Unlike the coder's, this prompt
-    ///     names a subject that already exists, so it carries the full patch evidence and cites the artifacts it was
-    ///     built from. Best-effort for the same reason as the coder's, and under <see cref="CancellationToken.None" />
-    ///     for the same reason too: a review that ends in a cancelled attempt or a rejected submission is exactly the
-    ///     one whose prompt is worth having, so the attempt's own deadline must not be able to cancel the record of
-    ///     it, and an observation must never be able to fail the attempt it observes. The swallow is logged.
-    /// </summary>
+    /// <summary>Records what this round told the reviewer, before the reviewer is called.</summary>
+    /// <remarks>
+    ///     Unlike the coder's, this prompt names a subject that already exists, so it carries the full patch evidence
+    ///     and cites the artifacts it was built from. Best-effort and under <see cref="CancellationToken.None" /> for
+    ///     the coder's reasons: a review ending in a cancelled attempt or a rejected submission is exactly the one
+    ///     whose prompt is worth having, and an observation must never fail the attempt it observes. Swallows log.
+    /// </remarks>
     private async Task PersistPromptAsync(DevelopmentExecutionSnapshot snapshot,
         string prompt,
         DevelopmentEvidenceSet evidence,
@@ -264,15 +263,13 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                                       && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
 
-            // The two artifact PROTOCOL checks, unchanged. They prove the report has the shape this reviewer
-            // understands. The profile-digest checks that follow are an additional dimension, not a replacement:
-            // a digest says which commands ran, and says nothing about whether the artifact can be parsed.
+            // The two artifact protocol checks prove the report has the shape this reviewer understands. The digest
+            // checks below are an added dimension, not a replacement: a digest says nothing about parseability.
             || !string.Equals(report.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
             || !string.Equals(validationArtifact.CommandProfileVersion, DevelopmentValidationRunner.ProfileVersion, StringComparison.Ordinal)
 
-            // The report must have been produced by the same command profile this project runs under now, recorded
-            // both in the report body and on the artifact row, so a profile change invalidates stale approval
-            // evidence instead of letting a review approve commands that are no longer the ones that would run.
+            // The report must come from the profile this project runs under now, recorded in the body and on the row,
+            // so a profile change invalidates stale approval instead of approving commands that would no longer run.
             || !string.Equals(report.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal)
             || !string.Equals(validationArtifact.CommandProfileDigest, expectedProfileDigest, StringComparison.Ordinal)
             || !string.Equals(report.BaseCommit, evidence.Current.BaseCommit, StringComparison.OrdinalIgnoreCase)
@@ -350,21 +347,21 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             "\nJudge the work against the requirements AS AMENDED by any operator instruction above, and never request a change the test-write policy forbids.",
             "\nUse only the read-only tools. Never modify the worktree or claim task completion.");
 
-    /// <summary>
-    ///     The rule sets a Development workflow resolved for the node run driving this task, when one does. Rendered and
-    ///     bounded by the workflow before it ever reached the task, so this only decides whether there is a section at
-    ///     all: an empty heading governs nothing and would read as a policy that said nothing.
-    /// </summary>
+    /// <summary>The rule sets a Development workflow resolved for the node run driving this task, when one does.</summary>
+    /// <remarks>
+    ///     Rendered and bounded by the workflow before it reached the task, so this only decides whether there is a
+    ///     section at all: an empty heading governs nothing and would read as a policy that said nothing.
+    /// </remarks>
     private static string Policy(string? workflowPolicy) =>
         string.IsNullOrWhiteSpace(workflowPolicy)
             ? string.Empty
             : string.Concat("\nPolicy (rule sets applied by the workflow):\n", workflowPolicy);
 
-    /// <summary>
-    ///     Puts the gate's structured test counts in front of the reviewer. "Validation passed" alone does not let a
-    ///     reviewer tell a change covered by twenty executed tests from one covered by two, and coverage of the change
-    ///     is exactly the judgement the review round exists to make.
-    /// </summary>
+    /// <summary>Puts the gate's structured test counts in front of the reviewer.</summary>
+    /// <remarks>
+    ///     "Validation passed" alone does not let a reviewer tell a change covered by twenty executed tests from one
+    ///     covered by two, and coverage of the change is exactly the judgement the review round exists to make.
+    /// </remarks>
     private static string DescribeTestResults(DevelopmentValidationReport validation)
     {
         var outcomes = validation.Commands
@@ -383,13 +380,12 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                        : $"- {entry.CommandId}: no readable test result ({entry.Outcome.ParseFailureCode})"));
     }
 
-    /// <summary>
-    ///     What a person told this task to do differently, which until now reached the coder alone. Live on 2026-09-04
-    ///     that asymmetry deadlocked a task: the operator moved a test out of a base-committed file the test-write
-    ///     policy protects, the coder complied and passed validation 4 of 4, and the reviewer — still reading only the
-    ///     original requirements — demanded it be moved back. The next coder round obeyed the reviewer and was refused
-    ///     by the policy, and no number of retries could break the loop.
-    /// </summary>
+    /// <summary>What a person told this task to do differently, rendered for the reviewer as well as the coder.</summary>
+    /// <remarks>
+    ///     The asymmetry deadlocks a task: an operator moves a test out of a base-committed file the test-write policy
+    ///     protects, the coder complies and validation passes, and a reviewer reading only the original requirements
+    ///     demands it back — whereupon the next coder round obeys and is refused by the policy, for every retry.
+    /// </remarks>
     private static string OperatorInstruction(string? instruction) =>
         string.IsNullOrWhiteSpace(instruction)
             ? string.Empty
@@ -411,17 +407,14 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         }
     }
 
-    /// <summary>
-    ///     Why the reviewer asked for another round, in its own words. The fixed sentence alone told the next coder
-    ///     round nothing it could act on, which is the same hole the workflow's routed change requests had: the round
-    ///     was handed the identical brief and re-implemented blind.
-    ///     <para>
-    ///         The findings are already sanitized against this attempt's protected roots by the time they get here
-    ///         (<see cref="DevelopmentArtifactSanitizer.Sanitize(DevelopmentReviewerSubmission, string[])" />). The
-    ///         second pass is over the JOINED text and is belt-and-braces only — it must never cost a review that
-    ///         otherwise succeeded, so a refusal falls back to the fixed sentence rather than escaping.
-    ///     </para>
-    /// </summary>
+    /// <summary>Why the reviewer asked for another round, in its own words.</summary>
+    /// <remarks>
+    ///     The fixed sentence alone tells the next coder round nothing to act on, so it re-implements blind. The
+    ///     findings arrive already sanitized against this attempt's protected roots
+    ///     (<see cref="DevelopmentArtifactSanitizer.Sanitize(DevelopmentReviewerSubmission, string[])" />), so the
+    ///     second pass over the joined text is belt and braces: a refusal falls back to the fixed sentence rather
+    ///     than escaping, and never costs a review that otherwise succeeded.
+    /// </remarks>
     internal static string ChangeRequestReason(DevelopmentReviewerSubmission submission)
     {
         ArgumentNullException.ThrowIfNull(submission);
@@ -451,9 +444,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         {
             OperationCanceledException => "The bounded Development reviewer attempt was cancelled or timed out.",
 
-            // The mirror of DevelopmentCoderAttemptRunner.SanitizedReason: the POLICY's own sentence, behind the same
-            // failure code, so a reviewer refusal names the rule it broke instead of the category it belongs to — and
-            // so a workflow node reads it as a Policy stand-down rather than spending its retry budget on it.
+            // Mirrors DevelopmentCoderAttemptRunner.SanitizedReason: the policy's own sentence behind the same failure
+            // code, so a refusal names its rule and a workflow node stands down rather than spending its retry budget.
             DevelopmentWorkspaceSecurityException security => DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused,
                 PolicyReason(security)),
 

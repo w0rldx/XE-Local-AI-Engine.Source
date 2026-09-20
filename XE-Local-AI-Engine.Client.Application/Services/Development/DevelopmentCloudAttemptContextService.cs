@@ -133,19 +133,14 @@ internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudA
     /// <summary>
     ///     What the bundle's <c>policy</c> resource says: the CloudScoped authorization sentence, plus the rule-set
     ///     text a Development workflow snapshotted onto this task when there is one.
-    ///     <para>
-    ///         Load-bearing for BOTH roles. A cloud-routed coder or reviewer is sent only this bundle — its prompt's
-    ///         local <c>Policy</c> section never reaches the provider — so a workflow policy left out here is a policy
-    ///         the model never sees while the task's <c>WorkflowPolicyApplied</c> event and <c>appliedRuleSets</c>
-    ///         claim the attempt was governed by it.
-    ///     </para>
-    ///     <para>
-    ///         Composed BEFORE the builder, so the sanitizer, the byte and token caps, and the content hash the egress
-    ///         authorizer binds all cover it. That is also what makes it fail CLOSED: a policy the sanitizer refuses or
-    ///         one that overruns the bundle's caps throws here and terminalizes the attempt, rather than being dropped
-    ///         from a payload that still claims to carry it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Load-bearing for both roles: a cloud-routed attempt is sent only this bundle — its prompt's local
+    ///     <c>Policy</c> section never reaches the provider — so a workflow policy left out here is one the model
+    ///     never sees while <c>WorkflowPolicyApplied</c> and <c>appliedRuleSets</c> claim it governed the attempt.
+    ///     Composed before the builder, so the sanitizer, the caps and the egress authorizer's content hash all cover
+    ///     it, which also makes a refused or oversized policy terminalize the attempt instead of being dropped.
+    /// </remarks>
     private static string Policy(string? workflowPolicy) =>
         string.IsNullOrWhiteSpace(workflowPolicy)
             ? AuthorizationPolicy

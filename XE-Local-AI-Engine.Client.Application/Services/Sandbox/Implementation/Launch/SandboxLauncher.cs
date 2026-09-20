@@ -4,18 +4,20 @@ using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     The production <see cref="ISandboxLauncher" />: applies the plan computed by <see cref="SandboxLaunchPlan" /> to
-///     a <see cref="ProcessStartInfo" />. All decision logic lives in the plan (a pure function, unit-tested without
-///     starting processes); this type is the thin adapter that mutates the start info and layers in the wrapper's own
-///     environment.
+///     The production <see cref="ISandboxLauncher" />: applies the plan computed by <see cref="SandboxLaunchPlan" /> to a
+///     <see cref="ProcessStartInfo" />.
 /// </summary>
+/// <remarks>
+///     All decision logic lives in the plan, a pure function unit-tested without starting processes; this type is the thin adapter that
+///     mutates the start info and layers in the wrapper's own environment.
+/// </remarks>
 public sealed class SandboxLauncher : ISandboxLauncher
 {
-    /// <summary>
-    ///     Grace added to the command's own timeout to form the scope's <c>RuntimeMaxSec</c>. The engine's timeout
-    ///     must be the control that normally fires; this one exists for the case where the engine is no longer there
-    ///     to fire it, so it has to sit clearly behind it rather than racing it.
-    /// </summary>
+    /// <summary>Grace added to the command's own timeout to form the scope's <c>RuntimeMaxSec</c>.</summary>
+    /// <remarks>
+    ///     The engine's timeout must be the control that normally fires; this one exists for when the engine is no longer there to fire
+    ///     it, so it sits clearly behind rather than racing it.
+    /// </remarks>
     private static readonly TimeSpan ScopeLifetimeGrace = TimeSpan.FromSeconds(30);
 
     /// <summary>
@@ -52,10 +54,8 @@ public sealed class SandboxLauncher : ISandboxLauncher
             startInfo.ArgumentList.Add(argument);
         }
 
-        // The wrapper's own environment (the user systemd bus address) is layered on AFTER the caller's scrubbed
-        // allow-list, because systemd-run cannot reach the user manager without it. The innermost `env -u` layer that
-        // SandboxLaunchPlan emits removes it again before the sandboxed executable is exec'd, so the child's observable
-        // environment is unchanged by this addition.
+        // The wrapper's own environment (the user systemd bus address) is layered on AFTER the caller's scrubbed allow-list, systemd-run
+        // needing it to reach the user manager. The innermost `env -u` layer removes it again before the executable is exec'd.
         foreach (var pair in descriptor.WrapperEnvironment)
         {
             startInfo.Environment[pair.Key] = pair.Value;
@@ -64,13 +64,12 @@ public sealed class SandboxLauncher : ISandboxLauncher
         return descriptor;
     }
 
-    /// <summary>
-    ///     Prepares and renders the isolated chain. Every failure path throws
-    ///     <see cref="SandboxIsolationUnavailableException" /> — deliberately, and unlike every other branch in this
-    ///     type. A caller that asked for a filesystem boundary and silently got a command running on the host
-    ///     filesystem would be worse off than one that got an error, because it would go on believing the boundary was
-    ///     there.
-    /// </summary>
+    /// <summary>Prepares and renders the isolated chain.</summary>
+    /// <remarks>
+    ///     Every failure path throws <see cref="SandboxIsolationUnavailableException" />, deliberately and unlike every other branch here:
+    ///     a caller that asked for a filesystem boundary and silently got a command on the host filesystem is worse off than one that got
+    ///     an error, because it goes on believing the boundary is there.
+    /// </remarks>
     private static SandboxLaunchDescriptor CreateIsolatedDescriptor(ProcessStartInfo startInfo,
         SandboxLaunchPolicy policy,
         SandboxContainment containment,
@@ -117,10 +116,12 @@ public sealed class SandboxLauncher : ISandboxLauncher
     }
 
     /// <summary>
-    ///     Translates the HOST working directory the provider resolved into the path the same directory has INSIDE the
-    ///     sandbox. The jail is <c>/work</c> there and is never reachable at its host name, so a chain that kept the
-    ///     host path would chdir to a directory that does not exist and the command would not start.
+    ///     Translates the HOST working directory the provider resolved into the path the same directory has INSIDE the sandbox.
     /// </summary>
+    /// <remarks>
+    ///     The jail is <c>/work</c> there and never reachable at its host name, so a chain keeping the host path would chdir to a directory
+    ///     that does not exist and the command would not start.
+    /// </remarks>
     private static string ResolveSandboxWorkingDirectory(string? hostWorkingDirectory, string jailRoot)
     {
         if (string.IsNullOrEmpty(hostWorkingDirectory))

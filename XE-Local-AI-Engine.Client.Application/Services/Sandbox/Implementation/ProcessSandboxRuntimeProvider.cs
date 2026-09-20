@@ -11,82 +11,20 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 /// <summary>
-///     The <c>process</c> sandbox <see cref="ISandboxRuntimeProvider" /> — the <b>process-jail provider</b>: backs
-///     AgentHome and Coder with a supervised child <see cref="Process" /> rooted at a node-scoped working-directory
-///     jail on the worker host. It implements the provider-neutral copy → run → export → apply lifecycle without
-///     a container dependency.
-///     <para>
-///         It is NOT a predecessor of, nor superseded by, the Development Mode container provider added under
-///         ADR 0004. Those two are SIBLINGS behind one SPI, chosen per feature: Development Mode
-///         gets the container provider, while AgentHome (4 injection sites) and Coder (3 sites) stay here.
-///         All soft-guard logic (working-dir jail, path canonicalization, no-follow open, byte budgets, timeout,
-///         tree-kill) is owned by this provider — the path/symlink/no-follow half factored out into
-///         <see cref="SandboxJailPathGuard" /> so the guard pair is one audit target, and the question of which jails
-///         exist (create/attach/evict/terminate) into <see cref="SandboxLifecycleRegistry" />, which owns the live
-///         sandbox set this class executes commands inside; a future hardware-isolated (MXC) provider replaces the
-///         whole provider, not the contract.
-///     </para>
-///     <para>
-///         Security posture (v1): this is supervised execution, NOT an OS isolation boundary. That has not changed,
-///         and this provider gains NO Docker. ADR 0004 permits Docker for Development Mode build/test/lint execution
-///         only and says nothing about this provider's posture; under that ADR's decision 4, AgentHome and Coder stay
-///         HERE, so what follows is their actual security envelope. MXC remains the long-term hard-isolation backend;
-///         the Development Mode container provider is an interim sibling behind the same SPI, and the
-///         <see cref="ISandboxRuntimeProvider" /> seam is NOT closed by it.
-///     </para>
-///     <para>
-///         Enforced unconditionally: the working-directory jail, path/symlink guards, a scrubbed child environment (the
-///         worker's secret-bearing environment is NOT inherited — only a fixed system/toolchain allow-list is
-///         forwarded), the per-command timeout, tree-kill, captured-output byte caps, and a jail-directory disk ceiling
-///         on what the sandbox's OWN commands leave behind — node-wide by configuration, tightenable per sandbox
-///         through <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> (never loosenable; see
-///         <see cref="ResolveJailDiskCeiling" />), and measured as occupancy rather than per-command growth (see
-///         <see cref="StartJailDiskWatchdog" />).
-///     </para>
-///     <para>
-///         Enforced only where the host supplies the mechanism, measured once by
-///         <see cref="ISandboxContainmentProbe" />: CPU/memory/PID ceilings via a transient systemd user scope
-///         (cgroup v2), and network egress denial via a fresh empty network namespace. Egress denial is DEFAULT-DENY
-///         and has no allowlist — <see cref="SandboxNetworkPolicy.None" /> (the default posture of
-///         <see cref="SandboxCreateRequest" />) is served by removing all egress, while a caller that genuinely needs
-///         the host network must ask for <see cref="SandboxNetworkPolicy.Unrestricted" /> explicitly.
-///         <see cref="SandboxNetworkPolicy.Restricted" /> stays unsupported because an allowlist needs machinery this
-///         provider does not have.
-///     </para>
-///     <para>
-///         Read that egress claim precisely: it holds ONLY where the mechanism is actually active. On a host without
-///         user namespaces — and on every non-Linux host, where the mechanism is not implemented — the provider
-///         degrades, does not advertise <see cref="SandboxProviderCapabilities.SupportsNetworkPolicy" />, and the
-///         upstream approval gate remains the interim control. "The sandbox blocks the network" is NOT true as a flat
-///         statement about this provider.
-///     </para>
-///     <para>
-///         The honesty invariant runs in BOTH directions and is mechanical, not maintained by hand: advertisement
-///         (<see cref="Capabilities" />) and enforcement (the launch path) read the SAME probe, so a capability is
-///         advertised if and only if a mechanism is active, and a request for a guarantee this host cannot deliver is
-///         rejected fail-closed (<see cref="SandboxCapabilityNotSupportedException" />) rather than silently downgraded.
-///         Where a mechanism is absent the provider logs, runs without it, and claims nothing.
-///     </para>
-///     <para>
-///         A THIRD mechanism is available on hosts that can deliver it, and it is opt-in rather than default:
-///         <see cref="SandboxIsolationMode.Filesystem" /> runs the command in a mount namespace that does not contain
-///         the host filesystem at all (<c>setsid</c> → a named transient <c>systemd-run --user --scope</c> →
-///         <c>bwrap</c>; see <c>SandboxIsolatedChain</c>). Every existing caller — AgentHome, Coder, Development Mode —
-///         names no isolation mode and therefore gets the byte-identical chain it always got. Like the other two it is
-///         advertised only where a probe EXERCISED the real chain and confirmed its positive controls, and requesting
-///         it on a host without it is rejected fail-closed rather than served weaker.
-///     </para>
-///     <para>
-///         Still absent by design: read-only MOUNTS as a per-sandbox concept (the isolated mode's
-///         <see cref="SandboxCreateRequest.ReadOnlyTrees" /> is a different, narrower surface), a network allowlist,
-///         and any hardware isolation boundary. The single-user local-node threat model accepts these — risky
-///         execution is approval-gated upstream — and this provider does not claim to supply them. MXC remains an
-///         unintegrated provider behind the same sandbox seam.
-///     </para>
+///     The <c>process</c> <see cref="ISandboxRuntimeProvider" />: a supervised child <see cref="Process" /> in a
+///     node-scoped working-directory jail, running the host's own toolchain over the provider-neutral
+///     copy → run → export → apply lifecycle with no container dependency.
 /// </summary>
-// Serves BOTH per-feature roles: AgentHome/Coder resolve it through IAgentSandboxRuntimeProvider, and Development
-// Mode resolves it through IDevelopmentSandboxRuntimeProvider until an operator selects a container provider. When both
-// roles name this provider they resolve the SAME DI singleton — see the _jailRoot comment for why that matters.
+/// <remarks>
+///     Supervised execution, not an OS isolation boundary: a future hardware-isolated (MXC) provider
+///     replaces the whole provider, not the contract. Always enforced: the jail, <see cref="SandboxJailPathGuard" />'s
+///     path and symlink guards, a scrubbed child environment, the per-command timeout, tree-kill, output byte caps and
+///     a jail-disk ceiling. Cgroup ceilings, egress denial and filesystem isolation hold only where the launcher's
+///     probe measured them active, which <see cref="Capabilities" /> reads too, so a request is refused, not downgraded.
+/// </remarks>
+/// <seealso href="../../../../docs/wiki/12-security-and-privacy.md">Section 7; substrate rules: ADR 0004, ADR 0007.</seealso>
+// Serves BOTH per-feature roles — AgentHome/Coder through IAgentSandboxRuntimeProvider, Development Mode through
+// IDevelopmentSandboxRuntimeProvider — and both resolve the SAME DI singleton; see the _jailRoot comment for why.
 public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider, IWorkSessionSandboxRuntimeProvider, IDisposable
 {
     /// <summary>The provider name this registers under for configuration-bound selection.</summary>
@@ -96,13 +34,17 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     // posture: capture is capped, and reading stops once the cap is reached so a runaway command cannot exhaust memory.
     private const int DefaultMaxCapturedOutputBytes = 4 * 1024 * 1024;
 
-    // SECURITY INVARIANT: a sandboxed child NEVER inherits the worker process environment. The worker holds secrets
-    // (cloud API keys, OAuth tokens, the node SQLite key, connection strings) as environment variables; forwarding the
-    // whole environment would hand every one of them to arbitrary sandbox commands. Instead the child starts from an
-    // EMPTY environment and is repopulated only from this fixed allow-list of system/toolchain variables — the minimum
-    // the fixed production executables (`dotnet --version`, `git`, `find`, `grep`) need to run on Linux and Windows —
-    // after which the caller's explicit request.Environment is layered on top. No secret-bearing variable appears here.
-    // Names absent on the current OS are simply skipped; lookup is OS-correct (case-insensitive on Windows).
+    /// <summary>
+    ///     The only environment variables a sandboxed child inherits from the worker: system and toolchain names the
+    ///     fixed production executables need on Linux and Windows, none of them secret-bearing.
+    /// </summary>
+    /// <remarks>
+    ///     SECURITY INVARIANT: a sandboxed child never inherits the worker environment, which holds cloud API keys,
+    ///     OAuth tokens, the node SQLite key and connection strings. The child starts EMPTY, is repopulated only from
+    ///     this list, and the caller's explicit <c>request.Environment</c> is layered on top. Never widen it to inherit
+    ///     the parent. Names absent on the current OS are skipped, and lookup is OS-correct (case-insensitive on
+    ///     Windows).
+    /// </remarks>
     private static readonly string[] InheritableEnvironmentAllowlist =
     [
         // Executable resolution + user/home + temp — needed on both platforms.
@@ -131,15 +73,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         "HOMEPATH",
         "APPDATA",
         "LOCALAPPDATA",
-        // Windows MACHINE-WIDE configuration roots. These are not decoration: NuGet.Common resolves the machine-wide
-        // NuGet configuration directory by reading these names directly and Path.Combine-ing the result, so with all
-        // of them absent the combine receives null and `dotnet restore` dies on
-        // "NuGet.targets(782,5): error : Value cannot be null. (Parameter 'path1')" before it looks at a single
-        // package. The .NET SDK reads the same roots to locate installed workload records, which is the
-        // "An issue was encountered verifying workloads." that accompanies it. Measured against the 10.0.302 SDK:
-        // NuGet.Common.dll carries exactly PROGRAMDATA, PROGRAMFILES, PROGRAMFILES(X86) and ALLUSERSPROFILE.
-        // They name shared installation roots, not user data, so forwarding them leaks nothing the child could not
-        // already read from disk.
+        // Windows MACHINE-WIDE roots: NuGet.Common and the SDK read exactly these four to locate machine-wide NuGet config
+        // and workload records, combining unguarded, so absent `dotnet restore` dies on a null path. Shared, not user data.
         "ProgramData",
         "ProgramFiles",
         "ProgramFiles(x86)",
@@ -157,9 +92,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     private readonly TimeProvider _timeProvider;
     private int _disposed;
 
-    // The logger, launcher and marker store are optional so tests can construct the provider directly;
-    // ActivatorUtilities injects them in production. A null launcher/store means "real host behavior", so a directly
-    // constructed provider is hardened exactly like the production one rather than silently weaker.
+    // The logger, launcher and marker store are optional so tests can construct the provider directly; ActivatorUtilities
+    // injects them in production. A null one means real host behaviour, so a direct construction is hardened like production.
     public ProcessSandboxRuntimeProvider(IOptions<LocalContainerOptions> copyOptions,
         TimeProvider timeProvider,
         ILogger<ProcessSandboxRuntimeProvider>? logger = null,
@@ -176,15 +110,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // (64 MiB default).
         _maxCopyFileBytes = copyOptions.Value.MaxCopyFileBytes;
 
-        // The child's OWN writes into the jail are bounded separately: MaxCopyFileBytes governs only the host→jail
-        // copy-in re-read, so without this a runaway command could fill the host disk from inside the jail. This is the
-        // NODE-WIDE ceiling — the operator's — which a create request may tighten for its own sandbox but never raise.
+        // The child's OWN writes into the jail are bounded separately; MaxCopyFileBytes governs only the host→jail copy-in
+        // re-read. This is the NODE-WIDE operator ceiling, which a create request may tighten for its own sandbox, never raise.
         _maxJailDiskBytes = copyOptions.Value.MaxJailDiskBytes;
 
-        // A worker-local jail container directory owned by this provider instance. The provider is a DI singleton, so
-        // there is exactly one container root per running worker process; the instance suffix keeps two providers (e.g.
-        // concurrent tests, or a restart racing teardown) from colliding on each other's node-scoped jails. Each
-        // node-scoped sandbox is a subdirectory under it, named deterministically from the attach key.
+        // A worker-local jail container directory owned by this provider instance, a DI singleton, so there is one root per
+        // worker; the suffix stops two providers colliding. Each sandbox is a subdirectory named from the attach key.
         _jailRoot = Path.Combine(SandboxPaths.ContainerRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_jailRoot);
 
@@ -236,17 +167,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                                | SandboxProviderCapabilities.SupportsAttach
                                | SandboxProviderCapabilities.SupportsKill
                                | SandboxProviderCapabilities.SupportsTrustedHostWorkspace
-                               // Mechanism-independent too, and the honest statement of what this backend is: a
-                               // supervised child of the engine, running the host's own toolchain. It supplies no
-                               // image, which is what keeps a workload that needs one off this provider.
+                               // Mechanism-independent: a supervised child running the host's own toolchain. It supplies no
+                               // image, which keeps a workload that needs one off this provider.
                                | SandboxProviderCapabilities.SuppliesHostToolchain;
 
-            // Never served: read-only mounts (there is no mount layer).
-            //
-            // Served ONLY where the host supplies the mechanism. Reading the launcher's probe here — the same probe the
-            // launch path applies — is what makes the honesty invariant mechanical: these two flags cannot be advertised
-            // on a host where the corresponding wrapper would not actually be applied, because there is one source of
-            // truth rather than two that must be kept in step by hand.
+            // Read-only mounts are never served: there is no mount layer. The two flags below are read from the launcher's own
+            // probe, the same one the launch path applies, so neither can be advertised where the wrapper would not be.
             var containment = _launcher.Containment;
             if (containment.SupportsResourceLimits)
             {
@@ -260,10 +186,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             if (containment.SupportsFilesystemIsolation)
             {
-                // Both flags, from one probe result, because on this backend they are one fact: the bubblewrap chain
-                // the probe exercises is BOTH the SandboxIsolationMode.Filesystem contract and the way the host
-                // filesystem stops being visible. They are separate flags because the container backend has the second
-                // without the first, not because this one can have either alone.
+                // Both flags from one probe: here the bubblewrap chain IS both the SandboxIsolationMode.Filesystem contract and
+                // the host-filesystem boundary; they are separate only because a container has the second alone.
                 capabilities |= SandboxProviderCapabilities.SupportsFilesystemIsolation
                                 | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
             }
@@ -293,12 +217,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         var startInfo = BuildScrubbedStartInfo(state, request, redirectStandardInput: request.StandardInput is not null);
 
-        // Wrap the composed command in the strongest containment this host supports (process group, cgroup ceilings,
-        // empty network namespace). This rewrites only FileName/ArgumentList and layers in the wrapper's own
-        // environment, so the jail working directory, the scrubbed environment allow-list, stream redirection, the
-        // timeout and tree-kill all continue to behave exactly as before. It is deliberately applied AFTER the
-        // environment scrub, because the resource-limit wrapper needs the user-bus address the scrub would otherwise
-        // have removed — and strips it again before the sandboxed executable runs.
+        // Wrap the command in this host's strongest containment; only FileName/ArgumentList change, so the jail, scrub,
+        // redirection, timeout and tree-kill hold. After the scrub: the wrapper needs the user-bus address it removes, then strips.
         SandboxLaunchDescriptor launch;
         try
         {
@@ -313,11 +233,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
         catch (SandboxIsolationUnavailableException exception)
         {
-            // FAIL CLOSED, and non-throwing. The sandbox was created against a host the probe measured able to
-            // isolate, so getting here means something changed underneath (a jail whose mode was altered, a helper
-            // replaced, a kernel knob turned off). Running the command anyway would put a workload that was promised a
-            // filesystem boundary directly onto the host filesystem, so it is NOT run — and the caller learns why in
-            // the same result shape a failed launch already produces.
+            // FAIL CLOSED, non-throwing. The host was measured able to isolate, so something changed underneath; running anyway
+            // would put a workload promised a boundary onto the host filesystem. The caller learns why in a failed-launch shape.
             _logger.LogError(exception, "The sandbox filesystem boundary could not be established; the command was not run.");
 
             return new SandboxCommandResult
@@ -330,20 +247,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             };
         }
 
-        // Anchor the jail's occupancy baseline BEFORE the child is started, while the jail still holds only what the
-        // ENGINE staged. Capturing it after the launch let a command that writes as its very first act — the common
-        // shape for a compute workload — put its own bytes into the baseline, which made them free for it AND for every
-        // later command in this sandbox, so a ceiling smaller than that first write never fired at all. Only the first
-        // command in a sandbox pays for the walk; every later one reads the captured value. A null answer means the
-        // watchdog does not apply to this sandbox (no ceiling, or a preserved host workspace) and nothing was walked.
+        // Anchor the occupancy baseline BEFORE the child starts, while the jail holds only what the ENGINE staged: measured
+        // after, a command's own first write is free for it and every later command here. Null means the watchdog does not apply.
         var jailDiskCeiling = ResolveJailDiskCeiling(state);
         var jailOccupancyBaseline = CaptureJailOccupancyBaseline(state, jailDiskCeiling);
 
-        // Claim the scope BEFORE anything can create it. `systemd-run` creates the transient scope as its first act, so
-        // a marker written after the launch left a window — short, but wide open — in which a second worker's startup
-        // sweep listed a scope this worker was in the middle of launching, found no marker claiming it, and SIGKILLed a
-        // command that had just started running. The unit name is generated ahead of the launch precisely so it can be
-        // recorded first; the pid is filled in below, once there is one.
+        // Claim the scope BEFORE systemd-run can create it, which it does as its first act: a marker written after the launch
+        // leaves a window in which another worker's startup sweep finds the scope unclaimed and SIGKILLs a command that started.
         var pendingMarkerId = launch.ScopeUnitName is null ? null : PreRegisterProcessMarker(state, launch);
 
         var process = new Process
@@ -352,9 +262,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             EnableRaisingEvents = true
         };
 
-        // Capture stdout/stderr via the event pump with a hard per-stream byte budget. Reading stops appending past the
-        // cap so a runaway command cannot exhaust memory, while the pump keeps draining the pipe so the child never
-        // blocks on a full buffer.
+        // Capture stdout/stderr via the event pump with a hard per-stream byte budget: appending stops past the cap so a
+        // runaway command cannot exhaust memory, while the pump keeps draining so the child never blocks on a full buffer.
         var standardOutputBuilder = new CappedStringBuilder(DefaultMaxCapturedOutputBytes);
         var standardErrorBuilder = new CappedStringBuilder(DefaultMaxCapturedOutputBytes);
         process.OutputDataReceived += (_, eventArgs) => standardOutputBuilder.AppendLine(eventArgs.Data);
@@ -388,19 +297,16 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             };
         }
 
-        // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names,
-        // so the engine's copies are released here. Holding them for the command's lifetime would leak one descriptor
-        // per bind per command, which over a long session exhausts the engine's own table.
+        // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names, so the
+        // engine's copies are released here: holding them would leak one descriptor per bind per command.
         launch.LaunchResources?.Dispose();
 
-        // Record the live process group so a hard host kill (which skips Dispose/KillAsync entirely) leaves something
-        // the next start can reap. Only meaningful when the child really is a group leader — see the marker's own docs
-        // for why a non-leader pid must never be used as a group id.
+        // Record the live process group so a hard host kill, which skips Dispose/KillAsync, leaves something the next start can
+        // reap. Only meaningful for a real group leader; the marker's docs say why a non-leader pid must never be a group id.
         var markerId = CompleteProcessMarker(state, process, launch, pendingMarkerId);
 
-        // A per-command source that best-effort cancel (CancelCommandAsync) and sandbox kill (KillAsync) fire. Its
-        // firing yields a non-throwing Completed=false result — parity with the fake's CancelCommandAsync — distinct
-        // from a caller-token cancel (which throws) and a timeout (which returns a timed-out result).
+        // A per-command source that best-effort cancel (CancelCommandAsync) and sandbox kill (KillAsync) fire, yielding a
+        // non-throwing Completed=false result, distinct from a caller-token cancel (throws) and a timeout (timed-out result).
         var commandCancelSource = new CancellationTokenSource();
         var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
         if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
@@ -428,9 +334,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             timeoutSource.CancelAfter(timeout);
         }
 
-        // Bound the child's OWN writes into the jail. MaxCopyFileBytes governs only the host→jail copy-in re-read, so
-        // without this a runaway command could fill the host disk from inside the jail and nothing would stop it. The
-        // ceiling and the baseline were both resolved before the child was started; only the ticking starts here.
+        // Bound the child's OWN writes into the jail; MaxCopyFileBytes governs only the copy-in re-read, so without this a
+        // runaway command could fill the host disk. Ceiling and baseline were resolved before launch; only ticking starts here.
         using var diskWatchdog = StartJailDiskWatchdog(state, jailDiskCeiling, jailOccupancyBaseline, diskCapSource, linkedSource.Token);
 
         try
@@ -475,11 +380,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
         catch (OperationCanceledException) when (commandCancelSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            // A best-effort CancelCommandAsync (or a sandbox kill) fired: tree-kill and return a non-throwing
-            // Completed=false result so AgentHome treats it like the fake's cancelled command, not a caller cancel.
-            // The scope and process-group kill run here too. They did NOT before, and the gap was real: a cancel left
-            // the workload's own descendants alive, and under the isolated mode it left everything alive, because the
-            // tree the runtime walks stops at the outer helper.
+            // A best-effort cancel or sandbox kill fired: tree-kill and return a non-throwing Completed=false result, so AgentHome
+            // reads a cancelled command, not a caller cancel. Scope and group kills run here: a tree walk stops at the helper.
             SandboxProcessTree.TreeKill(process);
             await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
@@ -516,20 +418,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
         finally
         {
-            // TEARDOWN ON EVERY COMPLETION PATH, SUCCESS INCLUDED — not only on the cancel/timeout/disk-cap branches
-            // above.
-            //
-            // A command's own exit says nothing about its DESCENDANTS. `/bin/sh -c "…&"` returns at once with exit 0
-            // while its backgrounded child keeps running; an orphan is reparented, not killed, and nothing re-derives
-            // the group. That child would then outlive the command, and — because an AgentHome sandbox is owner-node
-            // scoped and reused through CreateOrAttach — outlive the whole RUN, still writing into a workspace the
-            // node is about to diff, still burning CPU, and invisible to the startup orphan sweep the moment the
-            // marker below is deleted. This repository has already paid for that class once.
-            //
-            // Ordered BEFORE the marker delete on purpose: if the engine dies mid-teardown the marker is still on
-            // disk, so the next start's sweep finds whatever survived. Every layer here is best-effort and idempotent
-            // — killing a scope or group that already exited on its own is a no-op, which is what makes it safe to
-            // run unconditionally rather than only where something is known to have leaked.
+            // Teardown on EVERY path, success included: a command's exit says nothing about its DESCENDANTS, and a reparented orphan
+            // outlives the RUN in a reused sandbox, unseen by the sweep once its marker goes. Ordered BEFORE that delete; all idempotent.
             SandboxProcessTree.TreeKill(process);
             await TerminateLaunchAsync(launch, process);
 
@@ -550,15 +440,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// <summary>
     ///     Composes the child's <see cref="ProcessStartInfo" />: the jail working directory, the argument vector, and
     ///     the SCRUBBED environment.
-    ///     <para>
-    ///         SECURITY INVARIANT, and the reason this is one function rather than two copies:
-    ///         <see cref="ProcessStartInfo" /> pre-seeds <see cref="ProcessStartInfo.Environment" /> with the FULL
-    ///         parent (worker) environment, which holds cloud API keys, OAuth tokens and the node SQLite key. It is
-    ///         cleared and repopulated from <see cref="InheritableEnvironmentAllowlist" />, then the caller's explicit
-    ///         request environment is layered on top. Both launch paths go through here so neither can drift out of
-    ///         the scrub.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     SECURITY INVARIANT, and the reason this is one function rather than two copies:
+    ///     <see cref="ProcessStartInfo" /> pre-seeds <see cref="ProcessStartInfo.Environment" /> with the FULL parent
+    ///     (worker) environment, which holds cloud API keys, OAuth tokens and the node SQLite key. It is cleared and
+    ///     repopulated from <see cref="InheritableEnvironmentAllowlist" />, then the caller's explicit request
+    ///     environment is layered on top. Both launch paths go through here so neither can drift out of the scrub.
+    /// </remarks>
     private static ProcessStartInfo BuildScrubbedStartInfo(JailState state, SandboxCommandRequest request, bool redirectStandardInput)
     {
         var startInfo = new ProcessStartInfo
@@ -618,18 +507,15 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 new SandboxLaunchContext
                 {
                     JailRoot = state.JailRoot,
-                    // No CommandTimeout: a protocol peer has no per-call deadline, so the scope takes the launcher's
-                    // default ceiling. That ceiling is enforced by the USER MANAGER rather than by the engine, which
-                    // is what bounds this jail if the engine is hard-killed and never runs its own teardown.
+                    // No CommandTimeout: a protocol peer has no per-call deadline, so the scope takes the launcher's default
+                    // ceiling, enforced by the USER MANAGER, which is what bounds this jail if the engine is hard-killed.
                     CommandEnvironment = request.Environment
                 });
         }
         catch (SandboxIsolationUnavailableException exception)
         {
-            // FAIL CLOSED, and here it THROWS rather than returning a failed-command shape the way ExecuteAsync does.
-            // There is no result object to carry a reason on — the caller asked for a live process — and the one
-            // caller (a Sandboxed stdio MCP server) must see a refusal, never a peer that turned out to be running on
-            // the host filesystem.
+            // FAIL CLOSED, and here it THROWS rather than returning a failed-command shape: there is no result object to carry a
+            // reason, and the caller (a Sandboxed stdio MCP server) must see a refusal, never a host-filesystem peer.
             throw new SandboxCapabilityNotSupportedException($"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not started.",
                 exception);
         }
@@ -660,16 +546,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             throw new SandboxCapabilityNotSupportedException("The sandbox command could not be launched.", exception);
         }
 
-        // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names,
-        // so the engine's copies are released here — one leaked descriptor per bind per server would exhaust the
-        // engine's table over a session.
+        // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names, so the
+        // engine's copies are released here: one leaked descriptor per bind per server would exhaust the table.
         launch.LaunchResources?.Dispose();
 
         var markerId = CompleteProcessMarker(state, process, launch, pendingMarkerId);
 
-        // Registered in the jail's in-flight set under the execution id, which is what makes KillAsync (and therefore
-        // the whole existing teardown: scope cgroup, process group, tree, jail directory) cover this process without
-        // a second teardown path of its own.
+        // Registered in the jail's in-flight set under the execution id, which is what makes KillAsync, and so the whole teardown
+        // (scope cgroup, process group, tree, jail directory), cover this process with no second path.
         var commandCancelSource = new CancellationTokenSource();
         var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
         if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
@@ -758,9 +642,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>
     ///     The handle-side half of a survey's entry checks — argument validation and the live-sandbox lookup — kept
-    ///     together so both surveys enter <see cref="SandboxFileSurveyOperations" /> under identical conditions. The
-    ///     jail-side half (path resolution + symlink walk) lives with the survey itself.
+    ///     together so both surveys enter <see cref="SandboxFileSurveyOperations" /> under identical conditions.
     /// </summary>
+    /// <remarks>The jail-side half (path resolution and the symlink walk) lives with the survey itself.</remarks>
     private JailState ResolveSurveyState(SandboxHandle handle, string directoryPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(handle);
@@ -786,9 +670,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         ArgumentException.ThrowIfNullOrWhiteSpace(executionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Best-effort: cancel + tree-kill the in-flight command by execution id. Firing the command-cancel source makes
-        // the in-flight ExecuteAsync return a non-throwing Completed=false result. A missing id or already-gone sandbox
-        // is a no-op (parity with the container/fake providers).
+        // Best-effort: cancel and tree-kill the in-flight command by execution id; firing the cancel source makes ExecuteAsync
+        // return a non-throwing Completed=false result. A missing id or gone sandbox is a no-op, as elsewhere.
         if (_registry.FindState(handle.SandboxId) is { } state
             && state.InFlight.TryGetValue(executionId, out var inFlight))
         {
@@ -810,14 +693,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>
     ///     Registers the orphan-reaper marker for a command that is ABOUT to be launched into a transient scope,
-    ///     claiming the unit name before <c>systemd-run</c> can create it. Returns the marker id, or
-    ///     <see langword="null" /> when the store could not record it.
-    ///     <para>
-    ///         It carries no pid — there is no child yet — which is exactly what makes it safe to write this early: the
-    ///         reaper's group-signalling path refuses a marker without one, so a pending marker can only ever protect
-    ///         the scope, never authorise a kill.
-    ///     </para>
+    ///     claiming the unit name before <c>systemd-run</c> can create it.
     /// </summary>
+    /// <returns>The marker id, or <see langword="null" /> when the store could not record it.</returns>
+    /// <remarks>
+    ///     It carries no pid — there is no child yet — which is what makes it safe to write this early: the reaper's
+    ///     group-signalling path refuses a marker without one, so a pending marker can only ever protect the scope,
+    ///     never authorise a kill.
+    /// </remarks>
     private string? PreRegisterProcessMarker(JailState state, SandboxLaunchDescriptor launch)
     {
         return _markerStore.Write(new SandboxProcessMarker
@@ -863,16 +746,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         return pendingMarkerId;
     }
 
-    /// <summary>
-    ///     Builds the marker for a just-started child, or <see langword="null" /> when the launch produced nothing the
-    ///     reaper could act on.
-    ///     <para>
-    ///         The pid is recorded ONLY when the child was launched under <c>setsid</c>, because the reaper signals
-    ///         with <c>kill(-pgid)</c> and the pid is only a process-group id in that case. Recording a non-leader pid
-    ///         would mean the reaper later signalled whatever group that pid belonged to — in the worst case the
-    ///         worker's own — so the absence of the mechanism must mean the absence of a pid, not a guess.
-    ///     </para>
-    /// </summary>
+    /// <summary>Builds the orphan-reaper marker for a just-started child.</summary>
+    /// <returns><see langword="null" /> when the launch produced nothing the reaper could act on.</returns>
+    /// <remarks>
+    ///     The pid is recorded ONLY when the child was launched under <c>setsid</c>, because the reaper signals with
+    ///     <c>kill(-pgid)</c> and the pid is a process-group id only in that case. A non-leader pid would have the
+    ///     reaper signal whatever group that pid belonged to — in the worst case the worker's own — so the absence of
+    ///     the mechanism must mean the absence of a pid, not a guess.
+    /// </remarks>
     private SandboxProcessMarker? BuildProcessMarker(JailState state, Process process, SandboxLaunchDescriptor launch)
     {
         int? processGroupId = null;
@@ -916,22 +797,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         };
     }
 
-    /// <summary>
-    ///     Tears down everything one launch started, in order of decreasing reach.
-    ///     <list type="number">
-    ///         <item>
-    ///             The transient scope's CGROUP, when the command ran in one. This is the only mechanism that is
-    ///             complete for an isolated command: its processes live in a PID namespace the engine cannot see, so
-    ///             neither the runtime's tree walk nor a process-group signal can enumerate them.
-    ///         </item>
-    ///         <item>
-    ///             The child's process GROUP, when the child is a group leader. This is what catches a descendant that
-    ///             detached from the tree the runtime walks, and it remains the whole story for a non-isolated command.
-    ///         </item>
-    ///     </list>
-    ///     <see cref="SandboxProcessTree.TreeKill" /> has already run by the time this is called and is unchanged;
-    ///     these are the layers underneath it, and all of it is best-effort — nothing here throws into the run flow.
-    /// </summary>
+    /// <summary>Tears down everything one launch started, in order of decreasing reach.</summary>
+    /// <remarks>
+    ///     First the transient scope's CGROUP, when the command ran in one: the only mechanism that is complete for an
+    ///     isolated command, whose processes live in a PID namespace neither a tree walk nor a group signal can
+    ///     enumerate. Then the child's process GROUP, when it is a group leader, which catches a descendant that
+    ///     detached from the tree and is the whole story for a non-isolated command.
+    ///     <see cref="SandboxProcessTree.TreeKill" /> has already run; these are the layers under it, all best-effort.
+    /// </remarks>
     private async Task TerminateLaunchAsync(SandboxLaunchDescriptor launch, Process process)
     {
         if (launch.ScopeUnitName is { } unitName
@@ -973,13 +846,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     Resolves the jail-growth ceiling for one sandbox: the node-wide
     ///     <see cref="LocalContainerOptions.MaxJailDiskBytes" />, tightened by this sandbox's optional
     ///     <see cref="SandboxCreateRequest.MaxJailDiskBytes" />.
-    ///     <para>
-    ///         TIGHTEN-ONLY, deliberately: the node-wide value is the operator's ceiling on what any sandbox on this box
-    ///         may write, so a create request may ask for less than it but never for more. The same asymmetry keeps a
-    ///         request from re-enabling a watchdog the operator disabled with a non-positive node-wide value — a bigger
-    ///         number never wins, so a disabled ceiling stays disabled.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     TIGHTEN-ONLY, deliberately: the node-wide value is the operator's ceiling on what any sandbox on this box
+    ///     may write, so a create request may ask for less than it but never for more. The same asymmetry keeps a
+    ///     request from re-enabling a watchdog the operator disabled with a non-positive node-wide value — a bigger
+    ///     number never wins, so a disabled ceiling stays disabled.
+    /// </remarks>
     private long ResolveJailDiskCeiling(JailState state)
     {
         return state.MaxJailDiskBytes is { } requested && requested < _maxJailDiskBytes
@@ -990,14 +863,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// <summary>
     ///     Captures (or reads back) this sandbox's jail occupancy baseline, or returns <see langword="null" /> when the
     ///     watchdog does not apply to it — a non-positive ceiling, or an engine-managed trusted host workspace.
-    ///     <para>
-    ///         Called from the command path BEFORE the child is started, and that ordering is the whole point: the walk
-    ///         must see the jail holding only what the ENGINE staged. Taken after the launch instead, a command whose
-    ///         first act is a write had its own bytes measured INTO the baseline — permanently, since the baseline is
-    ///         per sandbox — so those bytes were free for it and for every command after it, and a ceiling smaller than
-    ///         that first write could never fire. Only the first command in a sandbox pays for the walk.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Called BEFORE the child is started, and that ordering is the whole point: the walk must see the jail holding
+    ///     only what the ENGINE staged. Taken after the launch, a command whose first act is a write has its own bytes
+    ///     measured INTO the baseline — permanently, the baseline being per sandbox — so they are free for it and for
+    ///     every command after it, and a ceiling smaller than that first write can never fire. Only the first command
+    ///     in a sandbox pays for the walk.
+    /// </remarks>
     private static long? CaptureJailOccupancyBaseline(JailState state, long ceiling)
     {
         if (ceiling <= 0 || state.PreserveJailRoot)
@@ -1010,38 +883,16 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <summary>
-    ///     Starts the jail disk watchdog for one command, or returns a no-op when it does not apply. Cancelling
+    ///     Starts the jail disk watchdog for one command, or returns a no-op when it does not apply; cancelling
     ///     <paramref name="diskCapSource" /> is what unblocks the command's wait and routes it to the over-cap result.
-    ///     <para>
-    ///         The ceiling bounds the jail's OCCUPANCY, not one command's growth: what is measured is everything below
-    ///         the jail root above the baseline captured before this SANDBOX started its first command
-    ///         (<see cref="CaptureJailOccupancyBaseline" />). A baseline re-taken per command handed every
-    ///         new command a fresh allowance, so a caller could leave any amount on disk by writing just under the
-    ///         ceiling repeatedly and nothing would ever fire. Anchoring at what the engine staged before the sandbox
-    ///         ran anything closes that without charging a command for a workspace copy-in it did not write.
-    ///     </para>
-    ///     <para>
-    ///         A command that STARTS in an over-full jail is therefore terminated on the spot, before its first tick —
-    ///         the budget belongs to the sandbox, and an earlier command in it has already spent the budget.
-    ///     </para>
-    ///     <para>
-    ///         <b>It is a best-effort check on VISIBLE FILES, and it is not a quota.</b> What it measures is the sum of
-    ///         the lengths of the files it can currently enumerate under the jail, sampled every two seconds. Three
-    ///         consequences follow and none of them is a bug to be fixed here. Bytes written to a file that is then
-    ///         UNLINKED while the writer keeps its descriptor open are still on disk and are invisible to this walk, so
-    ///         an unlink-then-write loop passes it entirely. A burst written between two ticks is on disk before
-    ///         anything notices. And a sparse or hole-punched file is billed by length rather than by blocks. So this
-    ///         bounds a runaway writer that is not trying to evade it, which is the case it exists for; it does NOT
-    ///         make a claim against a hostile one. A real ceiling needs the filesystem to enforce it — a project quota,
-    ///         or a size-bounded mount with the memory accounted. This watchdog supplies neither mechanism and must not
-    ///         be presented as though it does.
-    ///     </para>
-    ///     <para>
-    ///         It is skipped for an engine-managed trusted host workspace: that directory is the user's own checkout,
-    ///         its existing size is not ours to police, and walking a large repository every tick would cost more than
-    ///         the control is worth there.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The ceiling bounds the SANDBOX's occupancy above the baseline captured before its first command
+    ///     (<see cref="CaptureJailOccupancyBaseline" />), never one command's growth, so a command that starts in an
+    ///     over-full jail is terminated before its first tick. It is a best-effort sum of VISIBLE file lengths sampled
+    ///     every two seconds and NOT a quota: an unlink-then-write loop, a burst between ticks and a sparse file each
+    ///     evade it. Skipped for a trusted host workspace, which is the user's own checkout.
+    /// </remarks>
     private IDisposable StartJailDiskWatchdog(JailState state,
         long ceiling,
         long? occupancyBaseline,
@@ -1062,9 +913,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             try
             {
-                // A coarse interval: this is a safety net against a runaway writer, not a byte-accurate meter, and a
-                // tight loop would cost more than the protection is worth. The body runs BEFORE the first wait, so a
-                // jail an earlier command already filled past the ceiling is caught at once rather than one tick later.
+                // A coarse interval: a safety net against a runaway writer, not a byte-accurate meter. The body runs BEFORE the
+                // first wait, so a jail an earlier command already filled past the ceiling is caught at once.
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
                 do
                 {
@@ -1143,10 +993,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>
     ///     One live <see cref="ISandboxInteractiveProcess" />: the child's standard streams, plus everything needed to
-    ///     tear it down. Disposal runs the SAME layers <c>ExecuteAsync</c> runs on an abnormal exit — tree-kill, then
-    ///     the scope cgroup and the process group through <see cref="TerminateLaunchAsync" /> — and then removes the
-    ///     in-flight entry and the reaper marker, so a released process leaves nothing for the next startup sweep.
+    ///     tear it down.
     /// </summary>
+    /// <remarks>
+    ///     Disposal runs the SAME layers <c>ExecuteAsync</c> runs on an abnormal exit — tree-kill, then the scope
+    ///     cgroup and the process group through <see cref="TerminateLaunchAsync" /> — and then removes the in-flight
+    ///     entry and the reaper marker, so a released process leaves nothing for the next startup sweep.
+    /// </remarks>
     private sealed class InteractiveProcess : ISandboxInteractiveProcess
     {
         private readonly CancellationTokenSource _cancelSource;
@@ -1221,12 +1074,15 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <summary>
-    ///     A thread-safe string accumulator with a hard ceiling measured in real UTF-8 BYTES (matching the
-    ///     <c>…Bytes</c> budget name). The event pump can fire from a pool thread, so appends lock; once the byte cap is
-    ///     reached further data is discarded (the pipe is still drained by the pump so the child never blocks). A
-    ///     multibyte line that would cross the cap is truncated at a UTF-8 rune boundary so the accumulated string never
-    ///     exceeds <paramref name="capBytes" /> encoded bytes.
+    ///     A thread-safe string accumulator with a hard ceiling measured in real UTF-8 BYTES, matching the
+    ///     <c>…Bytes</c> budget name.
     /// </summary>
+    /// <remarks>
+    ///     The event pump can fire from a pool thread, so appends lock; once the byte cap is reached further data is
+    ///     discarded, while the pump keeps draining the pipe so the child never blocks. A multibyte line that would
+    ///     cross the cap is truncated at a UTF-8 rune boundary, so the accumulated string never exceeds the cap in
+    ///     encoded bytes.
+    /// </remarks>
     private sealed class CappedStringBuilder
     {
         private readonly StringBuilder _builder = new();

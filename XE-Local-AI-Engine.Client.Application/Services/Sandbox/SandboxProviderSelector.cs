@@ -7,25 +7,16 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
-///     Picks the backend that serves a workload's <see cref="SandboxRequirements" />. ADR 0007 Decision 2: a consumer
-///     declares what it needs, this resolves a backend that can honour the WHOLE declaration, and when none can it
-///     fails closed. There is no fallback, no downgrade and no best-effort resolution.
-///     <para>
-///         <b>Resolution is minimal-satisfying, not most-capable-wins.</b> Among the backends that meet every declared
-///         axis, the one with the smallest additional privilege footprint wins — see
-///         <see cref="ByAscendingPrivilege" /> for the ranking and the reasoning behind its order. That ordering is
-///         load-bearing: it is the first of the three mechanisms ADR 0007 Decision 4 uses to replace the compile-time
-///         guard that used to keep a container out of AgentHome.
-///     </para>
-///     <para>
-///         Each role is registered once as a singleton factory, so a provider change still requires a restart, and two
-///         roles that resolve the same backend still share ONE instance — every backend is reached through
-///         <c>GetService&lt;TConcrete&gt;()</c> rather than constructed. That sharing is a correctness requirement, not
-///         a saving: <see cref="ProcessSandboxRuntimeProvider" /> allocates its jail root once per instance, and Coder
-///         reaches AgentHome's live sandbox by attach key through <see cref="ISandboxRuntimeProvider.ConnectAsync" />,
-///         so a second instance would answer "no such sandbox" to every coder tool.
-///     </para>
+///     Picks the backend serving a workload's <see cref="SandboxRequirements" /> — ADR 0007 Decision 2: a consumer declares what it
+///     needs, this resolves a backend honouring the WHOLE declaration, and when none can it fails closed. No fallback, no downgrade.
 /// </summary>
+/// <remarks>
+///     Resolution is MINIMAL-SATISFYING, not most-capable-wins: among the backends meeting every declared axis the one with the smallest
+///     additional privilege footprint wins (<see cref="ByAscendingPrivilege" /> carries the ranking and its reasoning), which is the first
+///     of ADR 0007 Decision 4's three mechanisms replacing the compile-time guard. Each role is a singleton factory, so two roles resolving
+///     the same backend share ONE instance — a correctness requirement: <see cref="ProcessSandboxRuntimeProvider" /> allocates its jail
+///     root per instance, and a second would answer Coder "no such sandbox".
+/// </remarks>
 internal static class SandboxProviderSelector
 {
     /// <summary>The operator key that constrains the AgentHome, Coder and work-session candidate set.</summary>
@@ -35,37 +26,16 @@ internal static class SandboxProviderSelector
     private const string DevelopmentConstraintKey = DevelopmentSandboxOptions.SectionName + ":Provider";
 
     /// <summary>
-    ///     Every backend this engine knows, ordered by ASCENDING additional privilege. First match wins, so the order
-    ///     IS the resolution rule and it is code-owned rather than emergent from a <c>switch</c>.
-    ///     <list type="number">
-    ///         <item>
-    ///             <description>
-    ///                 <c>fake</c> — executes nothing at all. It cannot start a process, so there is no privilege to
-    ///                 compare; it is first because a deterministic no-op is strictly less than any execution.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <description>
-    ///                 <c>process</c> — a supervised child of the engine, in a working-directory jail, with whatever
-    ///                 of setsid / systemd-run / unshare / bwrap the host actually delivers. It adds no component to
-    ///                 the trusted computing base: it runs as the engine's own user and talks to no daemon.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <description>
-    ///                 <c>docker</c> — last, and the axis that puts it there is not isolation strength but the daemon.
-    ///                 A container backend needs a live daemon whose socket is root-equivalent on Linux; ADR 0004
-    ///                 documents that rather than mitigating it. Reaching a root-equivalent socket is additional
-    ///                 privilege even when the resulting container is a stronger boundary than the jail, which is
-    ///                 precisely why "minimal-satisfying" and "most-capable" are different orderings.
-    ///             </description>
-    ///         </item>
-    ///     </list>
-    ///     <para>
-    ///         The day a third execution backend exists this comparison gets harder — ADR 0007 records that as a cost.
-    ///         Insert it here with its reasoning written down, not by capability count.
-    ///     </para>
+    ///     Every backend this engine knows, ordered by ASCENDING additional privilege; first match wins, so the order IS the resolution
+    ///     rule, code-owned rather than emergent from a <c>switch</c>.
     /// </summary>
+    /// <remarks>
+    ///     <c>fake</c> executes nothing, so a deterministic no-op is strictly less than any execution. <c>process</c> is a supervised
+    ///     child in a working-directory jail with whatever of setsid, systemd-run, unshare and bwrap the host delivers, adding nothing to
+    ///     the trusted computing base: the engine's own user, no daemon. <c>docker</c> is last on the DAEMON axis, not isolation strength —
+    ///     a socket that is root-equivalent on Linux is added privilege even when the container is the stronger boundary, which is why
+    ///     minimal-satisfying and most-capable differ. Insert a fourth with reasoning, never by capability count.
+    /// </remarks>
     private static readonly SandboxBackend[] ByAscendingPrivilege =
     [
         new()
@@ -89,18 +59,24 @@ internal static class SandboxProviderSelector
     ];
 
     /// <summary>
-    ///     The ranking, projected for the architecture test: backend name and the toolchain it supplies, in the order
-    ///     resolution walks them. Exposed because the guarantee that used to be an absent <c>implements</c> clause is
-    ///     now an enumeration, and an enumeration the test cannot read is not a guarantee.
+    ///     The ranking, projected for the architecture test: backend name and the toolchain it supplies, in the order resolution walks
+    ///     them.
     /// </summary>
+    /// <remarks>
+    ///     Exposed because the guarantee that used to be an absent <c>implements</c> clause is now an enumeration, and an enumeration the
+    ///     test cannot read is not a guarantee.
+    /// </remarks>
     internal static IReadOnlyList<(string Name, SandboxToolchainSource Toolchain)> BackendRanking { get; } =
         [.. ByAscendingPrivilege.Select(static backend => (backend.Name, backend.Toolchain))];
 
     /// <summary>
     ///     Resolves the AgentHome/Coder sandbox for <see cref="SandboxWorkloads.AgentHome" />, constrained by
-    ///     <c>AgentHome:Sandbox:Provider</c>. It cannot return a container backend: the declaration names
-    ///     <see cref="SandboxToolchainSource.HostToolchain" />, and a container backend supplies only an image.
+    ///     <c>AgentHome:Sandbox:Provider</c>.
     /// </summary>
+    /// <remarks>
+    ///     It cannot return a container backend: the declaration names <see cref="SandboxToolchainSource.HostToolchain" />, and a container
+    ///     backend supplies only an image.
+    /// </remarks>
     public static IAgentSandboxRuntimeProvider ResolveAgent(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -111,28 +87,14 @@ internal static class SandboxProviderSelector
             AgentConstraintKey);
     }
 
-    /// <summary>
-    ///     Resolves the Development Mode sandbox.
-    ///     <para>
-    ///         <b>Which declaration applies.</b> Development Mode is the one workload whose toolchain need is a
-    ///         property of the node rather than of the code: a node with an operator-approved image has one, a node
-    ///         without has only the host's. So the declaration is
-    ///         <see cref="SandboxWorkloads.DevelopmentModeImageToolchain" /> when the node names a container image, or
-    ///         when <c>Development:Sandbox:Provider</c> names an image-backed backend — that key meant "run Development
-    ///         Mode in a container", and reading it as a declared image-toolchain need is the migration of its meaning
-    ///         rather than a reinterpretation of it. Otherwise it is
-    ///         <see cref="SandboxWorkloads.DevelopmentModeHostToolchain" />, which is what every node ships as today.
-    ///     </para>
-    ///     <para>
-    ///         <b>Which constraint applies.</b> An explicit <c>Development:Sandbox:Provider</c> always constrains. When
-    ///         it is unset the AgentHome key constrains instead — the fallback that has always made this seam a runtime
-    ///         no-op on a node that never set the new key — but ONLY while the declaration is host-toolchain. A node
-    ///         that configured an image is asking for a container, and inheriting a key that names the process backend
-    ///         would answer that request with a refusal it never asked for. A node that names an image AND pins
-    ///         <c>Development:Sandbox:Provider</c> to a backend that cannot supply one still fails closed, loudly: a
-    ///         set key is never silently reinterpreted, because that is how a hardened node becomes an unhardened one.
-    ///     </para>
-    /// </summary>
+    /// <summary>Resolves the Development Mode sandbox.</summary>
+    /// <remarks>
+    ///     It is the one workload whose toolchain need is a property of the NODE, so the declaration is
+    ///     <see cref="SandboxWorkloads.DevelopmentModeImageToolchain" /> when the node names a container image or
+    ///     <c>Development:Sandbox:Provider</c> names an image-backed backend (that key always meant "run Development Mode in a container"),
+    ///     and <c>DevelopmentModeHostToolchain</c> otherwise. An explicit Development key always constrains; unset it inherits the
+    ///     AgentHome key, but ONLY while the declaration is host-toolchain. A set key is never silently reinterpreted.
+    /// </remarks>
     public static IDevelopmentSandboxRuntimeProvider ResolveDevelopment(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -157,13 +119,12 @@ internal static class SandboxProviderSelector
         return Resolve<IDevelopmentSandboxRuntimeProvider>(services, requirements, inherited, AgentConstraintKey);
     }
 
-    /// <summary>
-    ///     Resolves the work-session sandbox for <see cref="SandboxWorkloads.WorkSession" />. There is still no
-    ///     <c>WorkSessions:Sandbox:Provider</c> key — nothing in v1 executes inside this jail, and inventing a setting
-    ///     for a role with no consumer would be one more thing an operator can get wrong for no effect — so it is
-    ///     constrained by the AgentHome key, which is the backend a session tool would land on. Give it its own key
-    ///     when a session tool needs one.
-    /// </summary>
+    /// <summary>Resolves the work-session sandbox for <see cref="SandboxWorkloads.WorkSession" />.</summary>
+    /// <remarks>
+    ///     There is no <c>WorkSessions:Sandbox:Provider</c> key — nothing in v1 executes inside this jail, and a setting for a role with no
+    ///     consumer is one more thing an operator can get wrong for no effect — so the AgentHome key constrains it, which is the backend a
+    ///     session tool would land on. Give it its own key when a session tool needs one.
+    /// </remarks>
     public static IWorkSessionSandboxRuntimeProvider ResolveWorkSession(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -175,19 +136,16 @@ internal static class SandboxProviderSelector
     }
 
     /// <summary>
-    ///     The whole of the axis vocabulary, in one pure function: the first requirement
-    ///     <paramref name="requirements" /> states that a backend supplying <paramref name="backendToolchain" /> and
-    ///     advertising <paramref name="capabilities" /> cannot honour, or <see langword="null" /> when it can honour
-    ///     all of them. Internal so the architecture test can enumerate declarations against fixed capability sets and
-    ///     fail deterministically offline, rather than against whatever this host's containment probe happens to
-    ///     measure.
-    ///     <para>
-    ///         <paramref name="capabilities" /> is a delegate on purpose. Reading
-    ///         <c>ProcessSandboxRuntimeProvider.Capabilities</c> runs the host containment probe, which launches real
-    ///         children; the axes AgentHome and work sessions declare need none of it, so a resolution that used to
-    ///         cost nothing must not start costing a probe.
-    ///     </para>
+    ///     The whole of the axis vocabulary in one pure function: the first requirement a backend supplying
+    ///     <paramref name="backendToolchain" /> and advertising <paramref name="capabilities" /> cannot honour, or
+    ///     <see langword="null" /> when it honours all of them.
     /// </summary>
+    /// <remarks>
+    ///     Internal so the architecture test can enumerate declarations against fixed capability sets and fail deterministically offline
+    ///     rather than against whatever this host's probe measures. <paramref name="capabilities" /> is a delegate on purpose: reading
+    ///     <c>ProcessSandboxRuntimeProvider.Capabilities</c> runs the containment probe, which launches real children, and the axes
+    ///     AgentHome and work sessions declare need none of it — a resolution that cost nothing must not start costing a probe.
+    /// </remarks>
     internal static string? FindUnmetAxis(SandboxRequirements requirements,
         SandboxToolchainSource backendToolchain,
         Func<SandboxProviderCapabilities> capabilities)
@@ -200,21 +158,16 @@ internal static class SandboxProviderSelector
             return $"toolchain source ({requirements.Toolchain})";
         }
 
-        // The FLOOR is the property — the host filesystem absent from the sandbox's view — so it is checked against
-        // SupportsHostFilesystemBoundary, not against SupportsFilesystemIsolation. The latter names one mechanism's
-        // create-request contract, and gating the floor on it would refuse the container backend an isolation level it
-        // genuinely provides. Which mechanism a workload also needs is a per-call matter for SandboxCreateRequest,
-        // where run_python asks for the bwrap contract by name and is refused fail-closed without it.
+        // The FLOOR is the property, so it is checked against SupportsHostFilesystemBoundary, never SupportsFilesystemIsolation: that one
+        // names a mechanism's create-request contract, which run_python asks for per call and gating the floor on would refuse a container.
         if (requirements.IsolationFloor == SandboxIsolationMode.Filesystem
             && !capabilities().HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary))
         {
             return $"isolation floor ({requirements.IsolationFloor})";
         }
 
-        // An isolated request carries its own empty network namespace — bwrap's --unshare-net, positively controlled
-        // by the containment probe with a loopback connect — so the separate egress mechanism is not on that path and
-        // gating on it would refuse a host that isolates perfectly well. This mirrors the check
-        // ComputeToolGateway.ExecuteAsync already makes, and for the same reason.
+        // An isolated request carries its own empty network namespace (bwrap's --unshare-net, positively controlled by the probe with a
+        // loopback connect), so the separate egress mechanism is off that path and gating on it would refuse a host that isolates fine.
         if (requirements.NetworkFloor != SandboxNetworkPolicy.Unrestricted
             && requirements.IsolationFloor != SandboxIsolationMode.Filesystem
             && !capabilities().HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy))
@@ -228,10 +181,8 @@ internal static class SandboxProviderSelector
             return $"persistence ({requirements.Persistence})";
         }
 
-        // SandboxRequirements.MaxDiskBytes is deliberately absent from this function: it may only TIGHTEN the
-        // operator's node-wide ceiling, so a backend that ignores it is no worse off than one that honours it, and
-        // every backend satisfies it vacuously. Rejecting a candidate over it would refuse a sandbox for asking to be
-        // smaller.
+        // SandboxRequirements.MaxDiskBytes is deliberately absent: it may only TIGHTEN the operator's node-wide ceiling, so every backend
+        // satisfies it vacuously and rejecting a candidate over it would refuse a sandbox for asking to be smaller.
         return null;
     }
 
@@ -260,10 +211,8 @@ internal static class SandboxProviderSelector
             var provider = backend.Locate(services);
             if (provider is null)
             {
-                // Not registered on this node — AddNodeContainerSandbox is a module of its own, so the container
-                // backend simply is not there when it was never added. Recorded as rejected rather than skipped
-                // silently, because "docker was never registered" and "docker cannot serve this workload" are
-                // different diagnoses, and the log line is now how a reader tells them apart.
+                // Not registered on this node: AddNodeContainerSandbox is a module of its own. Recorded as rejected rather than skipped,
+                // because "never registered" and "cannot serve this workload" are different diagnoses the log line has to tell apart.
                 rejected.Add($"{backend.Name}: not registered");
                 continue;
             }
@@ -308,10 +257,8 @@ internal static class SandboxProviderSelector
         List<string> rejected,
         string winner)
     {
-        // Once per resolution, and each role resolves once per process because the factories are singletons. This log
-        // line is not decoration: ADR 0007 accepts that a consumer can no longer tell from its own file which backend
-        // it got, and that trade is only worth making if the resolution is recorded. Information, not Debug, for the
-        // same reason.
+        // Once per resolution, and each role resolves once per process. Not decoration: ADR 0007 accepts that a consumer can no longer
+        // tell from its own file which backend it got, and that trade is only worth making if the resolution is recorded at Information.
         var logger = services.GetService<ILoggerFactory>()?.CreateLogger(typeof(SandboxProviderSelector).FullName!);
         logger?.LogInformation(
             "Sandbox substrate resolved for '{Workload}': backend '{Winner}' (toolchain={Toolchain}, isolation floor={IsolationFloor}, network floor={NetworkFloor}, persistence={Persistence}). Constraint: {Constraint}. Candidates considered: {Candidates}. Rejected: {Rejected}.",
@@ -326,11 +273,8 @@ internal static class SandboxProviderSelector
             rejected.Count == 0 ? "none" : string.Join("; ", rejected));
     }
 
-    // An unset provider leaves the candidate set unconstrained, which under minimal-satisfying resolution lands on the
-    // deterministic fake — exactly where the old "unset means fake" special case landed, now as a consequence of the
-    // ranking rather than as a rule of its own. This is the safe non-Production path; in Production the SandboxOptions
-    // startup validation rejects an unset provider before anything resolves the selector, so a stripped config can
-    // never reach here and silently grant an execution-capable backend.
+    // An unset provider leaves the candidate set unconstrained, which under minimal-satisfying resolution lands on the deterministic fake
+    // — the safe non-Production path. In Production, startup validation rejects an unset provider before the selector is ever reached.
     private static string? ReadAgentConstraint(IServiceProvider services)
     {
         return Normalize(services.GetRequiredService<IOptions<SandboxOptions>>().Value.Provider);
@@ -342,12 +286,13 @@ internal static class SandboxProviderSelector
     }
 
     /// <summary>
-    ///     One registered backend as the selector sees it: its stable name, the toolchain it supplies, and how to reach
-    ///     its DI singleton. The toolchain is stated here rather than read from
-    ///     <see cref="ISandboxRuntimeProvider.Capabilities" /> so that resolving a host-toolchain workload never has to
-    ///     probe a backend it is about to reject on that axis; <c>SandboxSubstrateSelectionArchitectureTests</c>
-    ///     asserts the two never drift.
+    ///     One registered backend as the selector sees it: its stable name, the toolchain it supplies, and how to reach its DI singleton.
     /// </summary>
+    /// <remarks>
+    ///     The toolchain is stated here rather than read from <see cref="ISandboxRuntimeProvider.Capabilities" /> so that resolving a
+    ///     host-toolchain workload never has to probe a backend it is about to reject on that axis;
+    ///     <c>SandboxSubstrateSelectionArchitectureTests</c> asserts the two never drift.
+    /// </remarks>
     private sealed record SandboxBackend
     {
         public required string Name { get; init; }

@@ -17,12 +17,12 @@ internal interface IDevelopmentValidationRunner
 
 internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 {
-    /// <summary>
-    ///     Bumped from <c>development-validation-v1</c> when the gate gained structured test results: a v1 report was
-    ///     produced by a gate that checked exit codes only, so it cannot be treated as evidence for the rule the apply
-    ///     and reviewer gates now enforce. Bumping the protocol version makes an old artifact fail the version check
-    ///     explicitly, rather than fail the new count rule accidentally because its absent counts deserialize to zero.
-    /// </summary>
+    /// <summary>The artifact protocol version of a validation report.</summary>
+    /// <remarks>
+    ///     A <c>development-validation-v1</c> report came from a gate that checked exit codes only, so it is not
+    ///     evidence for the rule the apply and reviewer gates now enforce; the version bump makes such an artifact
+    ///     fail the version check explicitly, rather than fail the count rule because absent counts deserialize to 0.
+    /// </remarks>
     internal const string ProfileVersion = "development-validation-v2";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -74,19 +74,16 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
             var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken);
             var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken);
 
-            // BEFORE the command loop, and before the tools that would run it exist. A dependency-manifest change
-            // cannot be resolved by an attempt whose sandbox has no egress, so running restore/build/test to watch
-            // them fail would spend the whole attempt budget arriving at a less specific answer than the one already
-            // known. Zero command evidence is the honest report of a gate that deliberately ran nothing.
+            // Before the command loop and the tools that would run it: an egress-denied attempt cannot resolve a
+            // changed manifest, so running the commands spends the budget on a vaguer answer. Zero evidence is honest.
             var verdict = DevelopmentDependencyManifestPolicy.Evaluate(evidence.Current);
             IReadOnlyList<DevelopmentCommandEvidence> commands = [];
             if (verdict is null)
             {
                 var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile);
 
-                // The validation run had no overall deadline of its own: it was bounded only by each command's timeout,
-                // which before per-command budgets existed was the whole attempt cap per command. A four-command profile
-                // could therefore run for four times the cap it was supposed to respect.
+                // The validation run needs a deadline of its own: bounded only per command, a four-command profile runs
+                // for four times the attempt cap it is meant to respect.
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
                     _options.MaxAttemptDurationSeconds)));
@@ -142,18 +139,8 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         {
             try
             {
-                // ONE automatic re-run, then a human. The recovery hop puts the task back at InProgress behind a
-                // SUCCEEDED coder attempt — the state the next-action decision reads as "implemented, validate it" —
-                // so nothing but this count stops a validation that throws deterministically from re-running for as
-                // long as anything keeps asking. Two things remove every other brake: the Validation branch of
-                // StartNextActionAsync writes no operation-ledger row of its own, and a workflow tick re-derives the
-                // SAME operation id each time because neither the status, the round nor the attempt count has moved.
-                //
-                // The ledger IS the counter, and it costs nothing extra: the recovery transition is written under an
-                // id derived from the coder attempt it recovers, so "has this attempt already been recovered?" is one
-                // keyed read rather than a scan of the project's whole event log — no second write, no new store
-                // method, no migration. A NEW coder attempt derives a NEW id and counts from zero, which is right: a
-                // different implementation has not been tried yet.
+                // One automatic re-run, then a human. Nothing else brakes it: the recovery hop leaves the task reading
+                // as "implemented, validate it", and a workflow tick re-derives the same operation id every time.
                 var recovery = RecoveryOperationId(coderAttempt.Id);
                 var alreadyRecovered = await _store.FindOperationAsync(task.ProjectId,
                                                        recovery,
@@ -181,52 +168,46 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         }
     }
 
-    /// <summary>
-    ///     Where a finished deterministic gate leaves the task.
-    ///     <para>
-    ///         A FAILED gate hands the failure to the CODER as a change request. Returning the task to
-    ///         <c>InProgress</c> put it back in the exact state that means "implemented, validate it" — a succeeded
-    ///         coder attempt and no evidence of the round the gate has just judged — so
-    ///         <c>DevelopmentManagementService.StartNextActionAsync</c> read it back and scheduled the same validation
-    ///         again, and again. Measured live on 2026-09-04: 289 restore/build/test runs on one task in 25 minutes,
-    ///         zero coder rounds, ended only by cancelling the run.
-    ///     </para>
-    ///     <para>
-    ///         Named rather than inlined so the one expression that routes a gate verdict has one home, and so a test
-    ///         driving the gate's persistence hops without a workspace routes through it rather than restating it.
-    ///     </para>
-    /// </summary>
+    /// <summary>Where a finished deterministic gate leaves the task.</summary>
+    /// <remarks>
+    ///     A failed gate hands the failure to the coder as a change request. Returning the task to <c>InProgress</c>
+    ///     instead puts it back in the state meaning "implemented, validate it" — a succeeded coder attempt, no
+    ///     evidence of the round just judged — so the next-action decision schedules the same validation again: 289
+    ///     restore/build/test runs on one task in 25 minutes, zero coder rounds. Named so the one expression routing a
+    ///     gate verdict has one home, and so a test can drive the persistence hops without a workspace.
+    /// </remarks>
     internal static DevelopmentTaskStatus TargetFor(bool passed) =>
         passed ? DevelopmentTaskStatus.InReview : DevelopmentTaskStatus.ChangesRequested;
 
-    /// <summary>
-    ///     The task's terminal reason. It is clamped because <c>development_tasks.terminal_reason</c> is
-    ///     <c>HasMaxLength(1024)</c> and the detail interpolates a parser message that a future adapter could make
-    ///     arbitrarily long.
-    /// </summary>
+    /// <summary>The task's terminal reason.</summary>
+    /// <remarks>
+    ///     It is clamped because <c>development_tasks.terminal_reason</c> is <c>HasMaxLength(1024)</c> and the detail
+    ///     interpolates a parser message a future adapter could make arbitrarily long.
+    /// </remarks>
     private static string BuildFailureReason(DevelopmentValidationVerdict verdict) =>
         Clamp($"Deterministic validation failed ({verdict.FailureCode}): {verdict.FailureDetail}");
 
-    /// <summary>
-    ///     What an operator is told when the gate has now thrown twice on the same implementation.
-    ///     <para>
-    ///         The exception's TYPE, never its message. The message is the one string on this path that nothing has
-    ///         sanitized — it can carry a host path or a fragment of a prompt — and the obvious sanitizer,
-    ///         <c>DevelopmentArtifactSanitizer.SanitizeText</c>, REJECTS its input on a credential-like match rather
-    ///         than redacting it, so calling it here would throw a second exception out of a catch block whose whole
-    ///         job is to leave the task in a legible state. A type name is a code identifier: bounded, and incapable
-    ///         of naming this machine. The full detail still reaches the engine log, because this method's caller
-    ///         rethrows.
-    ///     </para>
-    /// </summary>
+    /// <summary>What an operator is told when the gate has thrown twice on the same implementation.</summary>
+    /// <remarks>
+    ///     The exception's type, never its message: the message is the one string on this path nothing has sanitized
+    ///     and can carry a host path or a prompt fragment, while <c>DevelopmentArtifactSanitizer.SanitizeText</c>
+    ///     rejects its input on a credential-like match, so calling it would throw out of a catch whose job is to
+    ///     leave the task legible. A type name is a bounded code identifier that cannot name this machine, and the
+    ///     caller rethrows, so the full detail still reaches the engine log.
+    /// </remarks>
     private static string BuildRecoveryExhaustedReason(Exception exception) =>
         Clamp($"Deterministic validation failed twice on this implementation without producing usable evidence ({exception.GetType().Name}). The engine log has the detail.");
 
     /// <summary>
-    ///     The operation id the recovery hop for one coder attempt is written under, and therefore the key that says
-    ///     whether that attempt has already had its one free re-run. Derived rather than random so the SECOND recovery
-    ///     of the same attempt can find the first with a single keyed read.
+    ///     The operation id the recovery hop for one coder attempt is written under, and so the key that says whether
+    ///     that attempt has already had its one free re-run.
     /// </summary>
+    /// <remarks>
+    ///     The ledger is the counter, at no extra cost: derived rather than random, a second recovery of the same
+    ///     attempt finds the first with one keyed read instead of a scan of the project's event log — no second
+    ///     write, no new store method, no migration. A new coder attempt derives a new id and counts from zero, which
+    ///     is right, because a different implementation has not been tried yet.
+    /// </remarks>
     private static Guid RecoveryOperationId(Guid coderAttemptId) =>
         new(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(coderAttemptId.ToString("N"), ":validation-recovery"))).AsSpan(0, 16));
 

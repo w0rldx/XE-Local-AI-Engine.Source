@@ -4,23 +4,14 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-/// <summary>
-///     Names — and recognises — the transient systemd scope every isolated command runs in.
-///     <para>
-///         The unit name is the whole termination story. A jail's processes live in their own PID namespace, so the
-///         engine cannot see them, and the pid it holds is <c>setsid</c>'s, three execs away from the workload. What
-///         it CAN do is name the cgroup they are all in and ask the user manager to signal it, which reaches every
-///         process in the scope including one that deliberately detached. That only works if the name is decided
-///         BEFORE the launch and recorded where a later run can find it, which is why this is a generated identifier
-///         rather than something read back from <c>systemd-run</c>'s output.
-///     </para>
-///     <para>
-///         The shape is deliberately narrow — <c>xe-&lt;role&gt;-&lt;32 hex&gt;.scope</c> — because the startup sweep
-///         reaps by pattern. A loose prefix match would let the sweep kill a unit some other tool happened to name
-///         <c>xe-something</c>; matching the exact generated shape means the sweep can only ever target units this
-///         engine created.
-///     </para>
-/// </summary>
+/// <summary>Names — and recognises — the transient systemd scope every isolated command runs in.</summary>
+/// <remarks>
+///     The unit name is the whole termination story: a jail's processes live in their own PID namespace and the pid the engine holds is
+///     <c>setsid</c>'s, so naming the cgroup and asking the user manager to signal it is what reaches every process, one that deliberately
+///     detached included. That works only if the name is decided BEFORE the launch and recorded where a later run can find it, hence a
+///     generated identifier rather than something read back from <c>systemd-run</c>. The shape is deliberately narrow,
+///     <c>xe-&lt;role&gt;-&lt;32 hex&gt;.scope</c>, so the startup sweep can only ever target units this engine created.
+/// </remarks>
 internal static partial class SandboxScopeUnit
 {
     /// <summary>The role used when a caller names none.</summary>

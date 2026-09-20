@@ -7,22 +7,17 @@ internal static class DevelopmentWorkspaceSecurity
 {
     private const char SandboxSeparator = '/';
 
-    // The exceptions to the dot-path rule in IsProtected, matched against a path's first segment either exactly or
-    // with a ".suffix" after them, so one ".env" entry covers ".env.example" and ".env.local" without listing every
-    // variant a repository might carry. The suffix form deliberately requires the dot: ".envrc" is another tool's
-    // state file and stays protected.
-    //
-    // All but ".env" are this repository's own tracked root dot-entries. Dev Mode exists partly to fix a red build,
-    // and a red build is usually a workflow or an ignore rule, so ".git" stays closed while ".gitignore" and
-    // ".github/" stay open. Being tracked is necessary but not sufficient: a tool's index directory that carries a
-    // tracked ".gitignore" is still a regenerable index, not source, and stays protected.
-    //
-    // ".env" is here for a different reason and must not be read as "'.env' is safe". It is governed by the SECRET
-    // gate (ISensitiveFileExclusionService), which is both stronger and more precise than this one: it refuses the
-    // read, suppresses the file from every listing, and refuses a rename whose SOURCE is a secret, while still
-    // allowing a creation — writing a fresh ".env.example" has no secret source to leak and is ordinary work.
-    // Swallowing ".env*" into this deny-list would add no protection the secret gate does not already give and would
-    // silently delete that last behaviour.
+    /// <summary>
+    ///     The exceptions to <see cref="IsProtected" />'s dot-path rule, matched against a path's first segment
+    ///     exactly or with a <c>.suffix</c> after it, so one <c>.env</c> entry covers <c>.env.example</c>.
+    /// </summary>
+    /// <remarks>
+    ///     The suffix form requires the dot, so <c>.envrc</c> — another tool's state file — stays protected. All but
+    ///     <c>.env</c> are tracked root dot-entries a red build is usually fixed in, which is why <c>.git</c> stays
+    ///     closed while <c>.gitignore</c> and <c>.github/</c> stay open; a tool's index directory carrying a tracked
+    ///     <c>.gitignore</c> is still a regenerable index and stays protected. <c>.env</c> is here because the secret
+    ///     gate governs it more precisely, still allowing the creation a deny-list entry here would silently remove.
+    /// </remarks>
     private static readonly string[] EditableDotPaths = [".dockerignore", ".editorconfig", ".env", ".gitattributes", ".github", ".gitignore"];
 
     public static string CanonicalRepositoryRoot(string repositoryRoot)
@@ -104,39 +99,20 @@ internal static class DevelopmentWorkspaceSecurity
 
     /// <summary>
     ///     Whether a workspace-relative path's FIRST segment is a dot-entry outside <see cref="EditableDotPaths" />.
-    ///     The first segment alone decides it, which is what makes the prune correct: <c>WorkspaceFileScanner</c> asks
-    ///     about a bare directory name before descending, so <c>.git</c> with nothing after it has to answer true.
-    ///     <see cref="Confine" /> uses it to refuse the path as a tool argument; the listing and search tools use it to
-    ///     drop the same paths from their OUTPUT, so the policy reads the same way whether a path is asked for or
-    ///     merely enumerated.
-    ///     <para>
-    ///         The rule is the dot prefix itself, not a list of names. Git internals, this engine's own
-    ///         <c>.xe-dev</c> import source and whatever state directory a contributor's editor or agent tooling drops
-    ///         in the worktree are indistinguishable to the guard and equally none of the agent's business — and a
-    ///         deny-list naming particular tools would protect nothing for a contributor who uses a different one,
-    ///         which is a guard whose strength depends on which software happens to be installed.
-    ///     </para>
-    ///     <para>
-    ///         <c>.xe-dev</c> is covered here, and it is worth saying why this is NOT the guard for it: refusing the
-    ///         path as a tool argument is necessary but not sufficient, because a build or test command can still write
-    ///         the file as a side effect, entirely outside this check. The property is actually carried by the digest
-    ///         re-check in <c>DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync</c> plus the fact that the
-    ///         database, not the worktree, is the source of truth for the profile.
-    ///     </para>
-    ///     <para>
-    ///         Dropping them from listings is not cosmetic. A freshly cloned worktree's <c>.git</c> holds far more
-    ///         entries than <see cref="DevelopmentOptions.MaxChangedFiles" /> allows a listing to return, so without
-    ///         this a root <c>list_files</c> can spend its entire budget on Git internals the agent is forbidden to
-    ///         open anyway, and return nothing it can act on.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The rule is the dot prefix itself, never a list of names, so the guard does not depend on which software a
+    ///     contributor installed. The first segment alone decides it, the file scanner asking about a bare directory
+    ///     name before descending. <see cref="Confine" /> refuses such a path as a tool argument and the listing and
+    ///     search tools drop it from their output, so a root listing cannot spend its whole budget on Git internals.
+    ///     <c>.xe-dev</c> is covered here but really guarded by the digest re-check, which a side effect cannot evade.
+    /// </remarks>
     public static bool IsProtected(string relativePath)
     {
         ArgumentNullException.ThrowIfNull(relativePath);
 
-        // Segment-aware by construction: ".gitignore" is its own first segment and never a match for ".git".
-        // Span IndexOf, because the string overload is culture-sensitive by default and CA1307 rejects it; segment
-        // splitting here must be ordinal.
+        // Segment-aware by construction: ".gitignore" is its own first segment and never a match for ".git". Span
+        // IndexOf because the string overload is culture-sensitive and this splitting must be ordinal (CA1307).
         var path = relativePath.AsSpan();
         var separator = path.IndexOf(SandboxSeparator);
         var firstSegment = separator < 0 ? path : path[..separator];
@@ -185,11 +161,12 @@ internal readonly record struct DevelopmentConfinedPath(bool IsAccepted, string 
         new(false, string.Empty, string.Empty, reason);
 }
 
-/// <summary>
-///     A Development workspace security/validation guard rejected the supplied value. Endpoints whose request carries
-///     the rejected value map this to 400; endpoints that act purely on persisted project state map it to 409. The
-///     state-conflict half of the family has its own type — see <see cref="DevelopmentRepositoryStateConflictException" />.
-/// </summary>
+/// <summary>A Development workspace security or validation guard rejected the supplied value.</summary>
+/// <remarks>
+///     Endpoints whose request carries the rejected value map this to 400; endpoints acting purely on persisted
+///     project state map it to 409. The state-conflict half of the family has its own type, see
+///     <see cref="DevelopmentRepositoryStateConflictException" />.
+/// </remarks>
 public class DevelopmentWorkspaceSecurityException : InvalidOperationException
 {
     public DevelopmentWorkspaceSecurityException(string message) : base(message) { }

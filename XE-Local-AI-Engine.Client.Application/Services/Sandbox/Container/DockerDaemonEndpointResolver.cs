@@ -1,17 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     Resolves the Docker daemon endpoint this node will talk to, in a fixed, reportable order. Discovery is
-///     deliberately shallow — it does not read <c>~/.docker/config.json</c> contexts, and it does not probe: it names
-///     one endpoint and says where that name came from, and the preflight then decides whether the operator has
-///     approved it.
-///     <para>
-///         Order: explicit engine configuration, then <c>DOCKER_HOST</c>, then the platform default. The environment
-///         variable outranks the default because that is what every Docker tool does and an operator who sets it means
-///         it; it does not outrank engine configuration, because engine configuration is the one input a stray shell
-///         export cannot reach.
-///     </para>
-/// </summary>
+/// <summary>Resolves the Docker daemon endpoint this node will talk to, in a fixed, reportable order.</summary>
+/// <remarks>
+///     Discovery is deliberately shallow: it reads no <c>~/.docker/config.json</c> contexts and does not probe, naming one endpoint and
+///     where that name came from, and the preflight then decides whether the operator approved it. The order is explicit engine
+///     configuration, then <c>DOCKER_HOST</c>, then the platform default — the variable outranks the default because that is what every
+///     Docker tool does, and does not outrank engine configuration, which is the one input a stray shell export cannot reach.
+/// </remarks>
 internal static class DockerDaemonEndpointResolver
 {
     internal const string DockerHostVariable = "DOCKER_HOST";
@@ -33,22 +28,16 @@ internal static class DockerDaemonEndpointResolver
         return Resolve(options.DaemonEndpoint, environmentReader, fileExists, isWindows);
     }
 
-    /// <summary>
-    ///     Resolve the endpoint from a plain configured endpoint string rather than from Development Mode's options
-    ///     record.
-    ///     <para>
-    ///         The discovery order is a property of this host, not of any one consumer: <c>DOCKER_HOST</c> and the
-    ///         platform sockets are the same whichever part of the engine is asking. So the second consumer of a
-    ///         daemon takes this overload and supplies its own configured value, rather than either constructing a
-    ///         <see cref="ContainerSandboxOptions" /> it does not own or forking a resolver that would drift from this
-    ///         one the first time a platform default changed.
-    ///     </para>
-    /// </summary>
+    /// <summary>Resolve the endpoint from a plain configured endpoint string rather than from Development Mode's options record.</summary>
     /// <param name="configuredEndpoint">
-    ///     The consumer's explicit endpoint setting, or null when it has none. Pass a typed null
-    ///     (<c>(string?)null</c>) rather than the literal <c>null</c>: the <see cref="ContainerSandboxOptions" />
-    ///     overload accepts it equally well, so a bare <c>Resolve(null)</c> is CS0121-ambiguous.
+    ///     The consumer's explicit endpoint setting, or null when it has none. Pass a typed <c>(string?)null</c>, a bare <c>null</c>
+    ///     being CS0121-ambiguous against the <see cref="ContainerSandboxOptions" /> overload.
     /// </param>
+    /// <remarks>
+    ///     The discovery order is a property of this HOST, not of any one consumer, so a second consumer supplies its own configured value
+    ///     here rather than constructing a <see cref="ContainerSandboxOptions" /> it does not own or forking a resolver that would drift
+    ///     the first time a platform default changed.
+    /// </remarks>
     /// <param name="environmentReader">Reads an environment variable; injected so the order is testable.</param>
     /// <param name="fileExists">Whether a path exists; injected so the order is testable.</param>
     /// <param name="isWindows">Whether the engine is running on Windows.</param>
@@ -75,9 +64,8 @@ internal static class DockerDaemonEndpointResolver
             return new DockerDaemonEndpoint { Uri = new Uri(WindowsNamedPipeEndpoint), Source = DockerDaemonEndpointSource.WindowsNamedPipe };
         }
 
-        // The per-user socket is only preferred when the system-wide one is genuinely absent. Preferring it whenever
-        // it exists would silently move an operator who has both from the daemon they installed to the one their shell
-        // happens to run — exactly the substitution the daemon attestation exists to make visible rather than to perform.
+        // The per-user socket is preferred only when the system-wide one is genuinely absent: preferring it whenever it exists would move
+        // an operator who has both from the daemon they installed to the one their shell runs — the substitution attestation reveals.
         if (!fileExists(DefaultUnixSocketPath))
         {
             var runtimeDirectory = environmentReader(UserRuntimeDirectoryVariable);
@@ -127,9 +115,8 @@ internal static class DockerDaemonEndpointResolver
 
         var trimmed = raw.Trim();
 
-        // A bare absolute path is accepted as a Unix socket. `DOCKER_HOST=/run/user/1000/docker.sock` is a thing
-        // people write, and rejecting it as "malformed" would send an operator hunting for a syntax error rather than
-        // telling them which daemon they reached.
+        // A bare absolute path is accepted as a Unix socket: people write `DOCKER_HOST=/run/user/1000/docker.sock`, and rejecting it as
+        // malformed would send an operator hunting for a syntax error rather than telling them which daemon they reached.
         if (trimmed.StartsWith('/'))
         {
             endpoint = BuildUnixEndpoint(trimmed);

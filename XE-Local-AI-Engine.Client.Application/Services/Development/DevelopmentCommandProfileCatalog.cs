@@ -3,59 +3,49 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     The code-owned command-profile catalog. It ships three .NET-family profiles and no user-defined ones:
-///     a custom profile would let a repository describe its own build and test commands, which needs the container
-///     isolation that is not built yet, and a <c>cargo</c> profile on a host without <c>cargo</c> would only upgrade
-///     "missing solution" into "command not found".
+///     The code-owned command-profile catalog, shipping three .NET-family profiles and no user-defined ones.
 /// </summary>
+/// <remarks>
+///     A custom profile would let a repository describe its own build and test commands, which needs the container
+///     isolation that is not built yet; and a <c>cargo</c> profile on a host without <c>cargo</c> would only upgrade
+///     "missing solution" into "command not found".
+/// </remarks>
 internal static class DevelopmentCommandProfileCatalog
 {
     public const string DotnetSlnx = "dotnet-slnx";
     public const string DotnetCsproj = "dotnet-csproj";
 
-    /// <summary>
-    ///     The profile for a repository with no detected .NET build system. Its validation profile is the whitespace
-    ///     check alone, which is honest rather than false-green: the gate reports exactly what it verified, and the
-    ///     profile is surfaced to the operator at confirmation so "no build system was detected" is a visible decision
-    ///     rather than a silent downgrade.
-    /// </summary>
+    /// <summary>The profile for a repository with no detected .NET build system.</summary>
+    /// <remarks>
+    ///     Its validation profile is the whitespace check alone, which is honest rather than false-green: the gate
+    ///     reports exactly what it verified, and the profile is surfaced to the operator at confirmation, so "no
+    ///     build system was detected" is a visible decision rather than a silent downgrade.
+    /// </remarks>
     public const string GenericGit = "generic-git";
 
     /// <summary>
-    ///     Bumped whenever the command set, argument vectors, timeouts or protected paths of any profile below change
-    ///     — and equally whenever <see cref="DependencyManifestPaths" /> gains or loses a rule, because that set is a
-    ///     gate applied to every attempt run under a profile this catalog issued.
-    ///     A stored profile whose <c>(ProfileId, ProfileVersion)</c> still resolves here but whose canonical content no
-    ///     longer matches is rejected rather than silently re-interpreted — see
-    ///     <see cref="ResolveStored" />.
+    ///     Bumped whenever the command set, argument vectors, timeouts or protected paths of any profile below change,
+    ///     and equally whenever <see cref="DependencyManifestPaths" /> gains or loses a rule.
     /// </summary>
+    /// <remarks>
+    ///     That set is a gate applied to every attempt run under a profile this catalog issued. A stored profile whose
+    ///     <c>(ProfileId, ProfileVersion)</c> still resolves here but whose canonical content no longer matches is
+    ///     rejected rather than silently re-interpreted — see <see cref="ResolveStored" />.
+    /// </remarks>
     public const string CurrentVersion = "v2";
 
     /// <summary>
-    ///     The files whose content decides what <c>restore</c> resolves. A change to any of them fails deterministic
-    ///     validation with <see cref="DevelopmentValidationFailureCodes.DependencyManifestChanged" /> — see
-    ///     <see cref="DevelopmentDependencyManifestPolicy" /> for why that is a verdict rather than a security
-    ///     exception.
-    ///     <para>
-    ///         It lives HERE, beside <see cref="DefaultProtectedPaths" /> and under
-    ///         <see cref="CurrentVersion" />'s rule, rather than in the policy class: the set is the whole of the
-    ///         control, and a control versioned by a mechanism of its own would be a second thing to keep in step with
-    ///         the profile a project was created under. It is deliberately NOT a field of
-    ///         <see cref="DevelopmentCommandProfile" /> — it is code-owned and identical for every profile, so putting
-    ///         it in the canonical digest would invalidate every stored profile to say nothing new.
-    ///     </para>
-    ///     <para>
-    ///         <c>Directory.Build.props</c> and <c>Directory.Build.targets</c> are included on the operator's 2026-08-25
-    ///         ruling. They are <em>build</em> configuration rather than dependency manifests, but either can carry a
-    ///         <c>PackageReference</c>, and excluding them would leave exactly the bypass the rule exists to close.
-    ///         Note this is a different shape from <c>EnsureBuildConfigurationBarrier</c>, which bounds MSBuild's
-    ///         upward search to configuration from <em>above</em> the workspace.
-    ///     </para>
-    ///     <para>
-    ///         The set is the control, so a packaging system missing from it is a hole rather than a gap in coverage.
-    ///         Adding one is a source change here plus a <see cref="CurrentVersion" /> bump.
-    ///     </para>
+    ///     The files whose content decides what <c>restore</c> resolves; changing one fails deterministic validation
+    ///     with <see cref="DevelopmentValidationFailureCodes.DependencyManifestChanged" />, a verdict rather than a
+    ///     security exception.
     /// </summary>
+    /// <remarks>
+    ///     The set is the whole of the control: a packaging system missing from it is a hole, not a gap in coverage,
+    ///     and adding one is a source change here plus a <see cref="CurrentVersion" /> bump. It is not a field of
+    ///     <see cref="DevelopmentCommandProfile" /> — code-owned and identical for every profile, so the canonical
+    ///     digest would invalidate every stored profile to say nothing new. <c>Directory.Build.props</c> and
+    ///     <c>.targets</c> are in because either can carry a <c>PackageReference</c>.
+    /// </remarks>
     public static readonly string[] DependencyManifestPaths =
     [
         "**/*.csproj",
@@ -80,34 +70,14 @@ internal static class DevelopmentCommandProfileCatalog
     /// <summary>
     ///     Paths the agent may create but may not modify or delete once they existed at <c>BaseCommit</c> — the
     ///     test-write policy.
-    ///     <para>
-    ///         Grounded in the measured layout of this repository, <c>XE-Framework</c> and the synthetic fixture rather
-    ///         than assumed. Three things this set deliberately encodes:
-    ///     </para>
-    ///     <para>
-    ///         The filename rules carry most of the weight: <c>*Tests.cs</c> matched 543 files across both real
-    ///         repositories with zero false positives. The directory rules exist only to close the shared-helper hole —
-    ///         without them the agent could gut <c>AssertEx.cs</c> so every assertion silently passes, which is a
-    ///         shorter path to green than deleting a test and is exactly the move the test-write policy exists to stop.
-    ///     </para>
-    ///     <para>
-    ///         The directory rules are scoped to <c>*.cs</c> on purpose. Freezing whole test directories would also
-    ///         freeze the nine test <c>.csproj</c> files, so the agent could never add a package reference to an
-    ///         existing test project — which blocks the "implement a feature and its tests" case the test-write policy
-    ///         explicitly permits.
-    ///     </para>
-    ///     <para>
-    ///         <c>**&#47;*.Tests&#47;**</c> alone would be a trap and is not used alone: no directory in
-    ///         <c>XE-Framework</c> ends in <c>.Tests</c> (its projects are <c>XeFramework.Tests.UnitTests</c> and
-    ///         siblings), and it also misses this repository's own <c>XE-Local-AI-Engine.Tests.E2ETests</c>. Matching
-    ///         only that pattern would protect zero tests on this very repository.
-    ///     </para>
-    ///     <para>
-    ///         Not included, each for a measured reason: <c>*Spec.cs</c> has three false positives across the two
-    ///         repositories (<c>OrchestrationSpec.cs</c>, <c>LlamaServerLaunchSpec.cs</c>, <c>ImageServerLaunchSpec.cs</c>)
-    ///         and zero true positives; <c>*Test.cs</c> singular matches nothing in either repository.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The filename rules carry most of the weight — <c>*Tests.cs</c> matches 543 files across two real
+    ///     repositories with zero false positives — while the directory rules exist only to close the shared-helper
+    ///     hole and are scoped to <c>*.cs</c>, so an agent can still add a package reference to an existing test
+    ///     project. What each pattern is grounded in, and what is deliberately left out, is in
+    ///     <c>docs/wiki/12-security-and-privacy.md</c> ("The test-write policy's protected-path set").
+    /// </remarks>
     public static readonly string[] DefaultProtectedPaths =
     [
         "**/*Tests.cs",
@@ -177,21 +147,16 @@ internal static class DevelopmentCommandProfileCatalog
     }
 
     /// <summary>
-    ///     Resolves a profile that was snapshotted into the database, and re-derives it from the code-owned catalog to
-    ///     prove the definition has not changed underneath it.
-    ///     <para>
-    ///         This is the reuse rule. If someone edits a profile's commands without bumping
-    ///         <see cref="CurrentVersion" />, every already-created project would silently start running different
-    ///         commands under a version string that claims otherwise. Rejecting is the only safe answer: the stored
-    ///         bytes are the operator-confirmed agreement, and the code no longer honours it.
-    ///     </para>
-    ///     <para>
-    ///         This does <em>not</em> touch the three artifact protocol versions
-    ///         (<c>development-workspace-v1</c>, <c>development-validation-v2</c>, <c>development-review-v1</c>) or the
-    ///         gates that compare them. Those describe artifact shape compatibility; this describes command content.
-    ///         They are separate dimensions.
-    ///     </para>
+    ///     Resolves a profile snapshotted into the database, re-deriving it from the code-owned catalog to prove the
+    ///     definition has not changed underneath it.
     /// </summary>
+    /// <remarks>
+    ///     Editing a profile's commands without bumping <see cref="CurrentVersion" /> would silently start every
+    ///     already-created project on different commands under a version string claiming otherwise, and the stored
+    ///     bytes are the operator-confirmed agreement, so rejecting is the only safe answer. This does not touch the
+    ///     three artifact protocol versions (<c>development-workspace-v1</c>, <c>development-validation-v2</c>,
+    ///     <c>development-review-v1</c>) or their gates: those describe shape compatibility, this command content.
+    /// </remarks>
     public static DevelopmentCommandProfile ResolveStored(string? storedProfileJson)
     {
         if (string.IsNullOrWhiteSpace(storedProfileJson))

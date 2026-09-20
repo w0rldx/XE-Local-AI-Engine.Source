@@ -4,60 +4,27 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
-///     Startup <see cref="IHostedService" /> that reaps sandbox children orphaned by a previous run of THIS app, and the
-///     stale jails they left behind. It is the direct structural mirror of <c>StaleLlamaServerReaper</c>.
-///     <para>
-///         The provider tears its children down through <c>Dispose</c> and <c>KillAsync</c>, both of which run only on a
-///         graceful DI shutdown or an explicit kill. A hard host kill — the documented behaviour of <c>aspire stop</c>
-///         on this stack — skips both, leaving the child process group running and its jail directory on disk. Reaping
-///         on the next start makes restart clean regardless of how the previous run died.
-///     </para>
+///     Startup <see cref="IHostedService" /> that reaps sandbox children orphaned by a previous run of THIS app, and the stale jails they
+///     left behind; the direct structural mirror of <c>StaleLlamaServerReaper</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Three independent safety gates</b>, because signalling a process group is irreversible and a marker is
-///         untrusted input after a crash:
-///     </para>
-///     <list type="number">
-///         <item>
-///             <b>Owner liveness.</b> A marker whose owning worker pid is still alive belongs to a running worker (this
-///             one, or a second instance) and is skipped entirely — the reaper never touches a live run's children.
-///             This is why the provider PRE-REGISTERS the marker before it starts an isolated command: the scope exists
-///             from the moment <c>systemd-run</c> runs, so a marker written afterwards would leave a window in which
-///             this sweep saw a live command's scope unclaimed.
-///         </item>
-///         <item>
-///             <b>Pid-reuse guard.</b> The kernel may have recycled the recorded process-group id onto an unrelated
-///             process. The group is signalled only when the leader's start time still matches the value recorded at
-///             launch, so a recycled pid is skipped rather than killed.
-///         </item>
-///         <item>
-///             <b>Strict path ownership.</b> A jail is deleted only when it lies under
-///             <see cref="SandboxPaths.ContainerRoot" />, parity with <c>StaleLlamaServerReaper.IsUnderRoot</c>. A
-///             marker naming a path outside it gets its process group reaped (if the first two gates pass) but nothing
-///             deleted. A jail flagged <see cref="SandboxProcessMarker.PreserveJail" /> — an engine-managed trusted host
-///             workspace — is never deleted at all.
-///         </item>
-///     </list>
-///     <para>
-///         The whole sweep is best-effort and wrapped so a reaper failure can never block application start. Hosted
-///         services start before any request is served and before the provider spawns anything, so it only ever observes
-///         orphans from a previous run.
-///     </para>
+///     A hard host kill skips <c>Dispose</c> and <c>KillAsync</c>, leaving the child process group running and its jail on disk. Three
+///     independent gates apply, because signalling a group is irreversible and a marker is untrusted input after a crash. OWNER LIVENESS:
+///     a marker whose owning worker pid is alive is skipped entirely. PID REUSE: the group is signalled only while the leader's start time
+///     still matches what launch recorded. PATH OWNERSHIP: a jail is deleted only under <see cref="SandboxPaths.ContainerRoot" />, and one
+///     flagged <see cref="SandboxProcessMarker.PreserveJail" /> never at all. The sweep is best-effort and cannot block startup.
 /// </remarks>
 public sealed class SandboxOrphanReaper : IHostedService
 {
     /// <summary>
     ///     How long an engine-owned scope that NO marker claims must have been active before the sweep will signal it.
-    ///     <para>
-    ///         Defence in depth behind the pre-registered marker, for the one case the marker cannot cover: a worker
-    ///         whose marker store is unwritable launches isolated commands that are, on disk, indistinguishable from a
-    ///         previous run's leftovers. A scope that young is far more likely to belong to a worker starting
-    ///         alongside this one than to a run that died, and the two mistakes are not symmetric — signalling a live
-    ///         command destroys work irrecoverably, while skipping a genuine orphan leaves it to its own
-    ///         <c>RuntimeMaxSec</c>.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Defence in depth behind the pre-registered marker, for the case it cannot cover: a worker whose marker store is unwritable
+    ///     launches isolated commands indistinguishable on disk from a previous run's leftovers. A scope that young more likely belongs to
+    ///     a worker starting alongside this one, and the mistakes are not symmetric — signalling a live command destroys work
+    ///     irrecoverably, while skipping a genuine orphan leaves it to its own <c>RuntimeMaxSec</c>.
+    /// </remarks>
     private static readonly TimeSpan UnreferencedScopeGrace = TimeSpan.FromSeconds(30);
 
     private readonly ISandboxContainmentProbe? _containmentProbe;
@@ -74,9 +41,8 @@ public sealed class SandboxOrphanReaper : IHostedService
     {
     }
 
-    // The scope killer is injectable so the sweep's DECISIONS can be tested without a systemd user manager: which unit
-    // a live worker still claims, which is an orphan, and which name this engine did not generate. Signalling a cgroup
-    // is irreversible, so those decisions are worth asserting rather than reasoning about.
+    // The scope killer is injectable so the sweep's DECISIONS can be tested without a systemd user manager: which unit a live worker
+    // claims, which is an orphan, which name this engine did not generate. Signalling a cgroup is irreversible, so they are asserted.
     internal SandboxOrphanReaper(ISandboxMarkerStore markerStore,
         ISandboxProcessGroupKiller killer,
         ILogger<SandboxOrphanReaper> logger,
@@ -117,11 +83,8 @@ public sealed class SandboxOrphanReaper : IHostedService
 
     private async Task ReapAsync(CancellationToken cancellationToken)
     {
-        // Deliberately NOT short-circuited on an empty marker set: the transient-scope sweep below is the only thing
-        // that finds a scope whose marker was never written. A worker killed between `systemd-run` creating the scope
-        // and the marker hitting disk leaves an isolated workload running inside a cgroup nothing references, and with
-        // an early return here its RuntimeMaxSec was the only thing that would ever stop it. An empty set costs one
-        // unit listing on a host that has the mechanism, and nothing at all on a host that does not.
+        // Deliberately NOT short-circuited on an empty marker set: the transient-scope sweep below is the only thing that finds a scope
+        // whose marker was never written, which a worker killed between `systemd-run` and the marker hitting disk leaves behind.
         var markers = _markerStore.ReadAll();
 
         var containerRoot = Path.GetFullPath(SandboxPaths.ContainerRoot);
@@ -147,9 +110,8 @@ public sealed class SandboxOrphanReaper : IHostedService
                 continue;
             }
 
-            // The scope's cgroup, when there was one. Unlike the process-group signal this needs no pid-reuse guard:
-            // a unit NAME carries a fresh GUID per command and is never recycled, so the only thing it can ever
-            // identify is the command that generated it.
+            // The scope's cgroup, when there was one. Unlike the process-group signal this needs no pid-reuse guard: a unit NAME carries a
+            // fresh GUID per command and is never recycled, so the only thing it can identify is the command that generated it.
             if (marker.ScopeUnitName is { } unitName && scopeKiller is not null)
             {
                 await scopeKiller.KillAsync(unitName, cancellationToken);
@@ -182,36 +144,14 @@ public sealed class SandboxOrphanReaper : IHostedService
         }
     }
 
-    /// <summary>
-    ///     Kills every transient scope this engine owns that no LIVE worker claims and that is old enough to be one.
-    ///     <para>
-    ///         A scope with <c>--collect</c> disappears on its own as soon as its cgroup is empty, so anything still
-    ///         loaded here has processes in it. The only such scope that legitimately exists at startup belongs to a
-    ///         second worker instance that is still running — which is exactly the set collected above from markers
-    ///         with live owners, and exactly the set skipped here. Everything else is a jail whose supervising engine
-    ///         died, and whose <c>RuntimeMaxSec</c> would otherwise be the only thing that ever stopped it.
-    ///     </para>
-    ///     <para>
-    ///         <b>Two independent reasons to leave a unit alone</b>, because this signal is irreversible and reaches
-    ///         every process in the cgroup:
-    ///     </para>
-    ///     <list type="number">
-    ///         <item>
-    ///             A live worker's marker names it. The provider pre-registers that marker BEFORE the launch that
-    ///             creates the scope, so a running command's unit is claimed from the instant it can be listed — there
-    ///             is no window in which a live command looks unreferenced.
-    ///         </item>
-    ///         <item>
-    ///             It has been active for at least <see cref="UnreferencedScopeGrace" />, and the manager actually said
-    ///             so. A younger unit — or one whose age could not be measured — belongs to a worker starting
-    ///             alongside this one far more often than to a dead run, and is left to the next start.
-    ///         </item>
-    ///     </list>
-    ///     <para>
-    ///         The unit-name shape is checked twice — once when listing, once inside the killer — because this is the
-    ///         one place the reaper acts on a name it did not read from its own marker file.
-    ///     </para>
-    /// </summary>
+    /// <summary>Kills every transient scope this engine owns that no LIVE worker claims and that is old enough to be one.</summary>
+    /// <remarks>
+    ///     A scope with <c>--collect</c> disappears once its cgroup is empty, so anything still loaded has processes in it, and the only
+    ///     one that legitimately exists at startup belongs to a second live worker — the set skipped here. Two independent reasons leave a
+    ///     unit alone, because the signal is irreversible: a live worker's marker names it, the provider pre-registering that marker BEFORE
+    ///     the launch so there is no unreferenced window; or it has been active for less than <see cref="UnreferencedScopeGrace" />, or its
+    ///     age was unreported. The unit-name shape is checked twice, this being the one name not read from a marker file.
+    /// </remarks>
     private async Task<int> SweepUnreferencedScopesAsync(ISandboxScopeUnitKiller? scopeKiller,
         IReadOnlySet<string> liveScopeUnits,
         CancellationToken cancellationToken)
@@ -259,10 +199,8 @@ public sealed class SandboxOrphanReaper : IHostedService
     {
         if (marker.ProcessGroupId is not { } processGroupId || marker.LeaderStartTicks is not { } recordedStartTicks)
         {
-            // A marker pre-registered before its launch, whose owner then died before the pid could be recorded (or a
-            // launch that never produced a signallable group). There is nothing to signal here — the scope kill above
-            // is what covers an isolated workload — and inventing a target would be catastrophic: kill(-0) signals the
-            // REAPER's own process group.
+            // A marker pre-registered before its launch whose owner died before the pid was recorded, or a launch with no signallable
+            // group. Nothing to signal — the scope kill above covers an isolated workload — and kill(-0) would signal the REAPER's group.
             return false;
         }
 

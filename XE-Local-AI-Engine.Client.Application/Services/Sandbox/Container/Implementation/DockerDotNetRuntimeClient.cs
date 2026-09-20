@@ -14,14 +14,14 @@ using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 
 /// <summary>
 ///     The production <see cref="IDockerRuntimeClient" />: a thin adapter over <c>Docker.DotNet.Enhanced</c>.
-///     <para>
-///         Thin on purpose. Every decision — what a hardened container is, whether the settings took, which daemon is
-///         approved — lives above this class in code that a fake client can drive. What lives here is the wire
-///         translation and, importantly, the classification of transport failures into the outcomes an operator can
-///         act on: a missing socket, a socket that refuses, and a daemon that answered are three different problems
-///         with three different fixes, and the daemon does not label them for us.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Thin on purpose: every decision — what a hardened container is, whether the settings took, which daemon is
+///     approved — lives above this class in code a fake client can drive. What lives here is the wire translation
+///     and the classification of transport failures into operator-actionable outcomes: a missing socket, a socket
+///     that refuses and a daemon that answered are three problems with three fixes, and the daemon does not label
+///     them.
+/// </remarks>
 internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 {
     /// <summary>How long the write probe may take before "the probe did not answer" becomes its answer.</summary>
@@ -44,18 +44,16 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     /// <param name="probeTimeout">Bounds <see cref="ProbeAsync" />, and floors the transport timeout.</param>
     /// <param name="timeProvider">Clock, for the pull-progress aggregator's throttling of downstream reports.</param>
     /// <param name="requestTimeout">
-    ///     The HTTP request timeout. Separate from the probe timeout because the two consumers have opposite time
-    ///     budgets: a ten-second transport timeout sized for a preflight would cut off a thirty-second graceful stop.
-    ///     Null leaves it equal to <paramref name="probeTimeout" />, so the existing two-argument call sites behave
-    ///     exactly as they did.
+    ///     The HTTP request timeout, null for <paramref name="probeTimeout" />. Separate because a ten-second
+    ///     transport sized for a preflight would cut off a thirty-second graceful stop.
     /// </param>
     /// <param name="pullTimeout">
-    ///     Deadline for one image pull, applied as a linked cancellation rather than as a transport timeout: an
-    ///     application image takes minutes to fetch and the transport must not be sized for it.
+    ///     Deadline for one image pull, applied as a linked cancellation rather than a transport timeout, which must
+    ///     not be sized for an image that takes minutes to fetch.
     /// </param>
     /// <param name="logger">
-    ///     Used for exactly two things: the once-per-client warning about a health state this engine does not
-    ///     recognise, and a debug line naming a failed write probe. Optional so the existing call sites are unchanged.
+    ///     For two things only: the once-per-client warning about an unrecognised health state, and a debug line
+    ///     naming a failed write probe.
     /// </param>
     public DockerDotNetRuntimeClient(DockerDaemonEndpoint endpoint,
         TimeSpan probeTimeout,
@@ -82,9 +80,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
     public async Task<DockerDaemonIdentity> ProbeAsync(CancellationToken cancellationToken = default)
     {
-        // A Unix socket that is simply not there surfaces from the socket layer as AddressNotAvailable, which reads to
-        // an operator as a networking fault rather than as "Docker is not running". Checking the path first turns the
-        // most common failure on this platform into the message that names its own fix.
+        // A Unix socket that is not there surfaces as AddressNotAvailable, which reads as a networking fault rather
+        // than "Docker is not running". Checking the path first names the fix for the platform's commonest failure.
         var socketPath = Endpoint.UnixSocketPath;
         if (socketPath is not null && !File.Exists(socketPath) && !Directory.Exists(socketPath))
         {
@@ -301,9 +298,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             {
                 AttachStdout = true,
                 AttachStderr = true,
-                // Attached only when there is something to send. An exec with stdin attached and nothing written stays
-                // open on the child's read until the connection is torn down, so attaching unconditionally would turn
-                // every ordinary command into one that waits for input nobody is going to send.
+                // Attached only when there is something to send: with stdin attached and nothing written, the child's
+                // read blocks until the connection is torn down, so every ordinary command would wait for input.
                 AttachStdin = request.StandardInput is not null,
                 TTY = false,
                 Cmd = [request.Executable, .. request.Arguments],
@@ -339,18 +335,15 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
     }
 
-    // ---------------------------------------------------------------------------------------------------------
-    // IContainerRuntime — the application-container surface. Everything below is additive: no member above this
-    // line changed, so a Development Mode create still produces byte-identical wire parameters.
-    // ---------------------------------------------------------------------------------------------------------
+    // IContainerRuntime — the application-container surface. Everything below is additive to the members above, so
+    // a Development Mode create still produces byte-identical wire parameters.
 
     public async Task<string> RunContainerAsync(ContainerSpecification specification, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(specification);
 
-        // Guards first, before a single parameter is built. `required` means "assigned", not "non-empty": a blank
-        // host IP renders as a binding the daemon resolves to 0.0.0.0, and a blank user is not the same instruction
-        // as no user. There must be no window in which such a container exists for a read-back to catch.
+        // Guards first, before a parameter is built: `required` means assigned, not non-empty, and a blank host IP
+        // renders as a binding the daemon resolves to 0.0.0.0. No such container may exist for a read-back to catch.
         if (specification.PublishedPorts.FirstOrDefault(publication => !IsLoopback(publication.HostIp)) is { } offender)
         {
             throw new ArgumentException($"Container port {offender.ContainerPort}/{offender.Protocol} asks to publish on host interface "
@@ -372,9 +365,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 nameof(specification));
         }
 
-        // Container port plus protocol is the key of both wire dictionaries below, so two publications sharing one
-        // would throw the BCL's own duplicate-key ArgumentException from ToDictionary — raised outside the try, so
-        // unclassified, and naming neither the port nor the specification. This layer says which publication instead.
+        // Container port plus protocol keys both wire dictionaries below, so two publications sharing one throw the
+        // BCL's own duplicate-key error outside the try: unclassified, and naming neither port nor specification.
         if (specification.PublishedPorts.GroupBy(PortKey, StringComparer.Ordinal)
                          .FirstOrDefault(group => group.Skip(1).Any()) is { } duplicated)
         {
@@ -520,10 +512,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             // The daemon reports the name with a leading slash; the caller compares it against the name it asked
             // for, and a comparison that fails on a punctuation mark is not a verification.
             Name = (inspected.Name ?? string.Empty).TrimStart('/'),
-            // Config.Image, not the response's top-level Image: that one is the resolved image ID
-            // ('sha256:...'), while the caller verifies the container was created from the reference it pinned.
-            // The fake seam answers with the requested reference, so reading the ID here would make the two
-            // implementations disagree about what the field means.
+            // Config.Image, not the top-level Image, which is the resolved ID: the caller verifies the container was
+            // created from the reference it pinned, and the fake seam answers with that same reference.
             Image = inspected.Config?.Image ?? string.Empty,
             Labels = inspected.Config?.Labels is { } labels
                 ? new Dictionary<string, string>(labels, StringComparer.Ordinal)
@@ -538,9 +528,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             CapabilitiesDropped = hostConfig.CapDrop?.ToArray() ?? [],
             CapabilitiesAdded = hostConfig.CapAdd?.ToArray() ?? [],
             SecurityOptions = hostConfig.SecurityOpt?.ToArray() ?? [],
-            // The response's TOP-LEVEL Mounts, not HostConfig.Mounts: only the effective set carries an anonymous
-            // volume the image's own VOLUME instruction created, which is exactly the mount that would put
-            // application data outside the instance directory unnoticed.
+            // The TOP-LEVEL Mounts, not HostConfig.Mounts: only the effective set carries an anonymous volume the
+            // image's own VOLUME instruction created, the one mount that silently escapes the instance directory.
             Mounts = inspected.Mounts?.Select(ToMountView).ToArray() ?? [],
             DeviceCount = (hostConfig.Devices?.Count ?? 0) + (hostConfig.DeviceRequests?.Count ?? 0),
             PidMode = hostConfig.PidMode ?? string.Empty,
@@ -572,9 +561,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
         catch (DockerContainerNotFoundException)
         {
-            // Already gone, which is the same answer as "it was not running": false, not an error. Matches the
-            // idempotence RemoveContainerAsync already promises, so a teardown never has to reason about how far a
-            // previous attempt got.
+            // Already gone is the same answer as "it was not running": false, not an error, matching the idempotence
+            // RemoveContainerAsync promises, so a teardown never reasons about how far a previous attempt got.
             return false;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -669,10 +657,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             throw new ArgumentException("A container network specification must carry a name.", nameof(specification));
         }
 
-        // Before the create, not after the conflict. The labels ARE the ownership proof this layer reuses a network
-        // on: with none of them, OwnsNetwork has nothing to compare and a foreign bridge that happens to hold the
-        // name passes, putting the application on someone else's network. A specification that cannot prove
-        // ownership is refused rather than given a check it is guaranteed to pass.
+        // Before the create, not after the conflict: the labels ARE the ownership proof network reuse rests on, and
+        // with none OwnsNetwork has nothing to compare, so a foreign bridge holding the name would pass.
         if (specification.Labels.Count == 0)
         {
             throw new ArgumentException($"The container network '{specification.Name}' carries no labels. At least one ownership label is "
@@ -687,9 +673,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
         catch (DockerApiException apiException) when (apiException.StatusCode == HttpStatusCode.Conflict)
         {
-            // A name conflict says some network already holds that name. It does not say the network is ours, and a
-            // name is not a capability: attaching the application to a network somebody else created would put it on
-            // a bridge with everything else attached to it. So reuse needs proof of ownership, and nothing else does.
+            // A name conflict says some network holds that name, not that it is ours, and a name is not a capability:
+            // attaching to a bridge somebody else created shares it with everything else on it. Reuse needs proof.
             NetworkResponse existing;
             try
             {
@@ -774,9 +759,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
     }
 
-    // The daemon's own state vocabulary is lower-case ("running", "exited"), and this value is compared against
-    // those literals rather than displayed, so upper-casing it would mean normalising away from the wire format the
-    // comparison is against.
+    // The daemon's state vocabulary is lower-case and this value is compared against those literals rather than
+    // displayed, so upper-casing would normalise away from the wire format the comparison is against.
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Docker's container state words are lower-case on the wire and are compared, not displayed.")]
     public async Task<IReadOnlyList<ContainerSummary>> ListContainersDetailedAsync(IReadOnlyDictionary<string, string> labels,
@@ -795,9 +779,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             var listed = await _client.Containers
                                       .ListContainersAsync(new ContainersListParameters
                                       {
-                                          // The whole point: the default lists running containers only, so a container
-                                          // the user stopped through `docker stop` would look removed rather than
-                                          // stopped, and the observer would report a crashed application as gone.
+                                          // The default lists running containers only, so one the user stopped would
+                                          // look removed, and the observer would report a crash as gone.
                                           All = true,
                                           Filters = LabelFilter(labels)
                                       }, cancellationToken);
@@ -838,9 +821,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                                     ShowStderr = true,
                                                     Timestamps = false,
                                                     Follow = false,
-                                                    // Both are strings on 4.3.3 — neither is a number and neither is a
-                                                    // DateTime — so both are formatted invariantly rather than by the
-                                                    // node's locale.
+                                                    // Both are strings on the wire, neither a number nor a DateTime,
+                                                    // so both are formatted invariantly, not by the node's locale.
                                                     Tail = request.TailLines.ToString(CultureInfo.InvariantCulture),
                                                     Since = request.SinceUtc?.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
                                                 },
@@ -850,9 +832,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             var kept = new List<byte>(Math.Min(request.MaxBytes, 64 * 1024));
             var truncated = false;
 
-            // Containers are created with TTY unset, so the daemon always frames the stream and it must be
-            // demultiplexed. Both streams go into one builder in the order the daemon framed them, which is the order
-            // they happened.
+            // Containers are created with TTY unset, so the daemon always frames the stream and it is demultiplexed
+            // into one builder in the order the daemon framed it, which is the order things happened.
             while (true)
             {
                 var read = await stream.ReadOutputAsync(buffer, 0, buffer.Length, cancellationToken);
@@ -869,9 +850,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 var room = request.MaxBytes - kept.Count;
                 if (read.Count > room)
                 {
-                    // Strictly greater, so a read that lands exactly on the ceiling is not reported as truncated:
-                    // the next read decides, and a caller shown "truncated" for a complete log would go looking for
-                    // bytes that were never dropped.
+                    // Strictly greater, so a read landing exactly on the ceiling is not reported as truncated — the
+                    // next read decides, and "truncated" on a complete log sends a caller after bytes never dropped.
                     kept.AddRange(buffer.AsSpan(0, room));
                     truncated = true;
                     break;
@@ -913,9 +893,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 AttachStderr = true,
                 AttachStdin = false,
                 TTY = false,
-                // The path travels as $1, so a container path holding a space or a quote is data rather than shell
-                // syntax. The command is fixed and takes nothing from the caller: this member exists precisely so
-                // that no consumer of this layer ever gets to choose what runs inside a container.
+                // The path travels as $1, so a container path holding a space or a quote is data, not shell syntax.
+                // The command is fixed, so no consumer of this layer ever chooses what runs inside a container.
                 Cmd = ["sh", "-c", "f=\"$1/.xe-write-probe-$$\"; : > \"$f\" && rm -f \"$f\"", "_", containerPath],
                 WorkingDir = string.Empty,
                 Env = []
@@ -967,16 +946,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
     }
 
-    /// <summary>
-    ///     The one loopback literal, compared ordinally: a host IP is a wire value, not localized text.
-    ///     <para>
-    ///         <c>::1</c> is deliberately NOT accepted. An application's published port is reached by this node's own
-    ///         processes and by the operator's browser, both of which are given a <c>127.0.0.1</c> address, and a
-    ///         daemon asked to publish on the IPv6 loopback binds a socket nothing here connects to — a port that
-    ///         reads back as published and answers nobody. One address is also one thing for a later slice's port
-    ///         allocator to reserve and one thing for a policy check to compare against.
-    ///     </para>
-    /// </summary>
+    /// <summary>The one loopback literal, compared ordinally: a host IP is a wire value, not localized text.</summary>
+    /// <remarks>
+    ///     <c>::1</c> is deliberately NOT accepted. A published port is reached by this node's own processes and by
+    ///     the operator's browser, both given a <c>127.0.0.1</c> address, so a daemon asked to publish on the IPv6
+    ///     loopback binds a socket nothing here connects to — a port that reads back as published and answers
+    ///     nobody. One address is also one thing to reserve and one thing to compare a policy check against.
+    /// </remarks>
     private static bool IsLoopback(string hostIp)
     {
         return string.Equals(hostIp, "127.0.0.1", StringComparison.Ordinal);
@@ -1025,10 +1001,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     }
 
     /// <summary>
-    ///     Whether an existing network of the same name is provably this specification's own: the <c>bridge</c> driver,
-    ///     and every label the specification asked for present with the same value. The instance and install ids the
-    ///     caller puts in that label map are therefore a security input, not bookkeeping.
+    ///     Whether an existing network of the same name is provably this specification's own: the <c>bridge</c>
+    ///     driver, and every label the specification asked for present with the same value.
     /// </summary>
+    /// <remarks>
+    ///     The instance and install ids the caller puts in that label map are therefore a security input, not
+    ///     bookkeeping.
+    /// </remarks>
     private static bool OwnsNetwork(NetworkResponse existing, ContainerNetworkSpecification specification)
     {
         if (!string.Equals(existing.Driver, "bridge", StringComparison.Ordinal))
@@ -1068,13 +1047,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         };
     }
 
-    /// <summary>
-    ///     Maps the daemon's health word. A null status means no healthcheck was declared and is silent; a status this
-    ///     engine does not recognise is <see cref="ContainerHealthState.None" /> AND one warning carrying the value,
-    ///     emitted once per client so a renamed daemon state is visible rather than silent. The caller reads
-    ///     <c>None</c> from a service that declared a healthcheck as "not yet healthy", so an unrecognised word delays
-    ///     to the deadline rather than passing as healthy.
-    /// </summary>
+    /// <summary>Maps the daemon's health word.</summary>
+    /// <remarks>
+    ///     A null status means no healthcheck was declared and is silent; an unrecognised status is
+    ///     <see cref="ContainerHealthState.None" /> plus one warning carrying the value, emitted once per client so a
+    ///     renamed daemon state is visible. The caller reads <c>None</c> from a service that declared a healthcheck
+    ///     as "not yet healthy", so an unrecognised word delays to the deadline rather than passing as healthy.
+    /// </remarks>
     // Internal rather than private so a unit test can pin the mapping and the once-per-client warning: the only
     // other way in is InspectAsync, which needs a daemon that can be asked to report a state it does not have.
     internal ContainerHealthState ToHealthState(string? status)
@@ -1218,10 +1197,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     }
 
     /// <summary>
-    ///     The exit code of a listed container, read out of the daemon's own status prose (<c>Exited (137) 3 minutes
-    ///     ago</c>): 4.3.3's list response carries no exit-code member. Null on any other shape, and null means "the
-    ///     daemon did not say" — never <c>0</c>, which would report a crashed application as a clean exit.
+    ///     The exit code of a listed container, read out of the daemon's own status prose, the list response carrying
+    ///     no exit-code member.
     /// </summary>
+    /// <remarks>
+    ///     Null on any other shape, and null means "the daemon did not say" — never <c>0</c>, which would report a
+    ///     crashed application as a clean exit.
+    /// </remarks>
     // Internal rather than private so a unit test can pin the shapes: this reads a number out of daemon prose, and
     // the real-daemon test proves the prose while this proves the parser.
     internal static int? ParseExitCode(string? status)
@@ -1281,9 +1263,11 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
     /// <summary>
     ///     Feeds the daemon's message stream through the aggregator and relays only what the throttle lets out.
+    /// </summary>
+    /// <remarks>
     ///     A hand-written sink rather than <see cref="Progress{T}" />, which posts to a synchronization context and
     ///     would reorder or defer the reports relative to the pull that produced them.
-    /// </summary>
+    /// </remarks>
     private sealed class PullProgressSink : IProgress<JSONMessage>
     {
         private readonly PullProgressAggregator _aggregator;
@@ -1307,20 +1291,14 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
     }
 
-    /// <summary>
-    ///     Drives both directions of one exec stream and returns its captured output.
-    ///     <para>
-    ///         The payload goes up WHILE the output is drained, not before it. A Docker exec is a single bidirectional
-    ///         connection: with nothing reading, a child that writes as it reads fills the daemon's buffer, the daemon
-    ///         stops accepting the payload, and the two sides wait on each other until the command times out.
-    ///         Development Mode's patch ceiling is 8 MB, comfortably past where a serialised version stops working.
-    ///     </para>
-    ///     <para>
-    ///         The half-close after the write is equally load-bearing: a child reading to end-of-input — <c>git apply</c>
-    ///         taking its patch from standard input is the case that matters — never returns while the write side is
-    ///         open, so without <c>CloseWrite</c> the command hangs rather than completes.
-    ///     </para>
-    /// </summary>
+    /// <summary>Drives both directions of one exec stream and returns its captured output.</summary>
+    /// <remarks>
+    ///     The payload goes up WHILE the output is drained: a Docker exec is one bidirectional connection, so with
+    ///     nothing reading, a child that writes as it reads fills the daemon's buffer, the daemon stops accepting the
+    ///     payload and both sides wait until the command times out — Development Mode's 8 MB patch ceiling is well
+    ///     past where a serialised version stops working. The half-close after the write is equally load-bearing: a
+    ///     child reading to end-of-input never returns while the write side is open.
+    /// </remarks>
     private static async Task<ExecOutput> PumpAsync(MultiplexedStream stream,
         string? standardInput,
         int maxBytesPerStream,
@@ -1348,16 +1326,14 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     /// <summary>
     ///     Drain an exec stream to its end, keeping at most <paramref name="maxBytesPerStream" /> bytes of each half
     ///     and discarding the rest as it arrives.
-    ///     <para>
-    ///         The ceiling has to be applied DURING the read, not after it. What is on the other end of this stream is
-    ///         a process inside an image the engine did not build, and <c>ReadOutputToEndAsync</c> accumulates
-    ///         everything it sends before anyone gets to truncate it — so a container that writes a gigabyte decides
-    ///         how much of this node's memory it uses, and the capture ceiling only decides how much of that is then
-    ///         thrown away. The stream is still drained to the end rather than abandoned: the caller's deadline is
-    ///         what bounds the time, and stopping the read early would leave the daemon writing into a connection
-    ///         nobody is reading.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The ceiling is applied DURING the read, because the other end is a process inside an image the engine did
+    ///     not build and <c>ReadOutputToEndAsync</c> accumulates everything before anyone truncates it, letting a
+    ///     container that writes a gigabyte decide how much of this node's memory it uses. The stream is still
+    ///     drained to the end: the caller's deadline bounds the time, and stopping early leaves the daemon writing
+    ///     into a connection nobody reads.
+    /// </remarks>
     internal static async Task<ExecOutput> ReadBoundedAsync(MultiplexedStream stream,
         int maxBytesPerStream,
         CancellationToken cancellationToken)
@@ -1397,10 +1373,12 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     }
 
     /// <summary>
-    ///     Whether <c>docker info</c> lists <paramref name="name" /> among the daemon's security options. Matched on
-    ///     the <c>name=</c> key rather than on the whole entry, because the daemon renders these as comma-separated
-    ///     key/value groups (<c>name=seccomp,profile=builtin</c>) and only the name is stable.
+    ///     Whether <c>docker info</c> lists <paramref name="name" /> among the daemon's security options.
     /// </summary>
+    /// <remarks>
+    ///     Matched on the <c>name=</c> key rather than the whole entry, because the daemon renders these as
+    ///     comma-separated key/value groups and only the name is stable.
+    /// </remarks>
     private static bool HasSecurityOption(SystemInfoResponse info, string name)
     {
         return info.SecurityOptions?.Any(option => option
@@ -1430,9 +1408,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         {
             HostPath = mount.Source ?? string.Empty,
             ContainerPath = mount.Target ?? string.Empty,
-            // A read-write mount comes back with ReadOnly absent rather than false (measured against a rootless Docker Engine),
-            // so a null must read as "writable" — reading it as "unknown" would fail the read-only check on every
-            // ordinary workspace mount.
+            // A read-write mount comes back with ReadOnly absent rather than false, so null has to read as "writable".
+            // Read as "unknown" instead, it would fail the read-only check on every ordinary workspace mount.
             ReadOnly = mount.ReadOnly ?? false,
             Propagation = mount.BindOptions?.Propagation ?? string.Empty
         };
@@ -1477,12 +1454,12 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         }
     }
 
-    /// <summary>
-    ///     Classify a transport or API failure into the operator-actionable outcome behind it. The socket error code
-    ///     is the load-bearing signal: <c>AccessDenied</c> means the socket is there and this process may not use it,
-    ///     which is a permissions fix, whereas every other connect failure means nothing is listening, which is a
-    ///     "start the daemon" fix. Matching on daemon prose instead would break on the next Docker release.
-    /// </summary>
+    /// <summary>Classify a transport or API failure into the operator-actionable outcome behind it.</summary>
+    /// <remarks>
+    ///     The socket error code is the load-bearing signal: <c>AccessDenied</c> means the socket is there and this
+    ///     process may not use it, a permissions fix, whereas every other connect failure means nothing is listening,
+    ///     a "start the daemon" fix. Matching on daemon prose instead would break on the next Docker release.
+    /// </remarks>
     private DockerRuntimeException Classify(Exception exception)
     {
         var socketException = FindSocketException(exception);

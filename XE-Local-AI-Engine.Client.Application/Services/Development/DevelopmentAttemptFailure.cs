@@ -5,15 +5,13 @@ using System.Runtime.InteropServices;
 /// <summary>
 ///     Stable <see cref="DevelopmentAttemptEvidenceException.FailureCode" /> values, so a UI can localize them and an
 ///     operator can tell two different failures apart.
-///     <para>
-///         The deterministic validation gate already reports this way
-///         (<see cref="DevelopmentValidationFailureCodes" />). The attempt lane did not, and every self-inflicted
-///         attempt failure collapsed into one sentence — "failed before producing valid exact evidence" — with no
-///         artifacts persisted, because evidence is only persisted after the attempt passes its own checks. The
-///         operator was therefore told that something went wrong and given nothing to act on, for failures the engine
-///         had fully diagnosed.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The deterministic validation gate reports the same way (<see cref="DevelopmentValidationFailureCodes" />).
+///     Without codes a self-inflicted attempt failure collapses into one sentence with no artifacts persisted,
+///     because evidence is persisted only once the attempt passes its own checks — so the operator is told that
+///     something went wrong and given nothing to act on, for a failure the engine had fully diagnosed.
+/// </remarks>
 internal static class DevelopmentAttemptFailureCodes
 {
     /// <summary>The typed submission's changed-file list is not exactly the workspace's changed-file manifest.</summary>
@@ -40,23 +38,23 @@ internal static class DevelopmentAttemptFailureCodes
     /// <summary>The provider returned no usable token accounting, so the attempt's budgets cannot be enforced.</summary>
     public const string UsageNotReported = "usage_not_reported";
 
-    /// <summary>
-    ///     A workspace policy refused the attempt's own diff — the test-write policy is the one that fires in practice.
-    ///     The code exists so the workflow lane can class it as a policy refusal rather than as a provider error, which
-    ///     is what the retry budget is spent on.
-    /// </summary>
+    /// <summary>A workspace policy refused the attempt's own diff; the test-write policy is the one that fires in practice.</summary>
+    /// <remarks>
+    ///     The code exists so the workflow lane classes it as a policy refusal rather than a provider error, which is
+    ///     what the retry budget is spent on.
+    /// </remarks>
     public const string WorkspacePolicyRefused = "workspace_policy_refused";
 }
 
 /// <summary>
 ///     A Development attempt failure the engine diagnosed itself and can describe to the operator verbatim.
-///     <para>
-///         The message on this exception is authored here, never assembled from model output or from an absolute host
-///         path, which is what lets the attempt runners surface it directly instead of replacing it with a generic
-///         sentence. Anything the engine did <em>not</em> author still falls through to the generic reason — the
-///         sanitization rule is unchanged, it is just no longer applied to messages that were already safe.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The message is authored here, never assembled from model output or an absolute host path, which is what lets
+///     the attempt runners surface it directly instead of replacing it with a generic sentence. Anything the engine
+///     did <em>not</em> author still falls through to the generic reason; the sanitization rule is unchanged and
+///     simply no longer applied to messages that were already safe.
+/// </remarks>
 internal sealed class DevelopmentAttemptEvidenceException : InvalidOperationException
 {
     /// <summary>The width of <c>development_attempts.terminal_reason</c>.</summary>
@@ -77,18 +75,20 @@ internal sealed class DevelopmentAttemptEvidenceException : InvalidOperationExce
     /// <summary>The operator-facing reason, unclamped.</summary>
     public string OperatorReason { get; }
 
-    /// <summary>
-    ///     The value the attempt runners persist. Composed and clamped HERE, as one string, because clamping the
-    ///     reason alone and then prefixing the code re-introduces the overflow it was meant to prevent — and
+    /// <summary>The value the attempt runners persist, composed and clamped here as one string.</summary>
+    /// <remarks>
+    ///     Clamping the reason alone and then prefixing the code re-introduces the overflow it prevents, and
     ///     <c>development_attempts.terminal_reason</c> is <c>HasMaxLength(1024)</c>.
-    /// </summary>
+    /// </remarks>
     public string TerminalReason => Compose(FailureCode, OperatorReason);
 
     /// <summary>
-    ///     The same composition for a reason the engine authored without throwing this exception — a policy refusal
-    ///     caught and turned into a terminal reason rather than raised as one. One formatter, so the code prefix a
-    ///     reader (and the workflow lane) matches on cannot drift between the two paths.
+    ///     The same composition for a reason the engine authored without throwing — a policy refusal caught and turned
+    ///     into a terminal reason rather than raised as one.
     /// </summary>
+    /// <remarks>
+    ///     One formatter, so the code prefix a reader and the workflow lane match on cannot drift between the paths.
+    /// </remarks>
     public static string Compose(string failureCode, string operatorReason)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
@@ -106,21 +106,14 @@ internal sealed class DevelopmentAttemptEvidenceException : InvalidOperationExce
 
 /// <summary>
 ///     The token accounting both attempt roles enforce, in one place because they enforced it differently by accident.
-///     <para>
-///         <c>MaxOutputTokens</c> is a <em>per provider call</em> ceiling: it is what goes on
-///         <see cref="Microsoft.Extensions.AI.ChatOptions.MaxOutputTokens" />, and the provider enforces it on every
-///         round. The usage that comes back from <c>ToChatResponse()</c> is the opposite — it is the <em>sum</em> over
-///         every round of the tool loop, which is why the input side already multiplies by the round count when it
-///         sizes <c>MaxCumulativeInputTokens</c>.
-///     </para>
-///     <para>
-///         The output side did not, and compared the cumulative total against the per-call ceiling. Measured live on
-///         2026-07-31: a coder attempt with a 32768 per-call budget reported 33k+ cumulative output tokens across a
-///         multi-round tool loop and was failed as "exceeded the configured output-token limit" — a limit no single
-///         call had exceeded. The attempt's completed work was discarded. Any attempt whose rounds together out-talk
-///         one round's budget hit this, which for a reasoning model is most of them.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Microsoft.Extensions.AI.ChatOptions.MaxOutputTokens" /> is a per-provider-call ceiling the provider
+///     enforces every round, while the usage from <c>ToChatResponse()</c> is the sum over every round of the tool
+///     loop — which is why the input side multiplies by the round count sizing <c>MaxCumulativeInputTokens</c>.
+///     Comparing the cumulative total against the per-call ceiling fails any attempt whose rounds together out-talk
+///     one round's budget: a coder attempt on a 32768 per-call budget reported 33k+ cumulative tokens and lost it.
+/// </remarks>
 internal static class DevelopmentAttemptOutputBudget
 {
     /// <summary>

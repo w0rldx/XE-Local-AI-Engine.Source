@@ -47,47 +47,36 @@ internal interface IDevelopmentWorkspaceTools
 
 internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 {
-    /// <summary>
-    ///     The artifact <em>protocol</em> version for coder-produced evidence. This is not the command-profile version:
-    ///     it describes the shape of the artifacts this class's caller writes, and the apply and reviewer gates compare
-    ///     their own protocol constants against it. Keep it, and keep it separate from
+    /// <summary>The artifact <em>protocol</em> version for coder-produced evidence.</summary>
+    /// <remarks>
+    ///     Not the command-profile version: it describes the shape of the artifacts this class's caller writes, and
+    ///     the apply and reviewer gates compare their own protocol constants against it. Keep it separate from
     ///     <see cref="DevelopmentCommandProfile.ComputeDigest" />.
-    /// </summary>
+    /// </remarks>
     private const string CommandProfileVersion = "development-workspace-v1";
 
-    /// <summary>
-    ///     The product's single definition of "this file may hold a credential". Read paths here call its
-    ///     <see cref="ISensitiveFileExclusionService.IsSecret" /> predicate, deliberately NOT the broader
-    ///     <see cref="ISensitiveFileExclusionService.IsExcluded" /> copy filter — that one also names build output,
-    ///     which an agent legitimately reads after a failed build and which is not a credential.
-    ///     <para>
-    ///         This is a MITIGATION, not a boundary. It removes the one-step path — the coder or reviewer model naming
-    ///         a secret directly to <c>read_file</c>/<c>search_text</c>, on its own initiative or steered by
-    ///         prompt-injected content in the repository it was asked to read — and nothing more. Development Mode also
-    ///         EXECUTES the repository's own build and test commands, and a test that prints <c>.env</c> puts those
-    ///         bytes into captured stdout, which reaches the same attempt context and the same cloud role route. A
-    ///         hostile repository's secrets are not made safe by this check; only the trivial path to them is closed.
-    ///     </para>
-    /// </summary>
+    /// <summary>The product's single definition of "this file may hold a credential".</summary>
+    /// <remarks>
+    ///     Read paths call its <see cref="ISensitiveFileExclusionService.IsSecret" /> predicate, never the broader
+    ///     <see cref="ISensitiveFileExclusionService.IsExcluded" /> copy filter, which also names build output an
+    ///     agent legitimately reads after a failed build. This is a MITIGATION, not a boundary: it closes the
+    ///     one-step path of a model naming a secret to <c>read_file</c>, and nothing more — Development Mode also
+    ///     executes the repository's tests, and one printing <c>.env</c> puts those bytes in captured stdout.
+    /// </remarks>
     private static readonly ISensitiveFileExclusionService DefaultExclusions = new SensitiveFileExclusionService();
 
     private readonly List<DevelopmentCommandEvidence> _commandEvidence = [];
 
     /// <summary>
     ///     The import file's digest as the worktree presented it before this attempt ran anything, or null if absent.
-    ///     <para>
-    ///         Captured here rather than taken from <see cref="DevelopmentCommandProfile.ImportDigest" /> on purpose.
-    ///         That digest was recorded at project creation from the operator's live repository working tree, whereas
-    ///         the managed worktree is checked out at the attempt's base commit — so for a repository carrying an
-    ///         uncommitted edit to <c>.xe-dev/profile.json</c> the two legitimately differ, and comparing against the
-    ///         stored value would fail every attempt on its very first command. What the invariant needs to prove is
-    ///         narrower and is exactly what this captures: that nothing THIS attempt ran changed the file.
-    ///     </para>
-    ///     <para>
-    ///         Taken in the constructor, which runs immediately after the workspace is prepared and validated and
-    ///         before any command executes, so no agent-influenced code has run yet.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Captured here rather than taken from <see cref="DevelopmentCommandProfile.ImportDigest" />, which was
+    ///     recorded at project creation from the operator's live working tree while the managed worktree sits at the
+    ///     base commit, so an uncommitted edit would fail every attempt on its first command. The invariant needs the
+    ///     narrower claim that nothing THIS attempt ran changed the file. Taken in the constructor, after the
+    ///     workspace is prepared and validated and before any command executes.
+    /// </remarks>
     private readonly string? _importBaselineDigest;
 
     private readonly ISensitiveFileExclusionService _exclusions;
@@ -120,17 +109,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     public DevelopmentCommandProfile Profile => _profile;
 
     /// <summary>
-    ///     Lists the workspace's regular files. Served by <see cref="WorkspaceFileScanner" /> rather than by
-    ///     <c>find</c> — see that class for why the engine owns this operation on every platform rather than branching
-    ///     on Windows.
-    ///     <para>
-    ///         The suppression predicate is applied at the PRUNE step, not only to the finished list. Pruning is what
-    ///         makes the listing usable at all: the output budget is spent before any post-filter runs, so on a
-    ///         workspace whose Git metadata alone outruns it every surviving entry named a suppressed path, the filter
-    ///         discarded all of them, and <c>list_files</c> answered with nothing while the workspace was full of files
-    ///         the agent could act on.
-    ///     </para>
+    ///     Lists the workspace's regular files, served by <see cref="WorkspaceFileScanner" /> rather than <c>find</c>.
     /// </summary>
+    /// <remarks>
+    ///     The suppression predicate is applied at the PRUNE step, not only to the finished list, which is what makes
+    ///     the listing usable at all: the output budget is spent before any post-filter runs, so on a workspace whose
+    ///     Git metadata alone outruns it every surviving entry names a suppressed path and the answer is empty while
+    ///     the workspace is full of files the agent could act on.
+    /// </remarks>
     public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default)
     {
         var confined = RequirePath(path, allowRoot: true);
@@ -156,21 +142,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     Searches the workspace for a LITERAL string. Served by <see cref="WorkspaceFileScanner" /> rather
-    ///     than by <c>grep</c> — see that class for why.
-    ///     <para>
-    ///         Credential-bearing entries are excluded by PRUNING, so a secret's CONTENT never enters the result in the
-    ///         first place; the emitted line is not filtered afterwards because it is never produced. Build output is
-    ///         deliberately not excluded — searching <c>bin</c>/<c>obj</c>/<c>node_modules</c> is legitimate and leaks
-    ///         nothing.
-    ///     </para>
-    ///     <para>
-    ///         The pattern is matched ordinally as a fixed string, never compiled as a regular expression. The
-    ///         shell-out passed <c>grep -F</c> with the pattern bound via <c>-e</c> for the same reason; managed code
-    ///         gets the property for free, because a model-supplied value can no longer be read as a flag or as a
-    ///         catastrophically backtracking expression at all.
-    ///     </para>
+    ///     Searches the workspace for a LITERAL string, served by <see cref="WorkspaceFileScanner" /> not <c>grep</c>.
     /// </summary>
+    /// <remarks>
+    ///     Credential-bearing entries are excluded by PRUNING, so a secret's content never enters the result and the
+    ///     emitted line is never produced rather than filtered afterwards; build output stays searchable, being
+    ///     legitimate and leaking nothing. The pattern is matched ordinally as a fixed string and never compiled as a
+    ///     regular expression, so a model-supplied value cannot be read as a flag or backtrack catastrophically.
+    /// </remarks>
     public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pattern);
@@ -191,21 +170,16 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     Runs one of the two managed workspace surveys against the confined host directory, under the same per-tool
-    ///     budget the shell-out ran under (<see cref="DevelopmentOptions.ToolCommandTimeoutSeconds" />, itself clamped
-    ///     to the attempt cap) so a pathological tree cannot consume the whole attempt.
-    ///     <para>
-    ///         Reads the HOST worktree rather than routing through the sandbox, which is what the engine already does
-    ///         for its own workspace invariants (<see cref="EnsureCommandProfileImportUnchanged" />) and for evidence
-    ///         export. Every provider's workspace is that same directory — the process provider identity-maps it and
-    ///         the container provider bind-mounts it — so the bytes surveyed are the bytes a command inside the sandbox
-    ///         would see.
-    ///     </para>
-    ///     <para>
-    ///         The failure sentence is kept identical to the one <see cref="EnsureCompleted" /> produced for these two
-    ///         operations, because it is what the operator-facing task output and the Windows RC runbook both name.
-    ///     </para>
+    ///     Runs one of the two managed workspace surveys against the confined host directory, under
+    ///     <see cref="DevelopmentOptions.ToolCommandTimeoutSeconds" /> so a pathological tree cannot consume the
+    ///     whole attempt.
     /// </summary>
+    /// <remarks>
+    ///     It reads the HOST worktree rather than routing through the sandbox, as the engine already does for its own
+    ///     workspace invariants and for evidence export: every provider's workspace is that same directory, so the
+    ///     bytes surveyed are the bytes a command inside the sandbox would see. The failure sentence is kept
+    ///     identical to <see cref="EnsureCompleted" />'s, because the task output and the RC runbook both name it.
+    /// </remarks>
     private List<string> RunScan(DevelopmentConfinedPath confined,
         string operation,
         Func<string, CancellationToken, List<string>> scan,
@@ -333,12 +307,15 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     The worktree against the BASE COMMIT, which is the one comparison the submission contract, the patch
-    ///     evidence and this tool all have to agree on. It diffed against the index until 2026-09-04, and the index
-    ///     equals the worktree from the moment an attempt starts — so the tool answered "nothing changed" for every
-    ///     file an earlier attempt on the shared workspace had left behind, which is precisely what the prompt now
-    ///     points a later attempt at. Files this attempt CREATED are untracked and still absent; get_status has them.
+    ///     The worktree against the BASE COMMIT, the one comparison the submission contract, the patch evidence and
+    ///     this tool all have to agree on.
     /// </summary>
+    /// <remarks>
+    ///     Diffing against the index instead answers "nothing changed" for every file an earlier attempt on the
+    ///     shared workspace left behind, because the index equals the worktree from the moment an attempt starts —
+    ///     and those are exactly the files the prompt points a later attempt at. Files this attempt CREATED are
+    ///     untracked and still absent here; <c>get_status</c> has them.
+    /// </remarks>
     public async Task<string> GetDiffAsync(CancellationToken cancellationToken = default)
     {
         var result = await ExecuteAsync("tool_git_diff",
@@ -365,10 +342,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
         _liveProgress?.CommandStarted(commandId);
 
-        // Raw first, truncated second, and the result adapter reads the raw copy. A runner prints its result summary
-        // LAST and Truncate keeps the HEAD, so parsing the evidence copy would lose the summary on any repository
-        // verbose enough to exceed MaxCommandOutputBytes — turning a perfectly readable green or red into an
-        // unparseable one, which fails validation. Only bytes the sandbox itself dropped are genuinely unrecoverable.
+        // Raw first, truncated second, and the result adapter reads the raw copy: a runner prints its summary LAST
+        // and Truncate keeps the HEAD, so the evidence copy loses it on any sufficiently verbose repository.
         var raw = await ExecuteRawAsync(commandId,
             command.Executable,
             command.Arguments,
@@ -430,20 +405,15 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     Re-checks the repository's <c>.xe-dev/profile.json</c> against the digest recorded when the profile was
-    ///     imported, after every catalog command.
-    ///     <para>
-    ///         Adding <c>.xe-dev</c> to <see cref="DevelopmentWorkspaceSecurity" />'s deny list only stops the agent
-    ///         naming that path as an argument to a workspace tool. It does nothing about a build or test command that
-    ///         writes the file as a side effect — an MSBuild target, a post-install script, or simply a test that writes
-    ///         where it should not. This check is what closes that, and it is why the deny-list entry must not be
-    ///         mistaken for the guard.
-    ///     </para>
-    ///     <para>
-    ///         Read from the host worktree rather than through the sandbox: the engine is verifying its own invariant,
-    ///         so routing the read through the surface being verified would be circular.
-    ///     </para>
+    ///     Re-checks the repository's <c>.xe-dev/profile.json</c> against the imported digest, after every catalog
+    ///     command.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="DevelopmentWorkspaceSecurity" />'s deny list only stops the agent naming that path as a tool
+    ///     argument; it does nothing about a build or test command writing the file as a side effect, which is what
+    ///     this check closes and why the deny-list entry must not be mistaken for the guard. Read from the host
+    ///     worktree, because routing an invariant check through the surface being verified would be circular.
+    /// </remarks>
     private void EnsureCommandProfileImportUnchanged()
     {
         var actual = DevelopmentCommandProfileImport.TryComputeDigest(_session.HostWorktreePath);
@@ -454,12 +424,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     Runs one of the engine's own fixed helper commands (directory listing, text search, patch application, diff,
-    ///     and the post-command workspace invariant probes). These are bounded by
-    ///     <see cref="DevelopmentOptions.ToolCommandTimeoutSeconds" /> rather than by the attempt cap: before per-command
-    ///     timeouts existed, every one of them could individually consume the whole 30-minute attempt budget, so a hung
-    ///     <c>grep</c> was indistinguishable from a legitimately long build.
+    ///     Runs one of the engine's own fixed helper commands: directory listing, text search, patch application,
+    ///     diff, and the post-command workspace invariant probes.
     /// </summary>
+    /// <remarks>
+    ///     Bounded by <see cref="DevelopmentOptions.ToolCommandTimeoutSeconds" /> rather than by the attempt cap, or
+    ///     each could individually consume the whole attempt budget and a hung search would be indistinguishable from
+    ///     a legitimately long build.
+    /// </remarks>
     private Task<SandboxCommandResult> ExecuteAsync(string executionPrefix,
         string executable,
         IReadOnlyList<string> arguments,
@@ -491,10 +463,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
     /// <summary>
     ///     Runs a command and returns its output as the sandbox produced it, capped only by the sandbox's own stream
-    ///     limit. Callers that persist the result must pass it through <see cref="TruncateForEvidence" /> first; the
-    ///     only reason to hold the untruncated form is to read structure out of it, because the engine's evidence cap
-    ///     keeps the head and the structure a test runner emits is at the tail.
+    ///     limit.
     /// </summary>
+    /// <remarks>
+    ///     Callers that persist the result must pass it through <see cref="TruncateForEvidence" /> first. The only
+    ///     reason to hold the untruncated form is to read structure out of it, the evidence cap keeping the head
+    ///     while the structure a test runner emits is at the tail.
+    /// </remarks>
     private Task<SandboxCommandResult> ExecuteRawAsync(string executionPrefix,
         string executable,
         IReadOnlyList<string> arguments,
@@ -527,23 +502,25 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     Clamps a per-command budget to the attempt cap. A profile can ask for less than the attempt allows but never
-    ///     for more, so <see cref="DevelopmentOptions.MaxAttemptDurationSeconds" /> stays the outer bound it claims to be.
+    ///     Clamps a per-command budget to the attempt cap.
     /// </summary>
+    /// <remarks>
+    ///     A profile can ask for less than the attempt allows but never more, so
+    ///     <see cref="DevelopmentOptions.MaxAttemptDurationSeconds" /> stays the outer bound it claims to be.
+    /// </remarks>
     private TimeSpan ResolveTimeout(int requestedSeconds) =>
         TimeSpan.FromSeconds(Math.Min(Math.Max(requestedSeconds, 1), _options.MaxAttemptDurationSeconds));
 
     /// <summary>
     ///     The environment every sandboxed command runs under, with every path expressed in the SANDBOX's namespace
     ///     rather than the host's.
-    ///     <para>
-    ///         This used to emit absolute host paths, which worked only because the child ran on the host. Inside a
-    ///         container none of them exist and the root filesystem is read-only, so <c>dotnet restore</c>, <c>build</c>
-    ///         and <c>test</c> all fail — and they fail obscurely, because the error names a directory the container has
-    ///         never heard of. The mapping comes from the sandbox handle, so the process provider (which identity-maps
-    ///         and therefore still emits host paths) is byte-identical to what it did before.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Absolute host paths work only while the child runs on the host: inside a container none of them exist and
+    ///     the root filesystem is read-only, so every <c>dotnet</c> command fails, and fails obscurely, naming a
+    ///     directory the container has never heard of. The mapping comes from the sandbox handle, so the process
+    ///     provider, which identity-maps, still emits host paths.
+    /// </remarks>
     private IReadOnlyDictionary<string, string> BuildEnvironment()
     {
         var home = ResolveRuntimeDirectory("home");
@@ -555,38 +532,26 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             ["TMP"] = temporary,
             ["TEMP"] = temporary,
             ["NUGET_PACKAGES"] = ResolveRuntimeDirectory("nuget"),
-            // The per-task NUGET_PACKAGES above must not outlive the task, and with node reuse on it did. MSBuild's
-            // reusable worker nodes (MSBuild.dll /nodemode:1) survive the dotnet process that started them, keeping
-            // that per-task path in their environment; on the process provider they are host processes, so a LATER
-            // restore anywhere on the same host can attach to one and write the by-then-deleted packages path into
-            // obj/*.dgspec.json. Measured twice: NU5037 during the graph-workflows merge and CS0006 in the session
-            // after it, both naming a /tmp/xe-… directory no command had asked for. One task per node, no reuse.
+            // MSBuild's reusable worker nodes outlive the dotnet process that started them and carry the per-task
+            // NUGET_PACKAGES into a later restore on the same host, which then writes a deleted path (NU5037, CS0006).
             ["MSBUILDDISABLENODEREUSE"] = "1",
             ["DOTNET_CLI_HOME"] = ResolveRuntimeDirectory("dotnet"),
             ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
             ["DOTNET_NOLOGO"] = "1",
-            // Without this, the .NET CLI's first-run experience appends "$DOTNET_CLI_HOME/.dotnet/tools" to the
-            // PERSISTED per-user PATH (on Windows, the HKCU\Environment registry value). DOTNET_CLI_HOME above is a
-            // fresh per-task directory, so every task leaked one more entry that outlived the directory it named.
-            // Measured on Windows 11 2026-08-03: 153 dead entries, 28 387 characters, and the entry count still
-            // climbing during a single session. The damage is not untidiness — cmd.exe silently receives an EMPTY
-            // %PATH% once the variable grows past its limit, so every bare-name command run through it fails. That
-            // broke three sandbox tests whose fixture is "cmd /c ping -n 31": ping could not resolve, the command
-            // exited instantly, and cancel/timeout/tree-kill had nothing left to kill. Stripping the dead entries
-            // took PATH to 847 characters and the same tests went green with no code change.
-            // DOTNET_SKIP_FIRST_TIME_EXPERIENCE is NOT an alternative — it is a no-op in .NET 10.
+            // Or the CLI's first-run appends the per-task DOTNET_CLI_HOME tools directory to the PERSISTED per-user PATH,
+            // one dead entry per task, until cmd.exe gets an EMPTY %PATH%. DOTNET_SKIP_FIRST_TIME_EXPERIENCE is a .NET 10 no-op.
             ["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "0"
         };
     }
 
     /// <summary>
     ///     Translates one per-task runtime directory into the path that names it inside the sandbox.
-    ///     <para>
-    ///         Throws rather than falling back to the host path when no mount covers it. A fallback would produce a
-    ///         command that looks correct and fails deep inside a build against a directory that does not exist, which
-    ///         is strictly harder to diagnose than a refusal here naming the missing mount.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     It throws rather than falling back to the host path when no mount covers it: a fallback produces a command
+    ///     that looks correct and fails deep inside a build against a directory that does not exist, which is harder
+    ///     to diagnose than a refusal naming the missing mount.
+    /// </remarks>
     private string ResolveRuntimeDirectory(string name)
     {
         var hostPath = Path.Combine(_session.RuntimePath, name);
@@ -609,16 +574,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
     }
 
-    /// <summary>
-    ///     Refuses a read whose path names a credential-bearing entry. See <see cref="DefaultExclusions" /> for what
-    ///     this does and does not close: it removes the direct read, and it does nothing about a build or test command
-    ///     that prints the same bytes to captured stdout.
-    ///     <para>
-    ///         Gates on <see cref="ISensitiveFileExclusionService.IsSecret" />, NOT on the broader copy filter. Build
-    ///         output — <c>bin</c>, <c>obj</c>, <c>node_modules</c>, <c>dist</c> — stays readable, because reading it
-    ///         after a failed build is a primary reason this feature exists and none of it is a credential.
-    ///     </para>
-    /// </summary>
+    /// <summary>Refuses a read whose path names a credential-bearing entry.</summary>
+    /// <remarks>
+    ///     See <see cref="DefaultExclusions" /> for what this does and does not close: it removes the direct read and
+    ///     nothing else. It gates on <see cref="ISensitiveFileExclusionService.IsSecret" />, never the broader copy
+    ///     filter, so build output stays readable — reading it after a failed build is a primary reason this feature
+    ///     exists, and none of it is a credential.
+    /// </remarks>
     private void EnsureNotSecret(string relativePath)
     {
         if (IsSecretPath(relativePath))
@@ -638,18 +600,15 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     }
 
     /// <summary>
-    ///     What list_files and search_text neither descend into nor emit: credentials, plus the paths
-    ///     <see cref="DevelopmentWorkspaceSecurity.Confine" /> already refuses as tool arguments. Build output is
-    ///     deliberately absent from both — it is neither secret nor protected, and an agent reads it after a failed
-    ///     build.
-    ///     <para>
-    ///         This one predicate is the whole rule now: <see cref="WorkspaceFileScanner" /> consults it to
-    ///         prune a directory and again to admit a file, so there is no separately-built exclusion expression that
-    ///         can drift away from it. Secrets match by NAME at any depth; protected trees match by their path rooted
-    ///         at the SCANNED directory, which is why a listing taken from a subdirectory still suppresses secrets even
-    ///         though the rooted prefixes match nothing there.
-    ///     </para>
+    ///     What <c>list_files</c> and <c>search_text</c> neither descend into nor emit: credentials, plus the paths
+    ///     <see cref="DevelopmentWorkspaceSecurity.Confine" /> already refuses as tool arguments.
     /// </summary>
+    /// <remarks>
+    ///     Build output is deliberately in neither, being neither secret nor protected. This one predicate is the
+    ///     whole rule, <see cref="WorkspaceFileScanner" /> consulting it to prune a directory and again to admit a
+    ///     file, so no separately built expression can drift from it. Secrets match by NAME at any depth while
+    ///     protected trees match rooted at the SCANNED directory, so a subdirectory listing still suppresses secrets.
+    /// </remarks>
     private bool IsSuppressedFromOutput(string emittedPath)
     {
         // Accepts both shapes: the scanner passes "a/b" while an emitted survey line reads "./a/b". The
@@ -747,20 +706,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         AddPatchPath(paths, value[prefix.Length..]);
     }
 
-    /// <summary>
-    ///     Adds the SOURCE side of a rename or copy, refusing it when it names a secret.
-    ///     <para>
-    ///         Rename and copy are the only patch operations that move bytes the model has never seen. Everything else
-    ///         in a unified diff carries its content as literal <c>+</c> lines, so a patch can only write a secret the
-    ///         model already knew — whereas <c>rename from .env to notes.txt</c> relocates an unread credential to a
-    ///         readable name, and <c>read_file("notes.txt")</c> then completes the leak the read gate just closed.
-    ///     </para>
-    ///     <para>
-    ///         Only the source side is checked, on purpose. Gating the destination too would refuse CREATING
-    ///         <c>.env.example</c> (it matches the <c>.env.*</c> rule), which is ordinary, legitimate work — and a
-    ///         creation has no secret source to leak.
-    ///     </para>
-    /// </summary>
+    /// <summary>Adds the SOURCE side of a rename or copy, refusing it when it names a secret.</summary>
+    /// <remarks>
+    ///     Rename and copy are the only patch operations that move bytes the model has never seen; everything else in
+    ///     a unified diff carries its content as literal <c>+</c> lines, so a patch can only write a secret the model
+    ///     already knew. Renaming <c>.env</c> to a readable name and then reading it completes the leak the read gate
+    ///     closed. Only the source side is checked, or creating <c>.env.example</c> — legitimate work with no secret
+    ///     source — would be refused too.
+    /// </remarks>
     private void AddSourcePatchPath(HashSet<string> paths, string path)
     {
         AddPatchPath(paths, path);

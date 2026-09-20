@@ -53,6 +53,70 @@ Stated honestly, including the ones that are costs.
 
 - **Revisiting this is expected, not exceptional.** Docker is recorded as a stopgap. When MXC — or another backend behind the same seam — can supply both isolation and a toolchain, the Development Mode provider should move to it, and this ADR should be superseded rather than quietly widened. Any change to the four boundaries in the Decision section requires a new operator decision rather than an edit to this record.
 
+## Invariants the code enforces
+
+`DockerSandboxRuntimeProvider` states its posture per mechanism rather than as one claim, and verifies each one
+against the daemon's own read-back before it returns a handle. These describe the implementation of the decision
+above; they do not extend it.
+
+- **Unconditional on every create, and verified:** the container gets its own filesystem, PID, IPC and UTS
+  namespaces, every capability dropped, no-new-privileges, a read-only root filesystem, no devices, and enforced
+  CPU, memory and PID ceilings. A caller's ceilings are the ones applied and the ones the read-back is checked
+  against, because the provider advertises `SupportsResourceLimits`.
+- **Egress is confined only when the caller asks for it.** `SandboxNetworkPolicy.None` gets an empty network
+  namespace; `Unrestricted` gets Docker's default bridge — still a private namespace with no host interface, but
+  with NAT egress; `Restricted` has no mechanism here and is rejected fail-closed rather than downgraded, because
+  an allow-list quietly served as an open bridge is the silent weakening this contract exists to prevent. Do not
+  read "container" as "offline": whichever policy is in force is the one the caller chose, and it is the one
+  verified.
+- **A guarantee that cannot be read back removes the container**, and the create is rejected with
+  `SandboxCapabilityNotSupportedException`. No path returns a handle to a container the provider could not verify.
+- **The provider implements the Development role only.** It does not implement `IAgentSandboxRuntimeProvider`, so
+  registering it for AgentHome or Coder is a compile error rather than something a reviewer has to notice — which
+  is what keeps a container requirement from spreading to the features Decision 4 scopes out of it.
+- **Engine-generated mounts are what make a container able to serve a build at all.** A read-only rootfs with no
+  HOME, temp or package cache cannot run `dotnet restore`. The workspace bind mount plus the neutral mount broker's
+  engine-generated mounts supply those, and nothing comes from the repository.
+- **`SandboxIsolationMode.Filesystem` is refused.** A container has a filesystem boundary, but not the one that
+  mode names: its contract is the bubblewrap chain's — a named read-only tree list, a synthetic `/etc`, one
+  writable jail — and none of it is implemented here. Serving the request on the strength of "a container is also
+  isolated" would hand the caller a different boundary than the one it asked for. The provider therefore claims
+  `SupportsHostFilesystemBoundary`, which it verifies, and deliberately not `SupportsFilesystemIsolation`.
+- **`SuppliesImageToolchain` and the host toolchain are exclusive**, which is the reason this backend exists: a
+  confinement mechanism restricts what a process may touch while the process still runs against the host's SDKs,
+  and this one does not — and it cannot offer the host's toolchain either.
+
+### Copying in and out does not use Docker's archive endpoint
+
+`PUT /containers/{id}/archive` fails outright against a read-only-rootfs container — `400 container rootfs is
+marked read-only`, whatever the destination path, including a writable `tmpfs` — and the read direction fails on a
+rootless daemon with `remount-ro … operation not permitted` for any path under a bind mount, which is where every
+interesting artifact lives. Both directions therefore go through the workspace bind mount, which is the same bytes
+on both sides, under containment, symlink and `O_NOFOLLOW` guards: a command running in the container can plant a
+symlink in the workspace and it is the host that resolves it, so an unguarded write would let the sandbox choose
+where the engine writes.
+
+### The identity rule, and why a rootless container runs as UID 0
+
+The container must run as the identity that maps to the engine's own host UID, and that identity must not map to
+host root. The two daemon modes answer that with opposite numbers. On a **rootful** daemon an in-container UID maps
+straight through, so the answer is the engine's own effective ids and zero would be host root. On a **rootless**
+daemon container UID 0 *is* the invoking user: measured on a rootless Docker Engine with a representative
+`/etc/subuid` mapping (a 65536-wide range starting at 100000), a container run as `1000:1000` could not create a
+file in the engine-generated workspace mount at all — `Permission denied`, because container 1000 is host 100999 —
+while one run as `0:0` wrote files that landed host-side owned by uid 1000, the engine's own account. Refusing zero
+there would refuse the only identity that works. "Root" in a rootless container is not host root: it still has
+every capability dropped, no-new-privileges set and a read-only root filesystem, and it maps to an unprivileged
+host account, strictly less privileged than the engine process that created it. An explicit operator-configured id
+wins over both defaults, because a daemon may map identities in a way neither rule describes.
+
+This is also why every create runs a **probe file**. `inspect` cannot answer the question: the daemon echoes back
+the UID it was *asked* for and has nothing to say about what that UID maps to, so a read-back that agrees perfectly
+is compatible with a container that cannot write a byte. One probe settles three things at once — the mount is
+writable from inside, it is backed by the host directory the engine thinks it is, and what the container creates
+belongs to the engine — under either daemon mode and without trusting the `rootless` label the daemon reports about
+itself.
+
 ## Implementation status
 
 Implementation progress is intentionally maintained outside this immutable decision record. See the

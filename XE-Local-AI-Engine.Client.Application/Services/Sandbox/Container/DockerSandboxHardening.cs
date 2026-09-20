@@ -3,17 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using System.Globalization;
 
 /// <summary>
-///     The minimum Docker hardening contract, in one place: it builds the container specification, and it
-///     verifies the settings the daemon read back against what was asked for.
-///     <para>
-///         The hardening contract is <em>fail-closed</em>. Passing a flag is not evidence the flag took — a daemon may ignore a setting
-///         it does not understand, a newer API may rename one, and a socket an operator did not intend may be a
-///         daemon configured to do neither. So every guarantee is checked against the daemon's own inspect output,
-///         and any single unverified guarantee rejects the container. There is no "log a warning and continue" path
-///         here by design: a warning would leave the caller holding a sandbox weaker than it asked for while
-///         believing otherwise, which is the exact failure the whole seam exists to prevent.
-///     </para>
+///     The minimum Docker hardening contract, in one place: it builds the container specification and verifies the settings the daemon
+///     read back against what was asked for.
 /// </summary>
+/// <remarks>
+///     Fail-closed. Passing a flag is not evidence the flag took — a daemon may ignore a setting it does not understand, a newer API may
+///     rename one, and a socket an operator did not intend may be a daemon configured to do neither — so every guarantee is checked
+///     against the daemon's own inspect output and any single unverified one rejects the container. There is deliberately no "log a
+///     warning and continue" path: a warning would leave the caller holding a sandbox weaker than it asked for while believing otherwise.
+/// </remarks>
 internal static class DockerSandboxHardening
 {
     /// <summary>Label marking a container as owned by this engine, so a later reaper can find it.</summary>
@@ -25,22 +23,14 @@ internal static class DockerSandboxHardening
     /// <summary>Label carrying the attach key's sandbox id, so an attach can find its container by query.</summary>
     internal const string SandboxIdLabel = "com.xe-local-ai-engine.sandbox-id";
 
-    /// <summary>
-    ///     Label carrying the id of the engine INSTALLATION that created the container.
-    ///     <para>
-    ///         <see cref="OwnerLabel" /> alone cannot answer "is this container mine?": its value is the constant
-    ///         <see cref="OwnerLabelValue" />, so every XE installation pointed at one daemon carries it, and a
-    ///         startup sweep keyed on it would remove a second installation's live Development Mode container.
-    ///         <see cref="SandboxIdLabel" /> cannot answer it either — it is a hash over the attach key, and at
-    ///         startup no attach key exists to hash. So the sweep is keyed on this label instead, whose value is
-    ///         derived from the node data directory: the one identity that is both stable across restarts and
-    ///         distinct per installation. See <c>DockerSandboxRuntimeProvider.BuildInstallId</c>.
-    ///     </para>
-    ///     <para>
-    ///         A container created by a build older than this label therefore carries no install id and is never
-    ///         swept. That is deliberate: an unattributable container is exactly the one a sweep must not guess about.
-    ///     </para>
-    /// </summary>
+    /// <summary>Label carrying the id of the engine INSTALLATION that created the container.</summary>
+    /// <remarks>
+    ///     <see cref="OwnerLabel" /> cannot answer "is this container mine?", its value being a constant every installation on one daemon
+    ///     carries, so a sweep keyed on it would remove a second installation's live container; <see cref="SandboxIdLabel" /> cannot
+    ///     either, being a hash over an attach key that does not exist at startup. This label's value derives from the node data
+    ///     directory, the one identity both stable across restarts and distinct per installation. A container older than the label carries
+    ///     no install id and is never swept — deliberate, an unattributable container being the one a sweep must not guess about.
+    /// </remarks>
     internal const string InstallLabel = "com.xe-local-ai-engine.sandbox-install";
 
     internal const string DropAllCapabilities = "ALL";
@@ -56,18 +46,14 @@ internal static class DockerSandboxHardening
     /// <summary>The mount options every engine-created <c>tmpfs</c> carries, and that the read-back then re-checks.</summary>
     internal static readonly string[] RequiredTmpfsOptions = ["noexec", "nosuid", "nodev"];
 
-    /// <summary>
-    ///     The Docker network mode that serves a requested policy, or a rejection for one that has no mechanism here.
-    ///     <para>
-    ///         <see cref="SandboxNetworkPolicy.None" /> is the network namespace with nothing in it.
-    ///         <see cref="SandboxNetworkPolicy.Unrestricted" /> is the default bridge — still a private namespace with
-    ///         no host interface, but with NAT egress, which is what Development Mode's <c>dotnet restore</c> needs
-    ///         until package-proxy machinery exists. <see cref="SandboxNetworkPolicy.Restricted" /> is an egress
-    ///         allow-list and stays fail-closed rejected: there is no mechanism for it here, and returning a bridge
-    ///         while the caller believed it had an allow-list would be exactly the silent weakening this contract
-    ///         exists to prevent.
-    ///     </para>
-    /// </summary>
+    /// <summary>The Docker network mode that serves a requested policy, or a rejection for one that has no mechanism here.</summary>
+    /// <remarks>
+    ///     <see cref="SandboxNetworkPolicy.None" /> is the network namespace with nothing in it.
+    ///     <see cref="SandboxNetworkPolicy.Unrestricted" /> is the default bridge, still a private namespace with no host interface but
+    ///     with NAT egress, which is what <c>dotnet restore</c> needs until package-proxy machinery exists.
+    ///     <see cref="SandboxNetworkPolicy.Restricted" /> is an egress allow-list and stays fail-closed rejected: there is no mechanism
+    ///     for it here, and returning a bridge to a caller believing it had an allow-list is the silent weakening this contract prevents.
+    /// </remarks>
     internal static string ResolveNetworkMode(SandboxNetworkPolicy policy)
     {
         return policy switch
@@ -82,37 +68,28 @@ internal static class DockerSandboxHardening
     }
 
     /// <summary>
-    ///     Mount options for an engine-created <c>tmpfs</c>. <c>noexec</c>/<c>nosuid</c>/<c>nodev</c> are set because a
-    ///     tmpfs is writable and a writable place is where a dropped payload lands; <c>size=</c> is set because an
-    ///     unbounded <c>tmpfs</c> is host RAM.
-    ///     <para>
-    ///         Note what these options are and are not worth here, because the honest accounting is what makes a second
-    ///         <c>tmpfs</c> defensible. They are NOT the container's only writable surface: the workspace bind mount and
-    ///         every engine-generated runtime mount are writable and carry no <c>noexec</c>, and an ELF binary dropped
-    ///         into the workspace was measured to execute. So a <c>noexec</c> <c>tmpfs</c> is strictly weaker than
-    ///         surfaces that already exist, and adding one widens nothing. Nor is <c>size=</c> the only bound on memory:
-    ///         <c>tmpfs</c> pages are charged to the container's memory cgroup, so the existing
-    ///         <see cref="DockerContainerSpecification.MemoryBytes" /> ceiling already caps them — a 1 GB <c>tmpfs</c>
-    ///         against a 256 MB limit was measured to OOM-kill the container at ~254 MB. <c>size=</c> is the second,
-    ///         tighter belt, and it is kept because a per-mount bound fails the write rather than the container.
-    ///     </para>
+    ///     Mount options for an engine-created <c>tmpfs</c>: <c>noexec</c>, <c>nosuid</c> and <c>nodev</c> because a writable place is
+    ///     where a dropped payload lands, and <c>size=</c> because an unbounded <c>tmpfs</c> is host RAM.
     /// </summary>
+    /// <remarks>
+    ///     The honest accounting is what makes a second <c>tmpfs</c> defensible. These are NOT the container's only writable surface — the
+    ///     workspace bind and every engine-generated runtime mount are writable, carry no <c>noexec</c>, and an ELF dropped into the
+    ///     workspace was measured to execute — so a <c>noexec</c> <c>tmpfs</c> widens nothing. Nor is <c>size=</c> the only memory bound:
+    ///     <c>tmpfs</c> pages are charged to the container's memory cgroup, and a 1 GB <c>tmpfs</c> under a 256 MB limit was measured to
+    ///     OOM-kill at ~254 MB. It is kept as the tighter belt, a per-mount bound failing the write rather than the container.
+    /// </remarks>
     internal static string BuildTmpfsOptions(long sizeBytes)
     {
         return "rw," + string.Join(',', RequiredTmpfsOptions) + ",size=" + sizeBytes.ToString(CultureInfo.InvariantCulture);
     }
 
-    /// <summary>
-    ///     Build the hardening-contract-conformant specification for one sandbox container.
-    ///     <para>
-    ///         <paramref name="requestedLimits" /> are the caller's ceilings and they WIN over the configured defaults,
-    ///         field by field. This provider advertises
-    ///         <see cref="SandboxProviderCapabilities.SupportsResourceLimits" />, and advertising a capability while
-    ///         quietly substituting your own numbers is the same silent-ignore the fail-closed contract exists to
-    ///         prevent — the caller would believe it received the ceiling it asked for. A null field means "no opinion",
-    ///         and only then does the configured default apply.
-    ///     </para>
-    /// </summary>
+    /// <summary>Build the hardening-contract-conformant specification for one sandbox container.</summary>
+    /// <remarks>
+    ///     <paramref name="requestedLimits" /> are the caller's ceilings and they WIN over the configured defaults, field by field: this
+    ///     provider advertises <see cref="SandboxProviderCapabilities.SupportsResourceLimits" />, and advertising a capability while
+    ///     quietly substituting your own numbers is the silent-ignore the fail-closed contract exists to prevent. A null field means "no
+    ///     opinion", and only then does the configured default apply.
+    /// </remarks>
     internal static DockerContainerSpecification BuildSpecification(ContainerSandboxOptions options,
         ResolvedContainerIdentity identity,
         string containerName,
@@ -138,22 +115,18 @@ internal static class DockerSandboxHardening
             Name = containerName,
             User = identity.UserSpecification,
             WorkingDirectory = options.WorkspaceMountTarget,
-            // A long-lived idle process so the container stays up between execs. `sh -c 'while :; do sleep …'` rather
-            // than `sleep infinity`: BusyBox and coreutils disagree on `sleep infinity`, and the image is the
-            // operator's choice, not ours.
+            // A long-lived idle process so the container stays up between execs. A shell loop rather than `sleep infinity`, on which
+            // BusyBox and coreutils disagree — and the image is the operator's choice, not ours.
             Entrypoint = ["/bin/sh"],
             Command = ["-c", "while :; do sleep 3600; done"],
             NetworkMode = ResolveNetworkMode(networkPolicy),
             CapabilitiesToDrop = [DropAllCapabilities],
-            // The seccomp profile is passed EXPLICITLY even though the daemon applies its default anyway, because a
-            // container created without it reads back with no security option at all — indistinguishable from a
-            // daemon running with seccomp turned off. See DockerSeccompProfile.
+            // The seccomp profile is passed EXPLICITLY even though the daemon applies its default anyway, because a container created
+            // without it reads back with no security option at all, indistinguishable from a daemon with seccomp off.
             SecurityOptions = [NoNewPrivileges, DockerSeccompProfile.SecurityOption],
             ReadOnlyRootFilesystem = true,
-            // Two tmpfs mounts, for two different reasons. Scratch is the writable area the sandbox contract offers a
-            // caller. The temp mount exists because the toolchain's shared-memory path is a compile-time constant that
-            // honours no environment variable — see ContainerSandboxOptions.TempMountTarget for the measured evidence
-            // and the upstream decision that makes it unrelocatable.
+            // Two tmpfs mounts for two reasons: scratch is the writable area the sandbox contract offers a caller, while the temp mount
+            // exists because the toolchain's shared-memory path is a compile-time constant honouring no environment variable.
             TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [options.ScratchMountTarget] = BuildTmpfsOptions(scratchBytes),
@@ -172,23 +145,19 @@ internal static class DockerSandboxHardening
         };
     }
 
-    /// <summary>
-    ///     Compare what the daemon applied against what was asked for, and return every violation found.
-    ///     <para>
-    ///         All violations are collected rather than short-circuiting on the first. An operator debugging a
-    ///         misconfigured daemon needs the whole list; discovering them one restart at a time is how a
-    ///         security control acquires the reputation that gets it disabled.
-    ///     </para>
-    /// </summary>
+    /// <summary>Compare what the daemon applied against what was asked for, and return every violation found.</summary>
     /// <param name="requested">What the engine asked the daemon for.</param>
     /// <param name="observed">What the daemon read back.</param>
     /// <param name="daemonIsRootless">
-    ///     Whether the daemon is rootless. It moves exactly one rule: under a rootless daemon container UID 0 is the
-    ///     invoking user's unprivileged host account, not host root, so it is the identity the hardening contract's "not root" rule is
-    ///     actually about — and the conventional non-root UID is the one that maps to a host account owning nothing.
-    ///     Note what inspect can and cannot settle: it echoes back the UID that was <em>asked</em> for and can never
-    ///     say what that UID maps to, so this flag relaxes a check the caller must then close with a real probe.
+    ///     Whether the daemon is rootless, which moves exactly one rule: container UID 0 is then the invoking user's unprivileged host
+    ///     account rather than host root.
     /// </param>
+    /// <remarks>
+    ///     All violations are collected rather than short-circuiting on the first: an operator debugging a misconfigured daemon needs the
+    ///     whole list, and discovering them one restart at a time is how a security control earns the reputation that gets it disabled.
+    ///     <paramref name="daemonIsRootless" /> relaxes a check the caller must then close with a real probe, inspect echoing the UID that
+    ///     was ASKED for and never what it maps to.
+    /// </remarks>
     internal static IReadOnlyList<string> FindViolations(DockerContainerSpecification requested,
         DockerContainerSettings observed,
         bool daemonIsRootless = false)
@@ -222,10 +191,8 @@ internal static class DockerSandboxHardening
             return;
         }
 
-        // Belt and braces against a specification that was itself wrong: `0:0`, `0`, `root` and an empty value all
-        // mean root, and Docker defaults to root whenever the field is unset. An empty value is refused under EITHER
-        // daemon mode — an unset User is the daemon's default rather than a decision, and a rootless daemon does not
-        // make "we never chose" acceptable.
+        // Belt and braces against a specification that was itself wrong: `0:0`, `0`, `root` and empty all mean root, and Docker defaults
+        // to root when the field is unset. Empty is refused under EITHER daemon mode — an unset User is a default, never a decision.
         var uid = observed.User.Split(':', 2)[0];
         if (string.IsNullOrEmpty(uid))
         {
@@ -236,11 +203,8 @@ internal static class DockerSandboxHardening
         var namesUidZero = string.Equals(uid, "0", StringComparison.Ordinal)
                            || string.Equals(uid, "root", StringComparison.OrdinalIgnoreCase);
 
-        // Under a rootless daemon, UID 0 in the container is the invoking user's own unprivileged host account — it
-        // still has every capability dropped, no-new-privileges set and a read-only root filesystem, and it is
-        // strictly less privileged than the engine process that created it. Refusing it there would refuse the ONLY
-        // identity that can use an engine-generated bind mount, so the rule inverts rather than relaxes. It stays a
-        // hard refusal on a rootful daemon, where UID 0 is host root.
+        // Under a rootless daemon, container UID 0 is the invoking user's own unprivileged host account, still capability-dropped and
+        // read-only-rooted, and the ONLY identity that can use an engine-generated bind mount. A hard refusal on a rootful daemon.
         if (namesUidZero && !daemonIsRootless)
         {
             violations.Add($"non-root user: the container would run as root ('{Describe(observed.User)}').");
@@ -263,9 +227,8 @@ internal static class DockerSandboxHardening
 
     private static void VerifySecurityOptions(DockerContainerSettings observed, List<string> violations)
     {
-        // Matched by prefix: the daemon normalises this option's rendering between versions ("no-new-privileges",
-        // "no-new-privileges:true", "no-new-privileges=true" have all appeared), and an exact match would turn a
-        // cosmetic daemon change into a spurious fail-closed rejection.
+        // Matched by prefix: the daemon normalises this option's rendering between versions, and an exact match would turn a cosmetic
+        // daemon change into a spurious fail-closed rejection.
         var present = observed.SecurityOptions.Any(option =>
             option.StartsWith("no-new-privileges", StringComparison.OrdinalIgnoreCase)
             && !option.EndsWith("false", StringComparison.OrdinalIgnoreCase));
@@ -275,12 +238,8 @@ internal static class DockerSandboxHardening
             violations.Add($"no-new-privileges: not applied; the daemon reports [{Describe(observed.SecurityOptions)}].");
         }
 
-        // Matched on "names a profile" rather than on equality with what was sent. The daemon echoes the profile back
-        // as `seccomp=<json>` (measured against a rootless Docker Engine: a container created with `--security-opt
-        // seccomp=<path>` inspects back as the compacted JSON, never as the path), and the two renderings that must
-        // be refused are the two this can tell apart without pinning us to a byte-for-byte echo: no seccomp option at
-        // all — which is ALSO what a daemon with seccomp disabled reports, and the whole reason the profile is passed
-        // explicitly — and `seccomp=unconfined`.
+        // Matched on "names a profile" rather than equality: the daemon echoes it back as compacted JSON, never the path. The refused
+        // renderings are no seccomp option at all, which a daemon with seccomp disabled also reports, and `seccomp=unconfined`.
         if (!observed.SecurityOptions.Any(DockerSeccompProfile.NamesAProfile))
         {
             violations.Add($"seccomp: no profile is applied; the daemon reports [{Describe(observed.SecurityOptions)}]. "
@@ -331,14 +290,14 @@ internal static class DockerSandboxHardening
         }
     }
 
-    /// <summary>
-    ///     Verifies the network mode that was <em>requested</em>, whatever it was — not a hardcoded "none". Egress
-    ///     denial is served only when the caller asks for it, so pinning this check to "none" would fail every
-    ///     legitimate <see cref="SandboxNetworkPolicy.Unrestricted" /> create while proving nothing extra about a
-    ///     <see cref="SandboxNetworkPolicy.None" /> one. The host-namespace check is separate and unconditional
-    ///     precisely because it is not a policy question: no requested policy makes sharing the host's network stack
-    ///     acceptable, and it is the one mode that would let a container reach the daemon socket that created it.
-    /// </summary>
+    /// <summary>Verifies the network mode that was REQUESTED, whatever it was, rather than a hardcoded "none".</summary>
+    /// <remarks>
+    ///     Egress denial is served only when the caller asks for it, so pinning this to "none" would fail every legitimate
+    ///     <see cref="SandboxNetworkPolicy.Unrestricted" /> create while proving nothing extra about a
+    ///     <see cref="SandboxNetworkPolicy.None" /> one. The host-namespace check is separate and unconditional because it is not a policy
+    ///     question: no policy makes sharing the host's network stack acceptable, and it is the one mode that would let a container reach
+    ///     the daemon socket that created it.
+    /// </remarks>
     private static void VerifyNetwork(DockerContainerSpecification requested, DockerContainerSettings observed, List<string> violations)
     {
         if (!string.Equals(requested.NetworkMode, observed.NetworkMode, StringComparison.OrdinalIgnoreCase))
@@ -375,10 +334,8 @@ internal static class DockerSandboxHardening
                 violations.Add($"tmpfs: '{target}' has no size bound (options '{appliedOptions}'), so it is host memory.");
             }
 
-            // Checked, not assumed. These options are the whole reason a writable tmpfs is acceptable under the hardening contract, and
-            // until now only the size bound was read back — a daemon that dropped `noexec` would have produced a
-            // container that passed verification while carrying the one property the mount was justified by. Same
-            // fail-closed rule as everything else here: asking for a flag is not evidence the flag took.
+            // Checked, not assumed: these options are the whole reason a writable tmpfs is acceptable under the hardening contract, and a
+            // daemon that dropped `noexec` would produce a container passing verification without the property it was justified by.
             var missing = RequiredTmpfsOptions
                           .Where(option => !HasMountOption(appliedOptions, option))
                           .ToArray();
@@ -422,9 +379,8 @@ internal static class DockerSandboxHardening
 
         if (unexpected.Length > 0)
         {
-            // Not paranoia: the whole point of this check is that only engine-generated mounts exist. A mount nobody asked for
-            // is either a daemon-side default this code has not accounted for or a mount somebody else injected, and
-            // both are reasons to refuse rather than to guess.
+            // The whole point of this check is that only engine-generated mounts exist. A mount nobody asked for is either a daemon-side
+            // default this code has not accounted for or one somebody else injected, and both are reasons to refuse rather than guess.
             violations.Add("mounts: the created container carries mounts the engine did not request "
                            + $"[{string.Join(", ", unexpected.Select(mount => mount.ContainerPath))}].");
         }
@@ -451,15 +407,12 @@ internal static class DockerSandboxHardening
         }
     }
 
-    /// <summary>
-    ///     Whether a comma-separated mount-option string carries <paramref name="option" /> as a whole option.
-    ///     <para>
-    ///         Tokenized rather than substring-matched, because a substring match on these particular names is wrong in
-    ///         both directions: <c>"noexec"</c> contains <c>"exec"</c>, so looking for the permissive form would find the
-    ///         restrictive one, and an option like <c>"nodevfoo"</c> would satisfy a search for <c>"nodev"</c>. The
-    ///         daemon renders these as a comma-separated list, so the whole-token comparison is the exact one.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether a comma-separated mount-option string carries <paramref name="option" /> as a whole option.</summary>
+    /// <remarks>
+    ///     Tokenized rather than substring-matched, because a substring match on these names is wrong in both directions:
+    ///     <c>"noexec"</c> contains <c>"exec"</c>, so looking for the permissive form finds the restrictive one, and <c>"nodevfoo"</c>
+    ///     would satisfy a search for <c>"nodev"</c>. The daemon renders these as a comma-separated list, so whole-token is exact.
+    /// </remarks>
     private static bool HasMountOption(string appliedOptions, string option)
     {
         return appliedOptions
@@ -473,36 +426,14 @@ internal static class DockerSandboxHardening
     }
 }
 
-/// <summary>
-///     The UID/GID a sandbox container runs as, resolved per create against the daemon that will run it.
-///     <para>
-///         The invariant is not "never zero" — it is <em>the container must run as the identity that maps to the
-///         engine's own host UID, and that identity must not map to host root</em>. Which UID satisfies that depends
-///         on the daemon, and the two answers are opposites:
-///     </para>
-///     <list type="bullet">
-///         <item>
-///             <description>
-///                 <b>Rootful daemon:</b> an in-container UID maps straight through, so the answer is the engine
-///                 process's own effective UID/GID, and zero is host root and refused.
-///             </description>
-///         </item>
-///         <item>
-///             <description>
-///                 <b>Rootless daemon:</b> container UID 0 maps to the invoking user and container UID <c>N&gt;0</c>
-///                 maps to <c>subuid_base + N - 1</c>, so the answer is 0 — and the conventional 1000 is a host
-///                 account that owns nothing of ours. Measured on a rootless Docker Engine with a representative
-///                 <c>/etc/subuid</c> mapping: <c>--user 1000:1000</c> could not create a file in the
-///                 engine-generated workspace mount at all, while <c>--user 0:0</c> wrote files the engine then owned.
-///             </description>
-///         </item>
-///     </list>
-///     <para>
-///         An operator-configured UID/GID still wins over both, because a daemon may map identities in a way neither
-///         rule describes. And none of this is taken on trust: an inspect can only echo back the UID that was asked
-///         for, never what it maps to, so the provider proves the mapping with a real probe file after creation.
-///     </para>
-/// </summary>
+/// <summary>The UID/GID a sandbox container runs as, resolved per create against the daemon that will run it.</summary>
+/// <remarks>
+///     The invariant is not "never zero" but "the container runs as the identity mapping to the engine's own host UID, and that identity
+///     must not map to host root", which the two daemons answer oppositely. Rootful: an in-container UID maps straight through, so the
+///     answer is the engine's own effective UID/GID and zero is host root, refused. Rootless: UID 0 maps to the invoking user and
+///     <c>N&gt;0</c> to <c>subuid_base + N - 1</c>, so the answer is 0 — measured, <c>--user 1000:1000</c> could not write the workspace
+///     mount at all. An operator-configured UID/GID wins over both, and a probe file proves the mapping.
+/// </remarks>
 public sealed class ResolvedContainerIdentity
 {
     /// <summary>In-container UID.</summary>

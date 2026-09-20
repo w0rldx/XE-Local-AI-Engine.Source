@@ -6,10 +6,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
 ///     File-backed <see cref="ISandboxMarkerStore" />: one small JSON document per live process group under
-///     <see cref="SandboxPaths.MarkersRoot" />. That root is a sibling of the per-instance jail containers, so a
-///     provider deleting its own container root on dispose does not take the markers with it, and the location is stable
-///     across restarts — which is the whole point, since a crashed run leaves nothing else to find its children by.
+///     <see cref="SandboxPaths.MarkersRoot" />.
 /// </summary>
+/// <remarks>
+///     That root is a sibling of the per-instance jail containers, so a provider deleting its own container root on dispose does not take
+///     the markers with it, and the location is stable across restarts — the whole point, since a crashed run leaves nothing else to find
+///     its children by.
+/// </remarks>
 public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -36,9 +39,8 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
     {
         ArgumentNullException.ThrowIfNull(marker);
 
-        // The pid alone is not unique over time, so the id carries a random suffix; the pid stays in the name purely to
-        // make a stray marker readable at a glance during diagnosis. A marker pre-registered before its launch has no
-        // pid yet and says so.
+        // The pid alone is not unique over time, so the id carries a random suffix; the pid stays in the name only to make a stray marker
+        // readable at a glance. A marker pre-registered before its launch has no pid yet and says so.
         var leader = marker.ProcessGroupId is { } processGroupId
             ? processGroupId.ToString(CultureInfo.InvariantCulture)
             : "pending";
@@ -60,10 +62,8 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
             return;
         }
 
-        // Deliberately a plain overwrite of the same file, and deliberately not conditional on it still existing: the
-        // completed marker is strictly more useful than the pending one it replaces, so re-creating a file a teardown
-        // raced away costs one stale entry the reaper's own gates already make a no-op, while refusing to write would
-        // lose the pid the reaper needs.
+        // A plain overwrite of the same file, deliberately not conditional on it still existing: the completed marker is strictly more
+        // useful than the pending one, so re-creating a file a teardown raced away costs one stale entry the reaper's gates no-op anyway.
         _ = TryPersist(markerId, marker, "Could not complete the pre-registered sandbox process marker; orphan reaping will fall back to its scope unit.");
     }
 
@@ -72,9 +72,8 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
         try
         {
             Directory.CreateDirectory(_markersRoot);
-            // Forced sync: ISandboxMarkerStore is a synchronous contract (Write/Update/Delete/ReadAll) called from
-            // the launch and teardown paths, including ones that run under a lock; the marker write must land before
-            // the child it describes is started.
+            // Forced sync: ISandboxMarkerStore is a synchronous contract called from the launch and teardown paths, including ones under
+            // a lock, and the marker write must land before the child it describes is started.
 #pragma warning disable MA0045 // forced sync: synchronous ISandboxMarkerStore contract (see comment above)
             File.WriteAllText(Path.Combine(_markersRoot, markerId + ".json"), JsonSerializer.Serialize(marker, SerializerOptions));
 #pragma warning restore MA0045

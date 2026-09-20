@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     The stable on-disk locations the process sandbox owns. These are shared by the provider (which creates a fresh
-///     per-instance jail container under <see cref="ContainerRoot" />) and the orphan reaper (which sweeps
-///     <see cref="MarkersRoot" /> and refuses to delete anything outside <see cref="ContainerRoot" />). Centralised so
-///     the reaper's ownership check and the provider's jail creation can never disagree about what "ours" means.
-/// </summary>
+/// <summary>The stable on-disk locations the process sandbox owns.</summary>
+/// <remarks>
+///     Shared by the provider, which creates a fresh per-instance jail container under <see cref="ContainerRoot" />, and the orphan reaper,
+///     which sweeps <see cref="MarkersRoot" /> and refuses to delete anything outside <see cref="ContainerRoot" />. Centralised so the
+///     reaper's ownership check and the provider's jail creation can never disagree about what "ours" means.
+/// </remarks>
 public static class SandboxPaths
 {
     /// <summary>The directory name, under the system temp path, that contains every jail this product creates.</summary>

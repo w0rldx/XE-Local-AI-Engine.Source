@@ -17,28 +17,20 @@ internal sealed class SandboxFilesystemIsolationProbeResult
 }
 
 /// <summary>
-///     Measures whether this host can really run a command with the host filesystem absent from its mount namespace,
-///     by RUNNING the production chain once against a throwaway jail and checking its positive controls.
-///     <para>
-///         Not a presence check, and not a simplified stand-in. <c>bwrap</c> can be installed and still fail — user
-///         namespaces disabled by sysctl, an <c>AppArmor</c> profile that blocks unprivileged <c>userns</c>, a kernel
-///         without <c>openat2</c>, a filesystem layout the usr-merge rule does not recognise, a jail whose ancestors
-///         are writable by someone else. Every one of those produces a chain that fails at exec time, and advertising
-///         a filesystem boundary on the strength of a file existing is the precise dishonesty this work removes.
-///     </para>
-///     <para>
-///         The controls are POSITIVE as well as negative, which matters more than it sounds. "The canary is not
-///         visible inside" is satisfied by a chain that failed to start at all, by a typo in the canary path, and by a
-///         shell that never ran — so the same probe also requires that the workload wrote to <c>/work</c>, read
-///         <c>/dev/urandom</c>, saw itself as pid 2, and found the synthetic <c>/etc/passwd</c>. A measurement that
-///         can only fail open is not a measurement.
-///     </para>
+///     Measures whether this host can really run a command with the host filesystem absent from its mount namespace, by RUNNING the
+///     production chain once against a throwaway jail and checking its positive controls.
 /// </summary>
+/// <remarks>
+///     Not a presence check and not a stand-in: <c>bwrap</c> can be installed and still fail on disabled user namespaces, an AppArmor
+///     profile, a kernel without <c>openat2</c>, an unrecognised usr-merge layout or a jail whose ancestors are writable by someone else,
+///     each producing a chain that fails at exec time. The controls are POSITIVE as well as negative, which matters: "the canary is not
+///     visible inside" is also satisfied by a chain that never started, so the probe additionally requires that the workload wrote to
+///     <c>/work</c>, read <c>/dev/urandom</c>, saw itself as pid 2 and found the synthetic <c>/etc/passwd</c>.
+/// </remarks>
 internal static class HostSandboxFilesystemIsolationProbe
 {
-    // The chain does real work — a dbus round trip to the user manager, five namespaces, a dozen mounts — so it gets a
-    // longer budget than the single-mechanism probes. Still short enough that a host which cannot do it at all does
-    // not visibly delay startup.
+    // The chain does real work — a dbus round trip to the user manager, five namespaces, a dozen mounts — so it gets a longer budget than
+    // the single-mechanism probes, still short enough that a host which cannot do it at all does not visibly delay startup.
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(25);
 
     private const UnixFileMode PrivateDirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
@@ -92,9 +84,8 @@ internal static class HostSandboxFilesystemIsolationProbe
             return Unavailable($"no root-owned {string.Join(", ", missing)} was found under {string.Join(", ", TrustedBinaryResolver.TrustedRoots)}");
         }
 
-        // The inner assertions need a shell. It comes from the read-only /usr bind, so it is resolved by the same trust
-        // rule as the helpers; bash is preferred only because its /dev/tcp redirection is what turns the egress check
-        // into a real connect attempt rather than an inspection of /proc.
+        // The inner assertions need a shell, which comes from the read-only /usr bind and is resolved by the same trust rule as the
+        // helpers. bash is preferred only because its /dev/tcp redirection makes the egress check a real connect rather than a /proc read.
         var bash = TrustedBinaryResolver.Resolve("bash");
         var shell = bash ?? TrustedBinaryResolver.Resolve("sh");
         if (shell is null)
@@ -216,23 +207,14 @@ internal static class HostSandboxFilesystemIsolationProbe
             : "the probe's canary files did not survive the run, so their absence inside the sandbox proves nothing";
     }
 
-    /// <summary>
-    ///     The inner assertions, as one POSIX shell script printing <c>KEY=VALUE</c> lines. It is a script rather than
-    ///     a series of commands because each control has to run inside the SAME sandbox instance — a fresh chain per
-    ///     assertion would multiply the probe's cost by fifteen and would not be measuring one jail.
-    ///     <para>
-    ///         Every host PATH the script names is interpolated through <see cref="Quote" />, never pasted between
-    ///         two apostrophes. Those paths are host data — a home directory, the sandbox container root, an
-    ///         <c>XDG_RUNTIME_DIR</c> — and a single apostrophe anywhere in one of them closes the quote the script
-    ///         text opened, which turns the remainder of that line into shell syntax the probe never intended and
-    ///         makes it report a perfectly capable host unable to isolate.
-    ///     </para>
-    ///     <para>
-    ///         The paths are taken as parameters rather than read from <see cref="ProbeScratch" /> and the environment
-    ///         so that the rendering — the part that has to survive a hostile path — can be asserted without creating
-    ///         a jail or running a chain.
-    ///     </para>
-    /// </summary>
+    /// <summary>The inner assertions, as one POSIX shell script printing <c>KEY=VALUE</c> lines.</summary>
+    /// <remarks>
+    ///     One script rather than a series of commands, because each control has to run inside the SAME sandbox instance: a fresh chain per
+    ///     assertion would multiply the cost by fifteen and would not be measuring one jail. Every host PATH it names is interpolated
+    ///     through <see cref="Quote" />, never pasted between two apostrophes — those paths are host data, and one apostrophe closes the
+    ///     quote and makes a capable host report itself unable to isolate. They are parameters rather than read from the environment so
+    ///     the rendering, the part that has to survive a hostile path, is assertable without creating a jail.
+    /// </remarks>
     internal static string BuildProbeScript(string homeCanaryPath,
         string siblingCanaryPath,
         string? runtimeDirectory,
@@ -282,11 +264,13 @@ internal static class HostSandboxFilesystemIsolationProbe
     }
 
     /// <summary>
-    ///     Renders <paramref name="value" /> as ONE POSIX shell word: wrapped in single quotes, with every embedded
-    ///     apostrophe closed, escaped and reopened as <c>'\''</c>. That is the only quoting form a POSIX shell reads
-    ///     literally with no exceptions — no expansion, no escape processing — so a path containing a quote, a space,
-    ///     a dollar sign or a backtick reaches <c>[ -e … ]</c> as itself.
+    ///     Renders <paramref name="value" /> as ONE POSIX shell word: single-quoted, with every embedded apostrophe closed, escaped and
+    ///     reopened as <c>'\''</c>.
     /// </summary>
+    /// <remarks>
+    ///     That is the only quoting form a POSIX shell reads literally with no exceptions — no expansion, no escape processing — so a path
+    ///     containing a quote, a space, a dollar sign or a backtick reaches <c>[ -e … ]</c> as itself.
+    /// </remarks>
     private static string Quote(string value)
     {
         return string.Concat("'", value.Replace("'", @"'\''", StringComparison.Ordinal), "'");

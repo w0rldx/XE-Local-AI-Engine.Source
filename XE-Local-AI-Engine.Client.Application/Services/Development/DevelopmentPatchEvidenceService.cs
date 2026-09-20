@@ -18,14 +18,13 @@ internal interface IDevelopmentPatchEvidenceService
 
 /// <summary>
 ///     Exports the final patch subject for a Development attempt.
-///     <para>
-///         Takes NO sandbox provider, deliberately. Every Git command below runs on the HOST against the managed
-///         worktree (see <see cref="RunGitExactAsync" />) rather than inside the attempt's sandbox, because the subject
-///         hash the operator approves must be produced by the engine's own trusted Git, not by whatever the sandboxed
-///         attempt could influence. It carried an unused <c>ISandboxRuntimeProvider</c> parameter until the per-feature
-///         seam landed; that only ever advertised a dependency this service does not have.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It takes no sandbox provider, deliberately: every Git command here runs on the host against the managed
+///     worktree (see <see cref="RunGitExactAsync" />) rather than inside the attempt's sandbox, because the subject
+///     hash the operator approves must come from the engine's own trusted Git and not from anything the sandboxed
+///     attempt can influence.
+/// </remarks>
 internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenceService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -106,13 +105,13 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         };
     }
 
-    /// <summary>
-    ///     The workspace paths that differ from the base commit right now. Shares its staging and its
-    ///     <c>--name-status</c> parse with <see cref="ExportAsync" />, so the two can never disagree about how a path
-    ///     is spelled. Unlike the export it tolerates an empty result, which is the ordinary state of a task's first
-    ///     attempt; its only size bound is <c>MaxPatchBytes</c> on the <c>--name-status</c> output, which
-    ///     <see cref="RunGitExactAsync" /> enforces.
-    /// </summary>
+    /// <summary>The workspace paths that differ from the base commit right now.</summary>
+    /// <remarks>
+    ///     It shares its staging and its <c>--name-status</c> parse with <see cref="ExportAsync" />, so the two can
+    ///     never disagree about how a path is spelled. Unlike the export it tolerates an empty result, the ordinary
+    ///     state of a task's first attempt; its only size bound is <c>MaxPatchBytes</c> on the <c>--name-status</c>
+    ///     output, which <see cref="RunGitExactAsync" /> enforces.
+    /// </remarks>
     public async Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -125,9 +124,8 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         return status.StandardOutput.Length == 0
             ? new HashSet<string>(StringComparer.Ordinal)
 
-            // Both ends of a rename: an attempt that renames b back to a has changed a, and a caller comparing a
-            // submission against this set would otherwise refuse the one shape it exists to forgive. Protected and
-            // escaping paths are dropped silently — ExportAsync judges those at the end of the attempt, as it does now.
+            // Both ends of a rename: renaming b back to a has changed a, and a caller comparing a submission against
+            // this set would else refuse the shape it exists to forgive. ExportAsync judges escaping paths at the end.
             : ParseStatus(status.StandardOutput)
               .SelectMany(static item => item.PreviousPath is null ? (string[])[item.Path] : [item.Path, item.PreviousPath])
               .Where(static path => DevelopmentWorkspaceSecurity.Confine(path, allowRoot: false).IsAccepted)
@@ -137,18 +135,14 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     /// <summary>
     ///     Refreshes the index so a <c>--cached</c> diff against HEAD sees the whole working tree, untracked files
     ///     included.
-    ///     <para>
-    ///         The config restore sits immediately before the first HOST-side Git command, and the ordering is the
-    ///         control. <c>reset</c> refreshes the index and <c>add -A</c> runs clean filters, so a repository-local
-    ///         <c>core.fsmonitor</c> or <c>filter.&lt;driver&gt;.clean</c> in the workspace's own .git/config executes
-    ///         HERE, on the machine running the engine — and the standalone clone is what made that file
-    ///         agent-writable inside the jail. AgentHomeGit's -c pins close fsmonitor but cannot close filter drivers,
-    ///         whose names are arbitrary; removing the definitions closes both without enumerating any key. No
-    ///         command of THIS attempt is in flight at either caller: the export runs after the attempt finished, and
-    ///         the changed-path listing runs before the model starts. The sandbox is per task and outlives an attempt,
-    ///         so a process a previous attempt leaked can still be writing here.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The config restore sits immediately before the first host-side Git command, and that ordering is the
+    ///     control: <c>reset</c> refreshes the index and <c>add -A</c> runs clean filters, so a <c>core.fsmonitor</c>
+    ///     or <c>filter.&lt;driver&gt;.clean</c> in the agent-writable workspace .git/config would execute on the
+    ///     engine's own machine. A <c>-c</c> pin closes fsmonitor but not filter drivers, whose names are arbitrary;
+    ///     removing the definitions closes both without enumerating a key. See <see cref="DevelopmentWorkspaceGitConfig" />.
+    /// </remarks>
     private async Task StageWorkingTreeAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken)
     {
         await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(session.HostWorktreePath, cancellationToken);

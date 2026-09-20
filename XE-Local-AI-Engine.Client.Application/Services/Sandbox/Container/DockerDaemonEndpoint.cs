@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     Where a resolved Docker daemon endpoint came from. This is reported to the operator and persisted with the
-///     attestation because "a socket was found" is not "the operator intended this daemon" — and the
-///     difference between the two is almost entirely which of these values produced the endpoint.
-/// </summary>
+/// <summary>Where a resolved Docker daemon endpoint came from.</summary>
+/// <remarks>
+///     Reported to the operator and persisted with the attestation, because "a socket was found" is not "the operator intended this
+///     daemon", and the difference between the two is almost entirely which of these values produced the endpoint.
+/// </remarks>
 public enum DockerDaemonEndpointSource
 {
     /// <summary>Explicit engine configuration (<c>Development:ContainerSandbox:DaemonEndpoint</c>). The strongest signal of intent.</summary>
@@ -44,34 +44,24 @@ public sealed record DockerDaemonEndpoint
     /// </summary>
     public string? UnixSocketPath => Uri.Scheme.Equals("unix", StringComparison.OrdinalIgnoreCase) ? Uri.LocalPath : null;
 
-    /// <summary>
-    ///     A stable, log-safe rendering: scheme, host, port and path, and nothing else.
-    ///     <para>
-    ///         A local socket carries no secrets, but an endpoint is not always a local socket: a <c>DOCKER_HOST</c>
-    ///         of <c>tcp://user:secret@host:2375/?token=…</c> is a value an operator can set, and this string reaches
-    ///         logs, resolution records, the persisted pin, operator messages and the 503 body an API returns — on
-    ///         paths that refuse that endpoint before they ever connect to it. Echoing the secret while refusing the
-    ///         endpoint would disclose it in the course of declining to use it. User information, the query and the
-    ///         fragment are dropped whole: all three are operator-supplied, none of them addresses a Docker daemon, and
-    ///         any of the three is somewhere a token fits. Redaction lives here rather than at any one call site
-    ///         because every consumer of an endpoint renders it through this member.
-    ///     </para>
-    ///     <para>
-    ///         An endpoint carrying none of the three renders exactly as <see cref="Uri.ToString" /> does, so no
-    ///         existing message changes.
-    ///     </para>
-    /// </summary>
+    /// <summary>A stable, log-safe rendering: scheme, host, port and path, and nothing else.</summary>
+    /// <remarks>
+    ///     An endpoint is not always a local socket — <c>tcp://user:secret@host:2375/?token=…</c> is a <c>DOCKER_HOST</c> an operator can
+    ///     set — and this string reaches logs, resolution records, the persisted pin, operator messages and a 503 body, on paths that
+    ///     refuse that endpoint before connecting to it, so echoing the secret would disclose it while declining to use it. User
+    ///     information, query and fragment are dropped WHOLE: all operator-supplied, none addressing a daemon, each somewhere a token
+    ///     fits. An endpoint carrying none of the three renders exactly as <see cref="Uri.ToString" />, so no existing message changes.
+    /// </remarks>
     public string Display => Redact(Uri);
 
     /// <summary>
-    ///     The component this endpoint carries that must never be rendered — named, never quoted — or null when it
-    ///     carries none. Both consumers of a daemon refuse such an endpoint before a client exists, and the refusal
-    ///     says which component is at fault without repeating what was in it.
-    ///     <para>
-    ///         One member rather than a predicate per consumer: the check and the word the refusal uses are the same
-    ///         fact, and a consumer that re-derived either would be the one that drifts.
-    ///     </para>
+    ///     The component this endpoint carries that must never be rendered — named, never quoted — or null when it carries none.
     /// </summary>
+    /// <remarks>
+    ///     Both consumers of a daemon refuse such an endpoint before a client exists, and the refusal says which component is at fault
+    ///     without repeating what was in it. One member rather than a predicate per consumer: the check and the word the refusal uses are
+    ///     the same fact, and a consumer re-deriving either would be the one that drifts.
+    /// </remarks>
     internal string? DisclosingComponent
     {
         get
@@ -101,16 +91,13 @@ public sealed record DockerDaemonEndpoint
         return uri.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.UriEscaped);
     }
 
-    /// <summary>
-    ///     The same redaction for an endpoint that is already a string.
-    ///     <para>
-    ///         A pin written before the redaction existed holds whatever <c>DOCKER_HOST</c> held — user information, a
-    ///         query, a fragment — so the value coming back off disk is not covered by the fact that new pins are
-    ///         written through <see cref="Display" />. A string that is not an absolute URI cannot be taken apart into
-    ///         components, so it renders as <see cref="UnparsableEndpoint" /> rather than being echoed: a hand-edited
-    ///         pin is precisely where a value this cannot parse would be sitting.
-    ///     </para>
-    /// </summary>
+    /// <summary>The same redaction for an endpoint that is already a string.</summary>
+    /// <remarks>
+    ///     A pin written before the redaction existed holds whatever <c>DOCKER_HOST</c> held, so the value coming back off disk is not
+    ///     covered by new pins being written through <see cref="Display" />. A string that is not an absolute URI cannot be taken apart
+    ///     into components, so it renders as <see cref="UnparsableEndpoint" /> rather than being echoed: a hand-edited pin is precisely
+    ///     where a value this cannot parse would sit.
+    /// </remarks>
     internal static string Redact(string endpoint)
     {
         return Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ? Redact(uri) : UnparsableEndpoint;

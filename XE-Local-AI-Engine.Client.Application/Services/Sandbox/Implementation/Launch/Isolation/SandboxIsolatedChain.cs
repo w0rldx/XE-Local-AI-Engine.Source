@@ -14,10 +14,13 @@ internal sealed class SandboxIsolatedTreeBinding
 }
 
 /// <summary>
-///     Everything the isolated chain needs that is NOT a decision: resolved helper paths, descriptor numbers, the unit
-///     name, the host's filesystem layout, and the ceilings. Every field is already measured or already opened, which
-///     is what lets <see cref="SandboxIsolatedChain.Render" /> stay a pure function of its input.
+///     Everything the isolated chain needs that is NOT a decision: resolved helper paths, descriptor numbers, the unit name, the host's
+///     filesystem layout, and the ceilings.
 /// </summary>
+/// <remarks>
+///     Every field is already measured or already opened, which is what lets <see cref="SandboxIsolatedChain.Render" /> stay a pure
+///     function of its input.
+/// </remarks>
 internal sealed record SandboxIsolatedChainInputs
 {
     public required string SetsidPath { get; init; }
@@ -63,68 +66,42 @@ internal sealed record SandboxIsolatedChainInputs
     /// </summary>
     public string WorkingDirectory { get; init; } = SandboxIsolatedChain.WorkPath;
 
-    /// <summary>
-    ///     Variables the CALLER asked the command to run with, emitted after the fixed allow-list so they override it.
-    ///     <para>
-    ///         Passing them through matters more than it looks. The chain is <c>--clearenv</c> plus an allow-list, so a
-    ///         caller's <c>SandboxCommandRequest.Environment</c> — which the non-isolated path honours — would
-    ///         otherwise be silently dropped the moment a sandbox opted into isolation. A variable that quietly stops
-    ///         arriving is a far worse failure than one that is refused.
-    ///     </para>
-    /// </summary>
+    /// <summary>Variables the CALLER asked the command to run with, emitted after the fixed allow-list so they override it.</summary>
+    /// <remarks>
+    ///     The chain is <c>--clearenv</c> plus an allow-list, so a caller's <c>SandboxCommandRequest.Environment</c>, which the
+    ///     non-isolated path honours, would otherwise be silently dropped the moment a sandbox opted into isolation. A variable that
+    ///     quietly stops arriving is a far worse failure than one that is refused.
+    /// </remarks>
     public IReadOnlyDictionary<string, string> AdditionalEnvironment { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
-/// <summary>
-///     Renders the exact argument vector of the filesystem-isolated launch chain. Pure, total, and byte-exact: given
-///     the same inputs it produces the same vector, which is what lets the whole chain — a security boundary whose
-///     argument ORDER is semantic — be asserted by unit test without starting anything.
-///     <para>
-///         The chain, outermost first:
-///     </para>
-///     <code>
+/// <summary>Renders the exact argument vector of the filesystem-isolated launch chain, purely and byte-exactly.</summary>
+/// <code>
 ///     setsid                                     ← process-group leader, so the PGID fallback kill has a target
-///       systemd-run --user --scope               ← a named transient scope: the cgroup that IS the kill authority
-///         --unit=xe-&lt;role&gt;-&lt;guid&gt;.scope
+///       systemd-run --user --scope --unit=xe-&lt;role&gt;-&lt;guid&gt;.scope   ← the cgroup that IS the kill authority
 ///         -p KillMode=control-group -p RuntimeMaxSec=… -p MemoryMax=… -p TasksMax=… -p CPUQuota=…
 ///         bwrap …                                ← the mount, pid, ipc, uts and network namespaces
 ///           &lt;command&gt;
 ///     </code>
-///     <para>
-///         Order is load-bearing at three points, each verified live on this host rather than assumed:
-///     </para>
-///     <list type="bullet">
-///         <item>
-///             <c>setsid</c> outermost. Started from .NET's <c>Process.Start</c> it EXECs rather than forks, so the
-///             started pid IS the process-group id and the exit code still propagates all the way back through
-///             <c>bwrap</c>'s inner pid 1.
-///         </item>
-///         <item>
-///             <c>systemd-run</c> outside <c>bwrap</c>. It talks to the per-user systemd bus over a UNIX socket, and
-///             the jail deliberately has no such socket — it must therefore create the scope BEFORE the namespaces
-///             exist. This is also why the jail needs no <c>env -u</c> layer the way the non-isolated chain does:
-///             <c>--clearenv</c> inside <c>bwrap</c> removes the bus address (and everything else) unconditionally.
-///         </item>
-///         <item>
-///             Inside <c>bwrap</c>, every mount operation is applied in argument order, so the <c>--remount-ro</c>
-///             flags must come after the binds they harden and the <c>--bind-fd</c> of the writable jail must come
-///             after the <c>--dir /work</c> that creates the mount point.
-///         </item>
-///     </list>
-/// </summary>
+/// <remarks>
+///     Byte-exactness lets a boundary whose argument ORDER is semantic be asserted by unit test. Order is load-bearing at three points,
+///     each verified live. <c>setsid</c> is outermost: from <c>Process.Start</c> it EXECs rather than forks, so the started pid IS the
+///     process-group id and the exit code propagates back through <c>bwrap</c>'s inner pid 1. <c>systemd-run</c> is outside <c>bwrap</c>,
+///     needing the bus socket the jail lacks, which is why no <c>env -u</c> layer is needed: <c>--clearenv</c> drops the bus address.
+///     Inside <c>bwrap</c> mounts apply in order, so <c>--remount-ro</c> follows its binds and <c>--bind-fd</c> the <c>--dir /work</c>.
+/// </remarks>
 internal static class SandboxIsolatedChain
 {
-    /// <summary>
-    ///     The hostname inside the UTS namespace. A fixed string rather than anything derived from the workload: the
-    ///     jail's hostname is observable by everything running in it, and the host's real name is not something a
-    ///     sandboxed workload needs to learn.
-    /// </summary>
+    /// <summary>The hostname inside the UTS namespace.</summary>
+    /// <remarks>
+    ///     A fixed string rather than anything derived from the workload: the jail's hostname is observable by everything running in it,
+    ///     and the host's real name is not something a sandboxed workload needs to learn.
+    /// </remarks>
     public const string Hostname = "xe-compute";
 
-    // The three in-sandbox paths are DEFINED by the provider-neutral SandboxIsolatedPaths, not here. A caller that
-    // opts into isolation has to name them as well — its environment and its working directory are expressed in the
-    // sandbox's view rather than the host's — so a second spelling in this file would be the one that drifts.
+    // The three in-sandbox paths are DEFINED by the provider-neutral SandboxIsolatedPaths, not here: a caller opting into isolation names
+    // them too, its environment and working directory being in the sandbox's view, so a second spelling here would be the one that drifts.
 
     /// <summary>The writable jail's mount point inside the sandbox, and the command's working directory.</summary>
     public const string WorkPath = SandboxIsolatedPaths.Work;
@@ -137,12 +114,11 @@ internal static class SandboxIsolatedChain
     /// <summary><c>PATH</c> inside the sandbox. Only the two system directories the read-only <c>/usr</c> bind provides.</summary>
     public const string SandboxPath = "/usr/bin:/bin";
 
-    /// <summary>
-    ///     The numeric-library thread-count variables. They are pinned rather than left to the library's own core
-    ///     detection because that detection reads the HOST's cpu count through <c>/proc</c>, which is not what the
-    ///     scope's <c>CPUQuota</c> allows — an unpinned BLAS spawns a thread per host core and then thrashes inside a
-    ///     fraction of one.
-    /// </summary>
+    /// <summary>The numeric-library thread-count variables.</summary>
+    /// <remarks>
+    ///     Pinned rather than left to the library's own core detection, which reads the HOST's cpu count through <c>/proc</c> and not what
+    ///     the scope's <c>CPUQuota</c> allows: an unpinned BLAS spawns a thread per host core and then thrashes inside a fraction of one.
+    /// </remarks>
     public static readonly string[] ThreadCountVariableNames =
     [
         "OPENBLAS_NUM_THREADS",
@@ -151,22 +127,14 @@ internal static class SandboxIsolatedChain
         "NUMEXPR_NUM_THREADS"
     ];
 
-    /// <summary>
-    ///     The mount points a read-only tree may not sit under, because the chain itself puts a mount there.
-    ///     <para>
-    ///         Three of them (<c>/usr</c>, <c>/dev</c>, <c>/proc</c>) are mounted BEFORE the read-only trees, so
-    ///         nesting under one means asking <c>bwrap</c> to create a directory inside a read-only bind, a devtmpfs
-    ///         or procfs — none of which permits it. The other two (<c>/work</c> and the jail-backed <c>/tmp</c>) are
-    ///         mounted AFTER them, so nesting under one means the tree is mounted and then silently SHADOWED: the
-    ///         workload sees the jail there and no error is raised anywhere.
-    ///     </para>
-    ///     <para>
-    ///         The silent case is why this is a rejection rather than a re-ordering. Re-ordering would move the
-    ///         shadowing from one pair of paths to another, and a read-only tree that quietly is not there is exactly
-    ///         the failure this whole layer exists to prevent. The legacy roots are covered because each is either a
-    ///         symlink into <c>/usr</c> or its own read-only bind.
-    ///     </para>
-    /// </summary>
+    /// <summary>The mount points a read-only tree may not sit under, because the chain itself puts a mount there.</summary>
+    /// <remarks>
+    ///     <c>/usr</c>, <c>/dev</c> and <c>/proc</c> are mounted BEFORE the read-only trees, so nesting under one asks <c>bwrap</c> to
+    ///     create a directory inside a read-only bind, a devtmpfs or procfs, none of which permits it. <c>/work</c> and the jail-backed
+    ///     <c>/tmp</c> are mounted AFTER, so nesting under one mounts the tree and then silently SHADOWS it with no error anywhere. That
+    ///     silent case is why this is a rejection rather than a re-ordering, which would only move the shadowing. The legacy roots are
+    ///     covered, each being either a symlink into <c>/usr</c> or its own read-only bind.
+    /// </remarks>
     [SuppressMessage("Security Hotspot",
         "S5443:Using publicly writable directories is security-sensitive",
         Justification = "These are in-namespace mount points the chain owns, listed so a caller cannot be shadowed by one; none is used as a host directory.")]
@@ -296,9 +264,8 @@ internal static class SandboxIsolatedChain
         chain.Add("--unshare-net");
         chain.Add("--hostname");
         chain.Add(Hostname);
-        // Nested user namespaces are the standard route back out of a namespace jail: with one, the workload can gain
-        // capabilities in its own namespace and mount things. --disable-userns forbids creating them and
-        // --assert-userns-disabled makes bwrap FAIL rather than continue if the kernel could not enforce that.
+        // Nested user namespaces are the standard route back out of a namespace jail, letting a workload gain capabilities and mount.
+        // --disable-userns forbids creating them, and --assert-userns-disabled makes bwrap FAIL if the kernel could not enforce that.
         chain.Add("--disable-userns");
         chain.Add("--assert-userns-disabled");
     }
@@ -389,9 +356,8 @@ internal static class SandboxIsolatedChain
 
     private static void AppendReadOnlyPosture(List<string> chain)
     {
-        // The root here is bwrap's own tmpfs, which is writable by default — so without this the workload could create
-        // top-level directories and fill RAM. /dev and /proc are remounted too: the device nodes and the proc entries
-        // remain readable, but nothing new can be created in either.
+        // The root here is bwrap's own tmpfs, writable by default, so without this the workload could create top-level directories and
+        // fill RAM. /dev and /proc are remounted too: their nodes and entries stay readable, but nothing new can be created in either.
         chain.Add("--remount-ro");
         chain.Add("/");
         chain.Add("--remount-ro");

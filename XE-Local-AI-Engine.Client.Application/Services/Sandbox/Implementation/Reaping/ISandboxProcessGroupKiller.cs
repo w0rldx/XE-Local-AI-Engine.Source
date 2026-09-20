@@ -7,10 +7,12 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 public interface ISandboxProcessGroupKiller
 {
     /// <summary>
-    ///     Reads the start time (clock ticks since boot) of the process with this pid, or <see langword="null" /> when
-    ///     no such process exists. The reaper compares it against the value recorded at launch; a mismatch means the pid
-    ///     was recycled onto an unrelated process and the group must NOT be signalled.
+    ///     Reads the start time, in clock ticks since boot, of the process with this pid, or <see langword="null" /> when none exists.
     /// </summary>
+    /// <remarks>
+    ///     The reaper compares it against the value recorded at launch: a mismatch means the pid was recycled onto an unrelated process
+    ///     and the group must NOT be signalled.
+    /// </remarks>
     long? GetProcessStartTicks(int processId);
 
     /// <summary><see langword="true" /> when a process with this pid currently exists (used for the owning-worker liveness check).</summary>

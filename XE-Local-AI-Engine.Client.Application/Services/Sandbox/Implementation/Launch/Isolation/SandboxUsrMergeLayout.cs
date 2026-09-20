@@ -33,27 +33,16 @@ internal sealed class SandboxPathShape
 }
 
 /// <summary>
-///     Decides how <c>/bin</c>, <c>/sbin</c>, <c>/lib</c>, <c>/lib64</c> and <c>/libx32</c> are reproduced inside the
-///     jail, given that the jail's only system tree is a single read-only bind of <c>/usr</c>.
-///     <para>
-///         This is not cosmetic. An ELF binary's interpreter is baked into it as an absolute path
-///         (<c>/lib64/ld-linux-x86-64.so.2</c>), so a jail that omits <c>/lib64</c> cannot exec anything at all,
-///         and a <c>#!</c> line naming <c>/bin/sh</c> fails the same way. The three-way rule below is what makes one
-///         chain work on both a usr-merged distribution (every legacy root is a symlink into <c>/usr</c>) and a
-///         split-usr one (they are real directories) without pretending to have handled a layout it has not seen.
-///     </para>
-///     <list type="bullet">
-///         <item>Canonical target under <c>/usr</c> → a <c>--symlink</c>, resolved through the single <c>/usr</c> bind.</item>
-///         <item>A real directory that is not under <c>/usr</c> → its own <c>--ro-bind</c>.</item>
-///         <item>Absent → omitted; a system without <c>/libx32</c> simply has no <c>/libx32</c> inside either.</item>
-///         <item>
-///             Anything else — a symlink pointing somewhere other than <c>/usr</c>, or a non-directory sitting on one
-///             of these names — is an UNRECOGNISED layout, and the capability is reported as unavailable rather than
-///             guessed at. Building a boundary out of an assumption about the host's filesystem shape is exactly the
-///             kind of quiet approximation this work exists to remove.
-///         </item>
-///     </list>
+///     Decides how <c>/bin</c>, <c>/sbin</c>, <c>/lib</c>, <c>/lib64</c> and <c>/libx32</c> are reproduced inside the jail, whose only
+///     system tree is a single read-only bind of <c>/usr</c>.
 /// </summary>
+/// <remarks>
+///     Not cosmetic: an ELF binary's interpreter is baked in as an absolute path, so a jail omitting <c>/lib64</c> cannot exec anything,
+///     and a <c>#!</c> naming <c>/bin/sh</c> fails the same way. A canonical target under <c>/usr</c> becomes a <c>--symlink</c> through
+///     the single bind; a real directory outside <c>/usr</c> gets its own <c>--ro-bind</c>; an absent one is omitted. Anything else — a
+///     symlink pointing outside <c>/usr</c>, or a non-directory on one of these names — is an UNRECOGNISED layout and the capability is
+///     reported unavailable rather than guessed at, a boundary built on an assumption about the host's shape being no boundary.
+/// </remarks>
 internal static class SandboxUsrMergeLayout
 {
     /// <summary>The legacy top-level roots, in the order the chain emits them.</summary>

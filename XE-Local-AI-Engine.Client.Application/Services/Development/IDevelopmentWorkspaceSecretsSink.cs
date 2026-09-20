@@ -3,21 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Where <see cref="DevelopmentWorkspaceProvider" /> reports the committed credentials a prepared workspace carries.
-///     <para>
-///         It exists because that report was the ONE thing in <c>PrepareAsync</c> that is not a value bag: it wrote
-///         through <c>IDevelopmentStore.RecordWorkspaceSecretsAsync</c>, which resolves the project from a
-///         <c>DevelopmentTask</c> row before it does anything else and then asserts a matching
-///         <c>DevelopmentAttempt</c>. A caller preparing a workspace for something that is not a Dev Mode task — a
-///         development-workflow node-run — names neither row and never gets past that resolve. Everything else in the
-///         method already works from a synthesized snapshot.
-///     </para>
-///     <para>
-///         The keys are named for what they are rather than for the rows the default implementation happens to resolve:
-///         the isolation key is whatever the workspace directory is partitioned by (the task, or the node-run), and the
-///         attempt key is what makes a repeated preparation of the same workspace idempotent.
-///     </para>
+///     Where <see cref="DevelopmentWorkspaceProvider" /> reports the committed credentials a prepared workspace
+///     carries.
 /// </summary>
+/// <remarks>
+///     It is a seam because <c>IDevelopmentStore.RecordWorkspaceSecretsAsync</c> resolves the project from a
+///     <c>DevelopmentTask</c> row and then asserts a matching <c>DevelopmentAttempt</c>, so a caller preparing a
+///     workspace for something that is not a Dev Mode task — a development-workflow node-run — names neither row and
+///     never gets past that resolve. The keys are named for what they are: the isolation key is whatever the
+///     workspace directory is partitioned by, and the attempt key is what makes a repeated preparation idempotent.
+/// </remarks>
 internal interface IDevelopmentWorkspaceSecretsSink
 {
     Task RecordAsync(Guid isolationKey,

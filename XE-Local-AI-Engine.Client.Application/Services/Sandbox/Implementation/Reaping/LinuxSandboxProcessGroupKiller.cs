@@ -3,16 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 using System.Globalization;
 using System.Runtime.InteropServices;
 
-/// <summary>
-///     Linux <see cref="ISandboxProcessGroupKiller" />. Group signalling mirrors <c>LinuxProcessGroupHandle</c> in the
-///     llama.cpp provider — the recorded precedent for this shape — with <c>kill(-pgid, …)</c> targeting the whole
-///     group: SIGTERM first, then SIGKILL for anything still standing.
-///     <para>
-///         Liveness and start-time come from <c>/proc</c> rather than <see cref="System.Diagnostics.Process" /> because
-///         the reaper needs the start time of a process it does not own, and needs it to be the SAME clock the marker
-///         recorded — field 22 of <c>/proc/[pid]/stat</c>, in clock ticks since boot.
-///     </para>
-/// </summary>
+/// <summary>Linux <see cref="ISandboxProcessGroupKiller" />.</summary>
+/// <remarks>
+///     Group signalling mirrors <c>LinuxProcessGroupHandle</c> in the llama.cpp provider, the recorded precedent for this shape, with
+///     <c>kill(-pgid, …)</c> targeting the whole group: SIGTERM first, then SIGKILL for anything still standing. Liveness and start time
+///     come from <c>/proc</c> rather than <see cref="System.Diagnostics.Process" /> because the reaper needs the start time of a process it
+///     does not own, on the SAME clock the marker recorded — field 22 of <c>/proc/[pid]/stat</c>, in clock ticks since boot.
+/// </remarks>
 public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
 {
     private const int Sigterm = 15;
@@ -52,9 +49,8 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
             return null;
         }
 
-        // Field 2 (comm) is the executable name in parentheses and may itself contain spaces or parentheses, so the
-        // fields after it are located from the LAST ')' rather than by splitting the whole line. The remaining tokens
-        // start at field 3 (state), which puts starttime (field 22) at index 19.
+        // Field 2 (comm) is the executable name in parentheses and may contain spaces or parentheses, so later fields are located from the
+        // LAST ')' rather than by splitting the line. The remaining tokens start at field 3 (state), putting starttime (22) at index 19.
         var commEnd = raw.LastIndexOf(')');
         if (commEnd < 0 || commEnd + 2 >= raw.Length)
         {
@@ -108,9 +104,8 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
         _ = kill(-processGroupId, Sigkill);
     }
 
-    // int kill(pid_t pid, int sig); — a negative pid signals the process group abs(pid). DllImport (not the
-    // source-generated LibraryImport) keeps this project free of AllowUnsafeBlocks, matching the libc open() import in
-    // ProcessSandboxRuntimeProvider.
+    // int kill(pid_t pid, int sig) — a negative pid signals the process group abs(pid). DllImport rather than LibraryImport keeps this
+    // project free of AllowUnsafeBlocks, matching the libc open() import in ProcessSandboxRuntimeProvider.
     [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int kill(int pid, int sig);

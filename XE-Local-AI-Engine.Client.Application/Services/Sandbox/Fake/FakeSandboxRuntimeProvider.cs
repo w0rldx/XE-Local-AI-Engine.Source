@@ -6,12 +6,13 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     Deterministic, in-memory <see cref="ISandboxRuntimeProvider" /> used as the CI-mandatory provider and as the
-///     default until a real provider ships. It needs no Docker and no network:
-///     a virtual filesystem backs copy/read, command results are scripted, and a "blocking" command lets
-///     cancellation and kill be exercised honestly. All timestamps come from the injected <see cref="TimeProvider" />
-///     so behavior is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
+///     Deterministic, in-memory <see cref="ISandboxRuntimeProvider" />, the CI-mandatory provider and the default until a real one ships.
 /// </summary>
+/// <remarks>
+///     It needs no Docker and no network: a virtual filesystem backs copy and read, command results are scripted, and a "blocking" command
+///     lets cancellation and kill be exercised honestly. Every timestamp comes from the injected <see cref="TimeProvider" />, so behaviour
+///     is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
+/// </remarks>
 // Serves BOTH per-feature roles, so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
 // Development Mode off one deterministic provider instance.
 public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider, IWorkSessionSandboxRuntimeProvider
@@ -49,11 +50,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
     public string ProviderName => Name;
 
-    // SupportsTrustedHostWorkspace is advertised because the container work needs unit coverage of callers
-    // that bind an engine-managed workspace, and a fake that refused the flag would force every such test onto a real
-    // daemon — which is precisely the coverage this fake exists to add *in addition to* real-daemon tests, not instead of them. The
-    // fake honours it in the only way an in-memory sandbox can: CreateOrAttachAsync accepts the binding, and the
-    // virtual filesystem is preserved across attach exactly as the contract requires of a real one.
+    // SupportsTrustedHostWorkspace is advertised because callers binding an engine-managed workspace need unit coverage a refused flag
+    // would push onto a real daemon. Honoured the only way an in-memory sandbox can: accepted at create, preserved across attach.
     public SandboxProviderCapabilities Capabilities =>
         SandboxProviderCapabilities.SupportsCopyInto
         | SandboxProviderCapabilities.SupportsCopyOut
@@ -61,9 +59,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         | SandboxProviderCapabilities.SupportsAttach
         | SandboxProviderCapabilities.SupportsKill
         | SandboxProviderCapabilities.SupportsTrustedHostWorkspace
-        // Deterministic and command-free, so the toolchain it "supplies" is the host's by default: the fake stands in
-        // for the process backend, never for a container, and a workload declaring an image-backed toolchain must not
-        // resolve to it just because it is the least privileged thing registered.
+        // Deterministic and command-free, so the toolchain it "supplies" is the host's: the fake stands in for the process backend, never
+        // a container, and a workload declaring an image-backed toolchain must not resolve to it for being the least privileged thing.
         | SandboxProviderCapabilities.SuppliesHostToolchain;
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
@@ -71,11 +68,8 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // An in-memory sandbox has no mount namespace and never will. Rejecting rather than ignoring keeps the fake
-        // honest in the same direction as the real providers: a caller that asked for a filesystem boundary and was
-        // handed a sandbox without one would go on believing it had the boundary, which is precisely the failure the
-        // fail-closed capability contract exists to prevent — and a fake that quietly accepted it would hide exactly
-        // that bug in every test that used it.
+        // An in-memory sandbox has no mount namespace and never will. Rejecting rather than ignoring keeps the fake honest in the same
+        // direction as the real providers, and a fake that quietly accepted the request would hide that bug in every test using it.
         if (request.Isolation == SandboxIsolationMode.Filesystem)
         {
             throw new SandboxCapabilityNotSupportedException("The fake sandbox provider has no mount namespace and cannot honor SandboxIsolationMode.Filesystem.");
@@ -239,10 +233,12 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
     }
 
     /// <summary>
-    ///     Lists the virtual filesystem's entries beneath the requested directory, in the same <c>./relative/path</c>
-    ///     shape the real provider emits — so a test that drives Coder or AgentHome through this provider is asserting
-    ///     the shape production produces, not a fake one.
+    ///     Lists the virtual filesystem's entries beneath the requested directory, in the same <c>./relative/path</c> shape the real
+    ///     provider emits.
     /// </summary>
+    /// <remarks>
+    ///     So a test driving Coder or AgentHome through this provider asserts the shape production produces, not a fake one.
+    /// </remarks>
     public Task<IReadOnlyList<string>> ListFilesAsync(SandboxHandle handle,
         SandboxListFilesRequest request,
         CancellationToken cancellationToken = default)
@@ -449,11 +445,13 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
     }
 
     /// <summary>
-    ///     Mirrors <c>ProcessSandboxRuntimeProvider</c>'s identity map, because that is the behaviour a caller written
-    ///     against the fake has to keep when it meets the process provider. It does not check the host filesystem: the
-    ///     fake's whole point is a virtual one, and a unit test naming a directory it never created must still get a
-    ///     usable handle.
+    ///     Mirrors <c>ProcessSandboxRuntimeProvider</c>'s identity map, the behaviour a caller written against the fake has to keep when
+    ///     it meets the process provider.
     /// </summary>
+    /// <remarks>
+    ///     It does not check the host filesystem: the fake's whole point is a virtual one, and a unit test naming a directory it never
+    ///     created must still get a usable handle.
+    /// </remarks>
     private static IReadOnlyList<SandboxMountBinding> ResolveIdentityMounts(SandboxCreateRequest request)
     {
         var bindings = new List<SandboxMountBinding>();

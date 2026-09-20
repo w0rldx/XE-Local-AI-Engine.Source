@@ -47,15 +47,12 @@ public interface IDevelopmentManagementService
         Guid taskId,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Puts a task's approved patch into the repository.
-    ///     <para>
-    ///         <paramref name="onBehalfOfWorkflowRunId" /> names the development-workflow run whose apply lane is
-    ///         asking, and is the ONLY thing that gets an apply past a live run's ownership of that decision.
-    ///         An operator surface — the endpoint — passes <see langword="null" />, which is what makes the refusal
-    ///         server-side rather than a button a React build withholds.
-    ///     </para>
-    /// </summary>
+    /// <summary>Puts a task's approved patch into the repository.</summary>
+    /// <remarks>
+    ///     <paramref name="onBehalfOfWorkflowRunId" /> names the development-workflow run whose apply lane is asking,
+    ///     and is the only thing that gets an apply past a live run's ownership of that decision. An operator surface
+    ///     passes <see langword="null" />, which makes the refusal server-side rather than a withheld button.
+    /// </remarks>
     Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
@@ -71,10 +68,13 @@ public interface IDevelopmentManagementService
 internal sealed class DevelopmentManagementService : IDevelopmentManagementService
 {
     /// <summary>
-    ///     Why a task with no rounds left was stood down — and, because it is PERSISTED as the task's reason and read
-    ///     back to recognise that stand-down, also the sentinel for it. Says "rounds" rather than "review rounds"
-    ///     because the budget stopped counting review entries alone: a failed deterministic gate spends one too.
+    ///     Why a task with no rounds left was stood down and — being persisted as the task's reason, then read back to
+    ///     recognise that stand-down — the sentinel for it.
     /// </summary>
+    /// <remarks>
+    ///     It says "rounds" rather than "review rounds" because the budget does not count review entries alone: a
+    ///     failed deterministic gate spends one too.
+    /// </remarks>
     private const string ReviewRoundLimitReason = "The configured maximum number of rounds has been reached.";
 
     private readonly IDevelopmentApplyService _applyService;
@@ -82,12 +82,13 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     private readonly IDevelopmentCoordinator _coordinator;
 
     /// <summary>
-    ///     Dev Mode moved tasks between statuses without a single line in the process log — the pass-4 evidence scan
-    ///     found zero hits for the gate verdict, for <c>ChangesRequested</c> and for the stand-down sentence, so every
-    ///     claim about what the chain did was model-quoted rather than a system record. All three messages carry the
-    ///     literal phrase "task status", so one grep finds every hop <see cref="StartNextActionAsync" /> decides:
-    ///     <c>Planned → Ready</c>, the round start, and the stand-down at the round cap.
+    ///     Records every task-status hop <see cref="StartNextActionAsync" /> decides.
     /// </summary>
+    /// <remarks>
+    ///     All three messages — <c>Planned → Ready</c>, the round start and the stand-down at the round cap — carry
+    ///     the literal phrase "task status", so one grep finds every hop. Without them a claim about what the chain
+    ///     did is model-quoted rather than a system record.
+    /// </remarks>
     private readonly ILogger<DevelopmentManagementService> _logger;
 
     private readonly IActiveCloudChatClientFactory _cloudFactory;
@@ -102,13 +103,12 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
     /// <summary>
     ///     Read-only, and for one question: which workflow run — if any — owns the approval for a task.
-    ///     <para>
-    ///         Asked HERE rather than at the endpoint layer, which is the other place the answer could be composed:
-    ///         this service is the ONE place a task aggregate is built — the project detail loops back through
-    ///         <see cref="GetTaskAsync" /> for every task it carries — so composing it above would mean asking at three
-    ///         call sites today and remembering to ask at the next one. Recorded so it is not re-litigated.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Asked here rather than at the endpoint layer because this service is the one place a task aggregate is
+    ///     built — the project detail loops back through <see cref="GetTaskAsync" /> for every task it carries — so
+    ///     composing it above would mean asking at three call sites today and remembering the next one.
+    /// </remarks>
     private readonly IDevWorkflowStore _workflows;
 
     private readonly TimeProvider _timeProvider;
@@ -202,11 +202,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
         var repository = await _repositoryBindings.ResolveFolderAsync(input.SelectedFolderId, cancellationToken);
 
-        // The profile is snapshotted here, once, and is the only source of truth for the life of the project. It is
-        // never re-read from the worktree during an attempt: the agent can write to the worktree, so a live read would
-        // let it rewrite its own test command.
-        // Template provenance is read from the materialization record rather than taken from the request: the client
-        // must not be able to assert which template a repository came from.
+        // The profile is snapshotted once here and never re-read from the worktree, which the agent can write. Template
+        // provenance comes from the materialization record, so a client cannot assert which template a repository is.
         var materialization = await _templateStore.FindMaterializationAsync(input.SelectedFolderId, cancellationToken);
         var profile = ResolveCommandProfile(input, repository.RepositoryRoot, materialization?.TemplateId.ToString());
         var projectId = DerivedOperationId(input.OperationId, "project");
@@ -250,9 +247,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var import = DevelopmentCommandProfileImport.TryRead(repositoryRoot);
         var importDigest = import?.Digest;
 
-        // Precedence: the operator's explicit confirmation, then what the repository asked for, then detection. The
-        // repository's request is only ever a choice among code-owned profiles — Materialize rejects anything else —
-        // so a repository can select a profile but never define one.
+        // Precedence: the operator's confirmation, then the repository's request, then detection. That request is only
+        // ever a choice among code-owned profiles — Materialize rejects anything else — so it selects, never defines.
         var profileId = !string.IsNullOrWhiteSpace(input.CommandProfileId)
             ? input.CommandProfileId
             : import?.Document.ProfileId;
@@ -382,11 +378,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         var awaitingValidation = task.Status == DevelopmentTaskStatus.InProgress
                                  && attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded };
 
-        // The budget is checked BEFORE the branch that would spend it, and covers the rework wait as well as the
-        // validation wait: a task at the cap has nothing left whichever of the two it is sitting in. Gated on
-        // ChangesRequested too because that is where a rejected review and a failed gate both leave it, and starting
-        // the coder round from there first spent a whole model attempt — its tokens and its duration — on work that
-        // could never reach a review. InReview is deliberately absent: that round is already paid for.
+        // The budget is checked before the branch that would spend it, covering the rework and validation waits alike.
+        // ChangesRequested is in, or a doomed coder round burns an attempt; InReview is out, being already paid for.
         if ((awaitingValidation || task.Status == DevelopmentTaskStatus.ChangesRequested)
             && task.CurrentReviewRound >= task.MaxReviewRounds)
         {
@@ -431,10 +424,8 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
             throw new DevelopmentInvalidTransitionException("The Development role has no configured model.");
         }
 
-        // An ext: id is invisible to the cloud provider resolver by design (it falls through cloud selection), so its
-        // locality is asked separately and refused under BOTH egress policies: the plan admits no dev-mode support for
-        // a declared-cloud external model, and an UNRESOLVED one is refused with it because a deleted connection or an
-        // unreadable store says nothing about where the prompt would go.
+        // An ext: id falls through cloud selection, so its locality is asked separately and refused under both egress
+        // policies; UNRESOLVED too, because a deleted connection or unreadable store says nothing about the prompt.
         if (ExternalModelId.HasExternalScheme(modelId)
             && await _modelTrustResolver.ResolveAsync(modelId, cancellationToken) != ModelTrustLocality.Local)
         {
@@ -565,28 +556,16 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     }
 
     /// <summary>
-    ///     The apply gate, enforced where it is actually enforceable: while the run driving a task is LIVE, the approval that lets
-    ///     that task's patch land is a gate node in the run, and this gate is not it.
-    ///     <para>
-    ///         The Development page already hides its Apply button for such a task, but a hidden button is a hint, not
-    ///         a rule — any client of this endpoint could apply the patch and leave the workflow's HumanGate trail
-    ///         describing a decision nobody made. So the refusal lives here, in the one place both apply surfaces meet:
-    ///         the endpoint and the workflow's own <c>DevWorkflowApplyCommands</c> both route through this method.
-    ///     </para>
-    ///     <para>
-    ///         The workflow's lane gets through by NAMING the run it is applying for, rather than by an ambient flag: a
-    ///         caller that says "on behalf of run X" and is refused because the task belongs to run Y is exactly the
-    ///         case that should be refused. And once the run has ENDED it can answer no further gate, so the authority
-    ///         returns here — withholding the apply then would strand an already-validated patch for good.
-    ///     </para>
-    ///     <para>
-    ///         With the module SWITCHED OFF this guard stands down entirely, and has to: the dispatcher only runs when
-    ///         <c>DevWorkflows:Enabled</c> is set, so a run that was live when the switch flipped never reaches a
-    ///         terminal status and never answers another gate — an unconditional refusal would strand its tasks for
-    ///         good, behind a workflow UI that is off too. Off means there is no competing gate to protect, which is
-    ///         also the rule the client has always followed for the same reason.
-    ///     </para>
+    ///     The apply gate: while the run driving a task is live, the approval that lets its patch land is a gate node
+    ///     in that run, and this is not it.
     /// </summary>
+    /// <remarks>
+    ///     Both apply surfaces — the endpoint and the workflow's <c>DevWorkflowApplyCommands</c> — route through here,
+    ///     because a hidden Apply button is a hint and any client could leave a HumanGate trail describing a decision
+    ///     nobody made. The workflow lane passes by naming the run it applies for, so "on behalf of run X" against run
+    ///     Y's task is refused. An ended run answers no further gate, so authority returns here; and with
+    ///     <c>DevWorkflows:Enabled</c> off the guard stands down, or a run live at the flip strands its tasks for good.
+    /// </remarks>
     private async Task EnsureApplyAuthorityAsync(Guid taskId, Guid? onBehalfOfWorkflowRunId, CancellationToken cancellationToken)
     {
         if (!_workflowOptions.Enabled)

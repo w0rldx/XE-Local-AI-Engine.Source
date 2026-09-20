@@ -18,20 +18,14 @@ public interface IDevelopmentProfileBackfillService
 
 /// <summary>
 ///     Fills the command profile on projects created before the profile existed.
-///     <para>
-///         Detection is re-run against the project's own bound repository, so a repository that has a solution gets the
-///         .NET profile it would have got at registration. It is deliberately <em>not</em> defaulted to
-///         <c>generic-git</c> when the repository cannot be reached: that profile's validation gate is the whitespace
-///         check alone, so substituting it for a repository nobody could look at would silently downgrade a real .NET
-///         project's gate from "builds and tests pass" to "no trailing whitespace" while still reporting a green
-///         validation. An unreachable repository is therefore left null, and the existing
-///         "re-register the repository" error stands — a visible failure rather than a quiet lie.
-///     </para>
-///     <para>
-///         Runs both at startup (every project at once) and on project load, because a repository that was offline at
-///         boot must not need an application restart to become usable once it is back.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Detection is re-run against the project's own bound repository, and an unreachable one is left null rather
+///     than defaulted to <c>generic-git</c>: that profile's gate is the whitespace check alone, so substituting it
+///     would downgrade a real .NET project from "builds and tests pass" to "no trailing whitespace" and still report
+///     green. The visible "re-register the repository" error stands instead. This runs at startup for every project
+///     and again on project load, so a repository offline at boot needs no restart once it is back.
+/// </remarks>
 internal sealed class DevelopmentProfileBackfillService : IDevelopmentProfileBackfillService
 {
     private readonly ILogger<DevelopmentProfileBackfillService> _logger;
@@ -100,10 +94,10 @@ internal sealed class DevelopmentProfileBackfillService : IDevelopmentProfileBac
     }
 
     /// <summary>
-    ///     Runs detection against the project's bound repository and materializes the canonical profile bytes, or returns
-    ///     null when the repository cannot be reached or the detected target will not materialize. Every null path is a
-    ///     deliberate "leave it null", never a fallback profile.
+    ///     Runs detection against the project's bound repository and materializes the canonical profile bytes, or
+    ///     returns null when the repository is unreachable or the detected target will not materialize.
     /// </summary>
+    /// <remarks>Every null path is a deliberate "leave it null", never a fallback profile.</remarks>
     private async Task<string?> DetectProfileJsonAsync(DevelopmentProjectSnapshot project, CancellationToken cancellationToken)
     {
         try

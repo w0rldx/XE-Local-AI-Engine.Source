@@ -4,15 +4,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     The persisted validation report.
-///     <para>
-///         <see cref="CommandProfileVersion" /> is the artifact protocol version and keeps its exact former meaning —
-///         the apply and reviewer gates still compare it against
-///         <see cref="DevelopmentValidationRunner.ProfileVersion" />. <see cref="CommandProfileId" /> and
-///         <see cref="CommandProfileDigest" /> are an additional, independent dimension recording which commands the
-///         gate actually ran. Adding them does not weaken the protocol check; replacing the protocol check with them
-///         would have.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="CommandProfileVersion" /> is the artifact protocol version the apply and reviewer gates compare
+///     against <see cref="DevelopmentValidationRunner.ProfileVersion" />, while <see cref="CommandProfileId" /> and
+///     <see cref="CommandProfileDigest" /> are an independent dimension recording which commands the gate ran.
+///     Adding them does not weaken the protocol check; replacing the protocol check with them would.
+/// </remarks>
 internal sealed record DevelopmentValidationReport(
     bool Passed,
     string BaseCommit,
@@ -60,15 +58,14 @@ internal static class DevelopmentValidationFailureCodes
 
 /// <summary>
 ///     The deterministic gate's verdict over one attempt's command evidence.
-///     <para>
-///         Exit codes alone were the whole gate until now, and they are not sufficient. A test command can exit
-///         non-zero for reasons that have nothing to do with tests, and — the case that matters — a suite reduced to
-///         zero tests can exit zero. So the verdict adds two rules on top of the exit codes, taken from the structured
-///         result a code-owned adapter read: <strong>executed &gt; 0</strong> and <strong>failed == 0</strong>. And a
-///         result the adapter could not read is a failure, never a pass: an unreadable result is exactly the state an
-///         agent optimizing for green would produce if unreadable meant "assume fine".
-///     </para>
 /// </summary>
+/// <remarks>
+///     Exit codes alone are not sufficient: a test command can exit non-zero for reasons unrelated to tests and, the
+///     case that matters, a suite reduced to zero tests can exit zero. The verdict adds two rules over the exit
+///     codes, taken from the structured result a code-owned adapter read — executed above zero, failed at zero — and
+///     treats a result the adapter could not read as a failure, never a pass, because unreadable is exactly the
+///     state an agent optimizing for green would produce if it meant "assume fine".
+/// </remarks>
 internal sealed class DevelopmentValidationVerdict
 {
     public required bool Passed { get; init; }
@@ -108,10 +105,12 @@ internal sealed class DevelopmentValidationVerdict
     }
 
     /// <summary>
-    ///     The per-command rules, in the order that yields the most useful reason rather than the earliest one. A
-    ///     failing test makes its command exit non-zero too, so checking the exit code first would report every red
-    ///     suite as the generic "command failed" and throw away the specific answer the adapter just produced.
+    ///     The per-command rules, in the order that yields the most useful reason rather than the earliest one.
     /// </summary>
+    /// <remarks>
+    ///     A failing test makes its command exit non-zero too, so checking the exit code first reports every red
+    ///     suite as the generic "command failed" and throws away the specific answer the adapter just produced.
+    /// </remarks>
     private static DevelopmentValidationVerdict? EvaluateCommand(DevelopmentCommandEvidence command)
     {
         if (!command.Completed)

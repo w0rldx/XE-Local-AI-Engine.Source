@@ -4,15 +4,14 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-///     Fail-closed startup validation for <see cref="ContainerSandboxOptions" />. It rejects, at startup, every
-///     configuration that could only produce a container weaker than the Docker hardening contract — a root UID, a
-///     mutable image tag, a relative mount target, or a scratch area that overlaps the workspace mount.
-///     <para>
-///         Deliberately NOT gated on "is the container provider selected". A stripped or mistyped configuration must
-///         fail loudly whichever provider is in force, and validating unconditionally is what makes the preflight's
-///         "the daemon is fine, the configuration is not" case reachable rather than latent.
-///     </para>
+///     Fail-closed startup validation for <see cref="ContainerSandboxOptions" />: it rejects every configuration that could only produce a
+///     container weaker than the Docker hardening contract.
 /// </summary>
+/// <remarks>
+///     A root UID, a mutable image tag, a relative mount target, or a scratch area overlapping the workspace mount. Deliberately NOT gated
+///     on whether the container provider is selected: a stripped or mistyped configuration must fail loudly whichever provider is in
+///     force, and validating unconditionally is what makes the preflight's "the daemon is fine, the configuration is not" case reachable.
+/// </remarks>
 internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<ContainerSandboxOptions>
 {
     public ValidateOptionsResult Validate(string? name, ContainerSandboxOptions options)
@@ -27,17 +26,8 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
                          + "A tag names whatever the registry last pushed, not the bytes the operator approved.");
         }
 
-        // Deliberately NOT rejecting UID/GID 0 here. Whether zero is root depends on the daemon, and this validator
-        // runs at startup with no daemon in reach: under a rootless daemon container UID 0 is the invoking user's own
-        // unprivileged host account and is the only identity that can use an engine-generated bind mount, while under
-        // a rootful one it is host root. A startup rejection would therefore refuse a correct configuration on one
-        // machine and accept nothing extra on the other. The check has moved to where the answer is knowable —
-        // DockerSandboxRuntimeProvider probes the daemon before it resolves the identity, and refuses UID 0 against a
-        // daemon that is not verified rootless. Negative values are still rejected, by the Range data annotation.
-        //
-        // What IS answerable without a daemon is whether the two halves of the identity agree about which mapping they
-        // live in. Under a rootless daemon 0 names the invoking user; pairing a 0 with a non-zero id straddles two
-        // different host accounts, so the container would not own what it creates whichever daemon runs it.
+        // Deliberately NOT rejecting UID/GID 0: whether zero is root depends on the daemon this startup validator cannot reach, so the
+        // check moved to the provider. What IS answerable here is agreement — pairing 0 with a non-zero id straddles two host accounts.
         if (options.UserId is not null && options.GroupId is not null && (options.UserId is 0) != (options.GroupId is 0))
         {
             failures.Add($"'{nameof(ContainerSandboxOptions.UserId)}' and '{nameof(ContainerSandboxOptions.GroupId)}' must both be 0 "
@@ -50,10 +40,8 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         ValidateMountTarget(nameof(ContainerSandboxOptions.ScratchMountTarget), options.ScratchMountTarget, failures);
         ValidateMountTarget(nameof(ContainerSandboxOptions.TempMountTarget), options.TempMountTarget, failures);
 
-        // An N-way sweep, not a pairwise call, and the difference is the whole point. Two targets need one comparison
-        // and three need three; adding a fourth by hand is how a pair gets missed. FindOverlap is shared with the
-        // provider's mount broker, which sweeps these targets together with every engine-generated mount target — an
-        // unbounded list that a fixed set of pairwise calls could never cover.
+        // An N-way sweep, not pairwise calls: two targets need one comparison and three need three, and adding a fourth by hand is how a
+        // pair gets missed. FindOverlap is shared with the provider's mount broker, which sweeps an unbounded generated list.
         if (FindOverlap([
                 new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.WorkspaceMountTarget), Path = options.WorkspaceMountTarget },
                 new ContainerMountTarget { Name = nameof(ContainerSandboxOptions.ScratchMountTarget), Path = options.ScratchMountTarget },
@@ -72,11 +60,11 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    /// <summary>
-    ///     Parses a Docker Engine API version string (<c>major.minor</c>) into a comparable value. Docker reports
-    ///     these as decimal-looking strings that are NOT decimals — 1.9 precedes 1.41 — so they are compared
+    /// <summary>Parses a Docker Engine API version string (<c>major.minor</c>) into a comparable value.</summary>
+    /// <remarks>
+    ///     Docker reports these as decimal-looking strings that are NOT decimals — 1.9 precedes 1.41 — so they are compared
     ///     component-wise as integers. Culture-invariant on purpose: the daemon's wire format is not localized.
-    /// </summary>
+    /// </remarks>
     internal static bool TryParseApiVersion(string? value, out DockerApiVersion version)
     {
         version = default;
@@ -130,17 +118,15 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
     }
 
     /// <summary>
-    ///     Sweeps every pair in <paramref name="targets" /> and returns the first collision, or <see langword="null" />
-    ///     when no target shadows another. Two container paths collide when they are equal or when one is an ancestor
-    ///     of the other — a mount at an ancestor hides everything the descendant was supposed to expose, and the
-    ///     container the daemon then reads back is not the one that was verified.
-    ///     <para>
-    ///         Shared rather than duplicated, because the two callers sweep different sets: startup validation sweeps
-    ///         the configured option targets with no daemon in reach, while the provider sweeps those PLUS every
-    ///         engine-generated mount target for one create. The rule must be the same in both or a mount that startup
-    ///         would have refused becomes reachable at create time.
-    ///     </para>
+    ///     Sweeps every pair in <paramref name="targets" /> and returns the first collision, or <see langword="null" /> when no target
+    ///     shadows another.
     /// </summary>
+    /// <remarks>
+    ///     Two container paths collide when equal or when one is an ancestor of the other: a mount at an ancestor hides everything the
+    ///     descendant was to expose, and the container the daemon reads back is then not the one that was verified. Shared rather than
+    ///     duplicated because the callers sweep different sets — startup sweeps the configured targets, the provider sweeps those PLUS
+    ///     every engine-generated target — and the rule must be the same in both or a mount startup would refuse becomes reachable.
+    /// </remarks>
     internal static ContainerMountOverlap? FindOverlap(IReadOnlyList<ContainerMountTarget> targets)
     {
         ArgumentNullException.ThrowIfNull(targets);

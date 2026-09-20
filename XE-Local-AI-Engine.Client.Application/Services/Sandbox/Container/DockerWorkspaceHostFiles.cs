@@ -8,40 +8,29 @@ using Microsoft.Win32.SafeHandles;
 /// <summary>
 ///     Host-side access to the bytes behind a container's workspace bind mount, under the same guards
 ///     <c>ProcessSandboxRuntimeProvider</c> applies to its jail.
-///     <para>
-///         Why the host and not the container: Docker refuses <c>PUT /containers/{id}/archive</c> outright against a
-///         container with a read-only root filesystem (measured against a rootless Docker Engine, which answers
-///         <c>400 container rootfs is marked read-only</c> regardless of destination, including a writable
-///         <c>tmpfs</c>), and the Docker hardening contract makes that root filesystem non-negotiable. The bind mount is the same bytes on
-///         both sides, so writing them host-side is not a workaround for the restriction — it is the route that does
-///         not need the archive endpoint at all.
-///     </para>
-///     <para>
-///         The guards are not optional decoration. A command inside the container can plant a symlink in the
-///         workspace, and the host — which is where these writes land — resolves it. So every component between the
-///         workspace root and the leaf is probed for a symlink before the write, the parent chain is re-probed after
-///         it is materialised, and on Linux the create itself is an <c>O_NOFOLLOW</c> <c>open(2)</c> so a leaf
-///         swapped between the check and the write fails rather than redirecting.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The host and not the container, because Docker refuses <c>PUT /containers/{id}/archive</c> outright against a read-only root
+///     filesystem — measured: <c>400 container rootfs is marked read-only</c> regardless of destination — and the hardening contract makes
+///     that root non-negotiable. The bind mount is the same bytes on both sides. The guards are not decoration: a command inside can plant
+///     a symlink in the workspace and the host resolves it, so every component is probed before the write, the parent chain is re-probed
+///     after it is materialised, and on Linux the create is an <c>O_NOFOLLOW</c> <c>open(2)</c>.
+/// </remarks>
 internal static class DockerWorkspaceHostFiles
 {
-    // O_WRONLY (0x1) | O_CREAT (0x40) | O_TRUNC (0x200) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux.
-    // A raw (FileOptions) cast for O_NOFOLLOW throws, so the libc open() below is required — the same flag set and
-    // the same reasoning as ProcessSandboxRuntimeProvider's copy-into write.
+    // O_WRONLY (0x1) | O_CREAT (0x40) | O_TRUNC (0x200) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux. A raw (FileOptions) cast
+    // for O_NOFOLLOW throws, so the libc open() below is required — the same flag set as the process provider's copy-into write.
     private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
     private const int DefaultCreateFileMode = 0b110_100_100;
 
-    // statx(2). AT_FDCWD is the "resolve relative to the working directory" dirfd; the path here is always absolute.
-    // AT_SYMLINK_NOFOLLOW makes the stat itself refuse to traverse a leaf symlink, so ownership is read off the file
-    // that was actually created rather than off whatever a planted link points at.
+    // statx(2). AT_FDCWD resolves relative to the working directory, though the path here is always absolute. AT_SYMLINK_NOFOLLOW makes
+    // the stat refuse to traverse a leaf symlink, so ownership is read off the file actually created, not off what a planted link names.
     private const int AtFileDescriptorCurrentWorkingDirectory = -100;
     private const int AtSymlinkNoFollow = 0x100;
     private const uint StatxOwnerMask = 0x8 | 0x10;
 
-    // Byte offsets into `struct statx`. Unlike `struct stat` this is a kernel UAPI structure with a fixed layout that
-    // is identical on every architecture, which is the entire reason statx is used here rather than stat: a stat
-    // binding would have to know the target architecture and the glibc vintage to find the same two fields.
+    // Byte offsets into `struct statx`. Unlike `struct stat` it is a kernel UAPI structure with a layout identical on every architecture,
+    // which is why statx is used: a stat binding would have to know the target architecture and the glibc vintage for the same fields.
     private const int StatxUserIdOffset = 20;
     private const int StatxBufferBytes = 256;
 
@@ -68,9 +57,8 @@ internal static class DockerWorkspaceHostFiles
         var parent = Path.GetDirectoryName(destination);
         if (parent is not null)
         {
-            // Validate the existing prefix BEFORE Directory.CreateDirectory: that API follows an intermediate symlink,
-            // so creating first could materialise directories outside the workspace before the later rejection. The
-            // second pass covers every newly created component and a concurrent swap.
+            // Validate the existing prefix BEFORE Directory.CreateDirectory, which follows an intermediate symlink and could materialise
+            // directories outside the workspace before the later rejection. The second pass covers new components and a concurrent swap.
             EnsureNoSymlinkComponents(canonicalRoot, parent, sandboxPath);
             Directory.CreateDirectory(parent);
             EnsureNoSymlinkComponents(canonicalRoot, parent, sandboxPath);
@@ -80,12 +68,11 @@ internal static class DockerWorkspaceHostFiles
         await WriteNoFollowAsync(destination, content, cancellationToken);
     }
 
-    /// <summary>
-    ///     Reads the owning UID of a host path without following a leaf symlink. Returns <see langword="null" /> when
-    ///     the platform cannot answer (anything but Linux, or a kernel without <c>statx</c>) — the caller decides
-    ///     what an unanswerable probe means, because on a rootful daemon it is a different question than on a
-    ///     rootless one.
-    /// </summary>
+    /// <summary>Reads the owning UID of a host path without following a leaf symlink.</summary>
+    /// <remarks>
+    ///     <see langword="null" /> when the platform cannot answer — anything but Linux, or a kernel without <c>statx</c> — and the caller
+    ///     decides what an unanswerable probe means, because on a rootful daemon it is a different question than on a rootless one.
+    /// </remarks>
     internal static uint? TryReadOwnerUserId(string hostPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
@@ -104,11 +91,11 @@ internal static class DockerWorkspaceHostFiles
             : BitConverter.ToUInt32(buffer, StatxUserIdOffset);
     }
 
-    /// <summary>
-    ///     Rejects a path whose leaf, or any component between the workspace root and it, is a symlink. The workspace
-    ///     root itself is trusted: the engine created it. Only existing components are probed, because a not-yet-created
-    ///     leaf cannot be a link — the <c>O_NOFOLLOW</c> create is what covers a leaf planted after this walk.
-    /// </summary>
+    /// <summary>Rejects a path whose leaf, or any component between the workspace root and it, is a symlink.</summary>
+    /// <remarks>
+    ///     The workspace root itself is trusted, the engine having created it. Only existing components are probed, a not-yet-created leaf
+    ///     being unable to be a link — the <c>O_NOFOLLOW</c> create covers a leaf planted after this walk.
+    /// </remarks>
     internal static void EnsureNoSymlinkComponents(string canonicalRoot, string canonicalPath, string sandboxPath)
     {
         var current = canonicalPath;
@@ -159,9 +146,8 @@ internal static class DockerWorkspaceHostFiles
         await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken);
     }
 
-    // DllImport rather than the source-generated LibraryImport, matching ProcessSandboxRuntimeProvider: the generated
-    // form requires AllowUnsafeBlocks on the whole project and buys nothing for two calls. The path is marshalled by
-    // the caller into a null-terminated UTF-8 byte array so any filename round-trips correctly.
+    // DllImport rather than LibraryImport, matching ProcessSandboxRuntimeProvider: the generated form requires AllowUnsafeBlocks on the
+    // whole project and buys nothing for two calls. The caller marshals the path into a null-terminated UTF-8 array so filenames survive.
     [DllImport("libc", EntryPoint = "open", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int open(byte[] pathname, int flags, int mode);

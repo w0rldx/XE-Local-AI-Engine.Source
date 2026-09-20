@@ -5,22 +5,16 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 /// <summary>
-///     An open <c>O_PATH</c> directory descriptor for a tree the isolated chain will bind, together with the canonical
-///     path it was opened from.
-///     <para>
-///         The descriptor — not the path — is what <c>bwrap</c> is given (<c>--bind-fd</c> / <c>--ro-bind-fd</c>), and
-///         that is the entire point. A pathname handed to <c>bwrap</c> is re-resolved by <c>bwrap</c>, in a different
-///         process, at a later moment; anything that can rename a component between the engine's check and that
-///         resolution redirects the mount. A descriptor names the inode that was already validated, so there is no
-///         second resolution to race. The plan makes fd binds MANDATORY for exactly this reason: there is no pathname
-///         fallback, and a host where the descriptor chain cannot be established reports the capability as absent.
-///     </para>
-///     <para>
-///         The descriptor is deliberately NOT close-on-exec: it has to survive
-///         <c>setsid</c> → <c>systemd-run --scope</c> → <c>bwrap</c>, all three of which exec in place. That was
-///         measured on this host rather than assumed, and it is why no <c>posix_spawn</c> shim is needed.
-///     </para>
+///     An open <c>O_PATH</c> directory descriptor for a tree the isolated chain will bind, together with the canonical path it was opened
+///     from.
 /// </summary>
+/// <remarks>
+///     The descriptor, not the path, is what <c>bwrap</c> is given, and that is the point: a pathname is re-resolved by <c>bwrap</c>, in
+///     another process, at a later moment, so anything able to rename a component in between redirects the mount, while a descriptor names
+///     the already-validated inode. FD binds are MANDATORY — there is no pathname fallback, and a host where the chain cannot be
+///     established reports the capability absent. The descriptor is deliberately NOT close-on-exec: it must survive <c>setsid</c> →
+///     <c>systemd-run --scope</c> → <c>bwrap</c>, which was measured rather than assumed, so no <c>posix_spawn</c> shim is needed.
+/// </remarks>
 internal sealed class SandboxTrustedDescriptor : IDisposable
 {
     private int _fileDescriptor;
@@ -55,18 +49,15 @@ internal sealed class SandboxTrustedDescriptor : IDisposable
 }
 
 /// <summary>
-///     Opens <see cref="SandboxTrustedDescriptor" />s through an <c>openat2(2)</c> walk that refuses to traverse a
-///     symlink or to leave the directory it started from, validating the ownership of every component as the FD it
-///     just opened rather than as a path it might re-resolve.
-///     <para>
-///         The ownership rule is the one the plan fixes: ancestors must be root-owned and non-writable by anyone else
-///         (a root-owned sticky directory such as <c>/tmp</c> counts, because entries in it can only be removed by
-///         their own owner), and the target itself must belong to the engine's own user. A jail anchor must in
-///         addition be <c>0700</c>. That combination accepts the three shapes this engine actually uses — a jail under
-///         <c>/tmp</c>, a runtime root under <c>/home/&lt;user&gt;</c>, a data directory under either — and rejects a
-///         tree anyone else on the box could have swapped.
-///     </para>
+///     Opens <see cref="SandboxTrustedDescriptor" />s through an <c>openat2(2)</c> walk that refuses to traverse a symlink or leave the
+///     directory it started from, validating every component as the FD it just opened rather than a path it might re-resolve.
 /// </summary>
+/// <remarks>
+///     Ancestors must be root-owned and non-writable by anyone else, a root-owned sticky directory such as <c>/tmp</c> counting because
+///     entries in it can only be removed by their own owner; the target itself must belong to the engine's own user, and a jail anchor
+///     must also be <c>0700</c>. That accepts the three shapes this engine uses — a jail under <c>/tmp</c>, a runtime root under the
+///     user's home, a data directory under either — and rejects a tree anyone else on the box could have swapped.
+/// </remarks>
 internal static class SandboxTrustedDescriptorOpener
 {
     // openat2(2). The number is identical on x86-64 and AArch64; the syscall landed late enough to have been
@@ -81,9 +72,8 @@ internal static class SandboxTrustedDescriptorOpener
     private const ulong OpenDirectory = 0x10000;
     private const ulong OpenCloseOnExec = 0x80000;
 
-    // RESOLVE_NO_SYMLINKS refuses the open if ANY component (the final one included) is a symlink; RESOLVE_BENEATH
-    // refuses anything that would escape the starting descriptor. Together they make the walk incapable of leaving the
-    // tree it was pointed at, which is what a pathname-based check can only approximate.
+    // RESOLVE_NO_SYMLINKS refuses the open if ANY component, the final one included, is a symlink; RESOLVE_BENEATH refuses anything that
+    // would escape the starting descriptor. Together the walk cannot leave the tree it was pointed at.
     private const ulong ResolveNoSymlinks = 0x04;
     private const ulong ResolveBeneath = 0x08;
 
@@ -159,13 +149,12 @@ internal static class SandboxTrustedDescriptorOpener
         }
     }
 
-    /// <summary>
-    ///     The ancestor rule. Root-owned and non-writable is the ordinary case; a root-owned STICKY directory is
-    ///     accepted because that is what makes a shared <c>/tmp</c> safe to sit under — an entry in a sticky directory
-    ///     can only be renamed or removed by its own owner, so nobody else can substitute the jail. A directory owned
-    ///     by the engine's own user is accepted when it is not writable by group or world, which covers the user's
-    ///     home and the node data directory.
-    /// </summary>
+    /// <summary>The ancestor rule.</summary>
+    /// <remarks>
+    ///     Root-owned and non-writable is the ordinary case; a root-owned STICKY directory is accepted because that is what makes a shared
+    ///     <c>/tmp</c> safe to sit under, an entry in one being renameable or removable only by its own owner. A directory owned by the
+    ///     engine's own user is accepted when not group- or world-writable, which covers the user's home and the node data directory.
+    /// </remarks>
     private static void EnsureAncestorIsTrustworthy(SandboxUnixFileFacts facts, string path, uint ownUserId)
     {
         if (!facts.IsDirectory)

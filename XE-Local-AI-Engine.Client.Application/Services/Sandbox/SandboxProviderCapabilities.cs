@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     Provider-neutral capability flags advertised by an <see cref="ISandboxRuntimeProvider" />. AgentHome reads
-///     these to gate optional behavior (read-only mounts, network policy, resource limits) and
-///     to skip operations a provider cannot serve. No provider SDK informs this enum.
-/// </summary>
+/// <summary>Provider-neutral capability flags advertised by an <see cref="ISandboxRuntimeProvider" />.</summary>
+/// <remarks>
+///     AgentHome reads these to gate optional behaviour — read-only mounts, network policy, resource limits — and to skip operations a
+///     provider cannot serve. No provider SDK informs this enum.
+/// </remarks>
 [Flags]
 public enum SandboxProviderCapabilities
 {
@@ -21,9 +21,12 @@ public enum SandboxProviderCapabilities
 
     /// <summary>
     ///     The provider can run a command with the host filesystem absent from its mount namespace
-    ///     (<see cref="SandboxIsolationMode.Filesystem" />). Advertised only where a probe has EXERCISED the real
-    ///     chain and confirmed its positive controls, never on the strength of a binary being installed.
+    ///     (<see cref="SandboxIsolationMode.Filesystem" />).
     /// </summary>
+    /// <remarks>
+    ///     Advertised only where a probe has EXERCISED the real chain and confirmed its positive controls, never on the strength of a
+    ///     binary being installed.
+    /// </remarks>
     SupportsFilesystemIsolation = 1 << 9,
 
     /// <summary>
@@ -34,39 +37,27 @@ public enum SandboxProviderCapabilities
 
     /// <summary>
     ///     Commands run against a digest-pinned, operator-approved image the engine names
-    ///     (<see cref="SandboxToolchainSource.EngineApprovedImage" />). The axis ADR 0007 Decision 5 added so that the
-    ///     flags a backend advertises and the axes a workload declares are ONE vocabulary — without it, the need that
-    ///     drove ADR 0004 was the only need in this engine that could not be written down.
-    ///     <para>
-    ///         A provider advertises exactly one of this and <see cref="SuppliesHostToolchain" />. They are not
-    ///         alternatives a caller may fall back between: a workload that needs the host's SDK is not served by an
-    ///         image pinned to a different one, and a repository needing .NET 8 on a .NET 10 host is the reason the
-    ///         image exists at all.
-    ///     </para>
+    ///     (<see cref="SandboxToolchainSource.EngineApprovedImage" />).
     /// </summary>
+    /// <remarks>
+    ///     The axis ADR 0007 Decision 5 added so that the flags a backend advertises and the axes a workload declares are ONE vocabulary;
+    ///     without it the need that drove ADR 0004 was the only one in this engine that could not be written down. A provider advertises
+    ///     exactly one of this and <see cref="SuppliesHostToolchain" />, and they are not alternatives a caller may fall back between: a
+    ///     workload needing the host's SDK is not served by an image pinned to a different one, and a repository needing .NET 8 on a
+    ///     .NET 10 host is why the image exists at all.
+    /// </remarks>
     SuppliesImageToolchain = 1 << 11,
 
     /// <summary>
-    ///     Commands cannot see the host filesystem: the sandbox's view contains only what the engine put there.
-    ///     <para>
-    ///         <b>This is the PROPERTY. <see cref="SupportsFilesystemIsolation" /> is one MECHANISM for it, and they are
-    ///         deliberately not the same flag.</b> That one means "can serve
-    ///         <see cref="SandboxIsolationMode.Filesystem" />", which is a specific create-request contract — a named
-    ///         read-only tree list bound at host paths, a synthetic <c>/etc</c>, one writable jail. A container has the
-    ///         property and implements none of that contract, so folding the two together would either lie to
-    ///         <c>run_python</c> (which passes <see cref="SandboxCreateRequest.ReadOnlyTrees" /> a container cannot
-    ///         bind) or refuse a container the isolation floor it genuinely provides. ADR 0007 Decision 5 wants one
-    ///         vocabulary for requirements and capabilities; the honest way to get it here is two flags, not one flag
-    ///         asked to mean two things.
-    ///     </para>
-    ///     <para>
-    ///         Advertised only on evidence, never on construction alone. The process backend advertises it exactly
-    ///         where <see cref="SupportsFilesystemIsolation" /> is advertised, because the bubblewrap chain the probe
-    ///         exercises IS how it achieves the property. The container backend advertises it because a read-only
-    ///         rootfs with engine-generated mounts and no host namespaces has it by construction AND because every
-    ///         create reads the settings back and fails closed on any mismatch
-    ///         (<c>DockerSandboxHardening.FindViolations</c>) — a container that did not verify never reaches a caller.
-    ///     </para>
+    ///     Commands cannot see the host filesystem: the sandbox's view contains only what the engine put there. This is the PROPERTY;
+    ///     <see cref="SupportsFilesystemIsolation" /> is one MECHANISM for it.
     /// </summary>
+    /// <remarks>
+    ///     They are deliberately not one flag: that one means "can serve <see cref="SandboxIsolationMode.Filesystem" />", a specific
+    ///     create-request contract of named read-only trees bound at host paths, a synthetic <c>/etc</c> and one writable jail. A container
+    ///     has the property and implements none of the contract, so folding them together would either lie to <c>run_python</c> or refuse a
+    ///     container the floor it genuinely provides. Advertised only on evidence: the process backend where its probe exercised the
+    ///     bubblewrap chain, the container backend because every create reads its settings back and fails closed on mismatch.
+    /// </remarks>
     SupportsHostFilesystemBoundary = 1 << 12
 }

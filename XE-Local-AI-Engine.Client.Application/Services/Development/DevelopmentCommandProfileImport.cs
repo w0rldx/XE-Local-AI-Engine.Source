@@ -5,23 +5,22 @@ using System.Text.Json;
 
 /// <summary>
 ///     The shape a repository may ship at <c>.xe-dev/profile.json</c> to declare which code-owned profile it wants.
-///     <para>
-///         Deliberately minimal: a repository may name a profile and a build target, and nothing else. It
-///         may <em>not</em> supply commands, executables, arguments or timeouts. Accepting those would let a repository
-///         the agent can write choose what the validation gate executes, which is the whole reason the profile lives in
-///         the database rather than the worktree.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately minimal: a repository may name a profile and a build target and nothing else, never commands,
+///     executables, arguments or timeouts. Accepting those would let a repository the agent can write choose what the
+///     validation gate executes, which is why the profile lives in the database rather than the worktree.
+/// </remarks>
 internal sealed record DevelopmentProfileImportDocument(string? ProfileId, string? BuildTarget);
 
 /// <summary>
 ///     Reads the optional <c>.xe-dev/profile.json</c> import source from a trusted host repository root.
-///     <para>
-///         This runs exactly once, at project creation, on the operator's trusted host path — never during an attempt
-///         and never through the sandbox. The value it produces is snapshotted into the database and the worktree copy
-///         is irrelevant from that point on.
-///     </para>
 /// </summary>
+/// <remarks>
+///     This runs exactly once, at project creation, on the operator's trusted host path — never during an attempt and
+///     never through the sandbox. Its value is snapshotted into the database, and the worktree copy is irrelevant
+///     from that point on.
+/// </remarks>
 internal static class DevelopmentCommandProfileImport
 {
     public const string RelativePath = ".xe-dev/profile.json";
@@ -70,9 +69,8 @@ internal static class DevelopmentCommandProfileImport
         return File.Exists(path) ? ComputeDigest(ReadBounded(path)) : null;
     }
 
-    // Synchronous by necessity: TryComputeDigest is called from the DevelopmentWorkspaceTools constructor (which
-    // captures the baseline digest) and from its synchronous EnsureCommandProfileImportUnchanged invariant check.
-    // Neither has an async seam to convert to.
+    // Synchronous by necessity: TryComputeDigest is reached from the DevelopmentWorkspaceTools constructor, which
+    // captures the baseline digest, and from its synchronous invariant check. Neither has an async seam.
 #pragma warning disable MA0045 // Reached from a constructor and a synchronous invariant check; see the comment above.
     private static byte[] ReadBounded(string path)
     {

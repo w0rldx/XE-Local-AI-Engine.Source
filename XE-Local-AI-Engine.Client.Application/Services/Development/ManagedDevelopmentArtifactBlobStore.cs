@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Blobs;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Development Mode's managed artifact blobs. The crypto, atomic-write and tamper-classification body lives in
-///     <see cref="ManagedEncryptedBlobStore" />; the folder, leaf and AAD column here are exactly the values this store
-///     has always used, so every blob already on disk stays readable.
+///     Development Mode's managed artifact blobs.
 /// </summary>
+/// <remarks>
+///     The crypto, atomic-write and tamper-classification body lives in <see cref="ManagedEncryptedBlobStore" />; the
+///     folder, leaf and AAD column here are fixed values, so every blob already on disk stays readable.
+/// </remarks>
 public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBlobStore
 {
     private readonly ManagedEncryptedBlobStore _blobs;
