@@ -58,6 +58,19 @@ internal static class SourceCommentStripper
     }
 
     /// <summary>
+    ///     Returns every real comment's span, in source order, for a caller that reads the comments rather than the
+    ///     code around them — the same recognition <see cref="StripComments" /> uses, reported instead of discarded.
+    /// </summary>
+    internal static IReadOnlyList<Range> CommentSpans(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var spans = new List<Range>();
+        new Scanner(source, new StringBuilder(source.Length), blankLiterals: false, spans).Run();
+        return spans;
+    }
+
+    /// <summary>
     ///     A single left-to-right pass. Every position belongs to exactly one state: code, a line comment, a block
     ///     comment, the content of a string or char literal, or the format text of an interpolation hole. Comment
     ///     delimiters are recognised in the code state only.
@@ -67,13 +80,15 @@ internal static class SourceCommentStripper
         private readonly string _text;
         private readonly StringBuilder _output;
         private readonly bool _blankLiterals;
+        private readonly List<Range>? _spans;
         private int index;
 
-        public Scanner(string text, StringBuilder output, bool blankLiterals)
+        public Scanner(string text, StringBuilder output, bool blankLiterals, List<Range>? spans = null)
         {
             _text = text;
             _output = output;
             _blankLiterals = blankLiterals;
+            _spans = spans;
         }
 
         internal void Run()
@@ -428,18 +443,23 @@ internal static class SourceCommentStripper
 
         private void SkipLineComment()
         {
+            var start = index;
+
             while (index < _text.Length && _text[index] is not ('\r' or '\n'))
             {
                 index++;
             }
 
+            _spans?.Add(start..index);
             _output.Append(' ');
         }
 
         private void SkipBlockComment()
         {
+            var start = index;
             var end = _text.IndexOf("*/", index + 2, StringComparison.Ordinal);
             index = end < 0 ? _text.Length : end + 2;
+            _spans?.Add(start..index);
             _output.Append(' ');
         }
 

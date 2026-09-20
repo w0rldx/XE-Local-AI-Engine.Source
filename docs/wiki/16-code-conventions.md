@@ -383,7 +383,7 @@ explanation. **No commented-out code** — git has it (Sonar S125 already fails 
 | `<summary>` | one sentence, ≤ 240 characters |
 | `<param>` / `<returns>` / `<value>` | ≤ 160 characters, and **only when it adds information** the name does not |
 | `<remarks>` | only for non-obvious behaviour; ≤ 5 content lines / 600 characters on an ordinary member |
-| whole doc block | more than **15 doc lines** on a normal member is a review trigger, not an automatic violation |
+| whole doc block | more than **15 doc lines** on a normal member; the ratchet below counts it like the other four, so an existing one stays until its batch cleans it and a new one fails the gate |
 
 Use `<inheritdoc/>` instead of copying an interface's docs onto its implementation. A doc block that has grown
 into a design article belongs in `docs/wiki/` or an ADR, with the member's doc reduced to a sentence and a
@@ -402,8 +402,21 @@ you → fix the root cause → verify the finding is gone → only then suppress
 (`#pragma` around the one span, restored on the next line, or a `[SuppressMessage]` on the one member) **with a
 reason**. A file-wide or project-wide suppression, or one with no reason, is a defect.
 
-*Migration status:* slice **S6** lands a shrink-only ratchet on these budgets and then cleans production code in
-file-disjoint batches; tests get the ratchet only.
+`CommentBudgetConventionTests` ratchets all five budgets over every solution project plus `tools/`, against
+`XE-Local-AI-Engine.Tests/Architecture/CommentBudgetAllowlist.txt` — one `file|rule|count` line per file and rule,
+recording how many items in that file exceed that budget today. A file with no line for a rule must measure zero.
+The list is shrink-only in both directions: measuring more than the count fails, and measuring less fails as
+stale, so the commit that cleans a file lowers or deletes its line in the same change and the room cannot be spent
+twice. After a cleanup batch, `XE_COMMENT_BUDGET_SHRINK=1` rewrites the whole file — it lowers counts, drops
+emptied entries, never adds a key, never raises a count, and always fails afterwards, so a regeneration can never
+be mistaken for a green run.
+
+The scan reads source text: no analyzer in the three active families measures the length of a summary or the
+height of a comment run. Comment recognition comes from `SourceCommentStripper`, so a `//` or `///` inside a
+regular, verbatim, interpolated or raw literal is content and never an item.
+
+*Migration status:* the ratchet is live and holds the whole tree. Production files are cleaned in later
+file-disjoint batches, each lowering its own allowlist lines; test projects carry the ratchet only.
 
 ### Tests: TUnit, not xUnit
 
