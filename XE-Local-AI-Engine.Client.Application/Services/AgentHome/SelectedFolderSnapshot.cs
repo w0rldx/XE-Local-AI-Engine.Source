@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Outcome of copying one selected folder into the sandbox workspace. Model-safe:
-///     it carries the alias, copy counts, and the sandbox-relative workspace path only — never the trusted host path
-///     . The gateway renders these for the model; the internal preparation phase
-///     attaches them to <see cref="AgentHomePrepareResult.FolderSnapshots" />.
+///     Outcome of copying one selected folder into the sandbox workspace.
 /// </summary>
+/// <remarks>
+///     Model-safe: it carries the alias, copy counts and the sandbox-relative workspace path only, never the trusted
+///     host path. The gateway renders these for the model, and the internal preparation phase attaches them to
+///     <see cref="AgentHomePrepareResult.FolderSnapshots" />.
+/// </remarks>
 internal sealed record SelectedFolderSnapshot
 {
     /// <summary>The safe, normalized folder alias the model referenced.</summary>

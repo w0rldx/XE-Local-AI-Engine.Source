@@ -5,9 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Collapses the sessions a crashed or restarted host left mid-flight to <c>Interrupted</c>, exactly once, at
-///     startup. Registered after the chat module so orphaned chat rows are terminalized first: a session that resumes
-///     must not find its conversation still holding a half-written turn.
+///     startup.
 /// </summary>
+/// <remarks>
+///     Registered after the chat module so orphaned chat rows are terminalized first: a session that resumes must not
+///     find its conversation still holding a half-written turn.
+/// </remarks>
 public sealed class WorkSessionStartupReconciler : IHostedService
 {
     private const string InterruptedReason = "The host restarted while the work session was in flight.";

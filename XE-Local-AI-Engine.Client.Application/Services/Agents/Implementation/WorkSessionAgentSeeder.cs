@@ -8,21 +8,16 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>
-///     Idempotent startup task that seeds the two work-session personas — General and Research — by slug, the same way
-///     <see cref="CoderAgentSeeder" /> seeds its one. Each carries the four state tool names in
-///     <c>AllowedToolNames</c>, which is what the agent-send intersection (offered ∩ allowed) needs to keep them: the
-///     state tools are held out of the whole chat offer and appear only in the profile-opt-in offer.
-///     <para>
-///         Neither pins a model, and both leave the playbook off. Every tool approval is <see langword="false" /> except
-///         <c>ask_user</c>, whose <see langword="true" /> is structural rather than a risk verdict — it is what routes
-///         the call through the runner's out-of-stream approval round-trip, where a human wait happens outside the
-///         stream-idle watchdog.
-///     </para>
-///     <para>
-///         Best-effort like every other seeder: a node must start even when seeding fails, and the next startup
-///         re-attempts. Deleting a seeded row re-seeds it on the next start.
-///     </para>
+///     Idempotent startup task that seeds the two work-session personas, General and Research, by slug, the way
+///     <see cref="CoderAgentSeeder" /> seeds its one.
 /// </summary>
+/// <remarks>
+///     Each carries the four state tool names in <c>AllowedToolNames</c>, which the agent-send intersection needs to
+///     keep them: the state tools are held out of the whole chat offer and appear only in the profile-opt-in one.
+///     Neither pins a model and both leave the playbook off. Every tool approval is <see langword="false" /> except
+///     <c>ask_user</c>, whose <see langword="true" /> is structural — it routes the call through the out-of-stream
+///     approval round-trip, where a human wait happens outside the stream-idle watchdog. Best-effort like the rest.
+/// </remarks>
 public sealed class WorkSessionAgentSeeder : IHostedService
 {
     private const string SharedInstructions =
@@ -141,25 +136,32 @@ public sealed class WorkSessionAgentSeeder : IHostedService
     }
 
     /// <summary>
-    ///     The built-in clock tool's name, which <c>AIFunctionFactory</c> derives from the METHOD name — so it is
-    ///     <c>GetCurrentTime</c>, not the snake_case spelling the hand-written tools use. There is no constant to borrow
-    ///     because the registry generates the descriptor; <c>WorkSessionAgentSeederTests</c> holds the two together by
-    ///     asserting every name seeded here is one the node's catalog carries.
+    ///     The built-in clock tool's name, which <c>AIFunctionFactory</c> derives from the METHOD name, so it is
+    ///     <c>GetCurrentTime</c> and not the snake_case spelling the hand-written tools use.
     /// </summary>
+    /// <remarks>
+    ///     There is no constant to borrow, the registry generating the descriptor;
+    ///     <c>WorkSessionAgentSeederTests</c> holds the two together by asserting every name seeded here is one the
+    ///     node's catalog carries.
+    /// </remarks>
     private const string ClockToolName = "GetCurrentTime";
 
     /// <summary>
-    ///     The spelling these personas shipped with before the registry's real name was checked. Seeding is
-    ///     additive-only and returns early on an existing slug, so an upgraded install would otherwise keep the dead
-    ///     name — and the clock tool — for the life of the database.
+    ///     The spelling these personas shipped with before the registry's real name was checked.
     /// </summary>
+    /// <remarks>
+    ///     Seeding is additive-only and returns early on an existing slug, so an upgraded install would otherwise
+    ///     keep the dead name — and lose the clock tool — for the life of the database.
+    /// </remarks>
     private const string LegacyClockToolName = "get_current_time";
 
     /// <summary>
-    ///     Renames the misspelt clock tool on a row that already exists, and touches nothing else on it. Rebuilt from
-    ///     the STORED record rather than from the seed input: an operator may have edited this persona, and re-seeding
-    ///     their row would be a data loss dressed up as a repair.
+    ///     Renames the misspelt clock tool on a row that already exists, and touches nothing else on it.
     /// </summary>
+    /// <remarks>
+    ///     Rebuilt from the STORED record rather than the seed input: an operator may have edited this persona, and
+    ///     re-seeding their row would be data loss dressed up as a repair.
+    /// </remarks>
     private async Task RepairClockToolNameAsync(IAgentDefinitionStore store, string slug, CancellationToken cancellationToken)
     {
         if (await store.GetBySeedSlugAsync(slug, cancellationToken) is not { } existing
@@ -168,9 +170,8 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             return;
         }
 
-        // Every key but the legacy one, copied as it stands; the legacy one then supplies a value only if the correct
-        // name has none. A row carrying BOTH spellings would otherwise let enumeration order pick the winner, and the
-        // live name's value is the one an operator configured.
+        // Every key but the legacy one is copied as it stands, and the legacy one supplies a value only where the
+        // correct name has none: with both spellings present, enumeration order would otherwise pick the winner.
         var approvals = new Dictionary<string, bool>(StringComparer.Ordinal);
         foreach (var (name, requiresApproval) in existing.ToolApprovals.Where(static pair => !IsLegacyClockToolName(pair.Key)))
         {

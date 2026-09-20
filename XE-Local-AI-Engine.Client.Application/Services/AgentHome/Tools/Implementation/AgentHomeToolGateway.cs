@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Thin adapter between the <c>run_in_agent_home</c> tool handler and <see cref="IAgentHomeService" />. It maps
-///     the validated tool request onto the service's
-///     prepare/run phases, renders the run result into a compact model-facing string, and maps the two policy
-///     rejections raised before any provider call (unknown/invalid selected-folder id, disallowed runtime profile)
-///     onto a clear rejection message. Cancellation is allowed to propagate as cancellation.
+///     Thin adapter between the <c>run_in_agent_home</c> tool handler and <see cref="IAgentHomeService" />.
 /// </summary>
+/// <remarks>
+///     It maps the validated tool request onto the service's prepare/run phases, renders the run result into a
+///     compact model-facing string, and turns the two policy rejections raised before any provider call — unknown or
+///     invalid selected-folder id, disallowed runtime profile — into a clear rejection message. Cancellation is
+///     allowed to propagate as cancellation.
+/// </remarks>
 internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 {
     private readonly IAgentHomeService _service;
@@ -31,11 +33,8 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 
         try
         {
-            // Single lifecycle entry (AgentHome gateway): the service resolves identity once, acquires the run-level single-flight
-            // guard, then runs Prepare + Run under it. The gateway no longer calls Prepare and Run separately.
-            // ConversationId is sourced from the ambient run context (seeded by the chat send at the root tool loop),
-            // NOT from the model-supplied tool args, so it cannot be forged or leak into the tool schema. It lets the
-            // service stage this conversation's uploaded attachments into the sandbox.
+            // One lifecycle entry: the service resolves identity once, takes the run-level single-flight guard, then runs
+            // Prepare + Run under it. ConversationId comes from the ambient run context, never the model args, so it cannot be forged.
             var run = await _service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds ?? [],
@@ -47,8 +46,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
                 cancellationToken);
 
             // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
-            // worker content-root structure. The
-            // workspace summary carries aliases and counts only — never host paths (workspace copy).
+            // worker content-root structure. The workspace summary carries aliases and counts only, never host paths.
             var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
             return string.Create(CultureInfo.InvariantCulture,
                 $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)}. Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildGoalSummary(run.GoalOutcome)}{BuildPatchSummary(run.Patch)}{BuildSandboxNotice(run.SandboxProviderName, run.GoalOutcome)}");
@@ -91,11 +89,13 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     }
 
     /// <summary>
-    ///     What the run actually did, in the model's own result. This is the honesty clause, and it runs in BOTH
-    ///     directions: a run whose goal never executed must SAY so (the previous shape reported a bare
-    ///     "completed (exit code 0)" for a fixed liveness probe, and a live round watched a model reason its way to
-    ///     that truth unaided), and a run that did execute must not be described as if it had not.
+    ///     What the run actually did, in the model's own result.
     /// </summary>
+    /// <remarks>
+    ///     The honesty clause runs in BOTH directions: a run whose goal never executed must SAY so, and a run that
+    ///     did execute must not be described as if it had not. Without it a fixed liveness probe renders as a bare
+    ///     "completed (exit code 0)" and the model is left to reason its way to the truth unaided.
+    /// </remarks>
     private static string BuildGoalSummary(AgentHomeGoalOutcome? goal)
     {
         if (goal is null)
@@ -148,13 +148,15 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     }
 
     /// <summary>
-    ///     The honesty clause for the no-op sandbox backend. <c>fake</c> answers every command it was not scripted for
-    ///     with exit 0 and empty output, so a run it served renders as "completed" with no file changes —
-    ///     indistinguishable from a real run whose goal produced nothing. It is also the backend a Development node
-    ///     resolves when <c>AgentHome:Sandbox:Provider</c> is unset, i.e. the default a first live round hits. Saying so
-    ///     in the model-facing result is what stops the model reporting work it never did — and it must say it whether
-    ///     or not the goal loop ran, because on this backend a loop that "ran" still executed nothing.
+    ///     The honesty clause for the no-op sandbox backend.
     /// </summary>
+    /// <remarks>
+    ///     <c>fake</c> answers every command it was not scripted for with exit 0 and empty output, so a run it served renders as
+    ///     "completed" with no file changes, indistinguishable from a real run whose goal produced nothing. It is also what a
+    ///     Development node resolves when <c>AgentHome:Sandbox:Provider</c> is unset, the default a first live round hits. Saying so
+    ///     in the model-facing result stops the model reporting work it never did, and it must be said whether or not the goal loop
+    ///     ran: on this backend a loop that "ran" still executed nothing.
+    /// </remarks>
     private static string BuildSandboxNotice(string sandboxProviderName, AgentHomeGoalOutcome? goal)
     {
         if (!string.Equals(sandboxProviderName, FakeSandboxRuntimeProvider.Name, StringComparison.Ordinal))

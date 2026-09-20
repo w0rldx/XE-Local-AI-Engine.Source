@@ -6,25 +6,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>
 ///     The node's always-on tool names: the four work-session state tools, plus every approval-bearing BUILT-IN from
-///     the node tool catalog. Lives here rather than in the agent assembly because both inputs do — the work-session
-///     catalog is internal to this layer, and the <c>Source</c> tag that tells a built-in from an MCP or custom tool
-///     exists only on <see cref="LocalToolCatalogEntry" />. The agent layer consumes nothing but the resulting names.
-///     <para>
-///         Deriving "built-in" from the catalog's own <c>Source</c> tag is also what keeps the hop free of
-///         <c>mcp__</c> / <c>custom__</c> prefix heuristics. MCP and custom tools are deliberately absent: they are the
-///         tools that push a real agent past the threshold, and hiding one changes nothing about calling one — its
-///         approval wrap is applied at registry build and is never unwrapped.
-///     </para>
-///     <para>
-///         <b>Which approval flag this reads.</b> <see cref="LocalToolCatalogEntry.RequiresApproval" /> is the STATIC
-///         catalog default, not the effective flag the tighten-only node policy composes at resolution. That is
-///         deliberate: the core set is then a fixed, deterministic set of names for the node, identical across agents
-///         and turns, so tightening an approval policy changes how a tool is CALLED and never which tools the model is
-///         SHOWN. The consequence to accept is that a built-in the node policy has tightened is ranked like any other
-///         non-core tool and can be hidden — which costs nothing, because being hidden never bypasses the approval it
-///         just gained.
-///     </para>
+///     the node tool catalog.
 /// </summary>
+/// <remarks>
+///     It lives here because both inputs do, and deriving "built-in" from the catalog's own <c>Source</c> tag keeps
+///     the hop free of prefix heuristics. MCP and custom tools are deliberately absent: they push a real agent past
+///     the threshold, and hiding one changes nothing about calling it, its approval wrap being applied at registry
+///     build. The flag read is <see cref="LocalToolCatalogEntry.RequiresApproval" />, the STATIC catalog default and
+///     not the composed one, so tightening a policy changes how a tool is CALLED, never which tools are SHOWN.
+/// </remarks>
 internal sealed class ToolRelevanceCoreSet : IToolRelevanceCoreSet
 {
     private const string BuiltinSource = "builtin";

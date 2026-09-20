@@ -12,15 +12,15 @@ public enum WorkSessionChangeKind
 }
 
 /// <summary>
-///     Announces a committed work-session change to whoever is watching the session. Called AFTER the commit that
-///     allocated <c>sequence</c>, so a subscriber that replays from the watermark can never miss the row it names.
-///     <para>
-///         Two callers publish: the supervisor (<see cref="WorkSessionChangeKind.Status" />,
-///         <see cref="WorkSessionChangeKind.Step" />, <see cref="WorkSessionChangeKind.Checkpoint" />) and the four state
-///         tool handlers from inside the invocation loop (<see cref="WorkSessionChangeKind.Task" />,
-///         <see cref="WorkSessionChangeKind.Finding" />, <see cref="WorkSessionChangeKind.Artifact" />).
-///     </para>
+///     Announces a committed work-session change to whoever is watching the session, AFTER the commit that allocated
+///     <c>sequence</c>, so a subscriber replaying from the watermark can never miss the row it names.
 /// </summary>
+/// <remarks>
+///     Two callers publish: the supervisor (<see cref="WorkSessionChangeKind.Status" />,
+///     <see cref="WorkSessionChangeKind.Step" />, <see cref="WorkSessionChangeKind.Checkpoint" />) and the four state
+///     tool handlers from inside the invocation loop (<see cref="WorkSessionChangeKind.Task" />,
+///     <see cref="WorkSessionChangeKind.Finding" />, <see cref="WorkSessionChangeKind.Artifact" />).
+/// </remarks>
 public interface IWorkSessionEventPublisher
 {
     Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default);

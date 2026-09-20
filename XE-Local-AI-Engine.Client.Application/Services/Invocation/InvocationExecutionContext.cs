@@ -3,13 +3,11 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation;
 /// <summary>
 ///     Everything one invocation needs beyond its <see cref="Client.Models.RuntimePackage" />: the assistant message
 ///     it answers, the optional admission policy, and the timings the entry path already measured.
-///     <para>
-///         This used to carry an epoch version and an epoch key as well, and a second <c>Create</c> factory that took
-///         them, because a Central-Platform-assigned invocation arrived as an end-to-end-encrypted envelope. That
-///         transport is gone, every invocation is built through <see cref="CreatePlain" />, and with no key to hold
-///         the type no longer owns anything to zero on dispose.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Every invocation is built through <see cref="CreatePlain" />, and the type holds no key material, so it owns
+///     nothing to zero on dispose.
+/// </remarks>
 public sealed class InvocationExecutionContext
 {
     public required Client.Models.RuntimePackage Package { get; init; }

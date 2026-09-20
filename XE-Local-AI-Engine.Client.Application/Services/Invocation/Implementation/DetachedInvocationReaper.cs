@@ -3,17 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-/// <summary>
-///     Cancels a run whose last event consumer went away and never came back. Without it, a browser that disconnects
-///     while an approval card is on screen leaves the turn parked for
-///     <c>MaxPendingToolCallAge + InvocationTimeout</c> (~15 minutes) PER PARK, holding the llama-server collision-slot
-///     lease the whole time, waiting for an answer that can no longer arrive.
-///     <para>
-///         Expiry does nothing special: it cancels the invocation, and the existing machinery unwinds it —
-///         <c>RunInvocationAsync</c> maps the <see cref="OperationCanceledException" /> to a Cancelled failure, the pump
-///         terminalizes the row, and the <c>finally</c> releases the lease. This is a trigger, not a teardown path.
-///     </para>
-/// </summary>
+/// <summary>Cancels a run whose last event consumer went away and never came back.</summary>
+/// <remarks>
+///     Without it, a browser disconnecting while an approval card is on screen leaves the turn parked for
+///     <c>MaxPendingToolCallAge + InvocationTimeout</c> PER PARK, holding the llama-server collision-slot lease the
+///     whole time for an answer that can no longer arrive. Expiry does nothing special: it cancels the invocation and
+///     the existing machinery unwinds it — the failure mapping records Cancelled, the pump terminalizes the row, and
+///     the <c>finally</c> releases the lease. A trigger, not a teardown path.
+/// </remarks>
 public sealed class DetachedInvocationReaper : BackgroundService
 {
     /// <summary>
@@ -26,10 +23,8 @@ public sealed class DetachedInvocationReaper : BackgroundService
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<DetachedInvocationReaper> _logger;
 
-    // Invocations already cancelled by this reaper. An entry survives in the tracker until the run reports a terminal
-    // state, which is a tick or two later — and forever if the run ignores its cancellation — so without this the same
-    // turn would be re-cancelled and re-logged every 5 s. Keyed on the DETACH INSTANT as well as the id, so a
-    // detach → re-attach → detach cycle is a new key and becomes reapable again; pruned against the live set per tick.
+    // Invocations already cancelled by this reaper. An entry survives in the tracker until the run reports a terminal state — a tick or two later, or never if
+    // the run ignores its cancellation — so without this the same turn is re-cancelled every tick. Keyed on the DETACH INSTANT too, so a re-detach is reapable.
     private readonly HashSet<DetachedInvocation> _reaped = [];
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
@@ -68,16 +63,14 @@ public sealed class DetachedInvocationReaper : BackgroundService
         }
     }
 
-    /// <summary>
-    ///     Reads the grace EVERY tick and never caches it in a field. Capturing a stored node setting in a singleton is
-    ///     precisely what silently required a node restart before an operator edit took effect; the read
-    ///     is an <c>IMemoryCache</c> hit through <c>CachedNodeSettingsStore</c>, so per-tick costs nothing.
-    ///     <para>
-    ///         One tick's work, <c>internal</c> so tests can drive it directly: the repo's fake clocks override only
-    ///         <c>GetUtcNow</c>, so a <see cref="PeriodicTimer" /> built on one still ticks on real time and a
-    ///         cadence-driven test would have to sleep for whole ticks.
-    ///     </para>
-    /// </summary>
+    /// <summary>One tick's work, reading the grace every tick and never caching it in a field.</summary>
+    /// <remarks>
+    ///     Capturing a stored node setting in a singleton is what makes an operator edit silently require a restart,
+    ///     and the read is an <c>IMemoryCache</c> hit through <c>CachedNodeSettingsStore</c>, so a per-tick read costs
+    ///     nothing. <c>internal</c> so tests can drive it directly: the repo's fake clocks override only
+    ///     <c>GetUtcNow</c>, so a <see cref="PeriodicTimer" /> built on one still ticks on real time and a
+    ///     cadence-driven test would have to sleep for whole ticks.
+    /// </remarks>
     internal async Task ReapAsync(CancellationToken cancellationToken)
     {
         var graceSeconds = await _runtimeSettings.GetDetachedGraceSecondsAsync(cancellationToken);

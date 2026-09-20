@@ -24,12 +24,12 @@ internal static class AgentHomeAllowedActions
 
 /// <summary>
 ///     Runs a model-supplied <c>goal</c> as a bounded agent loop inside an already-prepared AgentHome sandbox.
-///     <para>
-///         This is the seam that turns <c>run_in_agent_home</c>'s goal into work. It is deliberately NOT part of
-///         <see cref="IAgentHomeService" />: the lifecycle service owns identity, the lease, the workspace copy and the
-///         patch export and has no model dependency, while this owns the inner agent and the sandbox-scoped tools.
-///     </para>
 /// </summary>
+/// <remarks>
+///     This is the seam that turns <c>run_in_agent_home</c>'s goal into work, and it stays out of
+///     <see cref="IAgentHomeService" />: the lifecycle service owns identity, the lease, the workspace copy and the
+///     patch export and has no model dependency, while this owns the inner agent and the sandbox-scoped tools.
+/// </remarks>
 internal interface IAgentHomeGoalExecutor
 {
     /// <summary>
@@ -117,11 +117,14 @@ internal sealed record AgentHomeGoalOutcome
 
     /// <summary>
     ///     Why <c>run_command</c> was withheld although <c>run_commands</c> was granted, or <see langword="null" />
-    ///     when it was not withheld. Set when this node cannot give the sandbox a real filesystem boundary: a
-    ///     model-chosen command without one reads and writes any path the engine's user can, so the action is refused
-    ///     rather than served weaker — and the model is TOLD, because silently missing a granted tool is the kind of
-    ///     thing a model reports as "I did the work" having done none of it.
+    ///     when it was not withheld.
     /// </summary>
+    /// <remarks>
+    ///     Set when this node cannot give the sandbox a real filesystem boundary: a model-chosen command without one
+    ///     reads and writes any path the engine's user can, so the action is refused rather than served weaker. The
+    ///     model is TOLD, because a silently missing granted tool is what a model reports as "I did the work" having
+    ///     done none of it.
+    /// </remarks>
     public string? CommandsUnavailableReason { get; init; }
 
     /// <summary>Whether the loop ran at all — the one thing the result may never overstate.</summary>

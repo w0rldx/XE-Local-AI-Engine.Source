@@ -7,13 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 /// <summary>
-///     workspace copy <see cref="IAgentHomeWorkspaceService" />. For each trusted selected folder it walks the real host
-///     tree once to plan the copy (applying the sensitive-file exclusions, resolving symlinks/reparse points against
-///     the canonical root, and summing surviving bytes), rejects the preparation if a folder exceeds the byte budget,
-///     then copies the survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox provider. After
-///     at least one folder copies it creates a temporary in-sandbox git baseline that patch export diffs against. The
-///     model-facing result carries aliases and counts only — never host paths.
+///     workspace copy <see cref="IAgentHomeWorkspaceService" />.
 /// </summary>
+/// <remarks>
+///     For each trusted selected folder it walks the real host tree once to plan the copy — applying the sensitive-file exclusions,
+///     resolving symlinks and reparse points against the canonical root, summing surviving bytes — rejects the preparation if a folder
+///     exceeds the byte budget, then copies the survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox
+///     provider. Once at least one folder has copied it creates the temporary in-sandbox git baseline patch export diffs against. The
+///     model-facing result carries aliases and counts only, never host paths.
+/// </remarks>
 internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 {
     private const string BaselineUserEmail = "agent-home@localhost";
@@ -237,9 +239,8 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
     private static void HandleReparseEntry(FileSystemInfo info, string root, string alias)
     {
-        // A reparse point that cannot be resolved, or whose target escapes the trusted root, is an attack signal:
-        // fail closed for the whole prepare. A within-root link is skipped — its real target is
-        // already covered by the direct walk, and skipping avoids cycles and duplicate copies.
+        // A reparse point that cannot be resolved, or whose target escapes the trusted root, is an attack signal: fail
+        // closed for the whole prepare. A within-root link is skipped — the walk covers its target, without cycles.
         if (!HostPathSafety.TryResolveReparseWithinRoot(info, root, out var withinRoot))
         {
             throw new AgentHomeRequestRejectedException($"selected folder '{alias}' contains a link that cannot be resolved safely.");
@@ -253,23 +254,16 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
     private async Task CreateGitBaselineAsync(SandboxHandle handle, CancellationToken cancellationToken)
     {
-        // The baseline must be captured after copy and before any agent edit, so it lives in preparation (workspace copy),
-        // not in the run-time patch export, which runs after the agent has changed files. The hardened git
-        // byte-stabilizing flags (hooks/attributes disabled, autocrlf/filemode off) make the later diff reproducible
-        // even if a copied .gitattributes would otherwise perturb the bytes; the baseline must use the same flags the
-        // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
-        // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; the
-        // configured runtime provider supplies real git state.
+        // The baseline is captured after the copy and before any agent edit, so it belongs to preparation and carries the
+        // same byte-stabilizing flags the later diff is taken under. --allow-empty keeps an all-ignored tree committable.
         var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken);
         var timeout = TimeSpan.FromSeconds(prepareTimeoutSeconds);
 
         // `init` first: there is no repository to harden until it exists.
         await RunBaselineCommandAsync(handle, BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.WorkspaceArguments("init")), cancellationToken);
 
-        // `add -A` CONVERTS worktree content, so a clean filter named by configuration runs here, as the node. The
-        // copy exclusion set keeps a source repository's own .git out of the workspace and `init` just wrote a fresh
-        // config, so nothing model-authored can be there yet — the guard runs anyway, because the sandbox is reused
-        // across runs and "nothing has reached it yet" is an argument about ordering rather than a control.
+        // `add -A` CONVERTS worktree content, so a configured clean filter runs here as the node. The guard runs even
+        // though nothing model-authored can be there yet: the sandbox is reused, and ordering is not a control.
         if (!await AgentHomeGitHardening.TryHardenWorkspaceRepositoryAsync(handle, cancellationToken))
         {
             throw new AgentHomeRequestRejectedException("the workspace git directory is not the one the baseline created.");
@@ -296,9 +290,8 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
         if (!result.Completed || result.ExitCode != 0)
         {
-            // A failed baseline command leaves no reproducible HEAD for the patch export diff to compare against, so
-            // fail the prepare loudly rather than letting a later export silently report zero changes. The message
-            // carries only the command's execution id and exit code — never a host path.
+            // A failed baseline command leaves no reproducible HEAD to diff against, so fail the prepare loudly rather
+            // than let a later export report zero changes. The message carries an execution id and exit code only.
             throw new AgentHomeRequestRejectedException($"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
         }
     }

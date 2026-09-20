@@ -7,23 +7,16 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Idempotent startup task that seeds ONE "Default Assistant" agent definition (slug
-///     <see cref="AgentDefaults.DefaultAgentSeedSlug" />) so a mode-off send resolves through a real, uniformly-selectable
-///     definition that reproduces today's chat exactly. Its instructions ARE the embedded chat prompt
-///     (<see cref="LocalChatAgentOptions.InstructionsResource" />, the same resource the default send path reads), so an
-///     unedited Default Assistant yields the byte-identical config hash; the resolver grants this slug the full
-///     capability-gated tool offer (not the intersected set).
-///     <para>
-///         <b>Idempotent + self-healing.</b> It seeds only when the slug is absent from
-///         <see cref="IAgentDefinitionStore.ListSeededSlugsAsync" />, so re-runs never duplicate it. If an operator
-///         deletes the seeded row, the next startup re-seeds it by slug.
-///     </para>
-///     <para>
-///         <b>Best-effort + deterministic (no model).</b> A node must still start even if seeding fails (e.g. a transient
-///         DB error), so the expected failures are logged and swallowed; the next startup re-attempts once the underlying
-///         issue clears. Resolves <see cref="IAgentDefinitionStore" /> inside a hosted scope.
-///     </para>
+///     Idempotent startup task that seeds ONE "Default Assistant" agent definition, so a mode-off send resolves
+///     through a real, uniformly-selectable definition that reproduces plain chat exactly.
 /// </summary>
+/// <remarks>
+///     Its instructions ARE the embedded chat prompt the default send path reads, so an unedited row yields a
+///     byte-identical config hash, and the resolver grants this slug the full capability-gated offer rather than the
+///     intersected set. Seeding runs only when the slug is absent from
+///     <see cref="IAgentDefinitionStore.ListSeededSlugsAsync" />, so re-runs never duplicate it and a deleted row is
+///     re-seeded next startup. Best-effort and model-free: a node must start even when seeding fails.
+/// </remarks>
 public sealed class DefaultAgentSeeder : IHostedService
 {
     private readonly ILogger<DefaultAgentSeeder> _logger;
@@ -67,9 +60,8 @@ public sealed class DefaultAgentSeeder : IHostedService
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException or DbUpdateException)
         {
-            // Seeding is best-effort: a node must start even if the seed fails. The stream service falls back to the
-            // embedded prompt + full offer + client "Default Assistant" label when the row is absent, and the next
-            // startup re-attempts once the underlying issue clears.
+            // Best-effort: a node must start even if the seed fails. With no row the stream service uses the embedded
+            // prompt, the full offer and the client label, and the next startup re-attempts.
             _logger.LogWarning(ex, "Default Assistant seeding failed at startup; the default agent definition may be missing until the next start.");
         }
     }
@@ -80,10 +72,13 @@ public sealed class DefaultAgentSeeder : IHostedService
     }
 
     /// <summary>
-    ///     The seed input for the Default Assistant: the embedded chat prompt as its instructions (so an unedited row is
-    ///     byte-identical to today's default send), a single-agent kind, no pinned model/reasoning, an empty allowed-tool
-    ///     set (the resolver grants this slug the full offer regardless), and the playbook disabled.
+    ///     The seed input for the Default Assistant: the embedded chat prompt as its instructions, a single-agent
+    ///     kind, no pinned model or reasoning, an empty allowed-tool set and the playbook disabled.
     /// </summary>
+    /// <remarks>
+    ///     The embedded prompt keeps an unedited row byte-identical to the default send, and the empty allowed set
+    ///     costs nothing because the resolver grants this slug the full offer regardless.
+    /// </remarks>
     private async Task<AgentDefinitionInput> BuildSeedInputAsync(CancellationToken cancellationToken)
     {
         return new AgentDefinitionInput

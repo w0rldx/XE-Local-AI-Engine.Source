@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     Typed projection of the <c>run_in_agent_home</c> JSON arguments. The
-///     <see cref="MetadataToolFunction" /> bridge stays JSON-in / JSON-out, so the handler deserializes into this
-///     record and validates it against the tool constraints before any execution — the schema advertised to the
-///     model is advisory; this validation is authoritative.
+///     Typed projection of the <c>run_in_agent_home</c> JSON arguments.
 /// </summary>
+/// <remarks>
+///     The <see cref="MetadataToolFunction" /> bridge stays JSON-in / JSON-out, so the handler deserializes into
+///     this record and validates it against the tool constraints before any execution. The schema advertised to the
+///     model is advisory, this validation is authoritative.
+/// </remarks>
 internal sealed record AgentHomeRunToolRequest
 {
     public string? Goal { get; init; }
@@ -28,22 +30,19 @@ internal static partial class AgentHomeRunToolRequestValidator
     private const int MaxSelectedFolders = 8;
 
     /// <summary>
-    ///     The authoritative selected-folder-id pattern: a lowercase alias or a 36-character GUID. It is a
-    ///     <see langword="const" /> so the <see cref="GeneratedRegexAttribute" /> below and the copy embedded in
-    ///     <see cref="AgentHomeToolDefinition.ParameterSchema" /> have ONE source an equality test can compare against
-    ///     — see <c>AgentHomeToolSchemaContractTests</c>.
-    ///     <para>
-    ///         The alternation MUST stay inside one pair of anchors. It means the same thing to .NET either way, but
-    ///         llama.cpp's GBNF converter treats an anchor that is not the pattern's first/last character as a literal
-    ///         character, so <c>^a$|^b$</c> compiles into a grammar that forces a literal <c>$</c> onto every value the
-    ///         model emits. See the comment on <see cref="AgentHomeToolDefinition.ParameterSchema" />.
-    ///     </para>
+    ///     The authoritative selected-folder-id pattern: a lowercase alias or a 36-character GUID.
     /// </summary>
+    /// <remarks>
+    ///     A <see langword="const" /> so the <see cref="GeneratedRegexAttribute" /> below and the copy embedded in
+    ///     <see cref="AgentHomeToolDefinition.ParameterSchema" /> have ONE source an equality test can compare. The alternation MUST stay
+    ///     inside one pair of anchors: .NET reads either form the same, but llama.cpp's GBNF converter treats an anchor that is not the
+    ///     pattern's first or last character as a literal, so <c>^a$|^b$</c> forces a literal <c>$</c> onto every value the model emits and
+    ///     the validator rejects every call. Pinned by <c>AgentHomeToolSchemaContractTests</c> + <c>LlamaGrammarPatternCompatibilityTests</c>.
+    /// </remarks>
     internal const string SelectedFolderIdPattern = "^([a-z0-9][a-z0-9-]{0,63}|[0-9a-fA-F-]{36})$";
 
-    // `propose_memory` was REMOVED, not renamed: the node collected proposals from the sandbox and then discarded
-    // them, so offering the value advertised a capability that silently no-opped. Persisting a proposal into the
-    // existing adaptive-memory Suggested pipeline is a later slice; until it lands, the schema must not claim it.
+    // No `propose_memory` value: the node collects proposals from the sandbox and then discards them, so offering it
+    // would advertise a capability that silently no-ops until persistence into adaptive-memory Suggested lands.
     private static readonly string[] AllowedActionValues =
     [
         "read_workspace", "write_workspace", "run_commands", "export_patch"
@@ -130,9 +129,8 @@ internal static partial class AgentHomeRunToolRequestValidator
         }
     }
 
-    // ExplicitCapture, not a `(?:` group in the pattern itself: the group exists only to scope the alternation under the
-    // anchors, nothing reads it, and keeping the pattern text free of engine-specific syntax is what lets the schema
-    // copy stay byte-identical for every provider that compiles it (MA0023 is satisfied by the option, not the text).
+    // ExplicitCapture rather than a non-capturing group in the pattern text: the group only scopes the alternation under
+    // the anchors, so the text stays engine-neutral and byte-identical across providers (MA0023 met by the option).
     [GeneratedRegex(SelectedFolderIdPattern, RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 2000)]
     private static partial Regex SelectedFolderIdRegex();
 }

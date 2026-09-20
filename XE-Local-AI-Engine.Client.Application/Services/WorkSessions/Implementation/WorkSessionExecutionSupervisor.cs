@@ -14,63 +14,50 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 /// <summary>
 ///     Runs a work session as a bounded sequence of steps, each one an ordinary chat turn on the session's owned
 ///     conversation.
-///     <para>
-///         A step drives <see cref="INodeChatStreamService.SendMessageAsync" /> and drains the stream, rather than the
-///         invocation runner directly. The runner persists nothing into a conversation: the message rows, the ordered
-///         parts, the pump's terminalization, the resume registry a reloading browser re-attaches through, and the
-///         approval/question lifecycle all live in the send path. Driving the runner instead would mean rebuilding
-///         every one of them.
-///     </para>
-///     <para>
-///         The enumeration is deliberately NOT cancelled to stop a step. Cancelling it only stops the supervisor
-///         watching — the run keeps going, holding the node's one invocation slot, and the loop would never see its
-///         terminal. A pause, a cancel, an unanswered park and a step deadline therefore all stop a step the way the
-///         operator's stop button does: through <see cref="INodeChatStreamCancellationRegistry" />, which cancels the
-///         runner so the pump persists the real terminal and the stream yields it.
-///     </para>
-///     <para>
-///         Store calls here pass <see cref="CancellationToken.None" /> on purpose. Everything the loop writes after a
-///         step is the record of what already happened — a checkpoint, a terminal status — and abandoning those writes
-///         because a stop was requested is precisely how a session would be left mid-flight by the operation meant to
-///         settle it. The loop stops by checking its token between steps instead.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A step drives <see cref="INodeChatStreamService.SendMessageAsync" />, never the invocation runner, and is
+///     stopped only through <see cref="INodeChatStreamCancellationRegistry" />: cancelling the enumeration leaves the
+///     run holding the node's invocation slot with nobody left to read its terminal. Store calls after a step pass
+///     <see cref="CancellationToken.None" /> because they record what already happened; the loop stops by checking its
+///     token between steps. See docs/wiki/04-agent-mode.md ("One step").
+/// </remarks>
 internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupervisor, IHostedService, IAsyncDisposable
 {
     /// <summary>How long a stop waits for the loop to land before answering. A stuck provider must not hang the caller.</summary>
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    ///     The <see cref="WorkSessionEventTypes.StepEnded" /> outcome for a step whose turn simply finished — as opposed
-    ///     to <c>nameof(ProviderCallBudget)</c>, which names the bound that stopped it. Both rows carry the same
+    /// <summary>The <see cref="WorkSessionEventTypes.StepEnded" /> outcome for a step whose turn simply finished.</summary>
+    /// <remarks>
+    ///     <c>nameof(ProviderCallBudget)</c> names the bound that stopped a step instead. Both rows carry the same
     ///     consumption detail; the outcome is what tells a reader whether the step was clipped.
-    /// </summary>
+    /// </remarks>
     private const string StepCompletedOutcome = "Completed";
 
     /// <summary>
     ///     The <see cref="WorkSessionEventTypes.StepEnded" /> outcome for a step that was never sent because the node's
-    ///     tool-capable allow-list no longer admits the session's model. It carries no consumption detail, deliberately:
-    ///     nothing ran, and an empty record would read as a step that cost nothing rather than one that never happened.
+    ///     tool-capable allow-list no longer admits the session's model.
     /// </summary>
+    /// <remarks>
+    ///     It carries no consumption detail, deliberately: nothing ran, and an empty record would read as a step that
+    ///     cost nothing rather than one that never happened.
+    /// </remarks>
     private const string ToolGateOutcome = "ToolGate";
 
     /// <summary>
-    ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as every other
-    ///     JSON payload the session surface carries.
+    ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as the rest of
+    ///     the session surface.
     /// </summary>
     private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    ///     The admission gate. A slot is taken before the run is registered and released in the run's finally, so the
-    ///     cap holds across concurrent starts for DIFFERENT sessions — a count checked after the add lets two
-    ///     admissions each see room and then each back out, admitting fewer sessions than the cap allows.
-    ///     <para>
-    ///         Never disposed, deliberately: <see cref="SemaphoreSlim.Dispose()" /> only matters once
-    ///         <c>AvailableWaitHandle</c> has been touched, which nothing here does, and
-    ///         <see cref="DisposeAsync" /> does not wait for the in-flight runs — so a run landing after the host went
-    ///         down still releases its slot instead of faulting an unobserved task on a disposed gate.
-    ///     </para>
-    /// </summary>
+    /// <summary>The admission gate: a slot is taken before the run is registered and released in the run's finally.</summary>
+    /// <remarks>
+    ///     Taking it first is what makes the cap hold across concurrent starts for DIFFERENT sessions — a count checked
+    ///     after the add lets two admissions each see room and then each back out. Never disposed, deliberately:
+    ///     <see cref="SemaphoreSlim.Dispose()" /> only matters once <c>AvailableWaitHandle</c> has been touched, which
+    ///     nothing here does, and <see cref="DisposeAsync" /> does not wait for the in-flight runs, so a run landing
+    ///     after the host went down still releases its slot instead of faulting on a disposed gate.
+    /// </remarks>
     private readonly SemaphoreSlim _admission;
 
     private readonly INodeChatStreamCancellationRegistry _cancellationRegistry;
@@ -306,10 +293,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var sessionId = state.Session.Id;
         var step = state.Session.StepCount + 1;
 
-        // ONE scope for the turn, and it holds only the scoped stream service the enumeration belongs to. Every store
-        // write goes through its own short-lived scope instead: the tool handlers write the same session row from their
-        // own scopes mid-turn, and a DbContext held across that would raise a stale-row concurrency failure on the
-        // supervisor's next write even though nothing was actually lost.
+        // ONE scope for the turn, holding only the scoped stream service the enumeration belongs to; every store write
+        // takes its own. The tool handlers write this session row mid-turn, so a held DbContext goes stale under them.
         await using var turnScope = _scopeFactory.CreateAsyncScope();
 
         // Guard the conversation before anything is written. A session whose conversation was deleted through another
@@ -321,16 +306,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             return StepOutcome.Settled;
         }
 
-        // The operator's tool-capable allow-list is read LIVE on every offer, so a model that was listed when the
-        // session was created can be gone from the list by the time it takes a step. Nothing downstream would say so:
-        // the step runs, the model receives the offer WITHOUT the four state tools, every update_work_plan call comes
-        // back "Requested function update_work_plan not found", and the session spends its whole step budget writing
-        // nothing. Stop the step here instead, naming the list and the model.
-        //
-        // Only the allow-list is asked (InspectAllowListAsync): the capability probe the create boundary also runs can
-        // be a provider round-trip, and this guard would not read its answer. A session whose agent definition has been
-        // deleted is deliberately NOT judged either — the create path could not have judged it, and which model that
-        // turn resolves is then the send path's decision, not this one's.
+        // Read live per offer, so a model listed at create time can be gone by this step and the step would silently
+        // run tool-less. Allow-list only; a deleted agent is not judged — wiki 04-agent-mode.md ("what a repoint may not do").
         WorkSessionToolGateVerdict? toolGate = null;
         try
         {
@@ -339,11 +316,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
         {
-            // Fail OPEN, and the asymmetry is the point: gate 4 is ENFORCED by the offer, not by this guard. The tools
-            // are withheld with or without it, so all a failed check costs is the legible pause — whereas failing
-            // closed would turn a transient store hiccup into a stopped session on a check that is advisory by
-            // construction. The worst case is one ordinary step that goes out tool-less, which the next step re-checks
-            // and which MaxStepsPerRun still bounds.
+            // Fail OPEN: the offer enforces this gate anyway, so the guard is advisory and a transient store hiccup
+            // must not stop a session. Worst case is one tool-less step, which the next step re-checks.
             _logger.LogWarning(exception,
                 "Could not check the tool-capable allow-list for work session {SessionId} before step {Step}; taking the step anyway.",
                 sessionId,
@@ -355,15 +329,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             var refusal = WorkSessionToolGate.AllowListRefusal(refused);
             _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
 
-            // PAUSED, not Failed, and that is what makes the refusal's own advice actionable: Resume accepts only
-            // Paused/Interrupted and a repoint only Draft/Paused/Interrupted, so a Failed session could not be started
-            // again after the operator did exactly what the message asked. Checkpoint first, then the status — the same
-            // order, and for the same reason, as the step-budget pause.
-            //
-            // The row is StepEnded with an outcome naming the gate, never StepFailed: nothing failed, and a paused
-            // session carrying a failure row reads as a contradiction. Its own phase keeps the operation id distinct
-            // from the Ended row the retried step writes when it really does run, which idempotency would otherwise
-            // swallow.
+            // PAUSED, not Failed: Resume accepts only Paused/Interrupted, so Failed would lock out the operator who did
+            // exactly what the refusal asked. Checkpoint before status, StepEnded with its own phase — wiki 04-agent-mode.md.
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
             {
                 SessionId = sessionId,
@@ -378,21 +345,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             return StepOutcome.Settled;
         }
 
-        // Bound what this step will replay BEFORE the send. Every earlier step's state block, answer and reasoning is
-        // otherwise re-sent verbatim for the life of the session, and the step's own tool loop — a single knowledge-base
-        // read is capped at 50,000 characters — needs that room. Over budget, the older turns fold into the synopsis the
-        // send path splices. Nothing durable is lost: the state block below is rebuilt from the database every step.
-        //
-        // The gate verdict above already resolved which model THIS step will run on, so hand it over: calibration is
-        // per-model, and a session repointed while paused (or an unpinned agent whose node default moved) would
-        // otherwise be measured under the model the LAST step ran on. Null when the agent was deleted or the gate read
-        // failed, which is exactly when the bound's transcript fallback is the best answer available.
+        // Bound the replay BEFORE the send; nothing durable is lost, the state block is rebuilt from the database every
+        // step. The model comes from the gate verdict, because calibration is per-model and a repoint moves it.
         await turnScope.ServiceProvider.GetRequiredService<ConversationStepContextBound>()
                        .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, toolGate?.EffectiveModel, CancellationToken.None);
 
-        // Published BEFORE the send, not after. By the time a step terminalizes, the invocation resume registry has
-        // dropped its entry, so a client told about the step only then re-attaches to an empty stream and never sees the
-        // turn go live.
+        // Published BEFORE the send: by the time a step terminalizes the invocation resume registry has dropped its
+        // entry, so a client told only then re-attaches to an empty stream and never sees the turn go live.
         var started = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand
         {
             SessionId = sessionId,
@@ -418,39 +377,29 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             RequestId: correlation.RequestId,
             UseLocalTools: true,
             AgentDefinitionId: state.Session.AgentDefinitionId,
-            // The caller's pins for this session, or nulls that leave every turn resolving exactly as it does today. A
-            // model here suppresses the bound agent's own pin the same way the chat dropdown's pick does; the effort
-            // needs the flag beside it, because a caller-supplied effort otherwise LOSES to the agent's.
+            // The session's pins, or nulls that leave the turn resolving as usual. A model here suppresses the agent's
+            // own pin as the chat dropdown does; the effort needs the flag beside it, or it LOSES to the agent's.
             Model: run.Runtime?.ModelProfile,
             ReasoningEffort: run.Runtime?.ReasoningEffort,
             ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 },
             // Every step of every session, whatever the caller pinned: this turn is autonomous, so the send path must
             // never let the adaptive-effort dispatcher serve it on a model nobody chose.
             IsWorkSessionTurn: true,
-            // GRAPH-C4-2's runtime half, handed to the turn that has to obey it rather than asked here. The node's
-            // declaration and its template's waiver ride on the runtime override, which is re-supplied on every start
-            // and resume off the run's PINNED graph — so nothing an operator edits mid-run can widen what a running
-            // session is allowed to be offered. The decision itself belongs to the send: it resolves the mutable agent
-            // definition once and judges the offer THAT resolution produced, which is the only projection a check can
-            // be sure the turn will actually use. Asked here instead, it would answer about a definition the send is
-            // free to re-resolve differently a moment later.
+            // GRAPH-C4-2's runtime half: the declaration rides on the override, re-supplied on every start and resume
+            // off the run's PINNED graph, so no mid-run edit widens it. The send decides — only it sees the real offer.
             RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
             // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
             // question could only ever go unanswered — see the flag's own comment for what that costs.
             SuppressAskUser: state.Session.Kind == AgentWorkSessionKind.Workflow);
 
-        // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
-        // the invocation's async context (the send path calls the runner inline, not through a detached Task). The
-        // node-wide budget is larger than read_document's own 50,000-character cap, so without this nothing clips a
-        // knowledge-base read and three of them fill a 65,536-token window on their own. Disposal restores the prior
-        // value; a step still running after the drain keeps the value its context already captured.
+        // Seeded BEFORE the enumeration so it flows into the invocation's async context. The node-wide budget is larger
+        // than read_document's 50,000-character cap, so without this nothing clips a knowledge-base read.
         using var resultBudget = _options.MaxToolResultCharacters > 0
             ? ToolResultBudgetScope.BeginScope(_options.MaxToolResultCharacters)
             : null;
 
-        // Cap the tool-calling loop for this step, seeded the same way and for the same reason. Each iteration re-sends
-        // every prior result and reasoning block, so a step's context grows quadratically in its own calls; clipping
-        // each result is not enough once there are fourteen of them. Hitting the cap ends the step, not the session.
+        // Cap the tool loop, seeded the same way: each iteration re-sends every prior result, so context grows
+        // quadratically in a step's own calls and clipping each result alone is not enough. The cap ends the step only.
         using var callBudget = _options.MaxProviderCallsPerStep > 0
             ? ProviderCallBudget.BeginCallCapScope(_options.MaxProviderCallsPerStep)
             : null;
@@ -462,14 +411,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
         catch (WorkSessionUndeclaredWriteException refusal)
         {
-            // The send resolved the agent definition, saw a write/execute tool the node never declared in the offer it
-            // was about to hand the model, and stopped rather than sending it (GRAPH-C4-2). Nothing ran, so this is the
-            // gate's own row and not a step failure — and the row is what the owning run reads back, because the state
-            // it was decided from is mutable and re-deriving the cause later would answer differently.
-            //
-            // Failed rather than Paused: a paused workflow session is resumed by its owning run, so a pause would loop
-            // until the resume budget ran out and report a budget it did not really exhaust. Failed settles it once,
-            // and the run's next poll blocks the node run with this rule's own class and this sentence.
+            // The send saw an undeclared write/execute tool in the offer and stopped (GRAPH-C4-2); nothing ran, so this
+            // is the gate's own row. Failed, not Paused — the owning run would resume a pause until its budget died.
             return await SettleWriteGateAsync(sessionId, step, refusal.Message);
         }
         finally
@@ -514,15 +457,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     break;
 
                 case ChatStreamEventTypes.AssistantReconcile:
-                    // The stream sink is a bounded channel with FullMode = DropWrite, and it substitutes exactly ONE
-                    // reconcile for whatever it drops (ChatStreamEventSink.TryWrite). A browser repairs that by
-                    // re-subscribing for a snapshot; this supervisor has no snapshot to re-fetch, so a dropped
-                    // ApprovalRequested/QuestionRequested left the park unarmed and the step sat until the node-wide
-                    // pending tool-call age (10 minutes) instead of MaxParkedSeconds (FU3-3).
-                    //
-                    // Already parked: the clock is running and nothing here disarms it, so there is nothing to fix.
-                    // Re-arming would only push the deadline later — and reconciles come from sustained backpressure,
-                    // which produces more of them — so the bound stays the ORIGINAL park deadline, never extended.
+                    // A reconcile stands in for dropped events, which may include the one that arms the park — see
+                    // docs/wiki/04-agent-mode.md ("A dropped park event"). Already parked: the ORIGINAL deadline stands.
                     if (parked)
                     {
                         _logger.LogWarning("Work session {SessionId} step {Step} took a stream reconcile while already parked on '{ToolName}'; the original park deadline stands.",
@@ -532,25 +468,16 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         break;
                     }
 
-                    // Whether the dropped event was the arming one is not a guess: the turn's parked tool calls are
-                    // durable state. ToolApprovalCoordinator.RequestToolApprovalAsync registers the call BEFORE it
-                    // broadcasts the lifecycle event the forwarder turns into ApprovalRequested, so the entry is
-                    // already there when the substitute reconcile arrives. Its InvocationId is the package's, which
-                    // NodeChatStreamService seeds from the same RequestId this step supplied.
-                    //
-                    // No entry means the drop had nothing to do with an approval, and arming would stop a healthy
-                    // turn on ordinary backpressure.
+                    // Not a guess: the coordinator registers the parked call BEFORE broadcasting the event, so the entry
+                    // is already there. No entry means the drop was not an approval, and arming would stop a live turn.
                     if (!_pendingToolCalls.Calls.Values.Any(call => call.InvocationId == request.RequestId.GetValueOrDefault()))
                     {
                         _logger.LogInformation("Work session {SessionId} step {Step} took a stream reconcile with no tool call parked under it, so nothing was armed.", sessionId, step);
                         break;
                     }
 
-                    // The turn IS waiting on a human and the event that said so was lost, so the clock is armed on
-                    // the signal that survived. The tool name is not on the registry entry, hence null —
-                    // ParkedQuestionText already has a no-name branch. parked = true also hands the existing
-                    // AssistantDelta/ToolCallCompleted case the disarm, so a turn that turns out to be moving pays
-                    // nothing.
+                    // The turn IS waiting on a human, so arm the clock off the signal that survived. The registry entry
+                    // carries no tool name, hence null; the delta/completed case disarms it if the turn turns out live.
                     parked = true;
                     guard.ArmPark(TimeSpan.FromSeconds(_options.MaxParkedSeconds), toolName: null);
                     await MoveAsync(sessionId, AgentWorkSessionStatus.WaitingForApproval);
@@ -595,19 +522,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         var terminal = terminalEvent.Type;
 
-        // What the step actually spent, captured once now that the enumeration has landed and the run's own budget has
-        // stopped moving. It rides on whichever terminal row this step writes, because the cap it is measured against
-        // is a guess until there are recorded steps to size it from.
+        // What the step spent, captured once the enumeration has landed and the budget has stopped moving. It rides on
+        // whichever terminal row this step writes: the cap is a guess until there are recorded steps to size it from.
         var consumption = ComposeStepConsumptionDetail(callBudget);
         var endedRecorded = false;
 
-        // A step that spent its provider-call cap is BOUNDED, not broken: the tools it ran are already persisted and
-        // the next step resumes from the state block. Recognised by the budget's own fixed, path-free terminal messages,
-        // which the classifier forwards verbatim onto the failed row. Falling through to the failure branch would end
-        // the session on its own safety limit.
-        // Both messages are matched: StepCallCapReachedMessage is the per-step cap this supervisor itself seeds, and
-        // CeilingExceededMessage is the node-wide invocation ceiling — a session that hits the wider one is still only
-        // bounded, so ending it there would be the same bug one ceiling further out.
+        // A spent call cap is BOUNDED, not broken; falling through would end the session on its own safety limit. Both
+        // fixed messages match — the per-step cap seeded above and the node-wide ceiling bound the step alike.
         if (terminal == ChatStreamEventTypes.AssistantFailed
             && (string.Equals(terminalEvent.Error, ProviderCallBudget.StepCallCapReachedMessage, StringComparison.Ordinal)
                 || string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal)))
@@ -648,9 +569,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 break;
         }
 
-        // An ordinary step records its spend too, not only the one that tripped the cap — a record that only ever reads
-        // "10/10" measures the bound rather than the work, and sizing the cap needs the steps that stayed under it.
-        // Written BEFORE AdvanceStepAsync so the row lands on the step it describes rather than on the next one.
+        // An ordinary step records its spend too: a record that only ever reads "10/10" measures the bound, not the
+        // work. Written BEFORE AdvanceStepAsync so the row lands on the step it describes rather than on the next one.
         if (!endedRecorded)
         {
             await AppendStepEndedAsync(sessionId, step, StepCompletedOutcome, consumption);
@@ -707,25 +627,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
     /// <summary>
     ///     Serializes what one step consumed into the shape described on
-    ///     <see cref="WorkSessionEventDto.DetailJson" />, or <see langword="null" /> when nothing ran under a cap scope
-    ///     (no budget was created, so there is nothing to report — an empty record would read as "this step was free").
-    ///     <para>
-    ///         The counts and the tool names come off the cap scope the step itself seeded, which is the only readable
-    ///         seam: the run's ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
-    ///         <see cref="AsyncLocal{T}" /> write does not flow back out, so <c>ProviderCallBudget.Current</c> is null
-    ///         again by the time the enumeration returns — and the scope itself is disposed a moment later, which is
-    ///         why this row is where the names have to land if anything is ever to read them.
-    ///     </para>
-    ///     <para>
-    ///         Every member is a STEP TOTAL off this scope, and the provider's own reported usage is deliberately not
-    ///         among them. The terminal event does carry <c>InputTokens</c>/<c>OutputTokens</c>, but those are the LAST
-    ///         provider round's numbers (context occupancy, which is why they are not summed), and the turn's summed
-    ///         cost goes to the run envelope instead — either way a different denominator from a step, so mixing them
-    ///         into one record would invite exactly the division nothing here supports. Estimate-versus-truth is
-    ///         measured per round where the two halves actually match, by
-    ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back.
-    ///     </para>
+    ///     <see cref="WorkSessionEventDto.DetailJson" />, or <see langword="null" /> when no cap scope ran.
     /// </summary>
+    /// <remarks>
+    ///     Null rather than an empty record, which would read as "this step was free". Every member is a STEP TOTAL off
+    ///     the scope the step itself seeded — the only readable seam, because the send path's ambient
+    ///     <see cref="ProviderCallBudget" /> is an <see cref="AsyncLocal{T}" /> write that does not flow back out, so
+    ///     <c>ProviderCallBudget.Current</c> is null again once the enumeration returns. How the numbers may be read:
+    ///     docs/wiki/04-agent-mode.md ("The per-step consumption record").
+    /// </remarks>
     private static string? ComposeStepConsumptionDetail(ProviderCallCapScope? capScope)
     {
         if (capScope?.CaptureConsumption() is not { } consumption)
@@ -743,11 +653,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             ConsumptionJsonOptions);
     }
 
-    /// <summary>
-    ///     A cancelled step. The checkpoint is committed FIRST and the status LAST: a crash in that window reconciles to
-    ///     <c>Interrupted</c> off a valid checkpoint, whereas writing the status first would leave a paused session
-    ///     resuming from a stale state block.
-    /// </summary>
+    /// <summary>Settles a cancelled step: the checkpoint is committed FIRST and the status LAST.</summary>
+    /// <remarks>
+    ///     A crash in that window reconciles to <c>Interrupted</c> off a valid checkpoint, whereas writing the status
+    ///     first would leave a paused session resuming from a stale state block.
+    /// </remarks>
     private async Task<StepOutcome> SettleCancelledStepAsync(SessionRun run, StepCancellationGuard guard, Guid sessionId, int step)
     {
         if (run.StopReason == WorkSessionStopReason.Cancel)
@@ -772,9 +682,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             },
                     CancellationToken.None));
 
-            // Recorded as a finding, not only as an event, so the next step's state block re-asks it. The park itself is
-            // in-memory and survives neither this timeout nor a restart; this sentence is what makes the question
-            // durable, and it is written BEFORE the status so a crash in between cannot lose it.
+            // A finding, not only an event, so the next step's state block re-asks it: the park is in-memory and
+            // survives neither the timeout nor a restart. Written BEFORE the status so a crash cannot lose it.
             var findingId = Guid.NewGuid();
             _ = await WithStoreAsync(store => store.AppendFindingAsync(new AppendWorkSessionFindingCommand
             {
@@ -804,10 +713,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 $"A prompt went unanswered for {_options.MaxParkedSeconds} seconds, so the step was stopped. Ask again, or find another way forward.");
 
     /// <summary>
-    ///     Reads back whether <c>complete_work_session</c> fired during the step, and the summary it carried. The tool
-    ///     records an event rather than setting an in-memory flag, so the request survives a crash between the call and
-    ///     the end of the turn — and reading it back from the watermark the step opened with keeps the query bounded.
+    ///     Reads back whether <c>complete_work_session</c> fired during the step, and the summary it carried.
     /// </summary>
+    /// <remarks>
+    ///     The tool records an event rather than setting an in-memory flag, so the request survives a crash between the
+    ///     call and the end of the turn; reading from the watermark the step opened with keeps the query bounded.
+    /// </remarks>
     private async Task<string?> ReadCompletionSummaryAsync(IAgentWorkSessionStore store, Guid sessionId, long stepStartedSequence)
     {
         const string Fallback = "The agent declared the work session complete.";
@@ -883,14 +794,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
     /// <summary>
     ///     Records the write-declaration gate's refusal against the step it stopped, then settles the session on it.
-    ///     <para>
-    ///         The sentence is written as the step row's DETAIL and not only as the session's terminal reason, because
-    ///         the development-workflow run that owns this session has to answer with <c>GRAPH-C4-2</c>'s own failure
-    ///         class and the only honest source for a historical cause is the record written when it happened. A cause
-    ///         re-derived from the agent definition's CURRENT state goes quiet the moment an operator restores or
-    ///         narrows that definition, and the node run then falls through as an ordinary retryable provider failure.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The sentence is the step row's DETAIL, not only the session's terminal reason: the owning workflow run must
+    ///     answer with <c>GRAPH-C4-2</c>'s own failure class, and the record written when it happened is the only honest
+    ///     source for a historical cause. Re-derived from the definition's CURRENT state it goes quiet the moment an
+    ///     operator restores or narrows it, and the node run falls through as a retryable provider failure.
+    /// </remarks>
     private async Task<StepOutcome> SettleWriteGateAsync(Guid sessionId, int step, string refusal)
     {
         _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
@@ -922,10 +832,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     }
 
     /// <summary>
-    ///     Runs one store operation in its own scope, so no <c>DbContext</c> outlives the write it made. The tool
-    ///     handlers mutate the same session row from their own scopes while a step is in flight; a context held across
-    ///     that would carry a stale row version into the supervisor's next write and fail it as a lost update.
+    ///     Runs one store operation in its own scope, so no <c>DbContext</c> outlives the write it made.
     /// </summary>
+    /// <remarks>
+    ///     The tool handlers mutate the same session row from their own scopes while a step is in flight; a context
+    ///     held across that carries a stale row version into the supervisor's next write and fails it as a lost update.
+    /// </remarks>
     private async Task<T> WithStoreAsync<T>(Func<IAgentWorkSessionStore, Task<T>> operation)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -962,10 +874,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         public CancellationTokenSource Cancellation { get; }
 
         /// <summary>
-        ///     What this run was told to run on instead of the bound agent's own pins, or null for the agent's. Held for
-        ///     the life of the run rather than stored on the session: the caller re-supplies it every time it starts or
-        ///     resumes the session, which is what makes a restart cost nothing.
+        ///     What this run was told to run on instead of the bound agent's own pins, or null for the agent's.
         /// </summary>
+        /// <remarks>
+        ///     Held for the life of the run rather than stored on the session: the caller re-supplies it on every start
+        ///     and resume, which is what makes a restart cost nothing.
+        /// </remarks>
         public WorkSessionRuntimeOverride? Runtime { get; }
 
         public Task? Completion { get; set; }

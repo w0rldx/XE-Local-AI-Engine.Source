@@ -6,27 +6,25 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 
 /// <summary>
-///     The single place the "can a session-scoped approval ever be remembered for THIS tool?" rule lives. Two callers
-///     share it and must not drift: <c>ToolApprovalCoordinator.TryResolveSessionApprovalKey</c>, which turns an eligible call
-///     into an <see cref="ApprovalMemoKey" />, and the node tool-catalog response, which exposes the same answer as a
-///     boolean so the chat approval card only offers "Approve for this session" where the node will honor it. Before
-///     the boolean existed the card offered session scope on EVERY approval and silently behaved as "Once" for the
-///     ineligible majority — a UI that promises a durable decision it does not make is worse than one that never
-///     offers it.
-///     <para>
-///         The rule is deliberately expressed at the TOOL-IDENTITY level, which is all a catalog entry knows. The
-///         runner applies two further per-CALL narrowings the catalog cannot see and that only ever REMOVE eligibility:
-///         the named skill must be carried by the package and must not be <c>Origin.Imported</c>, and
-///         <c>read_skill_resource</c> must name its resource. So the boolean is an upper bound — never a promise.
-///     </para>
+///     The single place the "can a session-scoped approval ever be remembered for THIS tool?" rule lives.
 /// </summary>
+/// <remarks>
+///     Two callers share it and must not drift: <c>ToolApprovalCoordinator.TryResolveSessionApprovalKey</c> and the
+///     node tool-catalog response, whose boolean keeps the chat card from offering a durable decision the node would
+///     silently downgrade to "Once". The rule is expressed at TOOL-IDENTITY level, all a catalog entry knows, so it
+///     is an upper bound: the runner narrows it further per call — see docs/wiki/04-agent-mode.md
+///     ("Approval scoping") — and those narrowings only ever REMOVE eligibility.
+/// </remarks>
 public static class SessionApprovalEligibility
 {
     /// <summary>
-    ///     The operator's node-level "skill tools always prompt" switch. It lives on the concrete
-    ///     <c>NodeToolApprovalPolicy</c> rather than on the cross-project <see cref="IToolApprovalPolicy" /> contract
-    ///     (see that type), so both callers reach it through this one pattern match instead of duplicating the cast.
+    ///     The operator's node-level "skill tools always prompt" switch.
     /// </summary>
+    /// <remarks>
+    ///     It lives on the concrete <c>NodeToolApprovalPolicy</c> rather than the cross-project
+    ///     <see cref="IToolApprovalPolicy" /> contract, so both callers reach it through this one pattern match
+    ///     instead of duplicating the cast.
+    /// </remarks>
     public static bool IsSessionScopeDisabled(IToolApprovalPolicy approvalPolicy)
     {
         ArgumentNullException.ThrowIfNull(approvalPolicy);
@@ -39,9 +37,12 @@ public static class SessionApprovalEligibility
         !string.IsNullOrEmpty(toolName) && toolName.StartsWith(CustomToolValidation.ToolNamePrefix, StringComparison.Ordinal);
 
     /// <summary>
-    ///     Whether the name is one of MAF's two session-scopable skill tools. <c>run_skill_script</c> is deliberately
-    ///     absent: a durable approval on script execution is the one decision an operator re-makes every time.
+    ///     Whether the name is one of MAF's two session-scopable skill tools.
     /// </summary>
+    /// <remarks>
+    ///     <c>run_skill_script</c> is deliberately absent: a durable approval on script execution is the one decision
+    ///     an operator re-makes every time.
+    /// </remarks>
     public static bool IsSkillToolName(string? toolName)
     {
         if (string.IsNullOrEmpty(toolName))
@@ -56,10 +57,13 @@ public static class SessionApprovalEligibility
     }
 
     /// <summary>
-    ///     The tool-identity answer the catalog exposes. A custom tool qualifies only in <c>Fixed</c> mode — a
-    ///     <c>Parameterized</c> tool is once-or-deny, because one click must not grant open-ended, model-chosen
-    ///     execution — and no other tool qualifies except the two skill tools.
+    ///     The tool-identity answer the catalog exposes: the two skill tools, plus a custom tool in <c>Fixed</c>
+    ///     mode only.
     /// </summary>
+    /// <remarks>
+    ///     A <c>Parameterized</c> custom tool is once-or-deny, because one click must not grant open-ended,
+    ///     model-chosen execution.
+    /// </remarks>
     /// <param name="toolName">The executable tool name.</param>
     /// <param name="isFixedCustomTool">Only meaningful for a <c>custom__</c> name: whether that tool runs a verbatim, operator-authored invocation.</param>
     public static bool IsToolEligible(string? toolName, bool isFixedCustomTool) =>

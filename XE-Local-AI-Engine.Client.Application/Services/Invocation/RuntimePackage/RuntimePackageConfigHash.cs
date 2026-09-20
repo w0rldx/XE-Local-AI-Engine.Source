@@ -79,17 +79,11 @@ public static class RuntimePackageConfigHash
                 ToolCallTimeoutSeconds = timeouts.ToolCallTimeoutSeconds,
                 StreamIdleTimeoutSeconds = timeouts.StreamIdleTimeoutSeconds
             },
-            // The orchestration spec is folded deterministically (sorted participants/tools/edges) ONLY when present.
-            // It is emitted with WhenWritingNull so a single-agent loopback or the encrypted/server path (which never
-            // sets it) serializes BYTE-IDENTICALLY to the single-agent payload — the cross-repo round-trip digest
-            // depends on this. The per-property condition overrides the type-wide DefaultIgnoreCondition=Never.
+            // Folded deterministically (sorted participants/tools/edges) ONLY when present; the per-property
+            // WhenWritingNull overrides the type-wide Never, so a loopback stays BYTE-IDENTICAL for the digest.
             Orchestration = BuildOrchestrationHashPayload(orchestrationSpec),
-            // The resolved skill set is folded deterministically (sorted by Id, body HASHED not embedded) ONLY when
-            // non-empty. Like Orchestration it is emitted WhenWritingNull, so the no-skills loopback and the
-            // encrypted/server path (which never carries skills) serialize BYTE-IDENTICALLY to the pre-skills payload.
-            // Skills use MAF progressive disclosure (bodies are NOT in the resolved prompt), so a body/rename/picklist
-            // change would not move ResolvedSystemPrompt — folding the set here is what makes those changes invalidate
-            // resume. The body HASH (not the body) keeps the canonical JSON free of plaintext skill bodies.
+            // Sorted by Id, body HASHED not embedded, folded ONLY when non-empty and WhenWritingNull like Orchestration.
+            // Progressive disclosure keeps bodies out of the prompt, so only this fold invalidates resume on an edit.
             Skills = BuildSkillsHashPayload(skills)
         };
 
@@ -146,10 +140,8 @@ public static class RuntimePackageConfigHash
                            Instructions = participant.Instructions,
                            ModelProfile = participant.ModelId,
                            ReasoningEffort = ReasoningEffortNormalizer.Normalize(participant.ReasoningEffort),
-                           // Unlike the top-level MapAllowedTools (which drops Description), a participant tool's
-                           // Description IS folded into the hash: a participant agent's tool description is shown to the
-                           // model and can influence its tool choice within that participant, so a description edit is a
-                           // config-affecting change that must invalidate resume. (For MCP tools this is non-null.)
+                           // Unlike top-level MapAllowedTools, a participant tool's Description IS folded: it is shown
+                           // to the model and steers its tool choice, so an edit must invalidate resume.
                            Tools =
                            [
                                .. participant.Tools

@@ -2,32 +2,33 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
 ///     Per-root-invocation conversation context, flowed implicitly through the agent tool loop as an
-///     <see cref="AsyncLocal{T}" />. The MAF tool surface carries no per-invocation context, and the
-///     <c>run_in_agent_home</c> tool request is deserialized from model-supplied JSON — so the active conversation id
-///     (which decides whether uploaded attachments are staged into the sandbox) cannot be threaded through the tool
-///     args without becoming model-forgeable. Instead the chat send seeds it here when the root tool loop begins, and
-///     the AgentHome gateway reads <see cref="Current" /> to forward it into the internal prepare request. Modelled on
-///     <see cref="XE_Local_AI_Engine.Client.Services.Capacity.SpawnContext" />, which solves the same ambient-context
-///     problem for sub-agent spawn caps.
+///     <see cref="AsyncLocal{T}" />.
 /// </summary>
 /// <remarks>
-///     Default-safe: a null <see cref="Current" /> means no conversation was seeded, so no attachment staging happens.
+///     The MAF tool surface carries no per-invocation context, and the <c>run_in_agent_home</c> request is
+///     deserialized from model-supplied JSON, so threading the active conversation id — which decides whether
+///     uploaded attachments are staged into the sandbox — through the tool args would make it model-forgeable. The
+///     chat send seeds it here when the root tool loop begins and the gateway forwards <see cref="Current" /> into
+///     the internal prepare request. Default-safe: a null <see cref="Current" /> stages no attachments.
 /// </remarks>
+/// <seealso cref="XE_Local_AI_Engine.Client.Services.Capacity.SpawnContext" />
 public static class AgentRunConversationContext
 {
-    // The single ambient slot. AsyncLocal flows the value into every continuation the root tool loop awaits, including
-    // the AgentHome tool gateway the function-invocation pipeline calls, so the gateway reads the active conversation
-    // id without threading a parameter through the MAF tool surface.
+    // The single ambient slot: AsyncLocal flows the value into every continuation the root tool loop awaits, the
+    // AgentHome gateway included, so the gateway reads the conversation id without a parameter on the MAF surface.
     private static readonly AsyncLocal<Guid?> AmbientConversationId = new();
 
     /// <summary>The active conversation id for the current async flow, or <see langword="null" /> when none was seeded.</summary>
     public static Guid? Current => AmbientConversationId.Value;
 
     /// <summary>
-    ///     Seeds the active conversation id for the current async flow and returns a scope whose disposal restores the
-    ///     prior ambient value. Called once when a root agent tool loop begins; the prior value is restored rather than
-    ///     cleared so a nested seed cannot leak into an outer turn.
+    ///     Seeds the active conversation id for the current async flow and returns a scope whose disposal restores
+    ///     the prior ambient value.
     /// </summary>
+    /// <remarks>
+    ///     Called once when a root agent tool loop begins. Disposal restores the prior value rather than clearing it,
+    ///     so a nested seed cannot leak into an outer turn.
+    /// </remarks>
     public static IDisposable BeginScope(Guid conversationId)
     {
         var previous = AmbientConversationId.Value;

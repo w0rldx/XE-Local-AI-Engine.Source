@@ -3,21 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Collections.Concurrent;
 
 /// <summary>
-///     Owns the lifetime of registered tool calls: the per-invocation tool-result budget and the stale sweep that
-///     releases a call nothing will ever answer. Shares the one <see cref="PendingToolCallRegistry" /> with
-///     <see cref="ToolApprovalCoordinator" /> and <see cref="InvocationRunner" />, so a call registered by the
-///     approval path is visible to the approval resolve, the runner's cancel/drain path, and the sweep alike.
-///     <para>
-///         A singleton for the same reason the coordinator is: the sweep runs from a background service, on a
-///         different call stack than the turn whose calls it releases.
-///     </para>
-///     <para>
-///         This used to also own an API-side (platform) tool round-trip, shipping the request over the outbound
-///         worker hub and waiting for the result event that released it. Nothing in this repo ever offers a tool at
-///         that location — every tool offer a node builds is <c>ToolLocation.ClientLocal</c> — and the hub it
-///         answered on is gone, so only the registry lifetime remains.
-///     </para>
+///     Owns the lifetime of registered tool calls: the per-invocation tool-result budget, and the stale sweep that
+///     releases a call nothing will ever answer.
 /// </summary>
+/// <remarks>
+///     Shares the one <see cref="PendingToolCallRegistry" /> with <see cref="ToolApprovalCoordinator" /> and
+///     <see cref="InvocationRunner" />, so a call registered by the approval path is visible to the approval resolve,
+///     the runner's cancel/drain path and the sweep alike. A singleton for the coordinator's reason: the sweep runs
+///     from a background service, on a different call stack than the turn whose calls it releases. Every tool offer a
+///     node builds is <c>ToolLocation.ClientLocal</c>, so only the registry lifetime lives here.
+/// </remarks>
 public sealed class ApiToolCallBridge
 {
     // The SAME dictionary instance the runner and ToolApprovalCoordinator hold (see PendingToolCallRegistry).

@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 using System.Text.Json;
 
 /// <summary>
-///     The event-type tags the runtime appends on top of the ones the store writes for its own mutations
-///     (<c>SessionCreated</c>, <c>SessionStatusChanged</c>, <c>WorkPlanApplied</c>, <c>FindingRecorded</c>,
-///     <c>ArtifactSaved</c>, <c>CheckpointRecorded</c>, <c>StepAdvanced</c>, <c>SessionInterrupted</c>).
+///     The event-type tags the runtime appends on top of the ones the store writes for its own mutations.
 /// </summary>
+/// <remarks>
+///     The store's own are <c>SessionCreated</c>, <c>SessionStatusChanged</c>, <c>WorkPlanApplied</c>,
+///     <c>FindingRecorded</c>, <c>ArtifactSaved</c>, <c>CheckpointRecorded</c>, <c>StepAdvanced</c> and
+///     <c>SessionInterrupted</c>.
+/// </remarks>
 internal static class WorkSessionEventTypes
 {
     /// <summary>One step is about to be sent. Written before the send, so a subscriber can attach to the live turn.</summary>
@@ -20,25 +23,16 @@ internal static class WorkSessionEventTypes
     public const string StepFailed = "StepFailed";
 
     /// <summary>
-    ///     The step's turn ended without a fault, and the row carries what it spent
-    ///     (<c>WorkSessionStepConsumptionDetail</c>: counts plus the names of the tools it called) — which is why it is
-    ///     written for EVERY such step and not only for the clipped ones: a record that exists only when a bound trips
-    ///     measures the bound rather than the work. It is also the only durable place those tool names survive, because
-    ///     the scope they are collected in is disposed when the step ends.
-    ///     <para>
-    ///         The outcome tells them apart. <c>Completed</c> is an ordinary step. Anything else names what stopped it:
-    ///         <c>ProviderCallBudget</c>, the per-step provider-call cap; <c>ToolGate</c>, the allow-list check that
-    ///         refuses a step BEFORE it is sent; or <see cref="WriteGateOutcome" />. The two gate outcomes carry no
-    ///         consumption detail — nothing ran. Neither <c>Completed</c> nor a clipped step is a failure: the session
-    ///         stays runnable and the step resumes from the state block, so neither may ever be written as
-    ///         <see cref="StepFailed" />.
-    ///     </para>
-    ///     <para>
-    ///         A step stopped through the cancellation registry — paused, cancelled, an expired park, a blown deadline
-    ///         — writes no row here, deliberately: the run may still be unwinding when the supervisor sees its
-    ///         terminal, so its counters would be a race rather than a measurement.
-    ///     </para>
+    ///     The step's turn ended without a fault, and the row carries what it spent as a
+    ///     <c>WorkSessionStepConsumptionDetail</c>.
     /// </summary>
+    /// <remarks>
+    ///     The outcome tells the cases apart: <c>Completed</c> is an ordinary step, and anything else names what stopped it —
+    ///     <c>ProviderCallBudget</c>, <c>ToolGate</c> or <see cref="WriteGateOutcome" />, of which the two gate outcomes carry no
+    ///     consumption detail because nothing ran. Neither <c>Completed</c> nor a clipped step is a failure: the session stays
+    ///     runnable and resumes from the state block, so neither may ever be written as <see cref="StepFailed" />. See
+    ///     <c>docs/wiki/04-agent-mode.md</c> §5.7 for what the row records and which steps write none.
+    /// </remarks>
     public const string StepEnded = "StepEnded";
 
     /// <summary>
@@ -52,22 +46,25 @@ internal static class WorkSessionEventTypes
 
     /// <summary>
     ///     The <see cref="StepEnded" /> outcome for a turn the write-declaration guard refused before it was sent
-    ///     (<c>GRAPH-C4-2</c>). Unlike the other outcomes here this one IS terminal — the session settles Failed — and
-    ///     its row is the durable record of WHY, carrying the refusal sentence as its detail.
-    ///     <para>
-    ///         It lives here rather than on the supervisor because the development-workflow lane reads it back: the run
-    ///         that owns the session has to answer with this rule's own failure class, and a cause re-derived from the
-    ///         definition's CURRENT state would answer differently the moment an operator put the definition back.
-    ///     </para>
+    ///     (<c>GRAPH-C4-2</c>).
     /// </summary>
+    /// <remarks>
+    ///     Unlike the other outcomes here this one IS terminal — the session settles Failed — and its row is the durable record of
+    ///     WHY, carrying the refusal sentence as its detail. It lives here rather than on the supervisor because the
+    ///     development-workflow lane reads it back: the run that owns the session answers with this rule's own failure class, and a
+    ///     cause re-derived from the definition's CURRENT state would answer differently the moment an operator put it back.
+    /// </remarks>
     public const string WriteGateOutcome = "WriteGate";
 
     /// <summary>
-    ///     Puts a <see cref="WriteGateOutcome" /> row's refusal sentence into the event's detail, and takes it back out.
-    ///     The pair lives here so the supervisor that writes the row and the development-workflow poll that reads it
-    ///     cannot disagree about the encoding; the detail column is JSON everywhere else on this log, so the sentence
-    ///     travels as a JSON string rather than as raw text.
+    ///     Puts a <see cref="WriteGateOutcome" /> row's refusal sentence into the event's detail, and takes it back
+    ///     out.
     /// </summary>
+    /// <remarks>
+    ///     The pair lives here so the supervisor that writes the row and the development-workflow poll that reads it
+    ///     cannot disagree about the encoding. The detail column is JSON everywhere else on this log, so the sentence
+    ///     travels as a JSON string rather than as raw text.
+    /// </remarks>
     public static string WriteGateDetail(string refusal) =>
         JsonSerializer.Serialize(refusal);
 
@@ -85,10 +82,12 @@ internal static class WorkSessionStepPhases
     public const string ParkExpired = "park-expired";
 
     /// <summary>
-    ///     A step the tool gate stopped before it was sent. Its own phase, not <see cref="Ended" />: that step is
-    ///     retried after the operator fixes the allow-list, and sharing the phase would let idempotency swallow the
-    ///     real row the retried step writes when it actually runs.
+    ///     A step the tool gate stopped before it was sent, on its own phase rather than <see cref="Ended" />.
     /// </summary>
+    /// <remarks>
+    ///     That step is retried after the operator fixes the allow-list, and sharing the phase would let idempotency
+    ///     swallow the real row the retried step writes when it actually runs.
+    /// </remarks>
     public const string ToolGate = "tool-gate";
 
     /// <summary>

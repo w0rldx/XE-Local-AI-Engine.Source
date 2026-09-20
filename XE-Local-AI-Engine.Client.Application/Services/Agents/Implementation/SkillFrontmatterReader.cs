@@ -4,17 +4,11 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 ///     Splits a <c>SKILL.md</c> into its YAML frontmatter and its body.
 /// </summary>
 /// <remarks>
-///     <para>
-///         This is deliberately <em>not</em> a YAML parser. A general YAML implementation on untrusted input is its own
-///         attack surface — anchors and aliases give an attacker cheap amplification, custom tags give type coercion,
-///         and merge keys give aliasing — and none of it is needed here: the specification defines six known keys whose
-///         values are scalars, a flat string sequence, or a flat string map. Anything structurally richer is refused
-///         rather than interpreted, and unknown keys are ignored.
-///     </para>
-///     <para>
-///         Values that would open those doors (<c>&amp;anchor</c>, <c>*alias</c>, <c>!tag</c>) are rejected outright
-///         instead of being treated as text, so no reader downstream can be surprised by a value that "looks parsed".
-///     </para>
+///     Deliberately NOT a YAML parser: a general implementation on untrusted input is its own attack surface —
+///     anchors and aliases give cheap amplification, custom tags type coercion, merge keys aliasing — and none of it
+///     is needed, the specification defining six keys whose values are scalars, a flat sequence or a flat map.
+///     Anything structurally richer is refused rather than interpreted, unknown keys are ignored, and an
+///     <c>&amp;anchor</c>, <c>*alias</c> or <c>!tag</c> is rejected outright rather than treated as text.
 /// </remarks>
 internal static class SkillFrontmatterReader
 {
@@ -202,10 +196,12 @@ internal static class SkillFrontmatterReader
 }
 
 /// <summary>
-///     The six specification frontmatter keys plus the body. <see cref="AllowedTools" /> is normalised here, once,
-///     to the space-delimited string form — the shape MAF consumes and the shape persistence stores — so no caller
-///     downstream has to know the frontmatter could also have written it as a sequence.
+///     The six specification frontmatter keys plus the body.
 /// </summary>
+/// <remarks>
+///     <see cref="AllowedTools" /> is normalised here, once, to the space-delimited string form MAF consumes and
+///     persistence stores, so no caller downstream need know the frontmatter could also have written a sequence.
+/// </remarks>
 internal sealed class SkillFrontmatterDocument
 {
     public required string? Name { get; init; }

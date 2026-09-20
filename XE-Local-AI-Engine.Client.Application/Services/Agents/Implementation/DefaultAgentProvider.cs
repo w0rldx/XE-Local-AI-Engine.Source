@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Process-lifetime memoization of the seeded "Default Assistant" id. Singleton: the slug is fixed for the boot, so
-///     the lookup runs at most once (a concurrent first burst shares the same in-flight task). The scoped
-///     <see cref="IAgentDefinitionStore" /> is resolved through a fresh scope per first lookup. A <c>null</c> first
-///     result is NOT cached, so a send that races the startup seeder re-attempts on the next send and picks the id up
-///     once seeding finishes.
+///     Process-lifetime memoization of the seeded "Default Assistant" id.
 /// </summary>
+/// <remarks>
+///     A singleton, the slug being fixed for the boot, so the lookup runs at most once and a concurrent first burst
+///     shares one in-flight task; the scoped <see cref="IAgentDefinitionStore" /> is resolved through a fresh scope
+///     per first lookup. A <c>null</c> first result is NOT cached, so a send racing the startup seeder re-attempts
+///     and picks the id up once seeding finishes.
+/// </remarks>
 internal sealed class DefaultAgentProvider : IDefaultAgentProvider, IDisposable
 {
     private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);

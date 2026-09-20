@@ -57,18 +57,16 @@ internal sealed class PlaybookActionService : IPlaybookActionService
 
         await ValidateAsync(input, cancellationToken);
 
-        // Ownership guard: the action must already belong to the agent named on the route (input.AgentDefinitionId).
-        // A mismatch (or a missing action) returns null, which the endpoint maps to 404 — this blocks updating or
-        // re-parenting another agent's action through this agent's nested playbook route (IDOR).
+        // Ownership guard: the action must already belong to the route's agent. A mismatch or a missing action
+        // answers null, which the endpoint maps to 404 — this is what blocks the nested-route IDOR.
         var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null || existing.AgentDefinitionId != input.AgentDefinitionId)
         {
             return null;
         }
 
-        // The manual route never touches an analysis-provenance action: the mapper pins Source = Manual on the input,
-        // so letting it update an Analysis action would silently rewrite its provenance to Manual and drop its
-        // evidence. Analysis (Suggested/Archived) actions are edited only via the dedicated analysis-review paths.
+        // The manual route never touches an analysis-provenance action: its mapper pins a Manual source, so updating
+        // one would rewrite the provenance and drop its evidence. Those are edited only through the review paths.
         if (existing.Source != PlaybookActionSource.Manual)
         {
             return null;
@@ -196,11 +194,8 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalIncomplete, Record = null };
         }
 
-        // Fingerprint: the recorded eval must reflect the CURRENT behaviour-affecting context. Recompute the fingerprint
-        // over the agent's base instructions, sibling enabled actions, the enabled golden set, and the eval model, and
-        // require it to match — so a base-instruction / golden-set / sibling-action / model change after the eval ran
-        // (which does not bump the action's own version) blocks the promote. A legacy result with no recorded
-        // fingerprint fails this match and is treated as stale (re-run), which is the safe direction.
+        // The recorded eval must reflect the CURRENT behaviour-affecting context, so recompute over base instructions,
+        // sibling actions, the golden set and the model. A legacy result with no fingerprint reads as stale: safe.
         var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (owningAgent is null)
         {
@@ -209,9 +204,8 @@ internal sealed class PlaybookActionService : IPlaybookActionService
 
         var enabledActions = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
         var enabledGoldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
-        // Resolve the eval model's current weight identity so a same-name weight swap since the eval ran moves the
-        // fingerprint (forcing a re-eval), and an unresolvable identity records the same unverified sentinel the eval
-        // writer used — the two must be computed from the SAME resolver so a verified eval still matches at promote time.
+        // Resolve the model's weight identity so a same-name weight swap moves the fingerprint. The SAME resolver the
+        // eval writer used, including its unverified sentinel, or a verified eval stops matching at promote time.
         var modelIdentity = await _modelIdentityResolver.ResolveAsync(_evalOptions.ModelName, cancellationToken);
         var currentFingerprint = PlaybookEvalFingerprint.Compute(pending.Id,
             pending.Version,
@@ -230,21 +224,15 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRegressed, Record = null };
         }
 
-        // Absolute quality floor (defense in depth). The eval writer already folds this into Passed, but a
-        // legacy/hand-crafted result could carry Passed == true with zero candidate passes (a run where every case
-        // failed proves nothing). Independently require at least one candidate pass so a zero-quality result can never
-        // authorize a promotion even if Passed was recorded true.
+        // Absolute quality floor, defence in depth: the writer folds this into Passed, but a legacy or hand-crafted
+        // result could claim Passed with zero candidate passes, and a run where every case failed proves nothing.
         if (evalResult.CandidatePassCount <= 0)
         {
             return new PlaybookPromotionResult { Status = PlaybookPromotionStatus.EvalRegressed, Record = null };
         }
 
-        // Atomic promote under optimistic-concurrency + cap guards. The validated snapshot's Version is threaded so the
-        // Enabled write lands only if no concurrent edit/promote changed the row since it was read for the eval gate
-        // above — closing the TOCTOU where a concurrent UpdateSuggestedAsync (which bumps Version and clears the eval)
-        // could otherwise be promoted on stale evidence. The hard cap on enabled actions is re-checked inside the same
-        // store transaction, so two concurrent promotes cannot both exceed MaxEnabledActions. Version bumps because
-        // State changes; the EvalResult is carried through for audit.
+        // Atomic promote under optimistic concurrency and the cap: threading the validated Version closes the TOCTOU
+        // where a concurrent edit is promoted on stale evidence, and the cap is re-checked in the same transaction.
         var commit = await _store.PromoteSuggestedIfCurrentAsync(id, pending.Version, _actionOptions.MaxEnabledActions, pending.EvalResult, cancellationToken);
         return commit.Status switch
         {
@@ -267,9 +255,8 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             return null;
         }
 
-        // Record the eval JSON only — the action stays Suggested with every injected field (Behavior, Priority, State)
-        // and its staging provenance (Analysis/Extracted) unchanged, so the store leaves Version alone (EvalResult is
-        // excluded from its config-affecting rule).
+        // The eval JSON only: the action keeps every injected field and its staging provenance, so the store leaves
+        // Version alone — EvalResult is excluded from its config-affecting rule.
         var storeInput = new PlaybookActionInput
         {
             AgentDefinitionId = pending.AgentDefinitionId,
@@ -310,10 +297,8 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             return null;
         }
 
-        // The action stays Suggested and keeps its staging provenance (Analysis/Extracted) + evidence + confidence; only
-        // the operator-editable fields change. Editing clears any recorded EvalResult (the trailing argument is left
-        // null) so a stale pass cannot promote an edited action — the operator must re-run the eval. Promotion remains a
-        // separate, explicit step.
+        // The action keeps its Suggested state, staging provenance, evidence and confidence; only operator-editable
+        // fields change. The cleared EvalResult is what stops a stale pass promoting an edited action.
         var storeInput = new PlaybookActionInput
         {
             AgentDefinitionId = pending.AgentDefinitionId,
@@ -333,10 +318,8 @@ internal sealed class PlaybookActionService : IPlaybookActionService
 
     public async Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
-        // A review action applies only to a pending suggestion owned by the route agent: enforce ownership (IDOR),
-        // the Suggested state, and a staging provenance. Both Analysis (feedback-proposed) and Extracted (adaptive-memory
-        // post-run mined) candidates are staged suggestions that the SAME governance gate (eval + approve) reviews —
-        // anything else (missing, wrong agent, already enabled, manual) returns null → 404.
+        // A review action applies only to a pending suggestion owned by the route agent, so ownership, the Suggested
+        // state and a staging provenance are all enforced; anything else answers null and the endpoint maps it to 404.
         var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null
             || existing.AgentDefinitionId != agentDefinitionId
@@ -350,11 +333,12 @@ internal sealed class PlaybookActionService : IPlaybookActionService
     }
 
     /// <summary>
-    ///     A staged suggestion is any non-manual candidate awaiting the eval gate + approval. Both feedback-driven
-    ///     (<see cref="PlaybookActionSource.Analysis" />) and adaptive-memory extraction
-    ///     (<see cref="PlaybookActionSource.Extracted" />) candidates share the same governance lifecycle; the review
-    ///     paths preserve whichever provenance the candidate carries rather than rewriting it.
+    ///     A staged suggestion is any non-manual candidate awaiting the eval gate and approval.
     /// </summary>
+    /// <remarks>
+    ///     Feedback-driven and adaptive-memory candidates share one governance lifecycle, and the review paths
+    ///     preserve whichever provenance a candidate carries rather than rewriting it.
+    /// </remarks>
     private static bool IsStagedSuggestionSource(PlaybookActionSource source)
     {
         return source is PlaybookActionSource.Analysis or PlaybookActionSource.Extracted;

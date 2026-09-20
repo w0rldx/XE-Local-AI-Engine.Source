@@ -17,9 +17,8 @@ internal sealed partial class NodePatchApplyService
 
     private async Task AppendEventSafelyAsync(string runId, string eventName, string? detail, CancellationToken cancellationToken)
     {
-        // observability guard: Best-effort logging — broadened to catch ANY exception from identity/logger so a failed log can
-        // never surface after a successful host mutation. OperationCanceledException from the caller's token is NOT
-        // caught here; it will propagate only from the caller's own await, not from this helper.
+        // Observability guard: best-effort logging catches ANY exception from identity or logger, so a failed log can never
+        // surface after a successful host mutation. A caller-token cancellation propagates from the caller's own await.
         try
         {
             var logDirectory = Path.Combine(ResolveAgentHomeRoot(), RunsDirectoryName, runId, "logs");

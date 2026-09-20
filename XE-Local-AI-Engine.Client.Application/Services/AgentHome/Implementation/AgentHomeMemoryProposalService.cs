@@ -4,11 +4,14 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 /// <summary>
-///     memory-proposal export <see cref="IAgentHomeMemoryProposalService" />. Reads the agent-written JSONL files from
-///     <c>runs/&lt;run-id&gt;/memory/proposals/</c>, validates each line against the proposal schema, applies the
-///     <see cref="MemoryProposalSecretScanner" /> per record, and returns surviving proposals together with a rejection
-///     log. Never mutates real node/platform memory — caller is responsible for later user/platform review.
+///     memory-proposal export <see cref="IAgentHomeMemoryProposalService" />.
 /// </summary>
+/// <remarks>
+///     Reads the agent-written JSONL files from <c>runs/&lt;run-id&gt;/memory/proposals/</c>, validates each line
+///     against the proposal schema, applies the <see cref="MemoryProposalSecretScanner" /> per record, and returns
+///     the surviving proposals together with a rejection log. It never mutates real node or platform memory: the
+///     caller is responsible for later user/platform review.
+/// </remarks>
 internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalService
 {
     private const int MaxContentLength = 4000;
@@ -216,9 +219,8 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, "evidence path contains a path-traversal segment '..'");
         }
 
-        // Reject absolute/rooted HOST paths (Path.IsPathRooted, leading '/' or '\\', or an 'X:' drive). The only
-        // allowed rooted form is the in-sandbox workspace root; any other absolute path is a worker-host path that must
-        // not land in MemoryProposalRecord.Evidence. Relative paths are allowed.
+        // Reject rooted HOST paths: the in-sandbox workspace root is the only rooted form allowed, because any other
+        // absolute path is a worker-host path that must not land in MemoryProposalRecord.Evidence.
         if (evidence.Any(IsDisallowedEvidencePath))
         {
             return Reject(fileName, lineIndex, "evidence path is an absolute host path; only sandbox-relative or workspace-rooted paths are allowed");
@@ -247,11 +249,13 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
     }
 
     /// <summary>
-    ///     <see langword="true" /> when an evidence path is an absolute/rooted HOST path that must not be persisted
-    ///     A path is disallowed when it is rooted (<see cref="Path.IsPathRooted(string)" />), starts with a
-    ///     directory separator, or carries a Windows drive prefix — UNLESS it is under the in-sandbox workspace root,
-    ///     which is the only legitimate rooted form for evidence. Relative paths are always allowed.
+    ///     <see langword="true" /> when an evidence path is a rooted HOST path that must not be persisted.
     /// </summary>
+    /// <remarks>
+    ///     A path is disallowed when it is rooted (<see cref="Path.IsPathRooted(string)" />), starts with a directory
+    ///     separator, or carries a Windows drive prefix — unless it is under the in-sandbox workspace root, the only
+    ///     legitimate rooted form for evidence. Relative paths are always allowed.
+    /// </remarks>
     private static bool IsDisallowedEvidencePath(string path)
     {
         if (string.IsNullOrEmpty(path))

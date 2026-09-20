@@ -1,16 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Run-scoped logger for AgentHome execution artifacts. Appends structured JSONL records to the host-side
-///     <c>runs/&lt;run-id&gt;/logs/</c> directory (the host-side root, NOT the in-sandbox
-///     <c>/agent-home</c> — see the two-root host/sandbox split). Every record is correlated with the
-///     run-id, NodeId, and OwnerUserId. Raw host paths and secrets are NEVER written; argument summaries
-///     are caller-supplied model-safe objects (run-relative paths only).
+///     Run-scoped logger for AgentHome execution artifacts, appending structured JSONL records to the host-side
+///     <c>runs/&lt;run-id&gt;/logs/</c> directory.
 /// </summary>
 /// <remarks>
-///     Telemetry and list-runs projections are separate AgentHome surfaces. Tool-correlation hooks are wired by the
-///     AgentHome gateway; this service owns only the file-write primitives and the redaction contract so the gateway can
-///     inject it without modifying this type.
+///     That is the host-side root, NOT the in-sandbox <c>/agent-home</c> — the two-root host/sandbox split. Every
+///     record is correlated with the run-id, NodeId and OwnerUserId. Raw host paths and secrets are NEVER written,
+///     and argument summaries are caller-supplied model-safe objects holding run-relative paths only. Telemetry and
+///     list-runs projections are separate surfaces: this service owns the file-write primitives and the redaction
+///     contract, and the AgentHome gateway wires tool-correlation hooks without modifying this type.
 /// </remarks>
 internal interface IAgentHomeRunLogger
 {
@@ -93,10 +92,13 @@ internal sealed record AgentHomeCommandLogRecord
 
     /// <summary>
     ///     Who asked for this command: <see cref="AgentHomeCommandActors.Model" /> for one the goal loop's
-    ///     <c>run_command</c> issued, <see cref="AgentHomeCommandActors.Node" /> for one the engine issued itself (the
-    ///     patch export's git). Both run in the same sandbox over the same workspace, so a log that did not
-    ///     distinguish them would read as if the model had run the node's git.
+    ///     <c>run_command</c> issued, <see cref="AgentHomeCommandActors.Node" /> for one the engine issued itself
+    ///     (the patch export's git).
     /// </summary>
+    /// <remarks>
+    ///     Both run in the same sandbox over the same workspace, so a log that did not distinguish them would read as
+    ///     if the model had run the node's git.
+    /// </remarks>
     public required string Actor { get; init; }
 }
 

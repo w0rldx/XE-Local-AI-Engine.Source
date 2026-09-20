@@ -7,17 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 /// <summary>
 ///     Writes one checkpoint: the structured state as ids, plus the conversation synopsis as prose.
-///     <para>
-///         The prose half is produced by calling the EXISTING compaction service, not by a new summarizer seam. That
-///         call also folds the older turns of the owned conversation into the synopsis the send path already splices on
-///         every later turn, so bounding the raw history and taking the checkpoint are the same act. The structured half
-///         never needs splicing — the state block is rebuilt from the database on every step.
-///     </para>
-///     <para>
-///         Every no-op compaction outcome is non-fatal. A node with no installed local chat model cannot summarize at
-///         all, and a session must still be able to checkpoint its structured state and be resumed from it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The prose half comes from the EXISTING compaction service rather than a new summarizer seam, and that one call
+///     also folds the owned conversation's older turns, so bounding the raw history and taking the checkpoint are the
+///     same act. Every no-op compaction outcome is non-fatal: a node with no installed local chat model cannot
+///     summarize at all, and a session must still checkpoint its structured state and be resumed from it.
+/// </remarks>
 internal sealed class WorkSessionCheckpointComposer
 {
     private const int MaxKeyFindings = 25;
@@ -56,10 +52,8 @@ internal sealed class WorkSessionCheckpointComposer
 
         var summary = await SummarizeAsync(session.ConversationId, previous?.Summary, cancellationToken);
 
-        // The operation id is the checkpoint's own id, i.e. unique per call rather than derived from the step. A step
-        // takes more than one checkpoint — the park-timeout one and the pause one land at the same step count — and a
-        // step-derived key would make the store's idempotency swallow the second, which is the one that records where
-        // the work actually stopped.
+        // Unique per call, never derived from the step: a step takes more than one checkpoint (park-timeout, then
+        // pause) and a step-derived key lets idempotency swallow the second — the one recording where work stopped.
         var checkpointId = Guid.NewGuid();
         return await _store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand
         {
@@ -92,25 +86,15 @@ internal sealed class WorkSessionCheckpointComposer
 
     private async Task<string?> SummarizeAsync(Guid conversationId, string? previousSummary, CancellationToken cancellationToken)
     {
-        // A blank requested model means "the node default", which is right here: a work-session agent pins no model, and
-        // compaction stays on-node regardless of what the session itself runs on.
-        // The keep window is the session one (ConversationStepContextBound.SessionKeepVerbatim), not the configured chat
-        // default of eight: at eight, a session that checkpoints before its fourth step has nothing OUTSIDE the window
-        // to fold, compaction answers NothingToCompact, and the checkpoint's prose half stays null — precisely on the
-        // short sessions whose checkpoint is the only record of what happened. Two is safe for the same reason it is
-        // safe there: everything durable is in the state block, rebuilt from the database on every step. Deliberate
-        // side effect: the fold persists the synopsis and advances the send path's compaction cover, so the step after
-        // a checkpoint resumes on the synopsis plus the last exchange — one on-node summarizer call per checkpoint.
+        // A blank requested model keeps compaction on the node default whatever the session runs on. The keep window is
+        // the SESSION one, not the configured chat eight — wiki 04-agent-mode.md ("Checkpoints, and what a repoint…").
         var result = await _compaction.CompactAsync(conversationId,
                                           requestedModel: null,
                                           ConversationStepContextBound.SessionKeepVerbatim,
                                           cancellationToken);
 
-        // Any non-blank synopsis wins, not only a freshly folded one. The step boundary
-        // (ConversationStepContextBound) folds this conversation with a keep window of 2 whenever it grows past the
-        // budget, so by the time a checkpoint runs there is often nothing left for the configured window to fold — and
-        // the "already covered" no-op returns the SYNOPSIS THAT FOLD PRODUCED. Taking only the Compacted outcome would
-        // pin the checkpoint to a stale summary, or to none at all, on exactly the sessions the bound is protecting.
+        // Any non-blank synopsis wins, not only a freshly folded one: the step boundary often leaves nothing to fold,
+        // and its "already covered" no-op returns the synopsis THAT fold produced. Compacted-only would pin a stale one.
         if (!string.IsNullOrWhiteSpace(result.Summary))
         {
             return result.Summary;

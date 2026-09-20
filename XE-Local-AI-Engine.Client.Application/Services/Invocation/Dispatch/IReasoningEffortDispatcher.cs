@@ -35,12 +35,14 @@ internal static class ReasoningTierLabels
 }
 
 /// <summary>
-///     Everything the reasoning-effort dispatcher is allowed to look at. Immutable constraints are deliberately
-///     ABSENT: approval policy, secret masking, the loopback/Host gates, path guards, the sandbox,
-///     <c>AllowCloudModelAccess</c>, node-local-only analysis/eval/extraction/judge models and tool authorisation are
-///     never routing inputs, and no member here can carry one. Every field has exactly one named source on the
-///     runtime package, so nothing is invented at the call site.
+///     Everything the reasoning-effort dispatcher is allowed to look at.
 /// </summary>
+/// <remarks>
+///     Immutable constraints are deliberately ABSENT and no member here can carry one: approval policy, secret
+///     masking, the loopback/Host gates, path guards, the sandbox, <c>AllowCloudModelAccess</c>, node-local-only
+///     analysis/eval/extraction/judge models and tool authorisation are never routing inputs. Every field has exactly
+///     one named source on the runtime package, so nothing is invented at the call site.
+/// </remarks>
 public sealed class ReasoningDispatchRequest
 {
     /// <summary>The model the turn would run on before dispatch (the runner's resolved model).</summary>
@@ -99,11 +101,13 @@ public sealed class ReasoningDispatchDecision
     public required string Effort { get; init; }
 
     /// <summary>
-    ///     Always null today. No tier caps the turn's output: the FAST cap was dropped because it bought nothing on the
-    ///     reasoning side (the provider's own clamp already yields the full <c>low</c> budget without it) and cost real
-    ///     history, since both context budgeters derive their output RESERVATION from the requested max-output-tokens.
-    ///     The member stays so a future tier can carry one without moving the seam.
+    ///     Always null today: no tier caps the turn's output.
     /// </summary>
+    /// <remarks>
+    ///     A FAST cap buys nothing on the reasoning side — the provider's own clamp already yields the full
+    ///     <c>low</c> budget — and costs real history, because both context budgeters derive their output RESERVATION
+    ///     from the requested max-output-tokens. The member stays so a future tier can carry one without moving the seam.
+    /// </remarks>
     public required int? MaxOutputTokens { get; init; }
 
     /// <summary>Re-resolved for <see cref="Model" /> when it was swapped; the input's value otherwise.</summary>
@@ -126,11 +130,13 @@ public sealed class ReasoningDispatchDecision
 }
 
 /// <summary>
-///     Stable kebab-case reason labels for <see cref="ReasoningDispatchDecision.ReasonCode" />. Safe to log and to
-///     show: each names a RULE, never a signal value. Split into the tier reasons (why this tier) and the swap
-///     reasons (why the model was not replaced); a FAST turn reports a swap reason when a gate refused, and the tier
-///     reason otherwise.
+///     Stable kebab-case reason labels for <see cref="ReasoningDispatchDecision.ReasonCode" />.
 /// </summary>
+/// <remarks>
+///     Safe to log and to show: each names a RULE, never a signal value. Split into the tier reasons (why this tier)
+///     and the swap reasons (why the model was not replaced); a FAST turn reports a swap reason when a gate refused,
+///     and the tier reason otherwise.
+/// </remarks>
 public static class ReasoningDispatchReasons
 {
     /// <summary>An orchestrated turn is always <see cref="ReasoningTier.Normal" /> and is never swapped.</summary>
@@ -202,11 +208,13 @@ public static class ReasoningDispatchReasons
 }
 
 /// <summary>
-///     Resolves the reasoning effort <c>auto</c> into a concrete <c>{model, effort, output budget}</c> for ONE turn.
-///     Deterministic: no model call, no embedding, no randomness, no clock — the same request always produces the
-///     same decision. Invoked by the invocation runner only when the turn's normalized effort is <c>auto</c>, so
-///     every other turn is byte-identical to today and never even resolves this service.
+///     Resolves the reasoning effort <c>auto</c> into a concrete model, effort and output budget for ONE turn.
 /// </summary>
+/// <remarks>
+///     Deterministic: no model call, no embedding, no randomness, no clock, so the same request always produces the
+///     same decision. The runner invokes it only when the turn's normalized effort is <c>auto</c>, so every other
+///     turn never even resolves this service.
+/// </remarks>
 public interface IReasoningEffortDispatcher
 {
     /// <summary>Resolves one turn. Never throws for a routing reason: under any refusal it falls back to the resolved model at a lower effort.</summary>

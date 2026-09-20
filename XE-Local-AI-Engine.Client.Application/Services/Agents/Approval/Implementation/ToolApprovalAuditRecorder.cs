@@ -5,13 +5,14 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="IToolApprovalAuditRecorder" />. Increments the content-free approval-decision counter and
-///     appends a metadata-only audit row through <see cref="IAgentExecutionLogStore" />. Singleton: the approval
-///     runner is a singleton and the log store is scoped (it owns the scoped <c>NodeChatDbContext</c>), so each decision
-///     opens a short-lived scope — approvals are human-paced, so a scope per decision is negligible. The whole write is
-///     wrapped defensively: an audit failure is swallowed with a content-free warning so it can never break or delay the
-///     operator's approval decision.
+///     Default <see cref="IToolApprovalAuditRecorder" />: increments the content-free approval-decision counter and
+///     appends a metadata-only audit row through <see cref="IAgentExecutionLogStore" />.
 /// </summary>
+/// <remarks>
+///     Singleton, because the approval runner is one, while the log store is scoped — so each decision opens its own
+///     short-lived scope, which is negligible at human pace. The whole write is wrapped defensively: an audit failure
+///     is swallowed with a content-free warning so it can never break or delay the operator's decision.
+/// </remarks>
 internal sealed class ToolApprovalAuditRecorder : IToolApprovalAuditRecorder
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -48,9 +49,8 @@ internal sealed class ToolApprovalAuditRecorder : IToolApprovalAuditRecorder
         }
         catch (Exception exception)
         {
-            // Defensive by contract: the audit is best-effort and must NEVER break or delay the approval
-            // round-trip. Swallow every failure with a content-free warning — the invocation id only, no tool name,
-            // arguments, or decision text — so a wedged or failing store can never fault or stall the waiting turn.
+            // Defensive by contract: the audit is best-effort and must NEVER break or delay the approval round-trip,
+            // so every failure is swallowed with a content-free warning carrying the invocation id and nothing else.
             _logger.LogWarning(exception,
                 "Failed to record tool-approval decision audit for invocation {InvocationId}; the approval decision is unaffected.",
                 invocationId);

@@ -12,9 +12,8 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
     private readonly TimeProvider _timeProvider;
     private int _subscribed;
 
-    // The dispatcher arrives LAZY and is deliberately not touched here: WorkerEventDispatcher depends on
-    // IInvocationRunner, which now depends on this tracker, so resolving it in the constructor closes a DI cycle the
-    // container rejects at validate-on-build. InvocationRunner breaks the same cycle the same way.
+    // The dispatcher arrives LAZY and is deliberately not touched here: WorkerEventDispatcher depends on IInvocationRunner, which depends on this tracker, so
+    // resolving it in the constructor closes a DI cycle the container rejects at validate-on-build. InvocationRunner breaks the same cycle the same way.
     public InvocationAttachmentTracker(Lazy<IWorkerEventDispatcher> eventDispatcher, TimeProvider timeProvider)
     {
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
@@ -64,10 +63,8 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
         return detached ?? (IReadOnlyCollection<DetachedInvocation>)[];
     }
 
-    // Subscribes on the FIRST attach rather than at construction. By then the container has finished building, so
-    // resolving the dispatcher is safe; and before the first attach there are no entries, so the terminal events this
-    // would have missed had nothing to remove. Subscribes exactly once for the process lifetime — both are singletons,
-    // so there is no unsubscribe path (mirrors InvocationResumeRegistry's subscription to the same dispatcher).
+    // Subscribes on the FIRST attach rather than at construction: by then the container has finished building, so resolving the dispatcher is safe, and before
+    // that there are no entries for a terminal event to remove. Exactly once for the process lifetime — both are singletons, so there is no unsubscribe path.
     private void EnsureSubscribed()
     {
         if (Interlocked.Exchange(ref _subscribed, value: 1) == 0)
@@ -99,11 +96,12 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
         }
     }
 
-    /// <summary>
-    ///     One invocation's consumer count. <c>_counted</c> is the single authority for whether this entry currently
-    ///     contributes 1 to the <c>chat_stream_detached_invocations</c> gauge: every transition into and out of it is
-    ///     claimed exactly once under this lock, so the gauge cannot drift however the callers interleave.
-    /// </summary>
+    /// <summary>One invocation's consumer count.</summary>
+    /// <remarks>
+    ///     <c>_counted</c> is the single authority for whether this entry contributes 1 to the
+    ///     <c>chat_stream_detached_invocations</c> gauge: every transition into and out of it is claimed exactly once
+    ///     under this lock, so the gauge cannot drift however the callers interleave.
+    /// </remarks>
     private sealed class Entry
     {
         private readonly Lock _syncRoot = new();
@@ -140,11 +138,13 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
         }
 
         /// <summary>
-        ///     Returns <see langword="true" /> when this was the LAST consumer (a one-to-zero transition) and the caller
-        ///     must increment the gauge. A RETIRED entry returns <see langword="false" />: the hub's <c>finally</c>
-        ///     routinely disposes its attachment after the terminal state has already removed the entry, and counting
-        ///     that would strand the gauge permanently above zero on the ordinary completion path.
+        ///     Whether this was the LAST consumer — a one-to-zero transition — and the caller must increment the gauge.
         /// </summary>
+        /// <remarks>
+        ///     A RETIRED entry returns <see langword="false" />: the hub's <c>finally</c> routinely disposes its
+        ///     attachment after the terminal state has already removed the entry, and counting that would strand the
+        ///     gauge permanently above zero on the ordinary completion path.
+        /// </remarks>
         public bool Decrement(DateTimeOffset nowUtc)
         {
             lock (_syncRoot)

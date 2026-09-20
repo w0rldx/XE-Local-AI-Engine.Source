@@ -118,6 +118,16 @@ always-on core plus a relevance-ranked fill, and the model recovers anything hel
 per-agent `DisableToolRelevanceFilter` opts a single agent out even when the node switch is on. It is a context
 budget, never an authorisation boundary: hiding a tool neither widens nor narrows what an agent may call.
 
+`InvocationRunner` reads that switch live per turn rather than caching it in a field, so an operator save applies to
+the next turn without a restart, and opens the `ToolRelevanceScope` **before the agent is built** — an `AsyncLocal`
+written in a callee never reaches its caller, and the send-time relevance hop runs several awaited frames below the
+runner. The read sits **inside** the turn's `try`, because a throw above it would fail the turn with no failure ever
+reported, and binds to the invocation's own cancellation token (what an operator Cancel or the turn watchdog
+cancels), not the caller's. The core set is read **only when the switch is on**: `GetCoreToolNames` reads the MCP
+registry live and, with any server connected, allocates a fresh catalog list plus a set per turn, which on the
+shipped default would build a set nothing reads on the hot path of every chat turn. With the switch off the hop is a
+reference-equality pass-through and `list_tools` is never appended.
+
 The same policy is applied to the seeded Default Assistant, bound agents, orchestration participants,
 and regeneration. Approval decisions are recorded through `IToolApprovalAuditRecorder` as
 content-free operational metadata; arguments and tool results do not enter that audit record.
@@ -252,6 +262,35 @@ selected agent's offer is never widened beyond its allowed set. `spawn_subagent`
 non-tool-capable model gets an **empty** offer before per-name gating. See [Chat](05-chat.md) for how
 the selected agent surfaces as per-message attribution.
 
+#### The resolved runtime projection
+
+`ResolvedAgentRuntime` is what the resolver hands back, and its member order is load-bearing. The **first five**
+fields map one-to-one onto a `LocalChatRuntimePackageRequest` input, so the existing builder and config-hash plumbing
+are reused verbatim. **Everything after them is trailing, defaulted and deliberately outside the config hash** — the
+builder reads only the leading five — so adding one changes neither an existing hash nor positional construction:
+
+- `AgentDefinitionId` / `AgentName` — the provenance and display-name snapshot the stream service stamps as
+  per-response attribution without a second fetch.
+- `Skills` — the enabled, assigned skill set for MAF progressive disclosure. It is **not** folded into
+  `ResolvedSystemPrompt`, because bodies load on demand, so the runtime-package builder folds it into the config hash
+  separately and threads it to the invocation factory.
+- `PlaybookEnabled` / `MemoryExtractionEnabled` — the gates the post-run memory-extraction seam reads without
+  re-fetching the definition. Extraction fires only when **both** are true, while retrieval and injection stay gated
+  on `PlaybookEnabled` alone, so a retrieval-only agent still injects existing memory but mines no new candidates.
+- `Kind` — the definition's execution shape. The resolver has already loaded and decrypted the definition, so
+  exposing it lets the chat-turn resolver decide whether to compile an orchestration without a second uncached read
+  and AES-GCM decrypt on every send; the common non-orchestrator path skips the reload entirely.
+- `DisableToolRelevanceFilter` — the per-agent opt-out from the send-time relevance filter, which narrows only the
+  array handed to the provider, never the offer or the prompt.
+
+`DisableToolRelevanceFilter` is also the one member kept **off the wire** (`[JsonIgnore]`). This record is serialized
+verbatim into the frozen v1 benchmark runtime snapshot, whose stored bytes are re-hashed to validate
+`configurationHash`, so a new member emitting `false` would change the bytes of every already-frozen run and stop each
+one replaying with "configuration hash is invalid" (`BenchmarkRuntimeSnapshotV1CompatibilityTests` guards this).
+Omitting it is the honest shape as well: `BenchmarkRunExecutor.BuildPrimaryPackage` never threads the flag into the
+replayed `RuntimePackage`, so a frozen run always generates under the node-level filter setting whatever the agent
+asked for. Nothing else serializes the record — the agent-definition endpoint DTOs carry their own copy of the flag.
+
 ### 2.2 The AgentHome write-back loop
 
 `AgentHomeService.RunLifecycleAsync` (`Services/AgentHome/Implementation/AgentHomeService.cs`)
@@ -335,7 +374,9 @@ executes programs named by configuration (`diff.<name>.textconv`, `diff.external
 content conversion, `core.fsmonitor` on an index refresh). Measured on git 2.53.0 against the exact export
 argument vector: a repository-local `textconv` and a repository-local `clean` filter both executed, and so did a
 driver defined in the **global** config (the sandbox forwards `HOME`). `AgentHomeGit`'s `-c` pins cannot close
-that class — driver names are arbitrary and git has no flag that disables attribute processing.
+that class — driver names are arbitrary and git has no flag that disables attribute processing. Neither do
+`--no-textconv` and `--no-ext-diff`: the clean filter still ran under both, so they are belt and braces here, not the
+control.
 `AgentHomeGitHardening` closes it structurally instead, on the principle that a driver has to be **defined in
 configuration** to run, so an in-tree `.gitattributes` naming an undefined one is a no-op:
 
@@ -347,6 +388,22 @@ configuration** to run, so an in-tree `.gitattributes` naming an undefined one i
   outright — **fails the export closed** rather than exporting a patch the node cannot vouch for;
 - and every export git invocation is written to the run's `commands.jsonl` with `actor: node`, beside the model's
   own `actor: model` entries, so an audit sees the whole sequence rather than half of it.
+
+**The `-c` pins and the byte-stability pair.** `AgentHomeGit.Arguments` prefixes every AgentHome git invocation with
+the hardened `-c` set, because a command-line `-c` outranks every config file, `include.path` chains included. The
+exec-bearing key that is actually live there is `core.fsmonitor`: a value planted in a repository-local `.git/config`
+runs as a shell command on the first index refresh — `status`, `reset`, `add` and `diff` all trigger it — and that is
+reachable from the **host**, not only the sandbox, because `DevelopmentPatchEvidenceService` runs `reset` and `add -A`
+with its working directory set to the workspace and the workspace `.git/config` is writable from inside the container.
+`core.sshCommand`, `core.pager` and `core.editor` are not reachable from today's command set (no network operation, and
+stdout is always redirected so no pager spawns) and are pinned anyway, so adding a fetch or a paging command later
+cannot quietly re-open the hole. `core.autocrlf=false` and `core.filemode=false` are *not* in that shared set:
+`AgentHomeGit.WorkspaceArguments` adds them on the command line for the baseline and the export only. On the command
+line because the pre-invocation config rewrite would drop a stored value before the diff; not in the shared set because
+Development Mode, Dev Workflows, knowledge-repository import and host patch apply run `Arguments` against the
+*operator's own* checkouts, where forcing `core.autocrlf` would change how a patch renders or applies on a repository
+that legitimately stores CRLF — Development Mode derives that policy from the repository's own index
+(`DevelopmentWorkspaceWhitespacePolicy`) precisely so that it is not forced.
 
 Two residuals are stated rather than claimed away. The rewrite happens immediately before the invocation, so a
 process a `run_command` deliberately double-forked could in principle rewrite the file again in between — the
@@ -378,6 +435,28 @@ and the goal loop then reads the boundary it actually **got** off `SandboxHandle
 
 `ProcessSandboxFilesystemReachTests` measures both sides, and `AgentHomeGoalExecutorTests` pins the exact inner
 tool list with and without the boundary. See [Security & privacy §7](12-security-and-privacy.md).
+
+**One sandbox posture, asked for once.** The isolation request is made for *every* run, not only when `run_commands`
+was granted, for three reasons. It cannot sink a run, because the request is gated on the capability the provider
+advertises and that advertisement is mechanical — the same probe the launch path reads. The sandbox is owner-node
+scoped and **reused across runs** through `CreateOrAttach`, so a per-run request would be a lie on the attach path:
+the second run would silently inherit the first run's boundary while believing it had asked for its own. And a
+read/write-only run is no worse off for having the boundary, while the chat attachment re-stage creates the same
+sandbox, so one posture keeps the two entry points from disagreeing. **Egress** is requested the same way and
+default-denied wherever the provider can enforce it: everything AgentHome and Coder run inside the sandbox is local
+(`dotnet --version`, the baseline git commands under `/dev/null` hooks, Coder's `find`/`grep`), so denial costs no
+supported capability and removes the child's reach to the node's own loopback API, the LAN and the cloud-metadata
+endpoint. Capability-gated rather than unconditional for the same reason — asking for confinement a host cannot
+provide would stop AgentHome running rather than harden it — with the degradation visible in the sandbox containment
+log rather than silent. A node that wants the refusal instead sets `AgentHome:Sandbox:RequireEgressDenial`, which
+`SandboxEgressPolicy` turns into a fail-closed refusal naming that key.
+
+**What `Prepare` does before the loop starts.** `AgentHomeService` builds the attach key, recovers the worker-local
+layout, attaches or creates the sandbox, resolves and copies the selected folders, and creates the git baseline;
+`Run` then hands the `goal` to the executor and feeds the gated patch export and run-scoped logging. The
+service-level tests exercise orchestration, busy/cancel/owner hardening and the gated patch export against the
+deterministic provider, while the executor's own tests drive the real inner tools with a scripted chat client — the
+configured runtime provider is what supplies real command execution and git behaviour.
 
 **Still not done end to end.** Host patch apply has no operator surface (above), so an exported patch is
 something the operator can read on disk and nothing the product can land for them.
@@ -429,6 +508,53 @@ upper-exclusive range.
 rate table. Reasoning tokens are priced as output tokens; local and unpriced models report zero.
 These values are estimates, not provider invoices. The response states the execution-log retention
 horizon, and neither the ledger nor the summary contains message content.
+
+**The terminal telemetry rides all three terminal paths.** `InvocationRunner` reports the turn's tool-schema token
+estimate, the model-readiness duration and the turn's **summed** usage onto the invocation state immediately before
+it reports the turn completed, cancelled or failed, so the terminalize write persists them with the envelope row.
+Failure and cancellation carry them too, because the numbers are most interesting on a turn that ran out of context;
+the readiness duration is `null` on any turn with no local warm (Ollama, a remote provider), which is what that
+column means; and the summed usage is the turn's **cost**, as opposed to the last round's counts that
+`ReportInvocationCompletedAsync` puts on the message row. The report runs *before* each terminal report and swallows
+its own faults, so a throw can neither turn a finished turn into a failed one nor replace a real failure
+classification. `CaptureEfficiencySnapshot` is a pure counter read, so calling it on every path is free. Counts
+only: no tool name, prompt or tool result reaches this seam.
+
+### 2.5 The composite turn budget
+
+`TurnPolicy` (`Services/Invocation/Policy/TurnPolicy.cs`) is the immutable per-turn snapshot of every
+timeout, retry and budget knob that governs one invocation. `InvocationRunner.RunAsync` resolves it **once**
+and flows it unchanged through both the single-agent and the orchestration path, so the two enforce identical
+policy for one turn. It is a resolution and documentation seam only: every field is copied from an existing
+configured source — the package's `TimeoutSettings` and the `Agent:ConversationContextBudget`,
+`Agent:ProviderResilience` and `Agent:ToolPipeline` sections — and nothing on the record is itself persisted
+or folded into a runtime package's config hash.
+
+The three timeouts are a ladder; a stalled or slow turn trips them in this order, tightest first:
+
+| Bound | Source | Enforced by | What it bounds |
+|---|---|---|---|
+| `StreamIdleTimeout` | package `TimeoutSettings.StreamIdleTimeoutSeconds` | `StreamIdleWatchdog` | No chunk arrives between two yielded items of ONE streamed segment |
+| `ToolResultTimeout` | package `TimeoutSettings.ToolCallTimeoutSeconds`, else the node-global pending-tool-call age | `ApiToolCallBridge` | The wait for a tool call's RESULT |
+| `InvocationTimeout` | package `TimeoutSettings.InvocationTimeoutSeconds` | `InvocationLifecycleTracker` | The whole turn's wall clock, every segment and approval round-trip end to end |
+
+Two splits in that ladder are deliberate and stated rather than quietly unified. The orchestration path
+enforces an analogous **per-quiescence** idle bound in `OrchestrationRunSession`, but that timer comes from
+the node-global `OrchestrationAgentOptions.IdleTimeoutSeconds`, not from the package field above. And the
+human-**approval** wait always uses the node-global pending-tool-call age, never the shorter per-tool
+`ToolResultTimeout` — a person is not a tool call.
+
+Context budgeting (`ContextCapacityTokens` / `ReservedOutputTokens`) is orthogonal to all three: it bounds
+what history is *sent* to the provider, not how long the provider is given to answer.
+`RetryEnabled` / `MaxRetries` / `CircuitBreakerEnabled` govern only the pre-first-token send of the **first**
+segment (`ProviderStreamResilience`). `MaxToolIterationsPerRequest` and
+`MaxConsecutiveInvalidToolCallsPerTool` are the node-global tool-pipeline ceilings that the DI-wired
+`FunctionInvokingChatClient` and `ToolArgumentRepairAIFunction` apply; they ride the record as read-only
+reference values, so one place documents the whole turn's bounds.
+
+`WithEffectiveContext` folds the window a local model actually launched with back into the policy.
+`RequestedContextTokens` is what makes that safe: a user-requested `num_ctx` is a ceiling to keep, while the
+untrusted configured default must be **replaced** by the real launched window.
 
 ---
 
@@ -797,6 +923,9 @@ deadline all stop a step the way the operator's stop button does: through
 
 Every store write runs in its own scope. The tool handlers write the same session row from inside the
 turn, and a `DbContext` held across that carries a stale row version into the supervisor's next write.
+Those post-step writes also pass `CancellationToken.None`: a checkpoint and a terminal status are the
+record of what already happened, and dropping them because a stop was requested is exactly how a session
+ends up left mid-flight by the operation meant to settle it. The loop stops between steps instead.
 
 ### 5.2 The node has one invocation slot
 
@@ -812,6 +941,26 @@ an `OpenQuestion` finding so the next step re-asks it. The park itself is in-mem
 the timeout nor a restart; the finding is what makes the question durable. The checkpoint commits
 **before** the `Paused` status: a crash in that window reconciles to `Interrupted` off a valid
 checkpoint, where status-first would resume from a stale state block.
+
+#### A dropped park event
+
+The stream sink is a bounded channel with `FullMode = DropWrite` whose `ChatStreamEventSink.TryWrite`
+substitutes exactly **one** `AssistantReconcile` for whatever it drops. A browser repairs that by
+re-subscribing for a snapshot; the supervisor has no snapshot to re-fetch, so a dropped
+`ApprovalRequested`/`QuestionRequested` used to leave the park unarmed and the step sat until the
+node-wide pending tool-call age (10 minutes) rather than `MaxParkedSeconds`.
+
+Whether the lost event was the arming one is not a guess. `ToolApprovalCoordinator.RequestToolApprovalAsync`
+registers the call in `PendingToolCallRegistry` **before** it broadcasts the lifecycle event the forwarder turns into
+`ApprovalRequested`, so the entry is already there when the substitute reconcile arrives, and its
+`InvocationId` is the one `NodeChatStreamService` seeded from the step's `RequestId`. An entry means the
+turn really is waiting on a human and the park is armed off the reconcile — with no tool name, which
+`ParkedQuestionText` already has a branch for. No entry means the drop had nothing to do with an
+approval, and arming would stop a healthy turn on ordinary backpressure.
+
+A step that is **already** parked is left alone: re-arming would only push the deadline later, and
+reconciles come from sustained backpressure that produces more of them, so the bound stays the original
+park deadline and is never extended.
 
 ### 5.3 The state block
 
@@ -841,6 +990,15 @@ replay using the same `ITokenEstimator` the context budgeters use, and over
 `IConversationCompactionService` with a keep window of **2** — one step verbatim, the rest folded into
 the synopsis `CompactionContextResolver` already splices. That is safe precisely because the state block
 is rebuilt from the database; folding costs the model nothing it still needs.
+
+Its projection mirrors `ConversationContextBuilder.Build` exactly — the same selected-path collapse, anchor space
+and completed/non-empty filter — and **counts reasoning even where the provider will drop it**. Verified against
+Microsoft.Extensions.AI.OpenAI 10.9.0: the Chat Completions client converts text, URI, data and
+hosted-file content only, so a historical `TextReasoningContent` never reaches a llama.cpp session;
+only the Responses API client (Codex) replays it, and must. Over-counting a Chat-Completions provider
+makes the bound fire slightly early, while under-counting a Responses-API one would make it fire too
+late — which is the failure it exists to prevent, so the conservative direction wins and no
+suppression seam belongs in the projection.
 
 Compaction cannot touch the other half — the results the step's own tool loop produces *within* the
 turn. **Three bounds, not one**, because each catches what the others cannot:
@@ -878,9 +1036,8 @@ one the call cap clipped, `ToolGate` for one the allow-list check stopped before
 one of the three whose row carries no consumption detail — nothing ran). A record that existed only when
 a bound tripped would measure the bound rather than the work.
 
-The checkpoint's own compaction is not that bound. It lands every `CheckpointEveryNSteps` steps and keeps
-the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` (8) — four whole steps for a
-session — so it folds nothing until a session is long, and it runs *after* a step, never before one.
+The checkpoint's own compaction is not that bound. It lands only every `CheckpointEveryNSteps` steps and
+runs *after* a step, never before one, so nothing about it bounds the turn that is about to go out.
 Without the step-boundary bound a 27B model at a 65,536-token window overflowed at step 5
 (2026-08-24, live research session): the transcript had eaten the headroom the step's knowledge-base
 reads needed, and because both context budgeters are estimate-gated at `chars/4` — some 12 % optimistic
@@ -920,6 +1077,24 @@ ids — decisions and open questions first) plus the prose synopsis from the **e
 produces the summary, so no new summarizer seam exists. Every compaction no-op is non-fatal and the
 summary is `string?` end to end: a node with no local chat model produces none, and a placeholder would
 be a lie a resumed session reads as fact.
+
+It folds with the **session** keep window (`ConversationStepContextBound.SessionKeepVerbatim`, 2),
+not the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` default of eight. At
+eight, a session checkpointing before its fourth step has nothing outside the window to fold,
+compaction answers `NothingToCompact`, and the prose half stays null — on
+exactly the short sessions whose checkpoint is the only record of what happened. Two is safe for the same
+reason it is safe at the step boundary: everything durable is in the state block. The deliberate side
+effect is that the fold persists the synopsis and advances the send path's compaction cover, so the step
+after a checkpoint resumes on the synopsis plus the last exchange, for one on-node summarizer call.
+
+The synopsis it keeps is **any** non-blank one, not only a freshly folded one. The step boundary folds the
+same conversation whenever it grows past the budget, so a checkpoint often finds nothing left to fold, and
+that "already covered" no-op returns the synopsis *that* fold produced. Taking only the `Compacted`
+outcome would pin the checkpoint to a stale summary, or to none, on exactly the sessions the bound is
+protecting. Its event operation id is the checkpoint's own, never derived from the step: a step can take
+more than one — the park-timeout checkpoint and the pause checkpoint land at the same step count — and a
+step-derived key lets the store's idempotency swallow the second, which is the one recording where the
+work actually stopped.
 
 `IWorkSessionService.UpdateAsync` refuses to repoint a session that already holds findings at a
 cloud-effective agent unless `KnowledgeBase:AllowCloudModelAccess` is set. The knowledge-base cloud gate
@@ -968,9 +1143,58 @@ is refused until an operator adds that id under **Node Settings → Tools**, and
 | `WorkSessions:MaxToolResultCharacters` | `8000` | Tightens the node's tool-result budget for a step (§5.3). Tighten-only; 0 leaves the node value |
 | `WorkSessions:MaxProviderCallsPerStep` | `10` | Tool-loop iterations per step (§5.3). Hitting it ends the step cleanly; 0 leaves the node value |
 
+**Where the three context numbers come from.** `StepContextBudgetTokens` is deliberately a flat budget rather than a
+fraction of the model's context window: what consumes a research step is its own tool loop — a single `read_document`
+is capped at 50,000 characters, some 16k tokens — so the transcript's job is to stay out of the way and the state
+block, rebuilt from the database on every step, is what carries the session's state forward. The default leaves the
+large majority of a 64k window to the step itself. `MaxToolResultCharacters` tightens a node ceiling that is already
+larger than `read_document`'s own cap, so nothing clips a single knowledge-base read today; *several* of them in one
+research step is what overran a 64k window. The default of 8,000 (~2–2.5k tokens per result, at the ~3.4–3.6
+chars/token this corpus actually runs) clips a full-size read to about a sixth of itself and still leaves a step room
+for several. `MaxProviderCallsPerStep` exists because the function-invocation loop re-sends every prior tool result
+and every reasoning block on each iteration, so a step's context grows **quadratically** in its own tool calls — 14
+calls in one step overran a 65,536-token window with each individual result already clipped. Neither the step-boundary
+fold nor the per-result cap can reach that; only a cap on the iterations can. Its default of 10 was a guess meant to be
+replaced by a measurement, not by another guess: size it from the distribution of the `StepEnded` / `StepFailed`
+consumption rows (§5.7) for the session kind in question.
+
 `IWorkSessionSandboxRuntimeProvider` exists as a role marker with **no consumer in v1**: nothing a
 session tool does needs a jail yet, and the role is there so the first one that does gets a per-feature
 provider choice rather than a new registration to keep correct.
+
+### 5.7 The per-step consumption record
+
+Every `StepEnded` / `StepFailed` row carries `WorkSessionStepConsumptionDetail` — counts plus a bounded set of tool
+**names**, never a prompt, model output, tool argument or tool result — so the per-step provider-call cap can be sized
+from what steps actually consume. It is written for *every* such step and not only the clipped ones: a record that
+exists only when a bound trips measures the bound rather than the work.
+
+The names are on the row because it is the only **durable** carrier they have. The scope they are collected in is
+disposed at the end of the step that seeded it, and anything asking later — a Dev Workflow node run settling on a later
+dispatcher tick, in another scope and possibly another process — can read only what was persisted. A name is an
+identity, not content: a fixed id for a built-in tool, an operator-authored identifier for an MCP or custom one.
+
+Three things decide how the numbers may be read.
+
+- **Step totals, not turn totals.** Every member is read off the step's own cap scope, which is why the provider's own
+  reported token usage is not among them: that is a *turn* number — the last round's counts on the message, the rounds'
+  sum on the run envelope — and a step is not the same denominator as a turn. Estimate-versus-truth is measured per
+  round instead, where both halves describe the same request, by `ProviderCallBudgetChatClient`'s observed-usage
+  write-back into the calibration store.
+- **`ProviderCalls` is a ratio against `ProviderCallCap` only while `AttachedBudgets` is 1.** The cap bounds each
+  invocation separately, and a step that spawned sub-agents ran more than one — eighteen calls across two budgets is
+  two runs that each stayed under ten, not one run that breached it. Read the two together, or the record argues for
+  raising a cap nothing hit.
+- **The row is per step *number*, not per attempt.** The supervisor derives its event operation id from the session and
+  the step, so a step replayed after a crash finds the first attempt's row already recorded and the store's idempotency
+  returns it unchanged. The numbers are what the *first* attempt spent; the replay's own spend is added nowhere.
+  Aggregate these rows as a lower bound on what a session cost, never as an exact total.
+
+A step stopped through the cancellation registry — paused, cancelled, an expired park, a blown deadline — writes no row
+at all, deliberately: the run may still be unwinding when the supervisor sees its terminal, so its counters would be a
+race rather than a measurement. `ToolSchemaTokens` counts schema tokens **shipped across rounds**, so it grows with the
+round count and is not the size of the offer. `ToolNames` is trailing and optional: `null` means the row predates the
+member, never that the step called no tools — `ToolCallsCompleted` answers that.
 
 ---
 

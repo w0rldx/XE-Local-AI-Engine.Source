@@ -10,13 +10,13 @@ internal sealed record SaveArtifactRequest(string? Name, string? MediaType, stri
 
 /// <summary>
 ///     <c>save_artifact</c>: the session's durable outputs.
-///     <para>
-///         Write order is load-bearing and is this handler's only guarantee: <b>blob first, row second</b>. A crash
-///         between the two leaks one blob bounded by <c>MaxArtifactBytes</c>; the other order would leave a row pointing
-///         at bytes that never existed, which nothing can recover from. Replacing an artifact of the same name is the
-///         store's business — it hands back the superseded id and this handler sweeps those bytes after the commit.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Write order is load-bearing and is this handler's only guarantee: BLOB FIRST, ROW SECOND. A crash between the two leaks one
+///     blob bounded by <c>MaxArtifactBytes</c>, where the other order would leave a row pointing at bytes that never existed and
+///     nothing can recover from that. Replacing an artifact of the same name is the store's business: it hands back the superseded
+///     id and this handler sweeps those bytes after the commit.
+/// </remarks>
 internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtifactRequest>
 {
     private readonly IWorkSessionArtifactBlobStore _blobStore;

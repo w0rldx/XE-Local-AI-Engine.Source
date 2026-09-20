@@ -4,9 +4,12 @@ using System.Text.Json;
 
 /// <summary>
 ///     Loads the curated starter-pack templates from the embedded <c>agent-templates.seed.json</c> resource once and
-///     serves them from an in-memory cache. The resource is committed in-repo (transformed once at build time from the
-///     vendored agency-agents source), so the catalog never reaches the network — the whole point of vendoring.
+///     serves them from an in-memory cache.
 /// </summary>
+/// <remarks>
+///     The resource is committed in-repo, transformed once at build time from the vendored source, so the catalog
+///     never reaches the network — the whole point of vendoring.
+/// </remarks>
 internal sealed class AgentTemplateCatalog : IAgentTemplateCatalog
 {
     private const string ResourceNameSuffix = "agent-templates.seed.json";

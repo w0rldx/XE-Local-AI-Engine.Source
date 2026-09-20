@@ -13,20 +13,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     phase 2 persists the report's materialised payload.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Validation authority for the skill name and description is <see cref="AgentSkillFrontmatter" /> — the same
-///         code MAF runs when the resolved skill is built — so nothing can be imported that would later throw at
-///         agent-construction time. On top of that, this class owns the charset guards the specification does not
-///         define but a model-facing string needs: a bundled file's <c>name</c> is shown to the operator, handed to the
-///         model, and written to logs, so a newline in it would inject instructions above the reviewed body, and a
-///         homoglyph or a bidi override would make the preview render differently from what is stored — which is
-///         exactly the audit the operator's approval depends on. ASCII-only there is deliberate.
-///     </para>
-///     <para>
-///         <c>allowed-tools</c> is stored and displayed and grants and restricts nothing. The specification is explicit
-///         that it is pre-approval, not restriction: wiring it to the tool policy would be security theatre, telling
-///         the operator a skill is confined when every tool remains callable.
-///     </para>
+///     Name and description are validated by <see cref="AgentSkillFrontmatter" />, the code MAF itself runs, so
+///     nothing imports that would throw at agent-construction time. This class adds the charset guards the
+///     specification omits: a bundled file's <c>name</c> reaches the operator, the model and the logs alike, so
+///     ASCII-only is deliberate. <c>allowed-tools</c> grants and restricts NOTHING — the specification calls it
+///     pre-approval, and wiring it to the policy would claim a skill is confined while every tool stays callable.
 /// </remarks>
 internal sealed partial class SkillImportService : ISkillImportService
 {
@@ -81,9 +72,8 @@ internal sealed partial class SkillImportService : ISkillImportService
 
     public Task<SkillImportPreview> PreviewMarkdownAsync(string skillMarkdown, CancellationToken cancellationToken = default)
     {
-        // A pasted document has no containing directory, so the frontmatter name is all there is to go on, and there
-        // are no bundled files or scripts to weigh. Provenance is still the upload kind — the operator's own paste is
-        // no more trusted than the archive it was copied out of.
+        // A pasted document has no containing directory, so its frontmatter name is all there is, and it carries no
+        // bundled files. Provenance stays the upload kind: a paste is no more trusted than what it was copied from.
         var folder = new SkillArchiveFolder { DirectoryName = string.Empty, RootPath = string.Empty, SkillMarkdown = skillMarkdown ?? string.Empty, Files = [], RefusedScripts = [] };
         return BuildPreviewAsync([folder], UploadSourceUri, cancellationToken);
     }
@@ -356,10 +346,12 @@ internal sealed partial class SkillImportService : ISkillImportService
 
     /// <summary>
     ///     A bundled file's name is model-facing, approval-facing and a log field at once, so it is held to a strict
-    ///     ASCII path charset with an explicit <c>..</c> rejection (which the pattern's segment class would otherwise
-    ///     admit). Rejecting non-ASCII is the point, not an oversight: a homoglyph or a U+202E override renders one way
-    ///     in the preview and stores another, which defeats the operator's audit.
+    ///     ASCII path charset with an explicit <c>..</c> rejection the pattern's segment class would otherwise admit.
     /// </summary>
+    /// <remarks>
+    ///     Rejecting non-ASCII is the point, not an oversight: a homoglyph or a U+202E override renders one way in the
+    ///     preview and stores another, which defeats the operator's audit.
+    /// </remarks>
     private static bool IsSafeResourceName(string name)
     {
         return name.Length is > 0 and <= MaxResourceNameLength
@@ -413,10 +405,13 @@ internal sealed partial class SkillImportService : ISkillImportService
 
     /// <summary>
     ///     Buffers the upload, refusing it the moment more than <see cref="SkillImportOptions.MaxArchiveBytes" /> has
-    ///     arrived. The loop condition is <c>&lt;=</c> so an archive of exactly the cap is admitted and only the first
-    ///     byte past it is refused. Counting what was READ rather than trusting a declared length keeps a lying
-    ///     Content-Length from buffering more than the guard allows.
+    ///     arrived.
     /// </summary>
+    /// <remarks>
+    ///     The loop condition is <c>&lt;=</c>, so an archive of exactly the cap is admitted and only the first byte
+    ///     past it is refused. Counting what was READ, never a declared length, keeps a lying Content-Length from
+    ///     buffering more than the guard allows.
+    /// </remarks>
     private async Task<ReadOnlyMemory<byte>> ReadCappedAsync(Stream archive, CancellationToken cancellationToken)
     {
         using var buffer = new MemoryStream();

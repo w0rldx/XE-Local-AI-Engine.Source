@@ -39,11 +39,14 @@ internal sealed partial class NodePatchApplyService
     }
 
     /// <summary>
-    ///     Parses a single per-file patch block. Security contract: the written paths are derived from the BODY lines
-    ///     (<c>--- a/…</c>, <c>+++ b/…</c>, <c>rename from/to</c>, <c>copy from/to</c>) — the paths git actually acts
-    ///     on — NOT the <c>diff --git</c> header. The header is used only as a cross-check (b-path must match <c>+++ b/</c>).
-    ///     This makes all alias / traversal / cross-alias guards authoritative independent of git.
+    ///     Parses a single per-file patch block.
     /// </summary>
+    /// <remarks>
+    ///     Security contract: the written paths come from the BODY lines (<c>--- a/…</c>, <c>+++ b/…</c>,
+    ///     <c>rename from/to</c>, <c>copy from/to</c>) that git acts on, never the <c>diff --git</c> header, which
+    ///     serves only as a cross-check that its b-path matches <c>+++ b/</c>. That is what makes the alias,
+    ///     traversal and cross-alias guards authoritative independently of git.
+    /// </remarks>
     private static ParsedBlock ParseBlock(string block)
     {
         var lines = block.Split('\n');
@@ -51,10 +54,8 @@ internal sealed partial class NodePatchApplyService
         var isBinary = block.Contains("GIT binary patch", StringComparison.Ordinal)
                        || lines.Any(line => line.StartsWith("Binary files ", StringComparison.Ordinal));
 
-        // Extract the authoritative paths from the body lines.
-        // Every path git can act on comes from one of these line prefixes. /dev/null is skipped (new/deleted).
-        // The prefix strings are kept as constants so S125 ("commented-out code") is not triggered by raw
-        // unified-diff sigils appearing inline.
+        // Every path git can act on comes from one of these body-line prefixes, with /dev/null skipped for new and
+        // deleted files. They stay constants so raw unified-diff sigils inline do not read as commented-out code.
         const string prefixSource = "---";
         const string prefixDest = "+++";
         var bodyPaths = new List<BodyPath>();
@@ -90,9 +91,8 @@ internal sealed partial class NodePatchApplyService
 
         if (bodyPaths.Count == 0)
         {
-            // A mode-only block (e.g. old mode 100644 / new mode 100755) has no unified-diff body lines. Git acts
-            // on the path derived from the header, so we must validate that header path through the same guards as
-            // body paths (ContainsTraversal + SplitAlias) rather than leaving git as the only backstop.
+            // A mode-only block has no unified-diff body lines, and git acts on the header path, so that path goes through
+            // the same traversal and alias guards as a body path rather than leaving git as the only backstop.
             var headerPath = TryParseHeaderAPath(lines[0]);
             if (headerPath is null)
             {
@@ -151,10 +151,8 @@ internal sealed partial class NodePatchApplyService
 
         var blockAlias = aliases[0];
 
-        // Cross-check the header b-path alias against the authoritative body alias.
-        // The header can mis-split on paths whose name contains a space followed by a single letter and slash
-        // (e.g. "dir b/file"), so it is not used as the authoritative source. When a body plus-plus path is
-        // present the header alias should agree; a mismatch is a crafted-patch signal and is rejected.
+        // Cross-check the header b-path alias against the authoritative body alias: the header can mis-split on a name
+        // holding a space, a letter and a slash, so a mismatch with a present body path is a crafted-patch signal.
         var destBodyPath = allAliasResults.FirstOrDefault(result => result.Prefix == prefixDest);
         if (destBodyPath is not null)
         {
@@ -229,10 +227,12 @@ internal sealed partial class NodePatchApplyService
 
     /// <summary>
     ///     Parses the <c>a/…</c> path from a <c>diff --git a/… b/…</c> header into an <see cref="AliasPath" /> using
-    ///     <see cref="SplitAlias" />. Used for mode-only blocks that carry no <c>---</c>/<c>+++</c> body lines; the
-    ///     result is fed through the same traversal and within-root guards as all other target paths.
-    ///     Returns <see langword="null" /> when the header cannot be parsed.
+    ///     <see cref="SplitAlias" />, or <see langword="null" /> when the header cannot be parsed.
     /// </summary>
+    /// <remarks>
+    ///     Used for mode-only blocks that carry no <c>---</c>/<c>+++</c> body lines. The result is fed through the
+    ///     same traversal and within-root guards as every other target path.
+    /// </remarks>
     private static AliasPath? TryParseHeaderAPath(string header)
     {
         if (!header.StartsWith(DiffHeaderPrefix, StringComparison.Ordinal))
@@ -246,14 +246,12 @@ internal sealed partial class NodePatchApplyService
             return null;
         }
 
-        // Strip the "a/" prefix and find the end of the a-side: the header is "a/<apath> b/<bpath>" and the a-path
-        // ends at the first " b/" that is followed by the same path (for symmetric headers). For the traversal guard
-        // we only need the a-side; SplitAlias handles alias extraction from the a-prefix-stripped path.
+        // Strip the "a/" prefix: the header pairs an a-path with a b-path, and only the a-side feeds the traversal
+        // guard, with SplitAlias extracting the alias from the stripped path.
         var aRest = afterPrefix[2..];
 
-        // Locate the " b/" separator by scanning from the end — in symmetric headers the b-path mirrors the a-path
-        // so the separator is at position (len(aRest) - len(bpath) - 3). As a safe fallback: take everything up to
-        // the first occurrence of " b/" which is the canonical separator for well-formed headers.
+        // The canonical separator for a well-formed header is the first " b/", and a symmetric header mirrors the a-path
+        // after it, so everything up to that point is the a-side.
         var sepIndex = aRest.IndexOf(" b/", StringComparison.Ordinal);
         var aPath = sepIndex > 0 ? aRest[..sepIndex] : aRest;
 

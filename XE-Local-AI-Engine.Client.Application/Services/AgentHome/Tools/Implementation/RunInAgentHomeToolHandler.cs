@@ -4,11 +4,14 @@ using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     <see cref="IClientLocalToolHandler" /> for <c>run_in_agent_home</c> (ClientLocal). The bridge is JSON-in /
-///     JSON-out, so this handler deserializes the model arguments, validates them against the AgentHome tool
-///     constraints, honors cancellation, and delegates to <see cref="IAgentHomeToolGateway" />. The tool stays off the
-///     wire (server seed <c>IsActive=false</c> + <c>AgentHome:Enabled=false</c>) until the AgentHome gateway is enabled.
+///     <see cref="IClientLocalToolHandler" /> for <c>run_in_agent_home</c> (ClientLocal).
 /// </summary>
+/// <remarks>
+///     The bridge is JSON-in / JSON-out, so this handler deserializes the model arguments, validates them against
+///     the AgentHome tool constraints, honors cancellation, and delegates to <see cref="IAgentHomeToolGateway" />.
+///     The tool stays off the wire (server seed <c>IsActive=false</c> plus <c>AgentHome:Enabled=false</c>) until the
+///     AgentHome gateway is enabled.
+/// </remarks>
 internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

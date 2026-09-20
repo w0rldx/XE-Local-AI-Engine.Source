@@ -4,17 +4,16 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Compiles a <c>Kind=Orchestrator</c> agent definition + its <c>OrchestrationTopologyJson</c> into the loopback
-///     orchestration spec carried on the runtime package (orchestration). A sibling of <see cref="IAgentDefinitionResolver" />
-///     so the single-agent resolver stays untouched (regression-safe). Returns an <see cref="OrchestrationResolution" />
-///     whose <see cref="OrchestrationResolution.Orchestration" /> is <c>null</c> — signalling the caller to
-///     degrade to the single-agent path (the orchestrator runs as a lone agent on its own prompt + tools) — when:
-///     the definition is not an orchestrator; the topology is empty/invalid; the effective model is not tool-capable;
-///     the triage participant is missing/deleted; or fewer than two capable participants survive. Every degrade EXCEPT
-///     "not an orchestrator" carries a typed <see cref="OrchestrationDegradationReason" /> so the caller can surface a
-///     turn notice instead of degrading silently (the operator otherwise only sees a server log). The encrypted/server
-///     path never calls this; orchestration is loopback-only.
+///     Compiles an orchestrator definition and its <c>OrchestrationTopologyJson</c> into the loopback orchestration
+///     spec carried on the runtime package.
 /// </summary>
+/// <remarks>
+///     A sibling of <see cref="IAgentDefinitionResolver" />, so the single-agent resolver stays untouched. A null
+///     <see cref="OrchestrationResolution.Orchestration" /> tells the caller to run the orchestrator as a lone agent:
+///     the definition is not an orchestrator, the topology is empty or invalid, the effective model cannot call
+///     tools, the triage participant is gone, or fewer than two capable participants survive. Every degrade but the
+///     first carries a typed reason, so nothing degrades silently. Orchestration is loopback-only.
+/// </remarks>
 public interface IOrchestrationResolver
 {
     /// <summary>
@@ -23,21 +22,12 @@ public interface IOrchestrationResolver
     /// </summary>
     /// <param name="orchestrator">The conversation's bound definition (must be <c>Kind=Orchestrator</c> to resolve).</param>
     /// <param name="activeModelId">The model the turn runs on when the orchestrator pins none; gates capability.</param>
-    /// <param name="retrievalQuery">
-    ///     The incoming user-turn text used to relevance-gate each participant's playbook injection (relevance retrieval),
-    ///     applied with the SAME threshold/top-k/re-order decision as the single-agent path. Blank (or at/below the
-    ///     threshold) keeps the full static prepend per participant, so each participant's composed prompt stays
-    ///     byte-identical to the pre-retrieval path.
-    /// </param>
-    /// <param name="supportsTools">
-    ///     Whether the active model advertises the Ollama <c>tools</c> capability. When <c>false</c> every participant's
-    ///     tool offer is withheld (the model cannot drive tool calls), independent of the existing per-tool
-    ///     <c>ToolCapableModels</c> name allow-list. Defaults to <c>true</c> so callers that do not gate keep today's behaviour.
-    /// </param>
+    /// <param name="retrievalQuery">Relevance-gates each participant's playbook injection, as on the single-agent path.</param>
+    /// <param name="supportsTools">Whether the model advertises <c>tools</c>; false withholds every participant's offer.</param>
     /// <remarks>
-    ///     Provider locality for the knowledge-tool gate is resolved PER PARTICIPANT from each participant's own
-    ///     effective (post-pin) model, not from the turn's active model, so a cloud-pinned participant is withheld the
-    ///     knowledge tools even when the active model is local. There is therefore no turn-level cloud flag here.
+    ///     Provider locality for the knowledge-tool gate is resolved PER PARTICIPANT from each one's own effective,
+    ///     post-pin model rather than the turn's active model, so a cloud-pinned participant is withheld the knowledge
+    ///     tools even on a local active model. There is therefore no turn-level cloud flag here.
     /// </remarks>
     Task<OrchestrationResolution> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
         CancellationToken cancellationToken = default);
@@ -66,11 +56,14 @@ public enum OrchestrationDegradationReason
 }
 
 /// <summary>
-///     The outcome of one orchestration resolve: the compiled <see cref="ResolvedOrchestration" />, or <c>null</c> plus
-///     the typed <see cref="Reason" /> the turn degraded to single-agent. <see cref="ReasonText" /> is a sanitized,
-///     user-facing phrase (never a path, id, exception, or prompt) and <see cref="DegradationNotice" /> composes the one
-///     sentence BOTH the send and the regenerate path emit, so the two cannot drift.
+///     The outcome of one orchestration resolve: the compiled <see cref="ResolvedOrchestration" />, or <c>null</c>
+///     plus the typed <see cref="Reason" /> the turn degraded to single-agent on.
 /// </summary>
+/// <remarks>
+///     <see cref="ReasonText" /> is a sanitized, user-facing phrase, never a path, id, exception or prompt, and
+///     <see cref="DegradationNotice" /> composes the one sentence BOTH the send and the regenerate path emit, so the
+///     two cannot drift.
+/// </remarks>
 public sealed class OrchestrationResolution
 {
     public required ResolvedOrchestration? Orchestration { get; init; }
@@ -105,12 +98,14 @@ public sealed class OrchestrationResolution
 }
 
 /// <summary>
-///     The resolved orchestration: the compiled <see cref="OrchestrationSpec" /> (carried on the runtime package and
-///     folded into the config hash) plus the orchestrator's own resolved single-agent inputs, so the caller still
-///     populates the package's system prompt / model / version / reasoning from the orchestrator definition (the spec
-///     rides ALONGSIDE the existing single-agent fields, never replaces them — a runner that ignores the spec still
-///     runs a valid single-agent turn).
+///     The resolved orchestration: the compiled <see cref="OrchestrationSpec" />, folded into the config hash, plus
+///     the orchestrator's own resolved single-agent inputs.
 /// </summary>
+/// <remarks>
+///     The caller still populates the package's system prompt, model, version and reasoning from the orchestrator
+///     definition: the spec rides ALONGSIDE the single-agent fields and never replaces them, so a runner that ignores
+///     it still runs a valid single-agent turn.
+/// </remarks>
 public sealed class ResolvedOrchestration
 {
     public required OrchestrationSpec Spec { get; init; }
@@ -124,12 +119,14 @@ public sealed class ResolvedOrchestration
     public required int AgentDefinitionVersion { get; init; }
 
     /// <summary>
-    ///     True when ANY resolved participant's effective model is cloud-hosted. The orchestration seed is a SINGLE shared
-    ///     list broadcast to every participant (MAF has no per-participant seed), and per-participant TOOL stripping cannot
-    ///     redact content already embedded in that seed. So the caller must gate node-local private data (conversation
-    ///     attachments) on this aggregate — not only the orchestrator's own model locality — or an attachment inlined into
-    ///     the shared seed would reach a cloud participant. <see cref="FirstCloudParticipantModel" /> names one such model.
+    ///     True when ANY resolved participant's effective model is cloud-hosted.
     /// </summary>
+    /// <remarks>
+    ///     The orchestration seed is a SINGLE shared list broadcast to every participant, and per-participant tool
+    ///     stripping cannot redact content already embedded in it. The caller must therefore gate node-local private
+    ///     data on this aggregate, not on the orchestrator's own locality, or an inlined attachment reaches a cloud
+    ///     participant. <see cref="FirstCloudParticipantModel" /> names one such model.
+    /// </remarks>
     public required bool AnyParticipantIsCloud { get; init; }
 
     /// <summary>

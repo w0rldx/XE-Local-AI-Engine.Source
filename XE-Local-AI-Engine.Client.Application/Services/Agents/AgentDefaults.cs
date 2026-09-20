@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Shared constants for the node-local default chat persona. The <see cref="DefaultAgentSeedSlug" /> is the single
-///     source of truth for the seeded "Default Assistant" definition: the seeder mints it idempotently, the resolver
-///     grants it the full capability-gated tool offer (reproducing today's chat), and the stream/regeneration services
-///     fall back to it when no agent is selected on the send.
+///     Shared constants for the node-local default chat persona.
 /// </summary>
+/// <remarks>
+///     <see cref="DefaultAgentSeedSlug" /> is the single source of truth for the seeded "Default Assistant": the
+///     seeder mints it idempotently, the resolver grants it the full capability-gated tool offer, and the stream and
+///     regeneration services fall back to it when no agent is selected on the send.
+/// </remarks>
 public static class AgentDefaults
 {
     /// <summary>The forge-proof seed slug of the node-local "Default Assistant" definition (mode-off persona).</summary>

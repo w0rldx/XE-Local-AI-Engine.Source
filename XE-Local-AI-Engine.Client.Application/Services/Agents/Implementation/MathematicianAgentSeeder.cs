@@ -7,35 +7,20 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Compute;
 
 /// <summary>
-///     Idempotent startup task that seeds ONE "Mathematician" agent definition (slug
-///     <see cref="AgentDefaults.MathematicianAgentSeedSlug" />) — the persona that opts into the sandboxed
-///     <c>run_python</c> compute tool through its <c>AllowedToolNames</c>.
-///     <para>
-///         Seeding the persona is what makes the tool reachable at all: <c>run_python</c> is held out of the whole
-///         offer and merged into the profile pool only for a profile that names it, so without a definition that names
-///         it the tool is inert. Its approval stays <see langword="true" /> — the seed opts INTO the tool, never out of
-///         the approval round-trip.
-///     </para>
-///     <para>
-///         <b>Gated on <c>Compute:Enabled</c>.</b> The persona's only tool is <c>run_python</c>, which a disabled node
-///         refuses on every call, so seeding it there would publish an agent that cannot do the one thing it exists
-///         for. When the kill-switch is off the seeder logs once and skips; it never DELETES an already-seeded row, so
-///         turning the switch back off leaves an existing Mathematician (and any operator edits to it) intact — the
-///         seeder stays additive-only in both directions. Enabling compute seeds it on the next start.
-///     </para>
-///     <para>
-///         <b>Idempotent + self-healing.</b> It seeds only when the slug is absent from
-///         <see cref="IAgentDefinitionStore.ListSeededSlugsAsync" />, so re-runs never duplicate it. If an operator
-///         deletes the seeded row, the next startup re-seeds it by slug. <b>Best-effort:</b> a node must start even if
-///         seeding fails, so the expected failures are logged and swallowed and the next startup re-attempts. Mirrors
-///         <see cref="CoderAgentSeeder" />.
-///     </para>
+///     Idempotent startup task that seeds ONE "Mathematician" agent definition: the persona that opts into the
+///     sandboxed <c>run_python</c> compute tool through its <c>AllowedToolNames</c>.
 /// </summary>
+/// <remarks>
+///     Seeding the persona is what makes the tool reachable at all — <c>run_python</c> is held out of the whole offer
+///     and merged into the profile pool only for a profile naming it — and its approval stays <see langword="true" />,
+///     because the seed opts INTO the tool, never out of the approval round-trip. Gated on <c>Compute:Enabled</c>,
+///     since a disabled node refuses every call: the seeder skips, and never DELETES an already-seeded row. Idempotent
+///     off <see cref="IAgentDefinitionStore.ListSeededSlugsAsync" />, best-effort like <see cref="CoderAgentSeeder" />.
+/// </remarks>
 public sealed class MathematicianAgentSeeder : IHostedService
 {
-    // The instructions are the feature. A model that merely HAS a calculator still asserts unverified arithmetic; what
-    // changes the behavior is being told, concretely, that a claim is not finished until it has been executed — and
-    // being told what to do when the script disagrees with the reasoning.
+    // The instructions ARE the feature: a model that merely HAS a calculator still asserts unverified arithmetic.
+    // What changes the behaviour is being told a claim is unfinished until executed, and what to do on a disagreement.
     private const string Instructions =
         """
         You are a mathematician working with a sandboxed Python interpreter (numpy, scipy, sympy).
@@ -66,9 +51,8 @@ public sealed class MathematicianAgentSeeder : IHostedService
     private readonly ILogger<MathematicianAgentSeeder> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    // Reads the kill-switch through the validated options, the same way RunPythonToolHandler does, so
-    // ComputeOptions.Enabled stays the single definition of "is this node allowed to execute code" instead of this
-    // seeder growing a second reading of the raw configuration.
+    // Reads the kill-switch through the validated options, as RunPythonToolHandler does, so ComputeOptions.Enabled
+    // stays the single definition of "may this node execute code" rather than a second reading of raw configuration.
     public MathematicianAgentSeeder(IServiceScopeFactory scopeFactory,
         IOptions<ComputeOptions> computeOptions,
         ILogger<MathematicianAgentSeeder> logger)

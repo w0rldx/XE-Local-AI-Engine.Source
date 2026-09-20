@@ -6,35 +6,25 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
-///     Deterministic, LLM-free implementation of <see cref="IConversationContextBudgeter" />. Groups the history into
-///     turns (a user message and every assistant/tool message that follows it up to the next user message), always keeps
-///     system messages and tool-approval correlation records, and when the estimate exceeds the budget reduces in
-///     ordered passes: (1) shorten oversized HISTORICAL tool results to an excerpt, (2) drop the oldest historical turns
-///     whole, (3) evict whole historical approval groups oldest-first. Because tool-call and tool-result messages of one
-///     turn share a turn index, dropping a turn never orphans a tool-call from its result.
-/// <para>
-///     Two further passes exist only for the rounds those three cannot rescue — the ones that would otherwise raise
-///     <see cref="ContextBudgetExceededException" /> and fail the turn outright, which in practice means the PROTECTED
-///     recent window alone exceeds the budget and there is no older history left to reclaim. Both are opt-in
-///     (<see cref="ConversationContextBudgetOptions.StripProtectedReasoning" />,
-///     <see cref="ConversationContextBudgetOptions.ExcerptProtectedToolResults" />), both act on SURVIVORS only, both
-///     work oldest-first and stop the moment the round fits, and neither ever touches the last surviving message:
-///     (4) strip <see cref="TextReasoningContent" /> — superseded scratch-pad thinking, never a call/result/approval
-///     record, so no correlation can be orphaned; a message that carried nothing else is dropped whole rather than sent
-///     empty — and (5) excerpt tool results inside the protected window with the same marker Pass 1 uses. Rewrites are
-///     clone-PRESERVING (id, author, raw representation, additional properties survive), so a rewritten message is still
-///     the same message to everything downstream.
-/// </para>
+///     Deterministic, LLM-free <see cref="IConversationContextBudgeter" />: groups the history into turns and reduces
+///     it in ordered passes until the estimate fits the budget.
 /// </summary>
+/// <remarks>
+///     A turn is a user message plus every assistant/tool message up to the next user message, so a tool call and its
+///     result share a turn index and dropping a turn never orphans one. System messages and tool-approval correlation
+///     records are always kept. Passes 1-3 excerpt historical tool results, drop whole historical turns, then evict
+///     whole historical approval groups; Passes 4 and 5 are opt-in and reached only when the PROTECTED recent window
+///     alone is what does not fit. Each pass documents itself at its own site, and every rewrite is clone-preserving.
+/// </remarks>
 public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 {
-    /// <summary>
-    ///     The framed <see cref="ChatMessage" /> each fixed-overhead text is measured as, memoized by TEXT INSTANCE.
-    ///     <see cref="ITokenEstimator" />'s own character-profile memo is keyed on the message instance, so building a
-    ///     fresh wrapper per call guaranteed a miss and re-scanned the whole system prompt (tens of KB once skills are
-    ///     attached) on every call. The callers pass the same string instances for the life of an invocation, so this
-    ///     turns the repeated scans into lookups. No leak: an entry dies with its key string.
-    /// </summary>
+    /// <summary>The framed <see cref="ChatMessage" /> each fixed-overhead text is measured as, memoized by TEXT INSTANCE.</summary>
+    /// <remarks>
+    ///     <see cref="ITokenEstimator" />'s own character-profile memo is keyed on the message instance, so a fresh
+    ///     wrapper per call always missed and re-scanned the whole system prompt — tens of KB once skills are attached —
+    ///     on every call. Callers pass the same string instances for the life of an invocation, so this turns those
+    ///     repeated scans into lookups. No leak: an entry dies with its key string.
+    /// </remarks>
     private static readonly ConditionalWeakTable<string, ChatMessage> FixedOverheadFramingCache = new();
 
     private readonly ITokenEstimator _estimator;
@@ -56,19 +46,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     {
         ArgumentNullException.ThrowIfNull(messages);
 
-        // The system prompt is prepended to the request AFTER this history, and tool JSON schemas never appear
-        // in the message list at all — yet both count against the launched window. Folding their estimate into the
-        // effective budget stops the outer budget/hard-stop from being measured against history alone (which would let
-        // an actually-over-window request through, deferring to a late inner rejection). Mirrors the inner
-        // ProviderCallBudgetChatClient's Instructions + Tools overhead so the two budgeters approximately agree (the
-        // outer estimate over-counts slightly by framing each tool as its own System message — the safe direction).
+        // The system prompt is prepended AFTER this history and tool JSON schemas never appear in the message list, yet both count against the launched window.
+        // Folding their estimate in stops the budget being measured against history alone; it mirrors the inner budgeter, over-counting slightly, the safe direction.
         var divisor = _estimator.ResolveDivisor(modelName);
         var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions, divisor);
-        // Same margins the inner provider-round budgeter applies, for the same reason and from the same constants: the
-        // shared char heuristic under-counts on markdown and JSON, and an under-count at the window edge is a provider
-        // rejection rather than a trim. The flat safety factor covers the first round of an unknown model; the observed
-        // correction is what real rounds of THIS model have since taught (tighten-only, neutral until then, so a model
-        // nothing has been recorded for is byte-identical to before). Comparison only.
+        // Same margins the inner provider-round budgeter applies, from the same constants: the shared char heuristic under-counts on markdown and JSON, and an
+        // under-count at the window edge is a provider rejection rather than a trim. The flat factor covers an unknown model; the observed correction is tighten-only.
         var observedCorrection = _estimator.ResolveObservedCorrection(modelName);
         var effectiveBudget = Math.Max(TokenEstimatorCalibrationStore.ApplyEstimateMargins(contextTokenCapacity, observedCorrection)
                                        - reservedOutputTokens
@@ -110,20 +93,15 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         var maxTurn = turn;
 
-        // Approval correlation records outlive the turn window. FunctionInvokingChatClient pairs each
-        // ToolApprovalRequestContent with the ToolApprovalResponseContent replayed for it, and the approval validator
-        // fails the whole invocation when a replayed batch carries one without the other — or, for an already-resolved
-        // round, without the FunctionResultContent that decision produced. Every replayed decision is its own
-        // ChatRole.User message, so a turn using many approved tools puts each resolved round in its own turn, far
-        // outside the keep window the floor below protects; whole-turn dropping would then split pairs that must stay
-        // together. Pinning is per message, not per turn, so the surrounding history still trims.
+        // Approval correlation records outlive the turn window — each replayed decision is its own User message, so a many-tool turn puts its resolved rounds far
+        // outside the keep window — and the validator fails the invocation on a request without its response, or a resolved response without the result it produced.
         var approvals = BuildApprovalGroups(messages);
+
+        // Pinning is per message, not per turn, so the surrounding history still trims.
         var pinned = approvals.Pinned;
 
-        // Floor of 2, even against a mis-set config: the approval-replay path splits one in-flight round across two
-        // turns — the assistant tool-call (and its approval request) land in turn M, and the User approval-decision
-        // that FunctionInvokingChatClient replays lands in turn M+1. Protecting only one turn could drop turn M and
-        // orphan the approval response. Options validation also enforces >= 2; this clamp is the defence in depth.
+        // Floor of 2 even against a mis-set config: the approval-replay path splits one in-flight round across two turns, the assistant tool-call and its request
+        // in turn M and the replayed User decision in turn M+1, so protecting one turn could drop M and orphan the response. Options validation also enforces it.
         var keepCount = Math.Max(2, _options.RecentTurnKeepCount);
 
         // Turns with an index at or above this threshold are the protected recent window: always kept, never modified.
@@ -172,14 +150,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        // Pass 3: the approval pins are a correlation guarantee, not a reservation. Left permanent they accumulate
-        // without bound, and an approval-heavy conversation eventually has a pinned set that alone exceeds the budget —
-        // at which point ExceedsBudget is stuck true and the runner's hard stop rejects EVERY later turn, permanently.
-        // So once the ordinary passes are spent, evict whole historical approval groups oldest first. A group is the
-        // request, its replayed decision, and the results that decision produced, all correlated by call id; taking it
-        // atomically is what keeps the validator satisfied, which fails a response whose request is missing and a
-        // resolved response whose FunctionResultContent is missing. An incomplete group (a surfaced request with no
-        // decision yet — the in-flight round) is never a candidate: there is nothing historical about it.
+        // Pass 3: the approval pins are a correlation guarantee, not a reservation — left permanent they accumulate until the pinned set alone exceeds the budget and
+        // the hard stop rejects every later turn. A group (request, decision, the results it produced) is evicted atomically, oldest first; an in-flight one never is.
         for (var g = 0; g < approvals.Groups.Count && currentEstimate > effectiveBudget; g++)
         {
             var group = approvals.Groups[g];
@@ -196,17 +168,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        // Passes 4 and 5 are the last-resort reclaims, and they run ONLY because Passes 1-3 left the round over budget —
-        // which, once Pass 3 has evicted everything historical it may, means the PROTECTED window itself is what does not
-        // fit. No amount of further older-history compaction (deterministic or LLM-summarized) can reach that; the
-        // alternative to these two passes is the hard stop below, i.e. failing the turn outright. Both work on SURVIVORS
-        // only (a message an earlier pass already dropped is not rewritten and never re-counted) and both stop the moment
-        // the round fits, so a round that Passes 1-3 rescued pays nothing here.
-        //
-        // The LAST surviving message is exempt from both: it is the in-flight round the model is producing against (the
-        // pending tool result, or the approval decision just replayed), and it is the one thing the next provider call
-        // cannot be asked to work without.
+        // Passes 4 and 5 are the last-resort reclaims, reached ONLY because Passes 1-3 left the round over budget — which, once Pass 3 evicted everything
+        // historical, means the PROTECTED window itself does not fit. Both work on SURVIVORS only and stop the moment it fits; the alternative is the hard stop.
         var lastSurvivor = -1;
+
+        // The LAST surviving message is exempt from both: it is the in-flight round the model is producing against — the pending tool result,
+        // or the approval decision just replayed — and the one thing the next provider call cannot be asked to work without.
         for (var i = count - 1; i >= 0; i--)
         {
             if (!dropped[i])
@@ -216,10 +183,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        // Pass 4: strip the model's own superseded reasoning, oldest first, only while still over budget. Reasoning is
-        // dead scratch-pad text once a later round supersedes it, and neither the approval validator nor the tool-call
-        // correlation (BuildApprovalGroups / FunctionResultContent CallIds) ever inspects it — so removing it can orphan
-        // nothing. System messages are excluded, keeping "system messages are never modified" absolute.
+        // Pass 4: strip the model's own superseded reasoning, oldest first, only while still over budget. Reasoning is dead scratch-pad text once a later round
+        // supersedes it and neither the approval validator nor the tool-call correlation inspects it, so removing it orphans nothing; system messages are excluded.
         var reasoningStripped = 0;
         if (_options.StripProtectedReasoning)
         {
@@ -254,10 +219,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        // Pass 5: excerpt tool results inside the PROTECTED window — the one pass that shortens content the current round
-        // is actively working with, hence opt-in. Restricted to the protected region because Pass 1 has already visited
-        // every historical message (it runs under the same while-over-budget condition, so reaching here means it ran to
-        // the end of the list). Excerpting preserves the CallId the validator matches on, so the correlation survives.
+        // Pass 5: excerpt tool results inside the PROTECTED window — the one pass that shortens content the current round is actively working with, hence opt-in.
+        // Restricted there because Pass 1 has already visited every historical message; excerpting preserves the CallId the validator matches on.
         var protectedResultsExcerpted = 0;
         if (_options.ExcerptProtectedToolResults)
         {
@@ -291,10 +254,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
-        // Measured on the MATERIALIZED survivor list rather than reported from the running total. The running total is
-        // maintained incrementally across five passes that add, subtract and rewrite; re-estimating the exact list that
-        // is about to be sent is what makes EstimatedTokensAfter — and the ExceedsBudget hard stop derived from it — a
-        // statement about the payload rather than about the bookkeeping.
+        // Measured on the MATERIALIZED survivor list rather than the running total, which five passes add to, subtract from and rewrite. Re-estimating the exact
+        // list about to be sent is what makes EstimatedTokensAfter — and the ExceedsBudget hard stop derived from it — a statement about the payload.
         var estimatedAfter = _estimator.EstimateTokensWithDivisor(survivors, divisor);
 
         return new ConversationBudgetResult
@@ -313,26 +274,15 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     /// <summary>
-    ///     Flags the messages Pass 2 must never drop because doing so would break a tool-approval correlation — the
-    ///     messages carrying a <see cref="ToolApprovalRequestContent" /> or <see cref="ToolApprovalResponseContent" />,
-    ///     plus every message holding a <see cref="FunctionResultContent" /> for one of their tool calls (a resolved
-    ///     round's response is only replayable while its result is still in the batch) — and partitions those same
-    ///     messages into the correlated GROUPS Pass 3 may then evict whole. Both come from one scan; the pin array is
-    ///     null when the history holds no approval content at all, which is the common case.
-    ///     <para>
-    ///         A group is a connected component over "shares a request id or a call id" — request id links a request to
-    ///         its replayed decision (a call id can be blank, a request id never is), call id attaches the results that
-    ///         decision produced. A message carrying several rounds' content merges them rather than splitting a
-    ///         correlation across two evictions. Groups are ordered by their oldest message, which is the order Pass 3
-    ///         evicts in.
-    ///     </para>
-    ///     <para>
-    ///         Deliberately NOT applied to Pass 1: the approval records themselves hold neither a tool result nor
-    ///         tool-role text, so excerpting cannot touch them, while the paired results must stay excerptable or a
-    ///         long approved-tool turn would leave the budget nothing to reclaim. Excerpting preserves the CallId the
-    ///         validator matches on, so it never breaks the correlation.
-    ///     </para>
+    ///     Flags the messages Pass 2 must never drop, and partitions those same messages into the correlated groups
+    ///     Pass 3 may evict whole.
     /// </summary>
+    /// <remarks>
+    ///     Pinned are the messages carrying a <see cref="ToolApprovalRequestContent" /> or <see cref="ToolApprovalResponseContent" />, plus every message
+    ///     holding a <see cref="FunctionResultContent" /> for one of their calls, since a resolved round's response is only replayable while its result is in
+    ///     the batch. A group is a connected component over "shares a request id or a call id" — a call id can be blank, a request id never is — ordered by
+    ///     oldest message. Pass 1 is exempt: it cannot touch an approval record, and excerpting preserves the CallId the validator matches on.
+    /// </remarks>
     private static ApprovalCorrelation BuildApprovalGroups(IReadOnlyList<ChatMessage> messages)
     {
         // Everything here stays null until the first approval content is seen, so the common approval-free history
@@ -347,11 +297,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         {
             foreach (var content in messages[i].Contents)
             {
-                // A request and the decision replayed for it correlate on REQUEST id — the id the approval validator
-                // matches them on, and the only one always present. A blank CallId is a supported shape (an approval
-                // surfaced for a call that has none); correlating on CallId left such a request and its response in
-                // separate groups, so Pass 3 could take the decision and keep the request — the orphan this whole
-                // mechanism exists to prevent.
+                // A request and the decision replayed for it correlate on REQUEST id, the id the approval validator matches them on and the only one always
+                // present. A blank CallId is a supported shape, and correlating on it would leave such a pair in separate groups — the orphan this prevents.
                 var (requestId, toolCall) = content switch
                 {
                     ToolApprovalRequestContent request => (request.RequestId, request.ToolCall),
@@ -428,10 +375,10 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     /// <summary>
-    ///     True when every message of an approval group may be dropped: none is a system message, none is still inside
-    ///     the protected recent window, and none was already dropped by an earlier pass. Whole group or nothing — a
-    ///     partial eviction is precisely the orphan the pins exist to prevent.
+    ///     Whether every message of an approval group may be dropped: none a system message, none still inside the
+    ///     protected recent window, none already dropped by an earlier pass.
     /// </summary>
+    /// <remarks>Whole group or nothing — a partial eviction is precisely the orphan the pins exist to prevent.</remarks>
     private static bool IsEvictable(ApprovalGroup group, int[] turnOf, ChatMessage[] working, bool[] dropped, int protectedFrom)
     {
         foreach (var i in group.MessageIndices)
@@ -526,13 +473,15 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     /// <summary>
-    ///     Estimates the fixed per-round input overhead that never appears as a droppable history message but
-    ///     still counts against the context window — the resolved system prompt (measured as a System message) plus the
-    ///     model-facing definition text of each advertised tool (measured as one framed unit each). Reuses the injected
-    ///     <see cref="ITokenEstimator" /> (deliberately the same conservative, upper-biased estimator the history uses),
-    ///     mirroring the inner <c>ProviderCallBudgetChatClient</c>'s Instructions + Tools estimate so the outer and inner
-    ///     budgeters size the same round the same way. Returns 0 when both are absent.
+    ///     Estimates the fixed per-round input overhead that never appears as a droppable history message but still
+    ///     counts against the context window, or 0 when there is none.
     /// </summary>
+    /// <remarks>
+    ///     That is the resolved system prompt, measured as a System message, plus the model-facing definition text of
+    ///     each advertised tool, measured as one framed unit each. It reuses the injected <see cref="ITokenEstimator" />
+    ///     — deliberately the same conservative, upper-biased estimator the history uses — mirroring the inner
+    ///     <c>ProviderCallBudgetChatClient</c>'s Instructions + Tools estimate, so outer and inner size a round alike.
+    /// </remarks>
     private int EstimateFixedOverhead(string? systemPrompt, IReadOnlyList<string>? toolDefinitions, int divisor)
     {
         var overhead = 0;
@@ -567,13 +516,15 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     /// <summary>
-    ///     Rewrites a message whose tool-result content exceeds the excerpt budget, replacing each oversized result with
-    ///     a leading excerpt plus an explicit omitted-count marker. Truncates <see cref="FunctionResultContent" />
-    ///     anywhere and, for a <see cref="ChatRole.Tool" /> message, its plain <see cref="TextContent" /> (history that
-    ///     arrives as a tool-role text message rather than a structured result). Returns false when nothing was oversized.
-    ///     Shared by Pass 1 (historical results) and Pass 5 (protected-window results) so both produce byte-identical
-    ///     excerpt markers. The rewrite is clone-preserving (see <see cref="CloneWithContents" />).
+    ///     Rewrites a message whose tool-result content exceeds the excerpt budget, replacing each oversized result
+    ///     with a leading excerpt plus an explicit omitted-count marker.
     /// </summary>
+    /// <remarks>
+    ///     Truncates <see cref="FunctionResultContent" /> anywhere and, for a <see cref="ChatRole.Tool" /> message, its
+    ///     plain <see cref="TextContent" /> — history arriving as a tool-role text message rather than a structured
+    ///     result. Returns false when nothing was oversized. Shared by Pass 1 and Pass 5 so both produce byte-identical
+    ///     excerpt markers, and the rewrite is clone-preserving (<see cref="CloneWithContents" />).
+    /// </remarks>
     private bool TryTruncateToolResult(ChatMessage message, out ChatMessage truncated, out int charsOmitted)
     {
         truncated = message;
@@ -632,12 +583,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         return true;
     }
 
-    /// <summary>
-    ///     Removes every <see cref="TextReasoningContent" /> part from a message (Pass 4). Returns false when the message
-    ///     carries none, so an unaffected message is neither re-allocated nor counted.
-    ///     <paramref name="emptied" /> reports the reasoning-ONLY case: nothing survives the strip, so the caller drops the
-    ///     message whole instead of sending a contentless one.
-    /// </summary>
+    /// <summary>Removes every <see cref="TextReasoningContent" /> part from a message (Pass 4).</summary>
+    /// <remarks>
+    ///     Returns false when the message carries none, so an unaffected message is neither re-allocated nor counted.
+    ///     <paramref name="emptied" /> reports the reasoning-ONLY case: nothing survives the strip, so the caller drops
+    ///     the message whole instead of sending a contentless one.
+    /// </remarks>
     private static bool TryStripReasoning(ChatMessage message, out ChatMessage stripped, out bool emptied)
     {
         stripped = message;
@@ -679,13 +630,13 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         return true;
     }
 
-    /// <summary>
-    ///     Rewrites a message's content list while PRESERVING its identity — id, author, provider raw representation and
-    ///     additional properties all carry over. Reconstructing from role + contents alone (which every rewrite here used
-    ///     to do) silently dropped those, so a truncated or reasoning-stripped message stopped being the same message to
+    /// <summary>Rewrites a message's content list while PRESERVING its identity.</summary>
+    /// <remarks>
+    ///     Id, author, provider raw representation and additional properties all carry over. Reconstructing from role
+    ///     plus contents alone drops them, so a truncated or reasoning-stripped message stops being the same message to
     ///     anything downstream that keys on <see cref="ChatMessage.MessageId" /> or reads provider metadata off
     ///     <see cref="ChatMessage.RawRepresentation" />.
-    /// </summary>
+    /// </remarks>
     private static ChatMessage CloneWithContents(ChatMessage message, IList<AIContent> contents)
     {
         return new ChatMessage(message.Role, contents)
@@ -698,12 +649,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         };
     }
 
-    /// <summary>
-    ///     The excerpt marker every truncation in this repository shares. Internal rather than private because the
-    ///     replayed tool history is capped at PROJECTION time (<c>ConversationContextBuilder.Build</c>), before this
-    ///     budgeter ever sees the round, and a second marker shape would make two truncations of the same result read
-    ///     as two different results.
-    /// </summary>
+    /// <summary>The excerpt marker every truncation in this repository shares.</summary>
+    /// <remarks>
+    ///     Internal rather than private because the replayed tool history is capped at PROJECTION time
+    ///     (<c>ConversationContextBuilder.Build</c>), before this budgeter sees the round, and a second marker shape
+    ///     would make two truncations of the same result read as two different results.
+    /// </remarks>
     internal static string Excerpt(string value, int excerptChars, int omitted)
     {
         var marker = $"[truncated: {omitted} chars omitted]";

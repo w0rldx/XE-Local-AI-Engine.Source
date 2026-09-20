@@ -5,38 +5,27 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
-///     Conservative character-count token estimator: ~1 token per four characters plus a small
-///     fixed per-message framing overhead. It never calls the provider, so it is deterministic and allocation-light on
-///     the streaming hot path. It intentionally over- rather than under-estimates (the framing overhead and the coarse
-///     divisor bias upward) so the budgeter trims early rather than overrunning the launched context window. A
-///     provider-accurate implementation of <see cref="ITokenEstimator" /> can replace this later without touching the
-///     budgeting policy.
+///     Conservative character-count token estimator: about one token per four characters, plus a small fixed
+///     per-message framing overhead.
 /// </summary>
 /// <remarks>
-///     Per-message script-category profiles are memoized by message instance in a <see cref="ConditionalWeakTable{TKey,TValue}" />
-///     (no leak — the entry dies with the message). The budgeter re-estimates the same history across the two outer
-///     growth points and every inner tool-loop round, and the same <see cref="ChatMessage" /> instances flow through all
-///     of them (the runner appends but never mutates), so the memo turns repeated full-content scans into dictionary
-///     lookups. Correct only because a <see cref="ChatMessage" /> is immutable-after-construction on these paths
-///     (truncation produces a NEW instance). The final division is not memoized, so a later per-model calibration affects
-///     the same message instance without rescanning content.
+///     It never calls the provider, so it is deterministic and allocation-light on the streaming hot path, and it
+///     over- rather than under-estimates so the budgeter trims early rather than overrunning the launched window.
+///     Per-message script-category profiles are memoized by message instance in a
+///     <see cref="ConditionalWeakTable{TKey,TValue}" />, correct only because a <see cref="ChatMessage" /> is
+///     immutable on these paths — truncation produces a new instance — and the division stays outside the memo.
 /// </remarks>
 public sealed class HeuristicTokenEstimator : ITokenEstimator
 {
     private static readonly ConditionalWeakTable<ChatMessage, TokenCharacterProfile> PerMessageCharacterProfileCache = new();
     private readonly ITokenEstimatorCalibrationStore _calibrationStore;
 
-    // GPT/LLaMA-family byte-pair tokenizers average roughly four characters per token for English prose; using a
-    // divisor of four (rather than a larger one) keeps the estimate conservative for code and non-English text where
-    // tokens are shorter.
-    // Every message carries role/delimiter framing the character count alone misses; a small fixed floor keeps a
-    // near-empty message (e.g. a bare tool acknowledgement) from being counted as zero-cost.
+    // Every message carries role and delimiter framing the character count alone misses, and a small fixed floor keeps a near-empty message, such as a bare
+    // tool acknowledgement, from counting as zero-cost. The matching divisor of four is conservative for code and non-English text, where tokens are shorter.
     private const int PerMessageOverheadTokens = 4;
 
-    // ponytail: flat per-image charge. llama.cpp vision costs a few hundred to ~1-2k tokens per image depending on
-    // resolution and the projector's patch grid; a fixed conservative heuristic keeps images from being counted as
-    // zero-cost (which would let a vision turn silently overrun the window). Upgrade path: derive from the mmproj patch
-    // grid if per-image accuracy ever matters. Mirrored in ProviderMessageTokenEstimator (AI.Agent) — change both.
+    // ponytail: flat per-image charge, since llama.cpp vision costs a few hundred to ~2k tokens per image by resolution and projector patch grid; counting an
+    // image as zero-cost would let a vision turn overrun the window. Upgrade path: derive it from the mmproj patch grid. Mirrored in ProviderMessageTokenEstimator.
     private const int EstimatedTokensPerImage = 512;
 
     public HeuristicTokenEstimator(ITokenEstimatorCalibrationStore? calibrationStore = null)

@@ -5,24 +5,18 @@ using System.Text;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Reads skills out of an untrusted <c>.zip</c> entirely in memory. Nothing is ever written to disk, which removes
-///     the symlink-follow and TOCTOU classes outright rather than guarding them, and every remaining guard below fails
-///     closed with an operator-visible reason.
+///     Reads skills out of an untrusted <c>.zip</c> entirely in memory, nothing ever written to disk.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The bomb guards bound the bytes <em>actually inflated</em>. <see cref="ZipArchiveEntry.Length" /> and
-///         <see cref="ZipArchiveEntry.CompressedLength" /> are attacker-authored central-directory fields — assertions,
-///         not measurements — so nothing here allocates from them or decides on them. An entry declaring ~4 GiB for a
-///         handful of real bytes would otherwise abort a perfectly harmless archive on a single allocation. Each read
-///         runs against a buffer one byte longer than the cap: filling it proves the entry is over the limit, which a
-///         read that merely reached the cap cannot. (The opposite lie — declare small, inflate huge — is additionally
-///         closed by <see cref="ZipArchive" /> itself, whose read path stops inflating at the declared size.)
-///     </para>
-///     <para>
-///         Only entries we intend to keep are inflated at all. A repository full of images and binaries costs nothing
-///         and is not refused for content we were never going to store.
-///     </para>
+///     Staying in memory removes the symlink-follow and TOCTOU classes outright rather than guarding them, and every
+///     remaining guard fails closed with an operator-visible reason.
+/// </remarks>
+/// <remarks>
+///     The bomb guards bound the bytes ACTUALLY INFLATED. <see cref="ZipArchiveEntry.Length" /> and
+///     <see cref="ZipArchiveEntry.CompressedLength" /> are attacker-authored assertions, never measurements, so
+///     nothing here allocates from them or decides on them: an entry declaring 4 GiB for twenty real bytes would
+///     otherwise abort a harmless archive. Only entries the import intends to keep are inflated at all, so a
+///     repository full of binaries costs nothing and is refused for nothing.
 /// </remarks>
 internal static class SkillArchiveReader
 {
@@ -72,11 +66,12 @@ internal static class SkillArchiveReader
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
-    ///     Discovers every skill folder in <paramref name="archive" />. A skill folder is any directory holding a
-    ///     <c>SKILL.md</c>; the layout root is never hard-coded, because the real-world layouts differ (a bare skill
-    ///     folder, a GitHub archive's version-stamped top directory, or skills nested several levels down under
-    ///     <c>.github/plugins/</c>).
+    ///     Discovers every skill folder in <paramref name="archive" />: any directory holding a <c>SKILL.md</c>.
     /// </summary>
+    /// <remarks>
+    ///     The layout root is never hard-coded, because real-world layouts differ — a bare skill folder, a GitHub
+    ///     archive's version-stamped top directory, or skills nested several levels down.
+    /// </remarks>
     /// <exception cref="SkillImportException">Any guard tripped.</exception>
     public static async Task<IReadOnlyList<SkillArchiveFolder>> ReadAsync(ReadOnlyMemory<byte> archive,
         SkillImportOptions options,
@@ -137,9 +132,8 @@ internal static class SkillArchiveReader
             throw new SkillImportException($"The archive holds more than {options.MaxEntries} entries.");
         }
 
-        // Ordinal, not case-insensitive: the divergence being closed is that ZipArchive.Entries yields BOTH entries
-        // with the same FullName while GetEntry returns only the first, so a duplicate lets the preview and the persist
-        // disagree about what was approved. Case-differing names are genuinely distinct entries on the wire.
+        // Ordinal, not case-insensitive: Entries yields BOTH duplicates while GetEntry returns the first, so a
+        // duplicate lets preview and persist disagree. Case-differing names are distinct entries on the wire.
         var result = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
         foreach (var entry in entries)
         {
@@ -147,12 +141,8 @@ internal static class SkillArchiveReader
 
             if (IsSymbolicLink(entry))
             {
-                // Refused as an entry — never resolved, never a skill root, never a resource. Its payload is a path
-                // string, so following it would re-introduce the escape class that keeping extraction in memory
-                // removed. Dropping the entry rather than the whole archive is deliberate and load-bearing: the
-                // published collection repositories DO ship symlinked skill folders whose targets are real
-                // directories in the same archive, so scanning for SKILL.md still finds every skill, and aborting
-                // would make the flagship source unimportable for no security gain.
+                // Refused as an entry, never resolved: its payload is a path, so following one re-opens the escape
+                // class in-memory extraction closed. Dropping the ENTRY, not the archive — real repositories ship them.
                 continue;
             }
 
@@ -292,15 +282,8 @@ internal static class SkillArchiveReader
     {
         await using var source = await entry.OpenAsync(cancellationToken);
 
-        // The cap is measured against bytes ACTUALLY INFLATED; entry.Length is never read. Both directions of the
-        // header lie are covered, and only one of them is reachable — keep it that way:
-        //   over-declaring  (say 4 GiB, ship 20 bytes)  IS reachable: sizing a buffer from Length OOMs on a harmless
-        //                                               archive. Immunity comes from never reading Length.
-        //   under-declaring (say 4 KiB, ship 2 MiB)     is NOT constructible via ZipArchive: its read path stops
-        //                                               inflating at the declared size (measured: yields exactly 4096).
-        // A future reader may be tempted to "harden" by comparing Length against the cap. That checks the unreachable
-        // case, re-introduces the reachable one, and hardens nothing.
-        // One byte longer than the cap, so "filled the buffer" means over-limit rather than exactly-at-limit.
+        // Measured against bytes ACTUALLY INFLATED, never entry.Length: over-declaring is the reachable lie and not
+        // reading Length is the whole immunity. The buffer is one byte over the cap, so filling it means over-limit.
         var buffer = new byte[options.MaxEntryBytes + 1];
         var total = 0;
         while (total < buffer.Length)

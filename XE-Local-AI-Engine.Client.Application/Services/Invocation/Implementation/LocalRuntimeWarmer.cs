@@ -14,10 +14,12 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
 ///     The turn's model-readiness step: resolves whether the turn pays a real local (llama.cpp) cold-load, warms that
-///     model to readiness before the stream-idle watchdog is armed, and reads back the window it actually launched with.
-///     Owned by <see cref="InvocationRunner" />, which calls it once per turn and (on the orchestration path) once per
-///     participant model; it holds no per-turn state of its own, so a single instance serves every invocation.
+///     model before the stream-idle watchdog is armed, and reads back the window it actually launched with.
 /// </summary>
+/// <remarks>
+///     Owned by <see cref="InvocationRunner" />, which calls it once per turn and, on the orchestration path, once per
+///     participant model. It holds no per-turn state, so a single instance serves every invocation.
+/// </remarks>
 public sealed class LocalRuntimeWarmer
 {
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
@@ -46,20 +48,16 @@ public sealed class LocalRuntimeWarmer
     }
 
     /// <summary>
-    ///     Model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog
-    ///     is armed, so a cold big-model load runs in its own size-aware window (owned by the supervisor) instead of
-    ///     being killed by the shorter no-first-chunk watchdog. Cloud (Codex/Azure) and Ollama models route elsewhere or
-    ///     warm cheaply on first send, so they are a no-op here. Surfaces the phase into the invocation state (so the UI
-    ///     can render "loading model…") and records readiness timing/outcome on <see cref="NodeMetrics" />.
-    ///     <para>
-    ///         INVARIANT: the warm await is decoupled from the model load's lifetime in the supervisor — a caller
-    ///         cancellation abandons THIS wait (rethrown so the turn terminates as cancelled) while the load continues in
-    ///         the background and the model becomes warm for the next send. A warm FAILURE is swallowed here so the
-    ///         streaming send surfaces the real, classified error through its normal path rather than a duplicate here.
-    ///         Admission-gated callers receive that captured failure before policy evaluation, because otherwise an
-    ///         unknown-context rejection would mask the authoritative provider failure.
-    ///     </para>
+    ///     Warms a LOCAL (llama.cpp) model BEFORE the stream-idle watchdog is armed, so a cold big-model load runs in
+    ///     the supervisor's own size-aware window instead of dying to the shorter no-first-chunk watchdog.
     /// </summary>
+    /// <remarks>
+    ///     Cloud and Ollama models route elsewhere or warm on first send, so they are a no-op. It surfaces the phase
+    ///     into the invocation state and records readiness on <see cref="NodeMetrics" />. INVARIANT: this wait is
+    ///     decoupled from the load's lifetime — a cancellation abandons the WAIT and rethrows while the load keeps
+    ///     going, leaving the model warm for the next send. A warm FAILURE is swallowed so the streaming send surfaces
+    ///     the classified error, but an admission-gated caller is handed it first, or a null-context refusal masks it.
+    /// </remarks>
     internal async Task<LocalRuntimePreparationResult> PrepareLocalRuntimeAsync(string resolvedModel,
         IWorkerEventDispatcher dispatcher,
         Guid invocationId,
@@ -70,11 +68,8 @@ public sealed class LocalRuntimeWarmer
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(stream);
 
-        // An external OpenAI-compatible model is never warmed — the node does not own the process — but it still has a
-        // context window, and this branch has to run BEFORE the skip-return below or that window can never reach the
-        // turn budgeter. The skip path returns EffectiveContextTokens: null before GetRuntimeInfoAsync is ever called,
-        // and a null there means TurnPolicy falls back to its conservative 8192-token default. Implementing only the
-        // provider's runtime-info method would therefore have been cosmetic: nothing would have called it.
+        // An external OpenAI-compatible model is never warmed (the node does not own the process) but still HAS a
+        // window, so this branch must run BEFORE the skip-return or TurnPolicy falls back to its conservative default.
         if (ExternalModelId.HasExternalScheme(resolvedModel))
         {
             stream.ProviderTag = "remote";
@@ -86,9 +81,8 @@ public sealed class LocalRuntimeWarmer
         var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken);
         if (provider is null)
         {
-            // No local cold-load for this turn (cloud, Ollama, or an unresolved provider): the TTFT baseline is turn
-            // start and the provider dimension is "remote" — the first-token latency is the provider's own, not a
-            // measurable local warm. The send-to-load-start histogram is deliberately local-only, so it is not recorded.
+            // No local cold-load (cloud, Ollama or an unresolved provider): the TTFT baseline is turn start and the
+            // latency is the provider's own. The send-to-load-start histogram is local-only and is not recorded.
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
             return new LocalRuntimePreparationResult(EffectiveContextTokens: null, ProviderName: null, WarmFailure: null);
@@ -121,9 +115,8 @@ public sealed class LocalRuntimeWarmer
         }
         catch (Exception exception)
         {
-            // Readiness failed (e.g. model incompatible / OOM). Record and capture it. The normal path still lets the
-            // streaming send surface the real classified failure through its provider boundary; an admission-gated path
-            // rethrows this captured failure before policy evaluation so a null-context refusal cannot mask it.
+            // Readiness failed (incompatible model, OOM): record and CAPTURE it. The streaming send still surfaces the
+            // classified failure, while an admission-gated path rethrows this one before its null-context refusal.
             stream.AddModelReadiness(RecordReadiness(startedUtc, "failed"));
             readinessActivity?.SetTag("outcome", "failed");
             _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
@@ -143,9 +136,8 @@ public sealed class LocalRuntimeWarmer
         // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating);
 
-        // With the model now ready, read the effective per-slot context window it actually loaded so the turn's
-        // budgeters + the num_ctx side channel size against the REAL window (llama.cpp's -c) rather than the app default.
-        // Best-effort — a null here just keeps the configured default. A cancellation propagates (the turn is terminating).
+        // Read the effective per-slot window the model actually loaded, so the budgeters and the num_ctx side channel
+        // size against llama.cpp's real -c. Best-effort: a null keeps the default, a cancellation propagates.
         var effectiveContextTokens = await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken);
         return new LocalRuntimePreparationResult(effectiveContextTokens, provider.ProviderName, WarmFailure: null);
     }
@@ -193,10 +185,13 @@ public sealed class LocalRuntimeWarmer
     }
 
     /// <summary>
-    ///     The context window an external model's operator DECLARED, or <see langword="null" /> when they declared none
-    ///     (the budgeter then keeps its conservative fallback rather than assuming a window the server may not have).
-    ///     A cancellation propagates; every other failure degrades to the fallback.
+    ///     The context window an external model's operator DECLARED, or <see langword="null" /> when they declared
+    ///     none.
     /// </summary>
+    /// <remarks>
+    ///     A null keeps the budgeter's conservative fallback rather than assuming a window the server may not have. A
+    ///     cancellation propagates; every other failure degrades to the fallback.
+    /// </remarks>
     private async Task<int?> ResolveDeclaredExternalContextAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
     {
         try
@@ -216,17 +211,17 @@ public sealed class LocalRuntimeWarmer
     }
 
     /// <summary>
-    ///     Resolves the local provider that serves <paramref name="resolvedModel" />, returning it only when it is the
-    ///     llama.cpp runtime (the one that pays a real cold-load before a watched stream). Any other provider (Ollama /
-    ///     cloud / external) or a resolution failure returns <see langword="null" /> so the warm phase is skipped; a
-    ///     genuine cancellation propagates.
+    ///     Resolves the local provider serving <paramref name="resolvedModel" />, returning it only when it is the
+    ///     llama.cpp runtime — the one that pays a real cold-load before a watched stream.
     /// </summary>
+    /// <remarks>
+    ///     Any other provider (Ollama, cloud, external) or a resolution failure answers <see langword="null" /> so the
+    ///     warm phase is skipped; a genuine cancellation propagates.
+    /// </remarks>
     public async Task<ILocalModelProvider?> ResolveWarmableProviderAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
     {
-        // A cloud-routed model (Codex/Azure) must never trigger a local warm. The provider resolver maps any UNMAPPED
-        // model name to the default local provider (llamacpp), so a cloud model id like "gpt-5.6-terra" would otherwise
-        // resolve to llama-server and fail its cold-load with "model not installed". This is the SAME per-request routing
-        // decision RuntimeChatClient makes for the send, so warm and send stay consistent (see IsCloudProviderSelected).
+        // A cloud-routed model must never warm locally: the resolver maps any UNMAPPED name to llamacpp, so a cloud id
+        // would cold-load and fail. Same per-request decision RuntimeChatClient makes, so warm and send stay in step.
         if (_activeCloudFactory.IsCloudProviderSelected(resolvedModel))
         {
             return null;
@@ -268,11 +263,13 @@ public sealed class LocalRuntimeWarmer
 }
 
 /// <summary>
-///     The outcome of <see cref="LocalRuntimeWarmer.PrepareLocalRuntimeAsync" />: the effective context window the model
-///     actually launched with (null when there was no local warm or the window is unknown), the warmed provider's name,
-///     and — when readiness FAILED — the captured provider failure an admission-gated caller must rethrow before its
-///     policy runs.
+///     The outcome of <see cref="LocalRuntimeWarmer.PrepareLocalRuntimeAsync" />: the window the model actually
+///     launched with, the warmed provider's name, and the captured failure when readiness failed.
 /// </summary>
+/// <remarks>
+///     The window is null when there was no local warm or it is unknown. The captured failure is what an
+///     admission-gated caller must rethrow before its own policy runs.
+/// </remarks>
 internal readonly record struct LocalRuntimePreparationResult(
     int? EffectiveContextTokens,
     string? ProviderName,

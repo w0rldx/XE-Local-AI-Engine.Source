@@ -26,13 +26,13 @@ public sealed class WorkSessionArtifactBlobReadResult
 }
 
 /// <summary>
-///     The bytes behind a work session's artifacts, encrypted at rest under the node key and keyed by session id. Rows
-///     live in <c>agent_work_session_artifacts</c>; only the digest and size cross between the two.
-///     <para>
-///         Callers write the blob <em>before</em> the row: a crash between the two leaks one bounded blob, where the
-///         other order would leave a row pointing at bytes that never existed.
-///     </para>
+///     The bytes behind a work session's artifacts, encrypted at rest under the node key and keyed by session id.
 /// </summary>
+/// <remarks>
+///     Rows live in <c>agent_work_session_artifacts</c> and only the digest and size cross between the two. Callers
+///     write the blob BEFORE the row: a crash between the two leaks one bounded blob, where the other order would
+///     leave a row pointing at bytes that never existed.
+/// </remarks>
 public interface IWorkSessionArtifactBlobStore
 {
     Task<WorkSessionArtifactBlobWriteResult> WriteAsync(Guid sessionId,

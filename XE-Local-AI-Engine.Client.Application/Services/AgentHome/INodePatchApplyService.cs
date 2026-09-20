@@ -1,17 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Worker-side, approval-gated host patch apply. Lands exported
-///     <c>changes.patch</c> onto the real host selected folders, mapping each sandbox-relative <c>a/&lt;alias&gt;/…</c>
-///     / <c>b/&lt;alias&gt;/…</c> prefix back to its trusted host root via <see cref="Workspace.ISelectedFolderResolver" />
-///     and applying only under that root (traversal-rejected, binary-rejected by default).
+///     Worker-side, approval-gated host patch apply: lands an exported <c>changes.patch</c> onto the real host
+///     selected folders.
 /// </summary>
 /// <remarks>
-///     The <see cref="PreviewAsync" /> / <see cref="ApplyApprovedAsync" /> split is the approval gate: a caller
-///     obtains a preview, surfaces it for an explicit human confirm, then calls <see cref="ApplyApprovedAsync" />. The
-///     surface is a user-driven worker-local action — never a model-invoked tool (locked surface decision); the model
-///     cannot trigger host mutation. <see cref="ApplyApprovedAsync" /> re-runs the full validation + dry-run check
-///     internally, so it can never blind-apply.
+///     A sandbox-relative <c>a/&lt;alias&gt;/…</c> or <c>b/&lt;alias&gt;/…</c> prefix maps back to its trusted host root
+///     via <see cref="Workspace.ISelectedFolderResolver" />, and the patch applies only under that root —
+///     traversal-rejected, binary-rejected by default. The <see cref="PreviewAsync" /> / <see cref="ApplyApprovedAsync" /> split
+///     is the approval gate: preview, explicit human confirm, then apply. It is a locked, user-driven worker-local
+///     surface, never a model-invoked tool, and the apply re-runs the full validation and dry-run check itself.
 /// </remarks>
 public interface INodePatchApplyService
 {

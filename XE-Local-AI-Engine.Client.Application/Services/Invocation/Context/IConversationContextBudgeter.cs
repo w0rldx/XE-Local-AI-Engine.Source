@@ -4,45 +4,29 @@ using Microsoft.Extensions.AI;
 
 /// <summary>
 ///     Deterministically fits a conversation history into an input-token budget before it is sent to the provider.
-///     Policy: always keep system messages, the latest user message, and the most recent turns; when the estimated
-///     footprint exceeds the budget, first shorten oversized historical tool results to an excerpt, then drop the oldest
-///     turns whole (never splitting an assistant tool-call from its tool-result), then evict whole historical approval
-///     groups. The most recent turns survive those passes intact, so an in-flight tool-calling round is preserved.
-///     <para>
-///         For the rounds those passes cannot rescue — where the protected window itself exceeds the budget, so the only
-///         alternative is failing the turn — two opt-in last-resort passes reach into that window on SURVIVORS only,
-///         oldest-first, stopping the moment the round fits and never touching the last surviving message: stripping the
-///         model's superseded reasoning, and excerpting protected tool results. Neither touches a tool call, a tool-result
-///         correlation id, or an approval record. No LLM summarization is performed at any point.
-///     </para>
 /// </summary>
+/// <remarks>
+///     System messages, the latest user message and the most recent turns are always kept, so an in-flight
+///     tool-calling round survives; over budget, oversized historical tool results are excerpted, then the oldest turns
+///     dropped whole — never splitting a tool call from its result — then whole historical approval groups evicted.
+///     Two opt-in last-resort passes reach into the protected window only when it alone exceeds the budget, touching no
+///     call, correlation id or approval record. No LLM summarization is performed at any point.
+/// </remarks>
 public interface IConversationContextBudgeter
 {
     /// <summary>
-    ///     Produces a budgeted copy of <paramref name="messages" /> that fits within
-    ///     <paramref name="contextTokenCapacity" /> minus <paramref name="reservedOutputTokens" /> minus the fixed
-    ///     per-round input overhead of <paramref name="systemPrompt" /> and <paramref name="toolDefinitions" />. Returns
-    ///     the input unchanged (reference-equal) when it already fits. When even the always-keep set exceeds the budget it
-    ///     is kept anyway (the caller's per-message validator bounds individual message size) and the result is flagged
-    ///     trimmed.
+    ///     Produces a budgeted copy of <paramref name="messages" /> fitting the capacity left after the reserved output tokens and the fixed per-round overhead.
     /// </summary>
+    /// <remarks>
+    ///     Returns the input unchanged and reference-equal when it already fits; an always-keep set that alone exceeds the budget is kept anyway and flagged
+    ///     trimmed, since the caller's per-message validator bounds individual message size. The system prompt and each tool definition never appear in the
+    ///     history yet count against the window, so each is folded in as one framed unit — mirroring the inner budgeter, over-counting slightly, the safe direction.
+    /// </remarks>
     /// <param name="messages">The ordered history to budget.</param>
     /// <param name="contextTokenCapacity">The model's effective context window in tokens.</param>
     /// <param name="reservedOutputTokens">Tokens to hold back for the model's response.</param>
-    /// <param name="systemPrompt">
-    ///     The resolved system prompt that is prepended to the request AFTER this history but still counts against
-    ///     the window. Estimated (as a System message) and folded into the effective budget so the outer budget/hard-stop
-    ///     is measured against the true round, not history alone. <see langword="null" /> counts as no system prompt.
-    /// </param>
-    /// <param name="toolDefinitions">
-    ///     The model-facing definition text (name + description + parameter schema) of each tool advertised on the
-    ///     request. Tool JSON schemas never appear in <paramref name="messages" /> yet count against the window, so each
-    ///     entry is estimated as one framed unit and folded into the effective budget — mirroring how the inner
-    ///     <c>ProviderCallBudgetChatClient</c> folds its Instructions + Tools overhead so the two approximately agree
-    ///     (the outer estimate frames each tool as its own System message, so it over-counts slightly — the safe
-    ///     direction, trimming a touch early rather than rejecting late).
-    ///     <see langword="null" />/empty counts as no tools.
-    /// </param>
+    /// <param name="systemPrompt">The resolved system prompt, prepended AFTER this history; <see langword="null" /> counts as none.</param>
+    /// <param name="toolDefinitions">Each advertised tool's model-facing name, description and parameter schema; <see langword="null" /> or empty counts as none.</param>
     /// <param name="modelName">Resolved provider model identity used only to select an existing token calibration.</param>
     ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
         int contextTokenCapacity,

@@ -11,35 +11,21 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The single <see cref="IReasoningEffortDispatcher" />: a deterministic heuristic, no model call.
-///     <see cref="ReasoningEffortSignals" /> owns the ladder that turns a turn's shape into a tier; this class turns
-///     that tier into the concrete <c>{model, effort}</c> pair the runner applies, and owns the gates that
-///     decide whether the model may be replaced at all.
-///     <para>
-///         <b>The tier is never demoted.</b> Nothing about a turn's contents moves it down. Five package members
-///         (offered tools, attachments, skills, a response schema, an unattended run) make a turn ineligible for the
-///         model SWAP while the tier stands, because less reasoning is safe where a different model is not.
-///         <see cref="ReasoningTier.Fast" /> on the resolved model at <c>low</c> therefore stays reachable on a
-///         tool-enabled turn, which is the whole point of the rule.
-///     </para>
-///     <para>
-///         <b>Logging invariant.</b> <see cref="ReasoningDispatchDecision.ReasonCode" /> is the ONLY output of this
-///         class that may ever be logged. No signal value — message length, conversation depth, the score — may
-///         appear in a log message or a log scope even at Debug, and
-///         <see cref="ReasoningDispatchRequest.LatestUserText" /> must never reach a log scope at all. That is what
-///         keeps the slice inside the agent-trajectory data policy on the logging side. This class therefore takes no
-///         logger.
-///     </para>
+///     The single <see cref="IReasoningEffortDispatcher" />: a deterministic heuristic with no model call, turning
+///     the tier <see cref="ReasoningEffortSignals" /> resolved into a concrete model and effort, and owning the gates
+///     that decide whether the model may be replaced at all.
 /// </summary>
+/// <remarks>
+///     The tier is NEVER demoted by a turn's contents. Five package members — offered tools, attachments, skills, a
+///     response schema, an unattended run — only make a turn ineligible for the model SWAP, because less reasoning is
+///     safe where a different model is not, which keeps <see cref="ReasoningTier.Fast" /> reachable with tools on.
+///     LOGGING INVARIANT: <see cref="ReasoningDispatchDecision.ReasonCode" /> is the only output that may ever be
+///     logged — no signal value, and never <see cref="ReasoningDispatchRequest.LatestUserText" />. Hence no logger.
+/// </remarks>
 public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatcher
 {
-    // NO TIER CAPS THE OUTPUT. A FAST cap was designed to bound the ANSWER, but
-    // DeferredLlamaServerChatClient.ClampToGenerationRoom narrows a reasoning budget to half of
-    // min(num_ctx, MaxOutputTokens), and min(2048, num_ctx / 2) equals min(2048, min(num_ctx, 4096) / 2) for every
-    // num_ctx — so the cap changed nothing on the reasoning side. On the history side it cost real tokens: both
-    // context budgeters derive their output RESERVATION from the requested max-output-tokens. Every decision
-    // therefore carries a null MaxOutputTokens, and a FAST turn differs from a non-`auto` turn only in its effort
-    // (and its model, when a swap is admitted).
+    // NO TIER CAPS THE OUTPUT: DeferredLlamaServerChatClient.ClampToGenerationRoom already halves a reasoning budget,
+    // so a FAST cap changed nothing there while costing history — both budgeters reserve output from max-output-tokens.
 
     private const string LowEffort = "low";
     private const string MediumEffort = "medium";
@@ -97,9 +83,8 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
 
         var (tier, tierReason) = ReasoningEffortSignals.Resolve(request.LatestUserText, request.HasAttachments, request.ConversationDepth);
 
-        // Hard rule 2. A model with no graded ladder maps the tier onto the binary on/off pair and is never swapped:
-        // a stale `auto` reaching one still has to mean something, and "reason, unless the turn is trivial" is it.
-        // Reported as `binary-model` so the notice says WHY the effort is not one of the graded levels.
+        // Hard rule 2. A model with no graded ladder maps the tier onto the binary pair and never swaps: a stale
+        // `auto` must still mean "reason, unless the turn is trivial". Reported as `binary-model` so the notice says why.
         if (!request.SupportsThinking)
         {
             return Decide(request, tier, ReasoningDispatchReasons.BinaryModel);
@@ -118,11 +103,8 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
             return Decide(request, tier, swap.RefusalReason ?? tierReason);
         }
 
-        // OWNERSHIP OF THE RESERVATION TRANSFERS ONLY WITH A RETURNED DECISION. Admission has already booked the fast
-        // model's bytes and, on an Allow verdict, one loaded-process slot; the capability re-resolution below is the
-        // one node-side call still standing between that booking and the runner receiving it. Every non-success exit
-        // from here therefore releases it, or the ledger holds a slot for a turn that never ran on the fast model and
-        // later admissions are wrongly rejected.
+        // OWNERSHIP OF THE RESERVATION TRANSFERS ONLY WITH A RETURNED DECISION: admission already booked the bytes and
+        // a slot, so every non-success exit releases it or the ledger wrongly rejects later admissions.
         try
         {
             return await DecideSwappedAsync(tier, tierReason, swap, cancellationToken);
@@ -144,11 +126,14 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
     }
 
     /// <summary>
-    ///     The swapped decision: the FAST model's OWN capability flags, re-resolved, because the resolved model's are
-    ///     now stale — a stale <c>ReasoningBudgetEnforceable</c> sends a budget the replacement 400s on, and a stale
+    ///     The swapped decision, on the FAST model's OWN capability flags, re-resolved because the resolved model's
+    ///     are now stale.
+    /// </summary>
+    /// <remarks>
+    ///     A stale <c>ReasoningBudgetEnforceable</c> sends a budget the replacement 400s on, and a stale
     ///     <c>SupportsThinking</c> picks an effort from the wrong ladder. The reason stays the TIER reason: every gate
     ///     passed, so there is no rule to name.
-    /// </summary>
+    /// </remarks>
     private async Task<ReasoningDispatchDecision> DecideSwappedAsync(ReasoningTier tier,
         string tierReason,
         SwapResolution swap,
@@ -171,26 +156,22 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
     }
 
     /// <summary>
-    ///     Either the node-local FAST model this turn may be moved onto (with the ledger reservation its admission
-    ///     produced, when it produced one), or the reason it may not be. Ordered so the reason names the most specific
-    ///     rule that applies, and so a turn that can never swap pays for no settings read and no capacity probe.
-    ///     <para>
-    ///         It never propagates a node-side failure. The dispatcher's contract is that it never fails a turn — a
-    ///         TRUST lookup, a settings read, a provider lookup or a capacity probe that throws means "this node
-    ///         cannot serve a swap right now", which is exactly
-    ///         <see cref="ReasoningDispatchReasons.FastModelUnavailable" />. Every node-side call therefore sits
-    ///         INSIDE the try below, the resolved model's own locality lookup included: it is the first gate, and a
-    ///         trust store that is briefly unreachable must degrade the turn, not fail it. A cancellation still
-    ///         propagates, because the turn itself is terminating.
-    ///     </para>
+    ///     Either the node-local FAST model this turn may be moved onto, with the ledger reservation its admission
+    ///     produced, or the reason it may not be.
     /// </summary>
+    /// <remarks>
+    ///     Ordered so the reason names the most specific rule that applies and a turn that can never swap pays for no
+    ///     settings read or capacity probe. It never propagates a node-side failure: a trust lookup, settings read,
+    ///     provider lookup or capacity probe that throws means
+    ///     <see cref="ReasoningDispatchReasons.FastModelUnavailable" />, so every node-side call sits INSIDE the try,
+    ///     the first locality gate included. A cancellation still propagates — the turn itself is terminating.
+    /// </remarks>
     private async Task<SwapResolution> ResolveSwapAsync(ReasoningDispatchRequest request, CancellationToken cancellationToken)
     {
         try
         {
-            // Swap gate 1. The turn's data was admitted upstream against the resolved model's egress posture, and
-            // replacing a cloud model would move that data somewhere the gate never authorised. Unresolved trust is
-            // treated exactly as cloud, so demanding local is fail-closed by construction.
+            // Swap gate 1. The turn's data was admitted against the resolved model's egress posture, so replacing a
+            // cloud model would move it where no gate authorised. Unresolved trust counts as cloud: fail-closed.
             if (!await IsNodeLocalAsync(request.ResolvedModel, cancellationToken))
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.CloudNoSwap);
@@ -250,12 +231,8 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
                 return SwapResolution.Refused(ReasoningDispatchReasons.FastModelIsActiveModel);
             }
 
-            // Enforcement point 2 of the node-locality gate — the SAME predicate the save ran, so a value that was
-            // stored is exactly a value that swaps. It runs again here because a model can be UNINSTALLED, or an
-            // external connection re-declared, between that save and this turn: the turn's data was admitted upstream
-            // against a node-local model, and an external or cloud replacement would carry it somewhere no egress gate
-            // authorised. An uninstalled fast model degrades here, by name, instead of at warm time under the wrong
-            // reason code.
+            // Enforcement point 2 of the node-locality gate, the SAME predicate the save ran, re-run because a model
+            // can be uninstalled or re-declared since. An uninstalled fast model degrades HERE, by name, not at warm.
             if (!await NodeLocalModelGate
                        .IsInstalledNodeLocalLlamaModelAsync(fastModel, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
             {
@@ -269,11 +246,8 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
                 // reservation books the model's bytes and one loaded-process slot; the RUNNER owns releasing it.
                 CapacityVerdict.Allow => SwapResolution.Admitted(fastModel, capacity.Reservation),
 
-                // A process for the key already exists — but the running snapshot capacity read it from does not
-                // filter profiling-owned or draining processes, so "already running" is not yet "can serve this turn".
-                // The lease is the interlock that answers that: it is granted only for a live, non-exited,
-                // non-profiling-owned, non-evicting process, and it re-checks both after acquiring. Take it, read the
-                // shape, release it immediately — the send takes its own.
+                // A process exists, but the snapshot does not filter profiling-owned or draining ones, so "running" is
+                // not "can serve this turn". The lease answers that; take it, read the shape, release — the send re-takes.
                 CapacityVerdict.QueueSameModel => ProbeRunningProcess(fastModel),
                 _ => SwapResolution.Refused(ReasoningDispatchReasons.FastModelNoCapacity)
             };

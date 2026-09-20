@@ -4,19 +4,15 @@ using Microsoft.Agents.AI;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Validates skill content (MAF-safe Name, NOCASE-unique Name, non-blank Description/Body, length caps) and delegates
-///     persistence to <see cref="IAgentSkillStore" />. The store stamps id/version/timestamp and owns the version-bump
-///     rule; this service never touches versioning. A validation failure throws <see cref="AgentSkillValidationException" />
-///     whose message is safe to surface (it never echoes the skill Description or Body).
+///     Validates skill content — MAF-safe and NOCASE-unique Name, non-blank Description and Body, length caps — and
+///     delegates persistence to <see cref="IAgentSkillStore" />.
 /// </summary>
 /// <remarks>
-///     Name and Description are validated by <see cref="AgentSkillFrontmatter" /> itself — the same code MAF runs when
-///     the resolved skill is built into an <c>AgentInlineSkill</c> — rather than by a local regex. A local regex had
-///     drifted from the Agent Skills specification: <c>^[a-z0-9]([a-z0-9-]*[a-z0-9])?$</c> accepted consecutive hyphens,
-///     which MAF rejects, so a name like <c>foo--bar</c> validated and persisted here and then threw
-///     <see cref="ArgumentException" /> at agent-construction time in both the invocation factory and the sub-agent
-///     spawn path — breaking every agent the skill was assigned to. Delegating makes divergence impossible and keeps
-///     the caps (name 64, description 1024) tracking the spec upstream.
+///     The store stamps id, version and timestamp and owns the version-bump rule; this service never touches
+///     versioning, and its <see cref="AgentSkillValidationException" /> messages never echo the Description or Body.
+///     Name and Description are validated by <see cref="AgentSkillFrontmatter" /> itself, the very code MAF runs when
+///     building an <c>AgentInlineSkill</c>, never by a local regex: a local one drifted from the specification and
+///     persisted names MAF then rejected at agent-construction time, breaking every agent the skill was assigned to.
 /// </remarks>
 internal sealed class AgentSkillService : IAgentSkillService
 {
@@ -24,11 +20,8 @@ internal sealed class AgentSkillService : IAgentSkillService
     // MAF has no body cap of its own, so this one stays local.
     private const int MaxBodyLength = 20000;
 
-    // Optional frontmatter caps. MAF validates only Name and Description, so without these the remaining four fields
-    // reach the store unbounded — and they arrive from imported, untrusted SKILL.md files, not just the editor.
-    // Compatibility mirrors AgentSkillFrontmatter.MaxCompatibilityLength (500) so a value we accept always survives
-    // the round trip into MAF. The others are sized to their documented purpose: a licence is a short name or file
-    // reference, allowed-tools is a space-delimited list, and metadata is client extension data, not a payload.
+    // Optional frontmatter caps: MAF validates only Name and Description, so the other four would reach the store
+    // unbounded from imported SKILL.md. Compatibility mirrors AgentSkillFrontmatter.MaxCompatibilityLength exactly.
     private const int MaxLicenseLength = 200;
     private const int MaxCompatibilityLength = 500;
     private const int MaxAllowedToolsLength = 1024;
@@ -86,10 +79,8 @@ internal sealed class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException("Name is required.");
         }
 
-        // MAAI001: Agent Skills are still [Experimental] in Microsoft.Agents.AI and the scoped suppression remains
-        // at the pinned version (Directory.Packages.props). AgentSkillFrontmatter's validators are the same ones the
-        // AgentInlineSkill constructor runs, so anything accepted here is guaranteed to build into a MAF skill. Their
-        // messages describe the rule and echo no caller content, so they are safe to surface verbatim.
+        // MAAI001: Agent Skills stay [Experimental] at the version pinned in Directory.Packages.props. These validators
+        // are the ones the AgentInlineSkill constructor runs, and their messages name the rule, echoing no content.
 #pragma warning disable MAAI001
         if (!AgentSkillFrontmatter.ValidateName(name, out var nameError))
         {
@@ -125,11 +116,13 @@ internal sealed class AgentSkillService : IAgentSkillService
     }
 
     /// <summary>
-    ///     Bounds the optional Agent Skills frontmatter. These four fields are not validated by MAF and reach this
-    ///     service from imported SKILL.md files as well as from the editor, so an unbounded value would otherwise be
-    ///     encrypted and persisted verbatim. Messages name the field and the limit only — never the rejected value,
-    ///     which for an imported skill is attacker-authored text that must not be reflected back into a response.
+    ///     Bounds the optional Agent Skills frontmatter, which MAF does not validate.
     /// </summary>
+    /// <remarks>
+    ///     These four fields reach this service from imported SKILL.md files as well as the editor, so an unbounded
+    ///     value would be encrypted and persisted verbatim. Messages name the field and the limit only, never the
+    ///     rejected value, which for an imported skill is attacker-authored text.
+    /// </remarks>
     private static void ValidateFrontmatter(AgentSkillInput input)
     {
         if (input.License is { Length: > MaxLicenseLength })

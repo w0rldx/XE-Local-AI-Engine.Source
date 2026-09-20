@@ -3,16 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     The two clocks that can stop one work-session step: the park clock, armed when the turn asks for an approval or
-///     an answer and disarmed as soon as it moves again, and the whole-step deadline.
-///     <para>
-///         Both stop the step the same way the operator's stop button does — through
-///         <see cref="INodeChatStreamCancellationRegistry" />, which cancels the runner so the pump persists a real
-///         <c>Cancelled</c> terminal. Cancelling the supervisor's own enumeration instead would only stop it watching:
-///         the run would continue, holding the node's one invocation slot, which is the exact failure the park clock
-///         exists to prevent.
-///     </para>
+///     The two clocks that can stop one work-session step: the park clock, armed when the turn asks for an approval
+///     or an answer and disarmed as soon as it moves again, and the whole-step deadline.
 /// </summary>
+/// <remarks>
+///     Both stop the step the way the operator's stop button does, through <see cref="INodeChatStreamCancellationRegistry" />, which
+///     cancels the runner so the pump persists a real <c>Cancelled</c> terminal. Cancelling the supervisor's own enumeration instead
+///     would only stop it watching: the run would continue, holding the node's one invocation slot, which is the exact failure the
+///     park clock exists to prevent.
+/// </remarks>
 internal sealed class StepCancellationGuard : IDisposable
 {
     private readonly NodeChatMessageCorrelation _correlation;

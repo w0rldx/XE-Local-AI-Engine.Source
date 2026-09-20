@@ -4,12 +4,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     run logger <see cref="IAgentHomeRunLogger" />. Appends structured JSONL records to the four
-///     host-side log files under <c>runs/&lt;run-id&gt;/logs/</c>. All writes are sequential within a
-///     single run (one append per call); concurrent callers for different runs each hold independent
-///     instances (the run gateway constructs one per run). Raw host paths and secrets are never written — the
-///     caller is responsible for supplying model-safe values under the two-root host/sandbox split.
+///     run logger <see cref="IAgentHomeRunLogger" />, appending structured JSONL records to the four host-side log
+///     files under <c>runs/&lt;run-id&gt;/logs/</c>.
 /// </summary>
+/// <remarks>
+///     All writes are sequential within a single run, one append per call, and concurrent callers for different runs
+///     each hold an independent instance because the run gateway constructs one per run. Raw host paths and secrets
+///     are never written: the caller supplies model-safe values under the two-root host/sandbox split.
+/// </remarks>
 internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
 {
     // Cached options: camelCase + enum-as-string + no cycles. Reused across all appends (CA1869).
@@ -83,10 +85,8 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             nodeId = ctx.NodeId,
             ownerUserId = ctx.OwnerUserId,
             providerName = ctx.ProviderName,
-            // WHO ran it, beside the correlation fields: the node's own export git runs in the same sandbox, over the
-            // same workspace, as the model's run_command, so a line without this reads as if the model ran the node's
-            // git. A closed set of node-defined constants (AgentHomeCommandActors), never model input, so it needs no
-            // redaction of its own.
+            // WHO ran it: the node's export git runs in the same sandbox over the same workspace as the model's
+            // run_command. A closed set of node-defined constants, never model input, so it needs no redaction.
             record.Actor,
             record.ExecutionId,
             record.Executable,

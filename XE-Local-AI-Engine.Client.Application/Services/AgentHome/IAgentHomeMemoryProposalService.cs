@@ -1,20 +1,25 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Memory-proposal export. Collects the agent-written JSONL proposal files from
-///     a run's <c>/agent-home/runs/&lt;run-id&gt;/memory/proposals/</c> directory, validates each record against the
-///     proposal schema, and applies a regex-based secret scan before returning. The service never mutates real node/platform
-///     memory — proposals are durable run artifacts returned to the caller for later user/platform review.
+///     Memory-proposal export: collects the agent-written JSONL proposal files from a run's
+///     <c>/agent-home/runs/&lt;run-id&gt;/memory/proposals/</c> directory.
 /// </summary>
+/// <remarks>
+///     Each record is validated against the proposal schema and passed through a regex-based secret scan before it
+///     is returned. The service never mutates real node or platform memory: proposals are durable run artifacts
+///     returned to the caller for later user/platform review.
+/// </remarks>
 internal interface IAgentHomeMemoryProposalService
 {
     /// <summary>
     ///     Reads JSONL proposal files from the run's host-side memory directory, validates each record, applies the
-    ///     proposal secret scan, and returns the surviving proposals. Malformed records and records that contain secrets in
-    ///     non-content fields are rejected and logged; content-only secret matches are redacted. Never throws on a bad
-    ///     record — validation and scan errors are surfaced as <see cref="MemoryProposalRejection" /> entries on the
-    ///     result.
+    ///     proposal secret scan, and returns the surviving proposals.
     /// </summary>
+    /// <remarks>
+    ///     Malformed records and records carrying secrets in non-content fields are rejected and logged, while
+    ///     content-only secret matches are redacted. A bad record never throws: validation and scan errors are
+    ///     surfaced as <see cref="MemoryProposalRejection" /> entries on the result.
+    /// </remarks>
     Task<MemoryProposalCollectResult> CollectAsync(MemoryProposalCollectRequest request,
         CancellationToken cancellationToken = default);
 }

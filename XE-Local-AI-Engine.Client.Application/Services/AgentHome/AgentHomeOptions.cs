@@ -45,19 +45,24 @@ public sealed class AgentHomeOptions
     public int CommandTimeoutSeconds { get; set; } = 300;
 
     /// <summary>
-    ///     Wall-clock ceiling for the WHOLE goal-execution loop — every inner model turn and every command it runs —
-    ///     applied on top of, and separately from, <see cref="CommandTimeoutSeconds" /> (which still bounds ONE command).
-    ///     A stuck inner loop holds the node's single inference slot for as long as it runs, so this is not optional.
-    ///     Defaults to 600 seconds, which is a CONSERVATIVE STARTING POINT, not a measured value: the live round must
-    ///     time a realistic multi-tool-call goal on the target model class and this default re-set from that number.
+    ///     Wall-clock ceiling for the whole goal-execution loop — every inner model turn and every command it runs.
+    ///     Defaults to 600 seconds.
     /// </summary>
+    /// <remarks>
+    ///     Applies on top of, and separately from, <see cref="CommandTimeoutSeconds" />, which still bounds ONE
+    ///     command. A stuck inner loop holds the node's single inference slot for as long as it runs, so the ceiling
+    ///     is not optional. The default is a conservative starting point, not a measured value: re-set it from a
+    ///     timed, realistic multi-tool-call goal on the target model class.
+    /// </remarks>
     public int MaxRunSeconds { get; set; } = 600;
 
     /// <summary>
-    ///     Maximum number of inner tool calls one goal-execution loop may make. The model is told the budget, and the
-    ///     call that would exceed it is refused rather than executed; the run then finishes and still exports whatever
-    ///     partial work it produced. Defaults to 24.
+    ///     Maximum number of inner tool calls one goal-execution loop may make. Defaults to 24.
     /// </summary>
+    /// <remarks>
+    ///     The model is told the budget, and the call that would exceed it is refused rather than executed. The run
+    ///     then finishes and still exports whatever partial work it produced.
+    /// </remarks>
     public int MaxInnerToolCalls { get; set; } = 24;
 
     /// <summary>
@@ -93,10 +98,13 @@ public sealed class AgentHomeOptions
     public long MaxPatchBytes { get; set; } = 52428800;
 
     /// <summary>
-    ///     The model ids the worker considers tool-capable for AgentHome (the AgentHome tool-capability allowlist). The
-    ///     loopback offer list omits <c>run_in_agent_home</c> when the active model id is not in this list; the encrypted
-    ///     path stays server-gated by <c>AiModel.SupportsToolCalling</c>. Defaults to <c>["qwen3:8b"]</c>.
+    ///     The AgentHome tool-capability allowlist: the model ids the worker considers tool-capable. Defaults to
+    ///     <c>["qwen3:8b"]</c>.
     /// </summary>
+    /// <remarks>
+    ///     The loopback offer list omits <c>run_in_agent_home</c> when the active model id is not in this list. The
+    ///     encrypted path stays server-gated by <c>AiModel.SupportsToolCalling</c>.
+    /// </remarks>
     public IReadOnlyList<string> ToolCapableModels { get; set; } = ["qwen3:8b"];
 
     /// <summary>

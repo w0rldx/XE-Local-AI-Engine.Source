@@ -4,13 +4,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Folds an agent's enabled playbook actions into its system prompt. The header text and bullet format live here
-///     alone so the deferred relevance-retrieval path can reuse the composer with a filtered subset.
-///     Scope-aware (adaptive memory): positive guidance (Procedural / UserPreference / Project, plus untyped
-///     legacy actions) is rendered in the "Operating Playbook" section, while <see cref="MemoryScope.Failure" /> items are
-///     rendered in a SEPARATE, tightly-framed negative-guidance section ("avoid / what NOT to do") so the model does not
-///     read failures as instructions to follow.
+///     Folds an agent's enabled playbook actions into its system prompt.
 /// </summary>
+/// <remarks>
+///     The header text and bullet format live here alone, so the relevance-retrieval path reuses the composer with a
+///     filtered subset. Scope-aware: positive guidance renders in the "Operating Playbook" section while
+///     <see cref="MemoryScope.Failure" /> items render in a SEPARATE, tightly-framed negative-guidance section, so
+///     the model does not read failures as instructions to follow.
+/// </remarks>
 internal static class PlaybookPromptComposer
 {
     private const string Header = "\n\n## Operating Playbook\n";
@@ -20,16 +21,16 @@ internal static class PlaybookPromptComposer
     private const string FailureHeader = "\n\n## Avoid (lessons from past failures)\nDo NOT repeat these mistakes:\n";
 
     /// <summary>
-    ///     Returns <paramref name="baseInstructions" /> with the enabled actions appended as labeled bullet lists, in the
-    ///     order supplied (the store/selector already orders by Priority then CreatedAtUtc; the composer never re-sorts the
-    ///     positive section). <see cref="MemoryScope.Failure" /> items are pulled into a separate negative-guidance section,
-    ///     emitted AFTER the positive section and re-ordered DETERMINISTICALLY (Priority ascending, then CreatedAtUtc
-    ///     ascending) so the composed text — and thus the runtime config hash — is stable for a fixed memory set across
-    ///     sends (resume-safety). An empty list — OR a list with no Failure items and whose positive items match the legacy
-    ///     shape — composes byte-identically to the pre-scope path: an empty list returns <paramref name="baseInstructions" />
-    ///     <b>verbatim</b> (no header, no trailing delimiter), and an untyped-only/Failure-free list emits ONLY the
-    ///     "Operating Playbook" section exactly as before. That byte-identical guarantee is the central regression invariant.
+    ///     Returns <paramref name="baseInstructions" /> with the enabled actions appended as labeled bullet lists, in
+    ///     the order supplied.
     /// </summary>
+    /// <remarks>
+    ///     The store and selector already order by Priority then CreatedAtUtc and the composer never re-sorts the
+    ///     positive section. <see cref="MemoryScope.Failure" /> items are pulled into their own section AFTER it,
+    ///     re-ordered deterministically so the text, and the config hash, stay stable for a fixed memory set. An
+    ///     empty list returns <paramref name="baseInstructions" /> VERBATIM, and a Failure-free one emits only the
+    ///     "Operating Playbook" section: that byte-identical guarantee is the central regression invariant.
+    /// </remarks>
     public static string Compose(string baseInstructions, IReadOnlyList<PlaybookActionRecord> enabledOrderedByPriority)
     {
         ArgumentNullException.ThrowIfNull(enabledOrderedByPriority);

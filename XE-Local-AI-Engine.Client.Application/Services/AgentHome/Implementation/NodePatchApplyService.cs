@@ -10,22 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Applies exported <c>changes.patch</c> files onto trusted host selected folders. Each sandbox-relative
-///     <c>a/&lt;alias&gt;/…</c> / <c>b/&lt;alias&gt;/…</c> prefix is resolved through
-///     <see cref="ISelectedFolderResolver" /> and applied only under that host root. The apply path rejects traversal
-///     and cross-alias writes, rejects binary changes by default, previews before applying, and logs applied files
-///     folder-relative.
+///     Applies exported <c>changes.patch</c> files onto trusted host selected folders, resolving each sandbox-relative
+///     <c>a/&lt;alias&gt;/…</c> or <c>b/&lt;alias&gt;/…</c> prefix through <see cref="ISelectedFolderResolver" />.
 /// </summary>
 /// <remarks>
-///     Security model: all path validation is authoritative and independent of git's behaviour.
-///     The written paths are derived from the patch BODY lines (<c>--- a/…</c>, <c>+++ b/…</c>,
-///     <c>rename from/to</c>, <c>copy from/to</c>) — NOT the <c>diff --git</c> header — because git acts on the body
-///     paths. The header is kept only as a cross-check. The within-root + symlink-escape guard runs over every body
-///     path; safety never delegates to git path handling.
-///     Residual TOCTOU: there is a bounded symlink-swap window between the <c>--check</c> pass and the actual write.
-///     If a caller-controlled symlink is swapped into an intermediate directory after <c>--check</c>, git will reject
-///     the write with "beyond a symbolic link" (modern git). This bounded residual risk remains because the host
-///     folder is user-trusted and a full transactional fence would require OS-level file locking.
+///     The apply happens only under that host root, rejects traversal and cross-alias writes, rejects binary changes by default,
+///     previews before applying and logs applied files folder-relative. All path validation is authoritative and independent of git:
+///     the written paths come from the patch BODY lines (<c>--- a/…</c>, <c>+++ b/…</c>, <c>rename from/to</c>, <c>copy from/to</c>)
+///     rather than the <c>diff --git</c> header, because git acts on the body paths and the header is a cross-check only. Residual
+///     TOCTOU: a bounded symlink-swap window between <c>--check</c> and the write, which git rejects and the trusted host folder bounds.
 /// </remarks>
 internal sealed partial class NodePatchApplyService : INodePatchApplyService
 {
@@ -146,9 +139,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var appliedAliases = 0;
         foreach (var alias in plan.Aliases)
         {
-            // Residual TOCTOU note: the --check above passed for this alias; the write below runs immediately after.
-            // A symlink-swap in an intermediate directory between these two calls is bounded: git rejects "beyond a
-            // symbolic link" on modern versions, and the host folder is user-trusted.
+            // Residual TOCTOU: --check passed for this alias and the write runs immediately after. A symlink swap in an
+            // intermediate directory between the two is bounded — git rejects it, and the host folder is user-trusted.
             var apply = await ApplySubPatchAsync(runner, alias, cancellationToken);
             if (apply is null || apply.ExitCode != 0)
             {
@@ -206,9 +198,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     private static void MergeNumstat(Dictionary<string, LineStat> numstat, string alias, string output)
     {
-        // git apply --numstat lines: "<added>\t<removed>\t<path>" where <path> is the in-patch b-side path that
-        // -p2 has already stripped of the a/ + alias prefix, leaving a folder-relative path. Binary file entries
-        // emit "-" for both counts. Pure renames with no content changes emit "0\t0\t<path>".
+        // git apply --numstat lines carry added, removed and the b-side path that -p2 already stripped to folder-relative.
+        // A binary entry emits "-" for both counts, and a pure rename with no content change emits zeroes.
         foreach (var line in output.Split(separator: '\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = line.Split('\t');
@@ -403,9 +394,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return null;
         }
 
-        // Every target relative path (extracted from the BODY lines that git actually acts on) must resolve
-        // under the alias root. This is our own authoritative guard — we never rely on git's path validation.
-        // A symlinked intermediate dir that escapes the root is also rejected (EscapesViaReparsePoint).
+        // Every target relative path, taken from the BODY lines git acts on, must resolve under the alias root. This guard
+        // is authoritative and never relies on git's path validation; a symlinked intermediate that escapes is rejected.
         foreach (var block in blocks)
         {
             foreach (var relativePath in block.TargetRelativePaths)

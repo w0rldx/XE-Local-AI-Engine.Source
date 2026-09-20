@@ -8,12 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Writes and recovers the worker-local <c>agent-home</c> layout on the deterministic host root. The sandbox provider
-///     abstraction cannot author a directory tree (copy-into needs a host source, there is no mkdir, exec is scripted),
-///     and the layout must exist while Agent Mode is disabled, so the layout is materialized on the host root via
-///     <see cref="System.IO" />; later workspace-copy steps copy the prepared tree into the sandbox. The provider is
-///     consumed only to kill prior runtime state on an owner change.
+///     Writes and recovers the worker-local <c>agent-home</c> layout on the deterministic host root.
 /// </summary>
+/// <remarks>
+///     The sandbox provider abstraction cannot author a directory tree (copy-into needs a host source, there is no
+///     mkdir, exec is scripted) and the layout must exist while Agent Mode is disabled, so the layout is materialized
+///     on the host root via <see cref="System.IO" /> and later workspace-copy steps copy the prepared tree into the
+///     sandbox. The provider is consumed only to kill prior runtime state on an owner change.
+/// </remarks>
 internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDisposable
 {
     private const string AgentHomeDirectoryName = "agent-home";
@@ -280,16 +282,14 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     }
 
     /// <summary>
-    ///     The <c>policy.json</c> network posture, derived from the sandbox provider's advertised capability — the same
-    ///     flag <c>SandboxEgressPolicy</c> uses to choose what to request. One source of truth, so the
-    ///     manifest and the run cannot disagree.
-    ///     <para>
-    ///         Note the baseline writer deliberately does NOT overwrite an existing <c>policy.json</c> (re-init
-    ///         preserves operator edits, and there is a test pinning that). An agent-home initialized before egress
-    ///         denial was available therefore keeps its original file; the derived value applies to fresh
-    ///         initializations.
-    ///     </para>
+    ///     The <c>policy.json</c> network posture, derived from the sandbox provider's advertised capability — the
+    ///     same flag <c>SandboxEgressPolicy</c> reads, so the manifest and the run cannot disagree.
     /// </summary>
+    /// <remarks>
+    ///     The baseline writer deliberately does NOT overwrite an existing <c>policy.json</c>, so re-init preserves
+    ///     operator edits and a test pins that. An agent-home initialized before egress denial was available
+    ///     therefore keeps its original file, and the derived value applies to fresh initializations only.
+    /// </remarks>
     private string ResolveManifestNetworkPolicy()
     {
         return _sandboxProvider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
@@ -311,9 +311,8 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var policyJson = JsonSerializer.Serialize(new AgentHomePolicy
             {
                 Version = AgentHomePolicy.CurrentVersion,
-                // DERIVED, never restated: read from the same capability flag SandboxEgressPolicy
-                // reads, so the manifest cannot advertise a posture the run did not actually get. A hard-coded string
-                // here would silently become a lie the moment the effective policy changed on either side.
+                // DERIVED, never restated: read from the same capability flag SandboxEgressPolicy reads, so the manifest
+                // cannot advertise a posture the run did not get. A hard-coded string would become a lie on either change.
                 NetworkPolicy = ResolveManifestNetworkPolicy(),
                 AllowReadOnlyMounts = false,
                 WritableMounts = false
@@ -368,9 +367,8 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             return;
         }
 
-        // Defense in depth: a recursive delete only ever fires on a directory that holds a materialized AgentHome
-        // manifest. Wipe is reached solely after an existing manifest was read, so this invariant always holds; if it
-        // does not, refuse rather than recursively delete an unexpected (mis-configured root) directory.
+        // Defense in depth: a recursive delete only ever fires on a directory holding a materialized AgentHome manifest.
+        // Wipe is reached only after one was read, so refuse rather than recursively delete a mis-configured root.
         if (!File.Exists(Path.Combine(agentHomeRoot, ManifestFileName)))
         {
             throw new InvalidOperationException($"Refusing to recursively delete '{agentHomeRoot}': no AgentHome manifest is present.");

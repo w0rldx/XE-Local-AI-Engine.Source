@@ -22,17 +22,14 @@ internal static class WorkSessionToolSerialization
 
 /// <summary>
 ///     The shared shape of the four work-session state tools: bounded JSON in, one sentence out, never a throw.
-///     <para>
-///         The session is resolved from the ambient conversation id the invocation runner seeds for the whole tool loop
-///         (<see cref="AgentRunConversationContext" />) and a conversation-to-session lookup — never from the arguments,
-///         which are model-authored. That is what makes the profile-opt-in offer safe: a work-session agent bound to an
-///         ordinary chat resolves no session and gets four inert tools.
-///     </para>
-///     <para>
-///         Every guard fails CLOSED to a sentence rather than an exception, because a throw inside the
-///         function-invocation pipeline ends the turn where an actionable sentence lets the model recover.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The session is resolved from the ambient conversation id the invocation runner seeds for the whole tool loop
+///     (<see cref="AgentRunConversationContext" />) plus a conversation-to-session lookup, never from the model-authored arguments.
+///     That is what makes the profile-opt-in offer safe: a work-session agent bound to an ordinary chat resolves no session and gets
+///     four inert tools. Every guard fails CLOSED to a sentence rather than an exception, because a throw inside the
+///     function-invocation pipeline ends the turn where an actionable sentence lets the model recover.
+/// </remarks>
 internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandler
     where TRequest : class
 {
@@ -67,19 +64,25 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
     public abstract string ParameterSchema { get; }
 
     /// <summary>
-    ///     One concrete, valid argument payload for this tool, handed back verbatim whenever the arguments could not be
-    ///     read. A small model that got the shape wrong recovers from an example far more reliably than from a
-    ///     description of the shape — and the alternative, echoing the parser's own message, spends the step's whole
-    ///     call budget telling it the name of a CLR type.
+    ///     One concrete, valid argument payload for this tool, handed back verbatim whenever the arguments could not
+    ///     be read.
     /// </summary>
+    /// <remarks>
+    ///     A small model that got the shape wrong recovers from an example far more reliably than from a description
+    ///     of it, and the alternative — echoing the parser's own message — spends the step's whole call budget
+    ///     telling the model the name of a CLR type.
+    /// </remarks>
     protected abstract string ExampleArguments { get; }
 
     /// <summary>
-    ///     Auto-execute. These tools write only into the session's own rows, and an approval prompt per finding would
-    ///     make an unattended session unusable. The node-level policy can still tighten the whole
-    ///     <see cref="ToolCategory.WriteExecute" /> category, which is a deliberate consequence of labelling them
-    ///     honestly rather than hiding the write behind <see cref="ToolCategory.ReadLocal" />.
+    ///     Auto-execute: these tools write only into the session's own rows, and an approval prompt per finding would
+    ///     make an unattended session unusable.
     /// </summary>
+    /// <remarks>
+    ///     The node-level policy can still tighten the whole <see cref="ToolCategory.WriteExecute" /> category, which
+    ///     is a deliberate consequence of labelling them honestly rather than hiding the write behind
+    ///     <see cref="ToolCategory.ReadLocal" />.
+    /// </remarks>
     public bool RequiresApproval => false;
 
     public async Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
@@ -109,9 +112,8 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         }
         catch (JsonException exception)
         {
-            // The parser's own message is for an operator, not for the model: it names the CLR request type and, for an
-            // unknown property, never mentions the property the model should have used instead. It goes to the log; the
-            // model gets a shape it can copy.
+            // The parser's message is for an operator, not the model: it names the CLR request type and never mentions
+            // the property the model should have used. It goes to the log, and the model gets a shape it can copy.
             Logger.LogDebug(exception, "{ToolName} could not read its arguments.", ToolName);
             return InvalidArguments;
         }
@@ -124,10 +126,8 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
 
-        // Two writers touch one session per step by design: the supervisor moves the status while this handler writes
-        // from inside the invocation loop. A lost race is expected, not a defect — re-read and try once more, then say
-        // so in a sentence the model can act on.
-        // One retry, no more: a second lost race means something other than the expected two-writer contention.
+        // Two writers touch one session per step by design: the supervisor moves the status while this handler writes from
+        // the invocation loop. One retry, no more — a second lost race means something other than that contention.
         const int MaxAttempts = 2;
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
@@ -142,9 +142,8 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
                 return SessionClosed;
             }
 
-            // Argument bounds are checked AFTER the session guards, not before: "this tool only works inside a work
-            // session" is the more useful answer to a call that is both out of scope and malformed, and it is the answer
-            // that does not leak the shape of a tool the caller cannot use anyway.
+            // Argument bounds are checked AFTER the session guards: "this tool only works inside a work session" is the
+            // more useful answer to a call both out of scope and malformed, and it leaks no shape the caller cannot use.
             if (Validate(request) is { } validationError)
             {
                 return validationError;

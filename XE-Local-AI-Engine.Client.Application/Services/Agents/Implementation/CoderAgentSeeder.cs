@@ -6,20 +6,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 
 /// <summary>
-///     Idempotent startup task that seeds ONE "Coder (read-only)" agent definition (slug
-///     <see cref="AgentDefaults.CoderAgentSeedSlug" />) — a read-only project-access agent that can list, read, and
-///     search a selected project inside the AgentHome sandbox. It carries the three coder tool names in
-///     <c>AllowedToolNames</c> (so the agent-send intersection <c>offered ∩ AllowedToolNames</c> keeps them once the
-///     offer merge is in place) with every tool approval set to <see langword="false" /> (the coder
-///     tools are read-only and auto-run). It pins no model and disables the playbook.
-///     <para>
-///         <b>Idempotent + self-healing.</b> It seeds only when the slug is absent from
-///         <see cref="IAgentDefinitionStore.ListSeededSlugsAsync" />, so re-runs never duplicate it. If an operator
-///         deletes the seeded row, the next startup re-seeds it by slug. <b>Best-effort:</b> a node must start even if
-///         seeding fails, so the expected failures are logged and swallowed and the next startup re-attempts. Mirrors
-///         <see cref="DefaultAgentSeeder" />.
-///     </para>
+///     Idempotent startup task that seeds ONE "Coder (read-only)" agent definition: a read-only project-access agent
+///     that can list, read and search a selected project inside the AgentHome sandbox.
 /// </summary>
+/// <remarks>
+///     It carries the three coder tool names in <c>AllowedToolNames</c>, so the agent-send intersection keeps them,
+///     with every approval <see langword="false" /> because the coder tools are read-only; it pins no model and
+///     disables the playbook. Seeding runs only when the slug is absent from
+///     <see cref="IAgentDefinitionStore.ListSeededSlugsAsync" />, so re-runs never duplicate it and a deleted row is
+///     re-seeded next startup. Best-effort like <see cref="DefaultAgentSeeder" />: a node starts even if seeding fails.
+/// </remarks>
 public sealed class CoderAgentSeeder : IHostedService
 {
     private const string Instructions =

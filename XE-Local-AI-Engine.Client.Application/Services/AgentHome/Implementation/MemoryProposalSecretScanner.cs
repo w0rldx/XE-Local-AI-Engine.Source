@@ -3,29 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     Regex-based secret scanner for memory proposal records. Applies per-match dispositions:
-///     <list type="bullet">
-///         <item>
-///             <description>
-///                 PEM/private-key blocks and Google service-account JSON → reject the whole record (the secret cannot
-///                 be safely redacted because the structural context is the secret).
-///             </description>
-///         </item>
-///         <item>
-///             <description>
-///                 Any secret found in <c>evidence</c> paths or the <c>type</c>/<c>operation</c>/<c>confidence</c>
-///                 metadata fields → reject the whole record (metadata must not carry secrets).
-///             </description>
-///         </item>
-///         <item>
-///             <description>
-///                 Secrets found in the <c>content</c> field only → redact as <c>[REDACTED:&lt;class&gt;]</c> and
-///                 return the record (still useful to the reviewer).
-///             </description>
-///         </item>
-///     </list>
-///     This is not comprehensive DLP. The UI/API must label proposals as untrusted until reviewed.
+///     Regex-based secret scanner for memory proposal records.
 /// </summary>
+/// <remarks>
+///     A PEM/private-key block or Google service-account JSON rejects the whole record, because there the structural context IS the
+///     secret; so does any secret in <c>evidence</c> paths or the <c>type</c>/<c>operation</c>/<c>confidence</c> metadata, which must
+///     never carry one. A secret in <c>content</c> alone is redacted to <c>[REDACTED:&lt;class&gt;]</c> and the record still returned,
+///     still useful to the reviewer. This is not comprehensive DLP: the UI and API must label proposals untrusted until reviewed.
+/// </remarks>
 internal static partial class MemoryProposalSecretScanner
 {
     // PEM private-key blocks (any variant).
@@ -86,10 +71,8 @@ internal static partial class MemoryProposalSecretScanner
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex BearerLikeRegex();
 
-    // Keyword-free high-entropy fallback: a delimited base64/hex-ish run of ≥32 chars with no surrounding token keyword.
-    // The whitespace/start/end boundaries (rather than \b) keep the '[REDACTED:…]' markers — which contain '[' and ']' —
-    // out of the match, so a second pass never re-redacts an already-redacted span. Shannon entropy is gated separately
-    // so an ordinary long identifier (low entropy) is left intact.
+    // Keyword-free high-entropy catch: a delimited base64/hex-ish run of ≥32 chars. The boundaries are not \b, so the
+    // '[REDACTED:…]' markers stay out of the match and a second pass cannot re-redact. Entropy is gated separately.
     [GeneratedRegex(@"(?<![A-Za-z0-9+/=_\-])(?<token>[A-Za-z0-9+/=_\-]{32,})(?![A-Za-z0-9+/=_\-])",
         RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex BareHighEntropyTokenRegex();
@@ -210,10 +193,8 @@ internal static partial class MemoryProposalSecretScanner
             var candidate = match.Groups["token"].Value;
             if (ShannonEntropy(candidate) >= 4.5)
             {
-                // Keep the keyword; redact the high-entropy token only. The token group's Index is absolute (into the
-                // whole content), so subtract match.Index to get the keyword length relative to match.Value — otherwise
-                // a match at a non-zero offset slices past the keyword (leaking token bytes) or throws when the absolute
-                // index exceeds match.Value.Length.
+                // Keep the keyword, redact the high-entropy token only. The token group's Index is absolute, so subtract
+                // match.Index: an offset match would otherwise slice past the keyword, leaking token bytes, or throw.
                 var keywordLength = match.Groups["token"].Index - match.Index;
                 return match.Value[..keywordLength] + "[REDACTED:high-entropy-token]";
             }

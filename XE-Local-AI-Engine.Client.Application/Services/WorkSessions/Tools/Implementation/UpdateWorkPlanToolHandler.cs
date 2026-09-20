@@ -8,11 +8,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     One plan operation as the model wrote it. <c>name</c>, <c>text</c> and <c>summary</c> are aliases for
-///     <c>title</c> and exist because a small model reliably reaches for one of them instead: before they were
-///     accepted, the unknown key failed the WHOLE batch at deserialization and the retry spent the step's entire
-///     provider-call budget guessing.
+///     One plan operation as the model wrote it.
 /// </summary>
+/// <remarks>
+///     <c>name</c>, <c>text</c> and <c>summary</c> are aliases for <c>title</c>, because a small model reliably
+///     reaches for one of them instead and an unknown key fails the WHOLE batch at deserialization, after which the
+///     retry spends the step's entire provider-call budget guessing.
+/// </remarks>
 internal sealed record WorkPlanOperationRequest(
     string? Op,
     string? TaskId,
@@ -122,11 +124,13 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
     }
 
     /// <summary>
-    ///     The sentence handed back to the model. An 'add' mints its id here, so naming those ids is the only way a
-    ///     one-step session can move a task it just added: the state block for the step was composed before the task
-    ///     existed, and a model with no id for 'update' cannot mark that task Blocked — the signal a workflow node
-    ///     reads to stand the step down for a human never fires.
+    ///     The sentence handed back to the model, naming the ids an <c>add</c> just minted.
     /// </summary>
+    /// <remarks>
+    ///     Naming them is the only way a one-step session can move a task it just added: the step's state block was
+    ///     composed before the task existed, and a model with no id for <c>update</c> cannot mark that task Blocked,
+    ///     so the signal a workflow node reads to stand the step down for a human never fires.
+    /// </remarks>
     private static string Describe(IReadOnlyList<WorkPlanTaskChange> changes)
     {
         var text = new StringBuilder(string.Create(CultureInfo.InvariantCulture, $"Recorded {changes.Count} work-plan change(s)."));
@@ -208,17 +212,8 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
         Guid taskId;
         if (parsed == WorkPlanTaskOperation.Add)
         {
-            // The node mints the id: a model-supplied one is either a collision or a forgery attempt, and the state
-            // block hands the real one back on the very next step anyway.
-            //
-            // Derived rather than random, because the id lands inside DescribeBatch's idempotency key: a Guid.NewGuid()
-            // made the key of a retried batch differ from the original's, the store's query-first dedupe saw a new
-            // operation, and the retry added the task a SECOND time.
-            //
-            // The WHOLE batch's digest, not this operation's own content: a second call in the same step that repeats
-            // an earlier add — an ordinary small-model habit — would otherwise re-mint that add's id, and the store
-            // refuses an id it already holds, rolling back the genuinely new operations beside it. Position separates
-            // two identical adds inside one batch; the digest separates one batch from every other batch in the step.
+            // Derived, never random: the id lands inside the idempotency key, so a random one adds a retried task twice.
+            // The WHOLE batch's digest, or a repeated add re-mints its id and the store rolls back its neighbours.
             taskId = WorkSessionOperationId.For(session.Id, session.StepCount, string.Create(CultureInfo.InvariantCulture, $"add:{index}:{batchDigest}"));
         }
         else if (!TryParseId(operation.TaskId, out taskId))
@@ -263,11 +258,8 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
         return !string.IsNullOrWhiteSpace(op) && Enum.TryParse(op, ignoreCase: true, out parsed);
     }
 
-    // What the batch asked for, in order, as the material every add's id is derived from. JSON rather than a
-    // colon-joined string because both the title and the detail are free model text: separated by a bare colon,
-    // "Step 2" + "verify the pin" and "Step 2:verify the pin" render alike, and two genuinely different adds would
-    // mint one id. Fields are normalized the way TryMap maps them — the title alias resolved, blank read as absent —
-    // so a retry that differs only in how it spelt an empty field still lands on the same ids.
+    // What the batch asked for, in order, as the material every add's id derives from. JSON, not a colon-joined string:
+    // a bare colon in free model text lets two different adds mint one id. Normalized as TryMap maps, so retries match.
     private static string BatchDigest(IReadOnlyList<WorkPlanOperationRequest> operations) =>
         JsonSerializer.Serialize(operations.Select(static operation => new[]
         {

@@ -219,9 +219,8 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionValidationException("A follow-up needs some text.");
         }
 
-        // The node's message-size cap is checked in the chat hub, which a REST follow-up never passes through — and the
-        // row is persisted before anything downstream could inspect it. Checked here, before the write, so an over-cap
-        // follow-up persists nothing.
+        // The node's message-size cap lives in the chat hub, which a REST follow-up never passes through, and the row
+        // is persisted before anything downstream could inspect it. Checked here so an over-cap follow-up writes none.
         var sizeBytes = Encoding.UTF8.GetByteCount(text);
         var maxBytes = _securityOptions.MaxMessageSizeKb * 1024;
         if (sizeBytes > maxBytes)
@@ -241,10 +240,8 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         },
                                   cancellationToken);
 
-        // A paused or interrupted session picks the follow-up up by resuming: it rides the next step's history like any
-        // other user turn. A parked one does not — its live step already holds the node's invocation slot, and its
-        // prompt is answered through the chat card, not here. A workflow-owned one does not either: the refusal below
-        // lands in the same catch, and the run resumes the session on its next poll with the message already in place.
+        // A paused or interrupted session picks the follow-up up by resuming. A parked one does not: its live step
+        // holds the slot and its prompt is answered through the chat card. A workflow-owned one resumes on its poll.
         if (session.Status is AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted && _supervisor.HasCapacity)
         {
             try
@@ -452,17 +449,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     }
 
     /// <summary>
-    ///     Resolves the agent and answers with the model the session would actually run on. A session bound to a model
-    ///     that cannot call tools would burn its whole step budget writing nothing, so it is refused at the boundary
-    ///     rather than discovered on step 25.
-    ///     <para>
-    ///         BOTH tool gates are checked, and their refusals are worded differently because their fixes are: a model
-    ///         whose template cannot call tools needs a different agent, while a model the operator has not listed needs
-    ///         one line in Node Settings. Checking only the capability probe is what made this silent — the offer
-    ///         applies the allow-list too, so create succeeded and every state-tool call then came back "Requested
-    ///         function … not found".
-    ///     </para>
+    ///     Resolves the agent and answers with the model the session would actually run on.
     /// </summary>
+    /// <remarks>
+    ///     A session bound to a model that cannot call tools would burn its whole step budget writing nothing, so it
+    ///     is refused at the boundary rather than discovered on step 25. BOTH tool gates are checked and their
+    ///     refusals are worded differently because their fixes are: a different agent, versus one line in Node
+    ///     Settings. See docs/wiki/04-agent-mode.md ("Checkpoints, and what a repoint may not do").
+    /// </remarks>
     private async Task<string?> ResolveToolCapableAgentAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
         var verdict = await _toolGate.InspectAsync(agentDefinitionId, pinnedModelOverride, cancellationToken);
@@ -491,13 +485,13 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     /// <summary>
     ///     Refuses repointing a session that already holds findings at a cloud-effective agent.
-    ///     <para>
-    ///         The knowledge-base cloud gate is per turn and acts on the OFFER: it withholds the local-data tools from a
-    ///         cloud model. It says nothing about text a local model already extracted. Without this check, research on a
-    ///         local model, then a pause, a repoint at a cloud agent and a resume would hand the whole findings corpus to
-    ///         a third-party provider inside the next step's state block.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The knowledge-base cloud gate is per turn and acts on the OFFER, withholding local-data tools from a cloud
+    ///     model; it says nothing about text a local model already extracted. Without this check, research locally,
+    ///     then a pause, a repoint at a cloud agent and a resume would hand the whole findings corpus to a third-party
+    ///     provider inside the next step's state block.
+    /// </remarks>
     private async Task EnsureNoCloudEgressAsync(AgentWorkSessionSnapshot session, string? effectiveModel, CancellationToken cancellationToken)
     {
         if (_knowledgeOptions.AllowCloudModelAccess)
@@ -538,11 +532,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     }
 
     /// <summary>
-    ///     Keeps the two lifecycle surfaces from crossing. A workflow run owns its sessions outright, so a lifecycle call
-    ///     arriving through <see cref="IWorkSessionService" /> — the REST layer, the Work Sessions page, any headless
-    ///     caller — is refused, and the operator's control is pausing the run instead. The mirror case is refused for the
-    ///     same reason: <see cref="IWorkflowOwnedWorkSessionLifecycle" /> must not reach a session no run is driving.
+    ///     Keeps the two lifecycle surfaces from crossing.
     /// </summary>
+    /// <remarks>
+    ///     A workflow run owns its sessions outright, so a lifecycle call through <see cref="IWorkSessionService" /> —
+    ///     REST, the Work Sessions page, any headless caller — is refused and the operator's control is pausing the
+    ///     run. The mirror case is refused for the same reason:
+    ///     <see cref="IWorkflowOwnedWorkSessionLifecycle" /> must not reach a session no run is driving.
+    /// </remarks>
     private static void EnsureCallerOwns(AgentWorkSessionSnapshot session, bool workflowOwned)
     {
         var sessionIsWorkflowOwned = session.Kind == AgentWorkSessionKind.Workflow;

@@ -3,12 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Application-layer orchestration over <see cref="IAgentSkillStore" />: validates the supplied fields and delegates
-///     persistence. The store owns id/version/timestamp stamping and the content-affecting version-bump rule; this
-///     service never re-implements versioning. Validation rejects a blank or non-MAF-safe Name, a duplicate Name
-///     (case-insensitive), a blank Description or Body, and any field over its length cap. The decrypted
-///     Description/Body never enter a log or an exception message.
+///     Application-layer orchestration over <see cref="IAgentSkillStore" />: it validates the supplied fields and
+///     delegates persistence.
 /// </summary>
+/// <remarks>
+///     The store owns id, version and timestamp stamping and the content-affecting version-bump rule; this service
+///     never re-implements versioning. Validation rejects a blank or non-MAF-safe Name, a case-insensitive duplicate
+///     Name, a blank Description or Body, and any field over its length cap. The decrypted Description and Body never
+///     enter a log or an exception message.
+/// </remarks>
 public interface IAgentSkillService
 {
     /// <summary>Validates and persists a new skill, returning the stored record (free text decrypted).</summary>

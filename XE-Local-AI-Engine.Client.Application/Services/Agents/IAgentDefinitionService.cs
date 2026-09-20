@@ -4,12 +4,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Application-layer orchestration over <see cref="IAgentDefinitionStore" />: validates the supplied fields and
-///     delegates persistence. The store owns id/version/timestamp stamping and the config-affecting version-bump rule;
-///     this service never re-implements versioning. Validation rejects empty Name/Instructions and approval keys that
-///     fall outside the allowed-tool set, and warns (without failing) when a tool name is not in the node catalog so an
-///     uninstalled tool can be re-enabled later.
+///     Application-layer orchestration over <see cref="IAgentDefinitionStore" />: it validates the supplied fields
+///     and delegates persistence.
 /// </summary>
+/// <remarks>
+///     The store owns id, version and timestamp stamping and the config-affecting version-bump rule; this service
+///     never re-implements versioning. Validation rejects an empty Name or Instructions and approval keys outside the
+///     allowed-tool set, and only WARNS on a tool name absent from the node catalog, so an uninstalled tool can be
+///     re-enabled later.
+/// </remarks>
 public interface IAgentDefinitionService
 {
     /// <summary>Validates and persists a new definition, returning the stored record.</summary>

@@ -4,47 +4,41 @@ using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
-///     Inter-chunk idle watchdog for a streamed <see cref="IAsyncEnumerable{T}" />. Bounds the gap BETWEEN yielded
-///     items (the time the provider takes to produce the next chunk); it deliberately does not bound the total stream
-///     duration (the invocation-level timeout owns that) nor the consumer's own processing/transport time between
-///     chunks. Mirrors the per-event idle clock the orchestration session already uses so both streaming paths enforce
-///     an inter-chunk stall the same way.
-///     <para>
-///         The idle bound is a WALL-CLOCK bound a non-cooperative provider cannot defeat: each pull is awaited through
-///         <c>WaitAsync(idleTimeout, token)</c>, whose timer fires at the deadline even when the enumerator ignores the
-///         cancellation token and never returns. On timeout
-///         the provider is asked to stop and given a bounded grace to unwind; a provider that honours it unwinds cleanly,
-///         while one that ignores it is ABANDONED — its stuck operation is left running but observed off-thread (so it
-///         never surfaces as an unobserved-task fault), disposal is bounded the same way, and the abandonment is recorded
-///         on <see cref="NodeMetrics.ChatStreamProviderAbandonedTotal" />. Because the iterator terminates on timeout, any
-///         late item the abandoned enumerator eventually produces can never reach the consumer.
-///     </para>
+///     Inter-chunk idle watchdog for a streamed <see cref="IAsyncEnumerable{T}" />: it bounds the gap BETWEEN yielded
+///     items, never the total stream duration (the invocation timeout owns that) nor the consumer's own time.
 /// </summary>
+/// <remarks>
+///     Mirrors the orchestration session's per-event idle clock. A WALL-CLOCK bound a non-cooperative provider cannot
+///     defeat: each pull is awaited through <c>WaitAsync(idleTimeout, token)</c>, whose timer fires even when the
+///     enumerator ignores cancellation. On timeout the provider is asked to stop within a bounded grace; one that
+///     ignores it is ABANDONED, its stuck operation observed off-thread and counted on
+///     <see cref="NodeMetrics.ChatStreamProviderAbandonedTotal" />. The iterator terminates, so no late item arrives.
+/// </remarks>
 internal static class StreamIdleWatchdog
 {
     /// <summary>
-    ///     After an idle timeout (or outer cancellation) the provider is asked to stop; this is how long it is then given
-    ///     to honour cancellation — for its stuck <c>MoveNextAsync</c> to unwind and, separately, for a <c>DisposeAsync</c>
-    ///     to complete — before the enumerator is abandoned. Kept small so a wedged provider cannot hold the pipeline for
-    ///     long, but non-zero so a cooperative provider unwinds cleanly and is not misreported as abandoned.
+    ///     How long a provider asked to stop is given to honour cancellation — for its stuck <c>MoveNextAsync</c> to
+    ///     unwind and, separately, for a <c>DisposeAsync</c> to complete — before the enumerator is abandoned.
     /// </summary>
+    /// <remarks>
+    ///     Small, so a wedged provider cannot hold the pipeline for long, but non-zero, so a cooperative one unwinds
+    ///     cleanly rather than being misreported as abandoned.
+    /// </remarks>
     private static readonly TimeSpan DefaultAbandonmentGrace = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    ///     Enumerates the stream built by <paramref name="streamFactory" /> so that if more than
-    ///     <paramref name="idleTimeout" /> elapses waiting for the next item, the send is cancelled and a
-    ///     <see cref="StreamIdleTimeoutException" /> carrying <paramref name="timeoutMessage" /> is thrown. The factory
-    ///     receives the watchdog's own linked token so that expiry actually cancels the underlying provider call (a
-    ///     token handed to <c>GetAsyncEnumerator</c> alone would not, since the provider stream binds cancellation via
-    ///     its method argument). Crucially the wait is wall-clock-bounded, so a provider that IGNORES that token still
-    ///     hits the deadline. A non-positive <paramref name="idleTimeout" /> disables the watchdog (pass-through).
-    ///     Outer cancellation via <paramref name="cancellationToken" /> propagates as an ordinary
-    ///     <see cref="OperationCanceledException" /> and is never reported as an idle timeout.
+    ///     Enumerates the stream built by <paramref name="streamFactory" />, throwing a
+    ///     <see cref="StreamIdleTimeoutException" /> carrying <paramref name="timeoutMessage" /> when more than
+    ///     <paramref name="idleTimeout" /> elapses waiting for the next item.
     /// </summary>
-    /// <param name="abandonmentGrace">
-    ///     Overrides <see cref="DefaultAbandonmentGrace" /> (used by tests to keep the abandon path fast). When
-    ///     <see langword="null" /> or non-positive the default is used.
-    /// </param>
+    /// <remarks>
+    ///     The factory receives the watchdog's own linked token, because the provider stream binds cancellation via
+    ///     its method argument and a token handed to <c>GetAsyncEnumerator</c> alone would not cancel the send. The
+    ///     wait is wall-clock-bounded, so a provider that IGNORES that token still hits the deadline. A non-positive
+    ///     <paramref name="idleTimeout" /> disables the watchdog. Outer cancellation propagates as an ordinary
+    ///     <see cref="OperationCanceledException" /> and is never reported as an idle timeout.
+    /// </remarks>
+    /// <param name="abandonmentGrace">Overrides <see cref="DefaultAbandonmentGrace" />; null or non-positive uses it.</param>
     public static IAsyncEnumerable<T> WithIdleTimeout<T>(Func<CancellationToken, IAsyncEnumerable<T>> streamFactory,
         TimeSpan idleTimeout,
         string timeoutMessage,
@@ -75,11 +69,8 @@ internal static class StreamIdleWatchdog
             yield break;
         }
 
-        // The provider stream binds cancellation via the token handed to the factory; cancelling providerCts is the
-        // cooperative signal to stop. But a provider that IGNORES that token can leave MoveNextAsync/DisposeAsync pending
-        // forever, so the waits below are wall-clock-bounded and a stuck operation is abandoned (never awaited inline)
-        // rather than trusted to return. Disposal is therefore managed manually (no `await using`), so a hung DisposeAsync
-        // cannot wedge the pipeline.
+        // Cancelling providerCts is the cooperative stop signal, but a provider that IGNORES it can leave
+        // MoveNextAsync/DisposeAsync pending forever — hence wall-clock waits and manual disposal, never `await using`.
         using var providerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var enumerator = streamFactory(providerCts.Token).GetAsyncEnumerator(providerCts.Token);
         var disposalHandedOff = false;
@@ -88,10 +79,8 @@ internal static class StreamIdleWatchdog
             var awaitingFirstChunk = true;
             while (true)
             {
-                // Observe outer cancellation BEFORE advancing: a stream whose MoveNextAsync always completes
-                // synchronously (a pre-buffered enumerator) never reaches the wall-clock race below, so without this it
-                // could emit past a cancel forever. The idle bound is a per-wait timer, and a zero-wait synchronous chunk
-                // has no idle gap to exceed, so only cancellation is checked on this path.
+                // Observe outer cancellation BEFORE advancing: a pre-buffered enumerator completes synchronously, never
+                // reaches the wait below, and would emit past a cancel. A zero-wait chunk has no idle gap to exceed.
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var moveNext = enumerator.MoveNextAsync();
@@ -155,9 +144,8 @@ internal static class StreamIdleWatchdog
         }
         finally
         {
-            // Normal completion, a consumer break, or a timeout whose provider unwound cooperatively: dispose within a
-            // bound so a hung DisposeAsync cannot wedge the pipeline. When disposal was handed to an abandonment cleanup
-            // it owns the enumerator (which may still be mid-MoveNextAsync), so do not touch it here.
+            // Completion, a consumer break, or a cooperative unwind: dispose within a bound so a hung DisposeAsync
+            // cannot wedge the pipeline. An abandonment cleanup owns the enumerator instead — do not touch it here.
             if (!disposalHandedOff)
             {
                 var disposeTask = enumerator.DisposeAsync().AsTask();
@@ -171,13 +159,15 @@ internal static class StreamIdleWatchdog
     }
 
     /// <summary>
-    ///     Bounds one provider pull (<paramref name="moveTask" />) by a wall-clock idle deadline. Returns
-    ///     <see cref="PullStatus.Advanced" /> / <see cref="PullStatus.Completed" /> when the pull wins in time (the caller
-    ///     may then read <c>enumerator.Current</c>); on the deadline it asks the provider to stop, gives it
-    ///     <paramref name="abandonmentGrace" /> to unwind, records and (via <see cref="AbandonAsync" />) hands off a
-    ///     non-cooperative provider, emits the watchdog metric, and returns <see cref="PullStatus.IdleTimedOut" /> — or
-    ///     <see cref="PullStatus.OuterCancelled" /> when <paramref name="cancellationToken" /> is what fired.
+    ///     Bounds one provider pull (<paramref name="moveTask" />) by a wall-clock idle deadline.
     /// </summary>
+    /// <remarks>
+    ///     A pull that wins in time answers <see cref="PullStatus.Advanced" /> or
+    ///     <see cref="PullStatus.Completed" />, and the caller may read <c>enumerator.Current</c>. On the deadline it
+    ///     asks the provider to stop, allows <paramref name="abandonmentGrace" /> to unwind, hands a non-cooperative
+    ///     one to <see cref="AbandonAsync" />, emits the watchdog metric and answers
+    ///     <see cref="PullStatus.IdleTimedOut" /> — or <see cref="PullStatus.OuterCancelled" /> if the token fired.
+    /// </remarks>
     private static async Task<PullOutcome> PullNextAsync<T>(IAsyncEnumerator<T> enumerator,
         Task<bool> moveTask,
         TimeSpan idleTimeout,
@@ -189,33 +179,26 @@ internal static class StreamIdleWatchdog
         bool idleFired;
         try
         {
-            // WaitAsync is the same wall-clock bound the previous linked-CTS + Task.Delay + WhenAny race was — its timer
-            // fires whether or not the provider honours cancellation — at one timer registration instead of ~7 objects
-            // per token. A chunk (or a provider fault) arriving within the window returns/rethrows exactly as before.
+            // WaitAsync is the wall-clock bound: its timer fires whether or not the provider honours cancellation, at
+            // one timer registration per pull. A chunk or a provider fault inside the window returns or rethrows.
             var moved = await moveTask.WaitAsync(idleTimeout, cancellationToken);
             return new PullOutcome(moved ? PullStatus.Advanced : PullStatus.Completed, DisposalHandedOff: false);
         }
         catch (TimeoutException idleDeadline) when (!IsFaultOf(moveTask, idleDeadline))
         {
-            // Our deadline fired. The filter keeps a provider fault that happens to BE a TimeoutException classified as
-            // a provider fault (it propagates), exactly as it did when the pull won the old race; only the deadline we
-            // raised ourselves lands here. Preserve the old precedence too: an outer cancel observed at this moment is
-            // reported as cancellation, not as a stall.
+            // Our deadline fired. The filter keeps a provider fault that happens to BE a TimeoutException propagating
+            // as a provider fault; only our own deadline lands here, and an outer cancel takes precedence over a stall.
             idleFired = !cancellationToken.IsCancellationRequested;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Outer cancellation won — either WaitAsync observed the token, or a cooperative provider did and faulted
-            // the pull with it. Both are the same round, and both must run the stop/grace/abandon tail below before the
-            // caller throws, so the enumerator is never disposed while a MoveNextAsync is still pending. A provider
-            // OperationCanceledException raised for its OWN reasons (outer token not cancelled) is not caught here and
-            // propagates unchanged.
+            // Outer cancellation won, through WaitAsync or a cooperative provider; both run the stop/grace/abandon tail
+            // so nothing is disposed mid-pull. A provider cancel for its OWN reasons is not caught and propagates.
             idleFired = false;
         }
 
-        // The deadline (or outer cancellation) ended the round — we are done with this enumerator either way. Ask the
-        // provider to stop, then give it a bounded grace to honour cancellation. A cooperative provider unwinds
-        // MoveNextAsync within the grace (a clean timeout); a non-cooperative one does not and is abandoned.
+        // The round is over either way, so ask the provider to stop and give it a bounded grace: a cooperative one
+        // unwinds MoveNextAsync inside it (a clean timeout), a non-cooperative one does not and is abandoned.
         await providerCts.CancelAsync();
         var settled = await WaitBoundedAsync(moveTask, abandonmentGrace);
         var disposalHandedOff = false;
@@ -225,9 +208,8 @@ internal static class StreamIdleWatchdog
         }
         else
         {
-            // Non-cooperative: leave MoveNextAsync running and hand BOTH its observation and the enumerator's (bounded)
-            // disposal to an off-thread cleanup — we must not dispose while a MoveNextAsync is still pending (an
-            // IAsyncEnumerator contract violation).
+            // Non-cooperative: leave MoveNextAsync running and hand both its observation and the enumerator's bounded
+            // disposal off-thread. Disposing while a MoveNextAsync is pending violates the IAsyncEnumerator contract.
             disposalHandedOff = true;
             AbandonAsync(moveTask, enumerator, abandonmentGrace);
             NodeMetrics.ChatStreamProviderAbandonedTotal.Add(1);
@@ -269,12 +251,16 @@ internal static class StreamIdleWatchdog
     }
 
     /// <summary>
-    ///     Abandons a stuck provider pull: observes <paramref name="moveTask" /> off-thread (so its eventual fault, if any,
-    ///     is not unobserved) and, only once it has settled (never concurrently with the pending pull), disposes the
-    ///     <paramref name="enumerator" /> within <paramref name="grace" />. Returns immediately; the cleanup runs detached.
-    ///     If the pull never settles the enumerator is never disposed — the documented cost of bounding a provider that
-    ///     ignores cancellation (its native resources may leak until, if ever, it returns).
+    ///     Abandons a stuck provider pull, returning immediately while a detached cleanup observes
+    ///     <paramref name="moveTask" /> and then disposes the <paramref name="enumerator" /> within
+    ///     <paramref name="grace" />.
     /// </summary>
+    /// <remarks>
+    ///     Observing it off-thread keeps its eventual fault from being unobserved, and disposal waits for it to settle
+    ///     rather than running concurrently with a pending pull. A pull that never settles leaves the enumerator
+    ///     undisposed: the accepted cost of bounding a provider that ignores cancellation, whose native resources may
+    ///     leak until, if ever, it returns.
+    /// </remarks>
     private static void AbandonAsync<T>(Task<bool> moveTask, IAsyncEnumerator<T> enumerator, TimeSpan grace)
     {
         _ = CleanupAsync(moveTask, enumerator, grace);
@@ -306,11 +292,13 @@ internal static class StreamIdleWatchdog
     }
 
     /// <summary>
-    ///     True when <paramref name="exception" /> is the very exception <paramref name="task" /> faulted with — i.e. the
-    ///     pull's own failure that <c>WaitAsync</c> rethrew unchanged, not the deadline <c>WaitAsync</c> raised itself.
-    ///     Identity, not type, is the discriminator: a provider fault that happens to be a <see cref="TimeoutException" />
-    ///     must stay a provider fault.
+    ///     True when <paramref name="exception" /> is the very exception <paramref name="task" /> faulted with: the
+    ///     pull's own failure that <c>WaitAsync</c> rethrew, not the deadline <c>WaitAsync</c> raised itself.
     /// </summary>
+    /// <remarks>
+    ///     Identity, not type, is the discriminator — a provider fault that happens to be a
+    ///     <see cref="TimeoutException" /> must stay a provider fault.
+    /// </remarks>
     private static bool IsFaultOf(Task task, Exception exception)
     {
         return task.Exception is { } aggregate && aggregate.InnerExceptions.Contains(exception);

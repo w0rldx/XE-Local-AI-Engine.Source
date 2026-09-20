@@ -1,21 +1,24 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 /// <summary>
-///     Operator-tunable knobs for deterministic input-context budgeting applied to the conversation history sent to the
-///     provider on each invocation turn. These are node-level operational settings (NOT part of a runtime package's
-///     cross-repo config hash), bound from the <c>Agent:ConversationContextBudget</c> configuration section. Defaults
-///     are on and conservative so a fresh install bounds long conversations without an operator having to opt in.
+///     Operator-tunable knobs for the deterministic input-context budgeting applied to the conversation history sent
+///     to the provider on each invocation turn.
 /// </summary>
+/// <remarks>
+///     Node-level operational settings, NOT part of a runtime package's cross-repo config hash, bound from the
+///     <c>Agent:ConversationContextBudget</c> section. Defaults are on and conservative, so a fresh install bounds
+///     long conversations without an operator having to opt in.
+/// </remarks>
 public sealed class ConversationContextBudgetOptions
 {
     public const string SectionName = "Agent:ConversationContextBudget";
 
-    /// <summary>
-    ///     The default of <see cref="HistoricalToolResultExcerptChars" />, exposed as a constant so the callers that
-    ///     apply the same cap before the budgeter ever sees the round — <c>ConversationContextBuilder.Build</c>'s tool
-    ///     history projection and the step bound's estimate of it — can carry it as a parameter default instead of
+    /// <summary>The default of <see cref="HistoricalToolResultExcerptChars" />, exposed as a constant.</summary>
+    /// <remarks>
+    ///     The callers that apply the same cap before the budgeter sees the round — <c>ConversationContextBuilder.Build</c>'s
+    ///     tool-history projection and the step bound's estimate of it — carry it as a parameter default instead of
     ///     re-typing the number and drifting from it.
-    /// </summary>
+    /// </remarks>
     public const int DefaultHistoricalToolResultExcerptChars = 2000;
 
     /// <summary>
@@ -26,13 +29,15 @@ public sealed class ConversationContextBudgetOptions
     public int ReservedOutputTokenFloor { get; set; } = 1024;
 
     /// <summary>
-    ///     How many of the most recent turns (a user message plus every assistant/tool message that follows it up to the
-    ///     next user message) are always kept and never trimmed. Guarantees the latest user message and the in-flight
-    ///     tool-calling round survive budgeting. Must be at least 2: the approval-replay path spans two turns — the
-    ///     assistant tool-call and its approval request land in one turn, and the replayed User approval-decision lands
-    ///     in the next — so protecting a single turn could drop the tool-call turn and orphan the approval response. The
-    ///     budgeter clamps to this floor as well, so even a mis-set config cannot orphan an approval round.
+    ///     How many of the most recent turns are always kept and never trimmed, which is what guarantees the latest
+    ///     user message and the in-flight tool-calling round survive budgeting.
     /// </summary>
+    /// <remarks>
+    ///     A turn is a user message plus every assistant/tool message up to the next user message. Must be at least 2,
+    ///     because the approval-replay path spans two turns — the assistant tool-call and its approval request in one,
+    ///     the replayed User decision in the next — so protecting a single turn could drop the tool-call turn and
+    ///     orphan the response. The budgeter clamps to that floor too, so a mis-set config cannot orphan a round.
+    /// </remarks>
     public int RecentTurnKeepCount { get; set; } = 4;
 
     /// <summary>
@@ -49,30 +54,27 @@ public sealed class ConversationContextBudgetOptions
     public int DefaultContextTokens { get; set; } = 8192;
 
     /// <summary>
-    ///     Enables the budgeter's Pass 4: when the ordinary passes (excerpt historical tool results, drop whole historical
-    ///     turns, evict whole historical approval groups) still leave the round over budget, strip
-    ///     <see cref="Microsoft.Extensions.AI.TextReasoningContent" /> from surviving messages OLDEST FIRST, and only for
-    ///     as long as the round is still over budget. The last surviving message is never touched. This is the first pass
-    ///     allowed to reach into the protected recent window, and the only content it takes there is the model's own
-    ///     superseded scratch-pad thinking — never a tool call, a tool result, or an approval record — so it cannot orphan
-    ///     a correlation. It fires ONLY in rounds that would otherwise raise
-    ///     <see cref="ContextBudgetExceededException" /> and fail the turn outright.
-    ///     <para>
-    ///         Default ON. It shipped off and was flipped only once the combined replay gate
-    ///         (<c>BudgetedApprovalReplayTests</c>) proved a history it rewrote still survives the approval validator,
-    ///         function invocation, the inner provider-call budgeter and the real OpenAI/llama-server wire adapter. What
-    ///         it discards is informationally inert; the alternative in exactly these rounds is a failed turn.
-    ///     </para>
+    ///     Enables the budgeter's Pass 4: stripping <see cref="Microsoft.Extensions.AI.TextReasoningContent" /> from
+    ///     surviving messages, oldest first, while the round is still over budget.
     /// </summary>
+    /// <remarks>
+    ///     The first pass allowed to reach into the protected recent window, and the only content it takes there is the
+    ///     model's own superseded scratch-pad thinking — never a tool call, result or approval record — so it cannot
+    ///     orphan a correlation; the last surviving message is never touched. It fires ONLY in rounds that would
+    ///     otherwise raise <see cref="ContextBudgetExceededException" /> and fail the turn. Default ON: what it
+    ///     discards is informationally inert, and <c>BudgetedApprovalReplayTests</c> covers the rewritten history.
+    /// </remarks>
     public bool StripProtectedReasoning { get; set; } = true;
 
     /// <summary>
-    ///     Enables the budgeter's Pass 5: when Pass 4 still leaves the round over budget, excerpt oversized tool results
-    ///     inside the PROTECTED recent window (the same excerpt + omitted-count marker Pass 1 applies to historical ones),
-    ///     oldest first, only while still over budget, and never on the last surviving message. Default OFF: unlike Pass 4
-    ///     this shortens content the model is actively working with, so it is an explicit operator opt-in rather than a
-    ///     silent behaviour change to the "protected recent turns are never modified" invariant. The replay gate covers it
-    ///     too — the default is a deliberate policy choice, not an unproven pass.
+    ///     Enables the budgeter's Pass 5: excerpting oversized tool results inside the PROTECTED recent window when
+    ///     Pass 4 still leaves the round over budget.
     /// </summary>
+    /// <remarks>
+    ///     It applies the excerpt and omitted-count marker Pass 1 uses on historical results, oldest first, only while
+    ///     still over budget, and never on the last surviving message. Default OFF: unlike Pass 4 it shortens content
+    ///     the model is actively working with, so relaxing the "protected recent turns are never modified" invariant is
+    ///     an explicit operator opt-in. The replay gate covers it too — the default is policy, not an unproven pass.
+    /// </remarks>
     public bool ExcerptProtectedToolResults { get; set; }
 }

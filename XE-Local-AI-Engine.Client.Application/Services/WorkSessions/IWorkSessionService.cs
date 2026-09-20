@@ -5,14 +5,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     The whole work-session surface the REST layer sits on: CRUD, the lifecycle verbs, the five sequence-filtered
 ///     feeds, artifact content, and the user follow-up.
-///     <para>
-///         Three exception types cross this boundary and nothing else: <see cref="WorkSessionNotFoundException" /> for an
-///         unknown session, task, finding or artifact; <c>WorkSessionInvalidTransitionException</c> (the store's, in
-///         Persistence) for a lifecycle call the session's status forbids; and
-///         <see cref="WorkSessionValidationException" /> for a bad input. Every reader throws rather than returning a
-///         nullable, so the endpoint layer has one error path instead of two.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Three exception types cross this boundary and nothing else: <see cref="WorkSessionNotFoundException" /> for an unknown session,
+///     task, finding or artifact, <c>WorkSessionInvalidTransitionException</c> (the store's, in Persistence) for a lifecycle call the
+///     session's status forbids, and <see cref="WorkSessionValidationException" /> for a bad input. Every reader throws rather than
+///     returning a nullable, so the endpoint layer has one error path instead of two.
+/// </remarks>
 public interface IWorkSessionService
 {
     Task<IReadOnlyList<WorkSessionSummary>> ListAsync(CancellationToken cancellationToken = default);
@@ -38,9 +37,8 @@ public interface IWorkSessionService
     /// </summary>
     Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
-    // The five lifecycle verbs, plus DeleteAsync above, all refuse a session a development workflow run owns: it drives
-    // its own sessions through IWorkflowOwnedWorkSessionLifecycle, and an outside pause would read to the run's poll
-    // exactly like the routine step-budget pause it auto-resumes from. Refusals are WorkSessionInvalidTransitionException.
+    // The five lifecycle verbs, and DeleteAsync above, refuse a session a development workflow run owns — it drives its
+    // own through IWorkflowOwnedWorkSessionLifecycle, and an outside pause reads to its poll like the auto-resumed one.
     Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default);
@@ -50,11 +48,14 @@ public interface IWorkSessionService
     Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Persists <paramref name="text" /> as an ordinary user message on the owned conversation, so the next step's
-    ///     history carries it. A <c>Paused</c> or <c>Interrupted</c> session is asked for a step once the row commits; a
-    ///     parked one is not, because its live step already owns the node's invocation slot and its prompt is answered
-    ///     through the chat card. Returns the persisted message id.
+    ///     Persists <paramref name="text" /> as an ordinary user message on the owned conversation, so the next
+    ///     step's history carries it, and returns the persisted message id.
     /// </summary>
+    /// <remarks>
+    ///     A <c>Paused</c> or <c>Interrupted</c> session is asked for a step once the row commits. A parked one is
+    ///     not, because its live step already owns the node's invocation slot and its prompt is answered through the
+    ///     chat card.
+    /// </remarks>
     Task<Guid> PostFollowUpAsync(Guid sessionId, string text, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -73,10 +74,13 @@ public interface IWorkSessionService
     Task<IReadOnlyList<WorkSessionEventDto>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     One artifact's metadata, without opening its bytes. Throws <see cref="WorkSessionNotFoundException" /> for an unknown
-    ///     artifact or one that belongs to a different session — same ownership rule as the content read below, so a
-    ///     caller that only needs the size (a ceiling check) never has to scan the whole artifact feed for it.
+    ///     One artifact's metadata, without opening its bytes. Throws <see cref="WorkSessionNotFoundException" /> for
+    ///     an unknown artifact or one that belongs to a different session.
     /// </summary>
+    /// <remarks>
+    ///     Same ownership rule as the content read below, so a caller that only needs the size for a ceiling check
+    ///     never has to scan the whole artifact feed for it.
+    /// </remarks>
     Task<WorkSessionArtifactDto> GetArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>

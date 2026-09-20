@@ -4,27 +4,16 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Imports third-party Agent Skills into the node-local library. This is the feature's security boundary: every
-///     input here is attacker-authored content (an archive an operator was handed, a repository anyone can publish to),
-///     so the pipeline is <em>two-phase and dry-run first</em> — a preview call parses, guards and reports without
-///     writing a single row, and a second call persists the payload the operator actually saw.
-///     <para>
-///         The second call replays the <em>materialised preview payload</em>; it never re-parses the upload or re-fetches
-///         the repository. Re-deriving the content would reopen the exact divergence the two phases exist to prevent —
-///         a repository can change between the two calls, so the operator would be approving one payload and persisting
-///         another.
-///     </para>
-///     <para>
-///         Imported skills always land <see cref="AgentSkillRecord.Enabled" /> = <c>false</c> with
-///         <see cref="AgentSkillOrigin.Imported" /> provenance. That is the strongest control in the design: the
-///         definition resolver only resolves <em>enabled</em> skills, so third-party instructions cannot reach a model
-///         until an operator deliberately turns them on.
-///     </para>
-///     <para>
-///         Scripts are never imported. They are detected, listed in the report as refused, and
-///         dropped — the feature adds no execution surface.
-///     </para>
+///     Imports third-party Agent Skills into the node-local library, and is the feature's SECURITY BOUNDARY: every
+///     input here is attacker-authored content.
 /// </summary>
+/// <remarks>
+///     Two-phase and dry-run first: a preview parses, guards and reports without writing a row, and the commit
+///     replays that MATERIALISED payload rather than re-parsing or re-fetching, so the operator cannot approve one
+///     payload and persist another. An imported skill always lands <see cref="AgentSkillRecord.Enabled" />
+///     <c>false</c> with <see cref="AgentSkillOrigin.Imported" /> provenance, and a script is never imported, only
+///     reported as refused. The pipeline and its guards: docs/wiki/04-agent-mode.md ("Import pipeline").
+/// </remarks>
 public interface ISkillImportService
 {
     /// <summary>
@@ -35,11 +24,13 @@ public interface ISkillImportService
     Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Phase 1 for an uploaded <c>.zip</c> that is still a stream. Buffers it under
-    ///     <see cref="SkillImportOptions.MaxArchiveBytes" /> and then runs the same archive preview. The cap is applied
-    ///     to the bytes actually read rather than to a declared length, because a declared length is caller-controlled
-    ///     and bounding what gets buffered is the whole point of the guard. Writes nothing.
+    ///     Phase 1 for an uploaded <c>.zip</c> that is still a stream: buffers it under
+    ///     <see cref="SkillImportOptions.MaxArchiveBytes" />, then runs the same archive preview. Writes nothing.
     /// </summary>
+    /// <remarks>
+    ///     The cap applies to the bytes actually READ, never to a declared length, which is caller-controlled —
+    ///     bounding what gets buffered is the whole point of the guard.
+    /// </remarks>
     /// <exception cref="SkillImportException">
     ///     The upload exceeds the import size cap, an archive guard tripped, or the archive holds no skill.
     /// </exception>
@@ -53,11 +44,13 @@ public interface ISkillImportService
     Task<SkillImportPreview> PreviewMarkdownAsync(string skillMarkdown, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Phase 1 for a GitHub repository. <paramref name="owner" /> and <paramref name="repository" /> are the only
-    ///     caller-supplied parts of the URL — a pasted URL is never accepted, which is what keeps the host allowlist
-    ///     meaningful. A large collection repository yields many candidates; the operator selects, we never bulk-import.
-    ///     Writes nothing.
+    ///     Phase 1 for a GitHub repository. Writes nothing.
     /// </summary>
+    /// <remarks>
+    ///     <paramref name="owner" /> and <paramref name="repository" /> are the only caller-supplied parts of the
+    ///     URL: a pasted URL is NEVER accepted, which is what keeps the host allowlist meaningful. A large collection
+    ///     repository yields many candidates and the operator selects — nothing is ever bulk-imported.
+    /// </remarks>
     /// <exception cref="SkillImportException">The owner/repo is malformed, the download failed, or a guard tripped.</exception>
     Task<SkillImportPreview> PreviewGitHubRepositoryAsync(string owner, string repository, CancellationToken cancellationToken = default);
 
@@ -70,15 +63,14 @@ public interface ISkillImportService
 }
 
 /// <summary>
-///     The import guard limits, bindable so an operator can tighten them without a rebuild. The defaults are sized to
-///     admit a real collection repository — an archive of ~175 skills is well past a thousand entries and tens of
-///     megabytes — while keeping the guards that actually bound memory tight.
+///     The import guard limits, bindable so an operator can tighten them without a rebuild.
 /// </summary>
 /// <remarks>
-///     The ranking matters if you change these. <see cref="MaxEntryBytes" /> and <see cref="MaxTotalInflatedBytes" />
-///     are the real guards: they bound what is inflated, and only entries the import intends to keep are inflated at
-///     all. <see cref="MaxEntries" /> bounds a central-directory walk, which is cheap — set too low it blocks ordinary
-///     repositories while buying almost nothing, which is what the original 512 did.
+///     The defaults admit a real collection repository, well past a thousand entries and tens of megabytes, while
+///     keeping the guards that actually bound memory tight. The ranking matters if you change them:
+///     <see cref="MaxEntryBytes" /> and <see cref="MaxTotalInflatedBytes" /> bound what is INFLATED, and only entries
+///     the import intends to keep are inflated at all, whereas <see cref="MaxEntries" /> bounds a cheap
+///     central-directory walk and blocks ordinary repositories for almost nothing when set too low.
 /// </remarks>
 public sealed class SkillImportOptions
 {
@@ -235,11 +227,12 @@ public enum SkillImportStatus
 }
 
 /// <summary>
-///     Thrown when an import is refused. Every guard in the pipeline fails closed through this exception, and its
-///     message is written to be shown to the operator: it names the rule that was broken and deliberately never echoes
-///     an entry path, a resource name or any imported text, because those are the injection sinks the guards exist to
-///     close.
+///     Thrown when an import is refused; every guard in the pipeline fails closed through it.
 /// </summary>
+/// <remarks>
+///     Its message is written to be shown to the operator: it names the rule that was broken and NEVER echoes an
+///     entry path, a resource name or any imported text, those being the injection sinks the guards exist to close.
+/// </remarks>
 public sealed class SkillImportException : Exception
 {
     public SkillImportException(string message) : base(message)

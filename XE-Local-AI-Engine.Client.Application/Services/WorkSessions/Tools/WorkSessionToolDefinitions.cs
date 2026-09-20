@@ -3,17 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     Name / description / parameter-schema constants for the four work-session state tools. The handlers advertise
-///     their model-visible schema from here and the offer provider merges the same descriptors into the profile offer,
-///     so what the model is offered can never drift from what the handler validates.
-///     <para>
-///         The schemas carry no <c>maxLength</c>. Bounds over 1024 are stripped from the llama.cpp wire by the grammar
-///         compatibility pass, and the whole offered <c>tools</c> array compiles into ONE GBNF grammar with a shared
-///         repetition ceiling — so a Research session, which offers seven schemas on top of these four, is exactly the
-///         case that ceiling bites. The length bounds below are enforced by the handlers, which are authoritative
-///         anyway.
-///     </para>
+///     Name / description / parameter-schema constants for the four work-session state tools.
 /// </summary>
+/// <remarks>
+///     The handlers advertise their model-visible schema from here and the offer provider merges the same descriptors into the profile
+///     offer, so what the model is offered can never drift from what the handler validates. The schemas carry no <c>maxLength</c>:
+///     bounds over 1024 are stripped from the llama.cpp wire by the grammar compatibility pass, and the whole offered <c>tools</c>
+///     array compiles into ONE GBNF grammar with a shared repetition ceiling — a Research session, offering seven schemas on top of
+///     these four, is exactly the case that bites. The handlers enforce the length bounds and are authoritative anyway.
+/// </remarks>
 internal static class WorkSessionToolDefinitions
 {
     /// <summary>The cap on a whole tool-call argument payload, checked before any parse.</summary>
@@ -140,9 +138,8 @@ internal static class WorkSessionToolDefinitions
             + "unmet close is read as unmet, while a silent one is read as success. The session finishes at the end of "
             + "this turn, so say anything else you still want to say before calling it.";
 
-        // objectiveMet is a plain boolean on purpose: the whole offered tools array compiles into ONE GBNF grammar for
-        // llama.cpp, and a boolean adds no repetition bound to it at all. It is optional, and absent means met, so
-        // every transcript recorded before it existed still reads as the completion it was.
+        // objectiveMet is a plain boolean on purpose: the offered tools array compiles into ONE GBNF grammar, and a boolean
+        // adds no repetition bound. Optional, and absent means met, so a transcript predating it still reads as completion.
         public const string ParameterSchema = """
                                               {
                                                 "type": "object",
@@ -171,17 +168,14 @@ internal static class WorkSessionToolDefinitions
 
 /// <summary>
 ///     The four state tools as offer descriptors, so the offer provider merges exactly what the handlers advertise.
-///     <para>
-///         Every one is <see cref="ToolCategory.WriteExecute" />: they all write durable session rows, and that is the
-///         only write category the enum has. Calling them <see cref="ToolCategory.ReadLocal" /> would hide the write
-///         from a category-based operator policy, which is worse than the consequence of being honest — tightening
-///         <c>WriteExecute</c> makes every recorded finding need an approval click.
-///     </para>
-///     <para>
-///         <c>RequiresApproval</c> is false on all four: a session records dozens of findings, and a prompt per finding
-///         would make an unattended run impossible. Their blast radius is the session's own rows.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Every one is <see cref="ToolCategory.WriteExecute" />, because they all write durable session rows and that is the only write
+///     category the enum has. Calling them <see cref="ToolCategory.ReadLocal" /> would hide the write from a category-based operator
+///     policy, which is worse than the consequence of being honest: tightening <c>WriteExecute</c> makes every recorded finding need
+///     an approval click. <c>RequiresApproval</c> is false on all four — a session records dozens of findings, a prompt per finding
+///     would make an unattended run impossible, and their blast radius is the session's own rows.
+/// </remarks>
 internal static class WorkSessionToolCatalog
 {
     public static readonly IReadOnlyList<LocalChatToolDescriptor> Descriptors =

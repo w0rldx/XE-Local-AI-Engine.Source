@@ -1,30 +1,27 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     The one Git step Development Mode's template materialization and its managed workspace genuinely share:
-///     producing a <em>standalone</em> clone of a host repository — one whose <c>.git</c> is a real
-///     directory with its own object store, so the source repository is not reachable from the result.
-///     <para>
-///         Deliberately not a "materialize a repository" abstraction. The two callers diverge immediately after this
-///         step and must keep diverging: the template service discards <c>.git</c>, re-runs <c>init</c> and fabricates
-///         an initial commit, whereas the managed workspace <em>keeps</em> the cloned history and detaches onto the
-///         recorded base commit. A workspace with a fabricated initial commit would be unappliable by construction,
-///         because <c>TrustedDevelopmentHostApplyPort</c> requires the host repository's HEAD to equal the recorded base
-///         sha at apply time. What is shared is the transport, the flag set and the standalone assertion — nothing else.
-///     </para>
+///     The one Git step Development Mode's template materialization and its managed workspace share: a
+///     <em>standalone</em> clone, whose <c>.git</c> is a real directory with its own object store, so the source
+///     repository is not reachable from the result.
 /// </summary>
+/// <remarks>
+///     Deliberately not a "materialize a repository" abstraction. The two callers diverge immediately after this step and must keep
+///     diverging: the template service discards <c>.git</c>, re-runs <c>init</c> and fabricates an initial commit, while the managed
+///     workspace KEEPS the cloned history and detaches onto the recorded base commit. A fabricated initial commit would make a
+///     workspace unappliable, because <c>TrustedDevelopmentHostApplyPort</c> requires the host repository's HEAD to equal the recorded
+///     base sha at apply time. Shared here: the transport, the flag set and the standalone assertion, nothing else.
+/// </remarks>
 internal static class StandaloneGitClone
 {
     /// <summary>
     ///     Builds the clone arguments. Run these from the destination's <em>parent</em> directory.
-    ///     <para>
-    ///         The <c>file://</c> transport is mandatory, not stylistic. Given a plain local path git prints
-    ///         <c>warning: --depth is ignored in local clones; use file:// instead</c> and then hardlinks the entire
-    ///         object store — reproducing the shared-object coupling this helper exists to prevent, while still
-    ///         reporting success. Measured on a current Git release: the plain-path form yields the source's full history, the
-    ///         <c>file://</c> form yields exactly one commit.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The <c>file://</c> transport is mandatory, not stylistic: given a plain local path git ignores <c>--depth</c>, warns, and
+    ///     hardlinks the entire object store — reproducing the shared-object coupling this helper exists to prevent, while still
+    ///     reporting success. Measured: the plain-path form yields the source's full history, the <c>file://</c> form exactly one commit.
+    /// </remarks>
     /// <param name="sourceRoot">Canonical absolute path of the repository being cloned.</param>
     /// <param name="destination">Absolute path the clone is created at. Must not already exist.</param>
     /// <param name="branch">
@@ -49,16 +46,14 @@ internal static class StandaloneGitClone
     }
 
     /// <summary>
-    ///     True when the clone owns its Git directory outright: <c>.git</c> is a real directory rather than the pointer
-    ///     <em>file</em> a linked worktree or a submodule gets, and it carries no <c>objects/info/alternates</c> naming
-    ///     an object store it does not own.
-    ///     <para>
-    ///         Both halves matter and neither implies the other. The pointer-file check is what a worktree fails; the
-    ///         alternates check is what a <c>--shared</c> or <c>--reference</c> clone would fail. A plain-local-path
-    ///         clone passes <em>both</em> while still hardlinking the whole history, which is why callers must also keep
-    ///         the <c>file://</c> transport rather than treating this assertion as the guarantee.
-    ///     </para>
+    ///     True when the clone owns its Git directory outright: <c>.git</c> is a real directory rather than the
+    ///     pointer <em>file</em> a worktree or submodule gets, and carries no <c>objects/info/alternates</c>.
     /// </summary>
+    /// <remarks>
+    ///     Both halves matter and neither implies the other: the pointer-file check is what a worktree fails, the alternates check
+    ///     what a <c>--shared</c> or <c>--reference</c> clone would. A plain-local-path clone passes BOTH while still hardlinking the
+    ///     whole history, so callers must keep the <c>file://</c> transport rather than treat this assertion as the guarantee.
+    /// </remarks>
     public static bool IsStandalone(string destination)
     {
         var gitDirectory = Path.Combine(destination, ".git");
@@ -67,11 +62,13 @@ internal static class StandaloneGitClone
     }
 
     /// <summary>
-    ///     Best-effort removal of a directory this code created and then failed to finish populating. A half-created
-    ///     clone is worse than none — it would be treated as a preserved workspace on the next attempt and carry
-    ///     whatever the failed clone left behind — and the original failure is the one worth reporting, so a cleanup
-    ///     failure is swallowed rather than masking it.
+    ///     Best-effort removal of a directory this code created and then failed to finish populating.
     /// </summary>
+    /// <remarks>
+    ///     A half-created clone is worse than none: the next attempt would treat it as a preserved workspace and carry
+    ///     whatever the failed clone left behind. The original failure is the one worth reporting, so a cleanup
+    ///     failure is swallowed rather than masking it.
+    /// </remarks>
     public static void TryDelete(string path)
     {
         try
@@ -89,21 +86,14 @@ internal static class StandaloneGitClone
 
     /// <summary>
     ///     Removes a directory tree Git produced, including the read-only files it leaves behind.
-    ///     <para>
-    ///         <see cref="Directory.Delete(string, bool)" /> alone is NOT enough for a clone. Git marks the contents of
-    ///         <c>.git/objects/pack</c> — the <c>*.pack</c> and <c>*.idx</c> files — read-only, because they are
-    ///         immutable once written. On Unix the read-only bit is a mode on the file and deletion is governed by the
-    ///         parent directory's write permission, so the plain recursive delete succeeds. On Windows
-    ///         <c>FILE_ATTRIBUTE_READONLY</c> blocks the delete itself, and the recursive walk fails part-way with
-    ///         <c>UnauthorizedAccessException: Access to the path 'pack-&lt;sha&gt;.idx' is denied</c> — leaving a
-    ///         half-removed tree behind.
-    ///     </para>
-    ///     <para>
-    ///         So the attribute is cleared on the way down and the delete is then an ordinary one. This is why the
-    ///         helper exists rather than each caller writing <c>Directory.Delete(path, true)</c>: every caller here is
-    ///         deleting something Git wrote, so every caller hits it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see cref="Directory.Delete(string, bool)" /> alone is NOT enough for a clone: Git marks <c>.git/objects/pack</c>'s
+    ///     contents read-only because they are immutable once written. On Unix that is a mode and the parent directory's write
+    ///     permission governs deletion, so a plain recursive delete succeeds; on Windows <c>FILE_ATTRIBUTE_READONLY</c> blocks the
+    ///     delete and the walk fails part-way with an access denial, leaving a half-removed tree. So the attribute is cleared on the
+    ///     way down. Hence the helper: every caller here deletes something Git wrote, so every caller hits it.
+    /// </remarks>
     public static void Delete(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -118,10 +108,12 @@ internal static class StandaloneGitClone
     }
 
     /// <summary>
-    ///     Clears <see cref="FileAttributes.ReadOnly" /> from every file in the tree. Symbolic links are not followed:
-    ///     the attribute is cleared on the link itself, never on whatever it points at, so a link planted inside the
-    ///     tree cannot be used to strip the read-only bit off a file outside it.
+    ///     Clears <see cref="FileAttributes.ReadOnly" /> from every file in the tree.
     /// </summary>
+    /// <remarks>
+    ///     Symbolic links are not followed: the attribute is cleared on the link itself, never on whatever it points
+    ///     at, so a link planted inside the tree cannot strip the read-only bit off a file outside it.
+    /// </remarks>
     private static void ClearReadOnlyAttributes(DirectoryInfo directory)
     {
         foreach (var entry in directory.EnumerateFileSystemInfos())

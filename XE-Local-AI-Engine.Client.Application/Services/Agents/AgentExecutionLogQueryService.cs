@@ -4,10 +4,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The Agents Operator endpoints' only read door onto the append-only execution-log table: the per-agent
-///     diagnostics page, the run-envelope page and the token-usage aggregate. An endpoint is the HTTP edge and may
-///     not reach into a store itself (the endpoint-dependency rule), so every read the store already filters by
-///     record kind arrives here unchanged — this type adds no policy of its own and owns no writes.
+///     diagnostics page, the run-envelope page and the token-usage aggregate.
 /// </summary>
+/// <remarks>
+///     An endpoint is the HTTP edge and may not reach into a store itself, so every read the store already filters
+///     by record kind arrives here unchanged. This type adds no policy of its own and owns no writes.
+/// </remarks>
 public sealed class AgentExecutionLogQueryService
 {
     private readonly IAgentExecutionLogStore _executionLogs;

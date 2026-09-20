@@ -4,21 +4,15 @@ using System.Text;
 
 /// <summary>
 ///     The deterministic ladder behind reasoning effort <c>auto</c>: the phrase vocabularies and the integer score
-///     that turns one turn's SHAPE into a <see cref="ReasoningTier" />. Separated from the dispatcher so the whole
-///     rule set is table-testable without a container, and so the two translated phrase lists live in one place.
-///     <para>
-///         <b>Determinism.</b> There are exactly two degrees of freedom and both are pinned: phrase folding is
-///         <c>ToUpperInvariant</c> (the repo's CA1308 posture — never fold to lower case), and every comparison is
-///         <see cref="StringComparison.Ordinal" />. No clock, no randomness, no culture.
-///     </para>
-///     <para>
-///         <b>What is NOT here.</b> The offered tool count is deliberately not a score term. <c>ask_user</c> is
-///         merged into every tool-capable offer and the relevance ranker pins an always-on core set, so
-///         "tools are offered" holds on essentially every tools-mode turn: as a score term it cancelled the
-///         short-turn signal and made <see cref="ReasoningTier.Fast" /> unreachable whenever tools were on. Tools
-///         refuse the model SWAP instead — the tier is never demoted by anything.
-///     </para>
+///     that turn one turn's SHAPE into a <see cref="ReasoningTier" />.
 /// </summary>
+/// <remarks>
+///     Separate from the dispatcher so the rule set is table-testable without a container and the translated phrase
+///     lists live in one place. Two degrees of freedom, both pinned: folding is <c>ToUpperInvariant</c> (CA1308 —
+///     never fold to lower case) and every comparison is <see cref="StringComparison.Ordinal" />. The offered tool
+///     count is deliberately NOT a score term: tools are on for essentially every tools-mode turn, so it cancelled
+///     the short-turn signal and made <see cref="ReasoningTier.Fast" /> unreachable. Tools refuse the SWAP instead.
+/// </remarks>
 public static class ReasoningEffortSignals
 {
     /// <summary>A fenced code block opener. Its presence is the strongest single "this is real work" signal.</summary>
@@ -72,10 +66,8 @@ public static class ReasoningEffortSignals
 
         var hasCodeFence = text.Contains(CodeFence, StringComparison.Ordinal);
 
-        // Phrases are read from the PROSE only. A pasted snippet containing `debug`, `refactor` or `briefly` is code
-        // the user wants looked at, not an instruction about how hard to think about it; the fence's own +2 already
-        // says the turn is real work. Lengths and the fence itself still measure the whole message, because a long
-        // paste IS a long message.
+        // Phrases are read from the PROSE only: a pasted snippet saying "debug" or "briefly" is code to look at, not an
+        // instruction, and the fence already scores it. Lengths still measure the whole message — a long paste IS long.
         var upper = (hasCodeFence ? StripFencedBlocks(text) : text).ToUpperInvariant();
         var hasDeepPhrase = ContainsPhrase(upper, DeepPhrasesUpper);
         var hasFastPhrase = ContainsPhrase(upper, FastPhrasesUpper);
@@ -163,18 +155,20 @@ public static class ReasoningEffortSignals
             return ReasoningDispatchReasons.LongMessage;
         }
 
-        // Both arms are unreachable at the current weights — reaching Deep needs a score of 3, and without a fence, a
-        // deep phrase or a long message the maximum is 2 (attachment +1, deep conversation +1). Kept so this stays a
-        // total function: a future weight change must not be able to produce an empty reason.
+        // Both arms are unreachable at the current weights (Deep needs 3; without a fence, deep phrase or long message
+        // the maximum is 2). Kept so this stays total: a future weight change must not produce an empty reason.
         return isDeepContext ? ReasoningDispatchReasons.DeepContext : ReasoningDispatchReasons.Balanced;
     }
 
     /// <summary>
     ///     Returns the message with every fenced region removed, so a phrase inside a pasted snippet cannot move the
-    ///     score. Walks <c>```</c> markers pairwise; an UNCLOSED fence swallows the rest of the message, which is the
-    ///     safe direction — everything after an opener is code until proven otherwise. Called only when a fence is
-    ///     present, so an ordinary message allocates nothing.
+    ///     score.
     /// </summary>
+    /// <remarks>
+    ///     Walks <c>```</c> markers pairwise; an UNCLOSED fence swallows the rest of the message, the safe direction,
+    ///     since everything after an opener is code until proven otherwise. Called only when a fence is present, so
+    ///     an ordinary message allocates nothing.
+    /// </remarks>
     private static string StripFencedBlocks(string text)
     {
         var prose = new StringBuilder(text.Length);
@@ -203,9 +197,12 @@ public static class ReasoningEffortSignals
 
     /// <summary>
     ///     Word-boundary containment: the phrase must not be embedded inside a longer word, so "kurz" does not fire on
-    ///     "Kurzschluss" and "prove" does not fire on "improve". A boundary is anything that is not a letter or digit —
-    ///     which is why a phrase may itself contain punctuation (<c>tl;dr</c>) or a space.
+    ///     "Kurzschluss" and "prove" does not fire on "improve".
     /// </summary>
+    /// <remarks>
+    ///     A boundary is anything that is not a letter or digit, which is why a phrase may itself contain punctuation
+    ///     (<c>tl;dr</c>) or a space.
+    /// </remarks>
     private static bool ContainsPhrase(string upperText, string[] phrasesUpper)
     {
         foreach (var phrase in phrasesUpper)
@@ -226,11 +223,8 @@ public static class ReasoningEffortSignals
         return false;
     }
 
-    // The neighbouring CHARACTER, not the neighbouring UTF-16 code unit. A letter outside the BMP (Deseret, Gothic,
-    // the mathematical alphanumerics) occupies a surrogate PAIR, and char.IsLetterOrDigit is false for either half —
-    // so reading one code unit called every supplementary-plane letter a word boundary, and "kurz" fired on
-    // "\U00010400KURZ". Rune decoding reads the whole scalar. An unpaired surrogate decodes to the replacement
-    // character, which is not a letter or digit and so still counts as a boundary: the safe answer for broken text.
+    // The neighbouring CHARACTER, not the UTF-16 code unit: char.IsLetterOrDigit rejects each half of a surrogate pair,
+    // making every supplementary-plane letter a boundary. Rune decoding reads the scalar; a lone surrogate stays one.
 
     private static bool IsBoundaryBefore(string text, int index)
     {

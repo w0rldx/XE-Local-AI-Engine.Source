@@ -17,30 +17,14 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     Turns a <c>run_in_agent_home</c> goal into real work: a BOUNDED nested agent loop over the same
 ///     production-decorated <see cref="IChatClient" /> the outer turn runs on, handed a hand-built tool set that can
 ///     only touch the prepared sandbox's workspace COPY.
-///     <para>
-///         It mirrors <c>SubAgentSpawnService.RunSubAgentAsync</c> deliberately — a MAF <see cref="ChatClientAgent" />
-///         run as an <see cref="AIFunction" /> inside a child <see cref="SpawnContext" /> scope — rather than adding a
-///         fifth bespoke <see cref="IChatClient" /> tool loop to this codebase. Instructions and tools ride
-///         <see cref="ChatOptions" />, not <see cref="ChatClientAgentOptions" />, because the pinned MAF version has no
-///         <c>Instructions</c> property there and <see cref="AIAgent.AsAIFunction" /> invokes with no per-run options.
-///     </para>
-///     <para>
-///         <b>What bounds it.</b> Four budgets, all separate from the sandbox's own per-command timeout and jail-disk
-///         ceiling: a whole-run wall clock (<see cref="AgentHomeOptions.MaxRunSeconds" />), a tool-call count
-///         (<see cref="AgentHomeOptions.MaxInnerToolCalls" />), per-file and per-run write budgets, and a
-///         context-sized cap on how much command output re-enters the model. The wall clock matters most: an inner
-///         loop holds the node's single inference slot for as long as it runs.
-///     </para>
-///     <para>
-///         <b>What confines it.</b> The tool list is BUILT HERE, item by item, from <c>allowedActions</c> — never
-///         derived from the tool offer — so the inner agent structurally cannot reach an MCP tool, a custom tool,
-///         <c>spawn_subagent</c>, <c>ask_user</c>, a knowledge tool, or <c>run_in_agent_home</c> itself. It also has no
-///         human-in-the-loop route, so it is handed no approval-gated tool: the operator's single approval of the outer
-///         call is the consent for the whole envelope. Every model path runs through
-///         <see cref="WorkspacePathGuard" /> and then the provider's own jail guard pair; writes into <c>.git</c> are
-///         refused outright, because the baseline that holds there is what the exported patch is diffed against.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It mirrors <c>SubAgentSpawnService.RunSubAgentAsync</c> — a MAF <see cref="ChatClientAgent" /> run as an <see cref="AIFunction" /> inside
+///     a child <see cref="SpawnContext" /> scope — rather than adding a fifth bespoke tool loop. Instructions and tools ride <see cref="ChatOptions" />,
+///     not <see cref="ChatClientAgentOptions" />, because the pinned MAF version has no <c>Instructions</c> property there and
+///     <see cref="AIAgent.AsAIFunction" /> invokes with no per-run options. The tool list is BUILT here from <c>allowedActions</c>, never off the
+///     tool offer, and holds no approval-gated tool, so the outer call's one approval covers the whole envelope. Budgets: wiki 04 §2.2.
+/// </remarks>
 internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 {
     // AsAIFunction exposes the inner agent under a single "query" input parameter (same pinned-MAF fact
@@ -58,10 +42,13 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         "the goal was not executed: a model outside this node's trust boundary may not drive an AgentHome workspace.";
 
     /// <summary>
-    ///     Model-facing, and deliberately says WHY rather than just "no". A granted action that silently produces no
-    ///     tool is indistinguishable, from inside the loop, from a tool that failed — so the loop is told the node
-    ///     cannot give it a boundary, and the gateway repeats it to the outer model.
+    ///     Model-facing, and deliberately says WHY rather than just "no".
     /// </summary>
+    /// <remarks>
+    ///     From inside the loop, a granted action that silently produces no tool is indistinguishable from a tool
+    ///     that failed, so the loop is told the node cannot give it a boundary and the gateway repeats that to the
+    ///     outer model.
+    /// </remarks>
     internal const string ReasonCommandsNeedIsolation =
         "commands were not available: this node cannot isolate the sandbox file system, and a command without that "
         + "boundary could read and change files anywhere on this machine, so run_command was withheld even though "
@@ -105,19 +92,16 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The inner loop INHERITS the outer call's trust decision rather than taking one of its own: it runs on the
-        // model the root tool loop is running on, and only when there IS a root tool loop. A null ambient context (or a
-        // root that named no model) means this was not reached through an approved chat turn — the unattended MCP entry
-        // points seed a root without a model id — so the loop refuses rather than picking a model for itself.
+        // The inner loop INHERITS the outer call's trust decision: it runs on the root tool loop's model, and only when
+        // there is one. No ambient root, or a root naming no model, means no approved chat turn, so the loop refuses.
         var context = SpawnContext.Current;
         if (context?.RootModelId is not { Length: > 0 } modelId)
         {
             return NotRun(ReasonNoApprovedTurn);
         }
 
-        // Defense in depth behind the offer gate, which already withholds run_in_agent_home from a parent outside the
-        // trust boundary: an agent profile's AllowedToolNames, or a future direct caller, would bypass the offer. The
-        // inner loop reads the operator's own files, so a parent whose prompts leave the node must not drive it.
+        // Defense in depth behind the offer gate, which an agent profile's AllowedToolNames or a direct caller bypasses.
+        // The inner loop reads the operator's own files, so a parent whose prompts leave the node must not drive it.
         if (await _modelTrustResolver.ResolveAsync(modelId, cancellationToken) != ModelTrustLocality.Local)
         {
             return NotRun(ReasonParentOutsideTrustBoundary);
@@ -143,9 +127,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 
         var toolNames = tools.Select(static tool => tool.Name).ToArray();
 
-        // The WHOLE-RUN wall clock, distinct from the per-command timeout the sandbox already applies. It runs on the
-        // injected TimeProvider so a test can drive it without sleeping, and is LINKED rather than substituted so an
-        // operator stop or host shutdown still wins and still propagates as a cancellation.
+        // The WHOLE-RUN wall clock, distinct from the sandbox's per-command timeout. It runs on the injected TimeProvider
+        // so a test drives it without sleeping, and is LINKED, not substituted, so an operator stop still wins.
         using var budgetCts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.MaxRunSeconds), _timeProvider);
         using var runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budgetCts.Token);
 
@@ -184,9 +167,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
         catch (OperationCanceledException) when (budgetCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            // ONLY the whole-run budget fired; the caller's token is untouched, so this is a budget hit, not a cancel.
-            // The sandbox has already tree-killed whatever command was mid-flight — the provider does that on every
-            // path where the command's own token is cancelled — so there is nothing left to tear down here.
+            // ONLY the whole-run budget fired, the caller's token is untouched, so this is a budget hit, not a cancel. The
+            // provider already tree-killed any mid-flight command, so there is nothing left to tear down here.
             status = AgentHomeGoalStatus.TimeBudgetExceeded;
         }
         catch (OperationCanceledException)
@@ -197,9 +179,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
         catch (Exception exception) when (IsToolCallBudgetExceeded(exception))
         {
-            // The tool-call budget is enforced inside the tools themselves so a partial run still exports its patch.
-            // Matched through the inner-exception chain because the MAF function-invocation layer between the tool and
-            // this frame is free to wrap what a tool throws.
+            // The tool-call budget is enforced inside the tools themselves, so a partial run still exports its patch.
+            // Matched through the inner-exception chain, because the MAF layer between is free to wrap what a tool throws.
             status = AgentHomeGoalStatus.ToolCallBudgetExceeded;
         }
         catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or IOException)
@@ -210,9 +191,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             status = AgentHomeGoalStatus.Failed;
         }
 
-        // A deadline the GATEWAY refused on — the model was still making calls when the budget ran out, and each was
-        // turned away with a sentence rather than an exception — is the same outcome as the token firing mid-call.
-        // Without this promotion the run would report "completed" for work a budget had already stopped.
+        // A deadline the GATEWAY refused on — calls turned away with a sentence rather than an exception — is the same
+        // outcome as the token firing mid-call. Without the promotion the run reports "completed" for stopped work.
         if (status == AgentHomeGoalStatus.Completed && gateway.DeadlineHit)
         {
             status = AgentHomeGoalStatus.TimeBudgetExceeded;
@@ -231,10 +211,12 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
     }
 
     /// <summary>
-    ///     Whether <paramref name="exception" /> is — or wraps — the tool-call budget signal. The MAF
-    ///     function-invocation layer sits between the tool and the caller and may wrap what a tool throws, so matching
-    ///     the outermost type alone would silently reclassify a budget cut-off as a failure.
+    ///     Whether <paramref name="exception" /> is — or wraps — the tool-call budget signal.
     /// </summary>
+    /// <remarks>
+    ///     The MAF function-invocation layer sits between the tool and the caller and may wrap what a tool throws, so
+    ///     matching the outermost type alone would silently reclassify a budget cut-off as a failure.
+    /// </remarks>
     private static bool IsToolCallBudgetExceeded(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
@@ -258,10 +240,12 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
     }
 
     /// <summary>
-    ///     Builds the inner tool list ITEM BY ITEM from <c>allowedActions</c>. Never derived from the tool offer or a
-    ///     registry: that is what makes "the inner agent has no MCP/custom/knowledge/spawn/ask_user/nested-AgentHome
-    ///     tool" a structural property of this method rather than a filter someone has to keep correct.
+    ///     Builds the inner tool list ITEM BY ITEM from <c>allowedActions</c>, never from the tool offer or a registry.
     /// </summary>
+    /// <remarks>
+    ///     That is what makes "the inner agent has no MCP, custom, knowledge, spawn, ask_user or nested-AgentHome
+    ///     tool" a structural property of this method rather than a filter someone has to keep correct.
+    /// </remarks>
     private static IList<AITool> BuildTools(ToolGateway gateway, IReadOnlyList<string> allowedActions, bool commandsIsolated)
     {
         var tools = new List<AITool>(5);
@@ -269,8 +253,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         if (allowedActions.Contains(AgentHomeAllowedActions.ReadWorkspace, StringComparer.Ordinal))
         {
             // The EXISTING coder reader, verbatim: it attaches to this same sandbox by key, confines every path, drops
-            // secrets, and already fences its output as untrusted data. Reimplementing it here would mean a second
-            // fence to keep correct.
+            // secrets and fences its output as untrusted data. Reimplementing it would mean a second fence to keep correct.
             tools.Add(AIFunctionFactory.Create(gateway.ListFilesAsync, "list_files", "List files below a workspace-relative path."));
             tools.Add(AIFunctionFactory.Create(gateway.ReadFileAsync, "read_file", "Read a bounded UTF-8 workspace file."));
             tools.Add(AIFunctionFactory.Create(gateway.SearchTextAsync, "search_text", "Search text below a workspace-relative path."));
@@ -281,10 +264,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             tools.Add(AIFunctionFactory.Create(gateway.WriteFileAsync, "write_file", "Replace one workspace file with new UTF-8 content."));
         }
 
-        // TWO conditions, and the second is not the caller's to waive: the action has to be granted AND the sandbox
-        // has to have actually come back with a filesystem boundary. The read and write tools need no such gate —
-        // they are confined by the node's OWN path guard and the provider's no-follow file surface, neither of which
-        // depends on the jail. A command is different: nothing in the node constrains what it opens.
+        // TWO conditions, the second not the caller's to waive: the action granted AND the sandbox actually back with a
+        // filesystem boundary. Read and write need no such gate; nothing in the node constrains what a command opens.
         if (allowedActions.Contains(AgentHomeAllowedActions.RunCommands, StringComparer.Ordinal) && commandsIsolated)
         {
             tools.Add(AIFunctionFactory.Create(gateway.RunCommandAsync, "run_command", "Run one command inside the workspace copy and read its output."));
@@ -294,10 +275,12 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
     }
 
     /// <summary>
-    ///     The inner system prompt. It states the task, the workspace-relative contract, the budgets, and that
-    ///     everything the tools return is data rather than instructions. It deliberately says NOTHING about the host:
-    ///     no absolute path, no node identity, no provider name.
+    ///     The inner system prompt: the task, the workspace-relative contract, the budgets, and that everything the
+    ///     tools return is data rather than instructions.
     /// </summary>
+    /// <remarks>
+    ///     It deliberately says NOTHING about the host: no absolute path, no node identity, no provider name.
+    /// </remarks>
     private string BuildInstructions(AgentHomeGoalRequest request, IReadOnlyList<string> toolNames, bool commandsWithheld)
     {
         var builder = new StringBuilder();
@@ -372,9 +355,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 
         public IReadOnlyList<AgentHomeCommandOutcome> Commands => _commands;
 
-        // Every parameter the model may legitimately omit carries a default, so AIFunctionFactory marks it optional in
-        // the generated schema. Without one a nullable parameter is still REQUIRED, and a call that leaves it out is
-        // rejected by the marshaller before the tool body ever runs.
+        // Every parameter the model may legitimately omit carries a default, so AIFunctionFactory marks it optional in the
+        // schema: without one a nullable parameter stays REQUIRED and the marshaller rejects the call before the body runs.
         public Task<string> ListFilesAsync([Description("Workspace-relative directory; empty means the workspace root.")] string? path = null,
             [Description("Optional file-name glob, for example *.md.")]
             string? glob = null,
@@ -470,9 +452,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                 return Refuse("write_file rejected: a file path is required (the workspace root is not a file).");
             }
 
-            // The baseline the exported patch is diffed against lives in .git. A model that can rewrite it can forge a
-            // patch, or hide one — so this is refused outright rather than merely discouraged, on the whole path and
-            // not just the first segment.
+            // The baseline the exported patch is diffed against lives in .git, and a model that can rewrite it can forge
+            // or hide a patch. Refused outright, on the whole path rather than just the first segment.
             if (confined.RelativePath.Split('/').Contains(".git", StringComparer.Ordinal))
             {
                 return Refuse("write_file rejected: the .git directory holds the change baseline and is not writable.");
@@ -491,10 +472,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                     $"write_file rejected: this run's total write budget of {_executor._options.MaxTotalWriteBytes} bytes is spent."));
             }
 
-            // Written through the provider's copy-in rather than a new write surface: CopyIntoAsync already resolves
-            // the destination against the jail, rejects a symlink component in the parent chain AND in the leaf — the
-            // case that matters here, since a command the model just ran can have planted one — and creates the file
-            // with O_NOFOLLOW so a swap between the check and the write cannot redirect it out of the jail.
+            // Written through the provider's copy-in, not a new write surface: it resolves the destination against the jail,
+            // rejects a symlink in the parent chain AND the leaf a command may just have planted, and opens with O_NOFOLLOW.
             var stagingPath = Path.Combine(Path.GetTempPath(), "agent-home-write-" + Guid.NewGuid().ToString("N"));
             try
             {
@@ -537,10 +516,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                 return Refuse("run_command rejected: an executable is required.");
             }
 
-            // No allow-list, by design: AgentHome's sandbox declaration already says it runs model-directed host
-            // commands, and the confinement it promises is the jail, the scrubbed environment and the egress denial —
-            // not a command catalogue. What IS pinned is where the command runs: the workspace copy, always, so a
-            // relative path in the command's own arguments cannot address anything above it.
+            // No allow-list, by design: the confinement AgentHome promises is the jail, the scrubbed environment and the
+            // egress denial, not a command catalogue. What IS pinned is the CWD — always the workspace copy.
             var executionId = string.Create(CultureInfo.InvariantCulture, $"{_request.RunId}-cmd-{Interlocked.Increment(ref _commandCounter)}");
             var commandTimeout = TimeSpan.FromSeconds(_executor._options.CommandTimeoutSeconds);
 
@@ -582,10 +559,13 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 
         /// <summary>
         ///     Renders a command result for the inner model: a node-authored outcome line, then the captured output
-        ///     inside ONE untrusted fence. The output is a command's — anything in the workspace can produce it — so it
-        ///     gets the same treatment the read tools give file content, plus a context-sized truncation and the
-        ///     removal of the sandbox's own root from any path a command printed.
+        ///     inside ONE untrusted fence.
         /// </summary>
+        /// <remarks>
+        ///     Anything in the workspace can produce that output, so it gets the treatment the read tools give file
+        ///     content, plus a context-sized truncation and the removal of the sandbox's own root from any path a
+        ///     command printed.
+        /// </remarks>
         private string RenderCommandResult(SandboxCommandResult result)
         {
             var captured = new StringBuilder();
@@ -624,11 +604,13 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
 
         /// <summary>
-        ///     Removes the sandbox's own root directory from text a command produced, so a command that prints its
-        ///     working directory (or any absolute path under it) cannot hand the model the worker's host layout. The
-        ///     root is <see langword="null" /> on a provider that has no directory to name, in which case there is
-        ///     nothing to remove.
+        ///     Removes the sandbox's own root directory from text a command produced, so a command printing its
+        ///     working directory cannot hand the model the worker's host layout.
         /// </summary>
+        /// <remarks>
+        ///     The root is <see langword="null" /> on a provider that has no directory to name, in which case there
+        ///     is nothing to remove.
+        /// </remarks>
         private string RedactSandboxRoot(string text)
         {
             return _request.Handle.WorkingRoot is { Length: > 0 } root && text.Length > 0
@@ -717,10 +699,12 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 
 /// <summary>
 ///     Thrown by the goal loop's tool gateway when the inner agent asks for more tool calls than
-///     <see cref="AgentHomeOptions.MaxInnerToolCalls" /> allows. It ends the loop rather than returning a refusal the
-///     model would keep spending turns against; the executor catches it and reports a budget-capped run whose partial
-///     work still exports.
+///     <see cref="AgentHomeOptions.MaxInnerToolCalls" /> allows.
 /// </summary>
+/// <remarks>
+///     It ends the loop rather than returning a refusal the model would keep spending turns against. The executor
+///     catches it and reports a budget-capped run whose partial work still exports.
+/// </remarks>
 internal sealed class AgentHomeToolBudgetException : InvalidOperationException
 {
     public AgentHomeToolBudgetException(string message)

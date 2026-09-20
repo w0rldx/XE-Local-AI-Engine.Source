@@ -5,93 +5,63 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Compiles a node-local agent definition into the loopback runtime-package inputs. The resolver projects a bound
-///     definition onto the SAME fields the default chat path already feeds into
-///     <c>LocalChatRuntimePackageBuilder</c> (system prompt, allowed tools, model profile, reasoning effort, agent
-///     version), so the canonical config hash is computed unchanged. A null binding — or one that points at a deleted
-///     definition — resolves to <c>null</c>, signalling the caller to keep today's defaults (embedded system prompt,
-///     full capability-gated tool offer, agent version 1).
+///     Compiles a node-local agent definition into the loopback runtime-package inputs.
 /// </summary>
+/// <remarks>
+///     A bound definition projects onto the SAME fields the default chat path feeds into
+///     <c>LocalChatRuntimePackageBuilder</c> — system prompt, allowed tools, model profile, reasoning effort, agent
+///     version — so the canonical config hash is computed unchanged. A null binding, or one pointing at a deleted
+///     definition, resolves to <c>null</c>: the caller keeps the embedded prompt, full offer and agent version 1.
+/// </remarks>
 public interface IAgentDefinitionResolver
 {
     /// <summary>
-    ///     Resolves the runtime projection for the conversation's bound definition, or <c>null</c> when there is no
-    ///     binding (<paramref name="agentDefinitionId" /> is null) or the bound definition no longer exists.
+    ///     Resolves the runtime projection for the conversation's bound definition, or <c>null</c> when there is no binding or the bound definition no longer exists.
     /// </summary>
-    /// <param name="agentDefinitionId">The conversation's bound definition id, or <c>null</c> for the default persona.</param>
-    /// <param name="activeModelId">The model the turn runs on; gates the tool offer (capability-aware).</param>
-    /// <param name="retrievalQuery">
-    ///     The incoming user-turn text used to relevance-gate playbook injection (relevance retrieval and cohort monitoring, the relevance-retrieval gate). When the agent
-    ///     has more than the configured threshold of Enabled actions and this is non-blank, only the top-k most relevant
-    ///     actions are injected; otherwise (blank query, or at/below the threshold) the full static prepend is used, so the
-    ///     resolved prompt — and the config hash — stays byte-identical to the pre-retrieval path.
-    /// </param>
-    /// <param name="supportsTools">
-    ///     Whether the active model advertises the Ollama <c>tools</c> capability. When <c>false</c> ALL tool offers are
-    ///     withheld (the model cannot drive tool calls), independent of the existing per-tool <c>ToolCapableModels</c>
-    ///     name allow-list. Defaults to <c>true</c> so callers that do not gate by capability keep today's behaviour.
-    /// </param>
-    /// <param name="honorModelProfile">
-    ///     Whether the definition's pinned <c>ModelProfile</c> applies. When <c>true</c> (default) the pin — when set —
-    ///     is the model the turn runs on: it gates the tool offer and is returned as the resolved
-    ///     <see cref="ResolvedAgentRuntime.ModelProfile" />. When <c>false</c> the caller supplied an explicit concrete
-    ///     model (the user picked one in the chat dropdown) that must win over the pin: the pin is suppressed entirely,
-    ///     the tool offer is gated by <paramref name="activeModelId" />, and the resolved <c>ModelProfile</c> is
-    ///     <c>null</c> so the caller's <c>resolved?.ModelProfile ?? activeModel</c> yields the user's pick. Defaults to
-    ///     <c>true</c> so callers that do not override the pin keep today's behaviour.
-    /// </param>
-    /// <param name="activeModelIsCloud">
-    ///     Whether the turn's active model is cloud-hosted (Codex OAuth / Azure Foundry), resolved once per turn by the
-    ///     caller. Gates the knowledge-base tools off the offer for a cloud model (unless the operator opted in via
-    ///     <c>KnowledgeBase:AllowCloudModelAccess</c>) so node-local document/chunk/query text is not handed to a cloud
-    ///     provider through a tool result. Defaults to <c>false</c> (local) so callers that do not classify locality keep
-    ///     today's behaviour.
-    /// </param>
+    /// <remarks>
+    ///     <paramref name="retrievalQuery" /> relevance-gates playbook injection: above the configured action
+    ///     threshold and non-blank only the top-k actions are injected, and otherwise the full static prepend keeps
+    ///     prompt and hash byte-identical. A false <paramref name="supportsTools" /> withholds ALL offers, whatever
+    ///     the <c>ToolCapableModels</c> allow-list says, and a false <paramref name="honorModelProfile" /> suppresses
+    ///     the definition's pin so the caller's pick wins and the resolved profile comes back <c>null</c>.
+    /// </remarks>
+    /// <param name="activeModelId">The model the turn runs on; gates the tool offer, capability-aware.</param>
+    /// <param name="retrievalQuery">The user-turn text that relevance-gates playbook injection.</param>
+    /// <param name="supportsTools">Whether the active model advertises the <c>tools</c> capability.</param>
+    /// <param name="honorModelProfile">Whether the pin reaches <see cref="ResolvedAgentRuntime.ModelProfile" />.</param>
+    /// <param name="activeModelIsCloud">Whether the turn's model is cloud-hosted.</param>
     Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, bool honorModelProfile = true,
         bool activeModelIsCloud = false, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The same projection as the id overload, over a definition the caller has ALREADY read. It exists for callers
-    ///     that hold the record and would otherwise pay a second store read for the same row — and, more importantly, would
-    ///     assemble one runtime out of two reads that a concurrent edit can make disagree. Passing the snapshot makes the
-    ///     projection provably one version of the definition.
+    ///     The same projection as the id overload, over a definition the caller has ALREADY read.
     /// </summary>
+    /// <remarks>
+    ///     It saves a second store read, and more importantly stops one runtime being assembled out of two reads a
+    ///     concurrent edit can make disagree: the snapshot makes the projection provably one version.
+    /// </remarks>
     /// <param name="definition">The already-read definition snapshot to project. Never <c>null</c>.</param>
-    /// <param name="activeModelId">The model the turn runs on; gates the tool offer (capability-aware).</param>
-    /// <param name="retrievalQuery">The incoming user-turn text used to relevance-gate playbook injection, exactly as on the id overload.</param>
-    /// <param name="supportsTools">Whether the active model advertises the Ollama <c>tools</c> capability, exactly as on the id overload.</param>
-    /// <param name="honorModelProfile">Whether the definition's pinned <c>ModelProfile</c> applies, exactly as on the id overload.</param>
-    /// <param name="activeModelIsCloud">Whether the turn's active model is cloud-hosted, exactly as on the id overload.</param>
+    /// <param name="activeModelId">The model the turn runs on; gates the tool offer, capability-aware.</param>
+    /// <param name="retrievalQuery">Relevance-gates playbook injection, as on the id overload.</param>
+    /// <param name="supportsTools">Whether the model advertises <c>tools</c>, as on the id overload.</param>
+    /// <param name="honorModelProfile">Whether the pinned <c>ModelProfile</c> applies, as on the id overload.</param>
+    /// <param name="activeModelIsCloud">Whether the turn's model is cloud-hosted, as on the id overload.</param>
     /// <param name="cancellationToken">Cancels the projection's store reads.</param>
-    /// <returns>
-    ///     The runtime projection of <paramref name="definition" />. The return stays nullable so this overload is
-    ///     substitutable for the id overload at every seam; the real implementation never answers <c>null</c> here.
-    /// </returns>
+    /// <returns>The projection of <paramref name="definition" />; nullable only to stay substitutable.</returns>
     Task<ResolvedAgentRuntime?> ResolveAsync(AgentDefinitionRecord definition, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
         bool honorModelProfile = true, bool activeModelIsCloud = false, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     The runtime projection of a bound agent definition. The first five fields map 1:1 onto a
-///     <c>LocalChatRuntimePackageRequest</c> input so the existing builder/config-hash plumbing is reused verbatim;
-///     <see cref="AgentDefinitionId" /> and <see cref="AgentName" /> carry the resolved agent's provenance + display-name
-///     snapshot so the stream service stamps per-response attribution without a second fetch. The attribution members are
-///     trailing (with defaults) so they never participate in the config hash and never affect positional construction.
-///     <see cref="Skills" /> is likewise trailing (defaults to null/empty): the enabled+assigned skill set used for MAF
-///     progressive disclosure. It is NOT folded into <see cref="ResolvedSystemPrompt" /> (bodies load on demand), so the
-///     runtime-package builder folds it into the config hash separately and threads it to the invocation factory.
-///     <see cref="PlaybookEnabled" /> is a trailing attribution snapshot too: it lets the post-run memory-extraction
-///     seam gate without re-fetching the definition. Like the other trailing members it does NOT participate in the
-///     config hash (the builder reads only the leading five fields) and never affects positional construction.
-///     <see cref="MemoryExtractionEnabled" /> is the companion gate: extraction fires only when BOTH it and
-///     <see cref="PlaybookEnabled" /> are true; retrieval/injection stays gated on <see cref="PlaybookEnabled" /> alone,
-///     so a retrieval-only agent (<see cref="MemoryExtractionEnabled" /> false) still injects existing memory but mines
-///     no new candidates. It is trailing/non-config-affecting for the same reason as <see cref="PlaybookEnabled" />.
-///     <see cref="Kind" /> is the definition's execution shape, also a trailing/non-config-affecting attribution snapshot:
-///     the resolver already loaded and decrypted the definition, so exposing its Kind lets the chat-turn
-///     resolver decide whether to compile an orchestration WITHOUT a second uncached store read + AES-GCM decrypt on
-///     every send (the common non-orchestrator path skips the reload entirely).
+///     The runtime projection of a bound agent definition.
 /// </summary>
+/// <remarks>
+///     The first five fields map one-to-one onto a <c>LocalChatRuntimePackageRequest</c> input, so the existing
+///     builder and config-hash plumbing are reused verbatim. EVERY member after them is trailing, defaulted and
+///     outside the config hash, which reads only those five, so adding one changes neither an existing hash nor
+///     positional construction. What each carries and why:
+///     docs/wiki/04-agent-mode.md ("The resolved runtime projection").
+/// </remarks>
 public sealed record ResolvedAgentRuntime(
     string ResolvedSystemPrompt,
     IReadOnlyList<AllowedToolDto> AllowedTools,
@@ -106,17 +76,7 @@ public sealed record ResolvedAgentRuntime(
     bool EffectiveModelIsCloud = false,
     AgentDefinitionKind Kind = AgentDefinitionKind.Single,
     IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
-    // Per-agent opt-out from the send-time tool-relevance filter. Trailing and non-config-affecting for the same reason
-    // as the members above: the filter narrows only the array handed to the provider, never the offer or the prompt.
-    //
-    // [JsonIgnore] — UNLIKE every other member here, this one is kept off the wire entirely. This record is serialized
-    // verbatim into the FROZEN v1 benchmark runtime snapshot, whose stored bytes are re-hashed to validate
-    // `configurationHash`, so a new member emitting `false` would change the bytes of every already-frozen run and
-    // every one of them would stop replaying with "configuration hash is invalid"
-    // (`BenchmarkRuntimeSnapshotV1CompatibilityTests` is the guard). Omitting it is also the honest shape: a benchmark
-    // never honours the opt-out — `BenchmarkRunExecutor.BuildPrimaryPackage` does not thread this flag into the
-    // replayed `RuntimePackage`, so every frozen run generates under the node-level filter setting whatever the agent
-    // asked for. Nothing else serializes this record; the agent-definition endpoint DTOs carry their own copy of the
-    // flag off `AgentDefinitionRecord` and are unaffected.
+    // Per-agent opt-out from the send-time tool-relevance filter, and the ONE member kept off the wire: this record
+    // is serialized into the frozen v1 benchmark snapshot, whose bytes are re-hashed. See the wiki section above.
     [property: JsonIgnore]
     bool DisableToolRelevanceFilter = false);

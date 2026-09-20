@@ -6,14 +6,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     AgentHome gateway <see cref="IAgentHomeIdentityProvider" />. The node id comes from <see cref="ITokenStore" /> (falling
-///     back to the deterministic local-loopback node id when the worker is not yet paired). The owner id is the user
-///     subject decoded from the worker's stored access token — the server mints it with the user id in both the
-///     <c>sub</c> and <see cref="ClaimTypes.NameIdentifier" /> claims (distinct from the <c>nodeId</c> claim), so the
-///     owner boundary is the authenticated user, not the node. When no token is present (unpaired local-loopback) the
-///     owner falls back to the node id so loopback stays deterministic. The token is read claim-only without
-///     re-validation: it was already validated at acquisition and this provider only reads a claim.
+///     AgentHome gateway <see cref="IAgentHomeIdentityProvider" />.
 /// </summary>
+/// <remarks>
+///     The node id comes from <see cref="ITokenStore" />, falling back to the deterministic local-loopback node id while the worker is
+///     unpaired. The owner id is the user subject decoded from the stored access token — the server mints the user id into both
+///     <c>sub</c> and <see cref="ClaimTypes.NameIdentifier" />, distinct from the <c>nodeId</c> claim, so the owner boundary is the
+///     authenticated user, not the node — and falls back to the node id when no token is present, so loopback stays deterministic.
+///     The token is read claim-only: it was already validated at acquisition and this provider only reads a claim.
+/// </remarks>
 internal sealed class AgentHomeIdentityProvider : IAgentHomeIdentityProvider
 {
     private readonly ITokenStore _tokenStore;

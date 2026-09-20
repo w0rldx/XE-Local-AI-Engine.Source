@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 
 /// <summary>
-///     Operator-tunable knobs for the pre-first-token provider retry and the circuit breaker (keyed by resolved model)
-///     applied around the streaming provider send in the agent invocation path. These are node-level operational resilience
-///     settings (NOT part of a runtime package's cross-repo config hash), bound from the
-///     <c>Agent:ProviderResilience</c> configuration section. Defaults are on and conservative so a fresh install
-///     self-heals transient inference blips without an operator having to opt in.
+///     Operator-tunable knobs for the pre-first-token provider retry and the per-resolved-model circuit breaker around
+///     the streaming provider send, bound from <c>Agent:ProviderResilience</c>.
 /// </summary>
+/// <remarks>
+///     Node-level operational settings, NOT part of a runtime package's cross-repo config hash. Defaults are on and
+///     conservative, so a fresh install self-heals transient inference blips without an operator opting in.
+/// </remarks>
 public sealed class ProviderResilienceOptions
 {
     public const string SectionName = "Agent:ProviderResilience";
@@ -40,10 +41,11 @@ public sealed class ProviderResilienceOptions
 
     /// <summary>
     ///     How long a tripped breaker stays open (fail-fast) before its window elapses and sends are admitted again.
-    ///     This is a time-based open window, not a strict single half-open trial: once the window has elapsed every
-    ///     caller is admitted (so concurrent probes are possible), and the first admitted send to then fail re-opens the
-    ///     breaker for another window while the first to succeed closes it. Concurrency is bounded elsewhere by the
-    ///     runner's single-invocation guard, not by this breaker.
     /// </summary>
+    /// <remarks>
+    ///     A time-based open window, not a strict single half-open trial: once it elapses every caller is admitted, so
+    ///     concurrent probes are possible, and the first admitted send to fail re-opens the breaker for another window
+    ///     while the first to succeed closes it. Real concurrency is bounded by the runner's single-invocation guard.
+    /// </remarks>
     public int CircuitBreakerBreakDurationSeconds { get; set; } = 30;
 }

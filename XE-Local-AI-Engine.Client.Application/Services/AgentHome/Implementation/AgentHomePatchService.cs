@@ -7,17 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Patch export implementation for <see cref="IAgentHomePatchService" />. Runs two in-sandbox <c>git diff</c>
-///     commands — under <see cref="AgentHomeGitHardening" />, which is what keeps a model-authored
-///     <c>textconv</c>/<c>clean</c> driver from executing here, after the model's turn has ended — against the
-///     workspace-copy baseline (a full <c>--binary</c> patch and a <c>--name-status</c> summary)
-///     with the byte-stabilizing git flags,
-///     captures their standard output (the sandbox SPI is shell-neutral, so the worker — not a shell redirection — owns
-///     the file write), then writes <c>changes.patch</c> and <c>changed-files.json</c> under the host-side
-///     <c>runs/&lt;run-id&gt;/patches/</c> directory. A patch over <see cref="AgentHomeOptions.MaxPatchBytes" /> is
-///     blocked: the metadata file is still written, the oversized patch is not. All model-facing paths are run-relative
-///     — never a host path.
+///     Patch export implementation for <see cref="IAgentHomePatchService" />.
 /// </summary>
+/// <remarks>
+///     It runs two in-sandbox <c>git diff</c> commands against the workspace-copy baseline with the byte-stabilizing flags — a full
+///     <c>--binary</c> patch and a <c>--name-status</c> summary — under <see cref="AgentHomeGitHardening" />, which keeps a model-authored
+///     <c>textconv</c>/<c>clean</c> driver from executing here after the model's turn has ended. The worker captures their standard output
+///     and owns the file write, since the sandbox SPI carries no shell redirection, then writes <c>changes.patch</c> and <c>changed-files.json</c>
+///     under <c>runs/&lt;run-id&gt;/patches/</c>, bounded by <see cref="AgentHomeOptions.MaxPatchBytes" />. Model-facing paths stay run-relative.
+/// </remarks>
 internal sealed class AgentHomePatchService : IAgentHomePatchService
 {
     private static readonly JsonSerializerOptions ChangedFilesJsonOptions =
@@ -53,10 +51,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
         var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
-        // BEFORE any git runs on this workspace: make every configuration git can reach node-owned again. The goal
-        // loop's run_command could have set a repository-local textconv/clean driver and its write_file could have
-        // created the .gitattributes that selects it, and git would run that program HERE, as the node, after the
-        // model's turn is over. Fails closed rather than exporting if the repository is no longer the node's.
+        // BEFORE any git runs here: make every configuration git can reach node-owned again, because the goal loop could
+        // have planted a driver git would run HERE as the node. Fails closed if the repository is no longer the node's.
         if (!await AgentHomeGitHardening.TryHardenWorkspaceRepositoryAsync(handle, cancellationToken))
         {
             _logger.LogError("Patch export for run {RunId} refused: the workspace git directory is not the one the baseline created.",
@@ -64,9 +60,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             return FailedExport();
         }
 
-        // Full binary-aware patch. Captured from standard output; the worker writes the file, since the SPI
-        // carries no shell redirection. --no-textconv/--no-ext-diff are belt and braces on top of the rewrite above,
-        // NOT the control: measured on git 2.53.0, they leave filter.<driver>.clean running.
+        // Full binary-aware patch, captured from standard output because the SPI carries no shell redirection.
+        // --no-textconv/--no-ext-diff are belt and braces on the rewrite above, not the control: a clean filter survives them.
         var patchResult = await RunGitAsync(handle,
             request,
             $"{request.RunId}-patch-diff",
@@ -84,9 +79,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         if (!IsSuccessful(patchResult) || !IsSuccessful(statusResult))
         {
-            // A non-zero exit or an incomplete command means no patch could be produced. Surface that distinctly so it
-            // is not reported as a clean zero-change run; write no artifacts. (Real non-zero git exits are exercised by
-            // the local-container provider in local-container sandbox — the fake's git is scripted.)
+            // A non-zero exit or an incomplete command means no patch could be produced: surface that distinctly, so it is
+            // not read as a clean zero-change run, and write no artifacts. Real non-zero git exits need a real provider.
             _logger.LogWarning("Patch export for run {RunId} aborted: patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
                 request.RunId,
                 patchResult.ExitCode,
@@ -150,11 +144,13 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
     }
 
     /// <summary>
-    ///     Runs one export git command and appends it to the run's command log, attributed to the NODE. The log entry
-    ///     is not decoration: this git runs in the same sandbox, over the same workspace, as the model's own
-    ///     <c>run_command</c> calls, and an operator auditing <c>commands.jsonl</c> after a run has to be able to see
-    ///     the whole sequence rather than only the half the model asked for.
+    ///     Runs one export git command and appends it to the run's command log, attributed to the NODE.
     /// </summary>
+    /// <remarks>
+    ///     The log entry is not decoration: this git runs in the same sandbox, over the same workspace, as the
+    ///     model's own <c>run_command</c> calls, and an operator auditing <c>commands.jsonl</c> after a run has to
+    ///     see the whole sequence rather than only the half the model asked for.
+    /// </remarks>
     private async Task<SandboxCommandResult> RunGitAsync(SandboxHandle handle,
         AgentHomePatchExportRequest request,
         string executionId,

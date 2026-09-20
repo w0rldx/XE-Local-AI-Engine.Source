@@ -116,9 +116,8 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
 
         var allowedToolNames = new HashSet<string>(input.AllowedToolNames, StringComparer.Ordinal);
 
-        // Approval overrides may only reference tools the definition allows — an approval for a tool that is not in
-        // the allowed set would never be applied (the resolver intersects against the allowed names), so reject it as
-        // a definition error rather than persist a dead override.
+        // Approval overrides may only name allowed tools: the resolver intersects against the allowed names, so an
+        // override outside the set would never apply. Reject it rather than persist a dead one.
         var orphanedApprovals = input.ToolApprovals.Keys
                                      .Where(name => !allowedToolNames.Contains(name))
                                      .ToArray();
@@ -144,12 +143,14 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
     }
 
     /// <summary>
-    ///     Validates the orchestration topology at authoring time. A <c>Kind=Orchestrator</c> definition must
-    ///     carry a parseable v1 topology naming at least the triage plus one specialist, with the triage and every
-    ///     handoff endpoint drawn from the participant set; a participant id that no longer exists is a warning (the
-    ///     runtime resolver degrades), never a hard failure (mirrors the no-FK tolerance + the unknown-tool warning). A
-    ///     <c>Kind=Single</c> definition must carry no topology, so a stray payload is rejected rather than silently kept.
+    ///     Validates the orchestration topology at authoring time.
     /// </summary>
+    /// <remarks>
+    ///     An orchestrator must carry a parseable v1 topology naming at least the triage plus one specialist, with
+    ///     the triage and every handoff endpoint drawn from the participant set. A participant id that no longer
+    ///     exists is only a WARNING, since the runtime resolver degrades — the same tolerance as the missing FK and
+    ///     the unknown tool. A single-kind definition must carry no topology, so a stray payload is rejected.
+    /// </remarks>
     private async Task ValidateOrchestrationTopologyAsync(AgentDefinitionInput input, CancellationToken cancellationToken)
     {
         if (input.Kind != AgentDefinitionKind.Orchestrator)
@@ -169,9 +170,8 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
             throw new AgentDefinitionValidationException("An orchestrator definition requires an OrchestrationTopologyJson naming its triage and participants.");
         }
 
-        // The shared parser is tolerant (returns null on malformed/unknown-version so the resolver can degrade); at
-        // authoring time we have already confirmed the payload is non-blank, so a null result means the user supplied a
-        // topology that does not parse as v1 — surface that as a definition error rather than persist an unusable value.
+        // The shared parser answers null on malformed or unknown-version input so the resolver can degrade; here the
+        // payload is already known non-blank, so a null means it does not parse as v1: a definition error.
         var topology = OrchestrationTopologyJson.TryParse(input.OrchestrationTopologyJson);
         if (topology is null)
         {
@@ -204,9 +204,8 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
             throw new AgentDefinitionValidationException($"Handoff edge(s) reference agent definition id(s) that are not participants: {string.Join(", ", danglingEndpoints)}.");
         }
 
-        // A participant id that no longer resolves is a warning, not a failure: a definition may be deleted or created
-        // out of order, and the runtime resolver already drops dangling participants and degrades. The author is warned
-        // so the orchestration can be repaired before it silently runs short-handed.
+        // A participant id that no longer resolves is a warning, not a failure: definitions may be created out of
+        // order and the resolver already degrades. The author is warned before it silently runs short-handed.
         var knownIds = (await _store.ListAsync(cancellationToken))
                        .Select(record => record.Id)
                        .ToHashSet();

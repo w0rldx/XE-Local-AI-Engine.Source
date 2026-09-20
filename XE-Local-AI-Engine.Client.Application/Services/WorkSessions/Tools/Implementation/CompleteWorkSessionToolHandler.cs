@@ -8,13 +8,12 @@ internal sealed record CompleteWorkSessionRequest(string? Summary, bool? Objecti
 
 /// <summary>
 ///     <c>complete_work_session</c>: the model closing the session, met or not.
-///     <para>
-///         It does <b>not</b> terminalize anything — it appends one event and returns, so the turn finishes cleanly and
-///         whatever the model still wants to say is persisted. The supervisor reads the event back after the terminal
-///         and closes the session then. Recording it as an event rather than an in-memory flag is what makes the
-///         request survive a crash between the tool call and the end of the step.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It does NOT terminalize anything: it appends one event and returns, so the turn finishes cleanly and whatever the model still
+///     wants to say is persisted, and the supervisor reads the event back after the terminal and closes the session then. Recording
+///     it as an event rather than an in-memory flag is what makes the request survive a crash between the tool call and the step's end.
+/// </remarks>
 internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<CompleteWorkSessionRequest>
 {
     public CompleteWorkSessionToolHandler(

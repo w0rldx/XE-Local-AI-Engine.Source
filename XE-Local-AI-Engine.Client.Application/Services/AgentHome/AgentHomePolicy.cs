@@ -13,10 +13,13 @@ internal sealed record AgentHomePolicy
     public required int Version { get; init; }
 
     /// <summary>
-    ///     The network posture for the sandbox. The live process provider does not isolate the network, so this is
-    ///     <c>"unrestricted"</c> (the child shares the host network); it becomes <c>"disabled"</c>/<c>"restricted"</c>
-    ///     only under a provider that actually enforces egress confinement.
+    ///     The network posture for the sandbox.
     /// </summary>
+    /// <remarks>
+    ///     The live process provider does not isolate the network, so this is <c>"unrestricted"</c> and the child
+    ///     shares the host network. It becomes <c>"disabled"</c>/<c>"restricted"</c> only under a provider that
+    ///     actually enforces egress confinement.
+    /// </remarks>
     public required string NetworkPolicy { get; init; }
 
     /// <summary>Whether read-only host mounts may be requested (gated elsewhere).</summary>

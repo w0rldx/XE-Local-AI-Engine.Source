@@ -7,11 +7,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-/// <summary>
-///     Opportunistically calibrates token estimates for llama.cpp models that are serving real requests. Each request
-///     performs only a bounded due check and queue write; /tokenize I/O runs here, outside inference. There is no timer
-///     that can revisit a stale endpoint after eject. Provider failures retain the prior calibration or chars/4 fallback.
-/// </summary>
+/// <summary>Opportunistically calibrates token estimates for llama.cpp models that are serving real requests.</summary>
+/// <remarks>
+///     Each request performs only a bounded due check and queue write, so the <c>/tokenize</c> I/O runs here, outside
+///     inference, and no timer can revisit a stale endpoint after an eject. A provider failure retains the prior
+///     calibration, or the chars/4 fallback.
+/// </remarks>
 internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService, ITokenEstimatorCalibrationScheduler
 {
     internal const int DefaultWorkCapacity = 64;
@@ -172,10 +173,8 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             }
         }
 
-        // The probe is a real request against the model's process, dispatched from this worker long after the chat
-        // that scheduled it. Unleased, profiling's pre-spawn claim wins and this POST lands on whatever now answers
-        // that port — the measurement process, since the allocator commonly re-hands the freed one. A refused lease
-        // skips the round entirely: calibration is opportunistic, and the next request reschedules it.
+        // The probe is a real request against the model's process, dispatched long after the chat that scheduled it. Unleased, profiling's pre-spawn claim wins
+        // and this POST lands on whatever now answers that port. A refused lease skips the round: calibration is opportunistic and the next request reschedules it.
         var acquisition = _supervisor.TryAcquireInferenceLease(work.ModelName, ModelRole.Chat);
         if (acquisition.ProcessEvicting || acquisition.ProcessProfiling)
         {

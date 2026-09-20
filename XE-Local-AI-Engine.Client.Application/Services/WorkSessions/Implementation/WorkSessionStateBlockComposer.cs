@@ -24,36 +24,25 @@ internal sealed record WorkSessionState
 
 /// <summary>
 ///     Builds the one message each step sends: the session's state, rebuilt from the database every time.
-///     <para>
-///         Rebuilding beats relying on the transcript for two reasons. A tool-only assistant turn is dropped from later
-///         context entirely (the send path keeps only completed, non-empty messages), so a step that did nothing but
-///         call tools would otherwise vanish. And the raw history is bounded by compaction, so anything older than the
-///         synopsis is gone by construction. What the model sees is therefore current and bounded, independently of
-///         what survived.
-///     </para>
-///     <para>
-///         Every agent-authored string in the block — task titles and details, finding text and source references,
-///         artifact names, the checkpoint synopsis — sits inside ONE untrusted-content fence. All of it has derived
-///         provenance and may be verbatim knowledge-base or MCP output; <c>sourceRef</c> in particular invites pasting
-///         tool results. It is data to reason over, not instructions to follow. The objective stays outside the fence:
-///         it is the operator's own text and the one instruction in the block that IS meant to be followed.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Every agent-authored string in the block — task titles and details, finding text and <c>sourceRef</c>, artifact
+///     names, the checkpoint synopsis — has derived provenance and sits inside ONE untrusted-content fence: data to
+///     reason over, never instructions. The objective stays OUTSIDE it, being the operator's own text. Why the block
+///     is rebuilt rather than read off the transcript: docs/wiki/04-agent-mode.md ("The state block").
+/// </remarks>
 internal static class WorkSessionStateBlockComposer
 {
     /// <summary>The prefix the frontend collapses these synthetic user turns by. Do not change it without changing that.</summary>
     public const string BlockPrefix = "[work session state";
 
-    /// <summary>
-    ///     Appended for <see cref="AgentWorkSessionKind.Workflow" /> sessions; see the call site for why.
-    ///     <para>
-    ///         The stuck sentence names the two things <c>DevWorkflowAgentExecutor</c> now READS out of a completed
-    ///         session before it decides the node run's fate: a task left <c>Blocked</c>, and <c>objectiveMet:false</c>
-    ///         on the completion. Either one blocks the row for a human instead of reporting a success nobody had.
-    ///         So this is no longer only a plea for honesty — it is the wording of a contract the
-    ///         executor enforces, and the two signals must stay named here for a model to know to leave them.
-    ///     </para>
-    /// </summary>
+    /// <summary>Appended for <see cref="AgentWorkSessionKind.Workflow" /> sessions; see the call site for why.</summary>
+    /// <remarks>
+    ///     The stuck sentence names the two signals <c>DevWorkflowAgentExecutor</c> READS out of a completed session
+    ///     before it decides the node run's fate — a task left <c>Blocked</c>, and <c>objectiveMet:false</c> on the
+    ///     completion — either of which blocks the row for a human rather than reporting a success nobody had. It is
+    ///     the wording of a contract the executor enforces, so both signals must stay named here.
+    /// </remarks>
     private const string WorkflowOwnedFooter =
         " This session is driven by a development-workflow node and has no operator attached: ask_user is not available"
         + " and nothing you ask will be answered. Decide and carry on yourself. If you are genuinely stuck, mark the task"
@@ -149,11 +138,8 @@ internal static class WorkSessionStateBlockComposer
         var footer = "\nContinue the objective. Record what you learn with record_finding, keep the plan current with "
                      + "update_work_plan, and call complete_work_session when the objective is met.";
 
-        // The send withdraws ask_user from a workflow-owned session's tool offer (NodeChatStreamRequest.SuppressAskUser),
-        // so say so here rather than leaving the model to discover it: the seeded personas' instructions still point at
-        // the tool, and an installed row keeps the text it was seeded with — the seeder skips a slug it already wrote.
-        // Without this line the model calls a function it was never offered and can loop on that until the step's
-        // provider-call cap.
+        // The send withdraws ask_user here (NodeChatStreamRequest.SuppressAskUser) while the seeded personas' saved
+        // instructions still point at it, so say so — otherwise the model loops on it until the provider-call cap.
         if (state.Session.Kind == AgentWorkSessionKind.Workflow)
         {
             footer += WorkflowOwnedFooter;
@@ -164,9 +150,12 @@ internal static class WorkSessionStateBlockComposer
 
     /// <summary>
     ///     The task the session is on: the stored pointer when it still resolves to an open task, otherwise the single
-    ///     <c>Active</c> one. The fallback matters because the tool handlers move a task to <c>Active</c> without
-    ///     touching the session row, which only a status transition may write.
+    ///     <c>Active</c> one.
     /// </summary>
+    /// <remarks>
+    ///     The fallback matters because the tool handlers move a task to <c>Active</c> without touching the session
+    ///     row, which only a status transition may write.
+    /// </remarks>
     public static WorkSessionTaskSnapshot? ResolveCurrentTask(WorkSessionState state)
     {
         ArgumentNullException.ThrowIfNull(state);

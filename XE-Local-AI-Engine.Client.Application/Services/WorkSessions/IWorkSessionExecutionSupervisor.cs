@@ -9,25 +9,24 @@ internal enum WorkSessionStopReason
 
 /// <summary>
 ///     Drives work sessions as a detached sequence of steps, off the HTTP and SignalR request paths.
-///     <para>
-///         <c>MaxConcurrentSessions</c> is an ADMISSION cap, not a concurrency setting. The node has exactly one
-///         invocation slot — <c>WorkerEventDispatcher</c> holds a <c>SemaphoreSlim(1, 1)</c> that every invocation takes
-///         — so a second admitted session buys queue depth, not parallelism, and a running step delays the operator's
-///         own chat turn until it finishes. That is a node-wide behavioural consequence of shipping work sessions, and
-///         <c>MaxParkedSeconds</c> is what bounds its worst case.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <c>MaxConcurrentSessions</c> is an ADMISSION cap, not a concurrency setting: the node has exactly one invocation slot, a
+///     <c>SemaphoreSlim(1, 1)</c> in <c>WorkerEventDispatcher</c> that every invocation takes, so a second admitted session buys
+///     queue depth rather than parallelism and a running step delays the operator's own chat turn until it finishes. That is a
+///     node-wide behavioural consequence of shipping work sessions, and <c>MaxParkedSeconds</c> bounds its worst case.
+/// </remarks>
 internal interface IWorkSessionExecutionSupervisor
 {
     /// <summary>
-    ///     Admits a session and starts driving it. Returns <see langword="false" /> when the feature is off, the session
-    ///     is already in flight here, or the admission cap is full.
-    ///     <para>
-    ///         <paramref name="runtime" /> pins what the steps of THIS run use instead of the bound agent's own model
-    ///         and effort, and is held for the run rather than stored — the caller supplies it again on the next start
-    ///         or resume, so nothing here has to survive a restart.
-    ///     </para>
+    ///     Admits a session and starts driving it. Returns <see langword="false" /> when the feature is off, the
+    ///     session is already in flight here, or the admission cap is full.
     /// </summary>
+    /// <remarks>
+    ///     <paramref name="runtime" /> pins what the steps of THIS run use instead of the bound agent's own model and
+    ///     effort, and is held for the run rather than stored: the caller supplies it again on the next start or
+    ///     resume, so nothing here has to survive a restart.
+    /// </remarks>
     bool TryStart(Guid sessionId, WorkSessionRuntimeOverride? runtime = null);
 
     /// <summary>

@@ -3,14 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Agents;
 using System.Text.Json;
 
 /// <summary>
-///     Canonical v1 shape of an orchestrator definition's <c>OrchestrationTopologyJson</c> column (orchestration). It
-///     references existing node-local <c>AgentDefinition</c> ids — the orchestrator definition is the triage by
-///     default, and <see cref="ParticipantAgentDefinitionIds" /> are the specialist agents it can hand off to. The
-///     resolver compiles this into the MAF-agnostic orchestration spec; the management UI round-trips it verbatim.
-///     This record is the PINNED contract shared by the resolver (worker-side compile), the management service
-///     (validation), and the React topology editor (authoring). Adding fields is a forward-compatible change only if
-///     <see cref="Version" /> is bumped and the parser stays tolerant of unknown versions.
+///     Canonical v1 shape of an orchestrator definition's <c>OrchestrationTopologyJson</c> column.
 /// </summary>
+/// <remarks>
+///     It references node-local <c>AgentDefinition</c> ids: the orchestrator is the triage by default and
+///     <see cref="ParticipantAgentDefinitionIds" /> are the specialists it can hand off to. The PINNED contract
+///     shared by the resolver's compile, the management service's validation and the React topology editor, so
+///     adding a field is forward-compatible only with a <see cref="Version" /> bump and a parser that stays tolerant
+///     of unknown versions.
+/// </remarks>
 public sealed record OrchestrationTopology
 {
     /// <summary>Schema version. v1 is the only shape the resolver understands; any other value is treated as "no topology".</summary>
@@ -50,39 +51,45 @@ public sealed record OrchestrationHandoff
 }
 
 /// <summary>
-///     Tolerant parse/serialize helpers for <see cref="OrchestrationTopology" />. A single cached
-///     <see cref="JsonSerializerOptions" /> (web defaults, camelCase) is reused so the JSON shape stays stable across
-///     the resolver, the management service, and any test fixtures (CA1869). Parsing NEVER throws: a null/blank/invalid
-///     payload returns <c>null</c> so the caller degrades to the single-agent path rather than failing the turn.
+///     Tolerant parse and serialize helpers for <see cref="OrchestrationTopology" />.
 /// </summary>
+/// <remarks>
+///     One cached <see cref="JsonSerializerOptions" /> (web defaults, camelCase) is reused so the JSON shape stays
+///     stable across the resolver, the management service and any test fixtures (CA1869). Parsing NEVER throws: a
+///     null, blank or invalid payload answers <c>null</c>, degrading the caller to the single-agent path.
+/// </remarks>
 public static class OrchestrationTopologyJson
 {
     /// <summary>The only schema version this build understands.</summary>
     public const int CurrentVersion = 1;
 
     /// <summary>
-    ///     Hard caps on topology size enforced at parse time so a hand-edited (or hostile) column cannot fan out into an
-    ///     unbounded per-turn DB lookup or an unbounded handoff graph. An oversized topology fails closed: it parses to
-    ///     <c>null</c> (the resolver degrades to single-agent; the management service rejects it as "malformed").
+    ///     Hard caps on topology size, enforced at parse time so a hand-edited or hostile column cannot fan out into
+    ///     an unbounded per-turn DB lookup or handoff graph.
     /// </summary>
+    /// <remarks>
+    ///     An oversized topology fails closed by parsing to <c>null</c>: the resolver degrades to single-agent and
+    ///     the management service rejects it as malformed.
+    /// </remarks>
     public const int MaxParticipants = 64;
 
     public const int MaxHandoffs = 512;
 
     /// <summary>
-    ///     Server-side ceiling on <see cref="OrchestrationTopology.MaxTurnsPerAgent" /> (the per-agent autonomous-turn
-    ///     depth/loop guard), matching the authoring UI's cap. A stored value above this fans an agent out into an
-    ///     arbitrarily long autonomous loop per turn, so it fails closed the same way an oversized participant/handoff
-    ///     list does. A non-positive value is NOT over the cap — it means "use the resolver default".
+    ///     Server-side ceiling on <see cref="OrchestrationTopology.MaxTurnsPerAgent" />, the per-agent autonomous-turn
+    ///     loop guard, matching the authoring UI's cap.
     /// </summary>
+    /// <remarks>
+    ///     A stored value above it would fan an agent into an arbitrarily long autonomous loop per turn, so it fails
+    ///     closed like an oversized participant or handoff list. A non-positive value is not over the cap: it means
+    ///     "use the resolver default".
+    /// </remarks>
     public const int MaxTurnsPerAgentCeiling = 64;
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
-        // Match the authoring/round-trip contract: camelCase property names, tolerant of trailing commas/comments the
-        // UI never emits but a hand-edited column might, and we ignore unknown members so an additive v1 change on one
-        // side does not break the other. MaxDepth is pinned low (defensive): the schema is shallow, so a deeply nested
-        // payload is malformed and is rejected during deserialization rather than driving unbounded recursion.
+        // The authoring round-trip contract: camelCase, tolerant of the trailing commas and comments a hand-edited
+        // column might carry, unknown members ignored. MaxDepth is pinned low — the schema is shallow, so deep is malformed.
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
         MaxDepth = 8
@@ -114,9 +121,8 @@ public static class OrchestrationTopologyJson
             return null;
         }
 
-        // Fail closed on an oversized topology: an unbounded participant list would fan out into one DB lookup per id
-        // per turn, an unbounded handoff list into an arbitrarily large graph, and an unbounded per-agent turn cap into
-        // an arbitrarily long autonomous loop per turn. Treat any of them as malformed (null).
+        // Fail closed on an oversized topology: unbounded participants mean a DB lookup per id per turn, unbounded
+        // handoffs an arbitrarily large graph, an unbounded turn cap an endless loop. All three are malformed.
         if (topology.ParticipantAgentDefinitionIds.Count > MaxParticipants
             || topology.Handoffs.Count > MaxHandoffs
             || topology.MaxTurnsPerAgent > MaxTurnsPerAgentCeiling)

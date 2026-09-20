@@ -81,20 +81,13 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     {
         ArgumentNullException.ThrowIfNull(definition);
 
-        // The definition's pinned ModelProfile (when set) is normally the model the turn actually runs on, so gate the
-        // tool offer by it — not the caller's active model — to keep capability gating and the runtime model consistent.
-        // When the user explicitly picked a concrete model in the chat dropdown the caller passes honorModelProfile=false:
-        // the pin is suppressed entirely so the active model wins for BOTH tool gating AND the returned ModelProfile
-        // (null), letting the caller's `resolved?.ModelProfile ?? activeModel` yield the user's pick. When the definition
-        // pins no profile (or the pin is suppressed) the turn keeps the caller's active model.
+        // The pin is normally the model the turn runs on, so it gates the offer, keeping capability gating and the
+        // runtime model consistent. Suppressed, the active model wins for BOTH the gating and the returned profile.
         var pinnedModel = honorModelProfile ? definition.ModelProfile : null;
         var effectiveModel = pinnedModel ?? activeModelId;
 
-        // Gate the knowledge tools on the EFFECTIVE model's provider locality, not the turn's active model. When the
-        // definition pins a model (including a spawned sub-agent, whose child model IS the pin) the offer keys on that
-        // pinned model, so its locality must too — otherwise a cloud-pinned agent on a local-active turn would keep the
-        // knowledge tools. The pin is classified through the shared capability resolver (one cache-first lookup); with no
-        // pin the effective model IS the active model, so reuse the flag the caller already resolved (no extra lookup).
+        // Gate the knowledge tools on the EFFECTIVE model's locality, never the turn's active one, or a cloud-pinned
+        // agent keeps them on a local turn. With no pin the effective model IS the active one: reuse the caller's flag.
         var effectiveModelIsCloud = pinnedModel is null
             ? activeModelIsCloud
             : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken)).IsCloud;
@@ -120,12 +113,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     /// <summary>
-    ///     Projects the resolved offer's custom tools into the runtime-package metadata the session-approval memo needs
-    ///     (name + version + Fixed/Parameterized). Reads the store ONCE, and only when the offer actually carries a
-    ///     <c>custom__</c> tool — the common no-custom-tool path does no store read and returns <c>null</c> so the package
-    ///     stays byte-identical to before this feature. A tool offered but no longer in the store (a mid-turn delete) is
-    ///     simply omitted; its later approval falls back to always-prompt.
+    ///     Projects the resolved offer's custom tools into the runtime-package metadata the session-approval memo
+    ///     needs: name, version and Fixed or Parameterized.
     /// </summary>
+    /// <remarks>
+    ///     The store is read ONCE, and only when the offer carries a <c>custom__</c> tool, so the common path reads
+    ///     nothing and answers <c>null</c>. A tool offered but gone from the store — a mid-turn delete — is omitted,
+    ///     and its later approval falls back to always-prompt.
+    /// </remarks>
     private async Task<IReadOnlyList<ResolvedCustomTool>?> ResolveCustomToolsAsync(IReadOnlyList<AllowedToolDto> allowedTools, CancellationToken cancellationToken)
     {
         var offeredCustomNames = allowedTools
@@ -148,22 +143,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 
     /// <summary>
     ///     Resolves the definition's per-agent skill picklist into the enabled, decrypted skills MAF progressive
-    ///     disclosure will offer. The store's fast-path filters to Enabled==true and omits missing ids; any assigned id
-    ///     absent from the result (the skill was deleted or disabled) is dropped and logged by id only — never the body
-    ///     or description (privacy: dropped-skill warnings carry no encrypted content). An empty/null picklist short-
-    ///     circuits with no store call so the no-skills path stays byte-identical to the pre-skills resolve. Each
-    ///     surviving row is projected by <see cref="ProjectSkill" />, which is where an imported skill's content is
-    ///     fenced — this method is the one place every skills consumer routes through, so the trust decision is made
-    ///     once here rather than at each consumer.
+    ///     disclosure will offer.
     /// </summary>
     /// <remarks>
-    ///     A skill whose stored Name no longer satisfies the Agent Skills specification is dropped here rather than
-    ///     carried forward. Rows predating the switch to <see cref="AgentSkillFrontmatter" /> validation may hold a
-    ///     name with consecutive hyphens, which the local regex once accepted; constructing an <c>AgentInlineSkill</c>
-    ///     from one throws <see cref="ArgumentException" /> and takes down the whole turn at agent-construction time —
-    ///     in both the invocation factory and the sub-agent spawn path. Dropping degrades one skill instead of failing
-    ///     the agent, matching the dropped-tool posture in <see cref="ProjectAllowedTools" />: degrade, log, never
-    ///     fabricate. This is the single choke point every skills consumer routes through, so the guard covers them all.
+    ///     An assigned id the store's Enabled fast path drops is logged BY ID ONLY, never the body or description, and
+    ///     an empty picklist short-circuits with no store call. A skill whose stored Name no longer satisfies the
+    ///     Agent Skills specification is dropped too, because constructing an <c>AgentInlineSkill</c> from one throws
+    ///     and takes down the whole turn: degrade, log, never fabricate, as <see cref="ProjectAllowedTools" /> does.
+    ///     This is the one choke point every skills consumer routes through, so <see cref="ProjectSkill" /> fences once.
     /// </remarks>
     private async Task<IReadOnlyList<ResolvedSkill>> ResolveSkillsAsync(AgentDefinitionRecord definition, CancellationToken cancellationToken)
     {
@@ -217,33 +204,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     /// <summary>
-    ///     Projects one stored skill onto the runtime DTO, applying the trust decision that every skills consumer
-    ///     inherits. An operator-authored (<see cref="AgentSkillOrigin.Local" />) row passes through with its bytes
-    ///     EXACTLY as stored — anything else would move the body hash, and therefore the runtime config hash, of every
-    ///     locally authored skill in the library. An <see cref="AgentSkillOrigin.Imported" /> row is third-party text we
-    ///     did not write and cannot validate, so its body AND every bundled resource payload are wrapped in the
-    ///     untrusted-content fence before they can reach the model — the same boundary this repo already puts around
-    ///     knowledge-base hits, read documents, uploaded attachments and coder workspace reads. Without it, imported
-    ///     markdown would be the single most trusted text in the context: it is injected verbatim as instructions, and
-    ///     an indirect-prompt-injection payload inside it needs no approval to reach the tools that require none.
+    ///     Projects one stored skill onto the runtime DTO, applying the trust decision every skills consumer inherits.
     /// </summary>
     /// <remarks>
-    ///     The DETERMINISTIC-nonce overload is mandatory here. A random nonce per resolve would change the fenced bytes
-    ///     on every turn, moving the folded body hash and flapping the runtime config hash — resume would never match
-    ///     twice. The seed is the skill's identity (id + version): stable across resolves, and unpredictable to whoever
-    ///     authored the content, because the id is a server-minted GUID assigned at import that never appears in the
-    ///     skill file. That is the property the fence needs (a body author who cannot derive the nonce cannot forge the
-    ///     closing marker). The node-key-derived seed used for chat attachments guards a different threat — there the
-    ///     salt is the conversation id, which IS handed back to clients — and buying it here would cost a node-key
-    ///     dependency on the resolver for no additional protection: anyone who can read a skill's id already has
-    ///     authenticated node-local access and could simply store the content as Local.
-    ///     <para>
-    ///         Known residual: MAF renders a skill's NAME and DESCRIPTION, and each resource's name and description,
-    ///         into the generated skill content outside any fence we control — they are lookup keys, not payload. They
-    ///         are length-capped by frontmatter validation, shown verbatim in the import preview the operator must
-    ///         approve, and are additionally carried INSIDE the fence as metadata so the boundary states what the
-    ///         surrounding text claims to be.
-    ///     </para>
+    ///     A <see cref="AgentSkillOrigin.Local" /> row passes through byte-exact, or the body hash and the runtime
+    ///     config hash would move for every locally authored skill. An <see cref="AgentSkillOrigin.Imported" /> row is
+    ///     third-party text, so its body AND every bundled resource go inside the untrusted-content fence: injected
+    ///     verbatim as instructions, it would otherwise be the most trusted text in the context. The DETERMINISTIC
+    ///     nonce is mandatory — see the <c>fenceNonceSeed</c> local for the seed and its residual.
     /// </remarks>
     private static ResolvedSkill ProjectSkill(AgentSkillRecord skill)
     {
@@ -292,9 +260,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         {
             var resource = resources[index];
 
-            // One seed per skill, but the framing binds the marker to the payload as well (it HMACs the fenced content
-            // under the seed), so each resource — and the body — still gets a marker of its own. One resource's
-            // model-visible closing marker therefore cannot close another's fence.
+            // One seed per skill, but the framing HMACs the fenced content under it, so body and each resource still
+            // get their own marker: one resource's model-visible closing marker cannot close another's fence.
             var content = fenceNonceSeed is null
                 ? resource.Content
                 : UntrustedContentFraming.WrapDocument(resource.Content, BuildFenceMetadata(skill, resource), fenceNonceSeed);
@@ -305,11 +272,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     /// <summary>
-    ///     The labels that ride INSIDE an imported skill's fence. Every attacker-controlled field the fence can carry
-    ///     goes in here (source, skill name, resource name and media type) rather than being emitted around the
-    ///     boundary, and the trust label states plainly what the enclosed bytes are. Blank values are dropped by the
-    ///     framing, so the body's metadata block is the resource block minus the two resource labels.
+    ///     The labels that ride INSIDE an imported skill's fence.
     /// </summary>
+    /// <remarks>
+    ///     Every attacker-controlled field the fence can carry — source, skill name, resource name and media type —
+    ///     goes in here rather than around the boundary, and the trust label states plainly what the enclosed bytes
+    ///     are. Blank values are dropped by the framing, so the body's block is the resource block minus its two
+    ///     resource labels.
+    /// </remarks>
     private static KeyValuePair<string, string?>[] BuildFenceMetadata(AgentSkillRecord skill, AgentSkillResourceRecord? resource = null)
     {
         return
@@ -328,13 +298,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     /// <summary>
-    ///     Composes the definition's final resolved prompt: the versioned base instruction scaffold (identity/
-    ///     grounding/tool/output discipline), a blank line, then the persona prompt (Instructions, with playbook
-    ///     memories folded in per <see cref="ComposePersonaPromptAsync" />). A definition with
-    ///     <see cref="AgentDefinitionRecord.DisableBaseScaffold" /> set — or the defensive case of a blank scaffold
-    ///     resource — skips the prepend entirely, keeping the resolved prompt byte-identical to the pre-scaffold
-    ///     persona-only path (preserving that definition's config hash across the scaffold's introduction).
+    ///     Composes the definition's final resolved prompt: the versioned base instruction scaffold, a blank line,
+    ///     then the persona prompt from <see cref="ComposePersonaPromptAsync" />.
     /// </summary>
+    /// <remarks>
+    ///     A definition with <see cref="AgentDefinitionRecord.DisableBaseScaffold" /> set, or the defensive case of a
+    ///     blank scaffold resource, skips the prepend entirely, so its resolved prompt and config hash are
+    ///     byte-identical to the persona-only path.
+    /// </remarks>
     private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
     {
         var personaPrompt = await ComposePersonaPromptAsync(definition, retrievalQuery, cancellationToken);
@@ -344,13 +315,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     /// <summary>
-    ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled. When it is
-    ///     disabled the query is skipped entirely and the base Instructions flow through unchanged — keeping the
-    ///     resolved prompt (and thus the runtime config hash) byte-identical to the no-playbook path. When the enabled set
-    ///     exceeds the retrieval threshold and a non-blank <paramref name="retrievalQuery" /> is supplied, only the
-    ///     top-k most relevant actions are injected (relevance retrieval and cohort monitoring, the relevance-retrieval gate); at or below the threshold — or with a blank
-    ///     query — the full static prepend is used, so the resolved prompt stays byte-identical to the pre-retrieval path.
+    ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled.
     /// </summary>
+    /// <remarks>
+    ///     Disabled, the query is skipped entirely and the base Instructions flow through unchanged, keeping prompt
+    ///     and config hash byte-identical. Above the retrieval threshold with a non-blank
+    ///     <paramref name="retrievalQuery" /> only the top-k most relevant actions are injected; at or below it, or
+    ///     with a blank query, the full static prepend keeps the prompt byte-identical as well.
+    /// </remarks>
     private async Task<string> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
     {
         if (!definition.PlaybookEnabled)
@@ -374,27 +346,20 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud,
         CancellationToken cancellationToken)
     {
-        // A model that does not advertise the Ollama "tools" capability cannot drive ANY tool call, so withhold the
-        // entire offer (empty) before the per-tool name gating below. This is the capability gate; the offer provider's
-        // ToolCapableModels name allow-list remains the additional gate for high-risk tools (run_in_agent_home / MCP).
+        // A model that does not advertise "tools" cannot drive ANY call, so withhold the whole offer before per-tool
+        // gating. This is the capability gate; ToolCapableModels remains the extra gate for high-risk tools.
         if (!supportsTools)
         {
             return [];
         }
 
-        // The seeded "Default Assistant" (mode-off persona) reproduces today's chat exactly: it receives the FULL
-        // capability-gated offer for the effective model, NOT the intersected allowed set. It is the ONLY
-        // definition granted the full offer — every other definition stays intersected (security invariant: a selected
-        // agent's tool offer is never widened beyond its allowed set). The provenance is forge-proof (only the seeder
-        // mints Source=Seeded with this slug), so an operator-authored row can never claim the full offer.
+        // SECURITY INVARIANT: the seeded Default Assistant is the ONLY definition granted the full capability-gated
+        // offer; every other stays intersected. Its forge-proof provenance is what an operator row cannot claim.
         if (definition.Source == AgentDefinitionSource.Seeded
             && string.Equals(definition.SeedSlug, AgentDefaults.DefaultAgentSeedSlug, StringComparison.Ordinal))
         {
-            // The mode-off Default Assistant takes the WHOLE capability-gated offer (never the intersected allowed set),
-            // but the node-default approval policy still applies (tighten-only) so a node-wide policy is not bypassable by
-            // plain mode-off chat. With NO node policy configured the Permissive floor is identity, so the offer — and the
-            // runtime-package config hash — stay byte-identical to the mode-off path from before this feature existed. Per-agent ToolApprovals
-            // are intentionally NOT applied here: this path reproduces plain chat, which carries no per-agent overrides.
+            // The node-default approval policy still applies, tighten-only, so no node-wide policy is bypassable by
+            // mode-off chat. Per-agent ToolApprovals are NOT applied: this path reproduces plain chat, which has none.
             var wholeOffer = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
             AllowedToolDto[] composedWholeOffer =
             [
@@ -404,19 +369,13 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                 })
             ];
 
-            // The Default Assistant ships with ZERO AllowedToolNames, so ask_user must not depend on the allowed set to
-            // reach it. It arrives here inside the whole offer already, which makes this call a no-op today; it is kept
-            // so the availability rule is enforced AT the seam rather than remotely, and a future gate on the offer side
-            // cannot silently drop the tool from mode-off chat.
+            // The Default Assistant ships with ZERO AllowedToolNames, so ask_user must not depend on the allowed set.
+            // A no-op today, kept so the rule is enforced AT the seam and no offer-side gate can silently drop it.
             return AskUserToolOffer.EnsureOffered(composedWholeOffer, wholeOffer, _toolApprovalPolicy);
         }
 
-        // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
-        // opt-in-only spawn_subagent), then keep only the tools the definition allows and resolve each tool's approval
-        // flag through the TIGHTEN-ONLY compose below. Using the profile pool — not the whole offer — is what lets a
-        // profile that lists spawn_subagent resolve it while the default/mode-off path never does. Tools the definition
-        // names but the pool does not contain (uninstalled or not capability-eligible) are dropped and logged — never
-        // fabricated.
+        // Start from the PROFILE pool (the whole offer plus opt-in-only spawn_subagent), which is what lets a profile
+        // listing it resolve while mode-off never does, then intersect. A named tool absent from the pool is dropped.
         var offered = await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
@@ -424,12 +383,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                         .Where(tool => allowedNames.Contains(tool.Name))
                         .Select(tool => tool with
                         {
-                            // TIGHTEN-ONLY 3-tier compose: the node policy (which already ORs the tool's catalog
-                            // default with its category/per-tool node rule) first, THEN the per-agent override can only
-                            // ADD approval. A per-agent true tightens a tool the node policy left auto-execute; a
-                            // per-agent false is a NO-OP (it can no longer loosen a tool the node policy — or the catalog
-                            // default — requires approval for). The pre-wrap floor at the registries remains authoritative
-                            // for execution regardless of this flag.
+                            // TIGHTEN-ONLY three-tier compose: node policy first, then a per-agent override that can
+                            // only ADD approval — a per-agent false is a NO-OP. The registry floor still rules execution.
                             RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
                                                || (definition.ToolApprovals.TryGetValue(tool.Name, out var perAgentApproval) && perAgentApproval)
                         })
@@ -446,11 +401,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                 string.Join(", ", droppedNames));
         }
 
-        // ask_user is unioned in AFTER the intersection, so a bound agent gets it whatever its AllowedToolNames says
-        // (including the empty set): being able to ask the operator a question is a property of running an interactive
-        // turn, not a per-agent permission. Widening is safe here in a way it would not be for any other tool — the
-        // union adds an approval-gated, side-effect-free tool whose only action is to show the operator a question, and
-        // its approval flag goes through the same tighten-only compose as everything else.
+        // ask_user is unioned in AFTER the intersection, whatever AllowedToolNames says: asking the operator is a
+        // property of an interactive turn. Safe to widen only because it is approval-gated and side-effect-free.
         return AskUserToolOffer.EnsureOffered(projected, offered, _toolApprovalPolicy);
     }
 }

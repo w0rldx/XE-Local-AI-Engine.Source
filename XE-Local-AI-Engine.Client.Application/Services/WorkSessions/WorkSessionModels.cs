@@ -22,13 +22,13 @@ public sealed class WorkSessionSummary
 
 /// <summary>
 ///     One work session in full.
-///     <para>
-///         <see cref="MaxStepsPerRun" /> is the node's EFFECTIVE option value rather than a stored column, so the
-///         session view can render "step N of M" without a second settings round-trip. <see cref="LastSequence" /> is
-///         the hub watermark a subscriber replays from; <see cref="Version" /> is the optimistic-concurrency token a
-///         later update or lifecycle call echoes back.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="MaxStepsPerRun" /> is the node's EFFECTIVE option value rather than a stored column, so the session
+///     view renders "step N of M" without a second settings round-trip. <see cref="LastSequence" /> is the hub
+///     watermark a subscriber replays from, and <see cref="Version" /> the optimistic-concurrency token a later
+///     update or lifecycle call echoes back.
+/// </remarks>
 public sealed class WorkSessionDetail
 {
     public required Guid Id { get; init; }
@@ -151,21 +151,16 @@ public sealed class WorkSessionEventDto
     public required string EventType { get; init; }
 
     /// <summary>
-    ///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only after
-    ///     matching on <see cref="EventType" />, and must tolerate a shape it does not know.
-    ///     <para>
-    ///         Two shapes are defined today. <c>CompletionRequested</c> carries
-    ///         <c>{ "Summary": string, "ObjectiveMet": bool? }</c> — PascalCase, because the handler serializes it with
-    ///         bare defaults — where an absent or null <c>ObjectiveMet</c> means the objective WAS met, so a completion
-    ///         recorded before that member existed still reads as the success it was.
-    ///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
-    ///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
-    ///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
-    ///         "attachedBudgets": int, "toolSchemaTokens": long, "toolNames": string[] }</c>. It is null on a step that
-    ///         made no provider round at all, and <c>toolNames</c> is absent on a row written before that member existed.
-    ///         Counts plus tool NAMES: no prompt, no model output, no tool argument and no tool result.
-    ///     </para>
+    ///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only
+    ///     after matching on <see cref="EventType" />, and must tolerate a shape it does not know.
     /// </summary>
+    /// <remarks>
+    ///     Two shapes are defined today. <c>CompletionRequested</c> carries a summary and a nullable objective flag in PascalCase,
+    ///     because the handler serializes it with bare defaults, and an absent or null flag means the objective WAS met, so a
+    ///     completion recorded before that member existed still reads as the success it was. <c>StepEnded</c> and <c>StepFailed</c>
+    ///     carry <see cref="WorkSessionStepConsumptionDetail" />, camelCase, null on a step that made no provider round at all and
+    ///     without <c>toolNames</c> on a row written before that member existed.
+    /// </remarks>
     public required string? DetailJson { get; init; }
 
     public required string? Outcome { get; init; }
@@ -175,57 +170,20 @@ public sealed class WorkSessionEventDto
     public required Guid? OperationId { get; init; }
 }
 
-/// <summary>
-///     What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row so the per-step provider-call cap
-///     can be sized from what steps actually consume rather than from a guess. Counts plus a bounded set of tool NAMES
-///     — no prompts, no model output, no tool arguments and no tool results — so it is safe to persist and to show.
-///     <para>
-///         The names are here because this row is the only DURABLE carrier they have. The scope they are collected in
-///         is disposed at the end of the step that seeded it, and anything asking later — a Dev Workflow node run
-///         settling on a later dispatcher tick, in another scope and possibly another process — can read only what was
-///         persisted. A name is an identity, not content: a fixed id for a built-in tool and an operator-authored
-///         identifier for an MCP or custom one.
-///     </para>
-///     <para>
-///         Every member is a STEP TOTAL read off the step's own cap scope, which is why the provider's own reported
-///         token usage is not among them: it is a TURN number — the last round's counts on the message, the rounds'
-///         sum on the run envelope — and a step is not the same denominator as a turn.
-///         Estimate-versus-truth is measured per round instead, where both halves describe the same request, by
-///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back into the calibration store.
-///     </para>
-///     <para>
-///         <b><see cref="ProviderCalls" /> is a ratio against <see cref="ProviderCallCap" /> only while
-///         <see cref="AttachedBudgets" /> is 1.</b> The cap bounds each invocation separately, and a step that spawned
-///         sub-agents ran more than one — so eighteen calls across two budgets is two runs that each stayed under ten,
-///         not one run that breached it. Read the two together or the record argues for raising a cap nothing hit.
-///     </para>
-///     <para>
-///         The row is per STEP NUMBER, not per attempt. The supervisor derives its event operation id from the session
-///         and the step, so a step replayed after a crash finds the first attempt's row already recorded and the
-///         store's idempotency returns it unchanged — the numbers on the row are the ones the FIRST attempt spent,
-///         and the replay's own spend is not added to them and not recorded anywhere else. Aggregate these rows as a
-///         lower bound on what a session cost, not as an exact total.
-///     </para>
-/// </summary>
-/// <param name="ProviderCalls">Raw provider rounds the step admitted. Against <paramref name="ProviderCallCap" /> this is the number that matters.</param>
-/// <param name="EstimatedInputTokens">Estimated input tokens summed over those rounds, from the character profile rather than the provider.</param>
+/// <summary>What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row.</summary>
+/// <remarks>
+///     Counts plus a bounded set of tool NAMES — no prompts, model output, tool arguments or tool results — so the per-step
+///     provider-call cap can be sized from what steps actually consume rather than from a guess. Every member is a STEP TOTAL, never
+///     a turn total, and the row is per step NUMBER rather than per attempt, so aggregate these rows as a lower bound on what a
+///     session cost. See <c>docs/wiki/04-agent-mode.md</c> §5.7.
+/// </remarks>
+/// <param name="ProviderCalls">Raw provider rounds the step admitted.</param>
+/// <param name="EstimatedInputTokens">Estimated input tokens over those rounds, from the character profile rather than the provider.</param>
 /// <param name="ToolCallsCompleted">Tool invocations that returned during the step, successfully or not.</param>
-/// <param name="ProviderCallCap">
-///     The cap the step was seeded with (<c>WorkSessions:MaxProviderCallsPerStep</c>). It bounds each invocation, not
-///     their sum — see <paramref name="AttachedBudgets" /> before treating it as a denominator.
-/// </param>
-/// <param name="AttachedBudgets">
-///     How many invocations the step ran: 1 ordinarily, more when the turn spawned sub-agents, each with its own cap.
-/// </param>
-/// <param name="ToolSchemaTokens">
-///     Tool-schema tokens SHIPPED ACROSS ROUNDS — every round re-sends the whole offer, so this grows with the round
-///     count and is not the size of the offer.
-/// </param>
-/// <param name="ToolNames">
-///     The distinct tool names the step called, ordinal-sorted and capped at sixteen. Trailing and optional: a row
-///     written before this member existed reads back as <see langword="null" />, which means "this row predates the
-///     field", never "this step called no tools" — <paramref name="ToolCallsCompleted" /> answers that.
-/// </param>
+/// <param name="ProviderCallCap">The step's seeded cap. It bounds each invocation, not their sum — read <paramref name="AttachedBudgets" /> first.</param>
+/// <param name="AttachedBudgets">How many invocations the step ran: 1 ordinarily, more when the turn spawned sub-agents.</param>
+/// <param name="ToolSchemaTokens">Tool-schema tokens shipped ACROSS ROUNDS, so this grows with the round count and is not the offer's size.</param>
+/// <param name="ToolNames">Distinct tool names called, ordinal-sorted, capped at sixteen. <see langword="null" /> means the row predates the member.</param>
 public sealed record WorkSessionStepConsumptionDetail(
     int ProviderCalls,
     long EstimatedInputTokens,
@@ -249,16 +207,15 @@ public sealed class WorkSessionArtifactContent
 }
 
 /// <summary>
-///     What ONE session runs on when its caller pins it rather than the bound agent definition: the model name and the
-///     reasoning effort, either of which may be null to leave that half to the agent.
-///     <para>
-///         This is a pin, not a preference. A development-workflow node authoring <c>modelProfile</c> means that node's
-///         session runs on that model — so it is applied exactly the way an agent definition's own pin is, tool gate
-///         included, and a name this node cannot load fails the session the same way a stale pin on the definition
-///         does. Nothing is persisted on the session row: the run's graph snapshot is where a workflow node's authoring
-///         lives, and it re-supplies this on every start and resume.
-///     </para>
+///     What ONE session runs on when its caller pins it rather than the bound agent definition: the model name and
+///     the reasoning effort, either of which may be null to leave that half to the agent.
 /// </summary>
+/// <remarks>
+///     This is a pin, not a preference: a development-workflow node authoring <c>modelProfile</c> means that node's session runs on
+///     that model, so it is applied exactly the way an agent definition's own pin is, tool gate included, and a name this node cannot
+///     load fails the session the same way a stale pin on the definition does. Nothing is persisted on the session row — the run's
+///     graph snapshot is where a workflow node's authoring lives, and it re-supplies this on every start and resume.
+/// </remarks>
 public sealed class WorkSessionRuntimeOverride
 {
     /// <summary>The model this session's turns run on, or null to leave that to the agent.</summary>
@@ -268,22 +225,24 @@ public sealed class WorkSessionRuntimeOverride
     public required string? ReasoningEffort { get; init; }
 
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Set by a
-    ///     development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives
-    ///     nothing: every turn of that session must then be refused if the agent definition it re-resolves would offer a
-    ///     tool that writes files or runs commands. Checked once at creation it is not checked at all — the definition can
-    ///     be edited between two steps, or deleted so the turn falls back to the default persona and its whole offer.
-    ///     <para>
-    ///         Default <see langword="false" />, which is every other caller and today's behaviour exactly.
-    ///     </para>
+    ///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Default
+    ///     <see langword="false" />, which is every caller but the workflow runtime.
     /// </summary>
+    /// <remarks>
+    ///     Set by a development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives nothing:
+    ///     every turn of that session is then refused if the agent definition it re-resolves would offer a tool that writes files or
+    ///     runs commands. Checked once at creation it is not checked at all, because the definition can be edited between two steps,
+    ///     or deleted so the turn falls back to the default persona and its whole offer.
+    /// </remarks>
     public bool RefuseUndeclaredWrites { get; init; }
 
     /// <summary>
-    ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has. The
-    ///     refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and the
-    ///     supervisor drops an override this reports empty.
+    ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has.
     /// </summary>
+    /// <remarks>
+    ///     The refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and
+    ///     the supervisor drops an override this reports empty.
+    /// </remarks>
     public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites;
 }
 
@@ -317,10 +276,10 @@ public sealed class UpdateWorkSessionRequestModel
 
 /// <summary>
 ///     The completion request the supervisor reads back at step end, as it is written to the event log.
-///     <para>
-///         <see cref="ObjectiveMet" /> is nullable rather than defaulted so that an event recorded before the argument
-///         existed reads as <see langword="null" /> — absent, and therefore met — instead of as an unmet objective the
-///         model never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="ObjectiveMet" /> is nullable rather than defaulted so an event recorded before the argument existed
+///     reads as <see langword="null" /> — absent, and therefore met — instead of as an unmet objective the model
+///     never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down.
+/// </remarks>
 internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null);

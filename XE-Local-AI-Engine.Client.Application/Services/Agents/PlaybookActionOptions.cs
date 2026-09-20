@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Options for the bounded playbook-action store (relevance retrieval and cohort monitoring, the enabled-action cap). <see cref="MaxEnabledActions" /> is the hard
-///     cap on Enabled actions per agent: the eval-gated promote path returns CapReached (409) at the cap and manual
-///     enable is rejected (400), so prompt bloat is bounded with no silent eviction.
+///     Options for the bounded playbook-action store.
 /// </summary>
+/// <remarks>
+///     <see cref="MaxEnabledActions" /> is the hard cap on Enabled actions per agent: at the cap the eval-gated
+///     promote path answers CapReached (409) and a manual enable is rejected (400), so prompt bloat is bounded with
+///     no silent eviction.
+/// </remarks>
 public sealed class PlaybookActionOptions
 {
     public const string Section = "PlaybookActions";

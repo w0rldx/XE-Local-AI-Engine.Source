@@ -8,13 +8,11 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 
 /// <inheritdoc cref="IProviderStreamResilience" />
 /// <remarks>
-///     A minimal internal implementation rather than a Polly/HTTP-resilience pipeline: the "retry only before the first
-///     chunk has been streamed to our transport" gate is application-level state that an HTTP-handler resilience
-///     pipeline cannot express (it would also retry mid-stream and duplicate tokens), so the resilience must live at
-///     this seam. Failures and the breaker window are tracked per key; the runner supplies the resolved model as the
-///     key, so the breaker is effectively per resolved model. The open window is time-based rather than a strict
-///     single half-open trial — once it elapses every caller is admitted, so concurrent probes are possible; the runner's
-///     single-invocation guard is what bounds real concurrency.
+///     A minimal internal implementation rather than a Polly/HTTP-resilience pipeline: "retry only before the first
+///     chunk reached our transport" is application-level state an HTTP-handler pipeline cannot express — it would
+///     retry mid-stream and duplicate tokens — so the resilience lives at this seam. Failures and the breaker window
+///     are tracked per key, and the runner supplies the resolved model, so the breaker is per resolved model. The open
+///     window is time-based, so concurrent probes are possible; the single-invocation guard bounds real concurrency.
 /// </remarks>
 internal sealed class ProviderStreamResilience : IProviderStreamResilience
 {
@@ -156,9 +154,8 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
         await Task.Delay(delay, _timeProvider, cancellationToken);
     }
 
-    // Transient = the send failed at the connection/transport layer or with a server-side/overload status, so a retry
-    // to a (possibly re-spawned) endpoint may succeed. A 4xx other than 429 is a request/capability problem and is
-    // deliberately NOT retried. A cancellation requested through the caller's token is never transient.
+    // Transient = a connection/transport failure or a server-side/overload status, where a retry to a possibly
+    // re-spawned endpoint may succeed. A 4xx other than 429 is not, nor is a cancellation on the caller's token.
     private static bool IsTransient(Exception exception, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)

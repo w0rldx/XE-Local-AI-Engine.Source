@@ -7,30 +7,21 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
-/// <summary>
-///     Bounds the transcript one work-session step replays.
-///     <para>
-///         A step is an ordinary chat turn, so the send path re-sends every earlier step's user state block, assistant
-///         text and assistant reasoning verbatim. Nothing folds them: compaction has no trigger of its own, and the only
-///         session caller is the checkpoint, which lands every <c>CheckpointEveryNSteps</c> steps and keeps the
-///         configured eight messages — four whole steps — verbatim. The transcript therefore grows monotonically and
-///         eats the headroom the step's OWN tool loop needs; a research step reading one knowledge-base document spends
-///         some 16k tokens on that result alone. On 2026-08-24 a 27B model at a 65,536-token window went over at step 5.
-///     </para>
-///     <para>
-///         So: before each send, project what the next step will replay and, over budget, fold it into the synopsis the
-///         send path already splices (<see cref="CompactionContextResolver" />). Nothing is lost — the state block is
-///         rebuilt from the database every step (<see cref="WorkSessionStateBlockComposer" />), which is precisely why
-///         the raw transcript is the expendable half.
-///     </para>
-/// </summary>
+/// <summary>Bounds the transcript one work-session step replays.</summary>
+/// <remarks>
+///     Before each send it projects what the next step will replay and, over budget, folds the older turns into the
+///     synopsis the send path already splices (<see cref="CompactionContextResolver" />). Nothing durable is lost: the
+///     state block is rebuilt from the database every step (<see cref="WorkSessionStateBlockComposer" />), which is why
+///     the raw transcript is the expendable half. Why the checkpoint's own compaction is not this bound, and the other
+///     two bounds beside it: docs/wiki/04-agent-mode.md ("The transcript bound at the step boundary").
+/// </remarks>
 internal sealed class ConversationStepContextBound
 {
-    /// <summary>
-    ///     What a forced session compaction keeps verbatim: the previous step's state block and its answer. Two is the
-    ///     service's own floor, and one step is all the verbatim history a session needs — everything durable is in the
-    ///     state block, and the folded span survives as the synopsis.
-    /// </summary>
+    /// <summary>What a forced session compaction keeps verbatim: the previous step's state block and its answer.</summary>
+    /// <remarks>
+    ///     Two is the compaction service's own floor, and one step is all the verbatim history a session needs —
+    ///     everything durable is in the state block, and the folded span survives as the synopsis.
+    /// </remarks>
     internal const int SessionKeepVerbatim = 2;
 
     private readonly IConversationCompactionService _compaction;
@@ -56,43 +47,17 @@ internal sealed class ConversationStepContextBound
 
     /// <summary>
     ///     Folds the session conversation's older turns when the next step would replay more than
-    ///     <paramref name="budgetTokens" /> estimated tokens. A non-positive budget disables the bound; every compaction
-    ///     no-op (no local model to summarize with, nothing new to fold) is non-fatal — the step still runs, and the
-    ///     provider-round budgeters remain the backstop they always were.
-    ///     <para>
-    ///         The projection and the budget are held in ONE arithmetic: the model is resolved once and used both for
-    ///         the estimate's divisor and for the observed correction the budget is divided by. Correcting only the
-    ///         estimate would compare calibrated tokens against an uncalibrated number and fold late on exactly the
-    ///         models calibration exists to protect. Tighten-only and neutral until a round has been recorded, so an
-    ///         uncalibrated session compares against the configured budget unchanged. Note this uses the correction
-    ///         ALONE — <see cref="TokenEstimatorCalibrationStore.EstimateSafetyFactor" /> is a context-window reserve
-    ///         and has no business retuning a flat policy budget.
-    ///     </para>
+    ///     <paramref name="budgetTokens" /> estimated tokens; a non-positive budget disables the bound.
     /// </summary>
-    /// <param name="conversationId">The session's owned conversation.</param>
-    /// <param name="budgetTokens">The configured step budget; non-positive disables the bound.</param>
-    /// <param name="effectiveModel">
-    ///     The model the UPCOMING turn will run on, as the supervisor already resolved it for this step
-    ///     (<c>WorkSessionToolGate.InspectAllowListAsync</c>'s verdict). It, not the transcript, is what the estimate
-    ///     and the budget must be calibrated under: a paused session repointed to another agent — or an unpinned agent
-    ///     whose node default model changed — runs the next step on a DIFFERENT model, and the previous model's divisor
-    ///     and correction would fold late on exactly the case the bound exists to prevent. Null (the agent was deleted,
-    ///     or the gate could not be read) falls back to the transcript's model.
-    /// </param>
+    /// <remarks>
+    ///     A compaction no-op (no local model to summarize with, nothing new to fold) is non-fatal: the step still runs
+    ///     and the provider-round budgeters stay the backstop. The keep window is two for a work session, whose state
+    ///     block is rebuilt every step, and the chat window for an integration session, whose transcript IS its state;
+    ///     it sits after the token because an <c>int</c> before it rebinds the supervisor's fourth positional argument.
+    /// </remarks>
+    /// <param name="effectiveModel">From <c>WorkSessionToolGate.InspectAllowListAsync</c>; null falls back to the transcript's.</param>
     /// <param name="cancellationToken">Cancels the reads; the compaction itself is the caller's own token.</param>
-    /// <param name="keepVerbatimExchanges">
-    ///     How many of the newest messages a forced fold keeps verbatim. The default is the work-session floor of two,
-    ///     so the supervisor's call site is byte-identical, and it exists because a work-session step rebuilds its state
-    ///     block from the database every step — the transcript beyond the previous step carries nothing the model still
-    ///     needs.
-    ///     <para>
-    ///         An integration session has no state block: its transcript IS the session state. Folded to two, the first
-    ///         turn over budget would collapse a caller-managed session to a synopsis plus the last exchange and delete
-    ///         the continuation the feature exists to deliver — so the integration coordinator passes the CHAT window
-    ///         instead. It sits LAST, after the token, deliberately: an <c>int</c> inserted before it rebinds the
-    ///         supervisor's fourth positional argument (<c>CancellationToken.None</c>) and does not compile.
-    ///     </para>
-    /// </param>
+    /// <param name="keepVerbatimExchanges">How many of the newest messages a forced fold keeps verbatim.</param>
     [SuppressMessage("Design", "CA1068:CancellationToken parameters must come last",
         Justification =
             "The keep window has to sit AFTER the token: the supervisor's call site passes four positional arguments whose fourth is CancellationToken.None, "
@@ -111,9 +76,8 @@ internal sealed class ConversationStepContextBound
             return;
         }
 
-        // With tool history on this takes the FULL read: the parts the projection has to count live in the same
-        // metadata_json blob the capped turn read omits for every non-user row the synopsis covers, so the capped read
-        // would measure a transcript smaller than the one the turn sends — the exact failure this bound prevents.
+        // With tool history on this takes the FULL read: the capped turn read omits the metadata_json the projection
+        // must count, so it would measure a transcript smaller than the one the turn sends.
         var conversation = includeToolHistory
             ? await _persistence.GetConversationAsync(conversationId, cancellationToken)
             : await _persistence.GetConversationForTurnAsync(conversationId, cancellationToken);
@@ -122,6 +86,8 @@ internal sealed class ConversationStepContextBound
             return;
         }
 
+        // ONE arithmetic: the same resolved model gives the estimate its divisor and the budget its observed correction
+        // (tighten-only, that ALONE — TokenEstimatorCalibrationStore.EstimateSafetyFactor is a context-window reserve).
         var modelName = effectiveModel ?? ResolveTranscriptModel(conversation);
         var projected = Project(conversation, _estimator, modelName, includeToolHistory, toolResultExcerptChars);
         var effectiveBudget = TokenEstimatorCalibrationStore.ApplyObservedCorrection(budgetTokens, _estimator.ResolveObservedCorrection(modelName));
@@ -130,9 +96,8 @@ internal sealed class ConversationStepContextBound
             return;
         }
 
-        // The FOLD runs on the node's default chat model, not on the one the step itself uses — true for a session's
-        // caller pin exactly as it already is for a bound agent's own. Summarizing is not the session's work, and
-        // routing it to a pinned model would make a fold contend for that model's load slot mid-session.
+        // The FOLD runs on the node's default chat model, not the step's, whether the pin is the caller's or the bound
+        // agent's: summarizing is not the session's work, and a pinned model would contend for its own load slot.
         var result = await _compaction.CompactAsync(conversationId, requestedModel: null, keepVerbatimExchanges, cancellationToken);
         _logger.LogInformation(
             "Work session conversation {ConversationId} projected ~{Projected} replayed token(s) against a step budget of {Budget} (effective {EffectiveBudget} after this model's observed correction); forced compaction reported {Outcome} after folding {Folded} message(s).",
@@ -146,32 +111,18 @@ internal sealed class ConversationStepContextBound
 
     /// <summary>
     ///     Estimates the tokens the next step's request will carry for HISTORY: the synopsis plus every completed,
-    ///     content-bearing message the synopsis does not already cover. Mirrors
-    ///     <c>ConversationContextBuilder.Build</c> — same selected-path collapse, same anchor space, same
-    ///     completed/non-empty filter — and measures with the same <see cref="ITokenEstimator" /> the context budgeters
-    ///     use, under the same per-model calibration, so this projection and their verdicts are in one arithmetic. The
-    ///     state block for the coming step is deliberately NOT counted: it is bounded by construction and is what the
-    ///     budget exists to protect.
-    ///     <para>
-    ///         Reasoning is counted, and on a llama.cpp session it is counted for a request that will NOT carry it.
-    ///         That is deliberate and it is the conservative direction. Verified against
-    ///         Microsoft.Extensions.AI.OpenAI 10.9.0: the Chat Completions client's content-part conversion handles
-    ///         text, URI, data and hosted-file content only, so a historical <see cref="TextReasoningContent" /> is
-    ///         dropped on the floor rather than sent. Only the Responses API client (Codex) replays it — and MUST, so
-    ///         no suppression seam belongs here. Over-counting a Chat-Completions provider by the reasoning it will
-    ///         discard makes this bound fire slightly early; under-counting a Responses-API one would make it fire too
-    ///         late, which is the failure it exists to prevent.
-    ///     </para>
+    ///     content-bearing message the synopsis does not already cover.
     /// </summary>
+    /// <remarks>
+    ///     Mirrors <c>ConversationContextBuilder.Build</c> — same selected-path collapse, anchor space and
+    ///     completed/non-empty filter — and measures with the same <see cref="ITokenEstimator" /> and calibration the
+    ///     context budgeters use, so projection and verdict are one arithmetic. The coming step's state block is not
+    ///     counted: it is bounded by construction and is what the budget protects. Reasoning always is, even where the
+    ///     provider drops it — docs/wiki/04-agent-mode.md ("The transcript bound at the step boundary").
+    /// </remarks>
     /// <param name="conversation">The session's owned conversation, as the send path will read it.</param>
     /// <param name="estimator">The same estimator the context budgeters measure with.</param>
-    /// <param name="modelName">
-    ///     The model the coming step will run on, so the estimate uses that model's calibrated divisor rather than the
-    ///     uncalibrated chars/4 default. The supervisor supplies it from the tool gate's verdict for THIS step. Null
-    ///     falls back to the transcript — the model the LAST completed assistant message ran on — which is right only
-    ///     while nothing has repointed the session or moved the node default since, and is therefore a fallback for
-    ///     when no upcoming model is resolvable rather than the primary source.
-    /// </param>
+    /// <param name="modelName">The coming step's model, for its calibrated divisor; null falls back to the transcript's.</param>
     internal static int Project(NodeChatConversationDto conversation,
         ITokenEstimator estimator,
         string? modelName = null,
@@ -214,9 +165,8 @@ internal sealed class ConversationStepContextBound
 
         foreach (var message in selected)
         {
-            // The SAME projection the send path applies, so the estimate counts what the turn will actually carry: with
-            // tool history on, a turn's completed exchanges are replayed as real function contents (both estimators
-            // count those natively), and a turn kept only for them is kept here too.
+            // The SAME projection the send path applies, so the estimate counts what the turn carries: with tool
+            // history on, completed exchanges replay as real function contents, and a turn kept only for them stays.
             var exchanges = includeToolHistory
                 ? ConversationContextBuilder.ProjectSendableToolExchanges(message, toolResultExcerptChars)
                 : null;
@@ -258,12 +208,14 @@ internal sealed class ConversationStepContextBound
     }
 
     /// <summary>
-    ///     FALLBACK only: the model the most recent completed assistant message ran on, or null when the session has
-    ///     not answered yet (the first step, where the transcript is short enough that the divisor cannot matter). Read
-    ///     from the whole message list rather than the selected path: a variant that was not chosen still ran on the
-    ///     same model. It describes the model the LAST turn used, which is not necessarily the next one's — see the
-    ///     <c>effectiveModel</c> parameter on <see cref="ApplyAsync" />.
+    ///     FALLBACK only: the model the most recent completed assistant message ran on, or null before the session has
+    ///     answered at all.
     /// </summary>
+    /// <remarks>
+    ///     Null on the first step, where the transcript is too short for the divisor to matter. Read from the whole
+    ///     message list rather than the selected path — an unchosen variant still ran on the same model. It describes
+    ///     the LAST turn's model, which is not necessarily the next one's: see <see cref="ApplyAsync" />.
+    /// </remarks>
     private static string? ResolveTranscriptModel(NodeChatConversationDto conversation)
     {
         string? model = null;

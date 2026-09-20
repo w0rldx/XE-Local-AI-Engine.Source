@@ -11,23 +11,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed partial class InvocationRunner
 {
-    // The mutable streaming accumulator shared by the single-agent and orchestration paths: the response/reasoning
-    // builders, the byte totals (against _maxResponseSizeBytes), the monotonic sequence counters the transport sends,
-    // and the terminal usage snapshot. Carried by reference into the branch methods so the post-stream completion
-    // block in RunAsync reads the final state. Internal rather than private only so LocalRuntimeWarmer can record the
-    // readiness telemetry (provider tag, ready timestamp, readiness duration) into the SAME accumulator the completion
-    // block reads — including on the cancelled path, where the value must land before the cancellation propagates.
+    // The mutable streaming accumulator both paths share — builders, byte totals, sequence counters, usage snapshot —
+    // carried by reference so RunAsync's completion block reads it. Internal so LocalRuntimeWarmer writes readiness in.
     internal sealed class StreamState
     {
-        // Wall-clock generation timer for the whole turn (prompt-eval through final token), started at state
-        // construction so it covers both the single-agent and orchestration branches. Read once in the completion
-        // block to stamp the persisted tokens-per-second duration.
+        // Wall-clock timer for the whole turn, started at construction so it covers both branches. Read once in the
+        // completion block to stamp the persisted tokens-per-second duration.
         public Stopwatch GenerationStopwatch { get; } = Stopwatch.StartNew();
 
-        // Time-to-first-token inputs. HarnessStartedTimestamp provides the production-harness TTFT used by the
-        // terminal efficiency record. ModelReadyTimestamp preserves the existing inference-only measure (the local
-        // warm phase's completion, or turn start for a runtime with no cold load). ProviderTag is the bounded metric
-        // dimension (local | remote). FirstOutputRecorded gates both one-shot values on the first emitted chunk.
+        // TTFT inputs: HarnessStartedTimestamp is the harness measure on the efficiency record, ModelReadyTimestamp
+        // the inference-only one, ProviderTag the bounded dimension, FirstOutputRecorded the one-shot gate for both.
         public long HarnessStartedTimestamp { get; init; }
 
         public long? ModelReadyTimestamp { get; set; }
@@ -35,11 +28,13 @@ public sealed partial class InvocationRunner
         public double? ModelReadinessDurationMs { get; private set; }
 
         /// <summary>
-        ///     Adds one local warm's duration to the turn's readiness total. SUMMED, not assigned: a turn can warm
-        ///     twice — a dispatched fast model that fails before first output is followed by a warm of the original
-        ///     model for the fallback — and an assignment charged the turn only the second warm while the whole-turn
-        ///     clock still contained both.
+        ///     Adds one local warm's duration to the turn's readiness total.
         /// </summary>
+        /// <remarks>
+        ///     SUMMED, not assigned: a turn can warm twice — a dispatched fast model failing before first output is
+        ///     followed by a warm of the original for the fallback — and an assignment charges only the second while
+        ///     the whole-turn clock still contains both.
+        /// </remarks>
         public void AddModelReadiness(double durationMs)
         {
             ModelReadinessDurationMs = (ModelReadinessDurationMs ?? 0d) + durationMs;
@@ -55,18 +50,12 @@ public sealed partial class InvocationRunner
 
         public StringBuilder ReasoningBuilder { get; } = new();
 
-        // The turn's usage, ACCUMULATED across every provider round, for the same reason AddSegmentTimings accumulates
-        // llama-server's timings: FunctionInvokingChatClient runs the tool loop inside ONE RunStreamingAsync, so a
-        // tool-calling turn emits one UsageContent per round and last-wins recorded only the final round (measured
-        // live: a three-round turn reported prompt 2,970 against a per-round estimate of 10,722). This is what the turn
-        // COST, and it feeds the token-usage metric, the efficiency record and the run-envelope row. Private setter so
-        // the only way in is AddUsage below — an overwrite is exactly the bug this replaced.
+        // The turn's usage, ACCUMULATED across rounds: the tool loop runs inside ONE RunStreamingAsync, so last-wins
+        // would record only the final round. This is what the turn COST; the private setter forces AddUsage.
         public UsageSnapshot? UsageSnapshot { get; private set; }
 
-        // The LAST provider round's usage on its own. A round's prompt is the WHOLE conversation so far, not a delta, so
-        // the final round's input count is what the model's context actually HELD when it answered — the occupancy the
-        // chat meter derives from the assistant message's tokens. Summing rounds there reads as three times the context
-        // the turn ever used (10,722 shown for a real ~3,000). Cost sums; occupancy does not.
+        // The LAST round's usage alone. A round's prompt is the WHOLE conversation, so its input count is what the
+        // context HELD — the occupancy the chat meter shows. Cost sums; occupancy does not.
         public UsageSnapshot? LastRoundUsage { get; private set; }
 
         /// <summary>Records one provider round's reported usage as the last round and folds it into the turn totals.</summary>
@@ -76,11 +65,8 @@ public sealed partial class InvocationRunner
             UsageSnapshot = UsageSnapshot.Accumulate(UsageSnapshot, LastRoundUsage);
         }
 
-        // Why generation stopped, taken from the LAST streamed update that carried a finish reason: a tool-calling turn
-        // ends its first segment with "tool_calls" and its final one with "stop", so last-wins is the turn's answer.
-        // Verbatim ChatFinishReason.Value — the OpenAI-compatible llama-server emits "length" both when n_predict is
-        // exhausted and when the context window fills (stopped_limit), which is exactly the truncation the benchmark
-        // ranking must see. Null when no provider reported one.
+        // Why generation stopped, from the LAST update carrying a reason: a tool-calling turn ends on "stop" after
+        // "tool_calls". Verbatim, because llama-server's "length" covers both n_predict and a filled window.
         public string? FinishReason { get; set; }
 
         public long Sequence { get; set; }
@@ -91,11 +77,8 @@ public sealed partial class InvocationRunner
 
         public int TotalReasoningBytes { get; set; }
 
-        // llama-server's own pp/tg timings, accumulated across every provider REQUEST the turn made. A tool-calling
-        // turn is several requests, each carrying its own `timings` object, so the token counts and durations SUM: the
-        // turn spent that much total time prefilling and that much decoding. TTFT is deliberately NOT summed —
-        // FirstOutputLatencyMs above is already one-shot on the first emitted chunk, which belongs to the first request,
-        // which is when the caller first saw output. Every field stays null for a provider that reports no timings.
+        // llama-server's pp/tg timings SUMMED across every provider request the turn made. TTFT is deliberately NOT
+        // summed — FirstOutputLatencyMs is one-shot on the first chunk. Null throughout for a provider with no timings.
         public int? PromptTokens { get; private set; }
 
         public double? PromptMs { get; private set; }
@@ -148,9 +131,8 @@ public sealed partial class InvocationRunner
             value is null ? total : (total ?? 0) + value.Value;
     }
 
-    // The single emit path both branches use: it appends to the accumulator, enforces the response/reasoning byte
-    // caps, advances the sequence counter and reports the chunk to the dispatcher. Keeping this one place guarantees
-    // the orchestration path streams byte-for-byte like the single-agent path.
+    // The single emit path both branches use: append, enforce the byte caps, advance the sequence, report. One place,
+    // so the orchestration path streams byte-for-byte like the single-agent path.
     private sealed class StreamTransport
     {
         private readonly RuntimePackage _package;
@@ -169,11 +151,13 @@ public sealed partial class InvocationRunner
 
         /// <summary>
         ///     Reports a non-fatal turn notice (model substitution, tool disabled, history truncated) for this
-        ///     invocation. Unlike <see cref="EmitReasoningAsync" />/<see cref="EmitTextAsync" /> this does not touch
-        ///     <see cref="StreamState" /> or the byte-size caps — a notice is metadata about the turn, not streamed
-        ///     model output — and reports through the SAME dispatcher every notice-emitting caller already holds, so
-        ///     it needs no separate wiring.
+        ///     invocation.
         /// </summary>
+        /// <remarks>
+        ///     Unlike <see cref="EmitReasoningAsync" />/<see cref="EmitTextAsync" /> it touches neither
+        ///     <see cref="StreamState" /> nor the byte caps, a notice being metadata rather than model output, and it
+        ///     reports through the SAME dispatcher every notice-emitting caller holds, so it needs no wiring.
+        /// </remarks>
         public Task EmitNoticeAsync(TurnNoticeKind kind, string message, string? detail = null)
         {
             return Dispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
@@ -185,9 +169,8 @@ public sealed partial class InvocationRunner
             });
         }
 
-        // Records time-to-first-token exactly once per turn, on the first emitted reasoning OR text chunk. The terminal
-        // record uses the true turn-start baseline; the existing histogram retains its model-ready baseline so cold-load
-        // and generation latency remain separable. Tagged by provider (local | remote), with no model identity.
+        // Records TTFT once per turn, on the first reasoning OR text chunk. The record uses the turn-start baseline
+        // and the histogram the model-ready one, so cold-load and generation stay separable. No model identity.
         private static void RecordFirstOutputLatency(StreamState stream)
         {
             if (stream.FirstOutputRecorded)
@@ -256,11 +239,8 @@ public sealed partial class InvocationRunner
             var inputTokens = ToNullableInt(usage.InputTokenCount);
             var outputTokens = ToNullableInt(usage.OutputTokenCount);
             var reasoningTokens = ToNullableInt(usage.ReasoningTokenCount);
-            // Reasoning is NOT a third bucket: Microsoft.Extensions.AI documents ReasoningTokenCount as counted
-            // inside OutputTokenCount, and both provider paths that reach here honour that (OpenAI reports
-            // completion_tokens_details.reasoning_tokens inside completion_tokens; llama-server the same). Adding it
-            // again over-counted every reasoning turn whose provider reported no total of its own. A provider-supplied
-            // total always wins; with neither input nor output reported the total stays null.
+            // Reasoning is NOT a third bucket: ReasoningTokenCount is counted INSIDE OutputTokenCount and both
+            // provider paths honour that. A provider-supplied total wins; with neither count reported it stays null.
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
                               ?? SumIfAny(inputTokens, outputTokens);
 
@@ -268,10 +248,12 @@ public sealed partial class InvocationRunner
         }
 
         /// <summary>
-        ///     Adds one provider round's usage to the running total. The first round simply becomes the total; every
-        ///     round after it sums member-wise, null-preserving (a member neither side reported stays null) and
-        ///     saturating at <see cref="int.MaxValue" /> so a pathological count cannot overflow the turn's total.
+        ///     Adds one provider round's usage to the running total; the first round simply becomes the total.
         /// </summary>
+        /// <remarks>
+        ///     Every round after it sums member-wise, null-preserving (a member neither side reported stays null) and
+        ///     saturating at <see cref="int.MaxValue" />, so a pathological count cannot overflow the turn's total.
+        /// </remarks>
         public static UsageSnapshot Accumulate(UsageSnapshot? total, UsageSnapshot round)
         {
             if (total is null)
@@ -306,9 +288,8 @@ public sealed partial class InvocationRunner
             }
         }
 
-        // Folded onto the saturating Add so a DERIVED total clamps exactly like an accumulated one: Enumerable.Sum
-        // over int is checked, so two in-range counts whose sum passes int.MaxValue threw OverflowException mid-stream
-        // and failed the invocation. Null-preserving: with neither side reported the total stays null.
+        // Folded onto the saturating Add so a DERIVED total clamps like an accumulated one; a checked sum of two
+        // in-range counts past int.MaxValue faults the stream. Null-preserving when neither side reported.
         private static int? SumIfAny(int? left, int? right) =>
             left is null && right is null ? null : Add(left, right);
 

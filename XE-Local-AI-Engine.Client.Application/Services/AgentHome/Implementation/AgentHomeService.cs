@@ -10,27 +10,16 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     AgentHome gateway <see cref="IAgentHomeService" />. Drives the real orchestration end-to-end against the configured
-///     provider (the deterministic fake by default): <see cref="RunLifecycleAsync" /> resolves owner/node identity once,
-///     acquires the shared exclusive execution lease keyed by that owner-node, then runs Prepare + Run under it. Prepare
-///     builds the attach key, recovers the worker-local layout, attaches/creates the sandbox, resolves and copies
-///     the selected folders, and creates the git baseline. Run hands the model's GOAL to
-///     <see cref="IAgentHomeGoalExecutor" /> — the bounded inner agent loop whose tools work only on the copied
-///     workspace, which is also every command's working directory, so the post-run patch export diffs the real CWD —
-///     then feeds the gated patch export and run-scoped logging.
-///     <para>
-///         The split is deliberate: this class owns identity, the single-flight lease, the workspace copy and the
-///         patch, and depends on no model; the executor owns the inner agent, its sandbox-scoped tools and the
-///         whole-run budgets. Cancellation classification moved WITH the work — a caller cancel propagates from the
-///         executor and unwinds the lease here, while a budget cut-off comes back as a non-throwing outcome so a
-///         partial run still exports its patch.
-///     </para>
-///     <para>
-///         The service-level tests exercise orchestration, busy/cancel/owner hardening and the gated patch export
-///         against the deterministic provider; the executor's own tests drive the real inner tools with a scripted
-///         chat client. The configured runtime provider supplies the real command execution and git behavior.
-///     </para>
+///     AgentHome gateway <see cref="IAgentHomeService" />, driving the orchestration end-to-end against the
+///     configured provider (the deterministic fake by default).
 /// </summary>
+/// <remarks>
+///     <see cref="RunLifecycleAsync" /> resolves owner/node identity once, takes the shared exclusive lease keyed by that owner-node,
+///     then runs Prepare + Run under it. This class owns identity, the lease, the workspace copy and the patch and depends on no
+///     model, while <see cref="IAgentHomeGoalExecutor" /> owns the inner agent, its sandbox-scoped tools and the whole-run budgets.
+///     Cancellation is classified with the work: a caller cancel propagates from the executor and unwinds the lease here, while a
+///     budget cut-off returns a non-throwing outcome, so a partial run still exports its patch. See <c>docs/wiki/04-agent-mode.md</c> §2.2.
+/// </remarks>
 internal sealed class AgentHomeService : IAgentHomeService, IConversationSandboxStager
 {
     // Stable sandbox alias for staged conversation upload attachments. The agent reads them at
@@ -178,37 +167,14 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             AttachKey = attachKey,
             RuntimeProfile = effectiveProfile,
-            // Default-deny egress wherever the provider can actually enforce it. The rule this rests on: everything
-            // AgentHome and Coder run inside the sandbox is local — `dotnet --version`, git
-            // init/config/add/commit/diff under /dev/null hooks, and Coder's find/grep — so denying egress costs no
-            // supported capability and removes the sandbox child's reach to the node's own loopback API, the LAN, and
-            // the cloud-metadata endpoint.
-            //
-            // The choice is CAPABILITY-GATED rather than unconditional: the provider fails closed on a confinement
-            // request it cannot honor, so asking for None on a host without user namespaces (or on Windows, where the
-            // mechanism is not implemented) would not harden AgentHome — it would stop it running at all. Asking for
-            // exactly what the provider advertises keeps the guarantee real where it exists and keeps AgentHome working
-            // where it does not, with the degradation visible in the sandbox containment log rather than silent. A node
-            // that wants the refusal instead sets AgentHome:Sandbox:RequireEgressDenial, which SandboxEgressPolicy
-            // turns into a fail-closed refusal naming that key.
-            // Ask for a real filesystem boundary wherever the backend advertises one. Three things make this the
-            // right shape rather than "only when run_commands is granted":
-            //
-            //  * It CANNOT fail the run closed. SandboxLifecycleRegistry refuses an unmeetable isolation request
-            //    outright, so the request is gated on the capability the provider advertises — and that advertisement
-            //    is mechanical (the same probe the launch path reads), not a second opinion about the host.
-            //  * The sandbox is owner-node scoped and REUSED across runs through CreateOrAttach. A per-run request
-            //    would be a lie on the attach path: the second run would silently inherit the first run's boundary
-            //    while believing it had asked for its own.
-            //  * A read/write-only run is no worse off for having the boundary, and the chat attachment re-stage
-            //    creates the same sandbox, so one posture keeps the two entry points from disagreeing.
-            //
-            // Whether the boundary ARRIVED is then read off the handle, never re-derived — that is what gates
-            // run_command in the goal loop.
+            // Ask for a real filesystem boundary wherever the backend advertises one, one posture for every run: the request
+            // is capability-gated so it can never fail the run closed, and CreateOrAttach reuses an owner-node sandbox.
             Isolation = _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
                 ? SandboxIsolationMode.Filesystem
                 : SandboxIsolationMode.None,
 
+            // Default-deny egress wherever the provider can enforce it: everything AgentHome and Coder run in the sandbox
+            // is local, so denial costs no capability. Capability-gated, with RequireEgressDenial demanding a refusal.
             NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
                 _sandboxOptions.RequireEgressDenial,
                 SandboxEgressPolicy.AgentOptionKey,
@@ -235,10 +201,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     {
         var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken);
 
-        // Stage this conversation's uploaded attachments (the extracted, decrypted Markdown) as a synthetic read-only
-        // "attachments" folder so the agent's existing file tools (list_files/read_file/search_text) discover them.
-        // The staging snapshot holds DECRYPTED plaintext in a temp dir; it is disposed in the finally immediately after
-        // the workspace copy completes so the plaintext never outlives the copy into the sandbox.
+        // Stage the conversation's extracted, decrypted attachments as a synthetic read-only "attachments" folder the
+        // file tools discover. The snapshot holds plaintext: the finally disposes it the moment the copy completes.
         var foldersToCopy = resolvedFolders;
         IReadOnlyList<string> stagedAttachmentPaths = [];
         IConversationStagingSnapshot? attachmentsSnapshot = null;
@@ -262,9 +226,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 ];
             }
 
-            // workspace copy: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape
-            // guard, per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command
-            // timeout.
+            // Workspace copy: each resolved selected folder into the sandbox workspace, with exclusions, the symlink-escape
+            // guard, the per-folder byte budget and the git baseline. Under the preparation timeout, not the command one.
             folderSnapshots = await _workspaceService
                                     .PrepareSelectedFoldersAsync(handle, foldersToCopy, prepareToken);
         }
@@ -313,9 +276,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         var lease = _leaseManager.TryAcquire(key);
 
-        // Share the owner-node execution lease with RunLifecycleAsync so an in-flight run_in_agent_home run and a
-        // chat-mode re-stage cannot race on the same owner-node sandbox. Non-blocking: if another operation holds the
-        // lease, skip the re-stage (the coder tools will report no workspace) rather than block the chat turn.
+        // Share the owner-node execution lease with RunLifecycleAsync so an in-flight run and a chat-mode re-stage cannot
+        // race on one sandbox. Non-blocking: a held lease skips the re-stage rather than blocking the chat turn.
         if (lease is null)
         {
             _logger.LogDebug("AgentHome attachment staging for node {NodeId} skipped: a run is already in progress.", identity.NodeId);
@@ -373,10 +335,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         }
     }
 
-    // Builds a decrypted-Markdown staging snapshot for the conversation's uploaded attachments, or null when there is
-    // no conversation context or the conversation has no extracted files. The caller appends the snapshot's host path as
-    // a synthetic folder and disposes the snapshot once the copy is done. Logs only counts/aliases — never host paths or
-    // file content.
+    // Builds a decrypted-Markdown staging snapshot for the conversation's attachments, or null without a conversation or
+    // extracted files. The caller appends its host path as a folder and disposes it. Logs counts and aliases only.
     private async Task<IConversationStagingSnapshot?> TryStageConversationAttachmentsAsync(Guid? conversationId,
         CancellationToken cancellationToken)
     {
@@ -429,10 +389,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             string.Create(CultureInfo.InvariantCulture, $"goal_length={request.Goal.Length}"),
             cancellationToken);
 
-        // The GOAL is what runs. The executor owns the inner agent loop, its sandbox-scoped tools (built from
-        // AllowedActions, so read_workspace / write_workspace / run_commands each gate a real capability) and the
-        // whole-run budgets; every tool it hands out works on the copied workspace, which is also the CWD every
-        // command runs in, so the patch export below diffs the real working tree.
+        // The GOAL is what runs. The executor owns the inner loop, its tools (built from AllowedActions, so each value
+        // gates a real capability) and the budgets; every tool works on the copied workspace, which is also every CWD.
         AgentHomeGoalOutcome goal;
         try
         {
@@ -460,9 +418,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 $"status={goal.Status};tool_calls={goal.ToolCallCount};refused={goal.RefusedCallCount};commands={goal.Commands.Count};files_written={goal.WrittenFiles.Count}"),
             cancellationToken);
 
-        // Patch export runs after the loop so the agent's file edits are diffed against the workspace-copy git
-        // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate). A run the
-        // budgets cut off still exports: the partial work is real and the operator must be able to see it.
+        // Export after the loop, so the agent's edits diff against the workspace-copy baseline. Gated on export_patch in
+        // AllowedActions and on the baseline existing. A budget-cut run still exports: the partial work is real.
         var patch = await ExportPatchAsync(request, runId, runDirectory, runLogger, cancellationToken);
 
         var timedOut = goal.Status == AgentHomeGoalStatus.TimeBudgetExceeded;
@@ -592,9 +549,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private async Task<IReadOnlyList<ResolvedSelectedFolder>> ResolveFoldersAsync(IReadOnlyList<string> selectedFolderIds,
         CancellationToken cancellationToken)
     {
-        // The resolver is scoped (it owns a NodeChatDbContext); this service is a singleton, so resolve all ids within
-        // a single short-lived scope. The DbContext is not thread-safe, so resolve sequentially. workspace copy copies the
-        // resolved folders into the sandbox.
+        // The resolver is scoped (it owns a NodeChatDbContext) and this service is a singleton, so resolve every id inside
+        // one short-lived scope. The DbContext is not thread-safe, so resolve sequentially.
         using var scope = _scopeFactory.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>();
 

@@ -4,34 +4,29 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The single, shared relevance retrieval and cohort monitoring relevance-retrieval decision. Both the single-agent
-///     <see cref="AgentDefinitionResolver" /> and the per-participant <see cref="OrchestrationResolver" /> route through
-///     this helper so the threshold gate, the top-k selection, the token-budget trim, and the deterministic re-order are
-///     applied identically and never duplicated. Below the threshold (or with a blank query) the caller's full Enabled set
-///     is returned unchanged, so the composed prompt — and thus the runtime config hash — stays byte-identical to the
-///     pre-retrieval static prepend.
+///     The single, shared playbook relevance-retrieval decision.
 /// </summary>
+/// <remarks>
+///     Both <see cref="AgentDefinitionResolver" /> and the per-participant <see cref="OrchestrationResolver" /> route
+///     through it, so the threshold gate, the top-k selection, the token-budget trim and the deterministic re-order
+///     are applied identically and never duplicated. Below the threshold, or with a blank query, the caller's full
+///     Enabled set comes back unchanged, keeping prompt and config hash byte-identical to the static prepend.
+/// </remarks>
 internal static class PlaybookRetrievalSelector
 {
     /// <summary>
-    ///     Chooses the subset of <paramref name="enabled" /> to inject for one send. When the set is at or below
-    ///     <paramref name="retrievalThreshold" /> or <paramref name="retrievalQuery" /> is blank, the set is returned as-is
-    ///     (static prepend, byte-identical to the pre-retrieval path) WITHOUT awaiting or invoking the ranker — so the no-op fast path
-    ///     never constructs an embedding client. Otherwise the <paramref name="ranker" /> selects the top
-    ///     <paramref name="topK" />; that relevance-ordered list is then trimmed to the token budgets (adaptive memory)
-    ///     — lowest-ranked items dropped first — and finally re-ordered by Priority then CreatedAtUtc to preserve
-    ///     the composer's deterministic store-order contract (the composer never re-sorts). The trim engages ONLY on this
-    ///     retrieval path, so the static-prepend fast path above stays byte-identical regardless of any configured budget.
+    ///     Chooses the subset of <paramref name="enabled" /> to inject for one send.
     /// </summary>
-    /// <param name="maxInjectedMemoryTokens">
-    ///     Soft total token budget for the injected memory; <c>0</c> = unbounded (legacy, byte-identical to pre-budget).
-    /// </param>
-    /// <param name="maxInjectedFailureMemoryTokens">
-    ///     Soft sub-budget reserved for Failure-scope memory within the total; <c>0</c> = no separate Failure cap.
-    /// </param>
-    /// <param name="logger">
-    ///     Optional logger for the text-free "trimmed N" warning; <c>null</c> suppresses logging (e.g. in unit tests).
-    /// </param>
+    /// <remarks>
+    ///     At or below <paramref name="retrievalThreshold" />, or with a blank <paramref name="retrievalQuery" />, the
+    ///     set comes back as-is WITHOUT invoking the ranker, so the fast path never constructs an embedding client.
+    ///     Otherwise the <paramref name="ranker" /> takes the top <paramref name="topK" />, the result is trimmed to
+    ///     the token budgets lowest-ranked first, and is re-ordered by Priority then CreatedAtUtc for the composer's
+    ///     store-order contract. The trim engages ONLY here, so the fast path stays byte-identical to any budget.
+    /// </remarks>
+    /// <param name="maxInjectedMemoryTokens">Soft total token budget for the injected memory; <c>0</c> is unbounded.</param>
+    /// <param name="maxInjectedFailureMemoryTokens">Soft sub-budget for Failure-scope memory; <c>0</c> is no cap.</param>
+    /// <param name="logger">Optional logger for the text-free "trimmed N" warning; <c>null</c> suppresses it.</param>
     public static async Task<IReadOnlyList<PlaybookActionRecord>> SelectAsync(IPlaybookRetrievalRanker ranker,
         string? retrievalQuery,
         IReadOnlyList<PlaybookActionRecord> enabled,
@@ -56,9 +51,8 @@ internal static class PlaybookRetrievalSelector
 
         var budgeted = TrimToBudget(ranked, maxInjectedMemoryTokens, maxInjectedFailureMemoryTokens, logger);
 
-        // The ranker orders by relevance; re-impose the store's Priority-then-CreatedAtUtc order so the composer's
-        // deterministic contract holds regardless of the ranker's internal ordering (and so a fixed memory set always
-        // composes to the same prompt text — and thus the same config hash — across sends, preserving resume-safety).
+        // The ranker orders by relevance, so re-impose the store's Priority-then-CreatedAtUtc order: a fixed memory
+        // set must compose to the same prompt text, and the same config hash, on every send.
         return budgeted
                .OrderBy(static action => action.Priority)
                .ThenBy(static action => action.CreatedAtUtc)
@@ -66,13 +60,14 @@ internal static class PlaybookRetrievalSelector
     }
 
     /// <summary>
-    ///     Trims a relevance-ordered selection to the soft token budgets, dropping the lowest-ranked items first. The
-    ///     Failure-scope sub-budget is applied first (so negative "what NOT to do" guidance can't crowd out positive
-    ///     guidance), then the surviving items are trimmed to the total budget. A non-positive budget disables that level.
-    ///     The token estimate is intentionally conservative and deterministic (see <see cref="EstimateTokens" />) so a
-    ///     fixed memory set always trims to the same surviving set — the budget is a soft guard against prompt bloat, not
-    ///     an exact correctness property.
+    ///     Trims a relevance-ordered selection to the soft token budgets, dropping the lowest-ranked items first.
     /// </summary>
+    /// <remarks>
+    ///     The Failure-scope sub-budget applies first, so negative guidance cannot crowd out positive, and the
+    ///     survivors are then trimmed to the total; a non-positive budget disables that level. The estimate is
+    ///     conservative and deterministic, so a fixed memory set always trims to the same surviving set — a soft
+    ///     guard against prompt bloat, not a correctness property.
+    /// </remarks>
     private static IReadOnlyList<PlaybookActionRecord> TrimToBudget(IReadOnlyList<PlaybookActionRecord> ranked,
         int maxInjectedMemoryTokens,
         int maxInjectedFailureMemoryTokens,
@@ -85,9 +80,8 @@ internal static class PlaybookRetrievalSelector
 
         var totalBefore = ranked.Count;
 
-        // Stage 1: cap Failure-scope items to their sub-budget, preserving relevance order across the whole list, so the
-        // subsequent total-budget pass still drops lowest-ranked first overall. Stage 2: trim the survivors to the total
-        // budget, again dropping lowest-ranked first.
+        // Stage 1 caps Failure-scope items to their sub-budget, preserving relevance order across the whole list, so
+        // stage 2's total-budget trim still drops lowest-ranked first overall.
         var afterFailureCap = CapByBudget(ranked, maxInjectedFailureMemoryTokens, failureOnly: true);
         var afterTotalCap = CapByBudget(afterFailureCap, maxInjectedMemoryTokens, failureOnly: false);
 
@@ -103,15 +97,15 @@ internal static class PlaybookRetrievalSelector
     }
 
     /// <summary>
-    ///     Walks <paramref name="ranked" /> in relevance order and keeps each item whose running token cost stays within
-    ///     <paramref name="budget" />, dropping the LOWEST-ranked items that overflow. When <paramref name="failureOnly" />
-    ///     is true only <see cref="MemoryScope.Failure" /> items count against — and are the only ones dropped by — the
-    ///     budget (non-Failure items always pass through, so the surviving Failure items are a relevance-ranked prefix of
-    ///     the originals); when false every item counts and the result is a relevance-ranked prefix (a lower-ranked item
-    ///     is never kept once a higher-ranked one was dropped for budget). A non-positive <paramref name="budget" />
-    ///     disables the cap and returns the input unchanged. Always keeps at least the first counted item so a single
-    ///     oversized memory still injects.
+    ///     Walks <paramref name="ranked" /> in relevance order, keeping each item whose running token cost stays
+    ///     within <paramref name="budget" /> and dropping the LOWEST-ranked ones that overflow.
     /// </summary>
+    /// <remarks>
+    ///     With <paramref name="failureOnly" /> only <see cref="MemoryScope.Failure" /> items count and are dropped,
+    ///     the rest passing through; otherwise every item counts and the result is a relevance-ranked prefix, so a
+    ///     lower-ranked item is never kept once a higher-ranked one was dropped. A non-positive budget disables the
+    ///     cap, and the first counted item is always kept, so a single oversized memory still injects.
+    /// </remarks>
     private static IReadOnlyList<PlaybookActionRecord> CapByBudget(IReadOnlyList<PlaybookActionRecord> ranked,
         int budget,
         bool failureOnly)
@@ -129,9 +123,8 @@ internal static class PlaybookRetrievalSelector
         {
             if (!failureOnly || action.MemoryScope == MemoryScope.Failure)
             {
-                // Once the budget is hit, every further counted (lower-ranked) item is dropped — a prefix truncation, so
-                // "lowest-ranked dropped first" holds deterministically. Non-counted items (in the Failure-only pass) are
-                // unaffected and continue to pass through.
+                // Once the budget is hit every further counted item is dropped: a prefix truncation, so lowest-ranked
+                // first holds deterministically. Non-counted items in the Failure-only pass still pass through.
                 if (capReached)
                 {
                     continue;
@@ -156,12 +149,13 @@ internal static class PlaybookRetrievalSelector
 
     /// <summary>
     ///     Conservative, deterministic token estimate for one action's injected text: <c>ceil(chars / 4)</c> over the
-    ///     <c>Behavior</c> string (the text the composer actually emits as a bullet), with a floor of 1 token for any
-    ///     non-empty behavior. ~4 chars/token is the common English rule of thumb; this is a soft budget guard, not an
-    ///     exact tokenizer, so it deliberately over- rather than under-counts. Being a pure function of the stored text it
-    ///     is stable across sends, which keeps the budget trim — and therefore the injected set and the config hash —
-    ///     deterministic for a fixed memory set.
+    ///     <c>Behavior</c> the composer emits, floored at one token for any non-empty behavior.
     /// </summary>
+    /// <remarks>
+    ///     A soft budget guard, not a tokenizer, so it deliberately over- rather than under-counts. Being a pure
+    ///     function of the stored text it is stable across sends, which keeps the trim, the injected set and the
+    ///     config hash deterministic for a fixed memory set.
+    /// </remarks>
     private static int EstimateTokens(PlaybookActionRecord action)
     {
         var length = action.Behavior?.Length ?? 0;

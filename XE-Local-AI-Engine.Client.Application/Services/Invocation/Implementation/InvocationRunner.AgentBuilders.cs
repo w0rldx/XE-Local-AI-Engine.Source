@@ -16,11 +16,8 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed partial class InvocationRunner
 {
-    // Compiles the loopback OrchestrationSpec into the .AI.Agent OrchestrationAgentDefinition: each participant's
-    // model is resolved to a concrete installed model (its pinned profile, else the turn's resolved model), and its
-    // projected offer list is bridged into AITools with the SAME switch BuildInvocationTools uses (ClientLocal →
-    // name-only placeholder the factory swaps for the registry executable). The seed history rides on the workflow
-    // input, not per participant.
+    // Compiles the loopback OrchestrationSpec into an OrchestrationAgentDefinition: each participant's model resolves
+    // to its pin or the turn's, and its offer bridges through the SAME switch BuildInvocationTools uses.
     private async Task<OrchestrationAgentDefinition> BuildOrchestrationDefinitionAsync(RuntimePackage package,
         OrchestrationSpec spec,
         string resolvedModel,
@@ -55,14 +52,11 @@ public sealed partial class InvocationRunner
                 Instructions = participant.Instructions,
                 ModelId = participantResolution.Model,
                 ReasoningEffort = participant.ReasoningEffort,
-                // This participant's OWN effective-model thinking capability, resolved per participant by the
-                // orchestration resolver (OrchestrationResolver) rather than the turn model's capability copied to all —
-                // so a participant pinned to a non-thinking model can never have a graded effort reach the think wire,
-                // and one pinned to a thinking model keeps its reasoning even when the turn model cannot think.
+                // This participant's OWN capability, resolved per participant rather than copied from the turn model:
+                // a graded effort must never reach a non-thinking pin, nor a thinking pin lose its reasoning.
                 SupportsThinking = participant.SupportsThinking,
-                // Resolved per participant alongside SupportsThinking, for the same reason: a participant pinned to a
-                // model whose template renders no reasoning end marker must not be handed a budget llama.cpp will
-                // silently ignore, while one pinned to an enforcing model keeps its cap.
+                // Per participant alongside SupportsThinking: a model whose template renders no reasoning end marker
+                // must not be handed a budget llama.cpp silently ignores, while an enforcing pin keeps its cap.
                 ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
                 EffectiveContextTokens = participantContextTokens,
                 Tools = BuildParticipantTools(participant.Tools)
@@ -93,28 +87,16 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Resolves the launched effective context window (in tokens) for one orchestration participant so its
-    ///     inner provider-round budgeter sizes against it. Precedence:
-    ///     <list type="number">
-    ///         <item>
-    ///             <description>
-    ///                 A participant on the SAME model as the turn reuses the turn's already-read-back effective window
-    ///                 (<see cref="LocalRuntimeWarmer.ResolveEffectiveContextTokensAsync" /> ran once in <see cref="LocalRuntimeWarmer.PrepareLocalRuntimeAsync" />)
-    ///                 — no extra probe.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <description>
-    ///                 A participant on a DIFFERENT model reads its window only when a llama.cpp server is ALREADY
-    ///                 resident for it (<c>GetRuntimeInfo</c> is a pure in-memory read that returns <see langword="null" />
-    ///                 when the model is not running — it never triggers a load).
-    ///             </description>
-    ///         </item>
-    ///     </list>
-    ///     Otherwise <see langword="null" />: participant models are deliberately NOT pre-warmed here (warming every
-    ///     participant up front is out of scope — VRAM pressure + latency), so a not-yet-resident participant on a
-    ///     distinct model keeps the inner budgeter on its configured default window until that participant is launched.
+    ///     Resolves the launched effective context window for one orchestration participant, so its inner
+    ///     provider-round budgeter sizes against it.
     /// </summary>
+    /// <remarks>
+    ///     A participant on the turn's own model reuses the window
+    ///     <see cref="LocalRuntimeWarmer.ResolveEffectiveContextTokensAsync" /> already read back for it. One on a DIFFERENT model reads
+    ///     its window only when a llama.cpp server is ALREADY resident, <c>GetRuntimeInfo</c> being an in-memory read
+    ///     that never triggers a load. Otherwise <see langword="null" />: participants are deliberately not pre-warmed
+    ///     (VRAM and latency), so the inner budgeter keeps its default window until that participant launches.
+    /// </remarks>
     private async Task<int?> ResolveParticipantContextTokensAsync(string participantModel,
         string resolvedModel,
         int? turnEffectiveContextTokens,
@@ -171,13 +153,8 @@ public sealed partial class InvocationRunner
     {
         var trimmedModel = requestedModel?.Trim();
 
-        // The "preflight" (runtime reachable + model installed) and its fallback-to-default are Ollama-specific:
-        // VerifyOllamaAndModelAsync probes the Ollama daemon and matches against Ollama's installed list. A model
-        // served by llama.cpp (a GGUF, e.g. the first-run-provisioned bartowski/...:Q4_K_M) never appears there, so
-        // running it would always "fail" and wrongly fall back to the Ollama default model — which the llama.cpp
-        // supervisor can't serve ("model is not installed"). Route the preflight by the model's resolved provider:
-        // for any non-Ollama provider, trust the provider/supervisor to validate installation and cold-start the
-        // process downstream (LlamaServerProcessSupervisor throws a clean NonRetryable if the GGUF is missing).
+        // The preflight and its fallback-to-default are Ollama-specific: a GGUF never appears in Ollama's installed
+        // list, so it would always "fail" into an Ollama default. Route by provider; the supervisor validates its own.
         if (!string.IsNullOrWhiteSpace(trimmedModel))
         {
             var providerName = await _providerResolver.ResolveProviderNameForModelAsync(trimmedModel, cancellationToken);
@@ -214,10 +191,13 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.EffortDispatched" /> notice. Names the tier, the
-    ///     concrete effort it resolved to, and the model only when it was actually replaced. Carries no signal value:
-    ///     WHY the tier was chosen rides the notice's reason-code detail, which names a rule rather than a measurement.
+    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.EffortDispatched" /> notice: the tier, the
+    ///     effort it resolved to, and the model only when it was actually replaced.
     /// </summary>
+    /// <remarks>
+    ///     It carries no signal value. WHY the tier was chosen rides the notice's reason-code detail, which names a
+    ///     rule rather than a measurement.
+    /// </remarks>
     private static string BuildEffortDispatchedNoticeMessage(ReasoningTier tier, string effort, string model, bool swapped)
     {
         var resolved = $"Reasoning effort 'auto' resolved to {tier} ({effort}) for this turn.";
@@ -225,11 +205,11 @@ public sealed partial class InvocationRunner
         return swapped ? resolved + $" This turn ran on '{model}'." : resolved;
     }
 
-    /// <summary>
-    ///     Maps the runtime package onto the inputs the reasoning-effort dispatcher may read. Every field has one
-    ///     named source here, so nothing is invented at the seam — and nothing that is an IMMUTABLE constraint
-    ///     (approval policy, egress gates, path guards, the sandbox, tool authorisation) can be reached from it.
-    /// </summary>
+    /// <summary>Maps the runtime package onto the inputs the reasoning-effort dispatcher may read.</summary>
+    /// <remarks>
+    ///     Every field has one named source here, so nothing is invented at the seam, and no IMMUTABLE constraint —
+    ///     approval policy, egress gates, path guards, the sandbox, tool authorisation — is reachable from it.
+    /// </remarks>
     private static ReasoningDispatchRequest BuildDispatchRequest(RuntimePackage package, string resolvedModel)
     {
         // ONE guarded lookup shared by the text and the attachment flag, so the two can never disagree and an empty or
@@ -272,10 +252,12 @@ public sealed partial class InvocationRunner
 
     /// <summary>
     ///     True when a tool's <see cref="Microsoft.Extensions.AI.FunctionResultContent.Result" /> is the structured
-    ///     <c>{"error":"tool_disabled",...}</c> marker <c>ToolArgumentRepairResult.ToolDisabled</c> (AI.Agent) returns
-    ///     instead of throwing once a tool is cut off after repeated invalid-argument calls. Parses defensively (a
-    ///     normal tool result is rarely JSON and never fails this check) rather than substring-matching the JSON text.
+    ///     marker <c>ToolArgumentRepairResult.ToolDisabled</c> returns once a tool is cut off.
     /// </summary>
+    /// <remarks>
+    ///     The marker is returned instead of throwing after repeated invalid-argument calls. Parsed defensively — a
+    ///     normal tool result is rarely JSON and never fails this check — rather than substring-matched.
+    /// </remarks>
     private static bool IsToolDisabledResult(string? result)
     {
         if (string.IsNullOrEmpty(result))
@@ -319,21 +301,16 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Applies the conversation-context budget (using the turn's already-resolved <see cref="TurnPolicy.ContextCapacityTokens" />/
-    ///     <see cref="TurnPolicy.ReservedOutputTokens" />, kept in lockstep with the factory's num_ctx / output-clamp
-    ///     source) to a message list. The FIRST time a trim occurs in an invocation this logs once (unchanged) AND
-    ///     emits a single sanitized <see cref="TurnNoticeKind.HistoryTruncated" /> chat notice carrying counts only —
-    ///     never content. When the budgeter still reports <c>ExceedsBudget</c> after its two-pass truncation, this is a
-    ///     HARD STOP: it throws <see cref="ContextBudgetExceededException" /> (a classified, pre-inference failure —
-    ///     see <see cref="InvocationFailureClassifier.MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
-    ///     (reference-equal) when nothing was trimmed.
-    ///     <para>
-    ///         <paramref name="toolBudgetDefinitions" /> is built ONCE per turn by the caller rather than here: the
-    ///         budgeter measures each definition as a framed message and memoizes that framing by string instance, so
-    ///         rebuilding the (identical) strings on every call would both re-concatenate them and guarantee a memo miss
-    ///         that re-scans every tool schema.
-    ///     </para>
+    ///     Applies the turn's already-resolved <see cref="TurnPolicy.ContextCapacityTokens" /> and
+    ///     <see cref="TurnPolicy.ReservedOutputTokens" /> to a message list, reference-equal when nothing was trimmed.
     /// </summary>
+    /// <remarks>
+    ///     The budget stays in lockstep with the factory's num_ctx and output-clamp source. The first trim of an
+    ///     invocation logs once and emits one sanitized <see cref="TurnNoticeKind.HistoryTruncated" /> notice carrying
+    ///     counts, never content. A budgeter still reporting <c>ExceedsBudget</c> after its two passes is a HARD STOP:
+    ///     <see cref="ContextBudgetExceededException" />, classified by <see cref="InvocationFailureClassifier.MapFailure" />.
+    ///     <paramref name="toolBudgetDefinitions" /> is built once per turn: the budgeter memoizes framing by instance.
+    /// </remarks>
     private async Task<IReadOnlyList<ChatMessage>> ApplyContextBudgetAsync(IReadOnlyList<ChatMessage> messages,
         RuntimePackage package,
         IReadOnlyList<string> toolBudgetDefinitions,
@@ -343,10 +320,8 @@ public sealed partial class InvocationRunner
         StreamTransport transport,
         ContextBudgetNoticeGate gate)
     {
-        // The resolved system prompt is prepended to the request AFTER this history (BuildInvocationDefinition),
-        // and tool JSON schemas are never in the message list — so feed both to the budgeter as fixed overhead. It folds
-        // them into the effective budget, mirroring the inner ProviderCallBudgetChatClient, so the outer budget and its
-        // hard-stop measure the true round rather than history alone.
+        // The system prompt is prepended AFTER this history and tool schemas are never in the message list, so both
+        // go to the budgeter as fixed overhead — mirroring the inner budgeter, so the hard stop measures a real round.
         var result = _contextBudgeter.Budget(messages,
             turnPolicy.ContextCapacityTokens,
             turnPolicy.ReservedOutputTokens,
@@ -394,17 +369,15 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.HistoryTruncated" /> notice — counts only, never
-    ///     content. The two last-resort budgeter passes are reported DISTINCTLY (reasoning removed vs. recent tool output
-    ///     shortened) because they mean different things to a reader: one discards the model's scratch-pad, the other
-    ///     shortens output the current round is working with.
-    ///     <para>
-    ///         The reassurance that "the originals are kept" is deliberately withheld once either fires. It is true of the
-    ///         saved conversation — which this never edits — but NOT of what those passes reclaim: reasoning and tool
-    ///         output produced inside this turn's tool/approval loop are never persisted, so once dropped they are gone
-    ///         rather than merely absent from this send. Saying otherwise would be a comfortable lie.
-    ///     </para>
+    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.HistoryTruncated" /> notice: counts only, never
+    ///     content.
     /// </summary>
+    /// <remarks>
+    ///     The two last-resort passes are reported DISTINCTLY because they mean different things — one discards the
+    ///     model's scratch-pad, the other shortens output the current round is working with. Once either fires, the
+    ///     reassurance that the originals are kept is withheld: it holds for the saved conversation, but reasoning and
+    ///     tool output produced inside this turn's loop are never persisted, so once dropped they are gone.
+    /// </remarks>
     private static string BuildHistoryTruncatedNoticeMessage(ConversationBudgetResult result)
     {
         var builder = new StringBuilder("Conversation history was trimmed to fit the model's context window (")
@@ -447,17 +420,14 @@ public sealed partial class InvocationRunner
 
     /// <summary>
     ///     Maps the resolved client-side <see cref="ResolvedSkill" /> set onto the provider-agnostic
-    ///     <see cref="InvocationSkill" /> records the factory builds into a MAF <c>AgentSkillsProvider</c> (.AI.Agent
-    ///     cannot reference Client.Models). Returns null for a null/empty set so the no-skills path stays byte-identical
-    ///     (the factory keeps the existing positional constructor and attaches no context provider). The two records are
-    ///     deliberate duplicates rather than one shared type: the layer test freezes .AI.Agent as unable to reference
-    ///     Client.*, and a field-for-field copy is cheaper than the project it would otherwise take to share them.
-    ///     <para>
-    ///         This is a pure rename of fields — no trust decision is taken or reversed here. An imported skill's body
-    ///         and resource payloads were already fenced by the resolver, so what crosses this boundary is what reaches
-    ///         the model.
-    ///     </para>
+    ///     <see cref="InvocationSkill" /> records the factory builds into a MAF <c>AgentSkillsProvider</c>.
     /// </summary>
+    /// <remarks>
+    ///     Null for a null or empty set, so the no-skills path stays byte-identical. The two records are deliberate
+    ///     duplicates: the layer test freezes .AI.Agent as unable to reference <c>Client.*</c>, and a field-for-field
+    ///     copy is cheaper than the project sharing them would take. A pure rename of fields — no trust decision is
+    ///     taken or reversed, the resolver having already fenced an imported skill's body and resources.
+    /// </remarks>
     private static IReadOnlyList<InvocationSkill>? MapSkills(IReadOnlyList<ResolvedSkill>? skills)
     {
         if (skills is not { Count: > 0 })
@@ -527,11 +497,11 @@ public sealed partial class InvocationRunner
         };
     }
 
-    /// <summary>
-    ///     Renders the package's conversation context as the provider-bound message list. Internal rather than private
-    ///     for the unit tests that pin the tool-history replay shape (the assembly already grants
-    ///     <c>InternalsVisibleTo</c> to the test project); not part of the public contract.
-    /// </summary>
+    /// <summary>Renders the package's conversation context as the provider-bound message list.</summary>
+    /// <remarks>
+    ///     Internal rather than private for the unit tests that pin the tool-history replay shape; not part of the
+    ///     public contract.
+    /// </remarks>
     internal static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
     {
         ArgumentNullException.ThrowIfNull(package);
@@ -552,11 +522,8 @@ public sealed partial class InvocationRunner
                 contents.Add(new TextReasoningContent(message.Thinking));
             }
 
-            // The blank text part is dropped ONLY for a turn carrying replayed exchanges: Microsoft.Extensions.AI's
-            // OpenAI client takes its tool-calls-only branch only when the message has no content part, and an empty
-            // TextContent alongside tool_calls is content some chat templates reject rather than ignore. Every other
-            // turn keeps it, so an image-only vision turn still goes out as [TextContent(""), DataContent] exactly as
-            // it always has.
+            // The blank text part is dropped ONLY for a turn with replayed exchanges: the OpenAI client takes its
+            // tool-calls-only branch only with no content part, and some templates reject an empty one beside them.
             if (!string.IsNullOrEmpty(message.Content) || message.ToolExchanges is not { Count: > 0 })
             {
                 contents.Add(new TextContent(message.Content));
@@ -582,12 +549,14 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Renders each offered tool's model-facing definition (name + description + parameter schema) as one
-    ///     text unit for the outer context budgeter's fixed-overhead estimate. Reads the raw <see cref="AllowedToolDto" />
-    ///     schema string — present for BOTH Api-side and client-local tools — rather than the built bridge, whose
-    ///     client-local offer placeholders carry no schema until the factory swaps them, so the schema footprint is
-    ///     counted for every tool. Returns an empty list when the package offers no tools.
+    ///     Renders each offered tool's model-facing definition as one text unit for the outer context budgeter's
+    ///     fixed-overhead estimate, or an empty list when the package offers none.
     /// </summary>
+    /// <remarks>
+    ///     It reads the raw <see cref="AllowedToolDto" /> schema string, present for BOTH Api-side and client-local
+    ///     tools, rather than the built bridge, whose client-local placeholders carry no schema until the factory
+    ///     swaps them — so the schema footprint is counted for every tool.
+    /// </remarks>
     private static IReadOnlyList<string> BuildToolBudgetDefinitions(RuntimePackage package)
     {
         if (package.AllowedTools.Count == 0)
@@ -600,9 +569,8 @@ public sealed partial class InvocationRunner
 
     private static IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)
     {
-        // The runtime package only carries the OFFER list: each client-local (catalog) tool gets a name-only
-        // placeholder, and the invocation factory swaps it for the matching executable from IAgentToolRegistry before
-        // the agent runs.
+        // The package carries only the OFFER list: a client-local tool becomes a name-only placeholder that the
+        // invocation factory swaps for the IAgentToolRegistry executable before the agent runs.
         return
         [
             .. package.AllowedTools.Select(tool => tool.Location switch

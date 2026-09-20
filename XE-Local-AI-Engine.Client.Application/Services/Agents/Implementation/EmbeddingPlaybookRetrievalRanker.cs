@@ -10,31 +10,28 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
-///     Embedding-backed <see cref="IPlaybookRetrievalRanker" />: ranks candidates by cosine similarity between the
-///     node-local embedding of the query and of each candidate's <c>TriggerCondition</c> (falling back to
-///     <c>Behavior</c>), with the same deterministic tiebreak the lexical ranker uses (Priority ascending, then
-///     CreatedAtUtc ascending). Embeddings are produced by the node-local <see cref="ILocalModelProvider" /> only — never
-///     a shared/cloud client — so playbook action text and the user-turn query never leave the node, and candidate
-///     vectors are held in a RAM-only cache that is never persisted, logged, or returned.
-///     The ranker is config-gated: with no <see cref="PlaybookRetrievalOptions.EmbeddingModelName" /> configured it
-///     delegates straight to the lexical ranker without constructing any embedding client, and on any embedding failure
-///     (model not pulled, Ollama unreachable, transport error) it falls back to the lexical ranker so a send never breaks
-///     and CI stays deterministic without Ollama.
+///     Embedding-backed <see cref="IPlaybookRetrievalRanker" />: it ranks candidates by cosine similarity between the
+///     node-local embedding of the query and of each candidate's <c>TriggerCondition</c>, or <c>Behavior</c>, with the
+///     lexical ranker's own deterministic tiebreak.
 /// </summary>
+/// <remarks>
+///     Embeddings come from the node-local <see cref="ILocalModelProvider" /> ONLY, never a shared or cloud client, so
+///     action text and the user turn never leave the node, and candidate vectors live in a RAM-only cache that is
+///     never persisted, logged or returned. Config-gated: with no
+///     <see cref="PlaybookRetrievalOptions.EmbeddingModelName" /> it delegates to the lexical ranker without
+///     constructing a client, and any embedding failure degrades there too, so a send never breaks.
+/// </remarks>
 public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 {
-    // Byte ceiling on the candidate-vector cache, alongside the configured entry bound. 4 MiB holds well over the
-    // default 512 entries at 768 dimensions and caps a 4096-dimension model at ~256 — the entry bound alone would let
-    // the same configuration retain 8 MB.
+    // Byte ceiling on the candidate-vector cache, beside the configured entry bound: 4 MiB holds well over the default
+    // 512 entries at 768 dimensions and caps a 4096-dimension model, where the entry bound alone would retain 8 MB.
     private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
 
     // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
     private const long EntryOverheadBytes = 64;
 
-    // RAM-only candidate-embedding cache keyed by (action id, version, embedding model). Version invalidates an edited
-    // action automatically; the model name guards against cosine'ing a stale-dimension vector against a new model's
-    // query. Eviction is coldest-first within both bounds, and concurrent sends missing on the same candidate share one
-    // embedding round-trip rather than each paying the single-slot embedding server.
+    // RAM-only, keyed by action id, version and embedding model: the version invalidates an edited action and the
+    // model name stops a stale-dimension vector meeting a new model's query. Concurrent misses share one round-trip.
     private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
     private readonly LexicalPlaybookRetrievalRanker _lexical;
     private readonly ILogger<EmbeddingPlaybookRetrievalRanker> _logger;
@@ -95,19 +92,14 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
-            // Any node-local embedding hiccup degrades gracefully to the deterministic lexical ranker so the send still
-            // completes: model not pulled / Ollama or llama-server down / transport error (HttpRequestException,
-            // IOException — the llama-server deferred generator wraps its LlamaRuntimeException to IOException — or
-            // OllamaUnavailableException, which the Ollama provider translates its transport failures into),
-            // or a misconfigured/unregistered EmbeddingProviderName (InvalidOperationException from the resolver).
-            // None of these are a reason to break the send.
+            // Any node-local embedding hiccup degrades to the deterministic lexical ranker: a model not pulled, a
+            // server down, a transport error, or an unregistered provider name. None is a reason to break the send.
             return await FallBackToLexicalAsync(query, candidates, k, exception, cancellationToken);
         }
     }
 
-    // The single lexical-fallback site: logs one text-free Warning (never any playbook/query text) and delegates to the
-    // deterministic lexical ranker so a send never breaks on an embedding failure. A null <paramref name="exception" />
-    // is the non-exceptional degrade (e.g. a short/partial embedding response) and still logs at Warning.
+    // The single lexical-fallback site: one text-free Warning, never any playbook or query text, then the lexical
+    // ranker. A null exception is the non-exceptional degrade, such as a short response, and still logs at Warning.
     private Task<IReadOnlyList<PlaybookActionRecord>> FallBackToLexicalAsync(string query,
         IReadOnlyList<PlaybookActionRecord> candidates,
         int k,
@@ -125,11 +117,8 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         string model,
         CancellationToken cancellationToken)
     {
-        // Route the embedding model to the runtime named by EmbeddingProviderName (ollama or llamacpp). For "llamacpp"
-        // the provider stands up a non-none-pooling embedding process on first use; an unavailable process throws a
-        // caught transport type (the deferred generator wraps LlamaRuntimeException -> IOException) so retrieval still
-        // degrades to lexical. A misconfigured/unregistered provider name throws InvalidOperationException,
-        // also caught below as a degrade rather than a hard send failure.
+        // Route to the runtime named by EmbeddingProviderName, which stands up an embedding process on first use.
+        // An unavailable process or an unregistered name throws a caught type, so retrieval degrades to lexical.
         var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
@@ -146,9 +135,8 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             textByKey[keys[index]] = CandidateText(candidate);
         }
 
-        // The cache resolves what it can (and waits on a concurrent send already embedding the same candidate); the
-        // remaining misses plus the query go out as ONE batch, so a send still costs a single embedding round-trip. The
-        // query is always re-embedded and never cached.
+        // The cache resolves what it can, waiting on a concurrent send already embedding the same candidate, and the
+        // remaining misses plus the query go out as ONE batch. The query is always re-embedded and never cached.
         var queryVector = ReadOnlyMemory<float>.Empty;
         var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken);
 
@@ -179,9 +167,8 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 
             var generated = await generator.GenerateAsync(batchTexts, options: null, token);
 
-            // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
-            // make the positional indexing throw ArgumentOutOfRangeException (outside the narrow catch); signal a degrade
-            // instead so the send never breaks. No playbook/query text is logged.
+            // A well-behaved generator returns one embedding per input, in order; a short response would make the
+            // positional indexing throw outside the narrow catch, so signal a degrade instead. Nothing is logged.
             if (generated.Count != batchTexts.Count)
             {
                 return null;

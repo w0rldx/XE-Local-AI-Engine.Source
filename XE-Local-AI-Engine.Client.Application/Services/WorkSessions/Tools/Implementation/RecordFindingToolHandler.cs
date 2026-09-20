@@ -7,10 +7,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal sealed record RecordFindingRequest(string? Kind, string? Text, string? SourceRef, string? TaskId, string? SupersedesId);
 
 /// <summary>
-///     <c>record_finding</c>: the session's durable memory of what it learned. Everything written here is re-injected
-///     into a later step's state block, which is why the composer fences it as untrusted data — <c>sourceRef</c> in
-///     particular invites pasting verbatim tool output.
+///     <c>record_finding</c>: the session's durable memory of what it learned.
 /// </summary>
+/// <remarks>
+///     Everything written here is re-injected into a later step's state block, which is why the composer fences it as
+///     untrusted data — <c>sourceRef</c> in particular invites pasting verbatim tool output.
+/// </remarks>
 internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFindingRequest>
 {
     public RecordFindingToolHandler(

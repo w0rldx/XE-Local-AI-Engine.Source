@@ -12,41 +12,28 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
-///     Embedding-backed <see cref="IToolRelevanceSelector" />, in the same shape as
-///     <see cref="EmbeddingPlaybookRetrievalRanker" />: ranks the NON-CORE candidates by cosine similarity between the
-///     node-local embedding of the turn's query and of each candidate's <c>name + " " + description</c>. Embeddings come
-///     from the node-local <see cref="ILocalModelProvider" /> only — never a shared or cloud client — so tool
-///     descriptions and the user's message never leave the node, and the vectors live in a RAM-only cache that is never
-///     persisted, logged or returned.
-///     <para>
-///         Config-gated the same way: with no <see cref="ToolRelevanceOptions.EmbeddingModelName" /> it delegates
-///         straight to the lexical selector and constructs no embedding client, so the shipped default is model-free and
-///         CI stays deterministic without an embedding process.
-///     </para>
-///     <para>
-///         <b>Bounded, because this one runs inside the send.</b> The playbook ranker ranks at resolve time; this ranks
-///         in front of the first token, and for <c>llamacpp</c> the first call stands up an embedding process — which,
-///         since the profiling-lease change, may additionally wait out a benchmark body up to three times.
-///         <see cref="ToolRelevanceOptions.EmbeddingTimeout" /> is applied here with a linked <c>CancelAfter</c> and its
-///         expiry DEGRADES to the lexical ranking. That inverts the playbook ranker's cancellation clause on purpose:
-///         there the token is the send's and a cancelled send must not be swallowed, whereas the relevance hop runs this
-///         under <c>CancellationToken.None</c>, so the only cancellation that can arrive is this selector's own timeout —
-///         the very thing that must degrade rather than throw.
-///     </para>
+///     Embedding-backed <see cref="IToolRelevanceSelector" />, in the shape of
+///     <see cref="EmbeddingPlaybookRetrievalRanker" />: it ranks the NON-CORE candidates by cosine similarity between
+///     the node-local embedding of the turn's query and of each candidate's name and description.
 /// </summary>
+/// <remarks>
+///     Embeddings come from the node-local <see cref="ILocalModelProvider" /> ONLY, so tool descriptions and the
+///     user's message never leave the node, and the vectors live in a RAM-only cache. Gated on
+///     <see cref="ToolRelevanceOptions.EmbeddingModelName" />, so the shipped default is model-free. BOUNDED, running
+///     inside the send: <see cref="ToolRelevanceOptions.EmbeddingTimeout" /> rides a linked <c>CancelAfter</c> whose
+///     expiry DEGRADES to lexical — the hop passes <c>CancellationToken.None</c>, the only cancellation possible.
+/// </remarks>
 public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 {
-    // Byte ceiling on the vector cache, alongside the configured entry bound — the same pair of bounds, and for the
-    // same reason, as the playbook ranker's cache: the entry bound alone lets a wide-vector model multiply the
-    // footprint silently.
+    // Byte ceiling on the vector cache beside the configured entry bound — the same pair, and reason, as the playbook
+    // ranker's: an entry bound alone lets a wide-vector model multiply the footprint silently.
     private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
 
     // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
     private const long EntryOverheadBytes = 64;
 
-    // RAM-only tool-vector cache keyed by (tool name, description, embedding model). The description stands in for the
-    // playbook cache's Version — an edited description is a different key, so a stale vector can never be scored — and
-    // the model name guards against cosine'ing a stale-dimension vector against a new model's query.
+    // RAM-only, keyed by tool name, description and embedding model. The description stands in for the playbook
+    // cache's Version, so an edited one cannot score a stale vector; the model name guards the dimension.
     private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
     private readonly LexicalToolRelevanceSelector _lexical;
     private readonly ILogger<EmbeddingToolRelevanceSelector> _logger;
@@ -93,9 +80,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             return await _lexical.SelectAsync(query, candidates, threshold, cancellationToken);
         }
 
-        // The selector's OWN bound. The relevance hop calls this under CancellationToken.None (the decision is shared
-        // between concurrent rounds and must not be cancellable by whichever caller arrived first), so this linked
-        // source is normally the only token in play.
+        // The selector's OWN bound. The relevance hop calls this under CancellationToken.None — the decision is shared
+        // between rounds and must not die with whichever caller arrived first — so this is the only token in play.
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_options.EmbeddingTimeout);
 
@@ -117,10 +103,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
-            // Every node-local embedding hiccup lands here: model not pulled, runtime down or ejected, a spent
-            // profiling retry, a transport error (the deferred llama-server generator wraps its LlamaRuntimeException
-            // and its refusals to IOException), or an unregistered EmbeddingProviderName. None is a reason to break a
-            // send, and none of them is a reason to hide a tool either — the lexical ranking is a complete answer.
+            // Every node-local embedding hiccup lands here: an unpulled model, a downed runtime, a spent profiling
+            // retry, a transport error, an unregistered provider. None may break a send or hide a tool.
             return await FallBackToLexicalAsync(query, candidates, threshold, exception, cancellationToken);
         }
     }
@@ -143,30 +127,26 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         return float.IsNaN(score) ? 0f : score;
     }
 
-    // The single lexical-fallback site: one text-free Warning — no tool name, no description, no query text — and the
-    // deterministic lexical selection, which offers exactly what it would have offered had the node never configured an
-    // embedding model. A null exception is the non-exceptional degrade (a short or partial embedding response).
+    // The single lexical-fallback site: one text-free Warning, then the deterministic lexical selection, which offers
+    // what an unconfigured node would have. A null exception is the non-exceptional degrade, such as a short response.
     private Task<ToolRelevanceSelection> FallBackToLexicalAsync(string? query,
         IReadOnlyList<ToolRelevanceCandidate> candidates,
         int threshold,
         Exception? exception,
         CancellationToken cancellationToken)
     {
-        // The exception OBJECT never reaches the sink: sinks render Message and every inner exception, and this call
-        // failed while carrying the query and the tool descriptions, so a transport error that echoes its request body
-        // would write raw trajectory content to disk under a template that was scrubbed to counts. The TYPE name is
-        // the whole allow-listed diagnosis; "none" is the non-exceptional degrade.
+        // The exception OBJECT never reaches the sink: it failed carrying the query and the tool descriptions, so a
+        // transport error echoing its request body would write raw trajectory content. The TYPE name is the diagnosis.
         _logger.LogWarning("Embedding-based tool-relevance selection failed for {CandidateCount} candidates ({FailureType}); falling back to lexical ranking for this turn.",
             candidates.Count,
             exception?.GetType().Name ?? "none");
         return _lexical.SelectAsync(query, candidates, threshold, cancellationToken);
     }
 
-    /// <param name="cancellationToken">The selector's own bounded token — the one the embedding round-trip runs under.</param>
+    /// <param name="cancellationToken">The selector's own bounded token, which the embedding round-trip runs under.</param>
     /// <param name="callerToken">
-    ///     The token <see cref="SelectAsync" /> was handed, used for the lexical degrade below. The bounded token would
-    ///     make an in-bound degrade throw once the bound had already expired, and the caller's catch would then degrade
-    ///     a SECOND time with the right token — one degrade, two warnings.
+    ///     The token <see cref="SelectAsync" /> was handed, for the lexical degrade: the bounded one would throw once
+    ///     expired and the caller's catch would degrade twice.'
     /// </param>
     private async Task<ToolRelevanceSelection> RankByEmbeddingAsync(string query,
         IReadOnlyList<ToolRelevanceCandidate> candidates,
@@ -175,9 +155,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         CancellationToken cancellationToken,
         CancellationToken callerToken)
     {
-        // Node-local BY CONSTRUCTION: the resolver hands back an ILocalModelProvider, so there is no cloud client this
-        // path could reach even if EmbeddingProviderName were mis-set — an unregistered name throws
-        // InvalidOperationException, which the caller catches as a degrade.
+        // Node-local BY CONSTRUCTION: the resolver hands back an ILocalModelProvider, so no cloud client is reachable
+        // even from a mis-set EmbeddingProviderName — an unregistered name throws and the caller degrades.
         var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
@@ -213,9 +192,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             textByKey[keys[position]] = CandidateText(candidate);
         }
 
-        // The cache resolves what it can (and waits on a concurrent turn already embedding the same tool); the
-        // remaining misses plus the query go out as ONE batch, so a turn costs a single embedding round-trip. The query
-        // is always re-embedded and never cached.
+        // The cache resolves what it can, waiting on a concurrent turn already embedding the same tool, and the
+        // remaining misses plus the query go out as ONE batch. The query is always re-embedded and never cached.
         var queryVector = ReadOnlyMemory<float>.Empty;
         var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken);
 
@@ -247,9 +225,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 
             var generated = await generator.GenerateAsync(batchTexts, options: null, token);
 
-            // A well-behaved generator returns exactly one embedding per input, in order. A short or partial response
-            // would make the positional indexing throw outside the narrow catch set; signal a degrade instead. No tool
-            // or query text is logged.
+            // A well-behaved generator returns one embedding per input, in order; a short response would make the
+            // positional indexing throw outside the narrow catch set, so signal a degrade instead. Nothing is logged.
             if (generated.Count != batchTexts.Count)
             {
                 return null;

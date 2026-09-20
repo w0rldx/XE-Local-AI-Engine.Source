@@ -42,9 +42,12 @@ internal sealed record AgentHomePrepareResult
 
     /// <summary>
     ///     The workspace-relative paths of the conversation attachments staged this prepare (e.g.
-    ///     <c>attachments/report.md</c>), in staging order. Empty when no conversation attachments were staged. The chat
-    ///     agent-mode path surfaces these to the model so a weak model reads the exact staged file instead of guessing.
+    ///     <c>attachments/report.md</c>), in staging order. Empty when none were staged.
     /// </summary>
+    /// <remarks>
+    ///     The chat agent-mode path surfaces these to the model so a weak model reads the exact staged file instead
+    ///     of guessing.
+    /// </remarks>
     public IReadOnlyList<string> StagedAttachmentRelativePaths { get; init; } = [];
 }
 
@@ -62,10 +65,13 @@ internal sealed record AgentHomeRunRequest
 }
 
 /// <summary>
-///     Inputs for <see cref="IAgentHomeService.RunLifecycleAsync" /> — the single gateway entry that wraps Prepare+Run
-///     under the run-level busy guard. Carries everything the two phases need so the gateway no longer calls Prepare and
-///     Run separately (which could let two prepares race before the first run acquired the guard).
+///     Inputs for <see cref="IAgentHomeService.RunLifecycleAsync" />, the single gateway entry that wraps Prepare+Run
+///     under the run-level busy guard.
 /// </summary>
+/// <remarks>
+///     It carries everything both phases need so the gateway never calls Prepare and Run separately: two prepares
+///     could otherwise race before the first run acquired the guard.
+/// </remarks>
 internal sealed record AgentHomeRunLifecycleRequest
 {
     /// <summary>The selected-folder ids to resolve and copy into the workspace.</summary>
@@ -123,25 +129,27 @@ internal sealed record AgentHomeRunResult
     public required AgentHomePatchExport Patch { get; init; }
 
     /// <summary>
-    ///     The sandbox backend that served the run (<see cref="ISandboxRuntimeProvider.ProviderName" />). Carried onto
-    ///     the result so the tool gateway can tell the model — and the operator reading the transcript — when the run
-    ///     was served by the no-op <c>fake</c> backend, which returns exit 0 and empty output for every command it was
-    ///     not scripted for. Without this the gateway renders "completed (exit code 0)" for a node where nothing ran,
-    ///     which is the default in Development until <c>AgentHome:Sandbox:Provider</c> is set.
+    ///     The sandbox backend that served the run (<see cref="ISandboxRuntimeProvider.ProviderName" />).
     /// </summary>
+    /// <remarks>
+    ///     Carried onto the result so the tool gateway can tell the model — and the operator reading the transcript —
+    ///     when the run was served by the no-op <c>fake</c> backend, which returns exit 0 and empty output for every
+    ///     command it was not scripted for and is the Development default until <c>AgentHome:Sandbox:Provider</c> is
+    ///     set. Without it the gateway renders "completed (exit code 0)" for a node where nothing ran.
+    /// </remarks>
     public string SandboxProviderName { get; init; } = string.Empty;
 
     /// <summary>
     ///     What the goal-execution loop actually did — tool calls, commands and their exit codes, files written,
-    ///     refusals, and which budget (if any) cut it off. <see langword="null" /> only when the run never reached the
-    ///     executor at all.
-    ///     <para>
-    ///         Carried onto the result so the tool gateway reports the real work instead of a bare
-    ///         "completed (exit code 0)" that reads as if the goal was carried out. The honesty rule runs both ways:
-    ///         when <see cref="AgentHomeGoalOutcome.Executed" /> is <see langword="false" /> the gateway must SAY the
-    ///         goal was not executed, and it must never say that when it was.
-    ///     </para>
+    ///     refusals, and which budget (if any) cut it off.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> only when the run never reached the executor at all. Carried onto the result so
+    ///     the tool gateway reports the real work instead of a bare "completed (exit code 0)" that reads as if the
+    ///     goal was carried out. The honesty rule runs both ways: when
+    ///     <see cref="AgentHomeGoalOutcome.Executed" /> is <see langword="false" /> the gateway must SAY the goal was
+    ///     not executed, and it must never say that when it was.
+    /// </remarks>
     public AgentHomeGoalOutcome? GoalOutcome { get; init; }
 }
 

@@ -17,9 +17,12 @@ public interface IInvocationRunner
 
     /// <summary>
     ///     Cancels a run whose last client disconnected and stayed away past the disconnect grace
-    ///     (<c>DetachedInvocationReaper</c>). Identical to <see cref="Cancel" /> except for how the turn is attributed:
-    ///     an abandoned turn, not an operator stop. Both terminalize the row <c>Cancelled</c>.
+    ///     (<c>DetachedInvocationReaper</c>).
     /// </summary>
+    /// <remarks>
+    ///     Identical to <see cref="Cancel" /> except for how the turn is attributed: an abandoned turn, not an operator
+    ///     stop. Both terminalize the row <c>Cancelled</c>.
+    /// </remarks>
     void CancelDetached(Guid invocationId);
 
     void CancelAll();
@@ -33,10 +36,10 @@ public interface IInvocationRunner
     /// </summary>
     void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once);
 
-    /// <summary>
-    ///     Releases a turn parked on an <c>ask_user</c> question by handing it the operator's answers. Mirrors
-    ///     <see cref="ResolveApprovalResult" />: keyed on the opaque question request id, and a no-op when no question
-    ///     is pending for that id, so a duplicate or stale answer can never fault the turn.
-    /// </summary>
+    /// <summary>Releases a turn parked on an <c>ask_user</c> question by handing it the operator's answers.</summary>
+    /// <remarks>
+    ///     Mirrors <see cref="ResolveApprovalResult" />: keyed on the opaque question request id, and a no-op when no
+    ///     question is pending for that id, so a duplicate or stale answer can never fault the turn.
+    /// </remarks>
     void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt);
 }

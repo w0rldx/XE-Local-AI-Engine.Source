@@ -6,13 +6,15 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
-///     Runs host-side <c>git</c> commands for the host patch apply flow. Mirrors the only existing
-///     <see cref="Process" /> use in this assembly (<c>CapabilityReportComposer</c>): a CA2000-clean <c>using var</c> process
-///     with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> (never a joined string, so paths with
-///     spaces are safe), and a <see cref="System.Threading.Tasks.Task" />-based read + wait. The hardened <c>-c</c> flags
-///     come from <see cref="AgentHomeGit" /> so a host global hook or <c>.gitattributes</c> cannot interfere with the
-///     apply.
+///     Runs host-side <c>git</c> commands for the host patch apply flow.
 /// </summary>
+/// <remarks>
+///     It mirrors this assembly's only other <see cref="Process" /> use, <c>CapabilityReportComposer</c>: a CA2000-clean
+///     <c>using var</c> process with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> rather than a
+///     joined string so paths with spaces are safe, and a <see cref="System.Threading.Tasks.Task" />-based read plus wait.
+///     The hardened <c>-c</c> flags come from <see cref="AgentHomeGit" />, so a host global hook or <c>.gitattributes</c>
+///     cannot interfere with the apply.
+/// </remarks>
 internal sealed class HostGitRunner
 {
     private readonly int _timeoutSeconds;
@@ -23,18 +25,16 @@ internal sealed class HostGitRunner
     }
 
     /// <summary>
-    ///     Runs <c>git</c> with the given hardened argument list in <paramref name="workingDirectory" /> and returns the
-    ///     exit code and captured streams. A timeout, a missing executable, or a launch failure surfaces as a non-zero
-    ///     exit with the failure on stderr rather than throwing past the caller.
-    ///     <para>
-    ///         <paramref name="standardInput" /> feeds a command that reads <c>-</c> — <c>git apply</c> is the one that
-    ///         does — so patch bytes are handed to git directly instead of being written to a file first, which is one
-    ///         fewer copy of them on disk. When the input is model-influenced, pass the bounds too: git echoes parts of
-    ///         a patch back on failure, and an unbounded read of that is the caller's memory in a hostile patch's hands.
-    ///         A run that exceeds a bound is answered as a non-zero exit rather than a throw, like every other failure
-    ///         here.
-    ///     </para>
+    ///     Runs <c>git</c> with the given hardened argument list in <paramref name="workingDirectory" /> and returns
+    ///     the exit code and captured streams.
     /// </summary>
+    /// <remarks>
+    ///     A timeout, a missing executable or a launch failure surfaces as a non-zero exit with the failure on stderr, never a throw
+    ///     past the caller. <paramref name="standardInput" /> feeds a command that reads <c>-</c> — <c>git apply</c> is the one that
+    ///     does — so patch bytes go to git directly instead of a file first, one fewer copy of them on disk. When the input is
+    ///     model-influenced, pass the bounds too: git echoes parts of a patch back on failure, and an unbounded read of that is the
+    ///     caller's memory in a hostile patch's hands. Exceeding a bound is answered as a non-zero exit, like every other failure.
+    /// </remarks>
     public async Task<HostGitResult> RunAsync(string workingDirectory,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
@@ -82,11 +82,8 @@ internal sealed class HostGitRunner
             return new HostGitResult { ExitCode = -1, StandardOutput = string.Empty, StandardError = exception.Message };
         }
 
-        // The drains start BEFORE stdin is written, and that order is load-bearing on a large patch. Both pipes are
-        // OS buffers of a few dozen kilobytes: git writing more diagnostics than fit blocks until somebody reads them,
-        // and this method blocks writing the rest of the patch until git reads THAT — two processes each waiting for
-        // the other, until the per-command timeout. `git apply` reading its whole input before complaining is what has
-        // kept it out of sight; a big enough malformed patch is not obliged to keep it there.
+        // The drains start BEFORE stdin is written, and that order is load-bearing on a large patch: both pipes are OS
+        // buffers of a few dozen kilobytes, so writing first deadlocks git against this method until the timeout.
         var stdoutTask = ReadBoundedAsync(process.StandardOutput, maxStandardOutputBytes, timeoutCts.Token);
         var stderrTask = ReadBoundedAsync(process.StandardError, maxStandardErrorBytes, timeoutCts.Token);
 
@@ -99,16 +96,13 @@ internal sealed class HostGitRunner
             }
             catch (IOException exception)
             {
-                // git exited before it had read the patch, so the write hit a broken pipe. Kept as a RESULT rather than
-                // let out: every other failure this runner can have comes back as a non-zero exit with the reason on
-                // stderr, and callers are written to that contract. Whatever git managed to say is still worth reading,
-                // so the wait below runs either way and this only speaks up if git left nothing better to say.
+                // git exited before reading the patch, so the write hit a broken pipe. Kept as a RESULT, because every
+                // failure here comes back as a non-zero exit; the wait still runs, and this speaks up only if git did not.
                 inputFailure = exception.Message;
             }
 
-            // Outside the catch, so a failed write still closes: a git waiting for EOF on a pipe nobody closed waits
-            // until the timeout kill, which turns a one-line diagnostic into a stalled command. Closing a pipe the
-            // write already broke throws that same failure again on the flush, and there is nothing new in it.
+            // Outside the catch, so a failed write still closes: a git waiting for EOF on a pipe nobody closed stalls until
+            // the timeout kill. Closing an already-broken pipe re-throws the same failure on the flush, nothing new.
             try
             {
                 process.StandardInput.Close();
@@ -145,10 +139,13 @@ internal sealed class HostGitRunner
     }
 
     /// <summary>
-    ///     Reads a stream to its end, or to <paramref name="maxBytes" /> — after which it keeps draining (so the process
-    ///     can exit) and keeps nothing. Mirrors the trusted apply port's bounded reads; the cap is counted in chars,
-    ///     which for UTF-8 is never more than the bytes it stands for.
+    ///     Reads a stream to its end, or to <paramref name="maxBytes" /> — after which it keeps draining, so the
+    ///     process can exit, and keeps nothing.
     /// </summary>
+    /// <remarks>
+    ///     Mirrors the trusted apply port's bounded reads. The cap is counted in chars, which for UTF-8 is never more
+    ///     than the bytes it stands for.
+    /// </remarks>
     private static async Task<BoundedRead> ReadBoundedAsync(StreamReader reader, int? maxBytes, CancellationToken cancellationToken)
     {
         if (maxBytes is not { } cap)

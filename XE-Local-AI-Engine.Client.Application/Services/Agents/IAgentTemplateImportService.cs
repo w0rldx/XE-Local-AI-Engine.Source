@@ -15,10 +15,12 @@ public sealed class AgentTemplateImportResult
 }
 
 /// <summary>
-///     Idempotent, additive importer for the curated starter-pack templates. Maps each requested template to an
-///     ordinary chat-persona agent definition (no tools, <c>Kind=Single</c>) and persists it through the forge-proof
-///     seeded store path. Re-importing an already-seeded slug never duplicates a row.
+///     Idempotent, additive importer for the curated starter-pack templates.
 /// </summary>
+/// <remarks>
+///     Each requested template maps to an ordinary single-kind chat persona with no tools, persisted through the
+///     forge-proof seeded store path. Re-importing an already-seeded slug never duplicates a row.
+/// </remarks>
 public interface IAgentTemplateImportService
 {
     /// <summary>

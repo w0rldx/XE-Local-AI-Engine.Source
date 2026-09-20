@@ -7,23 +7,11 @@ using System.Text.RegularExpressions;
 ///     Fetches a GitHub repository's default-branch archive for the import preview.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The host is <em>never</em> caller-supplied: the API takes an owner and a repository name, not a URL. That is
-///         the whole basis of the allowlist below — a pasted URL would let the caller choose the host and the allowlist
-///         would stop meaning anything. Both slug parts are charset-restricted, and rejecting a leading dot is what
-///         kills <c>..</c> path walking on the fixed host.
-///     </para>
-///     <para>
-///         Redirects are followed manually (<c>AllowAutoRedirect = false</c> on the registered client, the same posture
-///         the Hugging Face resolve client and the GitHub device-flow client use) because
-///         <c>github.com → codeload.github.com</c> is a normal hop that has to be permitted while every other
-///         destination is refused. Each hop is re-validated against the allowlist rather than only the first.
-///     </para>
-///     <para>
-///         Two threats are deliberately <em>not</em> defended here: DNS rebinding, which buys nothing against an HTTPS
-///         <em>hostname</em> allowlist (the attacker still needs a valid certificate for that name), and IP-literal
-///         hosts, which are moot while the host is not caller-supplied. No TTL pinning is built.
-///     </para>
+///     The host is NEVER caller-supplied — the API takes an owner and a repository name, not a URL — which is the
+///     whole basis of the allowlist; both slug parts are charset-restricted and a leading dot is rejected, killing
+///     <c>..</c> walking. Redirects are followed manually, each hop re-validated, because the hop to
+///     <c>codeload.github.com</c> must be permitted while every other destination is refused. DNS rebinding and
+///     IP-literal hosts are not defended: neither is reachable behind a hostname allowlist the caller cannot choose.
 /// </remarks>
 internal sealed partial class GitHubSkillArchiveDownloader
 {
@@ -163,10 +151,13 @@ internal sealed partial class GitHubSkillArchiveDownloader
     }
 
     /// <summary>
-    ///     Streams the body under a hard byte cap and a read-idle deadline. The cap is applied to the bytes received —
-    ///     the archive as it will be handed to <see cref="SkillArchiveReader" />, which caps the inflated size
-    ///     separately — so neither a slow-drip stall nor an endless body can exhaust the node.
+    ///     Streams the body under a hard byte cap and a read-idle deadline, so neither a slow-drip stall nor an
+    ///     endless body can exhaust the node.
     /// </summary>
+    /// <remarks>
+    ///     The cap applies to the bytes RECEIVED, the archive as <see cref="SkillArchiveReader" /> will get it; that
+    ///     reader caps the inflated size separately.
+    /// </remarks>
     private static async Task<byte[]> ReadCappedAsync(HttpContent content, int maxArchiveBytes, CancellationToken cancellationToken)
     {
         var source = await content.ReadAsStreamAsync(cancellationToken);
