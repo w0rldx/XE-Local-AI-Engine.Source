@@ -4,15 +4,13 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     What an inbound edge says about whether its target may proceed.
-///     <para>
-///         There is deliberately no <c>Waived</c> member. Dev Workflows has one to tell an operator's <c>Skip</c>
-///         decision from a cascade off something dead; v1's decision kinds are <c>Approve</c> and <c>Reject</c> only,
-///         so nothing can produce a waiver and the machinery would be unreachable. Re-add the concept with the first
-///         decision kind that produces one.
-///     </para>
-/// </summary>
+/// <summary>What an inbound edge says about whether its target may proceed.</summary>
+/// <remarks>
+///     There is deliberately no <c>Waived</c> member. Dev Workflows has one to tell an operator's <c>Skip</c>
+///     decision from a cascade off something dead; here the decision kinds are <c>Approve</c> and <c>Reject</c> only,
+///     so nothing can produce a waiver and the machinery would be unreachable. Re-add the concept with the first
+///     decision kind that produces one.
+/// </remarks>
 internal enum GraphWorkflowEdgeState
 {
     /// <summary>The source has not settled.</summary>
@@ -39,11 +37,13 @@ internal enum GraphWorkflowNodeAdmission
 }
 
 /// <summary>
-///     What recomputing a run's status concluded, and — when the answer is <c>Failed</c> or <c>Cancelled</c> — why. A
-///     status alone cannot carry that: a run whose tail was abandoned has no failing node run to read the reason off,
-///     because nothing failed, and a run that DID fail would otherwise report class <c>None</c> while the node under it
-///     names the real one.
+///     What recomputing a run's status concluded, and — when the answer is <c>Failed</c> or <c>Cancelled</c> — why.
 /// </summary>
+/// <remarks>
+///     A status alone cannot carry that: a run whose tail was abandoned has no failing node run to read the reason
+///     off, because nothing failed, and a run that DID fail would otherwise report class <c>None</c> while the node
+///     under it names the real one.
+/// </remarks>
 internal readonly record struct GraphWorkflowRunOutcome(
     GraphWorkflowRunStatus Status,
     GraphWorkflowFailureClass FailureClass = GraphWorkflowFailureClass.None,
@@ -51,12 +51,12 @@ internal readonly record struct GraphWorkflowRunOutcome(
 
 /// <summary>
 ///     The run and node-run state machines, as pure functions over persisted rows and the parsed graph.
-///     <para>
-///         The store deliberately does not judge transitions — it provides the rejection channel and enforces only what
-///         the database can. These functions are therefore the only guard, and being free of I/O is what lets the whole
-///         truth table be tested without a database.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The store deliberately does not judge transitions — it provides the rejection channel and enforces only what
+///     the database can. These functions are therefore the only guard, and being free of I/O is what lets the whole
+///     truth table be tested without a database.
+/// </remarks>
 internal static class GraphWorkflowStateMachine
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -73,23 +73,24 @@ internal static class GraphWorkflowStateMachine
 
     /// <summary>
     ///     The output document a pause produces for one answer — the document its out-edge conditions are then
-    ///     evaluated against. Written in ONE place because three callers ask questions of it: the definition-time
-    ///     pre-flight rule, the dispatcher when an answer has landed, and the API when it tells an operator in advance
-    ///     whether a rejection has anywhere to go. A second spelling of this shape would make them disagree in exactly
-    ///     the case that matters.
+    ///     evaluated against.
     /// </summary>
+    /// <remarks>
+    ///     Written in ONE place because three callers ask questions of it: the definition-time pre-flight rule, the
+    ///     dispatcher when an answer has landed, and the API when it tells an operator in advance whether a rejection
+    ///     has anywhere to go. A second spelling of this shape would make them disagree in exactly the case that
+    ///     matters.
+    /// </remarks>
     public static string PauseOutputJson(GraphWorkflowDecisionKind decision) =>
         JsonSerializer.Serialize(new PauseOutput { Status = GraphWorkflowNodeOutputStatuses.Succeeded, Output = new PauseDecision { Decision = decision.ToString() } }, JsonOptions);
 
-    /// <summary>
-    ///     Every answer a pause SUCCEEDS on — the ones that part company in the graph rather than on the row.
-    ///     <para>
-    ///         Derived from <see cref="TargetFor" /> rather than listed by hand. With two decision kinds that is
-    ///         trivially the whole enum, and it is kept anyway for one reason: the parser's own pre-flight rule
-    ///         iterates it, as does the decide endpoint when it advertises the answers, so a third kind cannot be added
-    ///         in one place and forgotten in the other.
-    ///     </para>
-    /// </summary>
+    /// <summary>Every answer a pause SUCCEEDS on — the ones that part company in the graph rather than on the row.</summary>
+    /// <remarks>
+    ///     Derived from <see cref="TargetFor" /> rather than listed by hand. With two decision kinds that is trivially
+    ///     the whole enum, and it is kept anyway for one reason: the parser's own pre-flight rule iterates it, as does
+    ///     the decide endpoint when it advertises the answers, so a third kind cannot be added in one place and
+    ///     forgotten in the other.
+    /// </remarks>
     public static IReadOnlyList<GraphWorkflowDecisionKind> DecisionAnswers { get; } =
     [
         .. Enum.GetValues<GraphWorkflowDecisionKind>().Where(static decision => TargetFor(decision) == GraphWorkflowNodeRunStatus.Succeeded)
@@ -125,16 +126,14 @@ internal static class GraphWorkflowStateMachine
     /// <summary>
     ///     Whether an inbound edge lets its target through, read off the run's node runs — <c>Pending</c> when the
     ///     source has no row yet, because a source that has not been materialized is a wait rather than a refusal.
-    ///     <para>
-    ///         Every terminal status but <c>Succeeded</c> kills the out-edge: none of them produced the output a
-    ///         condition would read, and treating "no output" as a passing condition is how a run routes on evidence it
-    ///         never had. So does a <c>Succeeded</c> source whose condition did not fire — the branch not taken.
-    ///     </para>
-    ///     <para>
-    ///         The graph is not a parameter, unlike the Dev Workflow original: the waiver rule is what needed to walk
-    ///         back through it, and v1 has no waiver.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Every terminal status but <c>Succeeded</c> kills the out-edge: none of them produced the output a condition
+    ///     would read, and treating "no output" as a passing condition is how a run routes on evidence it never had.
+    ///     So does a <c>Succeeded</c> source whose condition did not fire — the branch not taken. The graph is not a
+    ///     parameter, unlike the Dev Workflow original: the waiver rule is what needed to walk back through it, and
+    ///     there is no waiver here.
+    /// </remarks>
     public static GraphWorkflowEdgeState EdgeState(GraphWorkflowGraphEdge edge, IReadOnlyDictionary<string, GraphWorkflowNodeRunSnapshot> nodeRunsByKey)
     {
         ArgumentNullException.ThrowIfNull(edge);
@@ -154,18 +153,13 @@ internal static class GraphWorkflowStateMachine
     private static bool Fires(GraphWorkflowGraphEdge edge, string? outputJson) =>
         GraphWorkflowCondition.Evaluate(edge.Condition, ParseOutput(outputJson));
 
-    /// <summary>
-    ///     Whether a <c>Pending</c> node run may be queued, must be skipped, or is still waiting.
-    ///     <para>
-    ///         <c>All</c> over ZERO inbound edges is vacuously satisfied, and that is load-bearing rather than pedantic:
-    ///         it is how the <c>Start</c> node becomes eligible at all.
-    ///     </para>
-    ///     <para>
-    ///         The join policy is read off the NODE, whichever kind it is. An ordinary node with two inbound edges
-    ///         joins them exactly as a <c>Join</c> node does, and reading the policy off <c>Join</c> alone is the
-    ///         documented trap.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether a <c>Pending</c> node run may be queued, must be skipped, or is still waiting.</summary>
+    /// <remarks>
+    ///     <c>All</c> over ZERO inbound edges is vacuously satisfied, and that is load-bearing rather than pedantic:
+    ///     it is how the <c>Start</c> node becomes eligible at all. The join policy is read off the NODE, whichever
+    ///     kind it is — an ordinary node with two inbound edges joins them exactly as a <c>Join</c> node does, and
+    ///     reading the policy off <c>Join</c> alone is the documented trap.
+    /// </remarks>
     public static GraphWorkflowNodeAdmission Admission(GraphWorkflowGraphNode node,
         GraphWorkflowGraph graph,
         IReadOnlyDictionary<string, GraphWorkflowNodeRunSnapshot> nodeRunsByKey)
@@ -176,10 +170,8 @@ internal static class GraphWorkflowStateMachine
 
         var states = graph.InboundEdges(node.NodeKey).Select(edge => EdgeState(edge, nodeRunsByKey)).ToList();
 
-        // Pending outranks Dead under BOTH policies, and for the same reason: the answer is not allowed to depend on
-        // which branch happened to land first. A dead inbound edge already settles what an `All` join will DO — it can
-        // never fire, so it will be skipped — but settling it while a sibling branch is still running skips the node,
-        // and everything after it, in front of work the run has not finished.
+        // Pending outranks Dead under BOTH policies, for the same reason: the answer must not depend on which branch landed first. A dead inbound edge already
+        // settles what an `All` join will DO, but settling it while a sibling still runs skips the node, and everything after it, in front of unfinished work.
         if (states.Contains(GraphWorkflowEdgeState.Pending))
         {
             return GraphWorkflowNodeAdmission.Wait;
@@ -198,19 +190,15 @@ internal static class GraphWorkflowStateMachine
 
     /// <summary>
     ///     Why a node run <see cref="Admission" /> answered <c>Skip</c> for is being skipped, in the words its own row
-    ///     keeps. A cascaded skip that recorded nothing leaves an operator reading a column of identical Skipped rows
-    ///     with no way to tell which one of them was the decision.
-    ///     <para>
-    ///         Names ONE dead dependency, because a skip needs one cause rather than a list — and prefers a branch that
-    ///         broke or was skipped over one a condition merely routed past. Both are dead, but only the first is news:
-    ///         a Condition node taking its other branch is the graph working.
-    ///     </para>
-    ///     <para>
-    ///         A node this is asked about has a dead dependency by construction — an <c>All</c> node is skipped only on
-    ///         one, and the parser refuses an <c>Any</c> node with fewer than two inbound edges — so the no-cause
-    ///         sentence is a guard rather than a case.
-    ///     </para>
+    ///     keeps.
     /// </summary>
+    /// <remarks>
+    ///     A cascaded skip that recorded nothing leaves an operator reading a column of identical Skipped rows unable
+    ///     to tell which was the decision. It names ONE dead dependency, because a skip needs one cause rather than a
+    ///     list, and prefers a branch that broke or was skipped over one a condition merely routed past: both are
+    ///     dead, but a Condition taking its other branch is the graph working. A node asked about has a dead
+    ///     dependency by construction, so the no-cause sentence is a guard rather than a case.
+    /// </remarks>
     public static string SkipReason(GraphWorkflowGraphNode node,
         GraphWorkflowGraph graph,
         IReadOnlyDictionary<string, GraphWorkflowNodeRunSnapshot> nodeRunsByKey)
@@ -253,16 +241,16 @@ internal static class GraphWorkflowStateMachine
     }
 
     /// <summary>
-    ///     The status a run should hold given its node runs and its pinned graph, recomputed from scratch at the end of
-    ///     every tick rather than accumulated. It is denormalized on purpose so a reader can answer "what is this run
-    ///     doing" without a join.
-    ///     <para>
-    ///         Graph-aware on purpose. <c>Completed</c> means at least one TERMINAL node succeeded, so a run whose tail
-    ///         was skipped, or whose rejection routed down a branch that skipped the remainder, reads <c>Cancelled</c>
-    ///         with a reason naming the ends it never reached rather than <c>Completed</c> like a run that did its job.
-    ///         <c>Failed</c> outranks both: a node that failed is the answer to why the run stopped.
-    ///     </para>
+    ///     The status a run should hold given its node runs and its pinned graph, recomputed from scratch at the end
+    ///     of every tick rather than accumulated.
     /// </summary>
+    /// <remarks>
+    ///     Denormalized on purpose, so a reader can answer "what is this run doing" without a join, and graph-aware on
+    ///     purpose: <c>Completed</c> means at least one TERMINAL node succeeded, so a run whose tail was skipped, or
+    ///     whose rejection routed down a branch that skipped the remainder, reads <c>Cancelled</c> with a reason
+    ///     naming the ends it never reached rather than <c>Completed</c> like a run that did its job. <c>Failed</c>
+    ///     outranks both: a node that failed is the answer to why the run stopped.
+    /// </remarks>
     public static GraphWorkflowRunOutcome Recompute(GraphWorkflowRunStatus current,
         GraphWorkflowGraph graph,
         IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns)
@@ -291,10 +279,8 @@ internal static class GraphWorkflowStateMachine
                 return GraphWorkflowRunStatus.Running;
             }
 
-            // WaitingForApproval outranks Pending deliberately: every node run of a graph exists from the moment the
-            // run starts, so there are almost always Pending rows waiting on a branch that has not settled. Reading
-            // those as Running would report a run blocked on an unanswered pause as busy, which is the one thing the
-            // two statuses exist to tell apart.
+            // WaitingForApproval outranks Pending deliberately: every node run exists from the moment the run starts, so there are almost always Pending rows
+            // waiting on an unsettled branch. Reading those as Running would report a run blocked on an unanswered pause as busy, the one thing the two tell apart.
             return nodeRuns.Any(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval)
                 ? GraphWorkflowRunStatus.WaitingForApproval
                 : GraphWorkflowRunStatus.Running;
@@ -304,22 +290,18 @@ internal static class GraphWorkflowStateMachine
         return nodeRuns.Count == 0 ? current : null;
     }
 
-    /// <summary>
-    ///     What a run whose every node run is terminal amounts to, asked of the graph. Skipped and Cancelled node runs
-    ///     do not block an end — they simply are not one, and this is where that distinction is made.
-    ///     <para>
-    ///         <c>GateRejected</c> here means only this: a pause somewhere in this run was refused, and the run reached
-    ///         no end. It is NOT a causal proof — a rejection can route into a branch that runs perfectly well, and a
-    ///         false condition further down can be what actually killed the tail. The class narrows where a reader
-    ///         should look; the reason names what was actually not reached.
-    ///     </para>
-    /// </summary>
+    /// <summary>What a run whose every node run is terminal amounts to, asked of the graph.</summary>
+    /// <remarks>
+    ///     Skipped and Cancelled node runs do not block an end — they simply are not one, and this is where that
+    ///     distinction is made. <c>GateRejected</c> means only that a pause somewhere in this run was refused and the
+    ///     run reached no end. It is NOT a causal proof: a rejection can route into a branch that runs perfectly well,
+    ///     and a false condition further down can be what killed the tail. The class narrows where a reader should
+    ///     look; the reason names what was actually not reached.
+    /// </remarks>
     private static GraphWorkflowRunOutcome Terminalize(GraphWorkflowGraph graph, IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns)
     {
-        // The failing node's own class and reason are carried up rather than dropped: a run reading Failed with class
-        // None, while the node under it reads Interrupted, tells an operator nothing about why it stopped. Which failed
-        // node is picked matters when several did, so it is the lowest NODE KEY ordinally — the row order here is the
-        // store's, and a positional "first" would let two readers of the same run disagree.
+        // The failing node's class and reason are carried up rather than dropped: a run reading Failed with class None, while the node under it reads Interrupted,
+        // says nothing about why it stopped. Which node is picked matters when several failed, so it is the lowest NODE KEY ordinally, not a positional "first".
         var failed = nodeRuns.Where(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Failed)
                              .MinBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
         if (failed is not null)
@@ -372,20 +354,14 @@ internal static class GraphWorkflowStateMachine
         return Array.IndexOf(PauseRefusals, answered) >= 0 ? answered : null;
     }
 
-    /// <summary>
-    ///     Which answer a stored output document records, or <see langword="null" /> when it records none.
-    ///     <para>
-    ///         Read STRUCTURALLY, off <c>output.decision</c>, rather than by comparing the stored text against
-    ///         <see cref="PauseOutputJson" />: that method writes the minimal routing document a pre-flight check
-    ///         evaluates, while the composed document a real run stores carries <c>attempt</c>, <c>branch</c>, and the
-    ///         answer's own <c>comment</c> and <c>payload</c> beside the decision. A byte comparison would recognise
-    ///         the first and silently miss every one of the second.
-    ///     </para>
-    ///     <para>
-    ///         Matched case-sensitively against the enum NAME, which is what the writer serializes. Output that does
-    ///         not parse, or that carries no decision, is not an answer.
-    ///     </para>
-    /// </summary>
+    /// <summary>Which answer a stored output document records, or <see langword="null" /> when it records none.</summary>
+    /// <remarks>
+    ///     Read STRUCTURALLY, off <c>output.decision</c>, rather than by comparing the stored text against
+    ///     <see cref="PauseOutputJson" />: that writes the minimal routing document a pre-flight check evaluates,
+    ///     while the composed document a real run stores carries <c>attempt</c>, <c>branch</c> and the answer's own
+    ///     <c>comment</c> and <c>payload</c> beside it, so a byte comparison would recognise the first and miss every one of the second.
+    ///     Matched case-sensitively against the enum NAME; output that does not parse, or carries no decision, is no answer.
+    /// </remarks>
     public static GraphWorkflowDecisionKind? DecisionOf(string? outputJson)
     {
         if (ParseOutput(outputJson) is not { ValueKind: JsonValueKind.Object } document
@@ -409,11 +385,12 @@ internal static class GraphWorkflowStateMachine
         return null;
     }
 
-    /// <summary>
-    ///     Where a human's answer leaves the node run it answers. Both answers SUCCEED the pause: the answer is the
-    ///     node's output, and routing on it is the edges' job. A rejection reaches the run through an out-edge, not
-    ///     through a node failure — which is why the two land in the same place here and part company in the graph.
-    /// </summary>
+    /// <summary>Where a human's answer leaves the node run it answers.</summary>
+    /// <remarks>
+    ///     Both answers SUCCEED the pause: the answer is the node's output, and routing on it is the edges' job. A
+    ///     rejection reaches the run through an out-edge, not through a node failure — which is why the two land in
+    ///     the same place here and part company in the graph.
+    /// </remarks>
     public static GraphWorkflowNodeRunStatus TargetFor(GraphWorkflowDecisionKind decision) =>
         decision switch
         {
@@ -429,17 +406,14 @@ internal static class GraphWorkflowStateMachine
     public static bool IsDecidable(GraphWorkflowNodeRunStatus status, GraphWorkflowDecisionKind decision) =>
         status == GraphWorkflowNodeRunStatus.WaitingForApproval && IsLegal(status, TargetFor(decision));
 
-    /// <summary>
-    ///     The run transition table. Every terminal is reached through the cancel drain or through the "nothing is live
-    ///     any more" recomputation, and the invariant behind that is about LIVE work: a terminal written over a run
-    ///     with a live node run strands it under a run no tick advances again.
-    ///     <para>
-    ///         <c>Running → Cancelled</c> and <c>WaitingForApproval → Cancelled</c> are that recomputation's own edges
-    ///         and nothing else's. They are safe under exactly the same invariant rather than in spite of it:
-    ///         <see cref="Recompute" /> reaches its terminalization branch ONLY once every node run is already
-    ///         terminal, so there is nothing left to strand and nothing to drain either.
-    ///     </para>
-    /// </summary>
+    /// <summary>The run transition table.</summary>
+    /// <remarks>
+    ///     Every terminal is reached through the cancel drain or through the "nothing is live any more" recomputation,
+    ///     and the invariant behind that is about LIVE work: a terminal written over a run with a live node run
+    ///     strands it under a run no tick advances again. <c>Running → Cancelled</c> and
+    ///     <c>WaitingForApproval → Cancelled</c> are that recomputation's own edges, safe under the same invariant
+    ///     rather than in spite of it: it terminalizes ONLY once every node run is terminal, so nothing is stranded.
+    /// </remarks>
     public static bool IsLegal(GraphWorkflowRunStatus from, GraphWorkflowRunStatus to) =>
         from switch
         {
@@ -458,21 +432,14 @@ internal static class GraphWorkflowStateMachine
             _ => false
         };
 
-    /// <summary>
-    ///     The node-run transition table.
-    ///     <para>
-    ///         <c>Running → Pending</c> and <c>Queued → Pending</c> carry two different meanings that need no distinct
-    ///         edge: a retry scheduled after a retryable failure, and a collapse after the host restarted under the
-    ///         node run. Both re-derive the same way, which is why the row is cleaned rather than annotated.
-    ///     </para>
-    ///     <para>
-    ///         <c>Failed → Pending</c> is the ONE edge out of a terminal status, and it is retry IN PLACE: a failed row
-    ///         under both the node's own attempt cap and the run's total budget goes back to <c>Pending</c> with the
-    ///         attempt incremented, in one atomic write. There is no cross-node fix loop in v1, so the Dev Workflow
-    ///         module's other three terminal exits go with it — a <c>Succeeded</c>, <c>Skipped</c> or <c>Cancelled</c>
-    ///         row here is an answer nothing will ask again.
-    ///     </para>
-    /// </summary>
+    /// <summary>The node-run transition table.</summary>
+    /// <remarks>
+    ///     <c>Running → Pending</c> and <c>Queued → Pending</c> carry two meanings that need no distinct edge — a
+    ///     retry scheduled after a retryable failure, and a collapse after the host restarted under the node run —
+    ///     and both re-derive the same way, so the row is cleaned rather than annotated. <c>Failed → Pending</c> is
+    ///     the ONE edge out of a terminal status, retry IN PLACE under the node's cap and the run's budget, in one
+    ///     atomic write with the attempt incremented: nothing routes to another node, and no other terminal reopens.
+    /// </remarks>
     public static bool IsLegal(GraphWorkflowNodeRunStatus from, GraphWorkflowNodeRunStatus to) =>
         from switch
         {

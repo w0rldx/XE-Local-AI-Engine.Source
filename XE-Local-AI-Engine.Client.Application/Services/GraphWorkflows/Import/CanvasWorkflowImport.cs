@@ -36,27 +36,14 @@ public sealed class CanvasWorkflowImportSnapshot
 /// <summary>
 ///     The one-shot conversion of saved Open Canvas (Preview) workflows into Graph Workflow definitions, run once at
 ///     startup on the first start of the build that removes Open Canvas.
-///     <para>
-///         It runs REGARDLESS of <c>GraphWorkflows:Enabled</c>. An operator who never turns the feature on must not
-///         silently lose their canvases, so the flag gates the request path and this import is outside it.
-///     </para>
-///     <para>
-///         Split in two because an EF migration cannot decrypt <c>graph_json</c> — it has no node key — while the
-///         <c>DropCanvasWorkflows</c> migration removes the source table before any hosted service starts.
-///         <see cref="ReadAsync" /> therefore runs BEFORE migrations and <see cref="ImportAsync" /> after them. The
-///         idempotency mechanism is the source table itself: on every later start it is gone, the read is a no-op, and
-///         there is no marker table or flag column to keep honest.
-///     </para>
-///     <para>
-///         Nothing here may depend on a Preview type: the read parses the stored blob into private records of its own
-///         so the Preview namespace can be deleted out from under it in the same slice.
-///     </para>
-///     <para>
-///         It also runs under <c>--reset-admin-password</c>: that branch of <c>Program</c> returns only AFTER the
-///         migration pass, so the read, the migrations and this write all happen first. The knowledge-downgrade
-///         commands are the one launch path that returns before migrations and therefore before the import.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Split in two because an EF migration cannot decrypt <c>graph_json</c> — it has no node key — while the
+///     <c>DropCanvasWorkflows</c> migration removes the source table before any hosted service starts, so
+///     <see cref="ReadAsync" /> runs BEFORE migrations and <see cref="ImportAsync" /> after them. That absent table is
+///     the idempotency mechanism: no marker table, no flag column to keep honest. Why it ignores the feature flag,
+///     what it may not depend on and which launch paths reach it: docs/wiki/21-graph-workflows.md ("Why it is split around the migration").
+/// </remarks>
 public static class CanvasWorkflowImport
 {
     /// <summary>The prefix an operator greps for: a definition carrying it will not run until it is edited.</summary>
@@ -75,13 +62,13 @@ public static class CanvasWorkflowImport
 
     /// <summary>
     ///     Every saved canvas, decrypted, read BEFORE migrations while <c>canvas_workflows</c> still exists.
-    ///     <para>
-    ///         Raw SQL with EVERY column aliased: an unmapped-type query binds result columns to property names, so
-    ///         <c>graph_json</c> would never reach <c>GraphJson</c> and the read would throw with the drop migration
-    ///         still committing behind it. No <c>LIMIT</c> and no option — a cap plus an unconditional drop destroys
-    ///         everything past the cap as its normal outcome.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Raw SQL with EVERY column aliased: an unmapped-type query binds result columns to property names, so
+    ///     <c>graph_json</c> would never reach <c>GraphJson</c> and the read would throw with the drop migration still
+    ///     committing behind it. No <c>LIMIT</c> and no option — a cap plus an unconditional drop destroys everything
+    ///     past the cap as its normal outcome.
+    /// </remarks>
     public static async Task<CanvasWorkflowImportSnapshot> ReadAsync(NodeChatDbContext dbContext, ILogger logger, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
@@ -139,14 +126,14 @@ public static class CanvasWorkflowImport
     /// <summary>
     ///     Writes every candidate, AFTER migrations have created the Graph Workflow tables and dropped
     ///     <c>canvas_workflows</c>.
-    ///     <para>
-    ///         The happy path goes through <see cref="IGraphWorkflowDefinitionService" />, which owns the parse, the
-    ///         node cap and the hash the save endpoint uses. A graph it refuses is saved ANYWAY through
-    ///         <see cref="IGraphWorkflowStore" /> with an <c>IMPORT NEEDS ATTENTION:</c> description: preserving the
-    ///         row beats enforcing validity on data that is about to be deleted either way. Such a definition cannot
-    ///         run until an operator edits it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The happy path goes through <see cref="IGraphWorkflowDefinitionService" />, which owns the parse, the node
+    ///     cap and the hash the save endpoint uses. A graph it refuses is saved ANYWAY through
+    ///     <see cref="IGraphWorkflowStore" /> with an <c>IMPORT NEEDS ATTENTION:</c> description: preserving the row
+    ///     beats enforcing validity on data about to be deleted either way, and such a definition cannot run until an
+    ///     operator edits it.
+    /// </remarks>
     public static async Task ImportAsync(IGraphWorkflowDefinitionService definitions,
         IGraphWorkflowStore store,
         CanvasWorkflowImportSnapshot snapshot,
@@ -194,25 +181,21 @@ public static class CanvasWorkflowImport
             failed);
     }
 
-    /// <summary>
-    ///     One canvas graph as a Graph Workflow document. PURE and TOTAL: it always answers a document, never throws
-    ///     and never refuses a graph. <c>Reasons</c> carries whatever it could not translate faithfully — the graph
-    ///     travels either way, and the validator downstream decides whether the definition can run.
-    ///     <para>
-    ///         The wiring is NOT one-for-one. A Debug node is elided and the edge rewired around it, and every Pause
-    ///         gains a context edge past it, because neither node forwarded its predecessor's document the way its
-    ///         Graph Workflow counterpart does. Both are faithfulness, not liberties: see
-    ///         <see cref="AddPauseContextEdges" /> and <see cref="ResolveTargets" />.
-    ///     </para>
-    /// </summary>
+    /// <summary>One canvas graph as a Graph Workflow document.</summary>
+    /// <remarks>
+    ///     PURE and TOTAL: it always answers a document, never throws and never refuses a graph. <c>Reasons</c>
+    ///     carries whatever it could not translate faithfully — the graph travels either way, and the validator
+    ///     downstream decides whether the definition can run. The wiring is NOT one-for-one: a Debug node is elided
+    ///     and the edge rewired around it, and every Pause gains a context edge past it, because neither forwarded its
+    ///     predecessor's document the way its counterpart does. Both are faithfulness, not liberties.
+    /// </remarks>
     internal static ImportMapResult MapGraph(string graphJson)
     {
         var reasons = new List<string>();
         var canvas = ReadCanvas(graphJson, reasons);
 
-        // A JSON null sitting among the node or edge members deserializes to a null ELEMENT. It is valid JSON, so
-        // ReadCanvas never sees an exception, and every walk below would dereference it. Dropped so the mapper stays
-        // total.
+        // A JSON null sitting among the node or edge members deserializes to a null ELEMENT. It is valid JSON, so ReadCanvas never sees an exception, and
+        // every walk below would dereference it. Dropped so the mapper stays total.
         var nodes = (canvas.Nodes ?? []).OfType<CanvasNode>().ToList();
         var edges = (canvas.Edges ?? []).OfType<CanvasEdge>().ToList();
         if (nodes.Count != (canvas.Nodes?.Count ?? 0) || edges.Count != (canvas.Edges?.Count ?? 0))
@@ -220,10 +203,8 @@ public static class CanvasWorkflowImport
             reasons.Add("The stored canvas graph carried empty node or edge entries, which could name nothing and were dropped.");
         }
 
-        // Debug nodes forward their input unchanged (they were a side-event tap), so eliding one and rewiring
-        // X -> Debug -> Y into X -> Y preserves the run's meaning exactly.
-        // Non-empty ids only: an id nothing can name is no use for rewiring, and treating "" as elided would swallow
-        // every other node that also declares none.
+        // Debug nodes forward their input unchanged (a side-event tap), so eliding one and rewiring X -> Debug -> Y into X -> Y preserves the run's meaning.
+        // Non-empty ids only: an id nothing can name is no use for rewiring, and treating "" as elided would swallow every other node that also declares none.
         var elided = new HashSet<string>(nodes.Where(static node => IsKind(node.Kind, "Debug"))
                                               .Select(static node => node.Id)
                                               .Where(static id => !string.IsNullOrEmpty(id))!,
@@ -266,9 +247,8 @@ public static class CanvasWorkflowImport
             var mappedNode = MapNode(node, key, canvas.StartText, reasons);
             mappedNodes.Add(mappedNode);
 
-            // The context-edge guards read a successor's kind and join policy off the node this mapper actually
-            // emitted, never off the canvas kind: the two guards below are stated over the DOCUMENT the validator
-            // will read, so they cannot disagree with it.
+            // The context-edge guards read a successor's kind and join policy off the node this mapper actually emitted, never off the canvas kind: the two
+            // guards below are stated over the DOCUMENT the validator will read, so they cannot disagree with it.
             nodeByKey[key] = mappedNode;
         }
 
@@ -347,9 +327,12 @@ public static class CanvasWorkflowImport
 
     /// <summary>
     ///     The deliberate fallback: bypass <c>Validate</c> and store the graph as it is, tagged so the definition list
-    ///     says out loud that it will not run. The store computes the hash and the schema version exactly as it does
-    ///     for a clean save; the node count is what the mapper wrote, because there is no parse to take it from.
+    ///     says out loud that it will not run.
     /// </summary>
+    /// <remarks>
+    ///     The store computes the hash and the schema version exactly as it does for a clean save; the node count is
+    ///     what the mapper wrote, because there is no parse to take it from.
+    /// </remarks>
     private static async Task<ImportOutcome> SaveUnvalidatedAsync(IGraphWorkflowStore store,
         CanvasWorkflowImportCandidate candidate,
         ImportMapResult map,
@@ -422,9 +405,8 @@ public static class CanvasWorkflowImport
                 ["config"] = new JsonObject
                 {
                     ["inputSchema"] = null,
-                    // A run input is a JSON document, and the editor renders a stored default as JSON text — a bare
-                    // string would round-trip as unquoted prose the editor cannot parse. The seed text rides under one
-                    // member, so the first Agent still sees it verbatim inside the Start node's input document.
+                    // A run input is a JSON document and the editor renders a stored default as JSON text, so a bare string would round-trip as unquoted prose
+                    // it cannot parse. The seed text rides under one member, so the first Agent still sees it verbatim inside the Start node's input document.
                     ["defaultInput"] = string.IsNullOrEmpty(startText)
                         ? null
                         : new JsonObject
@@ -603,46 +585,14 @@ public static class CanvasWorkflowImport
     /// <summary>
     ///     The context edge around an imported Pause: one unconditional edge from the pause's nearest NON-Pause
     ///     ancestor to a successor that would otherwise read nothing but the approval.
-    ///     <para>
-    ///         Open Canvas's Pause was a pass-through resume — its post-adapter forwarded the answer it was waiting on
-    ///         unchanged — while a Graph Workflow Pause writes a decision document of its own
-    ///         (<c>{decision, comment, payload}</c>, <c>GraphWorkflowDocuments.PauseOutput</c>). A node's <c>input</c>
-    ///         is its ONE satisfied predecessor's output document and becomes the <c>upstream</c> map only when there
-    ///         are several (<c>GraphWorkflowDocuments.ComposeInput</c>, fed by
-    ///         <c>GraphWorkflowInlineExecutor.Upstream</c>). So <c>A -> Pause -> B</c> mapped one-for-one hands B the
-    ///         approval metadata and never A's answer, and a Pause before an End loses the result the same way.
-    ///     </para>
-    ///     <para>
-    ///         The successor keeps the default <c>All</c> join policy, so it is admitted only once BOTH the content
-    ///         edge and the pause's own <c>approved</c> edge are satisfied — never ahead of the approval — and with two
-    ///         satisfied predecessors its <c>input</c> is the <c>upstream</c> map <c>{ "&lt;X&gt;": …, "&lt;P&gt;": … }</c>.
-    ///         An Agent carries <c>includeUpstreamOutputs: true</c> and so sees the ancestor's text; an End maps with
-    ///         <c>resultPath: null</c> and so carries both documents. A node may hold two inbound edges — the graph
-    ///         indexes them per node and fan-in is the node's own join policy — and the only rule over one pair is that
-    ///         at most one edge may be unconditional, which the <paramref name="pairs" /> guard below keeps.
-    ///     </para>
-    ///     <para>
-    ///         Keyed on the SUCCESSOR and gated by the same three guards as the editor's advice
-    ///         (<c>GraphWorkflowGraph.PauseContextWarnings</c>), so the importer cannot advise an edge the validator
-    ///         would refuse or that would change when a node runs. A successor qualifies only when it is STARVED —
-    ///         every one of its inbound edges leaves a Pause, so there is no other route for the content — when its
-    ///         <c>joinPolicy</c> is not <c>Any</c> (read off the mapped node, never off its kind: an unconditional
-    ///         content edge would admit an <c>Any</c> node on its own, ahead of every approval), and when the nearest
-    ///         non-Pause ancestor is UNIQUE and is not a <c>Condition</c>. Two candidates means mutually exclusive
-    ///         branches, and edges from both would hang an <c>All</c> successor on the branch never taken; a Condition
-    ///         would receive a second unconditional out-edge, which <c>GraphWorkflowGraph.ValidateCondition</c>
-    ///         refuses.
-    ///     </para>
-    ///     <para>
-    ///         The ancestry walk still passes through consecutive pauses, so <c>A -> P1 -> P2 -> B</c> gains both
-    ///         <c>A -> P2</c> and <c>A -> B</c>: the second pause sees the content it is approving too.
-    ///     </para>
-    ///     <para>
-    ///         Every guard but the first is unreachable for a real import — an Open Canvas graph carries no Condition,
-    ///         no Join and no join policy — and they are stated anyway because the rule, not today's vocabulary, is
-    ///         what the next node kind has to keep holding.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Open Canvas's Pause was a pass-through resume, while <c>GraphWorkflowDocuments.PauseOutput</c> writes a
+    ///     decision document of its own, and <c>GraphWorkflowDocuments.ComposeInput</c> — fed by
+    ///     <c>GraphWorkflowInlineExecutor.Upstream</c> — hands a node its ONE satisfied predecessor's output, so
+    ///     <c>A -&gt; Pause -&gt; B</c> gives B the approval and never A's answer. Keyed on the SUCCESSOR and gated by
+    ///     <c>GraphWorkflowGraph.PauseContextWarnings</c>, whose Condition arm is <c>GraphWorkflowGraph.ValidateCondition</c>: docs/wiki/21-graph-workflows.md ("The mapping").
+    /// </remarks>
     private static void AddPauseContextEdges(HashSet<string> pauseKeys,
         IReadOnlyDictionary<string, JsonObject> nodeByKey,
         HashSet<(string From, string To)> pairs,
@@ -653,10 +603,8 @@ public static class CanvasWorkflowImport
         // A snapshot: the walk reads the canvas's own wiring and never the context edges this loop adds to it.
         var wiring = pairs.ToList();
 
-        // Reached through the pauses, but DECIDED on the successor: a pause with no successor is in no pair at all and
-        // so gets nothing to bypass to. That graph is already an IMPORT NEEDS ATTENTION case — the pre-flight rule
-        // refuses a pause whose one answer arrives nowhere — and inventing an edge here would not save it. A successor
-        // several pauses reach is considered ONCE, over the union of what all of them are fed by.
+        // Reached through the pauses, but DECIDED on the successor: a pause with no successor is in no pair and gets nothing to bypass to, which is already an
+        // IMPORT NEEDS ATTENTION case. A successor several pauses reach is considered ONCE, over the union of what all of them are fed by.
         var advised = new HashSet<string>(StringComparer.Ordinal);
         foreach (var successor in pauseKeys.Order(StringComparer.Ordinal)
                                            .SelectMany(pause => wiring.Where(pair => string.Equals(pair.From, pause, StringComparison.Ordinal))
@@ -718,9 +666,9 @@ public static class CanvasWorkflowImport
 
     /// <summary>
     ///     A mapped node's join policy, parsed with the SAME token reader the graph parser uses so the importer cannot
-    ///     read a member the validator would read differently. Absent — which is every node this mapper emits today —
-    ///     or unparseable falls back to the parser's own default.
+    ///     read a member the validator would read differently.
     /// </summary>
+    /// <remarks>Absent — which every node this mapper emits is — or unparseable falls back to the parser's own default.</remarks>
     private static GraphWorkflowJoinPolicy JoinPolicyOf(IReadOnlyDictionary<string, JsonObject> nodeByKey, string key) =>
         nodeByKey.TryGetValue(key, out var node)
         && GraphWorkflowTokens.TryParseName<GraphWorkflowJoinPolicy>(node["joinPolicy"]?.GetValue<string>(), out var parsed)
@@ -736,10 +684,13 @@ public static class CanvasWorkflowImport
 
     /// <summary>
     ///     The nodes a pause's content really comes from: its predecessors, with consecutive Pause nodes walked
-    ///     through, because a pause's own output is the approval rather than the answer. The seen-set stops the walk on
-    ///     a damaged row that loops a pause back into itself. <c>Start</c> is a fine answer — its output is the run's
-    ///     input, which is exactly the content a node behind the pause would otherwise have read.
+    ///     through, because a pause's own output is the approval rather than the answer.
     /// </summary>
+    /// <remarks>
+    ///     The seen-set stops the walk on a damaged row that loops a pause back into itself. <c>Start</c> is a fine
+    ///     answer — its output is the run's input, which is exactly the content a node behind the pause would
+    ///     otherwise have read.
+    /// </remarks>
     private static List<string> NonPauseAncestors(string pause, HashSet<string> pauseKeys, List<(string From, string To)> wiring)
     {
         var resolved = new List<string>();
@@ -774,12 +725,15 @@ public static class CanvasWorkflowImport
     }
 
     /// <summary>
-    ///     Where an edge into <paramref name="targetId" /> really lands: itself, or — when it is an elided Debug node —
-    ///     whatever that node pointed at, transitively. A Debug node with no successor is recorded in
-    ///     <paramref name="stranded" /> rather than silently swallowing the edge; one whose successors only lead back
-    ///     to Debug nodes the walk already passed through resolves to nothing for the same reason and is recorded in
-    ///     <paramref name="circular" />, because the seen-set stops the walk without either list ever growing.
+    ///     Where an edge into <paramref name="targetId" /> really lands: itself, or — when it is an elided Debug node
+    ///     — whatever that node pointed at, transitively.
     /// </summary>
+    /// <remarks>
+    ///     A Debug node with no successor is recorded in <paramref name="stranded" /> rather than silently swallowing
+    ///     the edge; one whose successors only lead back to Debug nodes the walk already passed through resolves to
+    ///     nothing for the same reason and is recorded in <paramref name="circular" />, because the seen-set stops the
+    ///     walk without either list ever growing.
+    /// </remarks>
     private static List<string> ResolveTargets(string targetId,
         HashSet<string> elided,
         Dictionary<string, List<string>> successors,

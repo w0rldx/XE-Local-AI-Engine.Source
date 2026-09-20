@@ -4,20 +4,20 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
 ///     The tool gate over a parsed graph: every <c>Tool</c> node must name a tool
-///     <see cref="IToolInvocationService" /> would actually invoke. Save time and run start ask the SAME question of
-///     the same catalog, so a definition accepted at save is refused at start only because the envelope tightened in
-///     between — which is the case the run-start check exists for.
+///     <see cref="IToolInvocationService" /> would actually invoke.
 /// </summary>
+/// <remarks>
+///     Save time and run start ask the SAME question of the same catalog, so a definition accepted at save is refused
+///     at start only because the envelope tightened in between — which is the case the run-start check exists for.
+/// </remarks>
 internal static class GraphWorkflowToolGate
 {
-    /// <summary>
-    ///     One error per offending <c>Tool</c> node, keyed by NODE KEY so the editor draws it on that node. Empty for a
-    ///     graph whose tools are all invocable, which is what lets both callers treat "no errors" as the whole answer.
-    ///     <para>
-    ///         A tool outside the envelope is an ERROR, never a warning: a workflow node runs unattended, so a write,
-    ///         execute or approval-gated tool has nobody to ask (ADR 0006).
-    ///     </para>
-    /// </summary>
+    /// <summary>One error per offending <c>Tool</c> node, keyed by NODE KEY so the editor draws it on that node.</summary>
+    /// <remarks>
+    ///     Empty for a graph whose tools are all invocable, which is what lets both callers treat "no errors" as the
+    ///     whole answer. A tool outside the envelope is an ERROR, never a warning: a workflow node runs unattended, so
+    ///     a write, execute or approval-gated tool has nobody to ask (ADR 0006).
+    /// </remarks>
     public static async Task<IReadOnlyList<GraphWorkflowValidationError>> ErrorsAsync(GraphWorkflowGraph graph,
         IToolInvocationService tools,
         CancellationToken cancellationToken)

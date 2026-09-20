@@ -6,12 +6,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// <summary>
 ///     The parsed, in-memory projection of a definition's or a run's pinned <c>graph_json</c> — the single source of
 ///     routing truth.
-///     <para>
-///         <see cref="Parse" /> is the only entry point and parsing IS the validation: a graph that survives it is one
-///         the dispatcher can route without a second opinion. Save time and run start share it, so a graph accepted at
-///         save is one that will start.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Parse" /> is the only entry point and parsing IS the validation: a graph that survives it is one the
+///     dispatcher can route without a second opinion. Save time and run start share it, so a graph accepted at save is
+///     one that will start.
+/// </remarks>
 internal sealed class GraphWorkflowGraph
 {
     private const int SupportedSchemaVersion = 1;
@@ -34,9 +34,9 @@ internal sealed class GraphWorkflowGraph
 
     /// <summary>
     ///     The reasoning efforts an Agent node may name, which are the ones an agent definition may pin — the override
-    ///     has to be sayable in the same vocabulary as the pin it replaces. Not an enum: this travels to the provider as
-    ///     the string it is written as.
+    ///     has to be sayable in the same vocabulary as the pin it replaces.
     /// </summary>
+    /// <remarks>Not an enum: this travels to the provider as the string it is written as.</remarks>
     private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high"];
 
     /// <summary>
@@ -58,13 +58,15 @@ internal sealed class GraphWorkflowGraph
 
     /// <summary>
     ///     The JSON Schema keywords the OpenAI strict-schema transform MOVES INTO A DESCRIPTION on its way to the
-    ///     grammar, so a response schema that carries one is asking for something the runtime will not check. The
-    ///     transform is applied unconditionally by the <c>Microsoft.Extensions.AI.OpenAI</c> adapter behind
-    ///     <c>ChatResponseFormat.ForJsonSchema</c> and has no opt-out, which is why this is a warning at authoring time
-    ///     rather than a fix in the executor. Structure — <c>enum</c>, <c>required</c>, <c>type</c>, the object shape —
-    ///     IS enforced, so none of that is listed here. <c>default</c> is relocated the same way by the transform's own
-    ///     <c>MoveDefaultKeywordToDescription</c>, so it belongs on this list rather than among the structure.
+    ///     grammar, so a response schema that carries one is asking for something the runtime will not check.
     /// </summary>
+    /// <remarks>
+    ///     The transform is applied unconditionally by the <c>Microsoft.Extensions.AI.OpenAI</c> adapter behind
+    ///     <c>ChatResponseFormat.ForJsonSchema</c> and has no opt-out, which is why this is a warning at authoring
+    ///     time rather than a fix in the executor. Structure — <c>enum</c>, <c>required</c>, <c>type</c>, the object
+    ///     shape — IS enforced and is not listed. <c>default</c> is relocated the same way by the transform's own
+    ///     <c>MoveDefaultKeywordToDescription</c>, so it belongs here rather than among the structure.
+    /// </remarks>
     private static readonly HashSet<string> DroppedSchemaKeywords = new(StringComparer.Ordinal)
     {
         "contentEncoding",
@@ -93,12 +95,15 @@ internal sealed class GraphWorkflowGraph
     };
 
     /// <summary>
-    ///     The members whose value is a sub-schema the transform DESCENDS INTO, beyond the two the walk handles itself.
+    ///     The members whose value is a sub-schema the transform DESCENDS INTO, beyond the two the walk handles
+    ///     itself.
+    /// </summary>
+    /// <remarks>
     ///     <c>TransformSchemaCore</c> recurses through exactly <c>properties</c>, <c>items</c>,
     ///     <c>additionalProperties</c>, <c>not</c>, <c>anyOf</c>, <c>oneOf</c> and <c>allOf</c> — so <c>$defs</c>,
     ///     <c>definitions</c> and <c>prefixItems</c> are left alone, and a constraint parked in one of them is neither
     ///     relocated nor worth a warning.
-    /// </summary>
+    /// </remarks>
     private static readonly string[] NestedSchemaMembers = ["items", "anyOf", "oneOf", "allOf"];
 
     /// <summary>Detached from its document by <c>Clone</c>, so a node that declares no config reads as an empty one.</summary>
@@ -147,14 +152,12 @@ internal sealed class GraphWorkflowGraph
     /// </summary>
     public IReadOnlyList<string> EntryNodeKeys { get; }
 
-    /// <summary>
-    ///     Nodes no edge leaves — what "the run got somewhere" means. A run is <c>Completed</c> only once one of these
-    ///     SUCCEEDED, so a tail that was skipped cannot read as the run having done its job.
-    ///     <para>
-    ///         Under the <c>End</c> rules this set and the <c>End</c> nodes coincide by construction, which is why the
-    ///         state machine keeps reading this rather than the kind.
-    ///     </para>
-    /// </summary>
+    /// <summary>Nodes no edge leaves — what "the run got somewhere" means.</summary>
+    /// <remarks>
+    ///     A run is <c>Completed</c> only once one of these SUCCEEDED, so a tail that was skipped cannot read as the
+    ///     run having done its job. Under the <c>End</c> rules this set and the <c>End</c> nodes coincide by
+    ///     construction, which is why the state machine keeps reading this rather than the kind.
+    /// </remarks>
     public IReadOnlySet<string> TerminalNodeKeys { get; }
 
     /// <summary>
@@ -163,19 +166,23 @@ internal sealed class GraphWorkflowGraph
     /// </summary>
     public IReadOnlyList<string> ToolNodeNames { get; }
 
-    /// <summary>
-    ///     What is worth saying about a graph that routes anyway. Non-blocking by construction: nothing here reaches
-    ///     <see cref="GraphWorkflowValidationException" />, so a graph with warnings saves, validates as valid and runs.
-    ///     Computed on the first ask, because only the validate endpoint asks and every dispatcher tick parses.
-    /// </summary>
+    /// <summary>What is worth saying about a graph that routes anyway.</summary>
+    /// <remarks>
+    ///     Non-blocking by construction: nothing here reaches <see cref="GraphWorkflowValidationException" />, so a
+    ///     graph with warnings saves, validates as valid and runs. Computed on the first ask, because only the
+    ///     validate endpoint asks and every dispatcher tick parses.
+    /// </remarks>
     public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= [.. PauseContextWarnings(), .. ResponseSchemaWarnings];
 
     /// <summary>
-    ///     The response-schema half of <see cref="Warnings" />, exposed on its own because it is the half a
-    ///     caller may have grounds to drop: the rewrite it warns about is the OpenAI adapter's, and the llama.cpp
-    ///     lane now sends the schema as authored. The parser cannot make that call itself — it has no way to reach
-    ///     the model-to-provider map — so <c>GraphWorkflowDefinitionService</c> filters these per node instead.
+    ///     The response-schema half of <see cref="Warnings" />, exposed on its own because it is the half a caller may
+    ///     have grounds to drop.
     /// </summary>
+    /// <remarks>
+    ///     The rewrite it warns about is the OpenAI adapter's, and the llama.cpp lane sends the schema as authored.
+    ///     The parser cannot make that call itself — it has no way to reach the model-to-provider map — so
+    ///     <c>GraphWorkflowDefinitionService</c> filters these per node instead.
+    /// </remarks>
     internal IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings => _responseSchemaWarnings ??= BuildResponseSchemaWarnings();
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
@@ -204,9 +211,12 @@ internal sealed class GraphWorkflowGraph
 
     /// <summary>
     ///     Every node that reaches <paramref name="to" /> by following out-edges, excluding itself — the mirror of
-    ///     <see cref="Descendants" />, over the inbound index. This is what "upstream of" means on a graph with more
-    ///     than one branch: a node on a PARALLEL branch is neither an ancestor nor a descendant.
+    ///     <see cref="Descendants" />, over the inbound index.
     /// </summary>
+    /// <remarks>
+    ///     This is what "upstream of" means on a graph with more than one branch: a node on a PARALLEL branch is
+    ///     neither an ancestor nor a descendant.
+    /// </remarks>
     public IReadOnlySet<string> Ancestors(string to)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -224,20 +234,14 @@ internal sealed class GraphWorkflowGraph
         return seen;
     }
 
-    /// <summary>
-    ///     Parses the graph and enforces every rule. Two kinds of failure, on purpose: a malformed document and the
-    ///     whole-graph structural rules THROW immediately, because there is nothing useful to say about the rest of a
-    ///     graph nobody can walk; every per-node and per-edge failure ACCUMULATES, keyed by the element it belongs to,
-    ///     so an author fixing a canvas gets every complaint at once.
-    ///     <para>
-    ///         <paramref name="maxNodes" /> is the caller's node cap, checked against the declared array BEFORE any
-    ///         node is read or any edge walked — the cap is what bounds the work this parse does, so enforcing it
-    ///         afterwards would bound nothing. It is passed as a number rather than read from options, so this stays
-    ///         testable without a container. A caller that omits it parses a graph that was already capped when it was
-    ///         saved: the run engine and the dispatcher re-parse stored graphs, and a cap lowered since would make a
-    ///         live run unroutable rather than merely unsaveable.
-    ///     </para>
-    /// </summary>
+    /// <summary>Parses the graph and enforces every rule.</summary>
+    /// <remarks>
+    ///     Two kinds of failure, on purpose: a malformed document and the whole-graph structural rules THROW
+    ///     immediately, because nothing useful can be said about the rest of a graph nobody can walk, while every
+    ///     per-node and per-edge failure ACCUMULATES, keyed by the element it belongs to, so an author fixing a canvas
+    ///     gets every complaint at once. <paramref name="maxNodes" /> is checked against the DECLARED array before a
+    ///     node is read, is passed as a number so this stays testable, and is omitted by the callers re-parsing a stored graph, where a cap lowered since would make a live run unroutable.
+    /// </remarks>
     public static GraphWorkflowGraph Parse(string graphJson, int maxNodes = int.MaxValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphJson);
@@ -321,9 +325,8 @@ internal sealed class GraphWorkflowGraph
             throw new GraphWorkflowValidationException("A graph workflow definition needs a 'nodes' array.");
         }
 
-        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph,
-        // and only the body size would otherwise bound how far. Duplicate keys are refused below, so this length and
-        // the parsed node count are the same number wherever the parse survives.
+        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph, and only the body size would otherwise bound
+        // how far. Duplicate keys are refused below, so this length and the parsed node count are the same number wherever the parse survives.
         var declared = nodesElement.GetArrayLength();
         if (declared > maxNodes)
         {
@@ -443,11 +446,11 @@ internal sealed class GraphWorkflowGraph
         };
     }
 
-    /// <summary>
-    ///     The node's reasoning-effort override, checked against the four the agent surface itself accepts. An unknown
-    ///     token is refused here rather than dropped at dispatch: unlike a model name, this vocabulary is closed and
-    ///     cannot go stale between authoring and a run.
-    /// </summary>
+    /// <summary>The node's reasoning-effort override, checked against the four the agent surface itself accepts.</summary>
+    /// <remarks>
+    ///     An unknown token is refused here rather than dropped at dispatch: unlike a model name, this vocabulary is
+    ///     closed and cannot go stale between authoring and a run.
+    /// </remarks>
     private static string? ParseReasoningEffort(JsonElement config, string nodeKey)
     {
         var effort = TrimmedOptionalString(config, "reasoningEffort");
@@ -567,9 +570,8 @@ internal sealed class GraphWorkflowGraph
             var from = RequiredString(element, "from", $"edge '{edgeKey}'");
             var to = RequiredString(element, "to", $"edge '{edgeKey}'");
 
-            // Structural, and deliberately not accumulated: the inbound and outbound indexes are built on these two, so
-            // collecting past an endpoint the graph does not declare walks an adjacency that is already wrong and every
-            // later complaint is noise.
+            // Structural, and deliberately not accumulated: the inbound and outbound indexes are built on these two, so collecting past an endpoint the graph
+            // does not declare walks an adjacency that is already wrong, and every later complaint is noise.
             if (!nodes.ContainsKey(from) || !nodes.ContainsKey(to))
             {
                 throw new GraphWorkflowValidationException($"Edge '{edgeKey}' ('{from}' → '{to}') names a node the graph does not declare.");
@@ -604,11 +606,12 @@ internal sealed class GraphWorkflowGraph
         return GraphWorkflowCondition.Parse(condition, $"'{edgeKey}' ('{from}' → '{to}')", defaultPath);
     }
 
-    /// <summary>
-    ///     The rules, in two halves. The structural ones throw as they are found — a graph with no <c>Start</c>, a
-    ///     cycle or an unreachable node is one nothing can walk, so there is nothing useful to say about the rest of
-    ///     it. Everything after them accumulates against the node or edge it belongs to.
-    /// </summary>
+    /// <summary>The rules, in two halves.</summary>
+    /// <remarks>
+    ///     The structural ones throw as they are found — a graph with no <c>Start</c>, a cycle or an unreachable node
+    ///     is one nothing can walk, so there is nothing useful to say about the rest of it. Everything after them
+    ///     accumulates against the node or edge it belongs to.
+    /// </remarks>
     private void Validate(List<GraphWorkflowValidationError> errors)
     {
         var starts = Nodes.Values.Where(static node => node.Kind == GraphWorkflowNodeKind.Start)
@@ -722,11 +725,12 @@ internal sealed class GraphWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     The pre-flight rule: every decision this pause offers has somewhere to go. Asked through the state machine's
-    ///     own routing over the document a pause actually stores, never by re-reading the condition — so the rule and
-    ///     the routing cannot disagree about which answer reaches which branch.
-    /// </summary>
+    /// <summary>The pre-flight rule: every decision this pause offers has somewhere to go.</summary>
+    /// <remarks>
+    ///     Asked through the state machine's own routing over the document a pause actually stores, never by
+    ///     re-reading the condition — so the rule and the routing cannot disagree about which answer reaches which
+    ///     branch.
+    /// </remarks>
     private static void ValidatePause(GraphWorkflowGraphNode node,
         GraphWorkflowPauseConfig pause,
         IReadOnlyList<GraphWorkflowGraphEdge> outbound,
@@ -743,34 +747,14 @@ internal sealed class GraphWorkflowGraph
     /// <summary>
     ///     The one warning this parser raises: a node whose every inbound edge leaves a <c>Pause</c> receives the
     ///     DECISION document and nothing else.
-    ///     <para>
-    ///         A Pause writes <c>{decision, comment, payload}</c> (<c>GraphWorkflowDocuments.PauseOutput</c>) and a
-    ///         node's <c>input</c> is its ONE satisfied predecessor's output document — it becomes the
-    ///         <c>upstream</c> map only when several are satisfied. So <c>X → P → Y</c>, authored one-for-one, hands Y
-    ///         the approval and never X's answer, and a Pause before an <c>End</c> loses the result the same way. The
-    ///         cure is an edge from the pause's nearest non-Pause ancestor to Y, which is exactly what the Open Canvas
-    ///         importer adds for itself (<c>CanvasWorkflowImport.AddPauseContextEdges</c>); an author gets this instead.
-    ///     </para>
-    ///     <para>
-    ///         Keyed on Y, not on the pause, because Y is the node that loses the content and so the node an editor
-    ///         should draw the badge on. One warning per Y however many pauses reach it.
-    ///     </para>
-    ///     <para>
-    ///         A successor whose <c>joinPolicy</c> is <c>Any</c> is EXEMPT, whatever its KIND, and that is a
-    ///         correctness rule rather than a taste one. The advised edge is unconditional, so it stays satisfied when
-    ///         every approval is rejected — an <c>Any</c> node would then be admitted on the content edge alone and run
-    ///         the branch the rejections were meant to stop. Collecting the decision documents is what such a node is
-    ///         FOR, so there is nothing to warn about. An <c>All</c> successor waits for the approval edges too, so it
-    ///         keeps both the warning and the advice.
-    ///     </para>
-    ///     <para>
-    ///         The ancestor is NAMED only when it is unique AND not a <c>Condition</c>. Two candidates means the pause
-    ///         is fed by mutually exclusive branches, and edges from both would leave an <c>All</c> successor waiting
-    ///         on the branch that was never taken. A Condition cannot be named because the edge would be that node's
-    ///         second unconditional out-edge, which <see cref="ValidateCondition" /> refuses. Either way the generic
-    ///         sentence stands: advice that turns a warning into a hang or an error is worse than no advice.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <c>GraphWorkflowDocuments.PauseOutput</c> writes <c>{decision, comment, payload}</c>, and a node's
+    ///     <c>input</c> is its ONE satisfied predecessor's output — so <c>X → P → Y</c>, authored one-for-one, hands Y
+    ///     the approval and never X's answer, and a Pause before an <c>End</c> loses the result the same way. The cure
+    ///     is an edge from the nearest non-Pause ancestor, which <c>CanvasWorkflowImport.AddPauseContextEdges</c> adds
+    ///     for itself. Who is warned, who is exempt, when the ancestor is named: docs/wiki/21-graph-workflows.md ("Whole-graph rules").
+    /// </remarks>
     private IReadOnlyList<GraphWorkflowValidationError> PauseContextWarnings()
     {
         var warnings = new List<GraphWorkflowValidationError>();
@@ -795,37 +779,16 @@ internal sealed class GraphWorkflowGraph
     }
 
     /// <summary>
-    ///     What an Agent node's <c>responseJsonSchema</c> asks for that the run will not deliver. One warning per node,
-    ///     because the author's next move is to open that node and edit one schema whatever the schema got wrong.
-    ///     <para>
-    ///         What rewrites it: the schema travels through <c>ChatResponseFormat.ForJsonSchema</c> and the
-    ///         <c>Microsoft.Extensions.AI.OpenAI</c> adapter, whose strict-schema transform runs unconditionally and
-    ///         cannot be opted out of. That transform relocates the value keywords in
-    ///         <see cref="DroppedSchemaKeywords" /> into the property's <c>description</c>, marks every declared property
-    ///         <c>required</c>, and injects <c>additionalProperties: false</c> into any object that declares
-    ///         <c>properties</c> and does NOT already say what it wants. The grammar is then built from the REWRITTEN
-    ///         schema, so <c>maxLength: 3</c> is a hint the model may read and nothing enforces, while a property the
-    ///         author left optional comes back mandatory. Structure — <c>type</c>, <c>enum</c>, <c>required</c>, the
-    ///         object shape — survives, which is why none of it is warned about.
-    ///     </para>
-    ///     <para>
-    ///         WHICH NODES THIS IS TRUE OF, since S7: not the llama.cpp ones any more.
-    ///         <c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c> now writes the AUTHOR'S schema onto
-    ///         the request body itself, which the adapter leaves alone (it fills its own response format in with
-    ///         <c>??=</c>), so a node whose model is served by llama-server receives every keyword as written — bounds
-    ///         above <c>LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound</c> excepted, because llama.cpp
-    ///         cannot compile those into a grammar at all. The rewrite still happens on every other runtime. The parser
-    ///         cannot tell which is which — the model-to-provider map is not reachable from here — so it raises the
-    ///         warning for every Agent node and <c>GraphWorkflowDefinitionService.ValidateAsync</c> drops the ones whose
-    ///         pinned model resolves to llama-server. A node with no model pin keeps its warning: what it inherits is
-    ///         not known at save time.
-    ///     </para>
-    ///     <para>
-    ///         Warned rather than refused: a schema is still useful with the constraints in it, the transform is the
-    ///         adapter's business and could change, and every one of these graphs runs. The whole point is that the
-    ///         author stops believing the parts that do not hold.
-    ///     </para>
+    ///     What an Agent node's <c>responseJsonSchema</c> asks for that the run will not deliver, one warning per node
+    ///     because the author's next move is to open that node and edit one schema whatever it got wrong.
     /// </summary>
+    /// <remarks>
+    ///     The schema travels through <c>ChatResponseFormat.ForJsonSchema</c> and the
+    ///     <c>Microsoft.Extensions.AI.OpenAI</c> adapter, whose strict-schema transform runs unconditionally: it moves
+    ///     the keywords in <see cref="DroppedSchemaKeywords" /> into a <c>description</c>, marks every declared
+    ///     property <c>required</c>, and injects <c>additionalProperties: false</c> where the key is absent. A bound
+    ///     above <c>LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound</c> is stripped on every runtime; the rest: docs/wiki/21-graph-workflows.md ("Whole-graph rules").
+    /// </remarks>
     private IReadOnlyList<GraphWorkflowValidationError> BuildResponseSchemaWarnings()
     {
         var warnings = new List<GraphWorkflowValidationError>();
@@ -847,14 +810,14 @@ internal sealed class GraphWorkflowGraph
         return warnings;
     }
 
-    /// <summary>
-    ///     The middle of the sentence, or <c>null</c> when the schema survives the transform intact. Walked breadth-first
-    ///     on an explicit queue over exactly the positions the transform itself recurses through, so a constraint buried
-    ///     under <c>items</c> is found and one parked in a <c>$defs</c> pool is correctly ignored. No depth guard of its
-    ///     own: the schema came out of <see cref="JsonDocument" />, whose own 64-level limit already refused anything
-    ///     deeper at parse time. Optional property names are deduplicated by NAME rather than by path, so the same name
-    ///     left optional on two sub-objects is said once — a sentence naming the problem, not an inventory of every site.
-    /// </summary>
+    /// <summary>The middle of the sentence, or <c>null</c> when the schema survives the transform intact.</summary>
+    /// <remarks>
+    ///     Walked breadth-first on an explicit queue over exactly the positions the transform itself recurses
+    ///     through, so a constraint buried under <c>items</c> is found and one parked in a <c>$defs</c> pool is
+    ///     ignored. No depth guard of its own: the schema came out of <see cref="JsonDocument" />, whose 64-level
+    ///     limit already refused anything deeper. Optional property names are deduplicated by NAME rather than by
+    ///     path, so the same name left optional on two sub-objects is said once, naming the problem not every site.
+    /// </remarks>
     private static string? DescribeSchema(JsonElement schema)
     {
         var dropped = new List<string>();
@@ -897,9 +860,8 @@ internal sealed class GraphWorkflowGraph
                 }
             }
 
-            // ABSENT is the case that changes: the transform injects `additionalProperties: false` only where the
-            // key is missing, so a schema that already SAYS what it wants — `false`, `true`, or a sub-schema — keeps
-            // it. An explicit `true` becomes `{}` on the way through and is still open at the grammar.
+            // ABSENT is the case that changes: the transform injects `additionalProperties: false` only where the key is missing, so a schema that already SAYS
+            // what it wants — `false`, `true`, or a sub-schema — keeps it. An explicit `true` becomes `{}` on the way through and is still open at the grammar.
             if (current.TryGetProperty("additionalProperties", out var additional))
             {
                 pending.Enqueue(additional);
@@ -941,11 +903,13 @@ internal sealed class GraphWorkflowGraph
 
     /// <summary>
     ///     Every sub-schema of <paramref name="schema" /> other than the two its caller already walked: array items in
-    ///     both the single-schema and the tuple spelling, and the composition keywords. <c>not</c> is descended by the
-    ///     transform but not here, along with the other relocated keywords that happen to CONTAIN a schema
-    ///     (<c>contains</c>, <c>propertyNames</c>, <c>patternProperties</c>): <c>not</c> itself is moved into a
-    ///     description afterwards, so nothing under it reaches the grammar to be warned about twice.
+    ///     both the single-schema and the tuple spelling, and the composition keywords.
     /// </summary>
+    /// <remarks>
+    ///     <c>not</c> is descended by the transform but not here, along with the other relocated keywords that happen
+    ///     to CONTAIN a schema (<c>contains</c>, <c>propertyNames</c>, <c>patternProperties</c>): <c>not</c> itself is
+    ///     moved into a description afterwards, so nothing under it reaches the grammar to be warned about twice.
+    /// </remarks>
     private static IEnumerable<JsonElement> NestedSchemas(JsonElement schema)
     {
         foreach (var name in NestedSchemaMembers)
@@ -981,22 +945,24 @@ internal sealed class GraphWorkflowGraph
     /// <summary>
     ///     A node that fires on its FIRST satisfied inbound edge — the one successor the pause-context advice must not
     ///     be given for, because an unconditional content edge would admit it on its own, ahead of any approval.
-    ///     <para>
-    ///         Read off <c>joinPolicy</c> ALONE and never off the kind. A join policy is a property of every node
-    ///         (<c>GraphWorkflowStateMachine.Admission</c> reads <c>node.JoinPolicy</c> with no kind check, and the
-    ///         wiki's own example puts <c>Any</c> on an <c>End</c>), so testing for a <c>Join</c> node here would have
-    ///         missed an <c>Agent</c> or <c>End</c> that declared the same policy — which is the documented trap about
-    ///         reading a join policy off the Join kind.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Read off <c>joinPolicy</c> ALONE and never off the kind. A join policy is a property of every node —
+    ///     <c>GraphWorkflowStateMachine.Admission</c> reads <c>node.JoinPolicy</c> with no kind check — so testing for
+    ///     a <c>Join</c> node here would miss an <c>Agent</c> or <c>End</c> declaring the same policy, which is the
+    ///     documented trap about reading a join policy off the Join kind.
+    /// </remarks>
     private bool FiresOnOneBranch(string nodeKey) =>
         Nodes[nodeKey].JoinPolicy == GraphWorkflowJoinPolicy.Any;
 
     /// <summary>
     ///     Where a pause's content really comes from: its predecessors, walking THROUGH consecutive pauses, because a
-    ///     pause's own output is the approval rather than the answer. <c>Start</c> is a fine answer — its output is the
-    ///     run's input, which is exactly what a node behind the pause would otherwise have read.
+    ///     pause's own output is the approval rather than the answer.
     /// </summary>
+    /// <remarks>
+    ///     <c>Start</c> is a fine answer — its output is the run's input, which is exactly what a node behind the
+    ///     pause would otherwise have read.
+    /// </remarks>
     private IReadOnlyList<string> NearestNonPauseAncestors(string pause)
     {
         var resolved = new List<string>();
@@ -1026,12 +992,12 @@ internal sealed class GraphWorkflowGraph
 
     /// <summary>
     ///     Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.
-    ///     <para>
-    ///         Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack
-    ///         frame per node — a stack overflow is a process kill nothing can catch, and this parse runs on a
-    ///         thread-pool thread. The frame is the node plus how far through its out-edges the walk has got.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack
+    ///     frame per node — a stack overflow is a process kill nothing can catch, and this parse runs on a thread-pool
+    ///     thread. The frame is the node plus how far through its out-edges the walk has got.
+    /// </remarks>
     private void EnsureAcyclic()
     {
         var onPath = new HashSet<string>(StringComparer.Ordinal);
@@ -1098,11 +1064,11 @@ internal sealed class GraphWorkflowGraph
     private static string? OptionalString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
-    /// <summary>
-    ///     An optional string, trimmed, with a blank one read as ABSENT rather than refused. A cleared picker sends
-    ///     <c>""</c> and older documents already hold one, and a run that cannot be routed because a field says nothing
-    ///     is a worse answer than the field simply not applying.
-    /// </summary>
+    /// <summary>An optional string, trimmed, with a blank one read as ABSENT rather than refused.</summary>
+    /// <remarks>
+    ///     A cleared picker sends <c>""</c> and older documents already hold one, and a run that cannot be routed
+    ///     because a field says nothing is a worse answer than the field simply not applying.
+    /// </remarks>
     private static string? TrimmedOptionalString(JsonElement element, string name) =>
         OptionalString(element, name)?.Trim() is { Length: > 0 } value ? value : null;
 
@@ -1148,11 +1114,12 @@ internal sealed class GraphWorkflowGraph
         };
     }
 
-    /// <summary>
-    ///     A required enum member BY NAME. Never <c>Enum.TryParse</c> on its own: that accepts a numeric token, so
-    ///     <c>"kind": "9"</c> would parse into a value no member has and reach the per-kind config table as a missing
-    ///     key rather than as the refusal an author can read.
-    /// </summary>
+    /// <summary>A required enum member BY NAME.</summary>
+    /// <remarks>
+    ///     Never <c>Enum.TryParse</c> on its own: that accepts a numeric token, so <c>"kind": "9"</c> would parse into
+    ///     a value no member has and reach the per-kind config table as a missing key rather than as the refusal an
+    ///     author can read.
+    /// </remarks>
     private static TEnum RequiredEnum<TEnum>(JsonElement element, string name, string owner)
         where TEnum : struct, Enum =>
         GraphWorkflowTokens.TryParseName<TEnum>(OptionalString(element, name), out var parsed)

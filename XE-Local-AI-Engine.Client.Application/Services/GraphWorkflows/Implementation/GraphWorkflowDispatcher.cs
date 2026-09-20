@@ -8,21 +8,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The run engine's one loop. It advances a persisted run by transitioning persisted node runs and holds no
-///     authoritative state of its own — the parsed-graph cache is a cost optimisation and nothing else, which is
-///     exactly why a restart costs at most the work in flight.
-///     <para>
-///         <b>Every dispatch-side status write happens inside a serialized <see cref="AdvanceOnceAsync" /> call.</b>
-///         That is the invariant the design rests on: a lane's work produces a pollable RESULT and never transitions a
-///         row itself, so the only other writers to a run are the human command paths — which is what the store's
-///         <c>Any</c> version sentinel exists for.
-///     </para>
-///     <para>
-///         Advancement is a pure database decision and takes microseconds, so one loop for every run is enough and
-///         gives one place where graph invariants are decided. Seam if the run count ever justifies it: partition by
-///         run id. Nothing here assumes it is alone.
-///     </para>
+///     The run engine's one loop, advancing a persisted run by transitioning persisted node runs and holding no
+///     authoritative state of its own.
 /// </summary>
+/// <remarks>
+///     The parsed-graph cache is a cost optimisation and nothing else, which is why a restart costs at most the work
+///     in flight. <b>Every dispatch-side status write happens inside a serialized <see cref="AdvanceOnceAsync" />
+///     call</b>: a lane's work produces a pollable RESULT and never transitions a row itself, so the only other
+///     writers to a run are the human command paths, which is what the store's <c>Any</c> version sentinel exists for.
+///     Advancement is a pure database decision taking microseconds, so one loop serves every run; the seam if the count ever justifies one is to partition by run id.
+/// </remarks>
 internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, IHostedService, IAsyncDisposable
 {
     /// <summary>The run statuses a sweep looks at. The three terminals are not advanced by a tick.</summary>
@@ -34,12 +29,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         GraphWorkflowRunStatus.Cancelling
     ];
 
-    /// <summary>
-    ///     How many runs of one status a sweep pages in. Generous rather than tuned, and deliberately NOT
-    ///     <c>MaxConcurrentRuns</c>: that is an admission cap, and using it as a page size here would order live runs by
-    ///     creation date and then silently stop sweeping everything past it — the oldest stuck run, which is exactly the
-    ///     one a sweep exists to rescue.
-    /// </summary>
+    /// <summary>How many runs of one status a sweep pages in.</summary>
+    /// <remarks>
+    ///     Generous rather than tuned, and deliberately NOT <c>MaxConcurrentRuns</c>: that is an admission cap, and
+    ///     using it as a page size here would order live runs by creation date and then silently stop sweeping
+    ///     everything past it — the oldest stuck run, which is exactly the one a sweep exists to rescue.
+    /// </remarks>
     private const int SweepPageSize = 500;
 
     /// <summary>
@@ -62,12 +57,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     private readonly SemaphoreSlim _advanceGate = new(initialCount: 1, maxCount: 1);
     private readonly CancellationTokenSource _stopping = new();
 
-    /// <summary>
-    ///     The parsed graph per live run. No cache library, no eviction policy, no expiry: the entry count is bounded by
-    ///     the concurrent-run cap, and a run's graph is PINNED at start so nothing can invalidate an entry but the run
-    ///     ending. It exists because decrypting and re-parsing the blob on every tick is the one repeated cost the
-    ///     database-as-truth design would otherwise pay for nothing.
-    /// </summary>
+    /// <summary>The parsed graph per live run.</summary>
+    /// <remarks>
+    ///     No cache library, no eviction policy, no expiry: the entry count is bounded by the concurrent-run cap, and
+    ///     a run's graph is PINNED at start so nothing can invalidate an entry but the run ending. It exists because
+    ///     decrypting and re-parsing the blob on every tick is the one repeated cost the database-as-truth design
+    ///     would otherwise pay for nothing.
+    /// </remarks>
     private readonly ConcurrentDictionary<Guid, GraphWorkflowGraph> _graphs = new();
 
     private readonly IReadOnlyList<IGraphWorkflowNodeExecutor> _executors;
@@ -99,11 +95,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// <summary>What the signal pump is about to read. The only way to assert that a productive tick re-signals.</summary>
     internal ChannelReader<Guid> PendingSignals => _signals.Reader;
 
-    /// <summary>
-    ///     A TEST-ONLY seam, and null in every other build: run just before a <c>Pending</c> run's start is written, so
-    ///     a test can commit a cancel in the one window the version check exists to lose. Production never sets it, and
-    ///     nothing in this class reads it for a decision.
-    /// </summary>
+    /// <summary>A TEST-ONLY seam, and null in every other build.</summary>
+    /// <remarks>
+    ///     Run just before a <c>Pending</c> run's start is written, so a test can commit a cancel in the one window
+    ///     the version check exists to lose. Production never sets it, and nothing in this class reads it for a
+    ///     decision.
+    /// </remarks>
     internal Func<Task>? BeforeRunWrite { get; set; }
 
     public void Signal(Guid runId) =>
@@ -152,12 +149,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     }
 
     /// <summary>
-    ///     Advances one run by one tick, and answers how many transitions it wrote — zero meaning the run is quiescent.
-    ///     <para>
-    ///         The testable seam, and a design requirement rather than an afterthought: the production loop is a thin
-    ///         wrapper around it, so no test ever has to wait on a timer or race a background task.
-    ///     </para>
+    ///     Advances one run by one tick, and answers how many transitions it wrote — zero meaning the run is
+    ///     quiescent.
     /// </summary>
+    /// <remarks>
+    ///     The testable seam, and a design requirement rather than an afterthought: the production loop is a thin
+    ///     wrapper around it, so no test ever has to wait on a timer or race a background task.
+    /// </remarks>
     internal async Task<int> AdvanceOnceAsync(Guid runId, CancellationToken cancellationToken)
     {
         await _advanceGate.WaitAsync(cancellationToken);
@@ -198,22 +196,15 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         }
         catch (GraphWorkflowValidationException exception)
         {
-            // A running run's graph parsed once already, so reaching here means the pinned blob changed underneath it.
-            // Throwing would re-throw on every sweep forever; the run is unroutable and says so instead.
-            //
-            // Except while it is CANCELLING, where there is no such thing as a failure to write: the state machine has
-            // no Cancelling → Failed edge, so FailUnroutableAsync can only log — and the drain below, which needs no
-            // graph, would never be reached. The run would then sit Cancelling forever. A drain is also all such a run
-            // has left to do, and the poll it skips here has nothing to settle: an unparseable graph means this
-            // dispatcher never dispatched the run, so no lane is driving any of its rows.
+            // A running run's graph parsed once already, so reaching here means the pinned blob changed underneath it; throwing would re-throw every sweep, so the
+            // run is unroutable and says so. Except while CANCELLING, where no failure can be written (no Cancelling → Failed edge) and a drain is all that is left.
             return run.Status == GraphWorkflowRunStatus.Cancelling
                 ? await DrainAsync(store, run, cancellationToken)
                 : await FailUnroutableAsync(store, run, exception, cancellationToken);
         }
 
-        // Settle what the lanes have landed FIRST, before anything reads the node runs for a decision: work that
-        // finished between ticks has to be seen as finished, or the run judges its whole graph against a row that is
-        // only still Running because nothing asked.
+        // Settle what the lanes have landed FIRST, before anything reads the node runs for a decision: work that finished between ticks has to be seen as
+        // finished, or the run judges its whole graph against a row that is only still Running because nothing asked.
         var written = await PollAsync(store, graph, run, cancellationToken);
 
         if (run.Status == GraphWorkflowRunStatus.Cancelling)
@@ -232,12 +223,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// <summary>
     ///     Asks every lane-owned node run what became of the work it was driving, settles the ones that landed, and
     ///     offers to their deadline the ones nothing had anything to say about.
-    ///     <para>
-    ///         Deliberately the lane's answer rather than this loop's memory: the dispatcher holds nothing about a run
-    ///         between ticks, so a restart loses nothing a poll cannot re-read. It runs in every non-terminal status
-    ///         including the drain — work asked to stop settles here, which is how the drain learns it may finish.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately the lane's answer rather than this loop's memory: the dispatcher holds nothing about a run
+    ///     between ticks, so a restart loses nothing a poll cannot re-read. It runs in every non-terminal status
+    ///     including the drain — work asked to stop settles here, which is how the drain learns it may finish.
+    /// </remarks>
     private async Task<int> PollAsync(IGraphWorkflowStore store, GraphWorkflowGraph graph, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
@@ -266,9 +257,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 continue;
             }
 
-            // A Queued row is polled only when its lane is in fact already driving it: the Running write can fail after
-            // the slot and the registry entry were taken, and outside a drain the next admission repairs that — but a
-            // drain admits nothing, so without this the run would wait on a row nothing would ever move again.
+            // A Queued row is polled only when its lane is in fact already driving it: the Running write can fail after the slot and the registry entry were
+            // taken, and outside a drain the next admission repairs that — but a drain admits nothing, so the run would wait on a row nothing would ever move.
             var lane = ExecutorFor(node.Kind);
             var polled = lane is not null && (current.Status == GraphWorkflowNodeRunStatus.Running || lane.IsInFlight(current.Id))
                 ? await lane.PollAsync(store, run, graph, node, current, cancellationToken)
@@ -283,13 +273,14 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     }
 
     /// <summary>
-    ///     Ends a node run that has been running longer than its node allows, and answers how many transitions it wrote.
-    ///     <para>
-    ///         The deadline is re-derived from the ROW every tick rather than armed once in memory, so it survives the
-    ///         restart that would otherwise leave a node run bounded by nothing. A row that has not started has no
-    ///         deadline at all, which is what leaves a queued row and a restart collapse nothing to expire.
-    ///     </para>
+    ///     Ends a node run that has been running longer than its node allows, and answers how many transitions it
+    ///     wrote.
     /// </summary>
+    /// <remarks>
+    ///     The deadline is re-derived from the ROW every tick rather than armed once in memory, so it survives the
+    ///     restart that would otherwise leave a node run bounded by nothing. A row that has not started has no
+    ///     deadline at all, which is what leaves a queued row and a restart collapse nothing to expire.
+    /// </remarks>
     private async Task<int> ExpireAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -302,9 +293,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             return 0;
         }
 
-        // Dropped BEFORE the row is settled, and dropped rather than merely stopped: a re-attempt can land the row on a
-        // new attempt within a tick or two, and admission would then find the registry still holding the work that ran
-        // out of time — leaving the fresh attempt with nothing to poll it.
+        // Dropped BEFORE the row is settled, and dropped rather than merely stopped: a re-attempt can land the row on a new attempt within a tick or two, and
+        // admission would then find the registry still holding the work that ran out of time — leaving the fresh attempt with nothing to poll it.
         if (ExecutorFor(node.Kind) is { } lane)
         {
             await lane.DiscardAsync(nodeRun.Id);
@@ -321,20 +311,16 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     }
 
     /// <summary>
-    ///     The ONE place retry-in-place lives. A node run reading <c>Failed</c> with a retryable class, under both its
-    ///     node's own attempt cap and the run's total budget, goes back to <c>Pending</c> with the attempt incremented
-    ///     in one atomic write carrying a <c>node.retried</c> event.
-    ///     <para>
-    ///         The event's detail is the only place the failure being re-attempted survives: the move to <c>Pending</c>
-    ///         clears the row's failure fields, because a re-attempt must not report the previous try's outcome while it
-    ///         runs. Executors and the startup reconciler therefore write plain failures and know nothing about retry,
-    ///         which is why an interrupted row is re-attempted here on the first tick with no second mechanism.
-    ///     </para>
-    ///     <para>
-    ///         No cross-node routing, ever. Nothing else in this runtime increments an attempt, so a graph of
-    ///         single-attempt nodes never spends any of the run-wide budget.
-    ///     </para>
+    ///     The ONE place retry-in-place lives: a <c>Failed</c> node run with a retryable class, under both its node's
+    ///     attempt cap and the run's total budget, goes back to <c>Pending</c> with the attempt incremented.
     /// </summary>
+    /// <remarks>
+    ///     One atomic write carrying a <c>node.retried</c> event, whose detail is the only place the failure being
+    ///     re-attempted survives: the move to <c>Pending</c> clears the row's failure fields, because a re-attempt
+    ///     must not report the previous try's outcome while it runs. Executors and the startup reconciler therefore
+    ///     write plain failures and know nothing about retry, which is why an interrupted row is re-attempted here on
+    ///     the first tick with no second mechanism. No cross-node routing, ever, and nothing else increments an attempt.
+    /// </remarks>
     private async Task<int> RetryFailedNodesAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -375,14 +361,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         return written;
     }
 
-    /// <summary>
-    ///     Judges every <c>Pending</c> node run against its inbound edges and dispatches the ones that may run.
-    ///     <para>
-    ///         <c>Queued</c> rows are re-offered to their lane without re-judging their edges — nothing un-succeeds, so
-    ///         the question's answer cannot have changed and only the slot was ever missing. That is what "the queue
-    ///         drains" means concretely: nothing hands out slots, the rows ask again.
-    ///     </para>
-    /// </summary>
+    /// <summary>Judges every <c>Pending</c> node run against its inbound edges and dispatches the ones that may run.</summary>
+    /// <remarks>
+    ///     <c>Queued</c> rows are re-offered to their lane without re-judging their edges — nothing un-succeeds, so
+    ///     the question's answer cannot have changed and only the slot was ever missing. That is what "the queue
+    ///     drains" means concretely: nothing hands out slots, the rows ask again.
+    /// </remarks>
     private async Task<int> AdmitAsync(IGraphWorkflowStore store, GraphWorkflowGraph graph, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
@@ -443,15 +427,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         return written;
     }
 
-    /// <summary>
-    ///     Runs an eligible node run, through the inline executor or through the lane that owns its kind.
-    ///     <para>
-    ///         A kind no lane owns and the inline executor does not run has NO ARM here, and that absence is the whole
-    ///         implementation: the node run fails <c>ValidationFailed</c> because this build cannot execute it, rather
-    ///         than queueing behind a lane that will never arrive. Registering an executor for the kind is what removes
-    ///         the case, and it removes it without touching this method.
-    ///     </para>
-    /// </summary>
+    /// <summary>Runs an eligible node run, through the inline executor or through the lane that owns its kind.</summary>
+    /// <remarks>
+    ///     A kind no lane owns and the inline executor does not run has NO ARM here, and that absence is the whole
+    ///     implementation: the node run fails <c>ValidationFailed</c> because this build cannot execute it, rather
+    ///     than queueing behind a lane that will never arrive. Registering an executor for the kind removes the case,
+    ///     and removes it without touching this method.
+    /// </remarks>
     private async Task<int> DispatchAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -482,12 +464,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
     /// <summary>
     ///     Settles a <c>Cancelling</c> run once nothing of it is live any more, and admits nothing while it drains.
-    ///     <para>
-    ///         <b>Ask, do not settle.</b> A row a lane is driving belongs to that lane, and only the lane knows what
-    ///         stopping it costs — so the drain requests the stop and the next tick's poll writes the terminal off what
-    ///         actually happened. Rows no lane owns are settled here, because for them there is nothing to ask.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <b>Ask, do not settle.</b> A row a lane is driving belongs to that lane, and only the lane knows what
+    ///     stopping it costs — so the drain requests the stop and the next tick's poll writes the terminal off what
+    ///     actually happened. Rows no lane owns are settled here, because for them there is nothing to ask.
+    /// </remarks>
     private async Task<int> DrainAsync(IGraphWorkflowStore store, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
@@ -497,9 +479,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         {
             if (ExecutorFor(nodeRun.Kind) is { } lane && lane.IsInFlight(nodeRun.Id))
             {
-                // Asked, not settled, and counted as work only when it actually asked — the drain re-signals on a
-                // productive tick, so a lane answering yes to a stop it has already requested would spin the run for
-                // the whole duration of the work.
+                // Asked, not settled, and counted as work only when it actually asked — the drain re-signals on a productive tick, so a lane answering yes to
+                // a stop it has already requested would spin the run for the whole duration of the work.
                 written += await lane.StopAsync(nodeRun.Id) ? 1 : 0;
                 continue;
             }
@@ -544,13 +525,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         return written + 1;
     }
 
-    /// <summary>
-    ///     Ends the tick by asking what the run now IS, of the rows and of the graph they belong to.
-    ///     <para>
-    ///         Written against the version the run was read at, so a cancel that landed between the read and this write
-    ///         WINS rather than being silently overwritten by a status move the dispatcher decided a moment earlier.
-    ///     </para>
-    /// </summary>
+    /// <summary>Ends the tick by asking what the run now IS, of the rows and of the graph they belong to.</summary>
+    /// <remarks>
+    ///     Written against the version the run was read at, so a cancel that landed between the read and this write
+    ///     WINS rather than being silently overwritten by a status move the dispatcher decided a moment earlier.
+    /// </remarks>
     private async Task<int> RecomputeRunStatusAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -572,9 +551,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             TargetStatus = outcome.Status,
             FailureClass = outcome.FailureClass,
             SanitizedReason = outcome.TerminalReason,
-            // The run's result, in the SAME transition that completes it: it is read off the first
-            // End node that succeeded, and there is no earlier moment at which "the run's answer"
-            // is a thing that exists.
+            // The run's result, in the SAME transition that completes it: read off the first End node that succeeded, and there
+            // is no earlier moment at which "the run's answer" is a thing that exists.
             OutputJson = outcome.Status == GraphWorkflowRunStatus.Completed ? RunResult(graph, nodeRuns) : null
         },
                            cancellationToken);
@@ -597,13 +575,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                               .FirstOrDefault()
                                               ?.OutputJson);
 
-    /// <summary>
-    ///     Starts a <c>Pending</c> run, or fails it for good if its pinned graph cannot be routed.
-    ///     <para>
-    ///         The graph is parsed again here rather than trusted from the definition's save. A run left <c>Pending</c>
-    ///         on a graph nothing can route would be swept forever, so the refusal is written down rather than retried.
-    ///     </para>
-    /// </summary>
+    /// <summary>Starts a <c>Pending</c> run, or fails it for good if its pinned graph cannot be routed.</summary>
+    /// <remarks>
+    ///     The graph is parsed again here rather than trusted from the definition's save. A run left <c>Pending</c> on
+    ///     a graph nothing can route would be swept forever, so the refusal is written down rather than retried.
+    /// </remarks>
     private async Task<int> StartPendingRunAsync(IGraphWorkflowStore store, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         try
@@ -629,11 +605,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Running);
 
-        // Against the version the run was READ at, not a fresh one. This tick has written no node run — a Pending run
-        // has none to write — so there is nothing of its own for it to lose a race against, and a cancel that committed
-        // in between has bumped the version. Taking a fresh version here would make that cancel's own bump the number
-        // this write passes with, and the run would go Running with a committed cancellation underneath it: the store
-        // checks the version, never the source status.
+        // Against the version the run was READ at, not a fresh one: this tick has written no node run, so it has nothing of its own to lose a race against, and a
+        // cancel that committed in between has bumped the version. A fresh version would carry that cancel's own bump, and the run would go Running underneath it.
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = run.Id, ExpectedVersion = run.Version, TargetStatus = GraphWorkflowRunStatus.Running }, cancellationToken);
         return 1;
     }
@@ -651,10 +624,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             return 0;
         }
 
-        // The version the run was READ at, for the same reason the start above uses it: both callers reach here before
-        // this tick has written any node run, so the only writer the top-of-tick version can lose to is somebody else —
-        // and losing to them is the point. A fresh version would let a cancel that committed in between carry this
-        // failure past the store's check.
+        // The version the run was READ at, for the same reason the start above uses it: both callers reach here before this tick has written any node run, so the
+        // only writer it can lose to is somebody else — and losing to them is the point. A fresh version would carry a cancel committed in between past the check.
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
         {
             RunId = run.Id,
@@ -668,21 +639,14 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         return 1;
     }
 
-    /// <summary>
-    ///     Fails one node run, with the output document that failure produces.
-    ///     <para>
-    ///         The document is composed through the single writer like every other, and dropped if the cap refuses it:
-    ///         a failure cannot fail for being too large to describe, and the row's own reason carries the account
-    ///         either way. <paramref name="node" /> is null only for a key the pinned graph no longer declares — the
-    ///         one case with no node to compose against.
-    ///     </para>
-    ///     <para>
-    ///         A <c>Pending</c> row is walked through <c>Running</c> first, because the state machine has no
-    ///         <c>Pending → Failed</c> edge and deliberately so: a row that never ran has nothing to report, so a
-    ///         failure about it is a failure of the ATTEMPT, and <c>Running</c> is what opens one. The pair costs the
-    ///         same two event rows an inline success costs, and reads the same way in the log.
-    ///     </para>
-    /// </summary>
+    /// <summary>Fails one node run, with the output document that failure produces.</summary>
+    /// <remarks>
+    ///     The document is composed through the single writer like every other, and dropped if the cap refuses it: a
+    ///     failure cannot fail for being too large to describe, and the row's own reason carries the account either
+    ///     way. <paramref name="node" /> is null only for a key the pinned graph no longer declares. A <c>Pending</c>
+    ///     row is walked through <c>Running</c> first, because the state machine deliberately has no
+    ///     <c>Pending → Failed</c> edge: a failure about a row that never ran is a failure of the ATTEMPT, which <c>Running</c> is what opens.
+    /// </remarks>
     private async Task<int> FailNodeAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -758,18 +722,14 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
     /// <summary>
     ///     The run's version as of right now, for a run-level write that follows this tick's own node-run writes.
-    ///     <para>
-    ///         Every node-run transition bumps the run version, so the top-of-tick version is stale by the time a drain
-    ///         writes — using it would make the dispatcher lose a race against itself. Re-reading narrows the window to
-    ///         what the check is actually for.
-    ///     </para>
-    ///     <para>
-    ///         <b>Only for a write that node writes precede.</b> A run write with nothing of its own in front of it
-    ///         passes the version it READ, because a fresh version would carry somebody else's cancel across the check.
-    ///         The drain is the one caller left, and its own move is legal from <c>Cancelling</c> alone, which nothing
-    ///         but the drain itself can leave.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Every node-run transition bumps the run version, so the top-of-tick version is stale by the time a drain
+    ///     writes — using it would make the dispatcher lose a race against itself, and re-reading narrows the window
+    ///     to what the check is for. <b>Only for a write that node writes precede:</b> a run write with nothing of its
+    ///     own in front of it passes the version it READ, because a fresh one would carry somebody else's cancel
+    ///     across the check. The drain is the one caller left, and its move is legal from <c>Cancelling</c> alone.
+    /// </remarks>
     private static async Task<long> CurrentVersionAsync(IGraphWorkflowStore store, Guid runId, CancellationToken cancellationToken) =>
         (await store.GetRunAsync(runId, cancellationToken)).Version;
 
@@ -854,16 +814,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         }
         catch (GraphWorkflowInvalidTransitionException exception)
         {
-            // Usually somebody else moved the run between this tick's read and its write — a cancel, or a human
-            // decision. Their write stands and the next tick re-derives from it; there is nothing to repair.
-            //
-            // Deliberately NOT re-signalled, which is where this departs from the development-workflow original. That
-            // module has a separate concurrency exception; here the store's stale-version rejection and the state
-            // machine's "that move is forbidden" share ONE type, on purpose — from the caller's side both mean "the
-            // row is not what you thought it was". Re-signalling would therefore turn an illegal-move BUG into a hot
-            // loop at full speed rather than a line in the log, and the sweep re-offers the run either way. The cost
-            // is one dispatch interval of latency after a genuinely lost race, which is the same budget every dropped
-            // signal already spends.
+            // Usually somebody else moved the run between this tick's read and its write. Their write stands and the next tick re-derives. Deliberately NOT
+            // re-signalled: where Dev Workflows has a separate concurrency exception, a stale version and an illegal move share ONE type here, so it would spin a BUG.
             _logger.LogWarning(exception, "Graph workflow run {RunId} could not commit a transition mid-tick.", runId);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

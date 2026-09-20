@@ -4,21 +4,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The <c>Pause</c> lane, and the one lane that drives nothing: parking a node run on a human is two status writes,
-///     so there is no work to hold, no slot to wait for and no answer to poll for.
-///     <para>
-///         It is a lane rather than an arm of <see cref="GraphWorkflowInlineExecutor" /> because it does not settle:
-///         every inline kind reaches a terminal inside the tick that dispatched it, and a pause deliberately does not.
-///         The answer arrives through <c>IGraphWorkflowRunService.DecideAsync</c>, hours later and from a person, which
-///         is the whole distinction the two classes encode.
-///     </para>
-///     <para>
-///         The prompt, the allowed answers and <c>requireComment</c> are NOT copied onto the row: they are already in
-///         the run's pinned graph, and a second copy is a second thing that can drift from the document the run
-///         actually routes on. <c>PendingDecisionKind</c> names the pending ACT, singular; which answers the API will
-///         accept comes from the node's <c>config.allowedDecisions</c>.
-///     </para>
+///     The <c>Pause</c> lane, and the one lane that drives nothing: parking a node run on a human is two status
+///     writes, so there is no work to hold, no slot to wait for and no answer to poll for.
 /// </summary>
+/// <remarks>
+///     A lane rather than an arm of <see cref="GraphWorkflowInlineExecutor" /> because it does not settle: every
+///     inline kind reaches a terminal inside the tick that dispatched it and a pause does not — its answer arrives
+///     through <c>IGraphWorkflowRunService.DecideAsync</c>, hours later and from a person. The prompt, the allowed
+///     answers and <c>requireComment</c> are NOT copied onto the row: they are in the run's pinned graph, and a copy
+///     can drift from what it routes on. <c>PendingDecisionKind</c> names the pending ACT; the answers the API accepts come from <c>config.allowedDecisions</c>.
+/// </remarks>
 internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
 {
     public bool Owns(GraphWorkflowNodeKind kind) =>
@@ -33,12 +28,12 @@ internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
 
     /// <summary>
     ///     Parks the node run on a human: <c>Running</c>, then <c>WaitingForApproval</c> with the pending act named.
-    ///     <para>
-    ///         Two writes rather than one, like every inline kind, so the <c>node.started</c> that precedes the
-    ///         <c>gate.requested</c> gives a reader the moment the pause was REACHED as well as the moment it began
-    ///         waiting. No output document is written: a pause's output is its answer, and it has none yet.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Two writes rather than one, like every inline kind, so the <c>node.started</c> that precedes the
+    ///     <c>gate.requested</c> gives a reader the moment the pause was REACHED as well as the moment it began
+    ///     waiting. No output document is written: a pause's output is its answer, and it has none yet.
+    /// </remarks>
     public async Task<int> DispatchAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
         GraphWorkflowGraph graph,

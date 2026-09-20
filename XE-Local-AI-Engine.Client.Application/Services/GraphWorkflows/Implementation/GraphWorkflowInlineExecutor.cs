@@ -8,16 +8,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     The five node kinds whose work is a pure function of rows the tick has already read: <c>Start</c>, <c>End</c>,
 ///     <c>Condition</c>, <c>Parallel</c> and <c>Join</c>.
-///     <para>
-///         They run INSIDE the tick, with no <c>Queued</c> hop, because they wait for no slot — a queued row would be
-///         the row lying about what it is waiting for. Two writes and therefore two event rows, which is what makes the
-///         timing of a fan-out visible at all and the whole reason <c>Parallel</c> and <c>Join</c> exist as kinds.
-///     </para>
-///     <para>
-///         It composes no document itself: <see cref="GraphWorkflowDocuments" /> is the single writer of every one of
-///         them, so an executor cannot disagree with the routing the dispatcher will do a moment later.
-///     </para>
 /// </summary>
+/// <remarks>
+///     They run INSIDE the tick, with no <c>Queued</c> hop, because they wait for no slot — a queued row would be the
+///     row lying about what it is waiting for. Two writes and therefore two event rows, which is what makes the timing
+///     of a fan-out visible at all and the whole reason <c>Parallel</c> and <c>Join</c> exist as kinds. It composes no
+///     document itself: <see cref="GraphWorkflowDocuments" /> is the single writer of every one of them, so an
+///     executor cannot disagree with the routing the dispatcher will do a moment later.
+/// </remarks>
 internal sealed class GraphWorkflowInlineExecutor
 {
     private readonly GraphWorkflowOptions _options;
@@ -35,13 +33,11 @@ internal sealed class GraphWorkflowInlineExecutor
             or GraphWorkflowNodeKind.Parallel
             or GraphWorkflowNodeKind.Join;
 
-    /// <summary>
-    ///     Runs one eligible node run to its terminal and answers how many transitions it wrote.
-    ///     <para>
-    ///         The input document is composed over the SATISFIED inbound edges, which is the same set the admission
-    ///         that got here judged — so what the node reads is exactly what let it run.
-    ///     </para>
-    /// </summary>
+    /// <summary>Runs one eligible node run to its terminal and answers how many transitions it wrote.</summary>
+    /// <remarks>
+    ///     The input document is composed over the SATISFIED inbound edges, which is the same set the admission that
+    ///     got here judged — so what the node reads is exactly what let it run.
+    /// </remarks>
     public async Task<int> ExecuteAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
         GraphWorkflowGraph graph,
@@ -158,13 +154,13 @@ internal sealed class GraphWorkflowInlineExecutor
         };
 
     /// <summary>
-    ///     The output documents of the predecessors this node run may read: the sources of its SATISFIED inbound edges,
-    ///     each once even when two edges connect the same pair.
-    ///     <para>
-    ///         Shared with the lanes rather than copied into them: an executor that composed this set differently would
-    ///         hand its node a different world than the admission that let it run judged.
-    ///     </para>
+    ///     The output documents of the predecessors this node run may read: the sources of its SATISFIED inbound
+    ///     edges, each once even when two edges connect the same pair.
     /// </summary>
+    /// <remarks>
+    ///     Shared with the lanes rather than copied into them: an executor that composed this set differently would
+    ///     hand its node a different world than the admission that let it run judged.
+    /// </remarks>
     public static IReadOnlyList<GraphWorkflowUpstreamDocument> Upstream(GraphWorkflowGraph graph,
         GraphWorkflowGraphNode node,
         IReadOnlyDictionary<string, GraphWorkflowNodeRunSnapshot> byKey) =>

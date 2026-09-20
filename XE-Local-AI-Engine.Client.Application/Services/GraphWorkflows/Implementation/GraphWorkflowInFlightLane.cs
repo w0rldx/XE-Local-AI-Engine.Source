@@ -9,15 +9,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     One node run's work in flight: the task, the token that stops it, and the two facts the dispatcher needs about
 ///     it without touching the task itself.
-///     <para>
-///         <see cref="Attempt" /> is what makes an answer belong to a try: a retry lands the row on a new attempt, and
-///         a pass belonging to the one before is not an answer about the one the row is on now.
-///         <see cref="InvocationId" /> is minted before the work starts, because the stop path has to have something to
-///         hand to whatever knows how to unwind it. <see cref="LeaseAcquired" /> is a
-///         <see cref="StrongBox{T}" /> rather than a <see cref="bool" /> so the task body can flip it and the poll can
-///         see it: the row honestly reads <c>Queued</c> until the work holds whatever node-wide slot it needs.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Attempt" /> is what makes an answer belong to a try: a retry lands the row on a new attempt, and a
+///     pass belonging to the one before is not an answer about the one the row is on now. <see cref="InvocationId" />
+///     is minted before the work starts, because the stop path has to have something to hand to whatever knows how to
+///     unwind it. <see cref="LeaseAcquired" /> is a <see cref="StrongBox{T}" /> rather than a <see cref="bool" /> so
+///     the task body can flip it and the poll can see it: the row reads <c>Queued</c> until the work holds its slot.
+/// </remarks>
 internal sealed class GraphWorkflowInFlight<TResult>
 {
     public required CancellationTokenSource Cancellation { get; init; }
@@ -34,18 +33,14 @@ internal sealed class GraphWorkflowInFlight<TResult>
 /// <summary>
 ///     The in-flight registry every graph-workflow lane is built out of: a bounded number of node runs may hold a slot
 ///     at once, each driven by a detached task that produces a RESULT and never writes a row.
-///     <para>
-///         Generic and executor-agnostic on purpose. What a turn is, how it is settled and what document it produces
-///         are the executor's business; the slots, the registry and the stop-and-forget contract are the same for all
-///         of them, and a second implementation of those is how two lanes come to disagree about whether a row is
-///         still being driven.
-///     </para>
-///     <para>
-///         The agent lane is its first instance; the tool lane is the second. Its contract is also asserted directly,
-///         because the two things that keep a drain from spinning — a stop that answers no on a repeat, and an entry
-///         that outlives the work until a poll has SEEN it land — are properties of this class rather than of either.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Generic and executor-agnostic on purpose — what a turn is, how it is settled and what document it produces are
+///     the executor's business, while the slots, the registry and the stop-and-forget contract are the same for the
+///     agent and tool lanes both, and a second implementation of those is how two lanes come to disagree about whether
+///     a row is still being driven. Its contract is asserted directly, because the two things that keep a drain from
+///     spinning — a stop answering no on a repeat, an entry outliving the work until a poll SEES it land — are its own.
+/// </remarks>
 internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<Guid, GraphWorkflowInFlight<TResult>> _inflight = new();
@@ -75,12 +70,12 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
 
     /// <summary>
     ///     Takes a slot and starts <paramref name="work" />, or answers <see langword="null" /> when the lane is full.
-    ///     <para>
-    ///         The slot is taken BEFORE the work starts and released when it ends, whatever it ends as, so a throw
-    ///         inside the caller's task cannot leak one. A full lane is queueing rather than failure: nothing is
-    ///         written, and the next tick asks again.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The slot is taken BEFORE the work starts and released when it ends, whatever it ends as, so a throw inside
+    ///     the caller's task cannot leak one. A full lane is queueing rather than failure: nothing is written, and the
+    ///     next tick asks again.
+    /// </remarks>
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
         Justification = "Ownership transfers to the in-flight entry, which outlives this call by design: Consume disposes it "
@@ -94,9 +89,8 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(work);
 
-        // ponytail: a zero-timeout wait, so a full lane costs a tick rather than a parked thread. What this does NOT
-        // bound is how long a row may sit Queued once it is in flight and waiting on a node-wide slot further down —
-        // bound the lease wait, or stamp a queued-at instant and expire on it, if that ever measures.
+        // ponytail: a zero-timeout wait, so a full lane costs a tick rather than a parked thread. It does NOT bound how
+        // long a row sits Queued waiting on a node-wide slot below — bound the lease wait, or expire on a queued-at stamp, if that measures.
         if (!await _lane.WaitAsync(millisecondsTimeout: 0, cancellationToken))
         {
             return null;
@@ -113,31 +107,20 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return flight;
         }
 
-        // Something is already being driven for this row. The caller checks that first; reaching here means it raced
-        // itself, and the entry that won is the one the poll will settle. The loser is unwound like any other discard —
-        // cancelled, then disposed once its work has noticed, because a token source nothing owns is a leak whatever
-        // the race that produced it.
+        // Something is already driving this row: the caller checks first, so reaching here means it raced itself and the
+        // entry that won is the one the poll settles. The loser is discarded — cancelled, then disposed once its work notices, since a token source nothing owns leaks.
         await cancellation.CancelAsync();
         _ = DisposeWhenDoneAsync(flight);
         return null;
     }
 
-    /// <summary>
-    ///     Asks the work to stop, answering whether it actually asked.
-    ///     <para>
-    ///         <see langword="false" /> on a repeat, and that is the whole point rather than tidiness: the entry lives
-    ///         until a poll SEES the work land, so a cancelling drain reaches this every tick until then. The caller
-    ///         counts a <see langword="true" /> as a written transition and the dispatcher re-signals itself after any
-    ///         productive tick, so answering <see langword="true" /> each time would spin the drain for the whole
-    ///         duration of the work.
-    ///     </para>
-    ///     <para>
-    ///         ponytail: the ceiling that buys is up to one <c>DispatchIntervalMilliseconds</c> sweep before a stopped
-    ///         turn is noticed, where the spin noticed immediately. Signalling from the work's own continuation would
-    ///         mean injecting the dispatcher into the lane that the dispatcher already takes. Break the cycle — a
-    ///         settable signal, or a completion channel — if that latency ever measures.
-    ///     </para>
-    /// </summary>
+    /// <summary>Asks the work to stop, answering whether it actually asked.</summary>
+    /// <remarks>
+    ///     <see langword="false" /> on a repeat, and that is the point rather than tidiness: the entry lives until a
+    ///     poll SEES the work land, so a cancelling drain reaches this every tick until then, and since the caller
+    ///     counts a <see langword="true" /> as a written transition and the dispatcher re-signals after any productive
+    ///     tick, answering <see langword="true" /> each time would spin the drain for the work's whole duration.
+    /// </remarks>
     public async Task<bool> StopAsync(Guid nodeRunId)
     {
         if (!_inflight.TryGetValue(nodeRunId, out var flight) || flight.Cancellation.IsCancellationRequested)
@@ -145,19 +128,19 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return false;
         }
 
+        // ponytail: the cost is up to one DispatchIntervalMilliseconds sweep before a stopped turn is noticed, where the spin noticed at once.
+        // Signalling from the work's continuation would inject the dispatcher into the lane it takes; a settable signal or completion channel breaks that, if it measures.
         await flight.Cancellation.CancelAsync();
         return true;
     }
 
-    /// <summary>
-    ///     Drops the entry and cancels its work without waiting for the unwind — awaiting it here would hold the
-    ///     dispatcher's advance gate, and with it every other run, for as long as the work takes to notice.
-    ///     <para>
-    ///         Removing the entry is the load-bearing half, not the cancel: a row settled with its entry left behind
-    ///         would refuse the next attempt its place in the registry, and that attempt would then run with nothing
-    ///         polling it.
-    ///     </para>
-    /// </summary>
+    /// <summary>Drops the entry and cancels its work without waiting for the unwind.</summary>
+    /// <remarks>
+    ///     Awaiting the unwind would hold the dispatcher's advance gate, and with it every other run, for as long as
+    ///     the work takes to notice. Removing the entry is the load-bearing half, not the cancel: a row settled with
+    ///     its entry left behind would refuse the next attempt its place in the registry, and that attempt would then
+    ///     run with nothing polling it.
+    /// </remarks>
     public async Task DiscardAsync(Guid nodeRunId)
     {
         if (!_inflight.TryRemove(nodeRunId, out var flight))
@@ -170,11 +153,11 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         _ = DisposeWhenDoneAsync(flight);
     }
 
-    /// <summary>
-    ///     Consumes a landed entry, once its settle has COMMITTED. Doing it before the write would spend the result on
-    ///     a write that may throw, and the next poll would then find no entry and report "the host stopped" about work
-    ///     that finished perfectly.
-    /// </summary>
+    /// <summary>Consumes a landed entry, once its settle has COMMITTED.</summary>
+    /// <remarks>
+    ///     Doing it before the write would spend the result on a write that may throw, and the next poll would then
+    ///     find no entry and report "the host stopped" about work that finished perfectly.
+    /// </remarks>
     public void Consume(Guid nodeRunId)
     {
         if (_inflight.TryRemove(nodeRunId, out var flight))
@@ -185,9 +168,12 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
 
     /// <summary>
     ///     Drops every entry whose row has moved on — re-attempted, cancelled, or otherwise no longer this lane's to
-    ///     settle. Called once a tick before anything is polled, because a retry reaches a row WITHOUT coming through
-    ///     the lane that is driving it.
+    ///     settle.
     /// </summary>
+    /// <remarks>
+    ///     Called once a tick before anything is polled, because a retry reaches a row WITHOUT coming through the lane
+    ///     that is driving it.
+    /// </remarks>
     public async Task ForgetSupersededAsync(IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns)
     {
         ArgumentNullException.ThrowIfNull(nodeRuns);

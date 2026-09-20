@@ -17,17 +17,14 @@ internal enum GraphWorkflowConditionOperator
     NotExists
 }
 
-/// <summary>
-///     One declarative comparison against a node's output document, carried on an EDGE. A <c>Condition</c> node may
-///     name a default <c>path</c> its own out-edges inherit, which is authoring convenience and nothing more — the
-///     comparison itself still lives on the edge, because a node-level comparison would be a second way to say what a
-///     conditional edge already says.
-///     <para>
-///         <see cref="Path" /> is dot-separated property names and nothing else: no wildcards, no array indexing, no
-///         functions. If a real expression language is ever justified it replaces <see cref="Evaluate" /> behind an
-///         interface and nothing else changes.
-///     </para>
-/// </summary>
+/// <summary>One declarative comparison against a node's output document, carried on an EDGE.</summary>
+/// <remarks>
+///     A <c>Condition</c> node may name a default <c>path</c> its own out-edges inherit, which is authoring
+///     convenience and nothing more: the comparison still lives on the edge, because a node-level one would be a
+///     second way to say what a conditional edge already says. <see cref="Path" /> is dot-separated property names
+///     and nothing else. If a real expression language is ever justified it replaces <see cref="Evaluate" /> behind
+///     an interface and nothing else changes. The operators: docs/wiki/21-graph-workflows.md ("Edges and conditions").
+/// </remarks>
 internal sealed class GraphWorkflowCondition
 {
     public required string Path { get; init; }
@@ -36,15 +33,13 @@ internal sealed class GraphWorkflowCondition
 
     public required JsonElement Value { get; init; }
 
-    /// <summary>
-    ///     Whether the edge carrying <paramref name="condition" /> fires. A null condition is unconditional.
-    ///     <para>
-    ///         Fail-closed on absence: a path the output does not carry answers <c>false</c> for every operator except
-    ///         <see cref="GraphWorkflowConditionOperator.NotExists" />, which is the one operator whose whole purpose is
-    ///         to be true then. An edge must never fire on data that is not there — a node that produced no output at
-    ///         all would otherwise route as if it had.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether the edge carrying <paramref name="condition" /> fires. A null condition is unconditional.</summary>
+    /// <remarks>
+    ///     Fail-closed on absence: a path the output does not carry answers <c>false</c> for every operator except
+    ///     <see cref="GraphWorkflowConditionOperator.NotExists" />, whose whole purpose is to be true then. An edge
+    ///     must never fire on data that is not there — a node that produced no output at all would otherwise route as
+    ///     if it had.
+    /// </remarks>
     public static bool Evaluate(GraphWorkflowCondition? condition, JsonElement? output)
     {
         if (condition is null)
@@ -119,10 +114,8 @@ internal sealed class GraphWorkflowCondition
     {
         if (left.ValueKind == JsonValueKind.Number && right.ValueKind == JsonValueKind.Number)
         {
-            // Widest exact type first. Through double, 9007199254740992 and 9007199254740993 are the SAME value, so a
-            // 'gt' over ids or byte counts past 2^53 answers on a rounding artefact rather than on the numbers. Double
-            // is kept as the last resort for the tokens no exact arm reads — fractional and exponent forms out of
-            // decimal range — and a token not even double reads is not an ordering at all.
+            // Widest exact type first: through double, 9007199254740992 and 9007199254740993 are the SAME value, so a 'gt' over ids
+            // or byte counts past 2^53 would answer on a rounding artefact. Double is the last resort, and a token it cannot read is no ordering.
             if (left.TryGetInt64(out var leftLong) && right.TryGetInt64(out var rightLong))
             {
                 return leftLong.CompareTo(rightLong);
@@ -133,20 +126,16 @@ internal sealed class GraphWorkflowCondition
                 return leftDecimal.CompareTo(rightDecimal);
             }
 
-            // Past decimal's range an INTEGER token still has an exact value, and only a chain that ends at double
-            // loses it: 1e29 and 1e29+1 are the same double. NumberStyles.AllowLeadingSign is the '^-?[0-9]+$' shape
-            // itself — sign and digits, nothing else — so a fractional or exponent token simply does not parse here
-            // and falls through to the line below.
+            // Past decimal's range an INTEGER token still has an exact value and only a chain ending at double loses it: 1e29 and 1e29+1 are one double.
+            // NumberStyles.AllowLeadingSign is the '^-?[0-9]+$' shape itself, so a fractional or exponent token does not parse here and falls through.
             if (BigInteger.TryParse(left.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var leftInteger)
                 && BigInteger.TryParse(right.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var rightInteger))
             {
                 return leftInteger.CompareTo(rightInteger);
             }
 
-            // ponytail: fractional and exponent tokens beyond decimal range still round through double, so two that
-            // differ only past ~17 significant digits read as equal and an integer token compared against its own
-            // exponent form answers on the rounded pair. Upgrade path if that ever routes a real graph wrongly:
-            // normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
+            // ponytail: fractional and exponent tokens beyond decimal range still round through double, so two differing only past ~17 significant
+            // digits read as equal. Upgrade path: normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
             return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
                 ? leftDouble.CompareTo(rightDouble)
                 : null;
@@ -160,17 +149,14 @@ internal sealed class GraphWorkflowCondition
         return null;
     }
 
-    /// <summary>
-    ///     Reads one condition off an edge. Throws rather than degrading to "never fires": a definition whose condition
-    ///     does not parse is a definition whose routing nobody can predict, and it is caught at save and again at run
-    ///     start.
-    ///     <para>
-    ///         <paramref name="defaultPath" /> is the source <c>Condition</c> node's <c>config.path</c> when the source
-    ///         is one, so an editor can prefill one path on the node and write only <c>{op, value}</c> per branch. An
-    ///         edge that resolves a path from neither is still refused: fail-closed means an edge with nothing to read
-    ///         would silently never fire.
-    ///     </para>
-    /// </summary>
+    /// <summary>Reads one condition off an edge, throwing rather than degrading to "never fires".</summary>
+    /// <remarks>
+    ///     A definition whose condition does not parse is one whose routing nobody can predict, and it is caught at
+    ///     save and again at run start. <paramref name="defaultPath" /> is the source <c>Condition</c> node's
+    ///     <c>config.path</c> when the source is one, so an editor can prefill one path on the node and write only an
+    ///     op and a value per branch. An edge that resolves a path from neither is still refused: fail-closed means an
+    ///     edge with nothing to read would silently never fire.
+    /// </remarks>
     public static GraphWorkflowCondition Parse(JsonElement element, string edgeDescription, string? defaultPath = null)
     {
         if (element.ValueKind != JsonValueKind.Object)
@@ -214,11 +200,8 @@ internal sealed class GraphWorkflowCondition
             throw new GraphWorkflowValidationException($"The condition on edge {edgeDescription} uses '{op}' and so needs a 'value'.");
         }
 
-        // Two authoring-time refusals, both for the same reason: Evaluate fails CLOSED, so a comparison it can never
-        // make is not an error anyone sees — it is an edge that silently never fires and a run that hangs with nothing
-        // in the log to explain it. A comparison it CAN make and answers "no" is left alone; that is routing.
-        //
-        // There is no comparison against an object or an array to make at all.
+        // Two authoring-time refusals, both because Evaluate fails CLOSED: a comparison it can never make is not an error anyone sees but an edge
+        // that silently never fires and a run that hangs. One it CAN make and answers "no" is routing. Against an object or array there is none to make.
         if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
         {
             throw new GraphWorkflowValidationException($"The condition on edge {edgeDescription} compares against a {value.ValueKind}. "

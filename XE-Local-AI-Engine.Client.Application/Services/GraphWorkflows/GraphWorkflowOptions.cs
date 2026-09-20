@@ -2,29 +2,25 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>
-///     Configuration for graph workflows.
-///     <para>
-///         <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture development
-///         workflows and work sessions hold: a disabled node has to answer legibly rather than 500 out of an empty
-///         container. The request-path gate in <c>Program</c> is what turns the switch into a 404. It defaults ON;
-///         only an operator who names it <see langword="false" /> gets that 404.
-///     </para>
-///     <para>
-///         The ranges here are sanity bounds the binder can see. The semantic floors and the one cross-option
-///         relation live in <c>GraphWorkflowOptionsValidator</c>, which data annotations cannot express.
-///     </para>
-/// </summary>
+/// <summary>Configuration for graph workflows.</summary>
+/// <remarks>
+///     <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture development workflows
+///     and work sessions hold: a disabled node has to answer legibly rather than 500 out of an empty container. The
+///     request-path gate in <c>Program</c> is what turns the switch into a 404. The ranges here are sanity bounds the
+///     binder can see; the semantic floors and the one cross-option relation live in
+///     <c>GraphWorkflowOptionsValidator</c>, which data annotations cannot express.
+/// </remarks>
 public sealed class GraphWorkflowOptions
 {
     public const string Section = "GraphWorkflows";
 
-    /// <summary>
-    ///     Whether the graph-workflow surface answers. On since S4 (ruling D9): the editor, the run engine and the run
-    ///     view are verified end to end, so a node ships with them offered. The switch did not go away — an operator who
-    ///     sets it to <see langword="false" /> still gets a 404 for the whole prefix from the request-path gate in
-    ///     <c>Program</c>, and that gate's own default moved with this one.
-    /// </summary>
+    /// <summary>Whether the graph-workflow surface answers. It defaults ON.</summary>
+    /// <remarks>
+    ///     On per ruling D9: the editor, the run engine and the run view are verified end to end, so a node ships
+    ///     with them offered. The switch did not go away — an operator who sets it to <see langword="false" /> still
+    ///     gets a 404 for the whole prefix from the request-path gate in <c>Program</c>, and that gate's own default
+    ///     moved with this one.
+    /// </remarks>
     public bool Enabled { get; init; } = true;
 
     /// <summary>The cap on one definition's nodes, enforced when a definition is validated rather than when it runs.</summary>
@@ -51,10 +47,12 @@ public sealed class GraphWorkflowOptions
     public int MaxOutputJsonBytes { get; init; } = 256 * 1024;
 
     /// <summary>
-    ///     How often the dispatcher sweeps every live run, independently of the change signals it also listens for. A
-    ///     dropped signal costs at most one interval of latency, never correctness. Floored at 100 ms by the validator:
-    ///     below that the sweep spends more time opening scopes than advancing runs.
+    ///     How often the dispatcher sweeps every live run, independently of the change signals it also listens for.
     /// </summary>
+    /// <remarks>
+    ///     A dropped signal costs at most one interval of latency, never correctness. Floored at 100 ms by the
+    ///     validator: below that the sweep spends more time opening scopes than advancing runs.
+    /// </remarks>
     [Range(1, 3_600_000)]
     public int DispatchIntervalMilliseconds { get; init; } = 500;
 

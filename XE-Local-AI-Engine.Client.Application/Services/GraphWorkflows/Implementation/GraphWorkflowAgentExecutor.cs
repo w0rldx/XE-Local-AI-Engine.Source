@@ -42,11 +42,11 @@ internal sealed class GraphWorkflowAgentUsage
 /// <summary>
 ///     What one agent turn came to. It is a RESULT and not a row: the lane produces it off the tick, and the poll is
 ///     the only thing that turns it into a status.
-///     <para>
-///         Carries a failure class rather than an exception because the task body catches everything — a turn that
-///         faulted would leave the poll rethrowing on every tick forever, about work that is long over.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It carries a failure class rather than an exception because the task body catches everything — a turn that
+///     faulted would leave the poll rethrowing on every tick forever, about work that is long over.
+/// </remarks>
 internal sealed class GraphWorkflowAgentTurn
 {
     public required bool Succeeded { get; init; }
@@ -65,25 +65,14 @@ internal sealed class GraphWorkflowAgentTurn
 /// <summary>
 ///     The <c>Agent</c> lane: a headless saved-agent invocation, driven off the tick through
 ///     <see cref="GraphWorkflowInFlightLane{TResult}" /> and never inside it.
-///     <para>
-///         Shape from the development-workflow TOOL lane rather than its agent lane, and the reason is the restart
-///         verdict: a work session is durable and pollable across one, an <see cref="IInvocationRunner" /> turn is an
-///         in-process task with no durable handle. That is why an interrupted <c>Running</c> Agent row is failed rather
-///         than resumed, and why <see cref="GraphWorkflowNodeRun.InvocationId" /> is written at all — it is the
-///         correlation id in the node logs for a turn nothing else survives.
-///     </para>
-///     <para>
-///         Contents from <c>RunSavedAgentHandler</c>, which is the node's other unattended caller of this stack: the
-///         locality gate before capacity, the capacity reservation disposed on every terminal path, the approval-required
-///         tools stripped from the offer, <c>IsUnattended</c>, and the terminal state read off a
-///         <see cref="StrongBox{T}" /> the state-changed handler fills.
-///     </para>
-///     <para>
-///         <b>Singleton.</b> The lane and its slot count are properties of the node and outlive both a tick and a DI
-///         scope, so every scoped collaborator is resolved inside the task body from its own scope — the scope the tick
-///         handed the store is gone long before the turn lands.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Shaped from the development-workflow TOOL lane rather than its agent lane: a work session is durable and
+///     pollable across a restart, while an <see cref="IInvocationRunner" /> turn is an in-process task with no durable
+///     handle. That is why an interrupted <c>Running</c> Agent row is failed rather than resumed, and why
+///     <see cref="GraphWorkflowNodeRun.InvocationId" /> is written at all — the correlation id for a turn nothing
+///     else survives. <b>Singleton</b>: scoped collaborators resolve in the task body. What it copies from <c>RunSavedAgentHandler</c>: docs/wiki/21-graph-workflows.md ("Agent").
+/// </remarks>
 internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, IAsyncDisposable
 {
     /// <summary>What a <c>Queued</c> Agent row is waiting for. It is waiting, not failing, so it carries no event.</summary>
@@ -127,9 +116,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
 
-        // Sized on the run cap rather than on an option of its own: what this bounds is how many node runs may be
-        // parked on the node-wide invocation lease at once, and a node that may run four workflows concurrently has no
-        // reason to let a fifth turn queue inside this process as well.
+        // Sized on the run cap rather than on an option of its own: it bounds how many node runs may be parked on the node-wide invocation lease at once, and a
+        // node that may run four workflows concurrently has no reason to let a fifth turn queue inside this process as well.
         _lane = new GraphWorkflowInFlightLane<GraphWorkflowAgentTurn>(_options.MaxConcurrentRuns,
             // A dropped turn's token is not enough on its own: the runner is what knows how to unwind one parked in a
             // provider stream, and a superseded entry never comes back through StopAsync to say so.
@@ -142,14 +130,12 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     public bool IsInFlight(Guid nodeRunId) =>
         _lane.IsInFlight(nodeRunId);
 
-    /// <summary>
-    ///     Admits an eligible Agent node run, and answers how many transitions it wrote.
-    ///     <para>
-    ///         The row goes to <c>Queued</c> first ALWAYS, even when a slot is free a line later, and stays there until
-    ///         the turn holds the node-wide invocation lease. Three parallel Agent nodes on a node with one invocation
-    ///         slot therefore read <c>Running, Queued, Queued</c> rather than leaving a reader to infer it from timing.
-    ///     </para>
-    /// </summary>
+    /// <summary>Admits an eligible Agent node run, and answers how many transitions it wrote.</summary>
+    /// <remarks>
+    ///     The row goes to <c>Queued</c> first ALWAYS, even when a slot is free a line later, and stays there until
+    ///     the turn holds the node-wide invocation lease. Three parallel Agent nodes on a node with one invocation
+    ///     slot therefore read <c>Running, Queued, Queued</c> rather than leaving a reader to infer it from timing.
+    /// </remarks>
     public async Task<int> DispatchAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
         GraphWorkflowGraph graph,
@@ -165,12 +151,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
         if (_lane.TryGet(nodeRun.Id, out var existing) && existing.Attempt == nodeRun.Attempt)
         {
-            // THIS attempt's turn is already being driven. The only thing that can have left the row behind it is the
-            // Running write failing after the slot was taken, so the row is caught up rather than re-run — a second
-            // turn would spend a whole model call to arrive at the answer already coming.
-            //
-            // The attempt is compared rather than assumed: a retry re-attempts a row WITHOUT coming through this lane,
-            // and admitting such a row against the turn belonging to the attempt before would settle one off the other.
+            // THIS attempt's turn is already being driven; the only thing that can have left the row behind it is the Running write failing after the slot was
+            // taken, so it is caught up rather than re-run. The attempt is compared, not assumed: a retry re-attempts a row WITHOUT coming through this lane.
             return nodeRun.Status == GraphWorkflowNodeRunStatus.Queued && existing.LeaseAcquired.Value
                 ? await RunningAsync(store, run, nodeRun, existing.InvocationId, inputJson: null, cancellationToken)
                 : 0;
@@ -213,15 +195,13 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         }
         else
         {
-            // A re-offer of a row this lane already queued. Only that first write persists a document, so composing a
-            // second one here would hand the turn something the row does not carry — and something a later reader of
-            // the row could not reconcile with the answer it produced.
+            // A re-offer of a row this lane already queued. Only that first write persists a document, so composing a second one here would hand the turn
+            // something the row does not carry, and something a later reader of the row could not reconcile with the answer it produced.
             inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken);
         }
 
-        // Minted HERE, before the task starts: it is the first argument of the runtime package request AND what the
-        // stop path hands the runner, so a turn that minted it privately would leave the cancel path with nothing to
-        // call for the whole of its first tick.
+        // Minted HERE, before the task starts: it is the first argument of the runtime package request AND what the stop path hands the runner, so a turn that
+        // minted it privately would leave the cancel path with nothing to call for the whole of its first tick.
         var invocationId = Guid.NewGuid();
         var flight = await _lane.TryStartAsync(nodeRun.Id,
                                     nodeRun.Attempt,
@@ -235,10 +215,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             return written;
         }
 
-        // Still Queued, deliberately. The turn has started but holds no node-wide slot yet, and a row that read Running
-        // here would be claiming a model is working on it while it waits behind an interactive chat turn. The catch-up
-        // to Running happens on the tick that first sees the lease land — through this method or through the poll,
-        // whichever reaches the row first.
+        // Still Queued, deliberately: the turn has started but holds no node-wide slot yet, and a row reading Running would claim a model is working on it while
+        // it waits behind an interactive chat turn. The catch-up happens on the tick that first sees the lease land, through this method or through the poll.
         return written;
     }
 
@@ -260,10 +238,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
         if (!_lane.TryGet(nodeRun.Id, out var flight))
         {
-            // Nothing on this node is driving this row and nothing ever will: the lane holds no memory across a
-            // restart, which is exactly what the startup reconciler collapses such rows for. Reaching here means it did
-            // not, so the row is judged for what it is rather than swept forever. Never resumed — the model's partial
-            // output died with the process, and whether it is tried again is the retry stage's answer, not this one's.
+            // Nothing on this node is driving this row and nothing will: the lane holds no memory across a restart, which is what the startup reconciler collapses
+            // such rows for. Reaching here means it did not, so the row is judged rather than swept forever; never resumed, and re-attempting is the retry stage's call.
             return await FailAsync(store,
                     graph,
                     run,
@@ -285,9 +261,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         int written;
         if (flight.Work.IsCanceled)
         {
-            // Checked BEFORE the await, and that is the load-bearing half of this branch: a stop can cancel a turn
-            // still parked on the invocation lease, which ends it Canceled with no state to map. Awaiting it would
-            // rethrow, the dispatcher would swallow it, and the row would rethrow again on every tick forever.
+            // Checked BEFORE the await, the load-bearing half of this branch: a stop can cancel a turn still parked on the invocation lease, which ends it
+            // Canceled with no state to map. Awaiting it would rethrow, the dispatcher would swallow it, and the row would rethrow on every tick forever.
             written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken);
         }
         else
@@ -304,18 +279,15 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
             var turn = await flight.Work;
 
-            // A turn that ended Cancelled WITHOUT this node asking — the shutdown drain, a model eject, a CancelAll —
-            // returns normally with a cancelled terminal rather than a cancelled task, so it reaches here rather than
-            // the branch above. It is still a cancellation: settling it as a failure would classify it, fail the row
-            // and make the run recompute Failed for work nobody judged.
+            // A turn that ended Cancelled WITHOUT this node asking — the shutdown drain, a model eject, a CancelAll — returns normally with a cancelled terminal
+            // rather than a cancelled task, so it reaches here. Still a cancellation: settling it as a failure would fail the row and recompute Failed for nothing.
             written += turn.FailureClass == GraphWorkflowFailureClass.Cancelled
                 ? await SettleCancelledAsync(store, run, nodeRun, turn.SanitizedReason ?? CancelledInFlight, cancellationToken)
                 : await SettleLandedAsync(store, graph, run, node, nodeRun, turn, cancellationToken);
         }
 
-        // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw
-        // — an over-cap document, a lost version race — and the next poll would then find no entry, take the branch
-        // above and record "the host stopped" about a turn that finished perfectly.
+        // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw — an over-cap document, a lost version
+        // race — and the next poll would find no entry, take the branch above and record "the host stopped" about a turn that finished perfectly.
         _lane.Consume(nodeRun.Id);
         return written;
     }
@@ -347,11 +319,12 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     public ValueTask DisposeAsync() =>
         _lane.DisposeAsync();
 
-    /// <summary>
-    ///     One agent turn, start to finish, off the tick. It NEVER faults: every step answers with a
-    ///     <see cref="GraphWorkflowAgentTurn" /> and one outer catch maps the unforeseen, so the poll never has to
-    ///     rethrow. Cancellation is the one exception that leaves here, and it leaves as a cancelled TASK.
-    /// </summary>
+    /// <summary>One agent turn, start to finish, off the tick.</summary>
+    /// <remarks>
+    ///     It NEVER faults: every step answers with a <see cref="GraphWorkflowAgentTurn" /> and one outer catch maps
+    ///     the unforeseen, so the poll never has to rethrow. Cancellation is the one exception that leaves here, and
+    ///     it leaves as a cancelled TASK.
+    /// </remarks>
     private async Task<GraphWorkflowAgentTurn> RunTurnAsync(Guid runId,
         Guid nodeRunId,
         GraphWorkflowGraphNode node,
@@ -381,9 +354,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 pinnedModel = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
             }
 
-            // 2. The EFFECTIVE model: what the node pins, else what the agent pins, else the node's local default.
-            //    The same settings carry MaxMessageRequestTimeoutSeconds, which is deliberately NOT read — step 6 says
-            //    why: the graph author declared this node's budget, and the runner must end before the deadline stage.
+            // 2. The EFFECTIVE model: what the node pins, else what the agent pins, else the node's local default. The same settings carry
+            //    MaxMessageRequestTimeoutSeconds, deliberately NOT read — step 6 says why: the runner must end before the deadline stage.
             var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken);
             var localDefault = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
                                              .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
@@ -393,9 +365,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 return Invalid("No local chat model is available to run this agent node. Install a local model or pin one to the agent.");
             }
 
-            // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any
-            //    invocation: a graph workflow run is unattended by construction, so node-local prompt and upstream
-            //    content is never handed to a cloud model.
+            // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any invocation: a graph workflow run is
+            //    unattended by construction, so node-local prompt and upstream content is never handed to a cloud model.
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
             if (capabilities.IsCloud)
             {
@@ -415,14 +386,12 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
             reservation = decision.Reservation;
 
-            // The seed prompt is also the retrieval query below, so it is built before the resolve rather than beside
-            // the package: a playbook gated on a blank query injects its full static prepend instead of the relevant
-            // slice, and that difference is a different resolved prompt.
+            // The seed prompt is also the retrieval query below, so it is built before the resolve rather than beside the package: a playbook gated on a blank
+            // query injects its full static prepend instead of the relevant slice, and that difference is a different resolved prompt.
             var seedPrompt = SeedPrompt(config, inputJson);
 
-            // 5. The agent's COMPLETE runtime. honorModelProfile is FALSE exactly when this node names its own model:
-            //    with a bare true, a node overriding a cloud-pinned agent to a local one would pass step 3 on its own
-            //    choice while the resolver gated the offer against — and returned — the cloud pin.
+            // 5. The agent's COMPLETE runtime. honorModelProfile is FALSE exactly when this node names its own model: with a bare true, a node overriding a
+            //    cloud-pinned agent to a local one would pass step 3 on its own choice while the resolver gated the offer against — and returned — the cloud pin.
             var resolved = await services.GetRequiredService<IAgentDefinitionResolver>()
                                          .ResolveAsync(config.AgentDefinitionId,
                                              effectiveModel,
@@ -435,9 +404,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             {
                 if (config.AgentDefinitionId is not null)
                 {
-                    // The definition existed at step 1 and was deleted before the resolve finished (rare race). ONLY
-                    // this case is a deletion: a null id resolves to null BY DESIGN, and reading that as one is what
-                    // made every agent node that names no agent unrunnable.
+                    // The definition existed at step 1 and was deleted before the resolve finished (rare race). ONLY this case is a deletion: a null id
+                    // resolves to null BY DESIGN, and reading that as a deletion is what makes every agent node that names no agent unrunnable.
                     return Invalid("The agent this node runs could not be found. It may have been deleted.");
                 }
 
@@ -486,20 +454,14 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     /// <summary>
     ///     What an Agent node that binds NO agent runs as: the default persona, composed exactly as the default chat
     ///     path composes it for an unbound conversation.
-    ///     <para>
-    ///         Every field mirrors <c>NodeChatRegenerationService</c>'s null-resolution fallback — the scaffolded
-    ///         embedded prompt through <see cref="IAgentInstructionProvider.GetDefaultChatSystemPrompt" />, the
-    ///         capability-gated catalog offer recomposed through the node's tighten-only
-    ///         <see cref="IToolApprovalPolicy" /> so an agentless node cannot bypass it, and agent version 1. No pinned
-    ///         model (the node's effective model is what the package binds), no reasoning effort (the node's own
-    ///         override is applied by the package builder), no skills and no custom tools: an unbound turn has no
-    ///         definition to carry any of them.
-    ///     </para>
-    ///     <para>
-    ///         The approval-required tools this leaves in the offer are stripped where every other offer's are, in
-    ///         <see cref="BuildPackage" /> — an unattended run has no approval round-trip.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Every field mirrors <c>NodeChatRegenerationService</c>'s null-resolution fallback — the scaffolded embedded
+    ///     prompt through <see cref="IAgentInstructionProvider.GetDefaultChatSystemPrompt" />, the capability-gated
+    ///     catalog offer recomposed through the node's tighten-only <see cref="IToolApprovalPolicy" /> so an agentless
+    ///     node cannot bypass it, and agent version 1. No pinned model, no reasoning effort, no skills and no custom tools: an unbound turn has no definition to
+    ///     carry any, and the package builder supplies the first two. The approval-required tools left in the offer are stripped in <see cref="BuildPackage" />.
+    /// </remarks>
     private static async Task<ResolvedAgentRuntime> DefaultPersonaAsync(IServiceProvider services,
         string effectiveModel,
         ModelCapabilitySnapshot capabilities,
@@ -528,14 +490,14 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
     /// <summary>
     ///     Takes the node-wide invocation slot, runs the package, and answers the terminal state the runner reported.
-    ///     <para>
-    ///         The slot is taken BEFORE the run and flips <paramref name="leaseAcquired" />, which is the moment the
-    ///         row may honestly say <c>Running</c>. The runner has no return value, so the result comes back through
-    ///         <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> — held in a
-    ///         <see cref="StrongBox{T}" /> rather than a local, which flow analysis would otherwise prove always-null
-    ///         because it cannot see the handler fire synchronously from the completion report.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The slot is taken BEFORE the run and flips <paramref name="leaseAcquired" />, which is the moment the row
+    ///     may honestly say <c>Running</c>. The runner has no return value, so the result comes back through
+    ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> — held in a <see cref="StrongBox{T}" /> rather
+    ///     than a local, which flow analysis would otherwise prove always-null because it cannot see the handler fire
+    ///     synchronously from the completion report.
+    /// </remarks>
     private static async Task<InvocationState?> RunInvocationAsync(IWorkerEventDispatcher eventDispatcher,
         IInvocationRunner invocationRunner,
         RuntimePackage package,
@@ -573,20 +535,14 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         return terminalState.Value;
     }
 
-    /// <summary>
-    ///     The headless loopback package for one node's turn.
-    ///     <para>
-    ///         Approval-required tools are stripped: an unattended run has no approval round-trip, so an approval-gated
-    ///         tool would surface a request nobody can answer. <c>IsUnattended</c> is what covers the rest of it —
-    ///         skill tools arrive through MAF's context providers and never through the offer, so stripping alone
-    ///         cannot reach them.
-    ///     </para>
-    ///     <para>
-    ///         The whole-turn deadline is the NODE's own <c>timeoutSeconds</c>, deliberately not the node-level
-    ///         "maximum message request timeout" the scheduler uses: the runner must end first, or the dispatcher's
-    ///         30-second-grace expiry stops being a backstop and becomes a race with the answer.
-    ///     </para>
-    /// </summary>
+    /// <summary>The headless loopback package for one node's turn.</summary>
+    /// <remarks>
+    ///     Approval-required tools are stripped: an unattended run has no approval round-trip, so an approval-gated
+    ///     tool would surface a request nobody can answer. <c>IsUnattended</c> covers the rest — skill tools arrive
+    ///     through MAF's context providers and never through the offer, so stripping alone cannot reach them. The
+    ///     whole-turn deadline is the NODE's own <c>timeoutSeconds</c>, not the node-level maximum message request
+    ///     timeout: the runner must end first, or the dispatcher's grace expiry becomes a race with the answer.
+    /// </remarks>
     private RuntimePackage BuildPackage(ILocalChatRuntimePackageBuilder packageBuilder,
         ResolvedAgentRuntime resolved,
         GraphWorkflowGraphNode node,
@@ -646,16 +602,14 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         });
     }
 
-    /// <summary>
-    ///     What the runner's terminal state means for this node run.
-    ///     <para>
-    ///         A node declaring a response schema must come back a JSON OBJECT. A parse failure fails
-    ///         <c>NodeFailed</c> — the RETRYABLE class, because a re-ask under the same grammar can land where one
-    ///         attempt did not — with the finish reason named, since a truncated answer is still
-    ///         <c>Completed</c> and <c>length</c> is the common cause. There is deliberately no salvage path: grammar-
-    ///         constrained output carries no fences, and stripping some would quietly mask a broken grammar.
-    ///     </para>
-    /// </summary>
+    /// <summary>What the runner's terminal state means for this node run.</summary>
+    /// <remarks>
+    ///     A node declaring a response schema must come back a JSON OBJECT. A parse failure fails <c>NodeFailed</c> —
+    ///     the RETRYABLE class, because a re-ask under the same grammar can land where one attempt did not — with the
+    ///     finish reason named, since a truncated answer is still <c>Completed</c> and <c>length</c> is the common
+    ///     cause. There is deliberately no salvage path: grammar-constrained output carries no fences, and stripping
+    ///     some would quietly mask a broken grammar.
+    /// </remarks>
     private static GraphWorkflowAgentTurn Map(InvocationState? terminal, GraphWorkflowAgentConfig config)
     {
         switch (terminal?.Status)
@@ -664,9 +618,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 return Failure(GraphWorkflowFailureClass.NodeFailed, "The agent turn reported no result.");
 
             case InvocationStatus.Failed when terminal.FailureCategory == FailureCategory.Timeout:
-                // The runner's own watchdog reports a timeout as a FAILED terminal, so the category is the only place
-                // it survives. Still retryable, and classed Timeout rather than NodeFailed because the answer to a
-                // node that ran out of time is a different one from the answer to a node whose provider said no.
+                // The runner's own watchdog reports a timeout as a FAILED terminal, so the category is the only place it survives. Still retryable, and classed
+                // Timeout rather than NodeFailed because the answer to a node that ran out of time differs from the answer to a node whose provider said no.
                 return Failure(GraphWorkflowFailureClass.Timeout, "The agent turn ran out of time before it answered. See the node logs for details.");
 
             case InvocationStatus.Failed:
@@ -729,15 +682,15 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         new() { Succeeded = false, FailureClass = failureClass, SanitizedReason = GraphWorkflowStateMachine.Bounded(reason, GraphWorkflowStateMachine.MaxTerminalReason), Text = string.Empty, Json = null, Usage = null };
 
     /// <summary>
-    ///     The seed user turn's content: the node's instructions, followed by the upstream documents when the node asks
-    ///     for them.
-    ///     <para>
-    ///         Inlined rather than referenced, which is this codebase's established upstream-consumption pattern —
-    ///         there is no dereference tool an agent could call. Budgeted at <c>MaxRunInputBytes</c>, the same bound the
-    ///         run's own input carries, and truncated with an explicit marker rather than silently: a prompt that lost
-    ///         half its evidence without saying so is how a node produces a confident wrong answer.
-    ///     </para>
+    ///     The seed user turn's content: the node's instructions, followed by the upstream documents when the node
+    ///     asks for them.
     /// </summary>
+    /// <remarks>
+    ///     Inlined rather than referenced, which is this codebase's established upstream-consumption pattern — there
+    ///     is no dereference tool an agent could call. Budgeted at <c>MaxRunInputBytes</c>, the same bound the run's
+    ///     own input carries, and truncated with an explicit marker rather than silently: a prompt that lost half its
+    ///     evidence without saying so is how a node produces a confident wrong answer.
+    /// </remarks>
     private string SeedPrompt(GraphWorkflowAgentConfig config, string inputJson)
     {
         if (!config.IncludeUpstreamOutputs)
@@ -858,9 +811,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             ExpectedVersion = GraphWorkflowVersions.Any,
             TargetStatus = status,
             OutputJson = document,
-            // Classified at the moment of the failing write, like every other failure this runtime
-            // records: the state machine has no Failed → Failed edge, so nothing can re-classify one
-            // afterwards.
+            // Classified at the moment of the failing write, like every other failure this runtime records: the state
+            // machine has no Failed → Failed edge, so nothing can re-classify one afterwards.
             FailureClass = turn.Succeeded ? null : GraphWorkflowFailures.Classify(turn.FailureClass, nodeRun.Attempt, node.MaxAttempts),
             TerminalReason = turn.SanitizedReason
         },

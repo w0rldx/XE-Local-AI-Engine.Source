@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 /// <summary>
 ///     One thing wrong with a definition graph, keyed by the node or edge it belongs to so the editor can draw it on
 ///     the offending element rather than in a list beside the canvas.
-///     <para>
-///         <see cref="Key" /> is <see langword="null" /> for a failure that belongs to the document as a whole — a
-///         malformed body, a schema version this node does not speak, or one of the structural rules whose answer is
-///         about the graph rather than about any one part of it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Key" /> is <see langword="null" /> for a failure that belongs to the document as a whole — a
+///     malformed body, a schema version this node does not speak, or one of the structural rules whose answer is
+///     about the graph rather than about any one part of it.
+/// </remarks>
 public sealed record GraphWorkflowValidationError(string? Key, string Message)
 {
     public override string ToString() =>
@@ -17,22 +17,23 @@ public sealed record GraphWorkflowValidationError(string? Key, string Message)
 
 /// <summary>
 ///     Everything wrong with one graph. <see cref="IsValid" /> is true only when <see cref="Errors" /> is empty.
-///     <para>
-///         Accumulated rather than thrown one at a time because an author fixing a canvas wants every complaint at
-///         once. The whole-document and structural rules are the deliberate exception and still throw first: there is
-///         nothing useful to say about the rest of a graph nobody can walk.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Accumulated rather than thrown one at a time because an author fixing a canvas wants every complaint at once.
+///     The whole-document and structural rules are the deliberate exception and still throw first: there is nothing
+///     useful to say about the rest of a graph nobody can walk.
+/// </remarks>
 public sealed class GraphWorkflowValidationResult
 {
     public required IReadOnlyList<GraphWorkflowValidationError> Errors { get; init; }
 
-    /// <summary>
-    ///     Things worth saying about a graph that is nonetheless fine. A warning NEVER blocks: a definition carrying
-    ///     one saves, validates as <see cref="IsValid" />, and runs — which is why this is a second list rather than a
-    ///     severity member on <see cref="GraphWorkflowValidationError" />, where every consumer of
-    ///     <see cref="Errors" /> would then have to remember to filter it out before refusing.
-    /// </summary>
+    /// <summary>Things worth saying about a graph that is nonetheless fine.</summary>
+    /// <remarks>
+    ///     A warning NEVER blocks: a definition carrying one saves, validates as <see cref="IsValid" />, and runs.
+    ///     That is why this is a second list rather than a severity member on
+    ///     <see cref="GraphWorkflowValidationError" />, where every consumer of <see cref="Errors" /> would then have
+    ///     to remember to filter it out before refusing.
+    /// </remarks>
     public IReadOnlyList<GraphWorkflowValidationError> Warnings { get; init; } = [];
 
     public bool IsValid => Errors.Count == 0;
@@ -47,9 +48,12 @@ public sealed class GraphWorkflowValidationResult
 
 /// <summary>
 ///     Bad input to the graph workflow runtime: a graph that cannot be parsed, or one whose nodes and edges the
-///     dispatcher could not route. Carries the structured errors, which is what lets the endpoints replay them one by
-///     one instead of collapsing them into a single sentence.
+///     dispatcher could not route.
 /// </summary>
+/// <remarks>
+///     It carries the structured errors, which is what lets the endpoints replay them one by one instead of
+///     collapsing them into a single sentence.
+/// </remarks>
 public sealed class GraphWorkflowValidationException : InvalidOperationException
 {
     /// <summary>A single whole-document or structural failure — the throw-first half of the rule set.</summary>

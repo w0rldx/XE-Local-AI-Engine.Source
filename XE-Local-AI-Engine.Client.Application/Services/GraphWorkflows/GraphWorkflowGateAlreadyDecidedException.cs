@@ -4,15 +4,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     A second human act on a pause that is already answered — a NEW operation id on a decided row, or an id that
-///     already decided a DIFFERENT pause of the same run. Neither is the idempotent replay a repeated id is.
-///     <para>
-///         It carries the answer that STANDS, and that is the whole reason it is its own type rather than another
-///         <see cref="GraphWorkflowRunConflictException" />: the second person to click needs to be told what was
-///         decided, not only that their click failed. <c>ConflictExceptionHandler</c> puts
-///         <see cref="StandingDecision" /> on the 409 body under the member Dev Workflows' equivalent already
-///         populates.
-///     </para>
+///     already decided a DIFFERENT pause of the same run.
 /// </summary>
+/// <remarks>
+///     Neither is the idempotent replay a repeated id is. It carries the answer that STANDS, which is why it is its
+///     own type rather than another <see cref="GraphWorkflowRunConflictException" />: the second person to click
+///     needs to be told what was decided, not only that their click failed. <c>ConflictExceptionHandler</c> puts
+///     <see cref="StandingDecision" /> on the 409 body under the member Dev Workflows' equivalent already populates.
+/// </remarks>
 public sealed class GraphWorkflowGateAlreadyDecidedException : InvalidOperationException
 {
     public GraphWorkflowGateAlreadyDecidedException(string message, GraphWorkflowDecisionKind standingDecision) : base(message)

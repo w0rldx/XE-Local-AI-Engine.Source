@@ -4,29 +4,24 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The one write seam for graph workflow definitions: every save comes through here, so the parse and the node cap
-///     have a single home and no caller — the API, or S4's importer — can store a graph the dispatcher could not route.
-///     <para>
-///         The reads (<see cref="ListAsync" />, <see cref="GetAsync" />, <see cref="DeleteAsync" />) are here because
-///         the endpoint-dependency rule (<c>EndpointDependencyTests</c>, <c>docs/wiki/16-code-conventions.md</c>) makes
-///         this service the endpoints' only door to <see cref="IGraphWorkflowStore" />. They are deliberate
-///         pass-throughs with no validation of their own: their semantics are the store's, so what
-///         <see cref="IGraphWorkflowStore.ListDefinitionsAsync" /> promises about the graph blob and what
-///         <see cref="IGraphWorkflowStore.DeleteDefinitionAsync" /> refuses while a run is live are answered there and
-///         restated nowhere.
-///     </para>
+///     have a single home and no caller — the API, or the canvas importer — can store a graph nothing could route.
 /// </summary>
+/// <remarks>
+///     The reads (<see cref="ListAsync" />, <see cref="GetAsync" />, <see cref="DeleteAsync" />) are here because the
+///     endpoint-dependency rule (<c>EndpointDependencyTests</c>, <c>docs/wiki/16-code-conventions.md</c>) makes this
+///     service the endpoints' only door to <see cref="IGraphWorkflowStore" />. They are deliberate pass-throughs with
+///     no validation of their own: what the store promises about the graph blob and what it refuses while a run is
+///     live are answered there and restated nowhere.
+/// </remarks>
 public interface IGraphWorkflowDefinitionService
 {
-    /// <summary>
-    ///     Every complaint about <paramref name="graphJson" />, keyed by the node or edge it belongs to. NEVER throws:
-    ///     the editor asks this question while a graph is still half-written, and a caller that has to catch to read
-    ///     an answer cannot append its own failures to the list.
-    ///     <para>
-    ///         Asynchronous because the tool gate is: whether a <c>Tool</c> node's name is invocable is a question for
-    ///         the live tool catalog, and asking it here is what keeps the editor's report and the runtime's refusal
-    ///         the same answer.
-    ///     </para>
-    /// </summary>
+    /// <summary>Every complaint about <paramref name="graphJson" />, keyed by the node or edge it belongs to.</summary>
+    /// <remarks>
+    ///     NEVER throws: the editor asks this while a graph is still half-written, and a caller that has to catch to
+    ///     read an answer cannot append its own failures to the list. Asynchronous because the tool gate is — whether
+    ///     a <c>Tool</c> node's name is invocable is a question for the live tool catalog, and asking it here is what
+    ///     keeps the editor's report and the runtime's refusal the same answer.
+    /// </remarks>
     Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, CancellationToken cancellationToken = default);
 
     /// <summary>Validates and stores. Throws <see cref="GraphWorkflowValidationException" /> before reaching the store.</summary>
@@ -34,14 +29,14 @@ public interface IGraphWorkflowDefinitionService
 
     /// <summary>
     ///     A partial edit under optimistic concurrency: every null member leaves the stored value alone, so a rename
-    ///     travels without the caller echoing back a graph it never read. A non-null graph is validated and its node
-    ///     count written alongside it.
-    ///     <para>
-    ///         <paramref name="description" /> distinguishes the two absences: null leaves the stored description
-    ///         alone, an EMPTY string clears it. Collapsing them would mean an author who deleted the text had no way
-    ///         to say so, or a rename that carried no description silently wiped one.
-    ///     </para>
+    ///     travels without the caller echoing back a graph it never read.
     /// </summary>
+    /// <remarks>
+    ///     A non-null graph is validated and its node count written alongside it. <paramref name="description" />
+    ///     distinguishes the two absences: null leaves the stored description alone, an EMPTY string clears it.
+    ///     Collapsing them would mean an author who deleted the text had no way to say so, or a rename that carried
+    ///     no description silently wiped one.
+    /// </remarks>
     Task<GraphWorkflowDefinitionSnapshot> UpdateAsync(Guid definitionId,
         int expectedVersion,
         string? name,

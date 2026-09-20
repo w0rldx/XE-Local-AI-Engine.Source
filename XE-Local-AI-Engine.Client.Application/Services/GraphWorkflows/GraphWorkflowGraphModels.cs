@@ -19,12 +19,13 @@ internal abstract record GraphWorkflowNodeConfig;
 
 internal sealed record GraphWorkflowStartConfig(JsonElement? InputSchema, JsonElement? DefaultInput) : GraphWorkflowNodeConfig;
 
-/// <summary>
-///     <see cref="Model" /> and <see cref="ReasoningEffort" /> are the two dispatch pins. The model name travels as
-///     written and is matched against this node's catalog when the run starts, exactly as an agent definition's own pin
-///     is, so a graph does not become unsaveable because a model was uninstalled after it was authored. The effort IS
-///     checked here: its vocabulary is closed and cannot go stale between authoring and a run.
-/// </summary>
+/// <summary><see cref="Model" /> and <see cref="ReasoningEffort" /> are the two dispatch pins.</summary>
+/// <remarks>
+///     The model name travels as written and is matched against this node's catalog when the run starts, exactly as
+///     an agent definition's own pin is, so a graph does not become unsaveable because a model was uninstalled after
+///     it was authored. The effort IS checked here: its vocabulary is closed and cannot go stale between authoring
+///     and a run.
+/// </remarks>
 internal sealed record GraphWorkflowAgentConfig(
     Guid? AgentDefinitionId,
     string Instructions,
@@ -74,8 +75,8 @@ internal sealed class GraphWorkflowGraphNode
 /// <summary>
 ///     One edge. <see cref="Key" /> is its identity — required and unique, which is what makes PARALLEL edges
 ///     expressible: two edges over the same pair are legal when at most one of them is unconditional.
-///     <see cref="Label" /> is the named outcome a node's output document reports as its <c>branch</c>.
 /// </summary>
+/// <remarks><see cref="Label" /> is the named outcome a node's output document reports as its <c>branch</c>.</remarks>
 internal sealed record GraphWorkflowGraphEdge(string Key, string From, string To, string? Label, GraphWorkflowCondition? Condition)
 {
     public override string ToString() =>

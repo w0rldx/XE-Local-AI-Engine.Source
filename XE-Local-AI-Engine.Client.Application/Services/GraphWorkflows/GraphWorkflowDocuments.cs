@@ -27,15 +27,14 @@ internal sealed class GraphWorkflowOutputTooLargeException : InvalidOperationExc
     public string NodeKey { get; }
 }
 
-/// <summary>
-///     The single writer of every node-run document. No executor composes one itself: eight node kinds share one
-///     envelope, one <c>branch</c> derivation and one size cap, and a second implementation of any of those is a way
-///     for an executor to disagree with the routing the dispatcher will do.
-///     <para>
-///         Pure and static — no I/O, no options container. The one option this needs, the output cap, travels as an
-///         argument for the same reason the parser's node cap does: it keeps the whole class testable without a host.
-///     </para>
-/// </summary>
+/// <summary>The single writer of every node-run document.</summary>
+/// <remarks>
+///     No executor composes one itself: every node kind shares one envelope, one <c>branch</c> derivation and one size
+///     cap, and a second implementation of any of those is a way for an executor to disagree with the routing the
+///     dispatcher will do. Pure and static — no I/O, no options container. The one option it needs, the output cap,
+///     travels as an argument for the same reason the parser's node cap does: it keeps the class testable without a
+///     host.
+/// </remarks>
 internal static class GraphWorkflowDocuments
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -48,15 +47,15 @@ internal static class GraphWorkflowDocuments
     private static JsonElement NullValue { get; } = JsonSerializer.SerializeToElement<object?>(value: null, JsonOptions);
 
     /// <summary>
-    ///     The common envelope: <c>{ status, attempt, branch, output }</c>, with <c>branch</c> naming the out-edge that
-    ///     fired.
-    ///     <para>
-    ///         The branch is derived HERE, from the envelope this call has just built, by evaluating the node's own
-    ///         out-edge conditions against it — first match wins, and an unconditional edge names none, because an edge
-    ///         that accepts everything says nothing about which way the run went. That is one implementation for all
-    ///         eight kinds, and it is the same evaluation the dispatcher will do a moment later against the same bytes.
-    ///     </para>
+    ///     The common envelope: <c>{ status, attempt, branch, output }</c>, with <c>branch</c> naming the out-edge
+    ///     that fired.
     /// </summary>
+    /// <remarks>
+    ///     The branch is derived HERE, from the envelope this call has just built, by evaluating the node's own
+    ///     out-edge conditions against it — first match wins, and an unconditional edge names none, because an edge
+    ///     that accepts everything says nothing about which way the run went. That is one implementation for every
+    ///     kind, and the same evaluation the dispatcher will do a moment later against the same bytes.
+    /// </remarks>
     /// <exception cref="GraphWorkflowOutputTooLargeException">The composed document is over <paramref name="maxOutputJsonBytes" /> UTF-8 bytes.</exception>
     public static string Compose(GraphWorkflowGraph graph,
         GraphWorkflowGraphNode node,
@@ -78,15 +77,13 @@ internal static class GraphWorkflowDocuments
         return bytes <= maxOutputJsonBytes ? document : throw new GraphWorkflowOutputTooLargeException(node.NodeKey, bytes, maxOutputJsonBytes);
     }
 
-    /// <summary>
-    ///     The input document an executor is handed: <c>{ run: { input }, upstream: { … }, input: … }</c>.
-    ///     <para>
-    ///         <c>input</c> is the shortcut for the common shape — the single satisfied predecessor's whole output
-    ///         document — and falls back to the <c>upstream</c> map when there is more than one, so a node with two
-    ///         inbound edges still has one place to read them all from. With no predecessor at all it is
-    ///         <see langword="null" />, which is what the <c>Start</c> node sees.
-    ///     </para>
-    /// </summary>
+    /// <summary>The input document an executor is handed: <c>{ run: { input }, upstream: { … }, input: … }</c>.</summary>
+    /// <remarks>
+    ///     <c>input</c> is the shortcut for the common shape — the single satisfied predecessor's whole output
+    ///     document — and falls back to the <c>upstream</c> map when there is more than one, so a node with two
+    ///     inbound edges still has one place to read them all from. With no predecessor at all it is
+    ///     <see langword="null" />, which is what the <c>Start</c> node sees.
+    /// </remarks>
     public static string ComposeInput(string? runInputJson, IReadOnlyList<GraphWorkflowUpstreamDocument> upstream)
     {
         ArgumentNullException.ThrowIfNull(upstream);
@@ -111,19 +108,14 @@ internal static class GraphWorkflowDocuments
     public static JsonElement StartOutput(string? runInputJson) =>
         JsonSerializer.SerializeToElement(new StartOutputPayload { Input = ValueOf(runInputJson) }, JsonOptions);
 
-    /// <summary>
-    ///     <c>Condition</c> and <c>Parallel</c>: a verbatim pass-through of the predecessor's <c>output</c>.
-    ///     <para>
-    ///         This is what makes a <c>Condition</c> node a real router. Edge conditions evaluate against the SOURCE
-    ///         node's output document — which for a Condition's own out-edges is the Condition's — so without the
-    ///         pass-through they would inspect <c>{}</c> and never fire.
-    ///     </para>
-    ///     <para>
-    ///         Read off <c>input.output</c> of the node's input document, which is the single satisfied predecessor's
-    ///         document. A node with several predecessors has no single upstream output to carry forward, and answers
-    ///         <c>{}</c> rather than inventing one.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>Condition</c> and <c>Parallel</c>: a verbatim pass-through of the predecessor's <c>output</c>.</summary>
+    /// <remarks>
+    ///     This is what makes a <c>Condition</c> node a real router: edge conditions evaluate against the SOURCE
+    ///     node's output document — which for a Condition's own out-edges is the Condition's — so without the
+    ///     pass-through they would inspect <c>{}</c> and never fire. It is read off <c>input.output</c>, the single
+    ///     satisfied predecessor's document; a node with several predecessors has no single upstream output to carry
+    ///     forward and answers <c>{}</c> rather than inventing one.
+    /// </remarks>
     public static JsonElement PassThroughOutput(string? inputDocumentJson)
     {
         if (Read(inputDocumentJson) is not { ValueKind: JsonValueKind.Object } input
@@ -137,31 +129,24 @@ internal static class GraphWorkflowDocuments
         return output.Clone();
     }
 
-    /// <summary>
-    ///     <c>Pause</c>: the answer a person gave, and the free text around it.
-    ///     <para>
-    ///         <c>decision</c> is the enum's NAME and nothing else, because that is the member every out-edge condition
-    ///         of a pause selects on and the exact member <see cref="GraphWorkflowStateMachine.PauseOutputJson" />
-    ///         writes for the definition-time pre-flight check. The two spellings must produce the same string or a
-    ///         graph that pre-flighted clean would route nowhere at run time.
-    ///     </para>
-    ///     <para>
-    ///         <c>comment</c> and <c>payload</c> ride beside it rather than above it: they are the operator's, not the
-    ///         router's, and a condition that could select on them would route on free text.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>Pause</c>: the answer a person gave, and the free text around it.</summary>
+    /// <remarks>
+    ///     <c>decision</c> is the enum's NAME and nothing else, because that is the member every out-edge condition of
+    ///     a pause selects on and the exact member <see cref="GraphWorkflowStateMachine.PauseOutputJson" /> writes for
+    ///     the definition-time pre-flight check — two spellings that disagree would let a graph pre-flight clean and
+    ///     route nowhere at run time. <c>comment</c> and <c>payload</c> ride beside it rather than above it: they are
+    ///     the operator's, not the router's, and a condition selecting on them would route on free text.
+    /// </remarks>
     public static JsonElement PauseOutput(GraphWorkflowDecisionKind decision, string? comment, JsonElement? payload) =>
         JsonSerializer.SerializeToElement(new PauseOutputPayload { Decision = decision.ToString(), Comment = comment, Payload = payload ?? NullValue }, JsonOptions);
 
-    /// <summary>
-    ///     <c>Tool</c>: the invocation's answer under <c>result</c>.
-    ///     <para>
-    ///         Embedded as JSON when the tool answered with an object or an array, and as a string otherwise. That one
-    ///         try-parse is what lets a downstream <c>Condition</c> — which passes its predecessor's output through
-    ///         verbatim — dot-path into a structured answer. Ceiling, stated rather than hidden: plain text that
-    ///         happens to be a JSON object is embedded as JSON, and the tools that do that mean it.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>Tool</c>: the invocation's answer under <c>result</c>.</summary>
+    /// <remarks>
+    ///     Embedded as JSON when the tool answered with an object or an array, and as a string otherwise. That one
+    ///     try-parse is what lets a downstream <c>Condition</c> — which passes its predecessor's output through
+    ///     verbatim — dot-path into a structured answer. Ceiling, stated rather than hidden: plain text that happens
+    ///     to be a JSON object is embedded as JSON, and the tools that do that mean it.
+    /// </remarks>
     public static JsonElement ToolOutput(string? result) =>
         JsonSerializer.SerializeToElement(new ToolOutputPayload
         {
@@ -173,9 +158,12 @@ internal static class GraphWorkflowDocuments
 
     /// <summary>
     ///     A dot path resolved against a stored document, or <see langword="null" /> when the document does not carry
-    ///     it. Shared with the <c>Tool</c> lane's argument bindings, so a binding's path grammar is the one this
-    ///     module already has rather than a second walk that could come to disagree with it.
+    ///     it.
     /// </summary>
+    /// <remarks>
+    ///     Shared with the <c>Tool</c> lane's argument bindings, so a binding's path grammar is the one this module
+    ///     already has rather than a second walk that could come to disagree with it.
+    /// </remarks>
     public static JsonElement? Resolve(string? documentJson, string path) =>
         Resolve(Read(documentJson), path);
 
@@ -199,11 +187,11 @@ internal static class GraphWorkflowDocuments
     /// <summary>
     ///     <c>End</c>: the declared outcome and the run's result — <paramref name="resultPath" /> resolved against the
     ///     End node's input document, or that whole document when the author named no path.
-    ///     <para>
-    ///         A path that is not a dot path, or that the document does not carry, resolves to <c>null</c>. Failing the
-    ///         node instead would end a run that did all of its work over a projection nobody reads.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A path that is not a dot path, or that the document does not carry, resolves to <c>null</c>. Failing the
+    ///     node instead would end a run that did all of its work over a projection nobody reads.
+    /// </remarks>
     public static JsonElement EndOutput(string outcome, string? resultPath, string? inputDocumentJson)
     {
         var input = Read(inputDocumentJson);

@@ -11,33 +11,14 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     The <c>Tool</c> lane: ONE named engine tool per node run, invoked in process through
 ///     <see cref="IToolInvocationService" /> and driven off the tick through
 ///     <see cref="GraphWorkflowInFlightLane{TResult}" /> rather than inside it.
-///     <para>
-///         Shape from <see cref="GraphWorkflowAgentExecutor" />, deliberately and to the letter — dispatch to a queue,
-///         settle on the poll, stop that answers no on a repeat, forget what a retry superseded. The two lanes differ
-///         in what they run and in nothing else, because a second shape is how two lanes come to disagree about
-///         whether a row is still being driven.
-///     </para>
-///     <para>
-///         What it does NOT share is the Agent lane's second gate. An agent turn queues twice — once for a lane slot
-///         and once for the node-wide invocation lease — while a tool call waits for the lane slot alone, so the row
-///         may say <c>Running</c> the moment <see cref="GraphWorkflowInFlightLane{TResult}.TryStartAsync" /> hands
-///         back an entry. The lane is what bounds the fan-out: a tool call has no global bottleneck of its own, and a
-///         <c>Parallel</c> node feeding two hundred <c>search_knowledge_base</c> nodes would otherwise fire all of
-///         them at once. It is sized on <c>MaxConcurrentRuns</c> rather than on a knob of its own — the same "how much
-///         of this node may be busy at once" question, and a second option is worth adding only once the two need
-///         different numbers.
-///     </para>
-///     <para>
-///         The whole invocation envelope (<c>ReadLocal</c> AND a composed approval of <see langword="false" />)
-///         lives inside <see cref="IToolInvocationService" />, so this class enforces none of it and cannot skip any
-///         of it. Every refusal arrives as an outcome and becomes a row.
-///     </para>
-///     <para>
-///         <b>Singleton.</b> The lane and its slot count are properties of the node and outlive both a tick and a DI
-///         scope. The store it writes through is the scoped one the tick hands it, and the invocation service is a
-///         singleton in its own right, so this lane needs no scope of its own.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>Singleton.</b> The lane and its slot count are properties of the node and outlive both a tick and a DI
+///     scope; the store it writes through is the scoped one the tick hands it, and the invocation service is a
+///     singleton in its own right, so this lane needs no scope of its own. Its shape is
+///     <see cref="GraphWorkflowAgentExecutor" />'s to the letter, because a second shape is how two lanes come to
+///     disagree about whether a row is still being driven. What it queues for, what bounds the fan-out and how an outcome becomes a terminal: docs/wiki/21-graph-workflows.md ("Tool").
+/// </remarks>
 internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IAsyncDisposable
 {
     /// <summary>What a <c>Queued</c> Tool row is waiting for. It is waiting, not failing, so it carries no event.</summary>
@@ -75,14 +56,12 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     public bool IsInFlight(Guid nodeRunId) =>
         _lane.IsInFlight(nodeRunId);
 
-    /// <summary>
-    ///     Admits an eligible Tool node run, and answers how many transitions it wrote.
-    ///     <para>
-    ///         The row goes to <c>Queued</c> first ALWAYS, carrying the input document the bindings resolve against,
-    ///         and moves on to <c>Running</c> in the same tick once the call actually holds a slot. A lane with none
-    ///         free leaves it <c>Queued</c> saying what it waits for, and the next tick asks again.
-    ///     </para>
-    /// </summary>
+    /// <summary>Admits an eligible Tool node run, and answers how many transitions it wrote.</summary>
+    /// <remarks>
+    ///     The row goes to <c>Queued</c> first ALWAYS, carrying the input document the bindings resolve against, and
+    ///     moves on to <c>Running</c> in the same tick once the call actually holds a slot. A lane with none free
+    ///     leaves it <c>Queued</c> saying what it waits for, and the next tick asks again.
+    /// </remarks>
     public async Task<int> DispatchAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
         GraphWorkflowGraph graph,
@@ -98,11 +77,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
 
         if (_lane.TryGet(nodeRun.Id, out var existing) && existing.Attempt == nodeRun.Attempt)
         {
-            // THIS attempt's call is already being driven. The only thing that can have left the row behind it is the
-            // Running write failing after the slot was taken, so the row is caught up rather than re-run.
-            //
-            // The attempt is compared rather than assumed: a retry re-attempts a row WITHOUT coming through this lane,
-            // and admitting such a row against the call belonging to the attempt before would settle one off the other.
+            // THIS attempt's call is already being driven; the only thing that can have left the row behind it is the Running write failing after the
+            // slot was taken, so the row is caught up rather than re-run. The attempt is compared, not assumed: a retry re-attempts a row WITHOUT coming through here.
             return nodeRun.Status == GraphWorkflowNodeRunStatus.Queued
                 ? await RunningAsync(store, run, nodeRun, cancellationToken)
                 : 0;
@@ -161,9 +137,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             return written + await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, refusal, eventType: null, cancellationToken);
         }
 
-        // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path has to hand its
-        // runner something, and a tool call has no such handle — it is an in-process await that its token ends. An id
-        // minted here would appear on the row as a correlation nothing else in the system carries.
+        // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path must hand its runner something, and a tool call has
+        // no such handle — an in-process await its token ends. An id minted here would appear on the row as a correlation nothing else in the system carries.
         var flight = await _lane.TryStartAsync(nodeRun.Id,
                                     nodeRun.Attempt,
                                     Guid.Empty,
@@ -193,10 +168,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
 
         if (!_lane.TryGet(nodeRun.Id, out var flight))
         {
-            // Nothing on this node is driving this row and nothing ever will: the lane holds no memory across a
-            // restart, which is exactly what the startup reconciler collapses such rows for. Reaching here means it
-            // did not, so the row is judged for what it is rather than swept forever. Never resumed — the call died
-            // with the process, and whether it is tried again is the retry stage's answer, not this one's.
+            // Nothing on this node is driving this row and nothing will: the lane holds no memory across a restart, which is what the startup reconciler
+            // collapses such rows for. Reaching here means it did not, so the row is judged rather than swept forever; never resumed, and whether it is tried again is the retry stage's answer.
             return await FailAsync(store,
                     graph,
                     run,
@@ -218,17 +191,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         int written;
         if (flight.Work.IsCanceled)
         {
-            // Defence rather than an expected path: the invocation service answers every cancellation with an outcome
-            // instead of throwing. Checked anyway, and BEFORE the await, because awaiting a cancelled task would
-            // rethrow, the dispatcher would swallow it, and the row would rethrow again on every tick forever.
+            // Defence rather than an expected path: the invocation service answers every cancellation with an outcome instead of throwing. Checked anyway, and
+            // BEFORE the await, because awaiting a cancelled task would rethrow, the dispatcher would swallow it, and the row would rethrow on every tick forever.
             written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken);
         }
         else if (flight.Work.IsFaulted)
         {
-            // The invocation service contracts never to throw, and this lane must not DEPEND on it keeping that
-            // promise. Awaiting a faulted task would rethrow into the dispatcher, which logs and moves on without
-            // consuming the entry — so the row would rethrow on every sweep forever and never reach its deadline
-            // either. Reading the exception here is also what observes it.
+            // The invocation service contracts never to throw and this lane must not DEPEND on it keeping that promise: awaiting a faulted task would rethrow into
+            // the dispatcher, which logs and moves on without consuming the entry, so the row would rethrow every sweep and never reach its deadline. Reading it also observes it.
             _logger.LogWarning(flight.Work.Exception,
                 "Graph workflow run {RunId} node run {NodeRunId} ('{NodeKey}') had its tool call end in a fault rather than an outcome.",
                 run.Id,
@@ -262,9 +232,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                 : await SettleLandedAsync(store, graph, run, node, nodeRun, ToolNameOf(node), outcome, cancellationToken);
         }
 
-        // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw
-        // — an over-cap document, a lost version race — and the next poll would then find no entry, take the branch
-        // above and record "the host stopped" about a call that finished perfectly.
+        // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw — an over-cap document, a lost version
+        // race — and the next poll would find no entry, take the branch above and record "the host stopped" about a call that finished perfectly.
         _lane.Consume(nodeRun.Id);
         return written;
     }
@@ -300,10 +269,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
-        // OFF the tick, before anything else happens. The lane starts this delegate INLINE, so every statement before
-        // the first yield runs inside the dispatcher's advance gate — and a read tool does real synchronous work
-        // before its first await (a filesystem scan, an expression parse), which would hold every other run and the
-        // cancel drain for the whole of it. The agent lane never noticed because its runner awaits immediately.
+        // OFF the tick, before anything else: the lane starts this delegate INLINE, so every statement before the first yield runs inside the dispatcher's advance
+        // gate — and a read tool does real synchronous work first (a filesystem scan, an expression parse). The agent lane needs none of this: its runner awaits immediately.
         await Task.Yield();
 
         // Flipped immediately, and honestly: the lane slot this body already holds is the only thing a tool call ever
@@ -316,20 +283,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext { RunId = runId, NodeRunId = nodeRunId, NodeKey = node.NodeKey, Timeout = timeout }, cancellationToken);
     }
 
-    /// <summary>
-    ///     The arguments this call is made with: the node's literals, then every binding on top.
-    ///     <para>
-    ///         <b>A binding overwrites a literal of the same name</b>, which is the only coherent reading of a node
-    ///         that sets both — a literal is the default the author typed, a binding is what the run computed. Each
-    ///         path resolves against the node's INPUT document through the module's own dot-path walk, so a binding's
-    ///         grammar is byte-identical to an edge condition's, and the resolved element is inserted VERBATIM: a
-    ///         bound number stays a number for the tool's schema to read.
-    ///     </para>
-    ///     <para>
-    ///         A path the document does not carry refuses the call. The reason names the argument and the path and
-    ///         NEVER the document, which carries whatever an upstream node wrote.
-    ///     </para>
-    /// </summary>
+    /// <summary>The arguments this call is made with: the node's literals, then every binding on top.</summary>
+    /// <remarks>
+    ///     <b>A binding overwrites a literal of the same name</b>, the only coherent reading of a node that sets both:
+    ///     a literal is the default the author typed, a binding is what the run computed. Each path resolves against
+    ///     the node's INPUT document through the module's own dot-path walk, so a binding's grammar is byte-identical
+    ///     to an edge condition's, and the element is inserted VERBATIM — a bound number stays a number for the tool's
+    ///     schema. A path the document does not carry refuses the call, naming the argument and the path, never the document.
+    /// </remarks>
     private static bool TryResolveArguments(GraphWorkflowToolConfig config, string inputJson, out string argumentsJson, out string refusal)
     {
         refusal = string.Empty;
@@ -397,15 +358,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         return 1;
     }
 
-    /// <summary>
-    ///     Turns one landed outcome into a document and a terminal status.
-    ///     <para>
-    ///         <c>Executed</c> succeeds; <c>UnknownTool</c>, <c>NotInvocable</c> and <c>InvalidArguments</c> fail
-    ///         <c>ValidationFailed</c> and are therefore never re-attempted; <c>Timeout</c> and <c>Faulted</c> fail on
-    ///         the two retryable classes. The service's own reason is repeated verbatim, and it is structural by
-    ///         contract — it never echoes an argument value.
-    ///     </para>
-    /// </summary>
+    /// <summary>Turns one landed outcome into a document and a terminal status.</summary>
+    /// <remarks>
+    ///     <c>Executed</c> succeeds; <c>UnknownTool</c>, <c>NotInvocable</c> and <c>InvalidArguments</c> fail
+    ///     <c>ValidationFailed</c> and are therefore never re-attempted; <c>Timeout</c> and <c>Faulted</c> fail on the
+    ///     two retryable classes. The service's own reason is repeated verbatim, and it is structural by contract — it
+    ///     never echoes an argument value.
+    /// </remarks>
     private async Task<int> SettleLandedAsync(IGraphWorkflowStore store,
         GraphWorkflowGraph graph,
         GraphWorkflowRunSnapshot run,
@@ -450,9 +409,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         }
         catch (GraphWorkflowOutputTooLargeException exception)
         {
-            // A real, reachable outcome: a knowledge-base search may legitimately answer with fifty thousand
-            // characters. Not retryable, and deliberately: the same call composes the same bytes. The tool is named
-            // beside the node the exception already names, because "which node" alone does not say what to shrink.
+            // A real, reachable outcome: a knowledge-base search may legitimately answer with fifty thousand characters. Not retryable, deliberately — the same
+            // call composes the same bytes. The tool is named beside the node the exception already names, because "which node" alone does not say what to shrink.
             return await FailAsync(store,
                     graph,
                     run,

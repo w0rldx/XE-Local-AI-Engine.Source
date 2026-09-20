@@ -2,32 +2,24 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     When a node run's current attempt runs out of time.
-///     <para>
-///         Derived from the ROW — its <c>StartedAtUtc</c> plus the node's declared timeout — and never held in memory. A
-///         deadline a process owns dies with that process, and the node run it was bounding would then run until
-///         something else noticed.
-///     </para>
-///     <para>
-///         Unlike the development-workflow original, a node that declares no timeout still HAS one: graph workflows
-///         carry a node-timeout default in options, and the graph author's <c>timeoutSeconds</c> only overrides it.
-///         A row that never started has no deadline at all, which is what leaves a re-attempt and a restart collapse
-///         nothing to expire.
-///     </para>
-/// </summary>
+/// <summary>When a node run's current attempt runs out of time.</summary>
+/// <remarks>
+///     Derived from the ROW — its <c>StartedAtUtc</c> plus the node's declared timeout — and never held in memory: a
+///     deadline a process owns dies with that process, and the node run it bounded would run until something else
+///     noticed. Unlike the development-workflow original, a node that declares no timeout still HAS one, from the
+///     node-timeout default in options, which an author's <c>timeoutSeconds</c> only overrides. A row that never
+///     started has no deadline at all, which is what leaves a re-attempt and a restart collapse nothing to expire.
+/// </remarks>
 internal static class GraphWorkflowDeadline
 {
-    /// <summary>
-    ///     How long past its own deadline a node run is left alone before the run ends it itself.
-    ///     <para>
-    ///         The agent lane bounds its own turn by the SAME number, counted from a moment slightly later — the runner
-    ///         starts after the row is written — and then needs a moment to map its result. Ending the row the instant
-    ///         the number is reached would race that better answer and sometimes win by milliseconds, throwing away the
-    ///         real outcome for nothing. This is the backstop for a lane that did not answer its own budget, so it is
-    ///         deliberately later than the budget it backs up.
-    ///     </para>
-    /// </summary>
+    /// <summary>How long past its own deadline a node run is left alone before the run ends it itself.</summary>
+    /// <remarks>
+    ///     The agent lane bounds its own turn by the SAME number counted from a moment slightly later — the runner
+    ///     starts after the row is written — and then needs a moment to map its result. Ending the row the instant the
+    ///     number is reached would race that better answer and sometimes win by milliseconds, throwing the real
+    ///     outcome away. This is the backstop for a lane that did not answer its own budget, so it is deliberately
+    ///     later than the budget it backs up.
+    /// </remarks>
     public static TimeSpan Grace { get; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Whether this node run has been running longer than its node allows, by enough that its own lane is not going to answer for it.</summary>

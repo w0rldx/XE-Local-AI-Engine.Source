@@ -5,23 +5,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     A lane the dispatcher hands node runs to instead of executing them inside its own tick — the seam every kind
-///     whose work is a model call, a tool call or anything else that takes longer than a database write goes through.
-///     <para>
-///         Registered as a set rather than singly: the dispatcher asks which lane <see cref="Owns" /> a kind, so a
-///         slice adding one adds a registration and nothing else. That is what keeps the tick's nine-step order fixed
-///         while the set of executable kinds grows.
-///     </para>
-///     <para>
-///         Implementations are SINGLETONS: their in-flight registry and their slot count are properties of the node and
-///         outlive both a tick and a DI scope. The store they write through is the scoped one the tick hands them.
-///     </para>
-///     <para>
-///         <c>GraphWorkflowAgentExecutor</c> and <c>GraphWorkflowToolExecutor</c> are implementations of it, each
-///         holding a bounded in-flight lane of its own. A kind NO registered executor owns and the inline executor
-///         does not run has no arm on the dispatch path at all, and a node run of such a kind fails
-///         <c>ValidationFailed</c> — an absent case rather than a placeholder.
-///     </para>
+///     whose work is a model call, a tool call or anything else slower than a database write goes through.
 /// </summary>
+/// <remarks>
+///     Registered as a set: the dispatcher asks which lane <see cref="Owns" /> a kind, so adding one adds a
+///     registration and nothing else, keeping the tick's step order fixed as the set of executable kinds grows. The
+///     implementations — each with a bounded in-flight lane of its own — are SINGLETONS, because that registry and
+///     the slot count are the node's and outlive both a tick and a DI scope, and they write through the scoped store
+///     the tick hands them. A kind no lane owns and the inline executor does not run fails <c>ValidationFailed</c>.
+/// </remarks>
 internal interface IGraphWorkflowNodeExecutor
 {
     /// <summary>Whether this lane is the one that runs <paramref name="kind" />. Exactly one lane owns any kind.</summary>
@@ -52,11 +44,12 @@ internal interface IGraphWorkflowNodeExecutor
         GraphWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    ///     Asks the work to stop, answering whether it actually asked. <see langword="false" /> when there is nothing in
-    ///     flight or the stop was already requested — the drain reaches this every tick until a poll sees the work land,
-    ///     and a lane that answered <see langword="true" /> each time would spin the drain for the whole duration.
-    /// </summary>
+    /// <summary>Asks the work to stop, answering whether it actually asked.</summary>
+    /// <remarks>
+    ///     <see langword="false" /> when there is nothing in flight or the stop was already requested — the drain
+    ///     reaches this every tick until a poll sees the work land, and a lane that answered <see langword="true" />
+    ///     each time would spin the drain for the whole duration.
+    /// </remarks>
     Task<bool> StopAsync(Guid nodeRunId);
 
     /// <summary>

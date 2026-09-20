@@ -5,11 +5,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     A run and its node runs in one read, composed from the store's snapshots rather than re-declaring their fields.
-///     <para>
-///         The GRAPH is deliberately not in it: a caller that needs nodes and edges reads the run's pinned blob, and the
-///         runtime already holds that parsed.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The GRAPH is deliberately not in it: a caller that needs nodes and edges reads the run's pinned blob, and the
+///     runtime already holds that parsed.
+/// </remarks>
 public sealed class GraphWorkflowRunDetail
 {
     public required GraphWorkflowRunSnapshot Run { get; init; }
@@ -32,10 +32,13 @@ public sealed class GraphWorkflowRunEventPage
 }
 
 /// <summary>
-///     What a decision left behind: the answer that now stands, and the CURRENT statuses of the run and of the pause it
-///     answered. Current, not predicted — what follows a decision is the dispatcher's work on its own clock, so a
-///     result promising <c>Running</c> would be describing a tick that has not happened.
+///     What a decision left behind: the answer that now stands, and the CURRENT statuses of the run and of the pause
+///     it answered.
 /// </summary>
+/// <remarks>
+///     Current, not predicted — what follows a decision is the dispatcher's work on its own clock, so a result
+///     promising <c>Running</c> would be describing a tick that has not happened.
+/// </remarks>
 public sealed class GraphWorkflowDecisionResult
 {
     public required GraphWorkflowDecisionKind Decision { get; init; }
@@ -46,10 +49,13 @@ public sealed class GraphWorkflowDecisionResult
 }
 
 /// <summary>
-///     Both ways a run command can lose, under one type because from the client's side they are one story — you are
-///     acting on a version of this run that no longer exists: a stale <c>definitionVersion</c> at start, and a cancel of
-///     a run that has already finished. Maps to a 409 through <c>ConflictExceptionHandler</c>.
+///     Both ways a run command can lose, under one type because from the client's side they are one story: you are
+///     acting on a version of this run that no longer exists.
 /// </summary>
+/// <remarks>
+///     A stale <c>definitionVersion</c> at start, and a cancel of a run that has already finished. Maps to a 409
+///     through <c>ConflictExceptionHandler</c>.
+/// </remarks>
 public sealed class GraphWorkflowRunConflictException : InvalidOperationException
 {
     public GraphWorkflowRunConflictException(string message) : base(message)
@@ -57,18 +63,14 @@ public sealed class GraphWorkflowRunConflictException : InvalidOperationExceptio
     }
 }
 
-/// <summary>
-///     Every way a caller changes or reads a graph workflow run.
-///     <para>
-///         <b>The commands are fire-and-forget.</b> Each validates, commits a durable intent, signals the dispatcher and
-///         returns the CURRENT state — which legitimately reads <c>Pending</c> or <c>Cancelling</c>. Nothing here waits
-///         for the runtime to act, which is what keeps the HTTP path off the node's one invocation slot.
-///     </para>
-///     <para>
-///         <b><see cref="StartAsync" /> is idempotent on a caller-minted request id.</b> The same id always answers with
-///         the same run, so an integration that never saw the first answer retries without risking a second run.
-///     </para>
-/// </summary>
+/// <summary>Every way a caller changes or reads a graph workflow run.</summary>
+/// <remarks>
+///     <b>The commands are fire-and-forget.</b> Each validates, commits a durable intent, signals the dispatcher and
+///     returns the CURRENT state — which legitimately reads <c>Pending</c> or <c>Cancelling</c>. Nothing here waits
+///     for the runtime to act, which is what keeps the HTTP path off the node's one invocation slot.
+///     <see cref="StartAsync" /> is idempotent on a caller-minted request id: the same id always answers with the
+///     same run, so an integration that never saw the first answer retries without risking a second run.
+/// </remarks>
 public interface IGraphWorkflowRunService
 {
     /// <summary>
@@ -101,21 +103,14 @@ public interface IGraphWorkflowRunService
 
     Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Answers the pause at <paramref name="nodeKey" />, signals, and reports what the rows now say.
-    ///     <para>
-    ///         <b>Idempotent on <paramref name="operationId" />.</b> The same id sent twice answers with the decision it
-    ///         already recorded rather than deciding again; the same id naming a different answer, a different person or
-    ///         a different pause of the same run is a caller bug and answers
-    ///         <see cref="GraphWorkflowGateAlreadyDecidedException" />. Comment and payload are deliberately not
-    ///         compared — they are the free text around the act rather than the act.
-    ///     </para>
-    ///     <para>
-    ///         BOTH answers succeed the node run. A rejection reaches the run through an out-edge that matches nothing,
-    ///         not through a node failure, and a rejection with nowhere to go strands the run as
-    ///         <c>Cancelled</c>/<c>GateRejected</c> — an honest outcome rather than an error to refuse here.
-    ///     </para>
-    /// </summary>
+    /// <summary>Answers the pause at <paramref name="nodeKey" />, signals, and reports what the rows now say.</summary>
+    /// <remarks>
+    ///     <b>Idempotent on <paramref name="operationId" />.</b> The same id twice answers with the decision already
+    ///     recorded; naming a different answer, person or pause of the same run is a caller bug and answers
+    ///     <see cref="GraphWorkflowGateAlreadyDecidedException" />. Comment and payload are deliberately not compared —
+    ///     free text around the act, not the act. BOTH answers succeed the node run: a rejection routes through an
+    ///     out-edge matching nothing rather than a node failure, and one with nowhere to go strands the run as <c>Cancelled</c>/<c>GateRejected</c> rather than being refused here.
+    /// </remarks>
     Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
         string nodeKey,
         Guid operationId,

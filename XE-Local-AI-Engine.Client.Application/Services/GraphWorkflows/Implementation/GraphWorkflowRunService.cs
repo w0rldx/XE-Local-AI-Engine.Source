@@ -101,9 +101,8 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         },
                                   cancellationToken);
 
-        // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the
-        // request id with the run that WON — which may be a run of somebody else's definition. Re-checked here, or the
-        // loser of that race would receive a run it never asked for by the one route the fast path cannot cover.
+        // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the request id with the run that WON — which may
+        // be a run of somebody else's definition. Re-checked here, or the loser would receive a run it never asked for by the one route the fast path cannot cover.
         EnsureReplayIsOfTheSameDefinition(run, definitionId, requestId);
 
         return await SignalAndComposeAsync(run.Id, cancellationToken);
@@ -117,9 +116,8 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             throw new GraphWorkflowRunConflictException($"This run is already {run.Status}, so there is nothing to cancel.");
         }
 
-        // A repeat cancel is the SAME ask answered again, not a conflict: the intent is already committed and the drain
-        // is already running, so this mirrors the start replay — accepted, idempotent, and signalled, because a caller
-        // that never saw the first answer is exactly the caller that sends this one.
+        // A repeat cancel is the SAME ask answered again, not a conflict: the intent is already committed and the drain is already running, so this mirrors the
+        // start replay — accepted, idempotent and signalled, because a caller that never saw the first answer is exactly the caller that sends this one.
         if (run.Status == GraphWorkflowRunStatus.Cancelling)
         {
             return await SignalAndComposeAsync(runId, cancellationToken);
@@ -127,11 +125,8 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Cancelling);
 
-        // Against the version it was READ at, so a recomputation that landed in between loses rather than silently
-        // overwriting an operator's intent with a status it decided a moment earlier.
-        //
-        // Node runs are deliberately NOT settled here: the dispatcher drains them, asking each live lane to stop rather
-        // than writing a terminal status over work that is still in flight.
+        // Against the version it was READ at, so a recomputation that landed in between loses rather than overwriting an operator's intent with a status it decided
+        // a moment earlier. Node runs are deliberately NOT settled here: the dispatcher drains them, asking each live lane to stop rather than writing over live work.
         _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand { RunId = runId, ExpectedVersion = run.Version, TargetStatus = GraphWorkflowRunStatus.Cancelling },
                             cancellationToken);
         return await SignalAndComposeAsync(runId, cancellationToken);
@@ -156,28 +151,23 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             throw new GraphWorkflowValidationException("A graph workflow decision needs a caller-minted operation id.");
         }
 
-        // 1. REPLAY FIRST, and run-wide — the scope the store's filtered unique index enforces. Looked up before the
-        // (run, node key) row is read at all: without this, one id reused across two pauses of a run passes every check
-        // below and then violates that index inside the write, as a database error rather than the conflict this API
-        // promises.
+        // 1. REPLAY FIRST, and run-wide — the scope the store's filtered unique index enforces, looked up before the (run, node key) row is read at all: without
+        // this, one id reused across two pauses of a run passes every check below and violates that index inside the write, as a database error not the promised conflict.
         if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken) is { } recorded)
         {
             return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, recorded, cancellationToken);
         }
 
-        // 2. The row must be waiting — and a row that is not gets the SAME resolution a lost write does, replay
-        // lookup first. Two identical requests both miss step 1, one commits, and the other reads a Succeeded row: it
-        // is this caller's own answer arriving twice, so refusing it here would 409 a decision that did land.
+        // 2. The row must be waiting — and one that is not gets the SAME resolution a lost write does, replay lookup first. Two identical requests both miss step 1,
+        // one commits, the other reads a Succeeded row: this caller's own answer arriving twice, so refusing it here would 409 a decision that did land.
         var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
         if (nodeRun.Status != GraphWorkflowNodeRunStatus.WaitingForApproval)
         {
             return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
         }
 
-        // 3. The run must be live. A drain is already settling this row, and a terminal run has no tick left to route
-        // the answer with — but the SAME resolution as step 2, replay lookup first: this caller's own answer can have
-        // committed under its own id and the run stopped between the row read and here, and refusing then would 409 a
-        // decision that did land.
+        // 3. The run must be live: a drain is already settling this row, and a terminal run has no tick left to route the answer. SAME resolution as step 2, replay
+        // first — this caller's answer can have committed under its own id and the run stopped between the row read and here, and refusing would 409 a real decision.
         var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
@@ -199,9 +189,8 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         // 5. Body rules. Everything here is about the REQUEST rather than about the run, which is what makes them 400s.
         var payload = ValidateBody(nodeKey, pause, comment, payloadJson);
 
-        // 6. Composed through the one document writer, so a pause row gets the same envelope, the same branch
-        // derivation and the same size check as every other kind — and the same `output.decision` spelling the
-        // definition-time pre-flight evaluated.
+        // 6. Composed through the one document writer, so a pause row gets the same envelope, the same branch derivation and the same size check as every other
+        // kind — and the same `output.decision` spelling the definition-time pre-flight evaluated.
         string document;
         try
         {
@@ -214,18 +203,13 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
         catch (GraphWorkflowOutputTooLargeException exception)
         {
-            // Unreachable while the payload cap stays strictly under the envelope budget, and kept because that is a
-            // relation between two options rather than a fact: an operator's oversized answer is their 400 to fix, not
-            // a node failure they cannot see the cause of.
+            // Unreachable while the payload cap stays strictly under the envelope budget, and kept because that is a relation between two options rather than a
+            // fact: an operator's oversized answer is their 400 to fix, not a node failure they cannot see the cause of.
             throw new GraphWorkflowValidationException(exception.Message, exception);
         }
 
-        // 7. ONE conditional write: the status move, the decision columns, the output and the gate.decided event. It
-        // can lose in TWO ways, and both are the same story to the caller. A null answer means the compare-and-set
-        // matched no row. An exception means the run row's own concurrency token lost, or the store converted the
-        // unique index, which is what two operators answering at once with different operation ids produce. Letting
-        // the second escape would reach the client as a bare run conflict with no standing decision, in exactly the
-        // case the standing decision exists to describe.
+        // 7. ONE conditional write — status move, decision columns, output and the gate.decided event — losing two ways that are one story: a null answer means the
+        // compare-and-set matched no row; an exception means the run's token lost or two operators answered at once. Escaping, that reaches the client as a bare conflict.
         GraphWorkflowMutationResult? written;
         try
         {
@@ -282,11 +266,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         return new GraphWorkflowRunEventPage { Events = page, LastSeq = page.Count == 0 ? afterSeq : page[^1].Seq, ReplayTruncated = events.Count > _options.EventReplayLimit };
     }
 
-    /// <summary>
-    ///     The same act arriving twice. It IS the same act only if it names the same pause, the same answer and the
-    ///     same person — a reused id naming any of those differently would read as success for a decision nobody took.
-    ///     Comment and payload are deliberately not compared: free text around the act, not the act.
-    /// </summary>
+    /// <summary>The same act arriving twice.</summary>
+    /// <remarks>
+    ///     It IS the same act only if it names the same pause, the same answer and the same person — a reused id
+    ///     naming any of those differently would read as success for a decision nobody took. Comment and payload are
+    ///     deliberately not compared: free text around the act, not the act.
+    /// </remarks>
     private async Task<GraphWorkflowDecisionResult> ReplayAsync(Guid runId,
         string nodeKey,
         Guid operationId,
@@ -310,11 +295,14 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     }
 
     /// <summary>
-    ///     What a decide write that wrote nothing means, and what a row that was no longer waiting when it was read
-    ///     means: something committed between this caller's checks and its write. Answered off what the rows NOW say
-    ///     rather than by retrying — this same operation id committed it, which is a replay; the run stopped being
-    ///     live, which is a run conflict; or another operation id answered the pause, which is the second human act.
+    ///     What a decide write that wrote nothing means, and what a row no longer waiting when it was read means:
+    ///     something committed between this caller's checks and its write.
     /// </summary>
+    /// <remarks>
+    ///     Answered off what the rows NOW say rather than by retrying — this same operation id committed it, which is
+    ///     a replay; the run stopped being live, which is a run conflict; or another operation id answered the pause,
+    ///     which is the second human act.
+    /// </remarks>
     private async Task<GraphWorkflowDecisionResult> LostTheRaceAsync(Guid runId,
         string nodeKey,
         Guid operationId,
@@ -327,9 +315,8 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, settled, cancellationToken);
         }
 
-        // Before the row: the store also declines once the RUN stops being live, and answering that with a node-status
-        // refusal would name the pause when the cancel is the reason — or, worse, name a standing decision on a row the
-        // drain has since cancelled.
+        // Before the row: the store also declines once the RUN stops being live, and answering that with a node-status refusal would name the pause when the cancel
+        // is the reason — or, worse, name a standing decision on a row the drain has since cancelled.
         var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
@@ -341,16 +328,16 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     }
 
     /// <summary>
-    ///     The refusal a row that is not open to a decision earns: one that NAMES the answer that stands where the row
-    ///     was actually answered, so the second person to click is told what was decided rather than only that their
-    ///     click failed, and S1's generic run conflict where it was not.
-    ///     <para>
-    ///         Gated on <c>DecisionOperationId</c>, the column an answered gate writes — NOT on the output document
-    ///         carrying an <c>output.decision</c>. A <c>Condition</c> or <c>Parallel</c> node downstream of an answered
-    ///         pause passes that predecessor's output through verbatim, so reading the document alone would report a
-    ///         standing decision for a node nobody ever decided.
-    ///     </para>
+    ///     The refusal a row that is not open to a decision earns: one NAMING the answer that stands where the row was
+    ///     actually answered, and a generic run conflict where it was not.
     /// </summary>
+    /// <remarks>
+    ///     Naming it is what tells the second person to click what was decided rather than only that their click
+    ///     failed. Gated on <c>DecisionOperationId</c>, the column an answered gate writes — NOT on the output
+    ///     document carrying an <c>output.decision</c>: a <c>Condition</c> or <c>Parallel</c> node downstream of an
+    ///     answered pause passes that predecessor's output through verbatim, so reading the document alone would
+    ///     report a standing decision for a node nobody ever decided.
+    /// </remarks>
     private static Exception StandingConflict(GraphWorkflowNodeRunSnapshot nodeRun, string message) =>
         nodeRun.DecisionOperationId is not null && GraphWorkflowStateMachine.DecisionOf(nodeRun.OutputJson) is { } standing
             ? new GraphWorkflowGateAlreadyDecidedException($"{message} It was answered {standing}.", standing)
@@ -398,15 +385,13 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
     }
 
-    /// <summary>
-    ///     The run status that follows its rows, written against the version it was read at.
-    ///     <para>
-    ///         Deliberately NON-terminal only: terminalization carries the run's own result off the End node that
-    ///         succeeded, and that is the dispatcher's write in the tick this decision has just signalled. The one move
-    ///         this owns is <c>WaitingForApproval → Running</c>, which is what makes the answer this method returns
-    ///         honest instead of a status the caller would have to re-read to disbelieve.
-    ///     </para>
-    /// </summary>
+    /// <summary>The run status that follows its rows, written against the version it was read at.</summary>
+    /// <remarks>
+    ///     Deliberately NON-terminal only: terminalization carries the run's own result off the End node that
+    ///     succeeded, and that is the dispatcher's write in the tick this decision has just signalled. The one move
+    ///     this owns is <c>WaitingForApproval → Running</c>, which is what makes the answer this method returns honest
+    ///     instead of a status the caller would have to re-read to disbelieve.
+    /// </remarks>
     private async Task RecomputeRunStatusAsync(Guid runId, GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
         var current = await _store.GetRunAsync(runId, cancellationToken);
@@ -453,15 +438,16 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     }
 
     /// <summary>
-    ///     Re-checks, at run start, that every <c>Tool</c> node of the pinned graph names a tool this node will actually
-    ///     run — the tool gate, as ONE mechanism in one place rather than a check the dispatcher repeats per kind.
-    ///     <para>
-    ///         Asked again here rather than trusted from save time: a definition saved when a tool was invocable must
-    ///         not start once the envelope has been tightened away from it. Failing the START rather than the node is
-    ///         what that buys — the operator learns immediately instead of three nodes in — so this runs BEFORE the run
-    ///         row is written and a refusal leaves nothing behind.
-    ///     </para>
+    ///     Re-checks, at run start, that every <c>Tool</c> node of the pinned graph names a tool this node will
+    ///     actually run.
     /// </summary>
+    /// <remarks>
+    ///     The tool gate, as ONE mechanism in one place rather than a check the dispatcher repeats per kind. Asked
+    ///     again here rather than trusted from save time: a definition saved when a tool was invocable must not start
+    ///     once the envelope has been tightened away from it. Failing the START rather than the node is what that buys
+    ///     — the operator learns immediately instead of three nodes in — so this runs BEFORE the run row is written
+    ///     and a refusal leaves nothing behind.
+    /// </remarks>
     private async Task EnsureToolNodesAreRunnableAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
         var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken);

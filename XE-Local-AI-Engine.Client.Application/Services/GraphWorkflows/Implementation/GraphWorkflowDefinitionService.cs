@@ -84,17 +84,14 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     public Task DeleteAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
         _store.DeleteDefinitionAsync(definitionId, cancellationToken);
 
-    /// <summary>
-    ///     The one place the option-bearing half of validation lives. A blank document is turned into the same
-    ///     structured refusal every other whole-document failure produces, so <see cref="ValidateAsync" /> can promise
-    ///     never to throw rather than leaking the parser's argument guard. Answers the PARSED graph rather than a node
-    ///     count, because two callers want the count and one wants the warnings, and re-parsing for either would run
-    ///     the rule set twice.
-    ///     <para>
-    ///         The tool gate runs AFTER the parse and only if it succeeded: the structural rules throw first, and there
-    ///         is nothing useful to say about the tools of a graph nobody can walk.
-    ///     </para>
-    /// </summary>
+    /// <summary>The one place the option-bearing half of validation lives.</summary>
+    /// <remarks>
+    ///     A blank document becomes the same structured refusal every other whole-document failure produces, so
+    ///     <see cref="ValidateAsync" /> can promise never to throw rather than leaking the parser's argument guard. It
+    ///     answers the PARSED graph rather than a node count, because two callers want the count and one wants the
+    ///     warnings and re-parsing for either would run the rule set twice. The tool gate runs AFTER the parse and only
+    ///     if it succeeded: the structural rules throw first, and a graph nobody can walk has no tools worth naming.
+    /// </remarks>
     private async Task<GraphWorkflowGraph> ValidateAndParseAsync(string graphJson, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(graphJson))
@@ -111,17 +108,15 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
 
     /// <summary>
     ///     The graph's warnings, minus the response-schema one on any Agent node whose pinned model llama-server
-    ///     serves. That warning describes the <c>Microsoft.Extensions.AI.OpenAI</c> strict-schema rewrite, and the
-    ///     llama.cpp lane no longer suffers it: the schema is written onto the request body as authored
-    ///     (<c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c>). Telling an author their bounds are
-    ///     dropped when the runtime enforces them is worse than saying nothing.
-    ///     <para>
-    ///         Here rather than in the parser because only this seam can reach the model-to-provider map, and only this
-    ///         path answers warnings at all. A node with no model pin, or one that maps to any other provider, keeps
-    ///         its warning: what an unpinned node inherits is decided at run start, and being wrong in the direction of
-    ///         a warning nobody needed is the cheap error.
-    ///     </para>
+    ///     serves.
     /// </summary>
+    /// <remarks>
+    ///     That warning is about the <c>Microsoft.Extensions.AI.OpenAI</c> strict-schema rewrite, which the llama.cpp
+    ///     lane does not suffer: <c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c> writes the schema
+    ///     onto the request body as authored, and telling an author their bounds are dropped when the runtime enforces
+    ///     them is worse than saying nothing. Here because only this seam reaches the model-to-provider map. A node
+    ///     with no pin keeps its warning, and so does one mapping to another provider: the cheap error direction.
+    /// </remarks>
     private async Task<IReadOnlyList<GraphWorkflowValidationError>> WarningsForRuntimeAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
         var suppressed = new HashSet<GraphWorkflowValidationError>();
@@ -146,12 +141,14 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
 
     /// <summary>
     ///     Whether llama-server serves <paramref name="model" />, answering <see langword="false" /> when the lookup
-    ///     cannot say. The resolver opens a scope, takes a map read lease and reads the store, so it can fail for
-    ///     reasons that have nothing to do with the graph being validated — and validation is a warning-only,
-    ///     never-blocking path that until now touched only the parser and the tool catalog. Letting a store fault
-    ///     escape would turn an editor's probe into a 500. Answering <see langword="false" /> keeps the warning, which
-    ///     is the same cheap-error direction an unpinned node already takes.
+    ///     cannot say.
     /// </summary>
+    /// <remarks>
+    ///     The resolver opens a scope, takes a map read lease and reads the store, so it can fail for reasons that
+    ///     have nothing to do with the graph being validated — and validation is a warning-only, never-blocking path.
+    ///     Letting a store fault escape would turn an editor's probe into a 500, while answering
+    ///     <see langword="false" /> keeps the warning, the same cheap-error direction an unpinned node already takes.
+    /// </remarks>
     private async Task<bool> ServedByLlamaServerAsync(string model, CancellationToken cancellationToken)
     {
         try

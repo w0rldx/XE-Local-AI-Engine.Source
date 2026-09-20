@@ -1,6 +1,6 @@
 # Graph Workflows — Operator-Authored DAGs
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-09-20 · Code-grounded.
 
 **Graph Workflows** let an operator draw a directed acyclic graph of agent turns, tool calls, conditions and human
 pauses, save it, and start runs of it. The engine executes the run from the database: every node run is a row, every
@@ -173,15 +173,25 @@ The first: a node whose inbound edges **all** leave a `Pause` receives the decis
 content that was approved (§4.6). It is keyed on that node rather than on the pause, because that is the node which
 loses the content and so the node an editor draws the badge on, and one warning is raised however many pauses reach
 it. The sentence **names** the pause's nearest non-`Pause` ancestor only when that ancestor is unique and is not a
-`Condition`: with two candidates the advice would have to pick one, and a `Condition` cannot be named because the edge
-it would ask for is that node's second unconditional out-edge, which the parser refuses — advice that turns a warning
-into an error is worse than the generic sentence.
+`Condition`: two candidates means the pause is fed by mutually exclusive branches, and edges from both would leave an
+`All` successor waiting on the branch that was never taken, while a `Condition` cannot be named because the edge it
+would ask for is that node's second unconditional out-edge, which the parser refuses — advice that turns a warning
+into a hang or an error is worse than the generic sentence.
+
+A successor whose `joinPolicy` is `Any` is **exempt**, whatever its kind, and that is a correctness rule rather than
+a taste one. The advised edge is unconditional, so it stays satisfied when every approval is rejected — an `Any` node
+would then be admitted on the content edge alone and run the branch the rejections were meant to stop. Collecting the
+decision documents is what such a node is *for*, so there is nothing to warn about. An `All` successor waits for the
+approval edges too, so it keeps both the warning and the advice.
 
 The second, on an **Agent node** whose `responseJsonSchema` asks for something the runtime it will run on does not
 enforce (`GraphWorkflowGraph.ResponseSchemaWarnings`). It fires on three things: a keyword the
 `Microsoft.Extensions.AI.OpenAI` strict-schema transform relocates into `description`, a declared property missing
 from `required`, and an object that declares `properties` and **omits** `additionalProperties` — an object that sets
-that key explicitly, `true` included, is silent. One warning per node carries whichever of the three apply, and each
+that key explicitly, `true` included, is silent. The grammar is then built from the **rewritten** schema, so
+`maxLength: 3` survives only as a hint the model may read and nothing enforces, while a property the author left
+optional comes back mandatory. Structure — `type`, `enum`, `required`, the object shape — survives the transform,
+which is why none of it is warned about. One warning per node carries whichever of the three apply, and each
 list names at most three before counting the rest, because this is a sentence and not an inventory:
 
 ```
@@ -199,6 +209,10 @@ rather than per node: a node that also earns the pause-context warning above kee
 pin keeps its schema warning too — what it inherits is decided at run start, and a warning nobody needed is the
 cheaper error. Nothing else moved: the parser's rule set, the warning sentence and the DTO are all unchanged, and a
 warning still never blocks.
+
+It warns rather than refuses because a schema is still useful with the constraints in it, the transform is the
+adapter's business and could change, and every one of these graphs runs. The point is that the author stops
+believing the parts that do not hold.
 
 The schema is walked breadth-first over exactly the members the transform itself descends — `properties`,
 `additionalProperties`, `items`, `anyOf`, `oneOf`, `allOf` — so a constraint under `items` is found and one parked in
@@ -389,8 +403,10 @@ a better answer and sometimes win by milliseconds.
 ### 3.5 Restart
 
 `GraphWorkflowStartupReconciler` is an `IHostedService` registered **before** the dispatcher, so its pumps cannot
-admit a row recovery has not judged. It reads the interrupted set — exactly `Queued ∪ Running`, never
-`WaitingForApproval`, which is a durable human wait rather than in-flight work — and hands its verdicts to the store
+admit a row recovery has not judged. It reads the interrupted set — exactly `Queued ∪ Running`, which the store
+scopes and the reconciler never widens. `WaitingForApproval` is deliberately outside it: it is a durable human wait
+rather than in-flight work, and a reconciler that took it would destroy every pause on the node on every boot. The
+reconciler hands its verdicts to the store
 to apply in one transaction. Exactly-once survives a crash during recovery: a host that dies before that commit
 leaves the rows as it found them, and the next boot judges them from the same evidence. Recovery makes at most three
 passes, and the last one settles whatever is left rather than walking away from it.
@@ -401,15 +417,17 @@ The verdicts:
   failure, so neither costs an attempt.
 - A `Running` **`Agent` or `Tool`** row is **failed** `Interrupted`. The work was an in-process task with no durable
   handle, so its partial output died with the host. Recovery never re-attempts it; the dispatcher's retry stage does
-  on its first tick, if and only if the node and run budgets allow.
+  on its first tick, if and only if the node and run budgets allow. The class written is the plain `Interrupted`
+  rather than anything `GraphWorkflowFailures.Classify` would decide, because recovery deliberately never parses the
+  run's graph and so cannot see the node's attempt cap — the retry stage, which does, classifies on that first tick.
 
 That is the same "never resume a provider stream, start a fresh attempt instead" posture Development Mode records in
 [ADR 0001](../adr/0001-development-mode-restart-recovery.md), applied without that design's replacement-attempt rows:
 a graph workflow node run retries **in place** with the attempt incremented, because per-attempt history lives in the
 event log rather than in a second row.
 
-The reconciler touches no run row. The dispatcher's first sweep recomputes the run's status from the rows recovery
-left behind.
+The reconciler touches no run row. The dispatcher's first sweep — `PumpSweepAsync` runs one immediately rather than
+waiting out an interval — recomputes the run's status from the rows recovery left behind.
 
 ---
 
@@ -461,6 +479,14 @@ One headless saved-agent turn, on its own in-flight lane sized at `MaxConcurrent
 in-process task with no durable handle, which is exactly why an interrupted `Running` row is failed rather than
 resumed (§3.5). `InvocationId` is written on the row as the correlation id in the node logs for a turn nothing else
 survives.
+
+The turn's contents come from `RunSavedAgentHandler`, the node's other unattended caller of this stack, and five of
+its rules carry over: the locality gate runs **before** capacity, the capacity reservation is disposed on every
+terminal path, approval-required tools are stripped from the offer, `IsUnattended` is set, and the terminal state is
+read off a `StrongBox<T>` the state-changed handler fills rather than off a return value the runner does not have.
+The executor is a **singleton** — the lane and its slot count are the node's and outlive both a tick and a DI scope —
+so every scoped collaborator is resolved inside the task body from its own scope: the scope the tick handed the store
+is long gone by the time the turn lands.
 
 | Config member | Meaning |
 |---|---|
@@ -538,6 +564,24 @@ Both are asked of the same catalog at **definition save** and again at **run sta
 A tool that was read-only when the graph was saved does not execute after a policy tightened. A tool outside the
 envelope is an **error**, never a warning: a workflow node runs unattended, so a write, execute or approval-gated
 tool has nobody to ask. Errors are keyed by node key, so the editor draws them on the offending node.
+
+The lane itself is a `GraphWorkflowInFlightLane`, the same registry the `Agent` lane uses, and the two differ only in
+what they run: dispatch to a queue, settle on the poll, a stop that answers no on a repeat, forget what a retry
+superseded. A tool call passes **one** queue where an agent turn passes two — there is no node-wide invocation lease
+to wait for after the lane slot, so the row reads `Running` the moment the lane hands back an entry. The lane is
+therefore what bounds the fan-out: a tool call has no global bottleneck of its own, and a `Parallel` node feeding two
+hundred `search_knowledge_base` nodes would otherwise fire all of them at once. It is sized on `MaxConcurrentRuns`
+rather than on a knob of its own — the same "how much of this node may be busy at once" question — and is worth a
+second option only once the two need different numbers. The whole invocation envelope lives inside
+`IToolInvocationService`, so the executor enforces none of it and cannot skip any of it: every refusal arrives as an
+outcome and becomes a row.
+
+A landed outcome maps to a terminal: `Executed` succeeds; `UnknownTool`, `NotInvocable` and `InvalidArguments` fail
+`ValidationFailed` and are therefore never re-attempted; `Timeout` and `Faulted` fail on the two retryable classes.
+The service's own reason is repeated verbatim and is structural by contract — it never echoes an argument value. An
+output document over the cap is a real, reachable outcome (a knowledge-base search may legitimately answer with fifty
+thousand characters) and is deliberately **not** retryable, since the same call composes the same bytes; the message
+names the tool beside the node, because "which node" alone does not say what to shrink.
 
 `graph-workflows/tools` is the picker's feed, filtered server-side by the same service the runtime invokes through,
 so the picker cannot offer a name the run would then refuse. A missing binding path fails the node
@@ -883,6 +927,12 @@ provenance field to go stale.
 The import runs regardless of `GraphWorkflows:Enabled`, deliberately: an operator who never turns the feature on must
 not silently lose their canvases. Every row is read — there is **no cap** — because a cap plus an unconditional drop
 in the same build would destroy everything past it as its *normal* outcome.
+
+Nothing in the importer may depend on a Preview type: the read parses the stored blob into private records of its own,
+so the Open Canvas namespace can be deleted out from under it. It also runs under `--reset-admin-password`, whose
+branch of `Program` returns only *after* the migration pass, so the read, the migrations and the write all happen
+first. The knowledge-downgrade commands are the one launch path that returns before migrations, and therefore before
+the import.
 
 ### 9.2 The mapping
 

@@ -3,23 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     Announces every committed graph-workflow mutation, and forwards everything else untouched.
-///     <para>
-///         The publish sits HERE rather than at each call site in the runtime for one reason: a missed call site is a
-///         pane that silently stops updating, and there is no test that would notice. Every mutation returns the
-///         watermark its commit allocated, so wrapping the one interface they all go through makes the notification
-///         impossible to forget — including from code written later.
-///     </para>
-///     <para>
-///         The change kind comes from the COMMAND, not from the event row: a caller that transitions a node run into a
-///         human wait is asking for a person, and that is the one push with a consequence beyond re-rendering.
-///     </para>
-/// </summary>
+/// <summary>Announces every committed graph-workflow mutation, and forwards everything else untouched.</summary>
 /// <remarks>
-///     ponytail: one ping per committed mutation, with no coalescing window. A <c>Parallel</c> node makes a fan-out
-///     reachable in v1, so a tick can write several in a row; if the client's refetch rate ever measures, a per-run
-///     debounce goes here.
+///     The publish sits HERE rather than at each call site: a missed one is a pane that silently stops updating and no
+///     test would notice, and every mutation returns the watermark its commit allocated, so wrapping the one interface
+///     they all go through makes it impossible to forget, later code included. The kind comes from the COMMAND, not
+///     the event row — a caller parking a node run on a human is asking for a person, the one push with a consequence
+///     beyond a re-render. ponytail: one ping per mutation, no coalescing; a per-run debounce goes here if it measures.
 /// </remarks>
 internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
 {
@@ -133,14 +123,12 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
         CancellationToken cancellationToken = default) =>
         _inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
 
-    /// <summary>
-    ///     Awaits the mutation, then announces the watermark that commit allocated.
-    ///     <para>
-    ///         A failed announcement is logged and swallowed: the write is already committed, and failing the caller
-    ///         over a notification would turn a late repaint into a lost transition. The subscriber re-reads the run
-    ///         from its own watermark, so the missed ping costs a refresh and nothing else.
-    ///     </para>
-    /// </summary>
+    /// <summary>Awaits the mutation, then announces the watermark that commit allocated.</summary>
+    /// <remarks>
+    ///     A failed announcement is logged and swallowed: the write is already committed, and failing the caller over
+    ///     a notification would turn a late repaint into a lost transition. The subscriber re-reads the run from its
+    ///     own watermark, so the missed ping costs a refresh and nothing else.
+    /// </remarks>
     private async Task<GraphWorkflowMutationResult> PublishAsync(Task<GraphWorkflowMutationResult> mutation,
         GraphWorkflowChangeKind kind,
         CancellationToken cancellationToken)
