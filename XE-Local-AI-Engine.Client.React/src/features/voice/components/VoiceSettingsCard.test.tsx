@@ -36,7 +36,7 @@ function renderCard(): { queryClient: QueryClient } {
 	});
 	const ui: ReactElement = (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<VoiceSettingsCard />
 			</MantineProvider>
 		</QueryClientProvider>

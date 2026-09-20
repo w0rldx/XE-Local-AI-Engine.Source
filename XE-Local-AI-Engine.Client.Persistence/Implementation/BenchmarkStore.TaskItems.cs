@@ -174,8 +174,8 @@ public sealed partial class BenchmarkStore
             throw new BenchmarkValidationException("A benchmark project must keep at least one task item.");
         }
 
-        // Foreign keys are off on this connection and no cascade fires, so this order IS the referential integrity:
-        // children before the parent they point at.
+        // Task items declare Restrict on the project and parent a generator's cases by id, and the node connection
+        // enforces foreign keys, so this order is what makes the delete legal: children before the parent they point at.
         _dbContext.BenchmarkTaskItems.RemoveRange(doomed.Where(entity => entity.ParentItemId == itemId));
         _dbContext.BenchmarkTaskItems.Remove(item);
         await ApplyItemSetChangeAsync(project, survivors, Now(), cancellationToken);

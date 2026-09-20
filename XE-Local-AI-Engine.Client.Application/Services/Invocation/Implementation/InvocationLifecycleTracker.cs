@@ -24,8 +24,8 @@ public sealed class InvocationLifecycleTracker
 
     private readonly TimeSpan _maxPendingToolCallAge;
 
-    // The SAME dictionary instance InvocationRunner, ToolApprovalCoordinator and ApiToolCallBridge hold (see
-    // PendingToolCallRegistry): the cancel/drain path below must observe the calls those registered.
+    // The SAME dictionary instance ToolApprovalCoordinator and ApiToolCallBridge hold (see PendingToolCallRegistry):
+    // the cancel/drain path below must observe the calls those registered.
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls;
 
     private readonly Lock _syncRoot = new();

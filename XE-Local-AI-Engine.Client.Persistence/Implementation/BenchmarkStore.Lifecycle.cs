@@ -336,9 +336,10 @@ public sealed partial class BenchmarkStore
     /// </summary>
     private async Task DeleteRunCoreAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
-        // Foreign keys are not enforced on this database, so the order below IS the referential integrity: the run
-        // stops pointing at its attempt, then comparisons, work items, judge and fidelity attempts, then the run
-        // itself. Anything left out of that list does not error — it simply outlives its run for good.
+        // The order below IS the delete: work items, judge and fidelity attempts all declare Restrict on the run, and
+        // the node connection enforces foreign keys, so removing the run before them is rejected outright. Comparisons
+        // declare no relationship to either run they name, so nothing removes them but this list — leave one out and it
+        // outlives its run for good. The run stops pointing at its attempt first, then children, then the run itself.
         var runId = run.Id;
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;

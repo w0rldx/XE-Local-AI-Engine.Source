@@ -10,7 +10,7 @@ import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function localDefaultOption(): ModelOption {

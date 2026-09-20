@@ -48,7 +48,7 @@ vi.mock("@/features/images/GeneratedImageDownload", async (importOriginal) => {
 });
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function job(overrides: Partial<ImageJobView> = {}): ImageJobView {

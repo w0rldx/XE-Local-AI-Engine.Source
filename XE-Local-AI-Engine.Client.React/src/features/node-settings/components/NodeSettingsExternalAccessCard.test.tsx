@@ -50,7 +50,7 @@ function renderCard(formOverrides: Partial<NodeSettingsFieldsForm> = {}): {
 	const onChange = vi.fn();
 	const onApplyPreset = vi.fn();
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<NodeSettingsExternalAccessCard
 				form={{ ...toNodeSettingsFieldsForm(undefined), ...formOverrides }}
 				onChange={onChange}

@@ -37,7 +37,7 @@ function baseContext(overrides: Partial<VoiceRuntimeContextValue> = {}): VoiceRu
 }
 
 function renderButton(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("VoicePreviewButton", () => {

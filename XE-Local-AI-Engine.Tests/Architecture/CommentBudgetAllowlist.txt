@@ -1378,7 +1378,6 @@ XE-Local-AI-Engine.Client.Persistence/Sqlite/NodeSqliteOptions.cs|block|1
 XE-Local-AI-Engine.Client.Persistence/Sqlite/NodeSqliteOptions.cs|remarks|1
 XE-Local-AI-Engine.Client.Persistence/Sqlite/NodeSqliteOptions.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence/Sqlite/NodeSqlitePragmas.cs|run|3
-XE-Local-AI-Engine.Client.Persistence/Sqlite/NodeSqlitePragmas.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence/Stores/BenchmarkJudgeStoreContracts.cs|summary|8
 XE-Local-AI-Engine.Client.Persistence/Stores/BenchmarkPairwiseStoreContracts.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence/Stores/BenchmarkPairwiseStoreContracts.cs|tag|1
@@ -1397,7 +1396,7 @@ XE-Local-AI-Engine.Client.Persistence/Stores/IAgentSkillStore.cs|block|1
 XE-Local-AI-Engine.Client.Persistence/Stores/IAgentSkillStore.cs|summary|8
 XE-Local-AI-Engine.Client.Persistence/Stores/IAgentWorkSessionStore.cs|summary|6
 XE-Local-AI-Engine.Client.Persistence/Stores/IBenchmarkStore.cs|block|2
-XE-Local-AI-Engine.Client.Persistence/Stores/IBenchmarkStore.cs|summary|22
+XE-Local-AI-Engine.Client.Persistence/Stores/IBenchmarkStore.cs|summary|21
 XE-Local-AI-Engine.Client.Persistence/Stores/IBenchmarkStore.cs|tag|8
 XE-Local-AI-Engine.Client.Persistence/Stores/ICustomToolStore.cs|summary|4
 XE-Local-AI-Engine.Client.Persistence/Stores/IDevWorkflowStore.cs|block|4
@@ -1932,7 +1931,7 @@ XE-Local-AI-Engine.Providers.LlamaServer/Implementation/RuntimeAcquisitionStatus
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/RuntimeAcquisitionStatusRegistry.cs|remarks|1
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/StaleLlamaServerReaper.cs|block|1
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/StaleLlamaServerReaper.cs|remarks|1
-XE-Local-AI-Engine.Providers.LlamaServer/Implementation/StaleLlamaServerReaper.cs|summary|2
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/StaleLlamaServerReaper.cs|summary|1
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/StreamingProcessRunner.cs|run|1
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/StreamingProcessRunner.cs|summary|1
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/TransientLlamaServerEvaluationHarness.cs|run|1
@@ -2082,7 +2081,7 @@ XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionCp
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionSourceProcessHardening.cs|run|1
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StaleImageServerReaper.cs|block|1
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StaleImageServerReaper.cs|remarks|1
-XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StaleImageServerReaper.cs|summary|2
+XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StaleImageServerReaper.cs|summary|1
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/WindowsImageJobObjectProcessHandle.cs|summary|1
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Options/StableDiffusionRuntimeOptions.cs|summary|6
 XE-Local-AI-Engine.Providers.StableDiffusionCpp/Options/StableDiffusionServerRuntimeOverrideOptions.cs|block|1
@@ -2313,12 +2312,11 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/WorkSessionsPageE2ETests.cs|summary|6
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeGoalExecutorTests.cs|run|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeGoalExecutorTests.cs|summary|4
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeIdentityProviderTests.cs|summary|1
-XE-Local-AI-Engine.Tests/AgentHome/AgentHomeMemoryProposalServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeOfferSeamTests.cs|run|3
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeOfferSeamTests.cs|summary|1
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|block|1
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|run|1
-XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|summary|8
+XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|summary|7
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchServiceTests.cs|summary|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeRunLoggerTests.cs|summary|3
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeServiceTests.cs|run|1
@@ -3253,7 +3251,6 @@ XE-Local-AI-Engine.Tests/Options/AnnotatedOptionsBoundsTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeDataDirectoryTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeSqliteContentionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Persistence/NodeSqlitePragmasTests.cs|run|4
-XE-Local-AI-Engine.Tests/Persistence/NodeSqlitePragmasTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/Abstractions/CudaToolkitLocatorTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Providers/Abstractions/DriveInfoFreeSpaceProbeTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/Abstractions/DriveInfoFreeSpaceProbeTests.cs|summary|1

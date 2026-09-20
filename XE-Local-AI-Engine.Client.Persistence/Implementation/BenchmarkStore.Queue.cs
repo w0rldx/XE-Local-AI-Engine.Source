@@ -9,6 +9,17 @@ public sealed partial class BenchmarkStore
     public Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         _dbContext.BenchmarkRuns.AsNoTracking().CountAsync(entity => entity.ProjectId == projectId, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, int>> CountRunsByProjectAsync(CancellationToken cancellationToken = default) =>
+        (await _dbContext.BenchmarkRuns.AsNoTracking()
+                         .GroupBy(entity => entity.ProjectId)
+                         .Select(group => new
+                         {
+                             ProjectId = group.Key,
+                             Count = group.Count()
+                         })
+                         .ToListAsync(cancellationToken))
+        .ToDictionary(static entry => entry.ProjectId, static entry => entry.Count);
+
     public async Task<IReadOnlyDictionary<BenchmarkWorkKind, int>> CountActiveWorkAsync(Guid projectId,
         CancellationToken cancellationToken = default) =>
         (await _dbContext.BenchmarkWorkItems.AsNoTracking()

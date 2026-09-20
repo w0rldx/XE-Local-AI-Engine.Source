@@ -7,13 +7,25 @@ internal sealed partial class NodePatchApplyService
     private async Task LogAppliedAsync(string runId, IReadOnlyList<PatchApplyFileEntry> files, CancellationToken cancellationToken)
     {
         var detail = string.Join(separator: ';', files.Select(file => string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}")));
+        PatchApplied(_logger, runId, files.Count);
         await AppendEventSafelyAsync(runId, "patch_applied", detail, cancellationToken);
     }
 
     private async Task LogRejectionAsync(string runId, IReadOnlyList<string> rejections, CancellationToken cancellationToken)
     {
+        PatchApplyRejected(_logger, runId, rejections.Count);
         await AppendEventSafelyAsync(runId, "patch_apply_rejected", string.Join(separator: ';', rejections), cancellationToken);
     }
+
+    // Outcome only, so an apply is visible without opening the run directory: run id and a count, never a path.
+    // The run's own log holds the per-file detail and the rejection strings.
+    [LoggerMessage(EventId = 4801, Level = LogLevel.Information, Message = "AgentHome patch applied for run {RunId}: {FileCount} file(s) written to the host.")]
+    private static partial void PatchApplied(ILogger logger, string runId, int fileCount);
+
+    // No "the host was not modified" claim: the partially-applied path reports through here too, and the result's
+    // own PartiallyApplied flag is what says which of the two happened.
+    [LoggerMessage(EventId = 4802, Level = LogLevel.Information, Message = "AgentHome patch apply rejected for run {RunId}: {RejectionCount} rejection(s).")]
+    private static partial void PatchApplyRejected(ILogger logger, string runId, int rejectionCount);
 
     private async Task AppendEventSafelyAsync(string runId, string eventName, string? detail, CancellationToken cancellationToken)
     {

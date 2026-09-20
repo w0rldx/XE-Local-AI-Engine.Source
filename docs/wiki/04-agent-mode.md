@@ -230,7 +230,7 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 | Area | Key types | Responsibility |
 |---|---|---|
 | **Agents** | `AgentDefinitionService`, `AgentDefinitionResolver`, `AgentSkillService`, `ISkillImportService`, `AgentTemplateCatalog`/`Import`, `DefaultAgentSeeder`, `CoderAgentSeeder`, `OrchestrationResolver` | CRUD of agent definitions; per-turn resolution into a `ResolvedAgentRuntime` (prompt + gated tool offer + pinned model + skills + flags); two-phase import of third-party skills (§4.5). |
-| **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomePatchService`, `NodePatchApplyService`, `MemoryProposalSecretScanner`, `IConversationSandboxStager`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, patch apply, memory proposals, conversation-attachment staging. |
+| **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomeGoalExecutor`, `AgentHomePatchService`, `NodePatchApplyService`, `IConversationSandboxStager`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, bounded inner agent loop, patch export and apply, conversation-attachment staging. |
 | **Analysis** | `PlaybookAnalysisService`, `DefaultPlaybookAnalysisAgent`, `IPlaybookAnalysisAgent` | Playbook analysis → **Suggested** staging (node-local model only). |
 | **Eval** | (uses AI.Agent `IPlaybookEvalAgentRunner`) + `PlaybookActionService` gate logic | Golden-conversation eval gate (Suggested → Enabled). |
 | **Insights** | `FeedbackInsightsService` / `IFeedbackInsightsService` | Read-only per-agent feedback aggregation (n≥3 threshold). |
@@ -301,8 +301,7 @@ selects a provider **per feature**, giving the container provider to Development
 container dependency). It resolves
 selected folders into the sandbox (`ISelectedFolderResolver` via a short-lived scope, since the service
 is a singleton and `NodeChatDbContext` isn't thread-safe), runs the agent, applies patches
-(`NodePatchApplyService` with `O_NOFOLLOW`/byte-recheck guards), and stages **memory proposals** that
-are secret-scanned (`MemoryProposalSecretScanner`) before they can be exported. The
+(`NodePatchApplyService` with `O_NOFOLLOW`/byte-recheck guards). The
 `run_in_agent_home` tool is a ClientLocal handler (`Tools/Implementation/RunInAgentHomeToolHandler.cs`).
 
 **How `run_in_agent_home` is offered.** Registering the handler in DI reaches the *resolution* seam only, so the
@@ -326,10 +325,18 @@ tools':
 - **Sandbox backend.** A node whose `AgentHome:Sandbox:Provider` is unset resolves the no-op `fake` backend in
   non-Production, which executes nothing; the tool result says so explicitly rather than reporting a clean
   exit 0. Set `AgentHome:Sandbox:Provider=process` (restart-time) to execute for real.
-- **Host patch apply has no operator surface yet.** A run *exports* `changes.patch` under its run directory
-  automatically, but `INodePatchApplyService` (`PreviewAsync` / `ApplyApprovedAsync`) has no endpoint, hub
-  method or SPA affordance calling it, so landing an exported patch on the host is not something an operator
-  can do from the product today.
+- **Host patch apply is the operator's, and only the operator's.** A run *exports* `changes.patch` under its run
+  directory automatically; landing it is a separate, human act. `INodePatchApplyService` is called from the
+  `AgentHomePatch` endpoint pair (preview / apply, `NodeOperator`-gated — see
+  [API & Hubs](09-api-and-hubs.md)) and from the chat tool-result card's **Review and apply changes** dialog,
+  which previews before it offers the button. The model cannot reach it: no `[McpServerTool]` and no
+  `IClientLocalToolHandler` names the service, and `HostPatchApplyReachArchitectureTests` fails the build if one
+  starts to. The apply also has to echo the hash the preview reported, so the diff the operator read is the diff
+  that lands. Two things a run can produce are exported but never landed: a **symbolic link** (`mode 120000`,
+  whose content is the link target, so applying it would point a real host link anywhere) and a **nested
+  repository** (`mode 160000`), both refused by name in `NodePatchApplyService.ParseBlock` — see
+  [Security & Privacy](12-security-and-privacy.md). A path the workspace's `.gitignore` covers is not in the
+  patch at all, because staging honours it (below).
 
 **What a run does with the `goal`.** `AgentHomeService.RunAsync` hands it to `IAgentHomeGoalExecutor`
 (`Services/AgentHome/Implementation/AgentHomeGoalExecutor.cs`), which runs a **bounded nested agent loop** on the
@@ -345,9 +352,11 @@ Its tools work only on the sandbox's workspace copy, and `allowedActions` decide
 | `export_patch` | the post-run patch export (unchanged) |
 
 There is no fifth value. `propose_memory` was **removed** from the schema rather than left standing, because the
-node collected the sandbox's proposals and then discarded them; persisting one into the adaptive-memory
-Suggested pipeline is a later slice, and `IAgentHomeMemoryProposalService` stays registered but unconsumed until
-it lands.
+node collected the sandbox's proposals and then discarded them; the collector that read them has since been
+deleted too, so nothing in the run path reads the sandbox's `memory/proposals/` directory. Persisting a proposal
+into the adaptive-memory Suggested pipeline is a later slice that would add its own collector. (The shared
+`MemoryProposalSecretScanner` is unrelated to that slice and stays: its live callers are `MemoryExtractionService`
+and `DevelopmentArtifactSanitizer` — see [Security & Privacy](12-security-and-privacy.md).)
 
 **What bounds the loop.** Four budgets, separate from the sandbox's own per-command timeout and jail-disk
 ceiling, all on `AgentHomeOptions`: `MaxRunSeconds` (the whole loop's wall clock — it matters most, because an
@@ -368,6 +377,15 @@ baseline the exported patch is diffed against lives. File contents and command o
 `UntrustedContentFraming` before they re-enter the model, and the sandbox's own root is stripped from captured
 output so no host path reaches it.
 
+**Export stages before it diffs.** `git diff HEAD` does not see an untracked path, so an export that diffed the
+working tree left every file the run *created* out of `changes.patch` and `changed-files.json` while the run
+reported it as written — silent data loss the moment the operator can apply a patch. Export therefore runs
+`add -A` first and diffs `--cached` against the baseline. Deliberately **not** `--force`: the workspace copy's
+baseline `add -A` honours `.gitignore`, so forcing would report every ignored-but-copied file as one the run
+added, and the two sides of the comparison have to apply the same rule. A model that hides its own creation
+behind a `.gitignore` shrinks what the operator is offered but cannot get an unreviewed file onto the host; the
+run's `run_completed` event carries `changed_files` beside `files_written` so the two numbers can be compared.
+
 **The patch export's own git is hardened, and logged.** Export runs `git diff` over the workspace the model just
 had `write_file` and `run_command` access to, **after** its turn ended and outside the run's budgets — and git
 executes programs named by configuration (`diff.<name>.textconv`, `diff.external`, `filter.<driver>.clean` on any
@@ -386,8 +404,13 @@ configuration** to run, so an in-tree `.gitattributes` naming an undefined one i
   **device**, which nothing can turn into a config file), `GIT_CONFIG_NOSYSTEM` and `GIT_ATTR_NOSYSTEM`;
 - a `.git` that is not a real directory — a gitfile pointing at a model-owned git directory defeats a rewrite
   outright — **fails the export closed** rather than exporting a patch the node cannot vouch for;
-- and every export git invocation is written to the run's `commands.jsonl` with `actor: node`, beside the model's
-  own `actor: model` entries, so an audit sees the whole sequence rather than half of it.
+- and every git invocation the node makes itself is written to the run's `commands.jsonl` with `actor: node`,
+  beside the model's own `actor: model` entries, so an audit sees the whole sequence rather than half of it. That
+  includes the export's own staging `add`, and the workspace copy's **baseline** git (`init` / `add -A` /
+  `commit`), which runs during *prepare* —
+  before a run id or a log exists — and is carried out of preparation on the prepare result and flushed the
+  moment the log opens. Each record keeps the timestamp and duration from when its command really ran, and
+  carries argv, exit code and duration only: never a byte of what the command printed.
 
 **The `-c` pins and the byte-stability pair.** `AgentHomeGit.Arguments` prefixes every AgentHome git invocation with
 the hardened `-c` set, because a command-line `-c` outranks every config file, `include.path` chains included. The
@@ -410,6 +433,38 @@ process a `run_command` deliberately double-forked could in principle rewrite th
 same window Development Mode accepts, and not closable on a soft jail with no filesystem boundary. And a model
 that rewrote the git objects or HEAD could make the exported patch misrepresent the tree; that bounds what a
 patch proves, and the operator reviewing it is the control.
+
+**The result's first line is a contract.** Line one is a node-authored header, start-anchored, in exactly this
+shape:
+
+```
+[agent-home run=<run-id> outcome=<Token> patch=<exported|none>]
+```
+
+Everything after it is prose, and that prose embeds the **model-authored** `run_command` executable *before* the
+run's genuine `runs/<id>/patches/changes.patch` string. A reader that recovered the run id by scanning the prose
+could therefore be handed `runs/<other-run>/patches/changes.patch` by a model that simply named its executable
+that, and would offer the operator a different run's patch. **Position is the control**: every field in the
+header is node-derived, the line is emitted before any model-authored byte, and nothing model-authored can reach
+index 0 (the one model-authored string the summary renders is also flattened to a single line, so it cannot even
+produce a second line that looks like a header). `patch=exported` means `changes.patch` was really written — a
+patch over `MaxPatchBytes` reports `none` although `changed-files.json` exists. A **rejection** (busy, unknown
+folder id, disallowed runtime profile) carries no header at all: no run was created, so there is nothing to
+offer, and a missing header means "no run" rather than "this turn's run". Parse it start-anchored or not at all;
+do not reorder the fields, add one, or widen a value.
+
+**What the outer model is told.** The tool returns a plain string (every `IClientLocalToolHandler` does), built
+only from facts the **node** derived: the header above, the run id and run-relative output paths, a stop-reason
+sentence, the per-folder copy counts, the loop's tool-call /
+refusal / written-file counts and elapsed seconds, an aggregate of the commands run with their exit codes, the
+patch's changed-file count and byte size, the `fake`-backend honesty notice, and a fixed closing sentence saying
+the run has ended and need not be repeated (a live round watched a 27B model re-invoke the tool two and three
+times in one turn because the summary was too thin to trust). **Command output and workspace file bytes never
+appear there**, and neither do the paths `write_file` wrote: the outer model still holds the node's other tools,
+so workspace-authored text arriving as "your tool result" is steering text with a delivery mechanism. The detail
+lives on disk, under `runs/<run-id>/`. `AgentHomeToolResultContainmentTests` plants one marker through all three
+routes at once — a command's stdout, a written file's content, and the path the model chose for a second file — and
+grades the returned string on its absence.
 
 **It only runs from an approved chat turn.** The loop reads the outer model id off the ambient `SpawnContext`
 root that `InvocationRunner` seeds, and refuses when there is none or when that model is outside the node's
@@ -458,8 +513,10 @@ service-level tests exercise orchestration, busy/cancel/owner hardening and the 
 deterministic provider, while the executor's own tests drive the real inner tools with a scripted chat client — the
 configured runtime provider is what supplies real command execution and git behaviour.
 
-**Still not done end to end.** Host patch apply has no operator surface (above), so an exported patch is
-something the operator can read on disk and nothing the product can land for them.
+**End to end, with the operator holding the last step.** An exported patch is previewed and landed through the
+`AgentHomePatch` endpoint pair and the chat card's apply dialog (above). What a run still has no surface for is
+listing its own history: runs accumulate on disk with no retention sweep and no run list, so an operator reaches
+a patch through the tool result that produced it.
 
 **Conversation-attachment staging** (`IConversationSandboxStager`,
 `Services/AgentHome/IConversationSandboxStager.cs`). `AgentHomeService` also implements this narrow public

@@ -47,7 +47,7 @@ function makeMetrics(overrides: Partial<InferenceBenchmarkMetrics> = {}): Infere
 }
 
 function renderCard(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("ProfileMetricsCard", () => {

@@ -151,7 +151,7 @@ function renderPanel(
 	attempt: DevelopmentAttempt | null = null,
 ): void {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<DevelopmentLivePanel attempt={attempt} live={live} artifacts={artifacts} events={[]} />
 		</MantineProvider>,
 	);

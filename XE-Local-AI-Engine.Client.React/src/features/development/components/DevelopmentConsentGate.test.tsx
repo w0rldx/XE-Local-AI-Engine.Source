@@ -22,7 +22,7 @@ const CONSENT_STORAGE_KEY = "xe-development-consent-v1";
 function renderGate(sandboxProvider = "process") {
 	capabilityMock.mockReturnValue({ data: { enabled: true, sandboxProvider } });
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<DevelopmentConsentGate>
 				<div data-testid="development-page-body">page</div>
 			</DevelopmentConsentGate>
@@ -188,7 +188,7 @@ describe("DevelopmentConsentGate", () => {
 	it("does not ask while the capability is unresolved or Development is disabled", () => {
 		capabilityMock.mockReturnValue({ data: { enabled: false, sandboxProvider: "process" } });
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentConsentGate>
 					<div data-testid="development-page-body">page</div>
 				</DevelopmentConsentGate>

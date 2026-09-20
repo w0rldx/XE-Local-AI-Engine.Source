@@ -106,8 +106,8 @@ public sealed class GeneratedImageStoreTests : IDisposable
     /// <summary>
     ///     The whole job-scoped delete over real SQLite and the real file system: the job row, its <c>generated_images</c>
     ///     row and its encrypted blob all go, and a second job that was never named keeps all three. The totals are read
-    ///     UNFILTERED — the node connection leaves <c>PRAGMA foreign_keys</c> off, so the store's delete order IS the
-    ///     referential integrity and a query scoped to the deleted job could not see an over-broad delete.
+    ///     UNFILTERED, so an over-broad delete is visible: a query scoped to the deleted job could not see one. The
+    ///     storage paths the delete returns are what the blob teardown needs, and no cascade can produce them.
     /// </summary>
     [Test]
     public async Task DeleteAsync_RemovesTheJobRowsAndBlob_LeavingAnotherJobIntact()
@@ -344,11 +344,11 @@ public sealed class GeneratedImageStoreTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        // `Foreign Keys=False` is what makes this database the node's: NodeSqliteOptions never emits
-        // PRAGMA foreign_keys, so the declared ON DELETE CASCADE is inert in production and the store's explicit
-        // ordered delete IS the referential integrity. Microsoft.Data.Sqlite turns enforcement ON by default, which
-        // would let the engine clean up after a delete that forgot its child rows and hide exactly that bug.
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath};Foreign Keys=False"));
+        // The node enforces foreign keys, so this fixture must too — it used to pin `Foreign Keys=False` on the belief
+        // that the node ran without enforcement, which made it the one fixture here testing a database production never
+        // has. The delete test below stays meaningful under the real posture because the cascade cannot produce the
+        // storage paths `DeleteAsync` returns, and those paths are the whole point of the explicit ordered delete.
+        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath};Foreign Keys=True"));
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();

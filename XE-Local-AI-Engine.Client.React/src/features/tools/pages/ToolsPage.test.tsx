@@ -38,7 +38,7 @@ const catalogTools: ToolCatalogEntry[] = [
 ];
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function installJsdomEnvironmentMocks(): void {

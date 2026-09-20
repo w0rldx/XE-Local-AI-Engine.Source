@@ -9,7 +9,7 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function installJsdomEnvironmentMocks(): void {

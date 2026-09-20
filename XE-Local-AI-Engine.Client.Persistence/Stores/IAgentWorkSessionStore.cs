@@ -362,8 +362,8 @@ public interface IAgentWorkSessionStore
 
     /// <summary>
     ///     Removes the session and every child row in explicit dependency order, and answers how many rows went. The
-    ///     node connection runs without <c>PRAGMA foreign_keys</c>, so the declared cascades never fire and the order
-    ///     here is the only thing that keeps the delete complete.
+    ///     order is load-bearing: findings declare <c>Restrict</c> on their task, so a task cannot go first, and the
+    ///     row count has to be observed rather than inferred from what the cascades would have removed.
     /// </summary>
     Task<int> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default);
 

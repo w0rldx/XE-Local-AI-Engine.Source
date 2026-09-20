@@ -10,11 +10,11 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     Patch export implementation for <see cref="IAgentHomePatchService" />.
 /// </summary>
 /// <remarks>
-///     It runs two in-sandbox <c>git diff</c> commands against the workspace-copy baseline with the byte-stabilizing flags — a full
-///     <c>--binary</c> patch and a <c>--name-status</c> summary — under <see cref="AgentHomeGitHardening" />, which keeps a model-authored
-///     <c>textconv</c>/<c>clean</c> driver from executing here after the model's turn has ended. The worker captures their standard output
-///     and owns the file write, since the sandbox SPI carries no shell redirection, then writes <c>changes.patch</c> and <c>changed-files.json</c>
-///     under <c>runs/&lt;run-id&gt;/patches/</c>, bounded by <see cref="AgentHomeOptions.MaxPatchBytes" />. Model-facing paths stay run-relative.
+///     It stages the workspace with <c>add -A</c> — not <c>--force</c>, so <c>.gitignore</c> still decides what is offered, as it did for the baseline — then
+///     runs two in-sandbox <c>git diff --cached</c> commands with the byte-stabilizing flags: a full <c>--binary</c> patch and a <c>--name-status</c>
+///     summary, under <see cref="AgentHomeGitHardening" />, which keeps a model-authored <c>textconv</c>/<c>clean</c> driver from executing after the model's
+///     turn has ended. Their standard output becomes <c>changes.patch</c> and <c>changed-files.json</c> under <c>runs/&lt;run-id&gt;/patches/</c>, bounded by
+///     <see cref="AgentHomeOptions.MaxPatchBytes" />. Model-facing paths stay run-relative.
 /// </remarks>
 internal sealed class AgentHomePatchService : IAgentHomePatchService
 {
@@ -60,13 +60,22 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             return FailedExport();
         }
 
+        // Stage the whole working tree first: a working-tree `diff HEAD` never sees an UNTRACKED path, so without this
+        // every file the run CREATED was silently absent from both artifacts. Not --force — see the class summary.
+        var stageResult = await RunGitAsync(handle,
+            request,
+            $"{request.RunId}-patch-stage",
+            commandTimeout,
+            ["add", "-A", "--", "."],
+            cancellationToken);
+
         // Full binary-aware patch, captured from standard output because the SPI carries no shell redirection.
         // --no-textconv/--no-ext-diff are belt and braces on the rewrite above, not the control: a clean filter survives them.
         var patchResult = await RunGitAsync(handle,
             request,
             $"{request.RunId}-patch-diff",
             commandTimeout,
-            ["diff", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."],
+            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."],
             cancellationToken);
 
         // Name-status summary used to build changed-files.json.
@@ -74,15 +83,17 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             request,
             $"{request.RunId}-patch-status",
             commandTimeout,
-            ["diff", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."],
+            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."],
             cancellationToken);
 
-        if (!IsSuccessful(patchResult) || !IsSuccessful(statusResult))
+        if (!IsSuccessful(stageResult) || !IsSuccessful(patchResult) || !IsSuccessful(statusResult))
         {
             // A non-zero exit or an incomplete command means no patch could be produced: surface that distinctly, so it is
             // not read as a clean zero-change run, and write no artifacts. Real non-zero git exits need a real provider.
-            _logger.LogWarning("Patch export for run {RunId} aborted: patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
+            _logger.LogWarning("Patch export for run {RunId} aborted: stage exit {StageExit} (completed {StageCompleted}), patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
                 request.RunId,
+                stageResult.ExitCode,
+                stageResult.Completed,
                 patchResult.ExitCode,
                 patchResult.Completed,
                 statusResult.ExitCode,

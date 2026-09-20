@@ -198,8 +198,8 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
             throw new TrainingConflictException("DatasetReferenced");
         }
 
-        // Explicit ordered deletes: the node connection never sets PRAGMA foreign_keys=ON, so the declared cascade on
-        // training_dataset_samples never fires. Children first, then the work item, then the dataset itself.
+        // Explicit ordered deletes. The cascade on training_dataset_samples does fire on the node connection, so that
+        // one is belt-and-braces; the generation work items carry no cascade and go only because this names them.
         _ = await _dbContext.TrainingDatasetSamples.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken);
         _ = await _dbContext.DatasetGenerationWorkItems.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken);
         // ExecuteDelete bypasses the tracker; clearing it stops EF reading the removed children as a severed required

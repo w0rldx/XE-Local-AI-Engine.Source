@@ -53,7 +53,7 @@ function renderTab(
 function rerenderWithAnchorParam(view: ReturnType<typeof renderWithProviders>, anchorParam: number, onLoadMore = vi.fn()) {
 	view.rerender(
 		<QueryClientProvider client={view.queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevWorkflowEventsTab
 					events={[]}
 					labelByNodeRunId={new Map()}

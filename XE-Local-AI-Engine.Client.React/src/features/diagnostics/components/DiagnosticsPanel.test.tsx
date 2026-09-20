@@ -60,7 +60,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("DiagnosticsPanel", () => {

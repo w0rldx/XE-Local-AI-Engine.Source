@@ -22,7 +22,7 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function attachment(overrides: Partial<ChatAttachment> = {}): ChatAttachment {

@@ -22,8 +22,11 @@ public sealed class AgentHomeOptionsValidator : IValidateOptions<AgentHomeOption
                                    "AgentHome:CommandTimeoutSeconds must be greater than zero.")
                                .AppendIf(options.MaxRunSeconds <= 0,
                                    "AgentHome:MaxRunSeconds must be greater than zero.")
+                               // Both configured values, not just the key names: this stops host startup, and an
+                               // operator who set only one of them cannot tell which value they did not write.
                                .AppendIf(options.MaxRunSeconds < options.CommandTimeoutSeconds,
-                                   "AgentHome:MaxRunSeconds must be at least AgentHome:CommandTimeoutSeconds — the whole-run budget cannot be shorter than one command's.")
+                                   $"AgentHome:MaxRunSeconds ({options.MaxRunSeconds}) must be at least AgentHome:CommandTimeoutSeconds "
+                                   + $"({options.CommandTimeoutSeconds}) — the whole-run budget cannot be shorter than one command's.")
                                .AppendIf(options.MaxInnerToolCalls <= 0,
                                    "AgentHome:MaxInnerToolCalls must be greater than zero.")
                                .AppendIf(options.MaxWriteFileBytes <= 0,

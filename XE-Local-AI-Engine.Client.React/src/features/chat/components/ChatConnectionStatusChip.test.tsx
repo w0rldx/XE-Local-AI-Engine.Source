@@ -45,7 +45,7 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({ nodeChatConnection: c
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("ChatConnectionStatusChip", () => {

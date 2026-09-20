@@ -77,7 +77,7 @@ function renderList(props: Partial<Parameters<typeof ScheduledJobList>[0]> = {})
 		onToggleEnabled: vi.fn(),
 	};
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ScheduledJobList jobs={[cronJob]} isMutating={false} {...handlers} {...props} />
 		</MantineProvider>,
 	);

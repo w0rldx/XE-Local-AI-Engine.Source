@@ -37,7 +37,7 @@ function renderActions(existingContent = "") {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AssistActions
 					surface="skill"
 					existing={{ name: "", description: "", content: existingContent }}

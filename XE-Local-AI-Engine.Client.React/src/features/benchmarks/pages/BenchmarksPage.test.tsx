@@ -21,6 +21,11 @@ setupMswServer();
 
 const projectId = "aaaaaaaa-0000-4000-8000-000000000001";
 
+const rubric = {
+	version: 1,
+	criteria: [{ id: "accuracy", title: "Accuracy", description: "Are the facts right?", weight: 100 }],
+};
+
 function baseRoutes(projects: unknown[]) {
 	server.use(
 		jsonRoute("get", "benchmarks/projects", { items: projects }),
@@ -43,6 +48,20 @@ function baseRoutes(projects: unknown[]) {
 		jsonRoute("get", `benchmarks/projects/${projectId}/runs`, {
 			items: [],
 			rankCohort: { rankedCount: 0, totalScored: 0 },
+		}),
+		// Ambient to the smoke: the workspace reads the task items of whatever project is selected, and the project
+		// editor reads the rubric presets as soon as it opens. Neither is what a case here asserts, but an undeclared
+		// read is a read the test proved nothing about.
+		jsonRoute("get", `benchmarks/projects/${projectId}/items`, {
+			items: [],
+			taskItemSetHash: null,
+			projectVersion: 1,
+		}),
+		jsonRoute("get", "benchmarks/rubric-presets", {
+			default: rubric,
+			programming: rubric,
+			reasoning: rubric,
+			verifiable: rubric,
 		}),
 	);
 }

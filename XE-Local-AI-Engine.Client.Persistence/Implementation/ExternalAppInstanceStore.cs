@@ -341,8 +341,8 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
                 return false;
             }
 
-            // Explicitly, and inside the same transaction as the row: cascades never fire on this connection, so an
-            // events delete left to the database would leave every event of this instance behind forever.
+            // Ordinarily a no-op: the instance row went first and the node enforces foreign keys, so the cascade has
+            // already taken these events. Belt and braces — and parent-first is only safe because that cascade fires.
             _ = await _dbContext.ExternalAppInstanceEvents.Where(row => row.InstanceId == instanceId).ExecuteDeleteAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }

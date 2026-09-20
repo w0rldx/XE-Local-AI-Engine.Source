@@ -40,7 +40,7 @@ describe("AboutDialogButton", () => {
 
 	it("lazy-loads once and keeps the update lifecycle mounted after close", async () => {
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AboutDialogButton />
 			</MantineProvider>,
 		);

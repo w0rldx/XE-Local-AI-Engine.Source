@@ -69,7 +69,7 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 interface HarnessProps {
@@ -196,7 +196,7 @@ describe("SkillForm", () => {
 
 	it("says an imported skill's instructions run with the agent's tool access", () => {
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<SkillForm
 					initialValues={baseValues}
 					isSubmitting={false}
@@ -216,7 +216,7 @@ describe("SkillForm", () => {
 
 	it("hides the enabled toggle on create and shows it on edit", () => {
 		const { rerender } = render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<SkillForm
 					initialValues={baseValues}
 					isSubmitting={false}
@@ -230,7 +230,7 @@ describe("SkillForm", () => {
 		expect(screen.queryByTestId("skill-form-enabled")).toBeNull();
 
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<SkillForm
 					initialValues={baseValues}
 					isSubmitting={false}

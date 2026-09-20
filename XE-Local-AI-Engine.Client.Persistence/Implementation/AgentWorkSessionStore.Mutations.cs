@@ -283,7 +283,8 @@ internal sealed partial class AgentWorkSessionStore
 
     private async Task EnsureTaskBelongsAsync(Guid sessionId, Guid taskId, CancellationToken cancellationToken)
     {
-        // Checked here rather than left to the foreign key: cascades and restrictions do not fire on this connection.
+        // Checked here rather than left to the foreign key: the task id is only constrained to exist, not to belong to
+        // this session, and the caller is owed a WorkSessionNotFoundException rather than a constraint violation.
         if (!await _dbContext.AgentWorkSessionTasks.AnyAsync(entity => entity.Id == taskId && entity.SessionId == sessionId, cancellationToken))
         {
             throw new WorkSessionNotFoundException($"Work session task '{taskId}' was not found on session '{sessionId}'.");

@@ -12,11 +12,18 @@ using XE_Local_AI_Engine.Client.Common;
 ///     It mirrors this assembly's only other <see cref="Process" /> use, <c>CapabilityReportComposer</c>: a CA2000-clean
 ///     <c>using var</c> process with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> rather than a
 ///     joined string so paths with spaces are safe, and a <see cref="System.Threading.Tasks.Task" />-based read plus wait.
-///     The hardened <c>-c</c> flags come from <see cref="AgentHomeGit" />, so a host global hook or <c>.gitattributes</c>
-///     cannot interfere with the apply.
+///     The hardened <c>-c</c> flags from <see cref="AgentHomeGit" /> and the configuration cut from
+///     <see cref="AgentHomeGitHardening.Environment" /> keep a host global hook or <c>.gitattributes</c> out of the apply.
 /// </remarks>
 internal sealed class HostGitRunner
 {
+    /// <summary>
+    ///     How long a killed child is given to actually exit before this runner reports that it could not confirm it
+    ///     had. A terminated process is reaped in milliseconds; this bound exists so an unreapable one is a reported
+    ///     failure rather than a hang.
+    /// </summary>
+    private static readonly TimeSpan ReapTimeout = TimeSpan.FromSeconds(10);
+
     private readonly int _timeoutSeconds;
 
     public HostGitRunner(int timeoutSeconds)
@@ -59,6 +66,13 @@ internal sealed class HostGitRunner
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
+        }
+
+        // This git runs against the OPERATOR's checkout, where global and system configuration is reachable and `git
+        // apply` reads .gitattributes drivers; their names are arbitrary, so the files leave git's search entirely.
+        foreach (var (key, value) in AgentHomeGitHardening.Environment)
+        {
+            startInfo.Environment[key] = value;
         }
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -117,11 +131,26 @@ internal sealed class HostGitRunner
         {
             await process.WaitForExitAsync(timeoutCts.Token);
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
-            // The per-command timeout (not the caller) fired: kill the process and surface a non-zero result.
+            // Kill on EITHER token: a caller cancellation that propagated with the git still running would release
+            // the node-wide apply gate over a tree that process keeps mutating. When this returns, the child is gone.
             ProcessTermination.TryKill(process);
-            return new HostGitResult { ExitCode = -1, StandardOutput = string.Empty, StandardError = "git timed out." };
+            var reaped = await TryWaitForExitAsync(process);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // The caller cancelled, so cancellation is what it is owed — but only once the child is gone, which
+                // is the whole point of waiting here rather than rethrowing straight away.
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return new HostGitResult
+            {
+                ExitCode = -1,
+                StandardOutput = string.Empty,
+                StandardError = reaped ? "git timed out." : "git timed out and did not exit after being terminated."
+            };
         }
 
         var standardOutput = await stdoutTask;
@@ -136,6 +165,24 @@ internal sealed class HostGitRunner
         return process.ExitCode == 0 && inputFailure is not null
             ? new HostGitResult { ExitCode = -1, StandardOutput = standardOutput.Text, StandardError = $"git stopped reading its input: {inputFailure}" }
             : new HostGitResult { ExitCode = process.ExitCode, StandardOutput = standardOutput.Text, StandardError = standardError.Text };
+    }
+
+    /// <summary>
+    ///     Waits for a just-killed process to exit, on a token of its OWN: the cancellation that caused the kill must
+    ///     not cut this wait short. <see langword="false" /> means the child may still be running.
+    /// </summary>
+    private static async Task<bool> TryWaitForExitAsync(Process process)
+    {
+        using var reapCts = new CancellationTokenSource(ReapTimeout);
+        try
+        {
+            await process.WaitForExitAsync(reapCts.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

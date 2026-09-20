@@ -14,15 +14,16 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 public interface INodePatchApplyService
 {
     /// <summary>
-    ///     Validates and dry-run-checks the run's exported patch against the host without mutating anything. Returns the
-    ///     per-file plan, any host-path-safe rejections, and whether the patch contains a binary block.
+    ///     Validates and dry-run-checks the run's exported patch against the host without mutating anything. Returns
+    ///     the per-file plan, any rejections, whether the patch contains a binary block, and the SHA-256 of the bytes
+    ///     it validated.
     /// </summary>
     Task<NodePatchApplyPreview> PreviewAsync(NodePatchApplyRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Re-runs the full preview validation + dry-run check (TOCTOU defense; never blind-applies) and, only when the
-    ///     check passes for every alias, applies the patch onto the host selected folders. Mutates nothing when the
-    ///     re-check fails.
+    ///     Re-runs the full preview validation and dry-run check (TOCTOU defence) and applies only when every alias
+    ///     checks clean; a failed re-check mutates nothing. <see cref="NodePatchApplyRequest.ExpectedPatchSha256" />
+    ///     binds the approval to the diff that was shown. Applies are serialized node-wide.
     /// </summary>
     Task<NodePatchApplyResult> ApplyApprovedAsync(NodePatchApplyRequest request, CancellationToken cancellationToken = default);
 }

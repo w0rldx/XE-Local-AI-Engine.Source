@@ -26,22 +26,26 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     private readonly ILogger<AgentHomeWorkspaceService> _logger;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly TimeProvider _timeProvider;
 
     public AgentHomeWorkspaceService(IAgentSandboxRuntimeProvider provider,
         IAgentHomeWorkspaceIsolation isolation,
         ISensitiveFileExclusionService exclusionService,
         INodeRuntimeSettings runtimeSettings,
+        TimeProvider timeProvider,
         ILogger<AgentHomeWorkspaceService> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
         _exclusionService = exclusionService ?? throw new ArgumentNullException(nameof(exclusionService));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
         IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
+        ICollection<AgentHomeCommandLogRecord>? baselineCommands = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(handle);
@@ -93,7 +97,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
             if (anyFileCopied)
             {
-                await CreateGitBaselineAsync(handle, cancellationToken);
+                await CreateGitBaselineAsync(handle, baselineCommands, cancellationToken);
             }
 
             requiresCleanup = false;
@@ -252,7 +256,9 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         }
     }
 
-    private async Task CreateGitBaselineAsync(SandboxHandle handle, CancellationToken cancellationToken)
+    private async Task CreateGitBaselineAsync(SandboxHandle handle,
+        ICollection<AgentHomeCommandLogRecord>? baselineCommands,
+        CancellationToken cancellationToken)
     {
         // The baseline is captured after the copy and before any agent edit, so it belongs to preparation and carries the
         // same byte-stabilizing flags the later diff is taken under. --allow-empty keeps an all-ignored tree committable.
@@ -260,7 +266,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         var timeout = TimeSpan.FromSeconds(prepareTimeoutSeconds);
 
         // `init` first: there is no repository to harden until it exists.
-        await RunBaselineCommandAsync(handle, BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.WorkspaceArguments("init")), cancellationToken);
+        await RunBaselineCommandAsync(handle, BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.WorkspaceArguments("init")), baselineCommands, cancellationToken);
 
         // `add -A` CONVERTS worktree content, so a configured clean filter runs here as the node. The guard runs even
         // though nothing model-authored can be there yet: the sandbox is reused, and ordering is not a control.
@@ -269,7 +275,10 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             throw new AgentHomeRequestRejectedException("the workspace git directory is not the one the baseline created.");
         }
 
-        await RunBaselineCommandAsync(handle, BaselineCommand("agent-home-baseline-add", timeout, AgentHomeGit.WorkspaceArguments("add", "-A")), cancellationToken);
+        await RunBaselineCommandAsync(handle,
+            BaselineCommand("agent-home-baseline-add", timeout, AgentHomeGit.WorkspaceArguments("add", "-A")),
+            baselineCommands,
+            cancellationToken);
         await RunBaselineCommandAsync(handle,
             BaselineCommand("agent-home-baseline-commit", timeout, AgentHomeGit.WorkspaceArguments("-c",
                 $"user.email={BaselineUserEmail}",
@@ -279,15 +288,36 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 "-m",
                 "agent-home baseline",
                 "--allow-empty")),
+            baselineCommands,
             cancellationToken);
 
         _logger.LogInformation("Created the in-sandbox git baseline for the selected workspace.");
     }
 
-    private async Task RunBaselineCommandAsync(SandboxHandle handle, SandboxCommandRequest command, CancellationToken cancellationToken)
+    private async Task RunBaselineCommandAsync(SandboxHandle handle,
+        SandboxCommandRequest command,
+        ICollection<AgentHomeCommandLogRecord>? baselineCommands,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = _timeProvider.GetUtcNow();
         var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
+
+        // Node-derived facts only — argv, exit code, duration, never the captured stdout/stderr: the run log audits
+        // WHAT the node ran, not what the workspace said back. A failed baseline is recorded too; it is the find.
+        baselineCommands?.Add(new AgentHomeCommandLogRecord
+        {
+            TimestampUtc = startedAt,
+            ExecutionId = command.ExecutionId,
+            Executable = command.Executable,
+            Arguments = command.Arguments,
+            Completed = result.Completed,
+            ExitCode = result.ExitCode,
+            DurationMs = (long)result.Duration.TotalMilliseconds,
+            ErrorClass = null,
+            Actor = AgentHomeCommandActors.Node
+        });
+
         if (!result.Completed || result.ExitCode != 0)
         {
             // A failed baseline command leaves no reproducible HEAD to diff against, so fail the prepare loudly rather

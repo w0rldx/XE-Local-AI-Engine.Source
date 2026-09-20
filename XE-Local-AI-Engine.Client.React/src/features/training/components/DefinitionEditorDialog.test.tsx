@@ -54,7 +54,7 @@ function renderDialog(definition: TrainingDefinition | null) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DefinitionEditorDialog definition={definition} onClose={vi.fn()} opened={true} />
 			</MantineProvider>
 		</QueryClientProvider>,

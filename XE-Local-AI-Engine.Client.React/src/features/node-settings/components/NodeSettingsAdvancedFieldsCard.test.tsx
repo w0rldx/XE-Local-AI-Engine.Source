@@ -42,7 +42,7 @@ function installJsdomEnvironmentMocks(): void {
 
 function renderCard(): void {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<NodeSettingsAdvancedFieldsCard
 				form={toNodeSettingsFieldsForm(undefined)}
 				bounds={toNodeSettingsFieldBounds(undefined)}

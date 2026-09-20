@@ -9,6 +9,13 @@ public sealed record NodePatchApplyRequest
 {
     /// <summary>The run id; resolves <c>&lt;RootPath&gt;/runs/&lt;RunId&gt;/patches/changes.patch</c>.</summary>
     public required string RunId { get; init; }
+
+    /// <summary>
+    ///     The SHA-256 (lowercase hex) a preview reported for the bytes it validated. When present, the apply refuses
+    ///     a patch that hashes differently, so the operator approves the diff they were shown. Omitted, re-validation
+    ///     is the whole defence.
+    /// </summary>
+    public string? ExpectedPatchSha256 { get; init; }
 }
 
 /// <summary>
@@ -31,6 +38,20 @@ public sealed record NodePatchApplyPreview
 
     /// <summary>Whether the patch contains a binary block (detected in the patch text, not via git).</summary>
     public bool ContainsBinary { get; init; }
+
+    /// <summary>
+    ///     SHA-256 (lowercase hex) of the exact patch bytes this preview validated, or <see langword="null" /> when no
+    ///     patch could be read. An apply that echoes it back in <see cref="NodePatchApplyRequest.ExpectedPatchSha256" />
+    ///     is refused if the bytes on disk have changed since.
+    /// </summary>
+    public string? PatchSha256 { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when the run has no readable <c>changes.patch</c> at all (unknown run, missing or
+    ///     empty file). Distinguishes "nothing to review" from "a patch that will not apply", which is a different
+    ///     answer for a caller that maps this onto a status code.
+    /// </summary>
+    public bool PatchMissing { get; init; }
 }
 
 /// <summary>
@@ -53,6 +74,12 @@ public sealed record NodePatchApplyResult
     ///     leaving some aliases applied and others not. <see cref="AppliedFiles" /> reports what landed.
     /// </summary>
     public bool PartiallyApplied { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when the run has no readable <c>changes.patch</c> at all. The twin of
+    ///     <see cref="NodePatchApplyPreview.PatchMissing" />.
+    /// </summary>
+    public bool PatchMissing { get; init; }
 }
 
 /// <summary>A single changed file in a patch apply preview/result. Carries no alias prefix and no host path.</summary>

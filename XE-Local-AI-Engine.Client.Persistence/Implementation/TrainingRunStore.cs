@@ -397,8 +397,8 @@ public sealed class TrainingRunStore : ITrainingRunStore
             throw new TrainingConflictException("RunEvaluated");
         }
 
-        // Explicit ordered deletes: the node connection never sets PRAGMA foreign_keys=ON, so the declared restrict on
-        // training_artifacts never fires. Children first, then the work item, then the run itself.
+        // Explicit ordered deletes: training_artifacts declares Restrict on the run and the node connection enforces
+        // foreign keys, so deleting the run first is rejected. Children first, then the work item, then the run itself.
         _ = await _dbContext.TrainingArtifacts.Where(item => item.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         _ = await _dbContext.TrainingWorkItems.Where(item => item.TargetId == runId).ExecuteDeleteAsync(cancellationToken);
         // ExecuteDelete bypasses the tracker; clearing it stops EF reading the removed children as a severed required

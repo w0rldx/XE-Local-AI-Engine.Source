@@ -197,7 +197,7 @@ function renderPage(cachedSettings?: unknown): QueryClient {
 
 	const wrapper = ({ children }: { children: ReactNode }) => (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>{children}</MantineProvider>
+			<MantineProvider env="test">{children}</MantineProvider>
 		</QueryClientProvider>
 	);
 

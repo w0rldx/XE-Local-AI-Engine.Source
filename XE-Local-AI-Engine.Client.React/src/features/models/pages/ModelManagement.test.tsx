@@ -129,7 +129,7 @@ import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
 		</MantineProvider>,
 	);
@@ -446,8 +446,9 @@ describe("ModelManagement", () => {
 		const dialog = await openDetailsDialog("llama3:8b");
 		fireEvent.click(within(dialog).getByRole("tab", { name: /license/i }));
 
-		// The License tab carries BOTH the template and the license.
-		expect(within(dialog).getByTestId("model-template-content").textContent).toContain("{{ .Prompt }}");
+		// The License tab carries BOTH the template and the license. Awaited, not read synchronously: the tab is opened
+		// the moment the dialog exists, and the details this panel renders arrive from their own request afterwards.
+		expect((await within(dialog).findByTestId("model-template-content")).textContent).toContain("{{ .Prompt }}");
 		expect(within(dialog).getByTestId("model-license-content").textContent).toContain("fake");
 	});
 

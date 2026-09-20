@@ -31,8 +31,8 @@ internal sealed class KnowledgeDocumentSectionConfiguration : IEntityTypeConfigu
                .HasColumnName("page_number");
 
         // Cascade from the owning document. Configured without a navigation on the principal so KnowledgeDocument stays a
-        // bare metadata row. The node-sqlite runtime connection does NOT enable PRAGMA foreign_keys, so this cascade
-        // documents intent and serves EF-managed deletes (tests); the raw-SQL purge path removes rows explicitly.
+        // bare metadata row. The cascade is enforced on the node connection; the raw-SQL purge path still removes rows
+        // explicitly so the FTS-trigger ordering is the purge's own decision rather than the database's.
         builder.HasOne<KnowledgeDocument>()
                .WithMany()
                .HasForeignKey(entity => entity.DocumentId)

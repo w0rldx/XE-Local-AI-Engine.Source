@@ -9,7 +9,7 @@ import { isRemoteImageSrc, markdownImageUrlTransform, remoteImageOrigin } from "
 import { SafeMarkdownImage } from "@/features/chat/components/SafeMarkdownImage";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 const DATA_IMAGE =
@@ -138,7 +138,7 @@ describe("SafeMarkdownImage consent flow", () => {
 
 		// Same component position, new remote source B: prior consent must not leak — the placeholder returns.
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<SafeMarkdownImage src="https://b.example.com/two.png" alt="two" />
 			</MantineProvider>,
 		);

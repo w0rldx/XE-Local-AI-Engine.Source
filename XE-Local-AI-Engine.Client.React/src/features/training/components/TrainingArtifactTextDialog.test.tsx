@@ -25,7 +25,7 @@ describe("TrainingArtifactTextDialog", () => {
 		const confirm = vi.fn();
 		const change = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<TrainingArtifactTextDialog
 					kind="promote"
 					onChange={change}

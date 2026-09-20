@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
@@ -90,7 +91,14 @@ internal static class DesktopBootstrap
         if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("node-sqlite")))
         {
             var databasePath = Path.Combine(dataDirectory, DatabaseFileName);
-            overrides[NodeSqliteConnectionStringKey] = $"Data Source={databasePath}";
+
+            // Foreign keys are stated, not inherited: a bare "Data Source=" sends no pragma, and the bundled e_sqlite3
+            // only happens to default them on. Every consumer of this string, the Quartz job store included, gets it.
+            overrides[NodeSqliteConnectionStringKey] = new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                ForeignKeys = true
+            }.ToString();
         }
 
         if (string.IsNullOrWhiteSpace(ResolveExistingOperatorSecret(configuration)))

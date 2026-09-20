@@ -1,5 +1,5 @@
 import { Badge, Button, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconChevronDown, IconCheck, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
+import { IconChevronDown, IconCheck, IconFileDiff, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useState } from "react";
@@ -9,9 +9,11 @@ import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { resolveToolApprovalMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { AgentHomePatchApplyDialog } from "@/features/chat/components/AgentHomePatchApplyDialog";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
+import { agentHomeRunIdWithPatch } from "@/features/chat/models/AgentHomePatchToolResult";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
 import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
@@ -129,6 +131,13 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 		},
 		[pendingApprovalRequestId, resolveApproval],
 	);
+
+	// An AgentHome run that exported a patch gets the one affordance that can land it on this computer. The run id is
+	// read out of the tool's own result; a run that changed nothing, failed, or blew the patch size budget names no
+	// changes.patch, so there is no button to press and nothing to apply.
+	const [patchDialogOpen, setPatchDialogOpen] = useState(false);
+	const patchRunId = agentHomeRunIdWithPatch(part.name, part.result);
+	const canReviewPatch = patchRunId !== null && part.state === "received";
 
 	const formattedArgs = formatStructured(part.args);
 	const formattedResult = formatStructured(part.result);
@@ -260,6 +269,27 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 							{t("chat.toolCall.deny", "Deny")}
 						</Button>
 					</Group>
+				) : null}
+				{/* Outside the Collapse, like the approval row: landing changes on this computer is the one thing an
+				    operator must not have to expand a collapsed card to discover. */}
+				{canReviewPatch ? (
+					<Group gap="xs" wrap="wrap" className={classes["tool-body"]}>
+						<Text size="xs" c="dimmed" style={{ minWidth: 0 }}>
+							{t("chat.toolCall.patchApply.prompt", "This run produced changes you can apply to your folders.")}
+						</Text>
+						<Button
+							size="compact-xs"
+							variant="light"
+							leftSection={<IconFileDiff size={12} />}
+							onClick={() => setPatchDialogOpen(true)}
+							data-testid="chat-tool-call-review-patch"
+						>
+							{t("chat.toolCall.patchApply.review", "Review and apply changes")}
+						</Button>
+					</Group>
+				) : null}
+				{patchDialogOpen && patchRunId !== null ? (
+					<AgentHomePatchApplyDialog runId={patchRunId} onClose={() => setPatchDialogOpen(false)} />
 				) : null}
 				<Collapse expanded={expanded} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
 					<Stack gap={6} className={classes["tool-body"]}>

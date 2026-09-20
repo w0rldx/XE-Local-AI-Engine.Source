@@ -126,7 +126,7 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 
 ## Deleting a job
 
-Nothing is deleted until an operator asks. `IImageJobCoordinator.DeleteAsync` is the whole path, and its order is the referential integrity: the node connection leaves `PRAGMA foreign_keys` **off**, so the `ON DELETE CASCADE` declared on `generated_images` is inert and an explicit ordered delete is all that stands between a deleted job and orphaned rows.
+Nothing is deleted until an operator asks. `IImageJobCoordinator.DeleteAsync` is the whole path. The node connection enforces foreign keys, so the `ON DELETE CASCADE` declared on `generated_images` does fire; the explicit ordered delete in `ImageJobStore.DeleteAsync` stays because it also collects the storage paths the blob teardown needs, which no cascade can do.
 
 1. **Refuse a job that is not terminal.** A `Queued` or `Generating` job answers **409** with an `outcome` member of `NotTerminal`; cancel it first (`POST images/jobs/{jobId}/cancel`). The node refuses rather than cancelling on the operator's behalf — the same posture [benchmark project delete](20-benchmarks.md) takes for an active run. Terminal is a one-way door, so reading the status and then deleting needs no lock.
 2. **Delete the rows in one transaction** (`IImageJobStore.DeleteAsync`): the job's `generated_images` rows first, then the `image_jobs` row. It hands back the `storage_path` of every blob it unreferenced, or `null` when the job never existed (→ **404**).
@@ -148,7 +148,7 @@ The job's replay log is dropped with it, so a late hub subscriber replays nothin
 6. **Managed runtime records are authoritative and fail closed.** Never fall back to another binary after drift without an explicit operator remove/repair.
 7. **Eject before build/remove.** Runtime mutation must not race active jobs, spawn/readiness, or a resident daemon.
 8. **Nothing outside the image blob root is ever unlinked.** `RemoveJobBlobs` proves containment for every recorded path and for the job directory before deleting either.
-9. **Delete rows before blobs, children before parents.** Foreign keys are not enforced on this connection, so the delete order in `ImageJobStore.DeleteAsync` is the only thing keeping `generated_images` from orphaning.
+9. **Delete rows before blobs, children before parents.** The declared cascade would remove `generated_images` on its own, but `ImageJobStore.DeleteAsync` deletes them explicitly in the same transaction because it must read their storage paths first — the blob teardown has nothing to unlink once the rows are gone.
 
 ## Related pages
 

@@ -1339,6 +1339,38 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Empty(change.EnqueuedRunIds, "The sweep re-expresses the same rule; the cell is already measured.");
     }
 
+    [Test]
+    public async Task CountRunsByProject_AnswersEveryProjectFromOneGroupedCount()
+    {
+        var databasePath = GetDatabasePath("count-runs-by-project.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var busy = await store.CreateProjectAsync(CreateProject());
+        var quiet = await store.CreateProjectAsync(CreateProject());
+        var untouched = await store.CreateProjectAsync(CreateProject());
+        for (var index = 0; index < 3; index++)
+        {
+            // The first run freezes the project, so each start needs the version the previous one left behind.
+            busy = AssertEx.NotNull(await store.GetProjectAsync(busy.Id));
+            _ = await store.StartRunAsync(CreateRun(busy));
+        }
+
+        _ = await store.StartRunAsync(CreateRun(quiet));
+
+        var counts = await store.CountRunsByProjectAsync();
+
+        AssertEx.Equal(expected: 3, counts[busy.Id]);
+        AssertEx.Equal(expected: 1, counts[quiet.Id]);
+        AssertEx.False(counts.ContainsKey(untouched.Id),
+            "A project with no runs has no row to group, so it is absent rather than present with a zero.");
+        // The grouped count is the per-project count, for every project — the listing swapped one for the other.
+        AssertEx.Equal(await store.CountRunsAsync(busy.Id), counts[busy.Id]);
+        AssertEx.Equal(await store.CountRunsAsync(quiet.Id), counts[quiet.Id]);
+        AssertEx.Equal(expected: 0, await store.CountRunsAsync(untouched.Id));
+    }
+
     private static BenchmarkProjectInput CreateProject(Guid? id = null) =>
         new() { Id = id ?? Guid.NewGuid(), Name = "Benchmark", CoreTaskJson = Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), ContextTokens = 4096, AgentDefinitionId = Guid.NewGuid() };
 

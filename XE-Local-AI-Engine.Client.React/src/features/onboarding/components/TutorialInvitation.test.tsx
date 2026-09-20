@@ -29,7 +29,7 @@ function context(overrides: Partial<OnboardingContextValue> = {}): OnboardingCon
 
 function renderInvitation(value: OnboardingContextValue) {
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<OnboardingContext.Provider value={value}>
 				<TutorialInvitation tutorialId="agents-basics" />
 			</OnboardingContext.Provider>
@@ -70,7 +70,7 @@ describe("TutorialInvitation", () => {
 		const view = renderInvitation(skipped);
 		expect(screen.queryByTestId("tutorial-invitation-agents-basics")).toBeNull();
 		view.rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<OnboardingContext.Provider
 					value={context({
 						tutorials: {

@@ -26,16 +26,14 @@ public sealed class ListBenchmarkProjectsEndpoint : EndpointWithoutRequest<ListB
     public override async Task HandleAsync(CancellationToken ct)
     {
         var projects = await _records.ListProjectsAsync(ct);
-        var items = new List<BenchmarkProjectSummaryResponse>(projects.Count);
-        foreach (var project in projects)
-        {
-            var count = await _records.CountRunsAsync(project.Id, ct);
-            items.Add(project.ToSummary(count));
-        }
+
+        // One grouped count for the whole listing. Counting per project read the same table once per row, so a picker
+        // with N projects cost N+1 round trips to answer a question one GROUP BY answers.
+        var runCounts = await _records.CountRunsByProjectAsync(ct);
 
         await Send.OkAsync(new ListBenchmarkProjectsResponse
         {
-            Items = items
+            Items = projects.Select(project => project.ToSummary(runCounts.GetValueOrDefault(project.Id))).ToArray()
         }, ct);
     }
 }

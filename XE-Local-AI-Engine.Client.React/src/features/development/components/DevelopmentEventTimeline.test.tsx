@@ -61,7 +61,7 @@ function event(id: string, sequence: number, outcome: string | null, operationPh
 
 function renderTimeline(events: readonly DevelopmentEvent[]) {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<DevelopmentEventTimeline events={events} untiedEvents={[]} onRefresh={vi.fn()} />
 		</MantineProvider>,
 	);

@@ -49,6 +49,8 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     private const string Model = "qwen3:8b";
     private const string WorkspaceAlias = "selected-project";
 
+    private static readonly JsonSerializerOptions ChangedFilesJsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly List<string> _tempPaths = [];
 
     public void Dispose()
@@ -212,15 +214,16 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     }
 
     /// <summary>
-    ///     The audit half of the finding: export's git runs in the same sandbox, over the same workspace, as the
-    ///     model's own commands. A <c>commands.jsonl</c> that showed only the model's half would hide exactly the
-    ///     invocations this class exists to protect.
-    ///     <para>
-    ///         Graded on the SERIALIZED file rather than on the records the logger was handed. Those two diverged
-    ///         once already — the envelope simply never listed the actor, so every field an operator reads was right
-    ///         and the attribution was absent on both halves, with the in-memory assertion still green.
-    ///     </para>
+    ///     The node's git runs in the same sandbox over the same workspace as the model's commands, so a
+    ///     <c>commands.jsonl</c> showing only the model's half would hide the invocations this class protects.
     /// </summary>
+    /// <remarks>
+    ///     The whole sequence is graded: the workspace-copy baseline's three git commands run during PREPARE, before
+    ///     a run id or a log exists, and are flushed the moment the log opens; then the model's turn; then the
+    ///     export's two diffs. Graded on the SERIALIZED file, not the records the logger was handed — those diverged
+    ///     once when the envelope never listed the actor, leaving every field an operator reads right, the
+    ///     attribution absent and the in-memory assertion green.
+    /// </remarks>
     [Test]
     public async Task Export_WritesItsOwnGitCommandsToTheRunLog_AttributedToTheNode()
     {
@@ -236,18 +239,277 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                      .Select(line => JsonDocument.Parse(line).RootElement)
                      .ToList();
 
-        // The order is the run's own: the model's turn first, then the export's two diffs after it ended. (The
-        // workspace-copy baseline's git runs during PREPARE, before the run log is opened, so it is not in this file.)
-        var expectedActors = string.Join(separator: ',', AgentHomeCommandActors.Model, AgentHomeCommandActors.Node, AgentHomeCommandActors.Node);
+        var expectedActors = string.Join(separator: ',',
+            AgentHomeCommandActors.Node,
+            AgentHomeCommandActors.Node,
+            AgentHomeCommandActors.Node,
+            AgentHomeCommandActors.Model,
+            AgentHomeCommandActors.Node,
+            AgentHomeCommandActors.Node,
+            AgentHomeCommandActors.Node);
         var actors = string.Join(separator: ',', logged.Select(record => record.GetProperty("actor").GetString()));
         AssertEx.Equal(expectedActors, actors,
-            "commands.jsonl records the model's own command and then both of the export's, each attributed to who ran it");
+            "commands.jsonl records the baseline's three, then the model's own command, then all three of the export's, each attributed to who ran it");
+
+        // The execution ids say WHICH node git ran, in order: a bare actor sequence would still pass if the flush
+        // duplicated the export's two records instead of carrying the baseline's.
+        var executionIds = logged.Select(record => record.GetProperty("executionId").GetString()).ToList();
+        AssertEx.Equal("agent-home-baseline-init", executionIds[0]);
+        AssertEx.Equal("agent-home-baseline-add", executionIds[1]);
+        AssertEx.Equal("agent-home-baseline-commit", executionIds[2]);
+        AssertEx.Equal($"{run.RunId}-patch-stage", executionIds[4]);
+        AssertEx.Equal($"{run.RunId}-patch-diff", executionIds[5]);
+        AssertEx.Equal($"{run.RunId}-patch-status", executionIds[6]);
 
         var nodeCommands = logged.Where(record => string.Equals(record.GetProperty("actor").GetString(), AgentHomeCommandActors.Node, StringComparison.Ordinal)).ToList();
         AssertEx.True(nodeCommands.TrueForAll(record => string.Equals(record.GetProperty("executable").GetString(), "git", StringComparison.Ordinal)),
-            "the node's logged commands are the export's git invocations");
-        AssertEx.True(nodeCommands.TrueForAll(record => record.GetProperty("arguments").EnumerateArray().Any(argument => string.Equals(argument.GetString(), "--no-textconv", StringComparison.Ordinal))),
-            "the logged argument vector is the one that really ran, belt-and-braces flags included");
+            "every command the node ran itself is git — the baseline's and the export's alike");
+        AssertEx.True(nodeCommands.TrueForAll(record => record.GetProperty("arguments").EnumerateArray().Any(argument => string.Equals(argument.GetString(), "core.autocrlf=false", StringComparison.Ordinal))),
+            "the logged argument vector is the one that really ran, including the byte-stabilizing pins the baseline and the diff must share");
+
+        // The run log is an audit of what the node RAN, never of what the workspace said back: no record carries
+        // captured output, and none may grow one.
+        AssertEx.True(logged.TrueForAll(static record => !record.TryGetProperty("standardOutput", out _) && !record.TryGetProperty("standardError", out _)),
+            "a command record carries argv, exit code and duration — never the bytes the command produced");
+    }
+
+    /// <summary>
+    ///     <c>git diff HEAD</c> does not see an UNTRACKED path, so every file a run CREATED was silently absent from
+    ///     both artifacts. All four change kinds are graded in ONE run: a fix that restored creations by losing
+    ///     deletions or renames is not a fix.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheRunCreatedModifiedDeletedAndRenamedFiles_ReportsAllFourWithTheirChangeTypes()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\ncreated by the run\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }),
+            ("run_command", new()
+            {
+                ["executable"] = "/bin/sh",
+                ["arguments"] = new[] { "-c", $"rm {WorkspaceAlias}/notes.txt && mv {WorkspaceAlias}/guide.txt {WorkspaceAlias}/manual.txt" }
+            }));
+
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "docs/notes.md", "added");
+        AssertChange(changed, "README.md", "modified");
+        AssertChange(changed, "notes.txt", "deleted");
+        AssertChange(changed, "manual.txt", "renamed");
+
+        var patch = await ReadPatchAsync(run);
+        AssertEx.Contains(patch, $"+++ b/{WorkspaceAlias}/docs/notes.md");
+        AssertEx.Contains(patch, "created by the run");
+        AssertEx.Equal(expected: 4, run.Patch.ChangedFileCount);
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     Two creations a content diff alone would drop: a binary file, which needs the <c>--binary</c> payload, and
+    ///     an empty one, which has no content at all and survives only as a mode line.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheRunCreatedBinaryAndEmptyFiles_ReportsBoth()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(("run_command", new()
+        {
+            ["executable"] = "/bin/sh",
+            ["arguments"] = new[] { "-c", $"head -c 4 /dev/zero > {WorkspaceAlias}/data.bin && : > {WorkspaceAlias}/empty.txt" }
+        }));
+
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "data.bin", "added");
+        AssertChange(changed, "empty.txt", "added");
+
+        var patch = await ReadPatchAsync(run);
+        AssertEx.Contains(patch, "GIT binary patch");
+        AssertEx.Contains(patch, $"b/{WorkspaceAlias}/empty.txt");
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     Staging honours <c>.gitignore</c> because the BASELINE's own <c>add -A</c> did: forcing here would report
+    ///     every ignored-but-copied file as one the run added. A model can hide its own work; it cannot reach the host.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenAModelWrittenGitignoreHidesACreatedFile_LeavesItOutAndStillExportsTheRest()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitignore", ["content"] = "hidden.txt\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/hidden.txt", ["content"] = "invisible\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/visible.txt", ["content"] = "visible\n" }));
+
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "visible.txt", "added");
+        AssertChange(changed, ".gitignore", "added");
+        AssertEx.True(changed.TrueForAll(entry => entry.RelativePath != "hidden.txt"),
+            "an ignored path stays out of the export, exactly as it stayed out of the baseline");
+
+        var patch = await ReadPatchAsync(run);
+        AssertEx.False(patch.Contains("invisible", StringComparison.Ordinal), "the ignored file's content is not in the patch either");
+    }
+
+    /// <summary>
+    ///     Staging makes the patch bigger, so the over-budget path carries more traffic than it did: it must still be
+    ///     honest — metadata written, oversized patch withheld, and the header's <c>patch=none</c> earned.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheStagedPatchIsOverBudget_KeepsMetadataAndWritesNoPatch()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(maxPatchBytes: 64);
+        var run = await fixture.RunAsync(("write_file",
+            new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = new string(c: 'n', count: 4096) + "\n" }));
+
+        AssertEx.True(run.Patch.Blocked, "a patch over MaxPatchBytes is blocked");
+        AssertEx.True(run.Patch.PatchRelativePath is null, "a blocked patch is not written");
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "docs/notes.md", "added");
+        AssertEx.False(File.Exists(Path.Combine(PatchesDirectory(run), "changes.patch")), "the oversized patch must not be written");
+    }
+
+    /// <summary>
+    ///     The property that matters to the operator: a created file survives export, preview and apply, and lands on
+    ///     the host with identical bytes. Applied to a SCRATCH folder, so the run's source folder stays untouched.
+    /// </summary>
+    [Test]
+    public async Task ExportedPatch_PreviewsAndAppliesTheCreatedFileToTheHost()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        const string Created = "# notes\ncreated by the run\n";
+        var run = await fixture.RunAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = Created }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+
+        var target = CreateTempDirectory("xe-ah-apply");
+        foreach (var seeded in Directory.GetFiles(fixture.HostFolder))
+        {
+            File.Copy(seeded, Path.Combine(target, Path.GetFileName(seeded)));
+        }
+
+        var applyService = CreateApplyService(fixture, target);
+        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
+
+        AssertEx.True(preview.CanApply, $"the exported patch checks clean. rejections: {string.Join(separator: ';', preview.Rejections)}");
+        AssertEx.Contains(preview.Files, file => file is { Alias: WorkspaceAlias, RelativePath: "docs/notes.md", ChangeType: "added" });
+
+        var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = run.RunId });
+
+        AssertEx.True(result.Applied, $"the exported patch applies. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.Equal(Created, await File.ReadAllTextAsync(Path.Combine(target, "docs", "notes.md")),
+            "the created file lands on the host with the bytes the run wrote");
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     <c>run_command</c> has no allow-list, so a run can <c>ln -s</c>. Staging carries the link in as
+    ///     <c>mode 120000</c>, whose content is the TARGET, and applying it would point a real link on the
+    ///     operator's folder anywhere. End to end: it must be refused.
+    /// </summary>
+    [Test]
+    public async Task ExportedPatch_WithACreatedSymlink_IsRefusedAndLeavesNoLinkOnTheHost()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(
+            ("run_command", new()
+            {
+                ["executable"] = "/bin/sh",
+                ["arguments"] = new[]
+                {
+                    "-c",
+                    $"ln -s /etc/passwd {WorkspaceAlias}/abs-link && ln -s ../../escape.txt {WorkspaceAlias}/rel-link"
+                }
+            }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }));
+
+        // The export is honest about what the run did — it is the APPLY that refuses.
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "abs-link", "added");
+        AssertChange(changed, "rel-link", "added");
+
+        var target = CreateTempDirectory("xe-ah-symlink-apply");
+        foreach (var seeded in Directory.GetFiles(fixture.HostFolder))
+        {
+            File.Copy(seeded, Path.Combine(target, Path.GetFileName(seeded)));
+        }
+
+        var applyService = CreateApplyService(fixture, target);
+        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
+
+        AssertEx.False(preview.CanApply, "a patch that creates a symbolic link must not be offered as applicable");
+        AssertEx.Contains(preview.Rejections, reason => reason.Contains("symbolic link", StringComparison.Ordinal));
+        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(target, StringComparison.Ordinal)
+                                                       && !reason.Contains(fixture.HostFolder, StringComparison.Ordinal)),
+            "the rejection carries no host path");
+
+        var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = run.RunId });
+
+        AssertEx.False(result.Applied, "the apply refuses the whole patch");
+        // Graded on the DIRECTORY LISTING, not on Path.Exists: a dangling link (rel-link points at nothing) is
+        // absent from Path.Exists whether or not it was created, so that check could pass over a real escape.
+        var entries = Directory.GetFileSystemEntries(target).Select(Path.GetFileName).ToArray();
+        foreach (var name in new[] { "abs-link", "rel-link" })
+        {
+            AssertEx.False(entries.Contains(name, StringComparer.Ordinal), $"no '{name}' entry exists on the host");
+        }
+
+        AssertEx.True(new DirectoryInfo(target).EnumerateFileSystemInfos("*", SearchOption.AllDirectories)
+                                               .All(static info => info.LinkTarget is null),
+            "nothing under the host folder is a link");
+
+        AssertEx.False(Path.Exists(Path.Combine(target, "docs", "notes.md")),
+            "one refused block refuses the whole patch — the legitimate creation does not land either");
+    }
+
+    /// <summary>
+    ///     The sibling shape: a run that initializes a nested repository inside the workspace. Staging turns it into
+    ///     a gitlink, and the apply must answer with the SUBMODULE refusal rather than an empty directory.
+    /// </summary>
+    [Test]
+    public async Task ExportedPatch_WithANestedRepository_IsRefusedAsASubmodule()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(("run_command", new()
+        {
+            ["executable"] = "/bin/sh",
+            ["arguments"] = new[]
+            {
+                "-c",
+                $"mkdir -p {WorkspaceAlias}/vendor && cd {WorkspaceAlias}/vendor && git init -q ."
+                + " && echo inner > file.txt && git add -A"
+                + " && git -c user.email=t@example.invalid -c user.name=t commit -q -m inner"
+            }
+        }));
+
+        AssertEx.True(run.Patch.ChangedFileCount > 0, "the nested repository reaches the export as a change");
+
+        var target = CreateTempDirectory("xe-ah-nested-apply");
+        foreach (var seeded in Directory.GetFiles(fixture.HostFolder))
+        {
+            File.Copy(seeded, Path.Combine(target, Path.GetFileName(seeded)));
+        }
+
+        var applyService = CreateApplyService(fixture, target);
+        var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
+
+        AssertEx.False(preview.CanApply, "a nested repository is not something the operator can apply");
+        AssertEx.Contains(preview.Rejections, reason => reason.Contains("submodule", StringComparison.Ordinal));
+        AssertEx.False(Path.Exists(Path.Combine(target, "vendor")), "no empty submodule directory is created on the host");
     }
 
     // ---------------------------------------------------------------- harness
@@ -356,6 +618,53 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         return directory;
     }
 
+    private static string PatchesDirectory(AgentHomeRunResult run)
+    {
+        // LogPath is runs/<id>/logs; the artifacts are its sibling.
+        return Path.Combine(Path.GetDirectoryName(run.LogPath)!, "patches");
+    }
+
+    private static async Task<List<ChangedFileEntry>> ReadChangedFilesAsync(AgentHomeRunResult run)
+    {
+        var path = Path.Combine(PatchesDirectory(run), "changed-files.json");
+        AssertEx.True(File.Exists(path), "the export wrote changed-files.json");
+        return JsonSerializer.Deserialize<List<ChangedFileEntry>>(await File.ReadAllTextAsync(path), ChangedFilesJsonOptions)!;
+    }
+
+    private static async Task<string> ReadPatchAsync(AgentHomeRunResult run)
+    {
+        var path = Path.Combine(PatchesDirectory(run), "changes.patch");
+        AssertEx.True(File.Exists(path), "the export wrote changes.patch");
+        return await File.ReadAllTextAsync(path);
+    }
+
+    private static void AssertChange(List<ChangedFileEntry> entries, string relativePath, string changeType)
+    {
+        var entry = AssertEx.NotNull(entries.Find(candidate => candidate.RelativePath == relativePath),
+            $"changed-files.json lists '{relativePath}'");
+        AssertEx.Equal(changeType, entry.ChangeType, $"'{relativePath}' is reported as {changeType}");
+        AssertEx.Equal(WorkspaceAlias, entry.Alias);
+    }
+
+    /// <summary>
+    ///     The host apply service pointed at a scratch folder under the run's own alias, reading the patch the export
+    ///     really wrote from the run's own <c>agent-home</c> root.
+    /// </summary>
+    private static NodePatchApplyService CreateApplyService(ExportFixture fixture, string targetFolder)
+    {
+        var scopeFactory = new ServiceCollection()
+                           .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
+                           .BuildServiceProvider();
+
+        return new NodePatchApplyService(new StaticSelectedFolderResolver(WorkspaceAlias, targetFolder),
+            Options.Create(new AgentHomeOptions { RootPath = fixture.StateRoot, PatchApplyTimeoutSeconds = 120 }),
+            StubNodeRuntimeSettings.Create().Build(),
+            new FakeNodeDataDirectory(fixture.StateRoot),
+            new StaticIdentityProvider(),
+            scopeFactory.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodePatchApplyService>.Instance);
+    }
+
     private static async Task AssertHostFolderUnchangedAsync(ExportFixture fixture)
     {
         // The run works on a COPY. Whatever the payload attempted, the operator's own folder is the thing that must
@@ -376,7 +685,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         };
     }
 
-    private ExportFixture CreateFixture()
+    private ExportFixture CreateFixture(long? maxPatchBytes = null)
     {
         var clock = TimeProvider.System;
         var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), clock);
@@ -384,6 +693,8 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var hostFolder = CreateTempDirectory("xe-ah-src");
         File.WriteAllText(Path.Combine(hostFolder, "README.md"), "# project\nsmal\n");
         File.WriteAllText(Path.Combine(hostFolder, "notes.txt"), "notes\n");
+        // Renamed, not modified, by the four-change-kinds run: enough lines that git's similarity detection reports R.
+        File.WriteAllText(Path.Combine(hostFolder, "guide.txt"), "one\ntwo\nthree\nfour\nfive\nsix\n");
 
         var resolver = new StaticSelectedFolderResolver(WorkspaceAlias, hostFolder);
         var root = CreateTempDirectory("xe-ah-state");
@@ -393,10 +704,15 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             CommandTimeoutSeconds = 120,
             MaxRunSeconds = 600
         });
-        var runtimeSettings = StubNodeRuntimeSettings.Create()
+        var settingsBuilder = StubNodeRuntimeSettings.Create()
                                                      .WithAgentHomeCommandTimeoutSeconds(120)
-                                                     .WithAgentHomePrepareTimeoutSeconds(300)
-                                                     .Build();
+                                                     .WithAgentHomePrepareTimeoutSeconds(300);
+        if (maxPatchBytes is { } budget)
+        {
+            settingsBuilder = settingsBuilder.WithAgentHomeMaxPatchBytes(budget);
+        }
+
+        var runtimeSettings = settingsBuilder.Build();
 
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
         var serviceProvider = new ServiceCollection()
@@ -412,6 +728,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
+            clock,
             NullLogger<AgentHomeWorkspaceService>.Instance);
         var patchService = new AgentHomePatchService(provider, runtimeSettings, clock, NullLogger<AgentHomePatchService>.Instance);
 
@@ -450,7 +767,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             clock,
             NullLogger<AgentHomeService>.Instance);
 
-        return new ExportFixture(service, provider, manifestService, serviceProvider, chatClient, hostFolder, resolver.FolderId);
+        return new ExportFixture(service, provider, manifestService, serviceProvider, chatClient, hostFolder, root, resolver.FolderId);
     }
 
     private sealed class ExportFixture : IDisposable
@@ -468,6 +785,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             ServiceProvider serviceProvider,
             ScriptedGitPayloadChatClient chatClient,
             string hostFolder,
+            string stateRoot,
             Guid folderId)
         {
             _service = service;
@@ -476,6 +794,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             _serviceProvider = serviceProvider;
             _chatClient = chatClient;
             HostFolder = hostFolder;
+            StateRoot = stateRoot;
             _folderId = folderId;
         }
 
@@ -483,6 +802,9 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         public ProcessSandboxRuntimeProvider Provider => _provider;
 
         public string HostFolder { get; }
+
+        /// <summary>The AgentHome state root — what <c>AgentHomeOptions.RootPath</c> was set to for this run.</summary>
+        public string StateRoot { get; }
 
         /// <summary>Runs the whole lifecycle — copy, baseline, the scripted inner loop, export — on the real jail.</summary>
         public async Task<AgentHomeRunResult> RunAsync(params (string Tool, Dictionary<string, object?> Arguments)[] script)

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     their branches settle reads well until terminalization, where a run whose remaining rows do not exist has
 ///     "nothing live" and completes before running anything. A missing row is still right for a decomposition's
 ///     children — which is why an absent source reads as a pending edge — but a graph known at run start has nothing
-///     to wait for. Shared by the run service, which holds the caller's inputs, and the dispatcher, for every other run.
+///     to wait for. Composed in one place, <c>DevWorkflowRunService</c> at run creation, and static so it stays testable.
 /// </remarks>
 internal static class DevWorkflowRunSeeds
 {

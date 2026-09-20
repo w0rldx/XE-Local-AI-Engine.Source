@@ -6263,6 +6263,34 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	priority?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse = {
+	appliedFiles: Array<XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchFileDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchFileDto = {
+	alias: string;
+	relativePath: string;
+	changeType: string;
+	added: number;
+	removed: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest = {
+	patchSha256: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchPreviewResponse = {
+	canApply: boolean;
+	files: Array<XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchFileDto>;
+	rejections: Array<string>;
+	containsBinary: boolean;
+	patchSha256: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchPreviewRequest = {
+	[key: string]: never;
+};
+
 export type ListWorkspacesData = {
 	body?: never;
 	path?: never;
@@ -20267,3 +20295,82 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type ApplyAgentHomePatchData = {
+	body: XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agent-home/runs/{runId}/patch/apply";
+};
+
+export type ApplyAgentHomePatchErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
+};
+
+export type ApplyAgentHomePatchError = ApplyAgentHomePatchErrors[keyof ApplyAgentHomePatchErrors];
+
+export type ApplyAgentHomePatchResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse;
+};
+
+export type ApplyAgentHomePatchResponse = ApplyAgentHomePatchResponses[keyof ApplyAgentHomePatchResponses];
+
+export type PreviewAgentHomePatchData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agent-home/runs/{runId}/patch/preview";
+};
+
+export type PreviewAgentHomePatchErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type PreviewAgentHomePatchError = PreviewAgentHomePatchErrors[keyof PreviewAgentHomePatchErrors];
+
+export type PreviewAgentHomePatchResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchPreviewResponse;
+};
+
+export type PreviewAgentHomePatchResponse = PreviewAgentHomePatchResponses[keyof PreviewAgentHomePatchResponses];

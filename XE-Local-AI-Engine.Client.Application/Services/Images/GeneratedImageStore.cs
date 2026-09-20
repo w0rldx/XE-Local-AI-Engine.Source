@@ -134,7 +134,7 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         // leave every older blob behind.
         foreach (var storagePath in storagePaths)
         {
-            if (!IsUnderRoot(storagePath, blobRoot))
+            if (!PathContainment.IsUnderRoot(storagePath, blobRoot))
             {
                 // The path itself is never logged (privacy §10 — no path leaves this feature), so the warning names
                 // the job and the refusal only.
@@ -153,7 +153,7 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         }
 
         var jobDirectory = JobDirectory(jobId);
-        if (!IsUnderRoot(jobDirectory, blobRoot))
+        if (!PathContainment.IsUnderRoot(jobDirectory, blobRoot))
         {
             // Unreachable while the data directory is a normal absolute path, but the guard is on the delete, not on
             // the caller: the same rule that protects a blob protects the directory it sat in.
@@ -171,32 +171,6 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         {
             _logger.LogDebug(exception, "Could not remove the image directory of deleted job {JobId}.", jobId);
         }
-    }
-
-    /// <summary>
-    ///     <see langword="true" /> when <paramref name="path" /> is a descendant of <paramref name="root" />. The
-    ///     trailing-separator guard prevents a sibling-prefix false match and the comparison is case-insensitive only
-    ///     on Windows — parity with <c>SandboxOrphanReaper.IsUnderRoot</c> and <c>StaleLlamaServerReaper.IsUnderRoot</c>.
-    /// </summary>
-    private static bool IsUnderRoot(string path, string root)
-    {
-        string fullPath;
-        try
-        {
-            fullPath = Path.GetFullPath(path);
-        }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // An unparseable path can never be under our root.
-            return false;
-        }
-
-        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
-            ? root
-            : root + Path.DirectorySeparatorChar;
-
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return fullPath.StartsWith(rootWithSeparator, comparison);
     }
 
     private string JobDirectory(Guid jobId)

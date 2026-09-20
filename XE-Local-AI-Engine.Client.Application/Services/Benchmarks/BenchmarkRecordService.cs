@@ -52,6 +52,12 @@ public sealed class BenchmarkRecordService
         return _store.CountRunsAsync(projectId, cancellationToken);
     }
 
+    /// <summary>Every project's run count in one grouped query — the listing's freeze indicator, without a count per row.</summary>
+    public Task<IReadOnlyDictionary<Guid, int>> CountRunsByProjectAsync(CancellationToken cancellationToken = default)
+    {
+        return _store.CountRunsByProjectAsync(cancellationToken);
+    }
+
     /// <summary>Deletes a project against the version the operator saw.</summary>
     public Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default)
     {

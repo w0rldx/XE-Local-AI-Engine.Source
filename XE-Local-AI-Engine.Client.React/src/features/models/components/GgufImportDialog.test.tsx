@@ -51,7 +51,7 @@ function renderDialog() {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<GgufImportDialog opened={true} onClose={vi.fn()} onStarted={vi.fn()} />
 			</MantineProvider>
 		</QueryClientProvider>,

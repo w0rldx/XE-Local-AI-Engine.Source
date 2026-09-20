@@ -8,14 +8,14 @@ using System.Collections.Concurrent;
 /// </summary>
 /// <remarks>
 ///     Shares the one <see cref="PendingToolCallRegistry" /> with <see cref="ToolApprovalCoordinator" /> and
-///     <see cref="InvocationRunner" />, so a call registered by the approval path is visible to the approval resolve,
-///     the runner's cancel/drain path and the sweep alike. A singleton for the coordinator's reason: the sweep runs
-///     from a background service, on a different call stack than the turn whose calls it releases. Every tool offer a
-///     node builds is <c>ToolLocation.ClientLocal</c>, so only the registry lifetime lives here.
+///     <see cref="InvocationLifecycleTracker" />, so a call registered by the approval path is visible to the approval
+///     resolve, the tracker's cancel/drain path and the sweep alike. A singleton for the coordinator's reason: the
+///     sweep runs from a background service, on a different call stack than the turn whose calls it releases. Every
+///     tool offer a node builds is <c>ToolLocation.ClientLocal</c>, so only the registry lifetime lives here.
 /// </remarks>
 public sealed class ApiToolCallBridge
 {
-    // The SAME dictionary instance the runner and ToolApprovalCoordinator hold (see PendingToolCallRegistry).
+    // The SAME dictionary instance ToolApprovalCoordinator and InvocationLifecycleTracker hold (see PendingToolCallRegistry).
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls;
     private readonly TimeProvider _timeProvider;
 

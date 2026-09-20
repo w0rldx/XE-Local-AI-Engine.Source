@@ -105,15 +105,19 @@ function capabilityRoute(enabled = true) {
 	return jsonRoute("get", "work-sessions/capability", { enabled });
 }
 
-function routes(sessionBody: Record<string, unknown> = session()) {
-	server.use(
-		jsonRoute("get", `work-sessions/${sessionId}`, sessionBody),
+/** The feeds the page mounts alongside the session detail. Each is read once even when the detail itself 404s. */
+function subordinateFeedRoutes() {
+	return [
 		jsonRoute("get", `work-sessions/${sessionId}/tasks`, { items: [], lastSequence: 0 }),
 		jsonRoute("get", `work-sessions/${sessionId}/findings`, { items: [], lastSequence: 0 }),
 		jsonRoute("get", `work-sessions/${sessionId}/artifacts`, { items: [], lastSequence: 0 }),
 		jsonRoute("get", `work-sessions/${sessionId}/checkpoints`, { items: [], lastSequence: 0 }),
 		jsonRoute("get", `work-sessions/${sessionId}/events`, { items: [], lastSequence: 0, hasMore: false }),
-	);
+	];
+}
+
+function routes(sessionBody: Record<string, unknown> = session()) {
+	server.use(jsonRoute("get", `work-sessions/${sessionId}`, sessionBody), ...subordinateFeedRoutes());
 }
 
 function setViewportWidth(width: number): void {
@@ -389,7 +393,12 @@ describe("WorkSessionDetailPage", () => {
 	});
 
 	it("offers a way back when the session cannot be loaded", async () => {
-		server.use(problemDetailsRoute("get", `work-sessions/${sessionId}`, 404, { detail: "no such session" }));
+		// The feeds go out with the mount and are only stopped afterwards by the missing detail — the case below is
+		// what pins that they stop, and they are declared here because this case makes those reads too.
+		server.use(
+			problemDetailsRoute("get", `work-sessions/${sessionId}`, 404, { detail: "no such session" }),
+			...subordinateFeedRoutes(),
+		);
 		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />, { withRouter: true });
 
 		const alert = await screen.findByTestId("work-session-detail-error");

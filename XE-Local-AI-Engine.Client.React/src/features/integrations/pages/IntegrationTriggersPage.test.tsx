@@ -131,7 +131,7 @@ function installJsdomEnvironmentMocks(): void {
 function pageElement() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return (
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationTriggersPage />

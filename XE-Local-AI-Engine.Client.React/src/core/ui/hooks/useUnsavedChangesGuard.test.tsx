@@ -42,7 +42,7 @@ function setBlockerState(state: BlockerState) {
 function makeWrapper() {
 	return function Wrapper({ children }: { children: ReactNode }) {
 		return (
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ConfirmProvider>{children}</ConfirmProvider>
 			</MantineProvider>
 		);

@@ -239,8 +239,8 @@ public interface IExternalAppInstanceStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Removes the events and the row in one transaction under the same version CAS. The events go explicitly:
-    ///     the node connection leaves <c>PRAGMA foreign_keys</c> off, so the declared cascade never fires.
+    ///     Removes the events and the row in one transaction under the same version CAS. The events go explicitly so
+    ///     the whole teardown sits under that CAS, rather than half of it happening as a database cascade.
     /// </summary>
     Task<bool> DeleteAsync(Guid instanceId, long expectedVersion, CancellationToken cancellationToken = default);
 }

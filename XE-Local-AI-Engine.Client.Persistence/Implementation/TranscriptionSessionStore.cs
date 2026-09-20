@@ -86,10 +86,9 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
             return false;
         }
 
-        // The transcript is deleted set-based rather than by loading it: the relationship declares ON DELETE CASCADE,
-        // but the node connection leaves PRAGMA foreign_keys off, so the database will not enforce it and the rows
-        // would orphan. Loading them to let EF cascade would decrypt every segment of a long transcript only to throw
-        // the plaintext away. The two statements share one transaction so a session never survives its own transcript.
+        // The declared ON DELETE CASCADE does fire on the node connection, but the transcript is still deleted
+        // set-based: loading the segments to let EF cascade would decrypt every one of them only to throw the plaintext
+        // away. The two statements share one transaction so a session never survives its own transcript.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _ = await _dbContext.TranscriptSegments
@@ -197,8 +196,8 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
     {
         ArgumentNullException.ThrowIfNull(segments);
 
-        // The session is loaded before anything is written. PRAGMA foreign_keys is off on the node connection, so an
-        // unknown session id would otherwise insert orphan rows that no read path can ever reach and nothing deletes.
+        // The session is loaded before anything is written: the contract answers false for an unknown session, and the
+        // foreign key would otherwise surface it as a constraint violation on the insert instead.
         var session = await LoadTrackedAsync(sessionId, cancellationToken);
         if (session is null)
         {

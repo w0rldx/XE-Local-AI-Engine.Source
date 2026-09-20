@@ -171,7 +171,7 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("PlaybookPanel", () => {
@@ -411,7 +411,7 @@ describe("PlaybookPanel", () => {
 			error: null,
 		});
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
 			</MantineProvider>,
 		);
@@ -430,7 +430,7 @@ describe("PlaybookPanel", () => {
 			error: null,
 		});
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
 			</MantineProvider>,
 		);
@@ -640,7 +640,7 @@ describe("PlaybookPanel", () => {
 			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 3, topK: 2, ranker: "lexical", embeddingModel: null } })),
 		);
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
 			</MantineProvider>,
 		);

@@ -219,6 +219,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
+            clock,
             NullLogger<AgentHomeWorkspaceService>.Instance);
         var patchService = new AgentHomePatchService(provider,
             runtimeSettings,

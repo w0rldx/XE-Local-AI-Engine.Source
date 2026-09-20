@@ -4253,9 +4253,9 @@ public sealed class InvocationRunnerTests
                                                      .WithToolRelevanceEnabled(toolRelevanceRead ?? (static _ => Task.FromResult(false)))
                                                      .Build();
 
-        // One registry instance shared by the runner and all three collaborators, exactly as the DI graph wires it: a
-        // second copy would let a call be registered in one dictionary and resolved against another. A test that has to
-        // observe the registry directly (the stale sweep) passes its own and holds that same reference.
+        // One registry instance shared by all three collaborators, exactly as the DI graph wires it: a second copy
+        // would let a call be registered in one dictionary and resolved against another. A test that has to observe
+        // the registry directly (the stale sweep) passes its own and holds that same reference.
         var resolvedPendingToolCallRegistry = pendingToolCallRegistry ?? new PendingToolCallRegistry();
 
         return new InvocationRunner(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
@@ -4275,7 +4275,6 @@ public sealed class InvocationRunnerTests
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
-            resolvedPendingToolCallRegistry,
             new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
                 resolvedPendingToolCallRegistry,
                 approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),

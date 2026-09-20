@@ -8,7 +8,7 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { probeLocalApi } from "@/features/api-foundation/api/ValidationProblemProbeApi";
 import { domainErrorRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { setupMswServer } from "@/test/UseMswServer";
+import { assertNoUnhandledRequests, setupMswServer } from "@/test/UseMswServer";
 
 setupMswServer();
 
@@ -93,13 +93,19 @@ describe("probeLocalApi over the real client", () => {
 
 	// Negative control for the MSW half of the setup split (the other half is src/test/NoNetwork.test.ts): inside a
 	// file that opted into MSW, a route no test declared must still fail. The second assertion is what makes this a
-	// control rather than a tautology — the failure has to come from MSW's `onUnhandledRequest: "error"` and not from
+	// control rather than a tautology — the failure has to come from MSW's unhandled-request handling and not from
 	// the global no-network guard, which is what proves `setupMswServer()` handed the REAL transports to MSW instead
 	// of leaving the guard's stubs in place for it to wrap.
+	//
+	// The third is the proof for the recorder `setupMswServer()` layers on top: the rejection alone only fails a
+	// test that awaits the call, and a component swallows it into `query.error`. `assertNoUnhandledRequests()` is
+	// what the lifecycle's own `afterEach` calls, so asserting it throws here IS the guard being exercised — and it
+	// drains the record, which is why this deliberately-undeclared route does not then fail this test twice.
 	it("still fails an undeclared route through MSW, not through the global no-network guard", async () => {
 		const error = await fetch(localApiPath("diagnostics/never-declared")).catch((thrown: unknown) => thrown);
 
 		expect(error).toBeInstanceOf(Error);
 		expect((error as Error).message).not.toMatch(/unexpected network call in test/);
+		expect(() => assertNoUnhandledRequests()).toThrow(/GET .*\/api\/local\/v1\/diagnostics\/never-declared/);
 	});
 });

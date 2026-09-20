@@ -86,9 +86,9 @@ public sealed class ImageJobStore : IImageJobStore
             return null;
         }
 
-        // The image rows are deleted set-based rather than by loading them: the relationship declares ON DELETE
-        // CASCADE, but the node connection leaves PRAGMA foreign_keys off, so the database will not enforce it and the
-        // rows would orphan. The two statements share one transaction so a job never survives its own images.
+        // The declared ON DELETE CASCADE does fire on the node connection, but the delete is still explicit and
+        // set-based: the storage paths have to be read before the rows go, or the blob teardown has nothing to unlink.
+        // The two statements share one transaction so a job never survives its own images.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var storagePaths = await _dbContext.GeneratedImages

@@ -22,7 +22,7 @@ internal sealed class CapabilityReportComposer
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
 
-    // AgentHome MVP capability strings (capability flag). Advertised only when AgentHome:Enabled=true so a node never claims sandbox/workspace/patch/memory
+    // AgentHome MVP capability strings (capability flag). Advertised only when AgentHome:Enabled=true so a node never claims sandbox/workspace/patch
     // support it cannot serve. The normalizer trims/dedupes/ sorts these, and the server stores SupportedCapabilities as a free-form JSON list (no schema bump).
     private static readonly string[] AgentHomeCapabilities =
     [
@@ -30,8 +30,7 @@ internal sealed class CapabilityReportComposer
         "sandbox-process",
         "runtime-dotnet-agent-home",
         "workspace-copy",
-        "patch-export",
-        "memory-proposals"
+        "patch-export"
     ];
 
     private readonly bool _agentHomeEnabled;

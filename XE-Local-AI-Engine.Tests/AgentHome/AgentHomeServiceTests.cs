@@ -1012,6 +1012,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
+            clock,
             NullLogger<AgentHomeWorkspaceService>.Instance);
 
         var patchService = new AgentHomePatchService(provider,

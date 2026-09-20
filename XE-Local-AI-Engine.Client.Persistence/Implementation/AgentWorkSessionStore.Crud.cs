@@ -133,8 +133,8 @@ internal sealed partial class AgentWorkSessionStore
 
     public async Task<int> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        // Explicit ordered deletes: the node connection runs without PRAGMA foreign_keys, so the declared cascades are
-        // documentation only and an EF-graph delete would leave every child table populated.
+        // The child cascades are enforced, so these deletes are belt and braces — except findings Restrict their task,
+        // so tasks go after findings, and the count returned has to be counted rather than inferred from a cascade.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {

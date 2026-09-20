@@ -188,7 +188,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Clear before resolution so preparation never reasons over a prior selection. The workspace service resets
         // again immediately before copying; the lifecycle catch performs final recovery on every failure.
-        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], prepareToken);
+        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], baselineCommands: null, prepareToken);
         return await PrepareAttachedAsync(request, effectiveProfile, attachKey, layout, handle, prepareToken);
     }
 
@@ -207,6 +207,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IReadOnlyList<string> stagedAttachmentPaths = [];
         IConversationStagingSnapshot? attachmentsSnapshot = null;
         IReadOnlyList<SelectedFolderSnapshot> folderSnapshots;
+
+        // The baseline's git runs before any run id or log exists, so its records are collected for RunAsync to flush
+        // once the log opens. The chat attachment re-stage has no run to attribute them to and drops the list.
+        var baselineCommands = new List<AgentHomeCommandLogRecord>();
         try
         {
             attachmentsSnapshot = await TryStageConversationAttachmentsAsync(request.ConversationId, prepareToken);
@@ -229,7 +233,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // Workspace copy: each resolved selected folder into the sandbox workspace, with exclusions, the symlink-escape
             // guard, the per-folder byte budget and the git baseline. Under the preparation timeout, not the command one.
             folderSnapshots = await _workspaceService
-                                    .PrepareSelectedFoldersAsync(handle, foldersToCopy, prepareToken);
+                                    .PrepareSelectedFoldersAsync(handle, foldersToCopy, baselineCommands, prepareToken);
         }
         finally
         {
@@ -251,7 +255,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             ResolvedFolders = foldersToCopy,
             FolderSnapshots = folderSnapshots,
             RuntimeProfile = effectiveProfile,
-            StagedAttachmentRelativePaths = stagedAttachmentPaths
+            StagedAttachmentRelativePaths = stagedAttachmentPaths,
+            BaselineCommands = baselineCommands
         };
     }
 
@@ -385,6 +390,14 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         var runLogger = loggerScope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
         var identity = await _identityProvider.GetAsync(cancellationToken);
         await OpenRunLogAsync(runLogger, runId, logDirectory, identity, cancellationToken);
+
+        // The git baseline ran during prepare, before this log existed. Flush its records first so commands.jsonl
+        // opens on the node's own invocations, the order they really ran in and the order an audit must see.
+        foreach (var baselineCommand in request.Prepared.BaselineCommands)
+        {
+            await AppendCommandSafelyAsync(runLogger, baselineCommand, cancellationToken);
+        }
+
         await AppendEventSafelyAsync(runLogger, "prepare_completed",
             string.Create(CultureInfo.InvariantCulture, $"goal_length={request.Goal.Length}"),
             cancellationToken);
@@ -425,8 +438,11 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         var timedOut = goal.Status == AgentHomeGoalStatus.TimeBudgetExceeded;
         var completed = goal.Status is AgentHomeGoalStatus.Completed or AgentHomeGoalStatus.NotRun;
 
+        // files_written rides along so the one line an operator reads carries both halves: a run that wrote more files
+        // than the export found changed paths is the shape a silently incomplete patch takes.
         await AppendEventSafelyAsync(runLogger, "run_completed",
-            string.Create(CultureInfo.InvariantCulture, $"status={goal.Status};changed_files={patch.ChangedFileCount}"),
+            string.Create(CultureInfo.InvariantCulture,
+                $"status={goal.Status};changed_files={patch.ChangedFileCount};files_written={goal.WrittenFiles.Count}"),
             cancellationToken);
 
         _logger.LogInformation("AgentHome run {RunId} finished: status={Status}, toolCalls={ToolCalls}, commands={Commands}, changedFiles={ChangedFiles}.",
@@ -505,6 +521,19 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             // Best-effort logging: a filesystem or permissions error must never fail the run.
             _logger.LogWarning(exception, "AgentHome run {RunId} could not open the run log.", runId);
+        }
+    }
+
+    private async Task AppendCommandSafelyAsync(IAgentHomeRunLogger runLogger, AgentHomeCommandLogRecord record, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await runLogger.AppendCommandAsync(record, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // Best-effort logging: a filesystem, permissions or not-opened error must never fail the run.
+            _logger.LogDebug(exception, "AgentHome run log append for command {ExecutionId} failed.", record.ExecutionId);
         }
     }
 

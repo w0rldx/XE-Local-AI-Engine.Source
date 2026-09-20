@@ -25,7 +25,7 @@ function renderWithProviders(ui: ReactElement) {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider>{children}</MantineProvider>
+				<MantineProvider env="test">{children}</MantineProvider>
 			</QueryClientProvider>
 		);
 	}

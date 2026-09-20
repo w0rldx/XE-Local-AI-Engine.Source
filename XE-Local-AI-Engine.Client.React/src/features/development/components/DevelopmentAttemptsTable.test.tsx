@@ -35,7 +35,7 @@ describe("DevelopmentAttemptsTable", () => {
 			terminalReason: "Validation failed.",
 		} as DevelopmentAttempt;
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentAttemptsTable attempts={[attempt]} />
 			</MantineProvider>,
 		);

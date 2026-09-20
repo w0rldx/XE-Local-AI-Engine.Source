@@ -120,7 +120,7 @@ function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<SkillsPage />
 			</MantineProvider>
 		</QueryClientProvider>,

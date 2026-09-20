@@ -67,7 +67,7 @@ function buildUi(): ReactElement {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<EntraAuthCodeSignInCard />
 			</MantineProvider>
 		</QueryClientProvider>

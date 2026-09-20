@@ -17,9 +17,9 @@ internal sealed class IntegrationExecutionEventConfiguration : IEntityTypeConfig
         builder.Property(entity => entity.DetailJson).HasColumnName("detail_json");
         builder.Property(entity => entity.OccurredAtUtc).HasColumnName("occurred_at_utc");
 
-        // Declared for parity with dev_workflow_run_events and for tooling; decorative at runtime, because the
-        // node-sqlite connection leaves PRAGMA foreign_keys off, so ON DELETE CASCADE never fires and
-        // ConversationFootprintPurge's explicit subselect deletes are the real teardown.
+        // Enforced: the node connection runs with foreign keys on, so this cascade does remove an execution's events.
+        // ConversationFootprintPurge still deletes them through an explicit subselect, because the conversation it
+        // starts from has no foreign key to the integration session that owns them.
         builder.HasOne<IntegrationExecution>().WithMany().HasForeignKey(entity => entity.ExecutionId).OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(entity => new

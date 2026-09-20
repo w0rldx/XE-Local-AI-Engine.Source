@@ -97,7 +97,7 @@ function renderForm(props: Partial<Parameters<typeof ScheduledJobForm>[0]> = {})
 	const onCancel = vi.fn();
 	const ref = createRef<ScheduledJobFormHandle>();
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ScheduledJobForm
 				ref={ref}
 				initialValues={emptyValues()}

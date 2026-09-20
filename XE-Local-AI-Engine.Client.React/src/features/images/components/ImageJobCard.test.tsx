@@ -73,7 +73,7 @@ function renderCard(view = job()) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ImageJobCard job={view} isCancelling={false} onCancel={() => undefined} />
 			</MantineProvider>
 		</QueryClientProvider>,

@@ -302,8 +302,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
-            // Remove the old searchable projections before the row is marked Pending. With runtime foreign keys OFF,
-            // every child lane must be deleted explicitly; deleting chunks also drives the external FTS delete trigger.
+            // A reindex, not a delete: the document row stays, so no cascade applies and these projections must go by
+            // hand before the row is marked Pending. Chunks come after vectors because deleting them fires the FTS trigger.
             await using (var vectorsCommand = connection.CreateCommand())
             {
                 vectorsCommand.Transaction = transaction;

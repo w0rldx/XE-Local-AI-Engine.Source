@@ -51,7 +51,7 @@ describe("DevelopmentProjectForm", () => {
 	it("requires an available registered repository and explicit host-user trust", async () => {
 		const submit = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[
 						{ id: "available", alias: "Workspace", availability: "Available" },
@@ -81,7 +81,7 @@ describe("DevelopmentProjectForm", () => {
 	it("registers an absolute host path once through the shared dialog", async () => {
 		const register = vi.fn().mockResolvedValue({ id: "repository-2", alias: "Engine", availability: "Available" });
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -111,7 +111,7 @@ describe("DevelopmentProjectForm", () => {
 		const register = vi.fn().mockResolvedValue({ id: "repository-2", alias: "Engine", availability: "Available" });
 		const repositoryChanged = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -137,7 +137,7 @@ describe("DevelopmentProjectForm", () => {
 	it("blocks creation until the detected command profile is explicitly confirmed", async () => {
 		const submit = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[{ id: "available", alias: "Workspace", availability: "Available" }]}
 					repositoriesLoading={false}
@@ -168,7 +168,7 @@ describe("DevelopmentProjectForm", () => {
 	it("moves the profile with the build target when the operator picks a different candidate", async () => {
 		const submit = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[{ id: "available", alias: "Workspace", availability: "Available" }]}
 					repositoriesLoading={false}
@@ -203,7 +203,7 @@ describe("DevelopmentProjectForm", () => {
 
 	it("states plainly that a generic-git repository is validated by a whitespace check alone", () => {
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[{ id: "available", alias: "Workspace", availability: "Available" }]}
 					repositoriesLoading={false}
@@ -225,7 +225,7 @@ describe("DevelopmentProjectForm", () => {
 	it("still allows creation when detection is unavailable, leaving the server to detect", async () => {
 		const submit = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[{ id: "available", alias: "Workspace", availability: "Available" }]}
 					repositoriesLoading={false}
@@ -257,7 +257,7 @@ describe("DevelopmentProjectForm", () => {
 		// Anything gated behind an existing project or a registered repository is unreachable on a fresh node, so the
 		// template entry point has to be operable from exactly this render — no repositories, no selection, no detection.
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -285,7 +285,7 @@ describe("DevelopmentProjectForm", () => {
 			templateCommit: "abc1234",
 		});
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -329,7 +329,7 @@ describe("DevelopmentProjectForm", () => {
 		});
 		const repositoryChanged = vi.fn();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -358,7 +358,7 @@ describe("DevelopmentProjectForm", () => {
 
 	it("blocks the template create until a template, a destination and an alias are all supplied", async () => {
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -393,7 +393,7 @@ describe("DevelopmentProjectForm", () => {
 		const addTemplate = vi.fn().mockResolvedValue({ id: "template-2", alias: "Library", availability: "Available" });
 		const removeTemplate = vi.fn().mockResolvedValue(undefined);
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -433,7 +433,7 @@ describe("DevelopmentProjectForm", () => {
 	it("keeps the template dialog open and surfaces a failed create", async () => {
 		const createFromTemplate = vi.fn().mockRejectedValue(new Error("The destination path is inside the node data directory."));
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -461,7 +461,7 @@ describe("DevelopmentProjectForm", () => {
 	it("keeps the registration dialog open and surfaces contract failures", async () => {
 		const register = vi.fn().mockRejectedValue(new Error("The repository registration response was incomplete."));
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -491,7 +491,7 @@ describe("DevelopmentProjectForm", () => {
 	it("names the unreachable node instead of rendering an empty alert when the request never lands", async () => {
 		const register = vi.fn().mockRejectedValue(new NetworkError());
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<DevelopmentProjectForm
 					repositories={[]}
 					repositoriesLoading={false}
@@ -520,7 +520,7 @@ describe("DevelopmentProjectForm", () => {
 		// reworded the sentence would still be wrong for one of the two providers.
 		const renderForm = (sandboxProvider?: string) =>
 			render(
-				<MantineProvider>
+				<MantineProvider env="test">
 					<DevelopmentProjectForm
 						repositories={[]}
 						repositoriesLoading={false}

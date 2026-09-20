@@ -83,7 +83,7 @@ function renderCard(onSignedInChange?: (v: boolean) => void): void {
 	});
 	const ui: ReactElement = (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<CodexSignInCard onSignedInChange={onSignedInChange} />
 			</MantineProvider>
 		</QueryClientProvider>

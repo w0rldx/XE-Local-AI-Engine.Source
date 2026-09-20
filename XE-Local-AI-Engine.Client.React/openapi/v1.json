@@ -23528,6 +23528,143 @@
           }
         ]
       }
+    },
+    "/api/local/v1/agent-home/runs/{runId}/patch/apply": {
+      "post": {
+        "tags": [
+          "Agent-Home"
+        ],
+        "operationId": "applyAgentHomePatch",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "AgentHomePatchApplyRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agent-home/runs/{runId}/patch/preview": {
+      "post": {
+        "tags": [
+          "Agent-Home"
+        ],
+        "operationId": "previewAgentHomePatch",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -45965,6 +46102,103 @@
             "format": "int32"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "appliedFiles"
+        ],
+        "properties": {
+          "appliedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchFileDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchFileDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alias",
+          "relativePath",
+          "changeType",
+          "added",
+          "removed"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "relativePath": {
+            "type": "string"
+          },
+          "changeType": {
+            "type": "string"
+          },
+          "added": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "patchSha256"
+        ],
+        "properties": {
+          "patchSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchPreviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "canApply",
+          "files",
+          "rejections",
+          "containsBinary",
+          "patchSha256"
+        ],
+        "properties": {
+          "canApply": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchFileDto"
+            }
+          },
+          "rejections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "containsBinary": {
+            "type": "boolean"
+          },
+          "patchSha256": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentHomeV1AgentHomePatchPreviewRequest": {
+        "type": "object",
+        "additionalProperties": false
       }
     },
     "securitySchemes": {

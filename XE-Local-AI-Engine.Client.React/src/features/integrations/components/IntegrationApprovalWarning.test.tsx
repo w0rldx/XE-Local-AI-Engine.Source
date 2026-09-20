@@ -55,7 +55,7 @@ function renderWarning(
 	toolsByName: ReadonlyMap<string, IntegrationToolFacts>,
 ) {
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<IntegrationApprovalWarning allowedToolNames={allowedToolNames} toolApprovals={toolApprovals} toolsByName={toolsByName} />
 		</MantineProvider>,
 	);

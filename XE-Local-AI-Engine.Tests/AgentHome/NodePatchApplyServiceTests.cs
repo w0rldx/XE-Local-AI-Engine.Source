@@ -609,6 +609,423 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "a clean mode-only block must not be rejected for path-guard reasons");
     }
 
+    /// <summary>
+    ///     The per-alias sub-patch copies the operator's source into the shared temp directory, so it is created
+    ///     0600 and gone before the call returns. Narrowing after creation leaves a umask-wide window in which
+    ///     another local user can read it.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WritesItsTempSubPatchUserOnlyAndRemovesIt()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("Unix file modes are what this asserts; the Windows half of the same guard is the ACL SecureFilePermissions applies.");
+        }
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, "run-tempmode", patch);
+
+        // The file exists only while git reads it, so a watcher captures the mode as each sub-patch appears. One
+        // watch, one directory, one filter: the inotify budget is not a test suite's to spend freely.
+        var observed = new List<(string Path, UnixFileMode Mode)>();
+        var gate = new Lock();
+        using (var watcher = new FileSystemWatcher(Path.GetTempPath(), "agenthome-apply-*.patch"))
+        {
+            watcher.Created += (_, args) =>
+            {
+                // The Skip above already left on Windows; this is what tells the platform analyzer so, since it
+                // cannot see through the skip into a lambda.
+                if (OperatingSystem.IsWindows())
+                {
+                    return;
+                }
+
+                try
+                {
+                    var mode = File.GetUnixFileMode(args.FullPath);
+                    lock (gate)
+                    {
+                        observed.Add((args.FullPath, mode));
+                    }
+                }
+                catch (FileNotFoundException)
+                {
+                    // Deleted between the event and the read; the deletion assertion below is what covers that.
+                }
+                catch (IOException)
+                {
+                    // Best-effort observation.
+                }
+            };
+            watcher.EnableRaisingEvents = true;
+
+            var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+            {
+                RunId = "run-tempmode"
+            });
+            AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
+        }
+
+        (string Path, UnixFileMode Mode)[] captured;
+        lock (gate)
+        {
+            captured = [.. observed];
+        }
+
+        AssertEx.NotEmpty(captured,
+            "no sub-patch file was observed being created, so this test asserted nothing about its permissions.");
+        AssertEx.True(captured.All(entry => entry.Mode == (UnixFileMode.UserRead | UnixFileMode.UserWrite)),
+            $"a sub-patch was created readable beyond the owner: {string.Join(separator: ';', captured.Select(entry => entry.Mode))}.");
+
+        // Per observed path rather than "the temp directory is empty of them": the watcher sees every apply on this
+        // box, and a sibling test's sub-patch may legitimately be in flight right now.
+        await AssertEx.EventuallyAsync(() => captured.All(entry => !File.Exists(entry.Path)),
+            TimeSpan.FromSeconds(10),
+            "a sub-patch was left behind on disk after its apply finished.");
+    }
+
+    [Test]
+    public async Task ApplyApprovedAsync_WithTheHashThePreviewReported_Applies()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, "run-bound", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-bound"
+        });
+        AssertEx.True(preview.CanApply, $"rejections: {string.Join(separator: ';', preview.Rejections)}");
+        AssertEx.NotNull(preview.PatchSha256, "a preview that read a patch reports its hash");
+        AssertEx.Equal(expected: 64, preview.PatchSha256!.Length, "SHA-256 renders as 64 lowercase hex characters");
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-bound",
+            ExpectedPatchSha256 = preview.PatchSha256
+        });
+
+        AssertEx.True(result.Applied, $"the hash the preview reported is the hash the apply accepts. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
+    }
+
+    /// <summary>
+    ///     The read-then-apply gap. The patch is REPLACED between preview and apply with one that would itself
+    ///     apply cleanly, so only the hash binding catches it: an operator lands the diff they read, not the diff
+    ///     that replaced it.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenThePatchChangedAfterThePreview_RejectsAndMutatesNothing()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var reviewed = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, "run-swap", reviewed);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-swap"
+        });
+        AssertEx.True(preview.CanApply, $"rejections: {string.Join(separator: ';', preview.Rejections)}");
+
+        // The swapped-in patch targets the SAME pre-image, so it passes every check the reviewed one passed.
+        var swapped = await GenerateGPatchAsync("repo-01", NewTempDir(), ("src/App.cs", "alpha\n", "alpha\nsomething else entirely\n"));
+        await WritePatchAsync(harness, "run-swap", swapped);
+        var before = await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs"));
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-swap",
+            ExpectedPatchSha256 = preview.PatchSha256
+        });
+
+        AssertEx.False(result.Applied, "a patch that changed since the preview is refused");
+        AssertEx.Contains(result.Rejections, reason => reason.Contains("changed since it was previewed", StringComparison.Ordinal));
+        AssertEx.Equal(before, await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")), "the host is untouched by a refused apply");
+
+        // And the swapped patch is not refused on its own terms — the refusal above is the BINDING, not a second
+        // validation failure that would have rejected it anyway.
+        var unbound = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-swap"
+        });
+        AssertEx.True(unbound.CanApply, "the swapped patch would itself have applied cleanly, which is what makes the binding the only guard that catches it");
+    }
+
+    /// <summary>
+    ///     A patch writing under a selected folder's <c>.git</c> writes the configuration git executes: hooks and
+    ///     the drivers <c>AgentHomeGitHardening</c> keeps node-owned. Refused in every path position, and through
+    ///     <c>.GIT</c> on a case-folding host.
+    /// </summary>
+    [Test]
+    [Arguments("destination", "diff --git a/repo-01/.git/config b/repo-01/.git/config\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/.git/config\n@@ -0,0 +1 @@\n+[core]\n")]
+    [Arguments("source", "diff --git a/repo-01/.git/hooks/pre-commit b/repo-01/.git/hooks/pre-commit\ndeleted file mode 100755\n--- a/repo-01/.git/hooks/pre-commit\n+++ /dev/null\n@@ -1 +0,0 @@\n-#!/bin/sh\n")]
+    [Arguments("rename to", "diff --git a/repo-01/safe.txt b/repo-01/.git/config\nsimilarity index 100%\nrename from repo-01/safe.txt\nrename to repo-01/.git/config\n")]
+    [Arguments("rename from", "diff --git a/repo-01/.git/config b/repo-01/safe.txt\nsimilarity index 100%\nrename from repo-01/.git/config\nrename to repo-01/safe.txt\n")]
+    [Arguments("copy to", "diff --git a/repo-01/safe.txt b/repo-01/.git/config\nsimilarity index 100%\ncopy from repo-01/safe.txt\ncopy to repo-01/.git/config\n")]
+    [Arguments("nested", "diff --git a/repo-01/sub/.git/objects/x b/repo-01/sub/.git/objects/x\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/sub/.git/objects/x\n@@ -0,0 +1 @@\n+x\n")]
+    [Arguments("mixed case", "diff --git a/repo-01/.GiT/config b/repo-01/.GiT/config\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/.GiT/config\n@@ -0,0 +1 @@\n+[core]\n")]
+    [Arguments("mode-only header", "diff --git a/repo-01/.git/hooks/pre-commit b/repo-01/.git/hooks/pre-commit\nold mode 100644\nnew mode 100755\n")]
+    public async Task PreviewAndApply_WithAGitDirectoryTarget_RejectWithoutTouchingHost(string position, string patch)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await SeedHostAsync(hostRoot, ("safe.txt", "safe\n"));
+        var gitDirectory = Path.Combine(hostRoot, ".git");
+
+        await WritePatchAsync(harness, "run-gitdir", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-gitdir"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-gitdir"
+        });
+
+        AssertEx.False(preview.CanApply, $"a {position} path under .git is rejected");
+        AssertEx.Contains(preview.Rejections, reason => reason.Contains("git directory", StringComparison.Ordinal));
+        AssertEx.False(result.Applied);
+        AssertEx.False(Directory.Exists(gitDirectory), "no .git directory is created on the host");
+        AssertEx.Equal("safe\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "safe.txt")), "the block's other side is untouched too");
+    }
+
+    /// <summary>
+    ///     Git C-quotes a path whenever the name holds a quote, a backslash or a control character, and this parser
+    ///     does not unescape them. It refuses by name rather than as an unregistered folder, pinning unescaping
+    ///     as a deliberate change later.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithAQuotedPath_RejectsSayingWhy()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        // The shape git produces for a name containing a literal quote: the whole path is C-quoted and escaped.
+        var patch =
+            "diff --git \"a/repo-01/od\\\"d.txt\" \"b/repo-01/od\\\"d.txt\"\n" +
+            "new file mode 100644\n" +
+            "index 0000000..e69de29\n" +
+            "--- /dev/null\n" +
+            "+++ \"b/repo-01/od\\\"d.txt\"\n" +
+            "@@ -0,0 +1 @@\n" +
+            "+text\n";
+        await WritePatchAsync(harness, "run-quoted", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted"
+        });
+
+        AssertEx.False(preview.CanApply, "a quoted path is refused rather than parsed past");
+        AssertEx.Contains(preview.Rejections, reason => reason.Contains("quoted path", StringComparison.Ordinal));
+        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
+            "the rejection carries no host path");
+    }
+
+    /// <summary>
+    ///     A gitlink (mode <c>160000</c>) is a submodule pointer, not a file: <c>git apply</c> without
+    ///     <c>--index</c> answers one with an EMPTY DIRECTORY the preview's file list could not have described,
+    ///     so it is refused by name.
+    /// </summary>
+    [Test]
+    [Arguments("added", "diff --git a/repo-01/vendor b/repo-01/vendor\nnew file mode 160000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/vendor\n@@ -0,0 +1 @@\n+Subproject commit 1111111111111111111111111111111111111111\n")]
+    [Arguments("removed", "diff --git a/repo-01/vendor b/repo-01/vendor\ndeleted file mode 160000\nindex 1111111..0000000\n--- a/repo-01/vendor\n+++ /dev/null\n@@ -1 +0,0 @@\n-Subproject commit 1111111111111111111111111111111111111111\n")]
+    [Arguments("mode-only", "diff --git a/repo-01/vendor b/repo-01/vendor\nold mode 100644\nnew mode 160000\n")]
+    // The everyday one: an existing submodule bumped to a new commit. No mode line at all — the mode is stated on
+    // the index header because it did not change — so this used to read as an ordinary modified file in the preview.
+    [Arguments("pointer bump",
+        "diff --git a/repo-01/vendor b/repo-01/vendor\nindex 1111111..2222222 160000\n--- a/repo-01/vendor\n+++ b/repo-01/vendor\n@@ -1 +1 @@\n-Subproject commit 1111111111111111111111111111111111111111\n+Subproject commit 2222222222222222222222222222222222222222\n")]
+    public async Task PreviewAndApply_WithAGitlinkBlock_RejectWithoutTouchingHost(string shape, string patch)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        await WritePatchAsync(harness, "run-gitlink", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-gitlink"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-gitlink"
+        });
+
+        AssertEx.False(preview.CanApply, $"a {shape} submodule reference is refused");
+        AssertEx.Contains(preview.Rejections, reason => reason.Contains("submodule", StringComparison.Ordinal));
+        AssertEx.False(result.Applied);
+        AssertEx.False(Directory.Exists(Path.Combine(hostRoot, "vendor")), "no empty submodule directory is created on the host");
+    }
+
+    /// <summary>
+    ///     A symlink block (mode <c>120000</c>) carries the link TARGET as its content, so applying one makes git
+    ///     create a real link pointing wherever that names — a <c>../</c> climb the within-root guard never sees,
+    ///     because it validates the link's own path.
+    /// </summary>
+    [Test]
+    [Arguments("created", "diff --git a/repo-01/evil b/repo-01/evil\nnew file mode 120000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/evil\n@@ -0,0 +1 @@\n+/etc/passwd\n\\ No newline at end of file\n")]
+    [Arguments("deleted", "diff --git a/repo-01/evil b/repo-01/evil\ndeleted file mode 120000\nindex 1111111..0000000\n--- a/repo-01/evil\n+++ /dev/null\n@@ -1 +0,0 @@\n-/etc/passwd\n")]
+    // A regular file turned into a link, and the reverse: git states both as a mode pair, with no `new file` line.
+    [Arguments("file-to-link", "diff --git a/repo-01/notes.txt b/repo-01/notes.txt\nold mode 100644\nnew mode 120000\n")]
+    [Arguments("link-to-file", "diff --git a/repo-01/notes.txt b/repo-01/notes.txt\nold mode 120000\nnew mode 100644\n")]
+    // Retargeting an existing link: the mode did not change, so it is stated on the index header and nowhere else.
+    [Arguments("retargeted",
+        "diff --git a/repo-01/evil b/repo-01/evil\nindex 1111111..2222222 120000\n--- a/repo-01/evil\n+++ b/repo-01/evil\n@@ -1 +1 @@\n-../inside\n+/etc/shadow\n")]
+    public async Task PreviewAndApply_WithASymlinkBlock_RejectWithoutTouchingHost(string shape, string patch)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await SeedHostAsync(hostRoot, ("notes.txt", "notes\n"));
+
+        await WritePatchAsync(harness, "run-symlink-mode", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-symlink-mode"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-symlink-mode"
+        });
+
+        AssertEx.False(preview.CanApply, $"a {shape} symbolic link is refused");
+        AssertEx.Contains(preview.Rejections, reason => reason.Contains("symbolic link", StringComparison.Ordinal));
+        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
+            "the rejection carries no host path");
+        AssertEx.False(result.Applied);
+        AssertEx.False(Path.Exists(Path.Combine(hostRoot, "evil")), "no link is created on the host");
+        AssertEx.Equal("notes\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "notes.txt")), "the mode-pair shapes leave the real file alone");
+    }
+
+    /// <summary>
+    ///     The false-positive control for the mode guards: an ordinary <c>100644</c> file whose CONTENT is the text
+    ///     of a mode line still applies. Every hunk line carries a sigil, which is what makes whole-line matching
+    ///     safe.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WithAFileWhoseContentLooksLikeAModeLine_IsNotRefused()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        const string Body = "new file mode 120000\nindex 1111111..2222222 160000\n";
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("docs/patch-format.md", "placeholder\n", Body));
+
+        await WritePatchAsync(harness, "run-lookalike", patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-lookalike"
+        });
+
+        AssertEx.True(result.Applied, $"a file that merely describes a mode line applies. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.Equal(Body, await File.ReadAllTextAsync(Path.Combine(hostRoot, "docs", "patch-format.md")));
+    }
+
+    /// <summary>
+    ///     Names that merely START with <c>.git</c> are ordinary tracked files and must keep applying. The driver
+    ///     definitions an in-tree <c>.gitattributes</c> names are closed by the hardened environment instead.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WithGitattributesOrGitignore_IsNotRefused()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01",
+            hostRoot,
+            (".gitattributes", "* text=auto\n", "* text=auto\n*.bin binary\n"),
+            (".gitignore", "bin/\n", "bin/\nobj/\n"));
+        await WritePatchAsync(harness, "run-dotgit-files", patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-dotgit-files"
+        });
+
+        AssertEx.True(result.Applied, $"a .gitattributes / .gitignore change is ordinary. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.Contains(await File.ReadAllTextAsync(Path.Combine(hostRoot, ".gitattributes")), "*.bin binary");
+    }
+
+    /// <summary>
+    ///     A selected folder need not be a git repository: <c>git apply</c> works against a bare working tree, and
+    ///     the operator surface makes a folder that is not a checkout the ordinary case rather than a corner.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenTheHostFolderIsNotAGitRepository_StillApplies()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        // GenerateGPatchAsync builds its baseline in a SEPARATE temp repo and only seeds the pre-image here, so this
+        // host folder has no .git of its own. Asserted rather than assumed, because the whole point is the absence.
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        AssertEx.False(Directory.Exists(Path.Combine(hostRoot, ".git")), "the host folder must not be a repository for this test to prove anything");
+        await WritePatchAsync(harness, "run-norepo", patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-norepo"
+        });
+
+        AssertEx.True(result.Applied, $"a non-repository folder is a valid apply target. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
+    }
+
+    /// <summary>
+    ///     Two applies never overlap: <c>git apply</c> is not transactional, so a second could write into a tree
+    ///     the first's <c>--check</c> cleared. The gate must outlive the SCOPED service; the resolver stub records
+    ///     the peak concurrency.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenTwoApplesRunAtOnce_AreSerialized()
+    {
+        var harness = NewHarness();
+        var hostRootA = harness.AddFolder("repo-01");
+        var hostRootB = harness.AddFolder("repo-02");
+
+        await WritePatchAsync(harness, "run-par-a", await GenerateGPatchAsync("repo-01", hostRootA, ("a.txt", "a\n", "a\nchanged\n")));
+        await WritePatchAsync(harness, "run-par-b", await GenerateGPatchAsync("repo-02", hostRootB, ("b.txt", "b\n", "b\nchanged\n")));
+
+        harness.Resolver.BlockUntilReleased();
+
+        // Two SEPARATE service instances over one state, which is what two concurrent scoped requests are: a gate
+        // held in an instance field would pass with one instance and fail here.
+        var first = harness.NewService().ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-par-a"
+        });
+        var second = harness.NewService().ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-par-b"
+        });
+
+        await AssertEx.EventuallyAsync(() => harness.Resolver.EnteredCount >= 1,
+            TimeSpan.FromSeconds(10),
+            "one apply must reach the resolver; neither did, so nothing below proves anything.");
+
+        // real-timer: the property is the ABSENCE of an overlap, so the second apply needs a real window in which
+        // it WOULD have entered; a gate the test controls cannot grant one, since never entering is the claim.
+        await Task.Delay(TimeSpan.FromMilliseconds(250));
+
+        harness.Resolver.Release();
+        var results = await Task.WhenAll(first, second);
+
+        AssertEx.Equal(expected: 1, harness.Resolver.MaxConcurrent,
+            "two applies were inside the resolver at once, so the node-wide apply gate did not hold them apart.");
+        AssertEx.Equal(expected: 2, harness.Resolver.EnteredCount, "both applies must have run; a serialized pair is not a dropped one.");
+        AssertEx.True(results.All(result => result.Applied), $"both applies land. rejections: {string.Join(separator: ';', results.SelectMany(result => result.Rejections))}");
+        AssertEx.Equal("a\nchanged\n", await File.ReadAllTextAsync(Path.Combine(hostRootA, "a.txt")));
+        AssertEx.Equal("b\nchanged\n", await File.ReadAllTextAsync(Path.Combine(hostRootB, "b.txt")));
+    }
 
     private TestHarness NewHarness(bool allowBinary = false)
     {
@@ -628,15 +1045,16 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
 
-        var service = new NodePatchApplyService(resolver,
-            options,
-            runtimeSettings,
-            new FakeNodeDataDirectory(agentHomeStateRoot),
-            new StubIdentityProvider(),
-            scopeFactory.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<NodePatchApplyService>.Instance);
+        NodePatchApplyService NewService() =>
+            new(resolver,
+                options,
+                runtimeSettings,
+                new FakeNodeDataDirectory(agentHomeStateRoot),
+                new StubIdentityProvider(),
+                scopeFactory.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<NodePatchApplyService>.Instance);
 
-        return new TestHarness(service, resolver, agentHomeRoot, () => NewTempDir());
+        return new TestHarness(NewService, resolver, agentHomeRoot, () => NewTempDir());
     }
 
 
@@ -799,19 +1217,28 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     private sealed class TestHarness
     {
         private readonly Func<string> _newFolder;
+        private readonly Func<NodePatchApplyService> _newService;
         private readonly FakeResolver _resolver;
 
-        public TestHarness(NodePatchApplyService service, FakeResolver resolver, string agentHomeRoot, Func<string> newFolder)
+        public TestHarness(Func<NodePatchApplyService> newService, FakeResolver resolver, string agentHomeRoot, Func<string> newFolder)
         {
-            Service = service;
+            _newService = newService;
+            Service = newService();
             _resolver = resolver;
             AgentHomeRoot = agentHomeRoot;
             _newFolder = newFolder;
         }
 
+        /// <summary>One shared instance, for the tests that need only one.</summary>
         public NodePatchApplyService Service { get; }
 
+        /// <summary>A FRESH instance over the same state — what a second scoped request resolves.</summary>
+        public NodePatchApplyService NewService() =>
+            _newService();
+
         public string AgentHomeRoot { get; }
+
+        public FakeResolver Resolver => _resolver;
 
         public string AddFolder(string alias)
         {
@@ -821,20 +1248,85 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         }
     }
 
+    /// <summary>
+    ///     The alias → host-root map the service resolves through, plus the instrumentation the serialization test
+    ///     needs. Every apply passes through <see cref="ListReferencesAsync" /> while holding the node-wide apply
+    ///     gate, which makes it the place to watch two of them from.
+    /// </summary>
     private sealed class FakeResolver : ISelectedFolderResolver
     {
         private readonly Dictionary<Guid, ResolvedSelectedFolder> _folders = [];
+        private readonly Lock _counters = new();
+        private TaskCompletionSource? _release;
+        private int _concurrent;
+        private int _entered;
+        private int _maxConcurrent;
+
+        public int EnteredCount
+        {
+            get
+            {
+                lock (_counters)
+                {
+                    return _entered;
+                }
+            }
+        }
+
+        public int MaxConcurrent
+        {
+            get
+            {
+                lock (_counters)
+                {
+                    return _maxConcurrent;
+                }
+            }
+        }
+
+        /// <summary>Makes every subsequent resolve wait inside the gate until <see cref="Release" />.</summary>
+        public void BlockUntilReleased()
+        {
+            _release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public void Release()
+        {
+            _ = _release?.TrySetResult();
+        }
 
         public Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<SelectedFolderReference> references =
-                _folders.Values.Select(folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias }).ToList();
-            return Task.FromResult(references);
+            lock (_counters)
+            {
+                _entered++;
+                _concurrent++;
+                _maxConcurrent = Math.Max(_maxConcurrent, _concurrent);
+            }
+
+            try
+            {
+                if (_release is { } release)
+                {
+                    await release.Task.WaitAsync(cancellationToken);
+                }
+
+                IReadOnlyList<SelectedFolderReference> references =
+                    _folders.Values.Select(folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias }).ToList();
+                return references;
+            }
+            finally
+            {
+                lock (_counters)
+                {
+                    _concurrent--;
+                }
+            }
         }
 
         public Task<ResolvedSelectedFolder> ResolveAsync(string id, CancellationToken cancellationToken = default)

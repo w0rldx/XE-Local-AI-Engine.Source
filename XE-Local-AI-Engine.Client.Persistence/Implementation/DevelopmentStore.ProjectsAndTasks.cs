@@ -87,8 +87,8 @@ public sealed partial class DevelopmentStore
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                // Checked rather than left to the foreign key: the node connection runs without PRAGMA foreign_keys, so
-                // a task named against a project that does not exist would be inserted and then be unreachable.
+                // Checked rather than left to the foreign key, so an unknown project id answers as a domain error
+                // instead of surfacing a constraint violation from the insert.
                 if (!await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken))
                 {
                     throw new DevelopmentNotFoundException($"Development project '{command.ProjectId}' was not found.");

@@ -145,7 +145,7 @@ function installDomMocks(): void {
 
 function renderPage(props: { initialProjectId?: string; initialTaskId?: string } = {}): void {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<DevelopmentPage {...props} />
 		</MantineProvider>,
 	);

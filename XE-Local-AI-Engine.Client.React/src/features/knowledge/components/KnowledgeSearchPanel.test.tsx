@@ -10,7 +10,7 @@ import type { KnowledgeDocument, KnowledgeSearchHit } from "@/features/knowledge
 import type { UseKnowledgeSearchResult } from "@/features/knowledge/queries/useKnowledgeSearch";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function knowledgeDocument(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {

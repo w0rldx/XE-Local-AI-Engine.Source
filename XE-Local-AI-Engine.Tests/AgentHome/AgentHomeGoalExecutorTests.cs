@@ -483,6 +483,38 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
             "the call past the wall clock must not have run");
     }
 
+    /// <summary>
+    ///     The reported elapsed time and the <c>MaxRunSeconds</c> deadline must come off the same clock, or the
+    ///     result can say a run took less time than the budget that cut it off.
+    /// </summary>
+    [Test]
+    public async Task Execute_ReportsElapsedFromTheSameClockTheRunBudgetUses()
+    {
+        SkipUnlessProcessJailIsUsable();
+
+        var clock = new MovableClock(new DateTimeOffset(year: 2026, month: 9, day: 19, hour: 9, minute: 0, second: 0, TimeSpan.Zero));
+        using var provider = CreateProvider();
+        var handle = await SeedWorkspaceAsync(provider, isolated: true, ("README.md", "# project\n"));
+        using var client = new ScriptedChatClient(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/a.txt", ["content"] = "first" }))
+        {
+            // Well inside the budget, so the run completes: what is graded is the number, not the stop reason.
+            BeforeCall = index =>
+            {
+                if (index == 0)
+                {
+                    clock.Advance(TimeSpan.FromSeconds(7));
+                }
+            }
+        };
+
+        var outcome = await ExecuteAsync(provider, handle, client, AllActions, options => options.MaxRunSeconds = 60, clock);
+
+        AssertEx.Equal(AgentHomeGoalStatus.Completed, outcome.Status);
+        AssertEx.Equal(TimeSpan.FromSeconds(7), outcome.Elapsed,
+            "elapsed is read off the injected clock the deadline uses, so moving that clock is the whole measurement");
+    }
+
     [Test]
     public async Task WriteFile_WhenTheContentIsOverThePerFileBudget_RefusesAndWritesNothing()
     {

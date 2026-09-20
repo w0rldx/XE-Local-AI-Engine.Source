@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -80,7 +81,7 @@ internal sealed class StaleWhisperServerReaper : IHostedService
         var reaped = 0;
         foreach (var candidate in candidates)
         {
-            if (candidate.ExecutablePath is not { Length: > 0 } executablePath || !IsUnderRoot(executablePath, fullRoot))
+            if (candidate.ExecutablePath is not { Length: > 0 } executablePath || !PathContainment.IsUnderRoot(executablePath, fullRoot))
             {
                 continue;
             }
@@ -94,31 +95,5 @@ internal sealed class StaleWhisperServerReaper : IHostedService
         {
             _logger.LogInformation("Reaped {Count} stale whisper-server orphan process(es) left by a previous run.", reaped);
         }
-    }
-
-    /// <summary>
-    ///     Whether <paramref name="executablePath" /> is a descendant of <paramref name="root" />. The trailing
-    ///     separator is what stops a sibling whose name merely starts with the root's — <c>whisper.cpp-other</c> —
-    ///     from matching.
-    /// </summary>
-    private static bool IsUnderRoot(string executablePath, string root)
-    {
-        string fullPath;
-        try
-        {
-            fullPath = Path.GetFullPath(executablePath);
-        }
-        catch (ArgumentException)
-        {
-            // An unparseable path can never be under our root.
-            return false;
-        }
-
-        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
-            ? root
-            : root + Path.DirectorySeparatorChar;
-
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return fullPath.StartsWith(rootWithSeparator, comparison);
     }
 }

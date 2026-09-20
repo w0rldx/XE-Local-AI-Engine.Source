@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     Persistence boundary for the training dataset module: definitions, datasets, samples, tool mocks and the durable
 ///     generation queue. Mirrors <see cref="IBenchmarkStore" />'s conventions — hand-bumped <c>Version</c> concurrency
 ///     tokens compared against a caller-supplied <c>expectedVersion</c>, explicit SQLite transactions around every
-///     multi-row mutation, and explicit ordered child deletes (the node connection never enables foreign keys, so a
-///     declared cascade does nothing).
+///     multi-row mutation, and explicit ordered child deletes (the references that block a delete declare
+///     <c>Restrict</c>, and the node connection enforces them, so the order is what makes the delete legal).
 /// </summary>
 public interface ITrainingDatasetStore
 {

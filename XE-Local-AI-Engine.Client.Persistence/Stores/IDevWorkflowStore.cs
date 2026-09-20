@@ -35,9 +35,9 @@ public interface IDevWorkflowStore
 
     /// <summary>
     ///     Removes the work item and every row below it in explicit dependency order, and answers what went — including
-    ///     the work sessions and runs whose EXTERNAL state the caller must now release. The node connection runs without
-    ///     <c>PRAGMA foreign_keys</c>, so the declared cascades never fire and the order is the only thing that keeps
-    ///     the delete complete.
+    ///     the work sessions and runs whose EXTERNAL state the caller must now release. A run's own children cascade,
+    ///     but the work sessions carry no foreign key to the work item, so this path is the only thing that reaches
+    ///     them — and the caller cannot be told what to release unless the rows are enumerated on the way out.
     ///     <para>
     ///         Refuses with <see cref="DevWorkflowRunInFlightException" /> while any of the item's runs is non-terminal,
     ///         checked inside the transaction so a run that starts mid-delete still wins. The caller learns what to

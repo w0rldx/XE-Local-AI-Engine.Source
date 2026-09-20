@@ -556,6 +556,9 @@ describe("useLiveCapture", () => {
 		const calls: string[] = [];
 		cancelRoute(calls);
 		hub.endSession.mockRejectedValue(new Error("transport gone"));
+		// A process capture posts `capture/process` on the way in; it records into its own list so `calls` stays the
+		// answer to "what did the stop path hit".
+		processCaptureOk([]);
 		const { factory } = harness();
 		const { result } = renderCapture();
 
@@ -629,6 +632,8 @@ describe("useLiveCapture", () => {
 		const calls: string[] = [];
 		cancelRoute(calls);
 		hub.endSession.mockResolvedValue(false);
+		// The way in is not what this case is about; it records into its own list so `calls` stays the teardown's.
+		processCaptureOk([]);
 		const { factory } = harness();
 		const { result, unmount } = renderCapture();
 

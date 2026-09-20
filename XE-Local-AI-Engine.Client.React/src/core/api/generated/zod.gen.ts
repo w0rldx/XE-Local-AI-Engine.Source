@@ -7696,6 +7696,38 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchFileDto = z.object({
+	alias: z.string(),
+	relativePath: z.string(),
+	changeType: z.string(),
+	added: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	removed: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse = z.object({
+	appliedFiles: z.array(zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchFileDto),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest = z.object({
+	patchSha256: z.string().regex(/^[0-9a-fA-F]{64}$/),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchPreviewResponse = z.object({
+	canApply: z.boolean(),
+	files: z.array(zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchFileDto),
+	rejections: z.array(z.string()),
+	containsBinary: z.boolean(),
+	patchSha256: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchPreviewRequest = z.record(z.string(), z.never());
+
 /**
  * Success
  */
@@ -11593,3 +11625,23 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zApplyAgentHomePatchBody = zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest;
+
+export const zApplyAgentHomePatchPath = z.object({
+	runId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zApplyAgentHomePatchResponse = zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse;
+
+export const zPreviewAgentHomePatchPath = z.object({
+	runId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zPreviewAgentHomePatchResponse = zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchPreviewResponse;

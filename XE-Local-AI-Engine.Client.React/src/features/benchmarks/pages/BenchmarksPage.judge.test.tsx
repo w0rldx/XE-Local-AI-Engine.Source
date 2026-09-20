@@ -91,8 +91,22 @@ function baseRoutes(run: Record<string, unknown> = runRow()) {
 			rankCohort: { policyRevision: 1, cohortGeneration: 1, rankedCount: 1, totalScored: 1 },
 		}),
 		jsonRoute("get", `benchmarks/runs/${runId}`, run),
+		// Ambient: the workspace reads the selected project's task items whatever the test is about. One item keeps
+		// this a single-run project, so the cell table (read only above one item) stays out of it.
+		jsonRoute("get", `benchmarks/projects/${projectId}/items`, {
+			items: [{ id: "dddddddd-0000-4000-8000-000000000001", index: 0, kind: "prompt", prompt: "Question 1.", inputHash: "v1:0" }],
+			taskItemSetHash: "v1:hash",
+			projectVersion: 2,
+		}),
 	);
 }
+
+// Every test's FIRST await gates on all of `baseRoutes()`'s concurrent GETs landing — through the generated
+// client, its interceptor chain, zod response validation and TanStack Query — before the workspace paints a
+// control. Testing Library polls `findBy*` on its own 1000ms window, which `testTimeout` does not raise, and under
+// full-suite CPU contention that fan-in can outlast it. Same reason `useBenchmarks.test.tsx` hands an explicit
+// timeout to the waits it knows are slow; the later awaits in each test wait on one request and keep the default.
+const fanIn = { timeout: 8_000 };
 
 /** The stacking layer of the dialog an element sits in: the z-index Mantine writes onto the Modal root. */
 function modalLayerOf(element: HTMLElement): number {
@@ -130,7 +144,7 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }, fanIn));
 		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
 
 		// The first save is refused, and the refusal has to read as a question rather than as an error toast.
@@ -163,7 +177,7 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }, fanIn));
 		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
 
 		const confirmLayer = modalLayerOf(await screen.findByTestId("benchmark-rejudge-confirm"));
@@ -186,7 +200,7 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }, fanIn));
 		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
 
 		await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("still running")));
@@ -206,7 +220,7 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		const banner = await screen.findByTestId("benchmark-judge-prompt-outdated");
+		const banner = await screen.findByTestId("benchmark-judge-prompt-outdated", undefined, fanIn);
 		expect(banner.textContent).toContain("Judge prompt version outdated");
 
 		fireEvent.click(screen.getByTestId("benchmark-judge-prompt-outdated-edit"));
@@ -219,7 +233,7 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		await screen.findByRole("button", { name: "Edit judge" });
+		await screen.findByRole("button", { name: "Edit judge" }, fanIn);
 		expect(screen.queryByTestId("benchmark-judge-prompt-outdated")).toBeNull();
 	});
 
@@ -235,7 +249,7 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		fireEvent.click(await screen.findByTestId("benchmark-rejudge-all"));
+		fireEvent.click(await screen.findByTestId("benchmark-rejudge-all", undefined, fanIn));
 		fireEvent.click(await screen.findByTestId("benchmark-rejudge-confirm-accept"));
 
 		await waitFor(() => expect(observedBody).toEqual({ expectedVersion: 2 }));
@@ -247,6 +261,6 @@ describe("BenchmarksPage judge changes", () => {
 
 		renderWithProviders(<BenchmarksPage />);
 
-		expect(((await screen.findByTestId("benchmark-rejudge-all")) as HTMLButtonElement).disabled).toBe(true);
+		expect(((await screen.findByTestId("benchmark-rejudge-all", undefined, fanIn)) as HTMLButtonElement).disabled).toBe(true);
 	});
 });

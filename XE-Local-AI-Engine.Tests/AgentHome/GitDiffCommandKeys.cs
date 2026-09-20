@@ -13,9 +13,11 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 /// </summary>
 internal static class GitDiffCommandKeys
 {
-    public static string PatchDiff => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."));
+    public static string StageAll => CommandKey(AgentHomeGit.WorkspaceArguments("add", "-A", "--", "."));
 
-    public static string NameStatus => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
+    public static string PatchDiff => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--cached", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."));
+
+    public static string NameStatus => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
 
     private static string CommandKey(IReadOnlyList<string> arguments)
     {

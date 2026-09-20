@@ -38,7 +38,7 @@ const base = {
 
 function renderList(skills: SkillSummary[]) {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<SkillList skills={skills} isMutating={false} onEdit={vi.fn()} onDelete={vi.fn()} />
 		</MantineProvider>,
 	);

@@ -67,7 +67,7 @@ describe("AppUpdateSection", () => {
 	it("offers anonymous update checks without any GitHub sign-in UI", () => {
 		setup();
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -79,7 +79,7 @@ describe("AppUpdateSection", () => {
 	it("shows the update button when the public feed has an update", () => {
 		setup({ updateAvailable: true, availableVersion: "0.1.0-rc.3" });
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -90,7 +90,7 @@ describe("AppUpdateSection", () => {
 	it("withholds controls when the artifact has no public source", () => {
 		setup({ isConfigured: false });
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -102,7 +102,7 @@ describe("AppUpdateSection", () => {
 	it("distinguishes an offline feed from a failed feed", () => {
 		setup({ checkStatus: "offline" });
 		const { rerender } = render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -111,7 +111,7 @@ describe("AppUpdateSection", () => {
 
 		setup({ checkStatus: "failed" });
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -123,7 +123,7 @@ describe("AppUpdateSection", () => {
 	it("renders nothing outside desktop mode", () => {
 		setup({ isDesktop: false });
 		render(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<AppUpdateSection />
 			</MantineProvider>,
 		);

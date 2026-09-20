@@ -22,7 +22,7 @@ vi.mock("react-i18next", () => ({
 import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function installJsdomEnvironmentMocks(): void {

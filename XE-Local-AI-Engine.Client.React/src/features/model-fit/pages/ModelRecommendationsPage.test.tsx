@@ -139,7 +139,7 @@ function renderPage() {
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<QueryClientProvider client={queryClient}>
 				<ModelRecommendationsPage />
 			</QueryClientProvider>

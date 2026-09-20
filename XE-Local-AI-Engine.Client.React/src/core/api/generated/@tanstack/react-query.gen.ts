@@ -12,6 +12,7 @@ import type { AxiosError } from "axios";
 import { client } from "../client.gen";
 import {
 	analyzePlaybook,
+	applyAgentHomePatch,
 	applyAppUpdate,
 	applyDevelopmentPatch,
 	approveGoldenConversation,
@@ -336,6 +337,7 @@ import {
 	pauseWorkSession,
 	pinNodeChatConversation,
 	postWorkSessionMessage,
+	previewAgentHomePatch,
 	previewDevelopmentPatch,
 	previewGgufImport,
 	previewSkillImport,
@@ -450,6 +452,9 @@ import {
 import type {
 	AnalyzePlaybookData,
 	AnalyzePlaybookResponse,
+	ApplyAgentHomePatchData,
+	ApplyAgentHomePatchError,
+	ApplyAgentHomePatchResponse,
 	ApplyAppUpdateData,
 	ApplyAppUpdateResponse,
 	ApplyDevelopmentPatchData,
@@ -1217,6 +1222,9 @@ import type {
 	PostWorkSessionMessageData,
 	PostWorkSessionMessageError,
 	PostWorkSessionMessageResponse,
+	PreviewAgentHomePatchData,
+	PreviewAgentHomePatchError,
+	PreviewAgentHomePatchResponse,
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchError,
 	PreviewDevelopmentPatchResponse,
@@ -11131,6 +11139,50 @@ export const updateSuggestedPlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const applyAgentHomePatchMutation = (
+	options?: Partial<Options<ApplyAgentHomePatchData>>,
+): UseMutationOptions<ApplyAgentHomePatchResponse, AxiosError<ApplyAgentHomePatchError>, Options<ApplyAgentHomePatchData>> => {
+	const mutationOptions: UseMutationOptions<
+		ApplyAgentHomePatchResponse,
+		AxiosError<ApplyAgentHomePatchError>,
+		Options<ApplyAgentHomePatchData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await applyAgentHomePatch({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const previewAgentHomePatchMutation = (
+	options?: Partial<Options<PreviewAgentHomePatchData>>,
+): UseMutationOptions<
+	PreviewAgentHomePatchResponse,
+	AxiosError<PreviewAgentHomePatchError>,
+	Options<PreviewAgentHomePatchData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		PreviewAgentHomePatchResponse,
+		AxiosError<PreviewAgentHomePatchError>,
+		Options<PreviewAgentHomePatchData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await previewAgentHomePatch({
 				...options,
 				...fnOptions,
 				throwOnError: true,

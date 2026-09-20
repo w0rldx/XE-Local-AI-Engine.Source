@@ -17,9 +17,9 @@ internal sealed class ExternalAppInstanceEventConfiguration : IEntityTypeConfigu
         builder.Property(entity => entity.DetailJson).HasColumnName("detail_json");
         builder.Property(entity => entity.OccurredAtUtc).HasColumnName("occurred_at_utc");
 
-        // Declared for parity with integration_execution_events and for tooling; decorative at runtime, because the
-        // node-sqlite connection leaves PRAGMA foreign_keys off, so ON DELETE CASCADE never fires and the store's own
-        // ordered delete is the real teardown.
+        // Enforced: the node connection runs with foreign keys on, so this cascade does remove an instance's events.
+        // The store still deletes them explicitly, inside the same transaction as the instance row, so the teardown is
+        // stated in one place rather than split between the store and the schema.
         builder.HasOne<ExternalAppInstance>().WithMany().HasForeignKey(entity => entity.InstanceId).OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(entity => new

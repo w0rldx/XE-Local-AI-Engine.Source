@@ -57,8 +57,8 @@ public sealed class ToolApprovalCoordinator
     // to a bool and a question to the operator's answers, and conflating them would let an approve/deny post release a question with no answer at all.
     private readonly ConcurrentDictionary<string, TaskCompletionSource<IReadOnlyList<UserQuestionAnswer>>> _pendingQuestions = new(StringComparer.Ordinal);
 
-    // The SAME dictionary instance the runner and ApiToolCallBridge hold (PendingToolCallRegistry): an approval registered here is released by
-    // ResolveApprovalResult, cancelled by the runner's cancel/drain path and swept by the bridge's stale cleanup. A second copy would strand all three.
+    // The SAME dictionary instance InvocationLifecycleTracker and ApiToolCallBridge hold (PendingToolCallRegistry): an approval registered here is released by
+    // ResolveApprovalResult, cancelled by the tracker's cancel/drain path and swept by the bridge's stale cleanup. A second copy would strand all three.
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls;
 
     // Session-scoped approvals the operator explicitly granted (ApprovalScope.Session), used as a SET — the byte value is ignored. It lives on this singleton

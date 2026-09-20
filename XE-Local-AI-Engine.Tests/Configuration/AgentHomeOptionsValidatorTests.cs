@@ -184,6 +184,46 @@ public sealed class AgentHomeOptionsValidatorTests
         AssertFailureContains(result, "CommandTimeoutSeconds must be greater than zero.");
     }
 
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public void Validate_WhenMaxRunSecondsNotPositive_ReturnsFailure(int value)
+    {
+        var result = _validator.Validate(name: null, new AgentHomeOptions
+        {
+            MaxRunSeconds = value
+        });
+
+        AssertFailureContains(result, "MaxRunSeconds must be greater than zero.");
+    }
+
+    [Test]
+    public void Validate_WhenMaxRunSecondsIsBelowCommandTimeout_NamesBothValues()
+    {
+        // The failure stops host startup, so it has to say which numbers it is comparing: an operator who set only
+        // MaxRunSeconds cannot otherwise tell what the CommandTimeoutSeconds it is measured against actually is.
+        var result = _validator.Validate(name: null, new AgentHomeOptions
+        {
+            MaxRunSeconds = 20,
+            CommandTimeoutSeconds = 300
+        });
+
+        AssertFailureContains(result, "AgentHome:MaxRunSeconds (20) must be at least AgentHome:CommandTimeoutSeconds (300)");
+    }
+
+    [Test]
+    public void Validate_WhenMaxRunSecondsEqualsCommandTimeout_ReturnsSuccess()
+    {
+        // The boundary: equal is legal — a whole-run budget of exactly one command's timeout admits that one command.
+        var result = _validator.Validate(name: null, new AgentHomeOptions
+        {
+            MaxRunSeconds = 300,
+            CommandTimeoutSeconds = 300
+        });
+
+        AssertEx.False(result.Failed);
+    }
+
     private static void AssertFailureContains(ValidateOptionsResult result, string expectedText)
     {
         AssertEx.False(result.Succeeded);

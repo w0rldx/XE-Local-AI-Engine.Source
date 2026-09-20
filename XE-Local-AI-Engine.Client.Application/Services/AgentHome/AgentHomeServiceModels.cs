@@ -49,6 +49,13 @@ internal sealed record AgentHomePrepareResult
     ///     of guessing.
     /// </remarks>
     public IReadOnlyList<string> StagedAttachmentRelativePaths { get; init; } = [];
+
+    /// <summary>
+    ///     The git baseline's own commands, in run order. Preparation happens before a run id does, so the run path
+    ///     flushes them into <c>commands.jsonl</c> once its log exists. Each record keeps its own timestamp and
+    ///     duration, not the flush's.
+    /// </summary>
+    public IReadOnlyList<AgentHomeCommandLogRecord> BaselineCommands { get; init; } = [];
 }
 
 /// <summary>Internal run-phase inputs for the lease-owned AgentHome lifecycle.</summary>

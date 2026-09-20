@@ -42,9 +42,9 @@ internal sealed class ConversationUploadedFileConfiguration : IEntityTypeConfigu
                .HasColumnName("created_at_utc");
 
         // Cascade from the owning conversation. The FK is configured without a navigation on the principal so the
-        // NodeConversation entity stays untouched. The node-sqlite runtime connection does NOT enable
-        // PRAGMA foreign_keys, so this cascade documents intent and serves EF-managed deletes (tests); the raw-SQL
-        // purge path removes the rows explicitly. Disk-resident bytes/extracted text are cleaned by the file store.
+        // NodeConversation entity stays untouched. The cascade is enforced on the node connection; the raw-SQL purge
+        // path still names this table so the whole conversation footprint — most of which carries no foreign key — is
+        // listed in one place. Disk-resident bytes/extracted text are cleaned by the file store.
         builder.HasOne<NodeConversation>()
                .WithMany()
                .HasForeignKey(entity => entity.ConversationId)

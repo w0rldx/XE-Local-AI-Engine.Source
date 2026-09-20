@@ -41,9 +41,6 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
         // Patch export service: post-run diff of the workspace-copy baseline with changes.patch, changed-files.json, and budget guard.
         builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
-        // Memory-proposal export service: schema validation and secret scan for agent-written JSONL proposals. Registered but
-        // NOT consumed — `propose_memory` stays out of the tool schema until a proposal lands in the adaptive-memory Suggested pipeline.
-        builder.Services.AddSingleton<IAgentHomeMemoryProposalService, AgentHomeMemoryProposalService>();
         // Goal executor: the bounded inner agent loop that turns the model's `goal` into real workspace work. It takes the
         // shared IChatClient, so it stays out of AgentHomeService, which has no model dependency of its own.
         builder.Services.AddSingleton<IAgentHomeGoalExecutor, AgentHomeGoalExecutor>();

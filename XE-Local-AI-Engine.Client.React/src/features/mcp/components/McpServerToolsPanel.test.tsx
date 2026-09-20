@@ -32,7 +32,7 @@ vi.mock("react-i18next", () => ({
 import { McpServerToolsPanel } from "@/features/mcp/components/McpServerToolsPanel";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function installJsdomEnvironmentMocks(): void {

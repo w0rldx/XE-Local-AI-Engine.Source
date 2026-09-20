@@ -13,7 +13,7 @@ import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard"
 import type { AgentOption } from "@/features/chat/models/ChatModels";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function makeOption(overrides: Partial<AgentOption> = {}): AgentOption {

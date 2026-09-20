@@ -47,7 +47,7 @@ function renderPanel(
 	sandboxProvider?: string,
 ) {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<DevelopmentContainerRuntimePanel
 				runtime={runtime}
 				onConfirm={onConfirm}

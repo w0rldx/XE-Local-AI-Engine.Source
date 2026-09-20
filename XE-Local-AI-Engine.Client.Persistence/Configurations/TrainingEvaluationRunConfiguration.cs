@@ -37,8 +37,8 @@ internal sealed class TrainingEvaluationRunConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
 
-        // Restricted like every other cross-aggregate training reference. The node connection never sets
-        // PRAGMA foreign_keys=ON, so these declare the guard the store enforces explicitly rather than enforcing it.
+        // Restricted like every other cross-aggregate training reference, and enforced: the node connection runs with
+        // foreign keys on. The store still checks first, so the caller gets a domain conflict rather than a DB error.
         builder.HasOne<TrainingRun>()
                .WithMany()
                .HasForeignKey(entity => entity.TrainingRunId)

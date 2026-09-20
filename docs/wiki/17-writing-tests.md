@@ -301,6 +301,15 @@ invalidates it — and every consumer gets a `File.Copy`. Reach for it as:
 **head** template and then runs the down migration for real; a `WhenApplied_*` test copies the **at-(N-1)**
 template and then runs the tail for real. Both still exercise the migration they are named after.
 
+**Foreign keys are ON, and a fixture must not quietly say otherwise.** The node enforces them: the connection string
+says `Foreign Keys=True` and `NodeSqlitePragmas` emits `PRAGMA foreign_keys=ON` on every open, so declared cascades
+fire and `Restrict` relationships reject a parent deleted before its children. A fixture that appends
+`;Foreign Keys=False`, or runs `PRAGMA foreign_keys=OFF`, is testing a database the node never has — the delete-order
+bug it lets through is real, and the orphan state it lets a test seed may be unreachable in production. Pin the
+posture only to seed a state the product genuinely produces, and say in a comment which one. Never infer the posture
+from a connection string: a bare `Data Source=` sends no pragma at all, yet the bundled `e_sqlite3` defaults it on.
+Measure it with `PRAGMA foreign_keys` — `NodeSqlitePragmasTests` is where that is pinned.
+
 A suite fixture that builds its schema with `EnsureCreatedAsync()` is the same mistake wearing a different hat — a
 second definition of the schema, off the entity model. `GraphWorkflowTestFixture` copies the template instead;
 the shared fixtures `DevWorkflowTestFixture`, `ExternalAppTestFixture`, `IntegrationTestFixture`,
@@ -332,9 +341,15 @@ worked examples.
 Render through the shared provider wrapper `src/test/RenderWithProviders.tsx` (Mantine theme, TanStack
 Query, router) instead of bare `@testing-library/react` — a bare render loses the providers most components
 need. Translations need no wrapper: `src/i18n.ts` is a Vitest `setupFiles` entry, so every file resolves `t()`
-against the shipped `en` bundle and must assert that string rather than the in-code `defaultValue`. Network goes
-through the MSW handlers in `src/test/msw/`; assert against handlers, not against a mocked
-`fetch`. `src/test/PinLocale.ts` is already wired as a Vitest `setupFiles` entry, so locale is deterministic; so is
+against the shipped `en` bundle and must assert that string rather than the in-code `defaultValue`. Every
+`MantineProvider` a test mounts — the shared wrapper and any hand-rolled one — carries `env="test"`, Mantine's own
+switch that disables transitions and renders portals inline, so no dropdown close timer or portal node outlives the
+test that made it. Network goes through the MSW handlers in `src/test/msw/`; assert against handlers, not against a
+mocked `fetch`. A file opts in with `setupMswServer()` (`src/test/UseMswServer.ts`), and inside such a file a request
+no handler declared FAILS the test that made it, naming the method and URL: the rejection alone is not enough,
+because a component reaching the API through TanStack Query catches it into `query.error` and a test asserting
+elsewhere would stay green over a call it never stubbed. Declare the route, never widen the guard.
+`src/test/PinLocale.ts` is already wired as a Vitest `setupFiles` entry, so locale is deterministic; so is
 `src/test/Cleanup.ts`, which runs React Testing Library's `cleanup` after every test (Vitest does not register it
 for you without `globals`). `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on in `vite.config.ts`, so spies
 and env stubs reset themselves — store and `localStorage` state does not. Every test needs a visible `expect(…)`:

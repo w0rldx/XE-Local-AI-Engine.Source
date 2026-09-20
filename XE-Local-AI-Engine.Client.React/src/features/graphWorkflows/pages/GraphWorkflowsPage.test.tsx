@@ -88,9 +88,11 @@ import {
 	eightNodeGraph,
 	graphWorkflowDefinition,
 	graphWorkflowDefinitionSummary,
+	graphWorkflowEvents,
 	graphWorkflowRun,
 	graphWorkflowRunSummary,
 	graphWorkflowTestIds,
+	graphWorkflowTools,
 	pendingPauseNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
@@ -123,6 +125,8 @@ function runViewRoutes(
 	return [
 		jsonRoute("get", `graph-workflows/runs/${runId}`, graphWorkflowRun({ graph })),
 		jsonRoute("get", "graph-workflows/runs", { runs: [graphWorkflowRunSummary()] }),
+		// The run view's event trail sits in a kept-mounted tab, so it is read whichever tab a case looks at.
+		jsonRoute("get", `graph-workflows/runs/${runId}/events`, graphWorkflowEvents()),
 		jsonRoute(
 			"get",
 			`graph-workflows/definitions/${definitionId}`,
@@ -445,6 +449,10 @@ describe("GraphWorkflowsPage", () => {
 		server.use(
 			...editorRoutes(),
 			validateRoute({ valid: false, errors: [{ key: "deleted-node", message: "This node is gone." }] }),
+			// The only case here that opens a node: its inspector fills the agent, model and tool pickers.
+			jsonRoute("get", "agents", { items: [] }),
+			jsonRoute("get", "models", { isAvailable: true, items: [] }),
+			jsonRoute("get", "graph-workflows/tools", graphWorkflowTools()),
 		);
 
 		const { onSelectionChange } = renderPage({ definitionId, nodeKey: "analyze" });

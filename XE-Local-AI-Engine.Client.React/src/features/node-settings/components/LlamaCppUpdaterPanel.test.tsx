@@ -100,7 +100,7 @@ import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaC
 
 function renderPanel(): void {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<LlamaCppUpdaterPanel />
 		</MantineProvider>,
 	);

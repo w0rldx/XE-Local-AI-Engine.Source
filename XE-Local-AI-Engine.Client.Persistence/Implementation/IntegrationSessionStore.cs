@@ -84,14 +84,27 @@ public sealed class IntegrationSessionStore : IIntegrationSessionStore
     }
 
     /// <summary>
-    ///     The backstop half of an operator delete. The mechanism is the conversation purge, which already cascades
-    ///     this row away; this removes it when that purge could not run, so the operator's list never keeps a session
-    ///     whose conversation is gone.
+    ///     Backstop for the conversation purge, which normally takes this row with it. Removes the session's
+    ///     executions and their events too: integration_executions.session_id carries no foreign key to cascade.
     /// </summary>
     public async Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
+        // Events, then executions, then the session, as ConversationFootprintPurge does. No foreign key points at the
+        // session from integration_executions, so nothing cascades and one transaction has to carry all three.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        _ = await _dbContext.IntegrationExecutionEvents
+                            .Where(row => _dbContext.IntegrationExecutions
+                                                    .Any(execution => execution.Id == row.ExecutionId && execution.SessionId == sessionId))
+                            .ExecuteDeleteAsync(cancellationToken);
+
+        _ = await _dbContext.IntegrationExecutions.Where(row => row.SessionId == sessionId)
+                            .ExecuteDeleteAsync(cancellationToken);
+
         var deleted = await _dbContext.IntegrationSessions.Where(row => row.Id == sessionId)
                                       .ExecuteDeleteAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
         return deleted > 0;
     }
 

@@ -91,7 +91,7 @@ function renderDialog() {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<SkillImportDialog opened={true} onClose={vi.fn()} />
 			</MantineProvider>
 		</QueryClientProvider>,

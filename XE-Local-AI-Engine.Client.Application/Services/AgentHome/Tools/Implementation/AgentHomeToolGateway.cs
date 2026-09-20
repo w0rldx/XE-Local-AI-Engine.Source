@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -17,6 +18,15 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </remarks>
 internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 {
+    /// <summary>
+    ///     Fixed text, never composed from what the run produced: the outer model has the node's other tools, so
+    ///     echoed workspace bytes would arrive as steering text. It says instead that re-invoking the tool reveals
+    ///     nothing more.
+    /// </summary>
+    private const string RunIsFinalNotice =
+        " This run has ended and the summary above is the whole of what the node recorded; calling run_in_agent_home"
+        + " again repeats the work rather than revealing more. Read runs/<run-id>/logs/ and the patch for the detail.";
+
     private readonly IAgentHomeService _service;
     private readonly INodeRuntimeSettings _runtimeSettings;
 
@@ -48,8 +58,11 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
             // worker content-root structure. The workspace summary carries aliases and counts only, never host paths.
             var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
+
+            // The header goes FIRST and is built from node data only — see BuildHeader for why that ordering is the
+            // control rather than a convenience.
             return string.Create(CultureInfo.InvariantCulture,
-                $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)}. Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildGoalSummary(run.GoalOutcome)}{BuildPatchSummary(run.Patch)}{BuildSandboxNotice(run.SandboxProviderName, run.GoalOutcome)}");
+                $"{BuildHeader(run)}\nAgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)}. Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildGoalSummary(run.GoalOutcome)}{BuildPatchSummary(run.Patch)}{BuildSandboxNotice(run.SandboxProviderName, run.GoalOutcome)}{RunIsFinalNotice}");
         }
         catch (AgentHomeBusyException)
         {
@@ -89,6 +102,55 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     }
 
     /// <summary>
+    ///     The machine-readable first line of the tool result, and a CONTRACT: read start-anchored as the whole of
+    ///     line one, in this shape and field order —
+    ///     <c>[agent-home run=&lt;runId&gt; outcome=&lt;Token&gt; patch=&lt;exported|none&gt;]</c> then <c>\n</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Position is the defence: the prose after it embeds model-authored text before the run's genuine patch
+    ///     path, so a reader recovering the run id by scanning could be handed another run's patch. Every field
+    ///     here is node-derived and precedes any model-authored byte. <c>patch=exported</c> means the patch was
+    ///     written; one over <see cref="AgentHomeOptions.MaxPatchBytes" /> reports <c>none</c>. A rejection creates
+    ///     no run, so it carries no header, and a missing header means "no run".
+    /// </remarks>
+    private static string BuildHeader(AgentHomeRunResult run)
+    {
+        var patch = run.Patch.PatchRelativePath is { Length: > 0 } ? "exported" : "none";
+        return string.Create(CultureInfo.InvariantCulture, $"[agent-home run={run.RunId} outcome={OutcomeToken(run)} patch={patch}]");
+    }
+
+    /// <summary>
+    ///     The stop reason of <see cref="DescribeOutcome" /> as ONE token from a closed set, and the <c>outcome</c>
+    ///     field of <see cref="BuildHeader" />: <see cref="AgentHomeGoalStatus" /> plus <c>TimedOut</c> for a run
+    ///     that never reached the executor. Nothing here is derived from what the run produced, so the set cannot
+    ///     grow behind the node's back.
+    /// </summary>
+    private static string OutcomeToken(AgentHomeRunResult run)
+    {
+        if (run.GoalOutcome is { } goal)
+        {
+            // Spelled out rather than ToString()'d: the token is a CONTRACT with whoever reads this result, so a
+            // rename breaks the build and a NEW status throws rather than reporting itself as a completed run.
+            return goal.Status switch
+            {
+                AgentHomeGoalStatus.NotRun => nameof(AgentHomeGoalStatus.NotRun),
+                AgentHomeGoalStatus.Completed => nameof(AgentHomeGoalStatus.Completed),
+                AgentHomeGoalStatus.ToolCallBudgetExceeded => nameof(AgentHomeGoalStatus.ToolCallBudgetExceeded),
+                AgentHomeGoalStatus.TimeBudgetExceeded => nameof(AgentHomeGoalStatus.TimeBudgetExceeded),
+                AgentHomeGoalStatus.Failed => nameof(AgentHomeGoalStatus.Failed),
+                _ => throw new UnreachableException($"Unknown AgentHome goal status '{goal.Status}'.")
+            };
+        }
+
+        if (run.TimedOut)
+        {
+            return "TimedOut";
+        }
+
+        return run.Completed ? nameof(AgentHomeGoalStatus.Completed) : nameof(AgentHomeGoalStatus.Failed);
+    }
+
+    /// <summary>
     ///     What the run actually did, in the model's own result.
     /// </summary>
     /// <remarks>
@@ -122,15 +184,26 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             _ = summary.Append(string.Create(CultureInfo.InvariantCulture, $" ({goal.RefusedCallCount} refused)"));
         }
 
+        // A COUNT, never the names: WrittenFiles holds paths the MODEL chose, and the outer model has the node's
+        // other tools, so a path here would be steering text. changed-files.json on disk keeps the names.
         _ = summary.Append(string.Create(CultureInfo.InvariantCulture, $", {goal.WrittenFiles.Count} file(s) written"));
+
+        // The loop's own wall clock, off the same TimeProvider the MaxRunSeconds budget is kept on.
+        _ = summary.Append(string.Create(CultureInfo.InvariantCulture, $", {goal.Elapsed.TotalSeconds:F1}s elapsed"));
 
         if (goal.Commands.Count > 0)
         {
-            _ = summary.Append(", commands: ")
+            // The aggregate before the list: a model scanning for "did any of this fail?" gets the answer without
+            // having to total the per-command exits itself.
+            var failed = goal.Commands.Count(static command => command.Completed && command.ExitCode != 0);
+            var incomplete = goal.Commands.Count(static command => !command.Completed);
+            // The `commands:` label itself is kept verbatim — a reader parsing this result defensively keys on it.
+            _ = summary.Append(string.Create(CultureInfo.InvariantCulture,
+                           $", commands: {goal.Commands.Count} run ({failed} non-zero exit, {incomplete} did not complete): "))
                        .Append(string.Join("; ",
                            goal.Commands.Select(static command => command.Completed
-                               ? string.Create(CultureInfo.InvariantCulture, $"{command.Executable} exit {command.ExitCode}")
-                               : string.Create(CultureInfo.InvariantCulture, $"{command.Executable} did not complete"))));
+                               ? string.Create(CultureInfo.InvariantCulture, $"{SingleLine(command.Executable)} exit {command.ExitCode}")
+                               : string.Create(CultureInfo.InvariantCulture, $"{SingleLine(command.Executable)} did not complete"))));
         }
 
         _ = summary.Append('.').Append(withheld);
@@ -145,6 +218,16 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         }
 
         return summary.ToString();
+    }
+
+    /// <summary>
+    ///     Flattens the model-authored <c>run_command</c> executable onto one line. <see cref="BuildHeader" />'s
+    ///     contract is start-anchored, so a newline cannot forge the header, but it could produce a line that merely
+    ///     LOOKS like one to a reader that scans lines.
+    /// </summary>
+    private static string SingleLine(string value)
+    {
+        return value.ReplaceLineEndings(" ");
     }
 
     /// <summary>
@@ -196,10 +279,12 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             return " Patch: export failed.";
         }
 
+        // A SIZE, never the content: the node's own byte count says whether the run made a one-line edit or rewrote
+        // a tree, which is what the model re-invokes the tool to find out. No patch text crosses into this result.
         if (patch.Blocked)
         {
             return string.Create(CultureInfo.InvariantCulture,
-                $" Patch: {patch.ChangedFileCount} file(s) changed; patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
+                $" Patch: {patch.ChangedFileCount} file(s) changed, {patch.PatchBytes} byte(s); patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
         }
 
         if (patch.ChangedFileCount == 0)
@@ -208,6 +293,6 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         }
 
         return string.Create(CultureInfo.InvariantCulture,
-            $" Patch: {patch.ChangedFileCount} file(s) changed -> {patch.PatchRelativePath}.");
+            $" Patch: {patch.ChangedFileCount} file(s) changed, {patch.PatchBytes} byte(s) exported -> {patch.PatchRelativePath}.");
     }
 }

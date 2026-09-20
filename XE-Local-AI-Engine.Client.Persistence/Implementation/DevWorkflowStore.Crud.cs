@@ -160,8 +160,8 @@ internal sealed partial class DevWorkflowStore
 
     public async Task<DevWorkflowWorkItemDeletion> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
     {
-        // Explicit ordered deletes through DevWorkflowPurge: the node connection runs without PRAGMA foreign_keys, so
-        // the declared cascades are documentation only and an EF-graph delete would leave every child table populated.
+        // Explicit ordered deletes through DevWorkflowPurge. A run's own children cascade, but the work sessions the
+        // agent node-runs own carry no foreign key to the work item, so only this path reaches them.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {

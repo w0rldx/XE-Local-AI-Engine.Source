@@ -49,7 +49,7 @@ function renderButton(view = job()) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ImageJobDeleteButton job={view} />
 			</MantineProvider>
 		</QueryClientProvider>,

@@ -33,8 +33,8 @@ internal sealed class TrainingRunConfiguration : IEntityTypeConfiguration<Traini
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
 
         // Restricted on both cross-aggregate references, like training_datasets -> training_dataset_definitions. The
-        // node connection never sets PRAGMA foreign_keys=ON, so these declare the delete guard the store enforces
-        // explicitly; they do not enforce it themselves.
+        // node connection enforces foreign keys, so these restrictions are real: deleting a referenced dataset or base
+        // artifact is rejected. The store checks first anyway, to answer with a domain conflict rather than a DB error.
         builder.HasOne<TrainingDataset>()
                .WithMany()
                .HasForeignKey(entity => entity.DatasetId)

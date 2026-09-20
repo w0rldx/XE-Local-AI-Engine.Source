@@ -4,6 +4,24 @@ using System.Text;
 
 internal sealed partial class NodePatchApplyService
 {
+    // None of these carries a path, in keeping with every other rejection string here.
+    private const string GitDirectoryRejection = "a patch block targets a git directory.";
+
+    private const string QuotedPathRejection = "a patch block has a quoted path, which is not supported.";
+
+    private const string GitlinkRejection = "a patch block changes a submodule reference, which is not supported.";
+
+    private const string SymlinkRejection = "a patch block creates or changes a symbolic link, which is not supported.";
+
+    /// <summary>The git mode of a submodule pointer.</summary>
+    private const string GitlinkMode = "160000";
+
+    /// <summary>
+    ///     The git mode of a symbolic link. Nothing downstream catches one: the within-root guard validates the
+    ///     link's OWN path, never where it points, and the preview would call it an ordinary added file.
+    /// </summary>
+    private const string SymlinkMode = "120000";
+
     private static List<string> SplitBlocks(string patchText)
     {
         var blocks = new List<string>();
@@ -53,6 +71,20 @@ internal sealed partial class NodePatchApplyService
 
         var isBinary = block.Contains("GIT binary patch", StringComparison.Ordinal)
                        || lines.Any(line => line.StartsWith("Binary files ", StringComparison.Ordinal));
+
+        // A gitlink is a submodule pointer: `git apply` answers one with an empty directory, so it is refused by
+        // name. The index-line arm catches a same-mode pointer bump, which carries no `mode 160000` line at all.
+        if (DeclaresMode(lines, GitlinkMode))
+        {
+            return ParsedBlock.Rejected(GitlinkRejection);
+        }
+
+        // A symlink block's one-line content IS the link target, so applying it creates a REAL link on the host
+        // pointing wherever that names. Refused by name for the same reason as the gitlink; see SymlinkMode.
+        if (DeclaresMode(lines, SymlinkMode))
+        {
+            return ParsedBlock.Rejected(SymlinkRejection);
+        }
 
         // Every path git can act on comes from one of these body-line prefixes, with /dev/null skipped for new and
         // deleted files. They stay constants so raw unified-diff sigils inline do not read as commented-out code.
@@ -105,6 +137,11 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
             }
 
+            if (ContainsGitDirectory(headerRelative))
+            {
+                return ParsedBlock.Rejected(GitDirectoryRejection);
+            }
+
             return new ParsedBlock
             {
                 Alias = headerAlias,
@@ -121,6 +158,14 @@ internal sealed partial class NodePatchApplyService
         {
             // Unified-diff body paths carry an "a/" or "b/" diff prefix; rename/copy lines do not.
             var normalized = raw.Trim();
+
+            // git C-quotes a name containing a quote, a backslash or a control character, REGARDLESS of
+            // core.quotePath. This parser does not unescape, so it refuses by name rather than split a nonsense alias.
+            if (normalized.StartsWith('"'))
+            {
+                return ParsedBlock.Rejected(QuotedPathRejection);
+            }
+
             if (normalized.StartsWith("a/", StringComparison.Ordinal) || normalized.StartsWith("b/", StringComparison.Ordinal))
             {
                 normalized = normalized[2..];
@@ -137,6 +182,11 @@ internal sealed partial class NodePatchApplyService
             if (ContainsTraversal(relative))
             {
                 return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
+            }
+
+            if (ContainsGitDirectory(relative))
+            {
+                return ParsedBlock.Rejected(GitDirectoryRejection);
             }
 
             allAliasResults.Add(new BodyAliasPath { Prefix = prefix, Alias = alias, Relative = relative });
@@ -298,10 +348,51 @@ internal sealed partial class NodePatchApplyService
         return relative.Length == 0 ? null : new AliasPath(alias, relative);
     }
 
+    /// <summary>
+    ///     Whether the block declares <paramref name="mode" /> on any of the four mode lines, or on the
+    ///     <c>index &lt;a&gt;..&lt;b&gt; &lt;mode&gt;</c> header — how git states an UNCHANGED mode, which carries no
+    ///     mode line at all: a submodule pointer bump, or a retargeted symlink.
+    /// </summary>
+    /// <remarks>
+    ///     Matched as a whole LINE, both ends: every line inside a hunk carries a <c>+</c>, <c>-</c> or space sigil,
+    ///     so a file whose CONTENT is the text of a mode line can never be mistaken for one.
+    /// </remarks>
+    private static bool DeclaresMode(string[] lines, string mode)
+    {
+        var suffix = " " + mode;
+        return lines.Any(line => IsModeLine(line, suffix));
+    }
+
+    private static bool IsModeLine(string line, string modeSuffix)
+    {
+        var trimmed = line.TrimEnd('\r');
+        if (!trimmed.EndsWith(modeSuffix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return trimmed.StartsWith("new file mode ", StringComparison.Ordinal)
+               || trimmed.StartsWith("deleted file mode ", StringComparison.Ordinal)
+               || trimmed.StartsWith("new mode ", StringComparison.Ordinal)
+               || trimmed.StartsWith("old mode ", StringComparison.Ordinal)
+               || trimmed.StartsWith("index ", StringComparison.Ordinal);
+    }
+
     private static bool ContainsTraversal(string relativePath)
     {
         var segments = relativePath.Replace(oldChar: '\\', newChar: '/').Split('/');
         return segments.Any(segment => segment is "..");
+    }
+
+    /// <summary>
+    ///     Whether any path segment IS the git directory — a write there reaches the hooks and filter drivers
+    ///     <see cref="AgentHomeGitHardening" /> keeps node-owned. Matched case-insensitively (a case-folding host)
+    ///     and by segment equality (<c>.gitattributes</c> is ordinary).
+    /// </summary>
+    private static bool ContainsGitDirectory(string relativePath)
+    {
+        var segments = relativePath.Replace(oldChar: '\\', newChar: '/').Split('/');
+        return segments.Any(segment => string.Equals(segment, ".git", StringComparison.OrdinalIgnoreCase));
     }
 
     // One raw path line lifted out of a patch block's body, tagged with the unified-diff prefix it came from.

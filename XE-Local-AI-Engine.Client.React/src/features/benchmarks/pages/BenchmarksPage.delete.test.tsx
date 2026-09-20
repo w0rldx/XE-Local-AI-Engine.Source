@@ -19,6 +19,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 // A selected run mounts the live pane, which opens a SignalR hub; it has its own suite.
 vi.mock("@/features/benchmarks/hooks/useBenchmarkRunHub", () => ({ useBenchmarkRunHub: hubMock }));
 
+import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
 import { BenchmarksPage } from "@/features/benchmarks/pages/BenchmarksPage";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -105,7 +106,15 @@ function pageRoutes(
 				taskItemSetHash: "v1:hash",
 				projectVersion: 3,
 			}),
+			// More than one task item makes the project a suite, and a suite reads the cell table on top of the runs.
+			jsonRoute("get", `benchmarks/projects/${detail.id}/cells`, {
+				cells: [],
+				rankCohort: { rankedCount: 0, totalScored: 0 },
+				scorableItemCount: taskItemCount,
+			}),
 		]),
+		// Selecting a project selects its first run, and the live pane then reads that run's own detail.
+		...runs.map((run) => jsonRoute("get", `benchmarks/runs/${run["id"] as string}`, run)),
 	);
 }
 
@@ -113,6 +122,9 @@ describe("BenchmarksPage project delete", () => {
 	beforeEach(() => {
 		toastErrorMock.mockClear();
 		toastSuccessMock.mockClear();
+		// The stub has to answer like the hub, not merely exist: once the selected run's detail resolves, the live pane
+		// gets past its loading branch and reads `parts`/`overlay` off whatever this returned.
+		hubMock.mockReturnValue({ parts: [], overlay: noBenchmarkRunLiveOverlay, isConnected: false, isReconnecting: false });
 	});
 	afterEach(cleanup);
 

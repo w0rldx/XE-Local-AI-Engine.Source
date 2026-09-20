@@ -147,6 +147,48 @@ public sealed class SlashCommandEndpointTests
     }
 
     [Test]
+    public async Task GetCommand_WithoutOperatorAuthentication_ReturnsUnauthorized()
+    {
+        var service = Substitute.For<ISlashCommandService>();
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+        var id = Guid.NewGuid();
+
+        using var response = await client.GetAsync($"{Route}/{id}");
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await service.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetCommand_WhenAuthorized_ReturnsTheCommandItAskedFor()
+    {
+        var service = Substitute.For<ISlashCommandService>();
+        var id = Guid.NewGuid();
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>())
+               .Returns(new SlashCommandCatalogItem
+               {
+                   Id = id, Name = "review", Description = "Review the diff", Source = "custom",
+                   ActionType = SlashCommandActionType.SendPrompt, Prompt = "Review this."
+               });
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, $"{Route}/{id}");
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<SlashCommandResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(id, body.Id);
+        AssertEx.Equal("review", body.Name);
+        AssertEx.Equal("Review the diff", body.Description);
+        AssertEx.Equal("custom", body.Source);
+        AssertEx.Equal(SlashCommandActionTypeDto.SendPrompt, body.Action.Type);
+        AssertEx.Equal("Review this.", body.Action.Prompt);
+        await service.Received(1).GetByIdAsync(id, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GetCommand_WhenMissing_ReturnsNotFound()
     {
         var service = Substitute.For<ISlashCommandService>();

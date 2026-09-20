@@ -13,7 +13,7 @@ import { SandboxIsolationPanel } from "@/features/development/components/Sandbox
 
 function renderPanel(roles: readonly SandboxIsolation[] | undefined) {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<SandboxIsolationPanel roles={roles} />
 		</MantineProvider>,
 	);

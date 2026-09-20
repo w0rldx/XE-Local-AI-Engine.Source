@@ -26,8 +26,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Sqlite;
 ///             trade is appropriate for a local chat database and is the SQLite-recommended default under WAL.
 ///         </item>
 ///     </list>
-///     Foreign-key enforcement is deliberately left OFF (the repo's delete paths issue explicit ordered deletes; see
-///     <c>docs/agent-knowledge.md §3</c>) — this type never emits <c>PRAGMA foreign_keys</c>.
+///     Foreign-key enforcement is ON, and is emitted explicitly. It was long believed to be off here, because the node
+///     builds a bare <c>Data Source=</c> connection string and <c>SqliteConnectionStringBuilder.ForeignKeys</c> defaults
+///     to null, so Microsoft.Data.Sqlite sends no pragma of its own. The bundled <c>e_sqlite3</c> is compiled with
+///     <c>DEFAULT_FOREIGN_KEYS</c>, so SQLite's own default is on and every declared <c>ON DELETE CASCADE</c> has always
+///     fired. Resting referential integrity on a native build's compile flag is not a decision anyone made, so the
+///     connection string now says <c>Foreign Keys=True</c> and <see cref="NodeSqlitePragmas" /> emits
+///     <c>PRAGMA foreign_keys=ON</c> on every open — the latter covers connection strings this process does not build
+///     itself (the Aspire dev integration's, or an operator-supplied one).
 /// </remarks>
 public sealed class NodeSqliteOptions
 {

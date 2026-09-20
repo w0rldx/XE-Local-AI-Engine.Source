@@ -17,7 +17,7 @@ function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>{ui}</MantineProvider>
+			<MantineProvider env="test">{ui}</MantineProvider>
 		</QueryClientProvider>,
 	);
 }

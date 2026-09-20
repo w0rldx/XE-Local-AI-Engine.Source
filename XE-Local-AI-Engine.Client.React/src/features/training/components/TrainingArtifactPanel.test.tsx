@@ -81,7 +81,7 @@ function artifact(overrides: Partial<TrainingArtifactView> = {}): TrainingArtifa
 function renderPanel(row: TrainingArtifactView) {
 	mocks.artifacts = [row];
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<TrainingArtifactPanel exportPhase={null} onExportStarted={vi.fn()} runId="run-1" />
 		</MantineProvider>,
 	);

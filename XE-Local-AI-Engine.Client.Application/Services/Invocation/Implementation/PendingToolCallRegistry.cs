@@ -4,13 +4,14 @@ using System.Collections.Concurrent;
 
 /// <summary>
 ///     The one set of tool calls currently parked on an out-of-stream answer, shared by every collaborator that can
-///     register, release or sweep one.
+///     register, release or observe one.
 /// </summary>
 /// <remarks>
-///     Those are <see cref="ApiToolCallBridge" /> for a platform tool round-trip, <see cref="ToolApprovalCoordinator" />
-///     for a framework approval round-trip, and <see cref="InvocationRunner" /> itself for the tool-result post and
-///     cancel/drain. There is exactly ONE instance per node, handed out by reference: a second copy would let a call be
-///     registered in one dictionary and resolved against another, parking the turn until its timeout.
+///     Those are <see cref="ToolApprovalCoordinator" /> for the operator's approve/deny round-trip,
+///     <see cref="InvocationLifecycleTracker" /> for cancel and drain, and <see cref="ApiToolCallBridge" /> for the
+///     tool-result budget and the stale sweep; <c>WorkSessionExecutionSupervisor</c> only reads it. There is exactly ONE
+///     instance per node, handed out by reference: a second copy would let a call be registered in one dictionary and
+///     resolved against another, parking the turn until its timeout.
 /// </remarks>
 public sealed class PendingToolCallRegistry
 {

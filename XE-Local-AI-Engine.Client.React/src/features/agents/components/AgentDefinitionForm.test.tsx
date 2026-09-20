@@ -120,7 +120,7 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 const baseValues: AgentDefinitionFormValues = {

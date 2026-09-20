@@ -170,7 +170,36 @@
 			"approvalPrompt": "Dieses Tool benötigt deine Freigabe zur Ausführung.",
 			"approve": "Freigeben",
 			"deny": "Ablehnen",
-			"approveSession": "Für diese Sitzung freigeben"
+			"approveSession": "Für diese Sitzung freigeben",
+			"patchApply": {
+				"prompt": "Dieser Lauf hat Änderungen erzeugt, die du auf deine Ordner anwenden kannst.",
+				"review": "Änderungen prüfen und anwenden",
+				"title": "Änderungen prüfen und anwenden",
+				"intro": "Diese Änderungen sind in einer Sandbox-Kopie entstanden. Beim Anwenden wird in die Ordner auf diesem Computer geschrieben.",
+				"runLabel": "Lauf",
+				"loading": "Änderungen werden gegen deine Ordner geprüft…",
+				"recheck": "Erneut prüfen",
+				"apply": "Auf meine Ordner anwenden",
+				"tableLabel": "Dateien, die dieser Patch ändert",
+				"columns": {
+					"folder": "Ordner",
+					"file": "Datei",
+					"change": "Änderung",
+					"lines": "Zeilen"
+				},
+				"lineCounts": "+{{added}} −{{removed}}",
+				"noFiles": "Der Patch dieses Laufs ändert keine Dateien.",
+				"binaryTitle": "Enthält binäre Änderungen",
+				"binaryBody": "Binärdateien lassen sich hier nicht prüfen, und dieser Node wendet sie nur an, wenn er dafür konfiguriert wurde.",
+				"rejectedTitle": "Diese Änderungen können nicht angewendet werden",
+				"appliedTitle": "Auf deine Ordner angewendet",
+				"applyFailedTitle": "Es wurde nichts angewendet",
+				"applyFailedHint": "Prüfe erneut, um den aktuellen Stand der Änderungen zu lesen, bevor du es noch einmal versuchst.",
+				"errors": {
+					"preview": "Die Änderungen dieses Laufs konnten nicht gelesen werden.",
+					"apply": "Die Änderungen konnten nicht angewendet werden."
+				}
+			}
 		},
 		"askUser": {
 			"title": "Der Assistent braucht deine Eingabe",
@@ -1577,26 +1606,8 @@
 					"dismiss": "Schließen"
 				},
 				"cudaBuild": {
-					"title": "CUDA (aus Quellcode erstellen)",
-					"devBadge": "Dev",
-					"description": "Erstellen Sie eine CUDA-beschleunigte llama.cpp-Laufzeit aus dem Quellcode auf diesem Linux-Host. Upstream liefert keine vorkompilierte Linux-CUDA-Version, daher ist dies der Weg zur GPU-Beschleunigung ohne Build-Kenntnisse.",
-					"loading": "Build-Voraussetzungen werden geprüft…",
-					"prereqError": "Die CUDA-Build-Voraussetzungen konnten nicht geprüft werden.",
-					"notLinux": "Der In-App-CUDA-Build ist nur unter Linux verfügbar. Die folgende Checkliste zeigt, was auf diesem Host fehlt.",
-					"build": "CUDA erstellen",
-					"rebuild": "Neu erstellen",
-					"remove": "Entfernen",
-					"cancel": "Build abbrechen",
-					"activeBadge": "Verwaltete CUDA-Laufzeit aktiv",
-					"rebuildAvailable": "Ein neuerer fixierter Quellcode-Tag ist verfügbar — erstellen Sie neu, um die verwaltete CUDA-Laufzeit zu aktualisieren.",
-					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit neu erstellen oder entfernen.",
-					"openLoadedModels": "Geladene Modelle öffnen",
 					"phaseLabel": "Phase",
-					"logEmpty": "Warten auf Build-Ausgabe…",
-					"startError": "Der CUDA-Build konnte nicht gestartet werden.",
-					"cancelError": "Der CUDA-Build konnte nicht abgebrochen werden.",
-					"removeError": "Der CUDA-Build konnte nicht entfernt werden.",
-					"removed": "Verwalteter CUDA-Build entfernt."
+					"logEmpty": "Warten auf Build-Ausgabe…"
 				},
 				"sourceBuild": {
 					"title": "llama.cpp aus Quellcode bauen",

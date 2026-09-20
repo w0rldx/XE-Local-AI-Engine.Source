@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Startup <see cref="IHostedService" /> that reaps sandbox children orphaned by a previous run of THIS app, and the stale jails they
@@ -11,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 ///     A hard host kill skips <c>Dispose</c> and <c>KillAsync</c>, leaving the child process group running and its jail on disk. Three
 ///     independent gates apply, because signalling a group is irreversible and a marker is untrusted input after a crash. OWNER LIVENESS:
 ///     a marker whose owning worker pid is alive is skipped entirely. PID REUSE: the group is signalled only while the leader's start time
-///     still matches what launch recorded. PATH OWNERSHIP: a jail is deleted only under <see cref="SandboxPaths.ContainerRoot" />, and one
+///     still matches what launch recorded. PATH OWNERSHIP: <see cref="PathContainment.IsUnderRoot" /> gates deletion on <see cref="SandboxPaths.ContainerRoot" />, and one
 ///     flagged <see cref="SandboxProcessMarker.PreserveJail" /> never at all. The sweep is best-effort and cannot block startup.
 /// </remarks>
 public sealed class SandboxOrphanReaper : IHostedService
@@ -248,7 +249,7 @@ public sealed class SandboxOrphanReaper : IHostedService
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(marker.JailPath) || !IsUnderRoot(marker.JailPath, containerRoot))
+        if (string.IsNullOrWhiteSpace(marker.JailPath) || !PathContainment.IsUnderRoot(marker.JailPath, containerRoot))
         {
             return false;
         }
@@ -269,31 +270,5 @@ public sealed class SandboxOrphanReaper : IHostedService
             _logger.LogDebug(exception, "Could not delete the stale sandbox jail at {JailPath}.", marker.JailPath);
             return false;
         }
-    }
-
-    /// <summary>
-    ///     <see langword="true" /> when <paramref name="path" /> is a descendant of <paramref name="root" />. The
-    ///     trailing-separator guard prevents a sibling-prefix false match, parity with
-    ///     <c>StaleLlamaServerReaper.IsUnderRoot</c>.
-    /// </summary>
-    private static bool IsUnderRoot(string path, string root)
-    {
-        string fullPath;
-        try
-        {
-            fullPath = Path.GetFullPath(path);
-        }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // An unparseable path can never be under our root.
-            return false;
-        }
-
-        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
-            ? root
-            : root + Path.DirectorySeparatorChar;
-
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return fullPath.StartsWith(rootWithSeparator, comparison);
     }
 }

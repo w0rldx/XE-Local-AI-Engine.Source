@@ -139,7 +139,7 @@ function renderPage() {
 	// A FRESH element each time: re-rendering the identical one lets React bail out, and a poll test needs the page
 	// to actually read its hooks again.
 	const tree = () => (
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationExecutionsPage />

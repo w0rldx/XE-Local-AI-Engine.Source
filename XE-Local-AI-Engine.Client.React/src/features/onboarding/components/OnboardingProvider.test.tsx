@@ -99,7 +99,7 @@ function installDomMocks() {
 
 function renderProvider() {
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<OnboardingProvider>
 				<ContextCapture />
 				app
@@ -112,7 +112,7 @@ function applyModelsQuery(view: ReturnType<typeof renderProvider>, query: typeof
 	modelsRef.current = query;
 	act(() => {
 		view.rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<OnboardingProvider>
 					<ContextCapture />
 					app
@@ -126,7 +126,7 @@ function applyConversations(view: ReturnType<typeof renderProvider>, conversatio
 	conversationsRef.current = conversations;
 	act(() => {
 		view.rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<OnboardingProvider>
 					<ContextCapture />
 					app
@@ -403,7 +403,7 @@ describe("frozen Quick Start readiness", () => {
 		};
 		act(() => {
 			view.rerender(
-				<MantineProvider>
+				<MantineProvider env="test">
 					<OnboardingProvider>
 						<ContextCapture />
 						app

@@ -84,7 +84,7 @@ function renderDialog() {
 
 	render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<GenerationAssistDialog
 					opened={true}
 					surface="skill"

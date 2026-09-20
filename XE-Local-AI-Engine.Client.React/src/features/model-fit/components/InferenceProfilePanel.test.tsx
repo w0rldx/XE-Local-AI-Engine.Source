@@ -73,7 +73,7 @@ function makeQuery(data: readonly InferenceProfileView[], overrides: Record<stri
 
 function renderPanel() {
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<InferenceProfilePanel />
 		</MantineProvider>,
 	);

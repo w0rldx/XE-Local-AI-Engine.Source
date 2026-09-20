@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 /// </summary>
 /// <remarks>
 ///     Delegates to the purge service, which issues the explicit ordered raw-SQL deletes (vectors, chunks, sections,
-///     document row) in one transaction — the schema cascade cannot be relied upon, because foreign-key enforcement is
-///     off on the runtime connection — and then removes the on-disk encrypted bytes.
+///     document row) in one transaction — the order is what keeps the external-content FTS index aligned, which a
+///     cascade does not promise — and then removes the on-disk encrypted bytes.
 /// </remarks>
 public sealed class DeleteKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRouteRequest>
 {

@@ -80,8 +80,8 @@ deliberately **not SQL-queryable**; the list view filters on `status`, which sta
 [Data & Persistence](08-data-and-persistence.md).
 
 `ITranscriptionSessionStore` is the only way application code reaches those tables. Three details of its contract
-matter to callers: `AppendSegmentsAsync` checks the session exists and returns `false` when it does not (the node
-connection leaves `PRAGMA foreign_keys` off, so a database-level cascade cannot be relied on); `DeleteAsync` uses
+matter to callers: `AppendSegmentsAsync` checks the session exists and returns `false` when it does not (the check
+turns what the foreign key would raise as an exception into the `false` the contract promises); `DeleteAsync` uses
 `ExecuteDeleteAsync` inside one transaction rather than loading and decrypting the whole transcript; and both the
 summary and detail views carry `SegmentCount`, while `ErrorCode`/`ErrorMessage` are on the **detail** view only.
 

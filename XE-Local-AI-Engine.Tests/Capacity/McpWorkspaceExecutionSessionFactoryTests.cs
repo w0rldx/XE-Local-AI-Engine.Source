@@ -445,8 +445,10 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
 
         public Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
             IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
+            ICollection<AgentHomeCommandLogRecord>? baselineCommands = null,
             CancellationToken cancellationToken = default)
         {
+            _ = baselineCommands;
             cancellationToken.ThrowIfCancellationRequested();
             PrepareCallCount++;
             LastHandle = handle;

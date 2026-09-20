@@ -139,8 +139,8 @@ public sealed class TranscriptionService : ITranscriptionService
         // Cancel first, then delete without waiting for the run to unwind. Cancellation is a signal, not a join, so a
         // transcription that is mid-flight can still reach AppendSegmentsAsync or CompleteAsync after the row is gone.
         // That race is benign BY CONTRACT: every store write is keyed on the session id and returns false for a
-        // session that no longer exists, and AppendSegmentsAsync checks existence itself because the node connection
-        // leaves PRAGMA foreign_keys off. Tracking the run task to join on it would buy nothing this relies on.
+        // session that no longer exists, and AppendSegmentsAsync checks existence itself so a late append answers false
+        // rather than throwing. Tracking the run task to join on it would buy nothing this relies on.
         _ = await CancelAsync(sessionId, cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();

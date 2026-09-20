@@ -75,10 +75,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
 
-    // The SAME dictionary instance ToolApprovalCoordinator and ApiToolCallBridge hold (see PendingToolCallRegistry):
-    // the cancel/drain path below and the tool-result post must observe the calls those two registered.
-    private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls;
-
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
@@ -115,7 +111,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
-        PendingToolCallRegistry pendingToolCallRegistry,
         ToolApprovalCoordinator toolApprovalCoordinator,
         ApiToolCallBridge apiToolCallBridge,
         InvocationLifecycleTracker lifecycleTracker,
@@ -126,8 +121,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _lifecycleTracker = lifecycleTracker ?? throw new ArgumentNullException(nameof(lifecycleTracker));
         _toolApprovalCoordinator = toolApprovalCoordinator ?? throw new ArgumentNullException(nameof(toolApprovalCoordinator));
         _apiToolCallBridge = apiToolCallBridge ?? throw new ArgumentNullException(nameof(apiToolCallBridge));
-        ArgumentNullException.ThrowIfNull(pendingToolCallRegistry);
-        _pendingToolCalls = pendingToolCallRegistry.Calls;
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));

@@ -71,6 +71,55 @@ public sealed class AgentHomePatchServiceTests : IDisposable
             "the name-status diff runs with the hardened -c flags and the workspace working directory");
     }
 
+    /// <summary>
+    ///     A working-tree <c>diff HEAD</c> cannot see an untracked path, so the export stages first and diffs the
+    ///     index. Order is the whole point: a stage that ran after the diff would leave a created file out, exactly as
+    ///     before.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_StagesTheWorkspaceBeforeItDiffs()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "A\trepo-01/docs/notes.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        var service = CreateService(provider);
+
+        await service.ExportPatchAsync(handle, Request("run-stage", NewTempDir(), Folder("repo-01")));
+
+        var gitCommands = provider.ExecutedCommands.Where(command => command.Executable == "git").ToArray();
+        var stageIndex = Array.FindIndex(gitCommands, command => command.Arguments.Contains("add"));
+        var diffIndex = Array.FindIndex(gitCommands, command => command.Arguments.Contains("--binary"));
+
+        AssertEx.True(stageIndex >= 0, "the export stages the workspace");
+        AssertEx.True(stageIndex < diffIndex, "staging runs BEFORE the diff, or a created file is still invisible to it");
+        AssertEx.True(HasHardenedFlags(gitCommands[stageIndex].Arguments)
+                      && gitCommands[stageIndex].WorkingDirectory == "/agent-home/workspace/selected",
+            "the staging add carries the same hardened -c flags and workspace working directory as the diffs");
+        AssertEx.False(gitCommands[stageIndex].Arguments.Contains("--force"),
+            "staging honours .gitignore exactly as the baseline's own add -A does");
+        AssertEx.True(gitCommands.All(command => !command.Arguments.Contains("--binary") || command.Arguments.Contains("--cached")),
+            "the diffs read the index, not the working tree");
+    }
+
+    [Test]
+    public async Task ExportPatchAsync_WhenStagingFails_ReportsFailureAndWritesNothing()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.StageAll, exitCode: 128, string.Empty, "fatal: unable to index file");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, string.Empty);
+        var service = CreateService(provider);
+
+        var runDir = NewTempDir();
+        var export = await service.ExportPatchAsync(handle, Request("run-stage-fail", runDir, Folder("repo-01")));
+
+        AssertEx.True(export.Failed,
+            "a failed stage leaves created files out of the index, so the export must refuse rather than report a clean zero-change run");
+        AssertEx.False(Directory.Exists(Path.Combine(runDir, "patches")), "no artifacts are written when staging failed");
+    }
+
     [Test]
     public async Task ExportPatchAsync_BuildsChangedFilesJsonMappedToFolderIdsWithRelativePaths()
     {

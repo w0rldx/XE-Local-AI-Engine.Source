@@ -98,9 +98,9 @@ public interface ITranscriptionSessionStore
     ///     index is what stops two writers double-allocating, so a repeated sequence throws rather than silently
     ///     interleaving.
     ///     <para>
-    ///         False when the session does not exist, and nothing is written. The existence check is not belt-and-braces:
-    ///         the node connection leaves <c>PRAGMA foreign_keys</c> off, so an unknown session id would otherwise insert
-    ///         orphan rows no read path can ever reach.
+    ///         False when the session does not exist, and nothing is written. The existence check is what turns an
+    ///         unknown session id into that <c>false</c>; the foreign key would otherwise raise a constraint violation
+    ///         out of the insert instead.
     ///     </para>
     /// </summary>
     Task<bool> AppendSegmentsAsync(Guid sessionId, IReadOnlyList<TranscriptSegmentWrite> segments, long updatedAtUtc, CancellationToken cancellationToken);

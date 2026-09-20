@@ -136,7 +136,7 @@ function installJsdomEnvironmentMocks(): void {
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationKeysPage />
@@ -294,7 +294,7 @@ describe("IntegrationKeysPage", () => {
 		// reading it, and clearing here would destroy their only copy.
 		keyHooksMock.useIntegrationKeys.mockReturnValue(makeQuery([...keys]));
 		view.rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ConfirmProvider>
 					<QueryClientProvider client={new QueryClient()}>
 						<IntegrationKeysPage />

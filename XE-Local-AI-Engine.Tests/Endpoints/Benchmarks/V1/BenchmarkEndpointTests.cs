@@ -117,7 +117,8 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: true)]);
-        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(1);
+        context.Store.CountRunsByProjectAsync(Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int> { [ProjectId] = 1 });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
         using var response = await client.SendAsync(request);
@@ -127,6 +128,32 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Contains(body, "\"runCount\":1", StringComparison.Ordinal);
         AssertEx.Contains(body, "\"isFrozen\":true", StringComparison.Ordinal);
         AssertEx.False(body.Contains("coreTask", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task ListProjects_ReadsEveryRunCountFromTheOneGroupedCount()
+    {
+        // One grouped count answers the whole listing, and a project the grouping never saw is a project with no runs
+        // — not a missing row and not a second query.
+        var unusedProjectId = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
+        await using var context = CreateContext();
+        context.Store.ListProjectsAsync(Arg.Any<CancellationToken>())
+               .Returns([Project(isFrozen: true), Project(isFrozen: false) with { Id = unusedProjectId, Name = "Never run" }]);
+        context.Store.CountRunsByProjectAsync(Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int> { [ProjectId] = 7 });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var items = document.RootElement.GetProperty("items");
+        AssertEx.Equal(expected: 2, items.GetArrayLength());
+        AssertEx.Equal(expected: 7, items[0].GetProperty("runCount").GetInt32());
+        AssertEx.Equal(expected: 0, items[1].GetProperty("runCount").GetInt32(), "A project absent from the grouped count has no runs.");
+        await context.Store.Received(1).CountRunsByProjectAsync(Arg.Any<CancellationToken>());
+        await context.Store.DidNotReceive().CountRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1100,6 +1127,7 @@ public sealed class BenchmarkEndpointTests
         // The listing stays a flat scan. The fidelity block is detail-only, exactly as coreTask and the judge are.
         await using var context = CreateContext();
         context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: false, fidelity: true)]);
+        context.Store.CountRunsByProjectAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
         using var response = await client.SendAsync(request);

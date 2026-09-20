@@ -66,7 +66,7 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 }
 
 function renderTable(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("RecommendationTable", () => {

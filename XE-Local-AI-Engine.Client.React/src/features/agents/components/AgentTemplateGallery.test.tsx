@@ -111,7 +111,7 @@ function installJsdomEnvironmentMocks(): void {
 
 function renderGallery(queryClient: QueryClient) {
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<QueryClientProvider client={queryClient}>
 				<AgentTemplateGallery opened={true} onClose={vi.fn()} />
 			</QueryClientProvider>

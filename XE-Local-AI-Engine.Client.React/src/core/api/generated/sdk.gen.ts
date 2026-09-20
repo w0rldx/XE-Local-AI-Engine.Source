@@ -15,6 +15,9 @@ import type {
 	AnalyzePlaybookData,
 	AnalyzePlaybookErrors,
 	AnalyzePlaybookResponses,
+	ApplyAgentHomePatchData,
+	ApplyAgentHomePatchErrors,
+	ApplyAgentHomePatchResponses,
 	ApplyAppUpdateData,
 	ApplyAppUpdateErrors,
 	ApplyAppUpdateResponses,
@@ -984,6 +987,9 @@ import type {
 	PostWorkSessionMessageData,
 	PostWorkSessionMessageErrors,
 	PostWorkSessionMessageResponses,
+	PreviewAgentHomePatchData,
+	PreviewAgentHomePatchErrors,
+	PreviewAgentHomePatchResponses,
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchErrors,
 	PreviewDevelopmentPatchResponses,
@@ -1318,6 +1324,9 @@ import type {
 import {
 	zAnalyzePlaybookPath,
 	zAnalyzePlaybookResponse,
+	zApplyAgentHomePatchBody,
+	zApplyAgentHomePatchPath,
+	zApplyAgentHomePatchResponse,
 	zApplyAppUpdateResponse,
 	zApplyDevelopmentPatchBody,
 	zApplyDevelopmentPatchPath,
@@ -1934,6 +1943,8 @@ import {
 	zPostWorkSessionMessageBody,
 	zPostWorkSessionMessagePath,
 	zPostWorkSessionMessageResponse,
+	zPreviewAgentHomePatchPath,
+	zPreviewAgentHomePatchResponse,
 	zPreviewDevelopmentPatchBody,
 	zPreviewDevelopmentPatchPath,
 	zPreviewDevelopmentPatchResponse,
@@ -15863,4 +15874,68 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const applyAgentHomePatch = <ThrowOnError extends boolean = false>(
+	options: Options<ApplyAgentHomePatchData, ThrowOnError>,
+): RequestResult<ApplyAgentHomePatchResponses, ApplyAgentHomePatchErrors, ThrowOnError> =>
+	(options.client ?? client).post<ApplyAgentHomePatchResponses, ApplyAgentHomePatchErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zApplyAgentHomePatchBody,
+					path: zApplyAgentHomePatchPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zApplyAgentHomePatchResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/agent-home/runs/{runId}/patch/apply",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const previewAgentHomePatch = <ThrowOnError extends boolean = false>(
+	options: Options<PreviewAgentHomePatchData, ThrowOnError>,
+): RequestResult<PreviewAgentHomePatchResponses, PreviewAgentHomePatchErrors, ThrowOnError> =>
+	(options.client ?? client).post<PreviewAgentHomePatchResponses, PreviewAgentHomePatchErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zPreviewAgentHomePatchPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPreviewAgentHomePatchResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/agent-home/runs/{runId}/patch/preview",
+		...options,
 	});

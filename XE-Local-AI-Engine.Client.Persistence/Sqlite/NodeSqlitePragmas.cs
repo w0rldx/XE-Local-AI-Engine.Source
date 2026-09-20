@@ -8,17 +8,14 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-///     Applies the node SQLite connection pragmas (<c>busy_timeout</c>, WAL <c>journal_mode</c>, <c>synchronous</c>) to a
-///     connection right after it opens. Two open mechanisms exist on the node database and both route through here:
-///     <list type="bullet">
-///         <item>EF-initiated opens (migrations, EF queries/saves, health probes) via <see cref="NodeSqliteConnectionInterceptor" />.</item>
-///         <item>Raw-ADO opens on the EF context's <see cref="DbConnection" /> via the shared open-if-needed helpers.</item>
-///     </list>
-///     Applying on every physical open is idempotent and cheap, so it is correct regardless of Microsoft.Data.Sqlite's
-///     connection pooling (a pooled handle keeps its pragma state, a fresh one gets it here). WAL is a persistent
-///     file-level property, so once any connection sets it the whole database file — including the shared Quartz job
-///     store's connections — runs under WAL.
+///     Applies the node SQLite pragmas (busy_timeout, foreign_keys, WAL, synchronous) on open. EF's interceptor and
+///     the raw-ADO helpers both route here; re-applying per open is idempotent, so a pooled handle is never left
+///     unconfigured.
 /// </summary>
+/// <remarks>
+///     WAL is a file-level property, so once any connection sets it the whole database file runs under WAL — the
+///     shared Quartz job store's connections included.
+/// </remarks>
 public static class NodeSqlitePragmas
 {
     // Process-wide default consumed by the static raw-open helpers (which cannot take injected options). Swapped once at
@@ -75,6 +72,13 @@ public static class NodeSqlitePragmas
             command.ExecuteNonQuery();
         });
 
+        TryExecute(logger, "foreign_keys", () =>
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = ForeignKeysSql;
+            command.ExecuteNonQuery();
+        });
+
         if (!ShouldApplyWal(connection, settings))
         {
             return;
@@ -112,6 +116,13 @@ public static class NodeSqlitePragmas
             await command.ExecuteNonQueryAsync(cancellationToken);
         });
 
+        await TryExecuteAsync(logger, "foreign_keys", async () =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = ForeignKeysSql;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        });
+
         if (!ShouldApplyWal(connection, settings))
         {
             return;
@@ -132,6 +143,10 @@ public static class NodeSqlitePragmas
             await command.ExecuteNonQueryAsync(cancellationToken);
         });
     }
+
+    // Emitted before the WAL guard, so it reaches the connection shapes that cannot switch into WAL too. The bundled
+    // e_sqlite3 already defaults enforcement on; stating it keeps the declared cascades off the native build's mercy.
+    private const string ForeignKeysSql = "PRAGMA foreign_keys=ON;";
 
     private static string BusyTimeoutSql(NodeSqlitePragmaSettings settings)
     {

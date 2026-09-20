@@ -97,9 +97,9 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Deletes one task item, and a generator's children before the generator itself — foreign keys are off on
-    ///     this connection and no cascade fires, so that order IS the referential integrity. Deleting the last leaf is
-    ///     refused: a project always asks at least one question.
+    ///     Deletes one task item, and a generator's children before the generator itself — nothing cascades here, so
+    ///     that order is what makes the delete legal. Deleting the last leaf is refused: a project always asks at least
+    ///     one question.
     /// </summary>
     Task DeleteTaskItemAsync(Guid projectId, Guid itemId, long expectedItemVersion, CancellationToken cancellationToken = default);
 
@@ -172,6 +172,13 @@ public interface IBenchmarkStore
 
     /// <summary>How many runs a project has, counted in the database.</summary>
     Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The run count of EVERY project that has one, in a single grouped count — what the project listing needs, so
+    ///     it does not ask <see cref="CountRunsAsync" /> once per row. A project with no runs is absent from the
+    ///     dictionary rather than present with a zero.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, int>> CountRunsByProjectAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The project's ACTIVE work — queued or running — counted per kind, empty when the project is idle. A run's

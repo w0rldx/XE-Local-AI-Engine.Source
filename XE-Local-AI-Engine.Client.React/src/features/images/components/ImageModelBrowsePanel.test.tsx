@@ -37,7 +37,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function repository(overrides: Partial<ImageRepositoryView> = {}): ImageRepositoryView {

@@ -24,9 +24,9 @@ internal sealed class TrainingDatasetSampleConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
 
-        // Samples belong to their dataset, so the declared behaviour is cascade — but the node connection never sets
-        // PRAGMA foreign_keys=ON, so no cascade actually fires. Deleting a dataset means explicit ordered deletes
-        // (samples first) in the store; this declaration documents ownership, it does not enforce it.
+        // Samples belong to their dataset, so the declared behaviour is cascade, and the node connection enforces it.
+        // The store still deletes samples first, in the same transaction, so the dataset teardown reads as one unit
+        // alongside the work items, which carry Restrict and would otherwise block the delete.
         builder.HasOne<TrainingDataset>()
                .WithMany()
                .HasForeignKey(entity => entity.DatasetId)

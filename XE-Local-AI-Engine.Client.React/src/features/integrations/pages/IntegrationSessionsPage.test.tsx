@@ -124,7 +124,7 @@ function makeListQuery<T>(items: readonly T[], totalCount = items.length) {
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationSessionsPage />

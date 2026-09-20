@@ -3,6 +3,12 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Training.V1;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -69,6 +75,68 @@ public sealed class TrainingRunEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     The by-id route's 200: the run the service hands back, mapped onto the wire. The encrypted freeze and
+    ///     license documents the record carries must stay off the response — a detail view reads a run, it does not
+    ///     republish the dataset.
+    /// </summary>
+    [Test]
+    public async Task GetRun_WhenKnown_ReturnsTheRunWithoutItsServerSideDocuments()
+    {
+        var runId = Guid.NewGuid();
+        var datasetId = Guid.NewGuid();
+        var runs = Substitute.For<ITrainingRunService>();
+        runs.GetAsync(runId, Arg.Any<CancellationToken>()).Returns(new TrainingRunRecord
+        {
+            Id = runId,
+            DatasetId = datasetId,
+            DatasetContentFingerprint = "v1:abc",
+            DatasetRevision = 3,
+            FreezeJson = ReadOnlyMemory<byte>.Empty,
+            BaseArtifactId = Guid.NewGuid(),
+            LinkedInstalledModelName = "base:Q4_K_M",
+            LinkedModelContentFingerprint = "v1:def",
+            OptionsJson = ReadOnlyMemory<byte>.Empty,
+            LicenseConfirmationJson = null,
+            Status = TrainingRunStatus.Training,
+            ProgressJson = null,
+            LogTail = "step 1",
+            LaunchReceiptJson = null,
+            ErrorMessage = null,
+            Version = 4,
+            CreatedAtUtc = 10,
+            UpdatedAtUtc = 20,
+            WorkStatus = TrainingWorkStatus.Running,
+            WorkErrorMessage = null
+        });
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ITrainingRunService>();
+                services.AddScoped(_ => runs);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/{runId}");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(runId, document.RootElement.GetProperty("id").GetGuid());
+        AssertEx.Equal(datasetId, document.RootElement.GetProperty("datasetId").GetGuid());
+        AssertEx.Equal(expected: 3, document.RootElement.GetProperty("datasetRevision").GetInt32());
+        AssertEx.Equal("Training", document.RootElement.GetProperty("status").GetString());
+        AssertEx.Equal("base:Q4_K_M", document.RootElement.GetProperty("linkedInstalledModelName").GetString());
+        AssertEx.Equal("step 1", document.RootElement.GetProperty("logTail").GetString());
+        AssertEx.False(body.Contains("freeze", StringComparison.OrdinalIgnoreCase), "The dataset freeze stays server-side.");
+        AssertEx.False(body.Contains("license", StringComparison.OrdinalIgnoreCase), "The license confirmation stays server-side.");
+        await runs.Received(1).GetAsync(runId, Arg.Any<CancellationToken>());
     }
 
     [Test]

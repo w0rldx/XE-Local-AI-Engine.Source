@@ -9,7 +9,7 @@ import { ChatNoticeRow } from "@/features/chat/components/ChatNoticeRow";
 import type { ChatNoticePart } from "@/features/chat/models/ChatModels";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function noticePart(overrides: Partial<ChatNoticePart> = {}): ChatNoticePart {
@@ -53,14 +53,14 @@ describe("ChatNoticeRow", () => {
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ModelSubstituted");
 
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ChatNoticeRow part={noticePart({ noticeKind: "ToolDisabled", text: "A tool was disabled." })} />
 			</MantineProvider>,
 		);
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ToolDisabled");
 
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ChatNoticeRow part={noticePart({ noticeKind: "HistoryTruncated", text: "Older history was trimmed." })} />
 			</MantineProvider>,
 		);

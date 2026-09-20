@@ -18,15 +18,32 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastErrorMock
 
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
-import { domainErrorRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
+import { domainErrorRoute, jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-setupMswServer();
-
 const runId = "bbbbbbbb-0000-4000-8000-000000000002";
 const projectId = "aaaaaaaa-0000-4000-8000-000000000001";
+
+// The pane reads the run's project for the judging MODE alone. Inside the page that key is already warm, so the
+// component's own comment is right that it costs no request; mounted on its own here it is a real read, ambient to
+// every test in the file and belonging to none of them.
+setupMswServer(
+	jsonRoute("get", `benchmarks/projects/${projectId}`, {
+		id: projectId,
+		name: "Summarisation",
+		coreTask: "Summarise the attached text.",
+		contextTokens: 4096,
+		agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
+		judgeEnabled: false,
+		runCount: 1,
+		isFrozen: true,
+		version: 2,
+		createdAtUtc: 1,
+		updatedAtUtc: 2,
+	}),
+);
 
 function runRow(overrides: Record<string, unknown> = {}) {
 	return {

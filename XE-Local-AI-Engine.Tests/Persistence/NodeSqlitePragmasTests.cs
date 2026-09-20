@@ -6,15 +6,16 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Proves the node SQLite connection posture — WAL journaling, a native busy_timeout, and synchronous=NORMAL
-///     — is applied on both the raw-ADO open path and the EF connection interceptor, that an existing non-WAL database
-///     converts safely, and that busy_timeout lets a second writer wait rather than fail instantly.
+///     Proves the node SQLite posture — WAL, busy_timeout, synchronous=NORMAL, foreign keys — on both the raw-ADO
+///     and EF interceptor open paths, that an existing non-WAL database converts, and that a second writer waits.
 /// </summary>
 [NotInParallel]
 [Category(TestCategories.Integration)]
@@ -151,6 +152,90 @@ public sealed class NodeSqlitePragmasTests : IDisposable
 
         await writerInsert; // must not throw
         AssertEx.Equal(expected: 2L, await ScalarAsync<long>(holder, "SELECT COUNT(*) FROM t;"));
+    }
+
+    /// <summary>
+    ///     Layer one: the bootstrap's connection string must SAY Foreign Keys=True. Parsed, not opened — the bundled
+    ///     e_sqlite3 defaults enforcement on, so an open stays green even after the setting is dropped.
+    /// </summary>
+    [Test]
+    public void DesktopBootstrapConnectionString_StatesForeignKeysOn()
+    {
+        using var configuration = new ConfigurationManager();
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, _ => _dir);
+
+        var connectionString = AssertEx.NotNull(configuration.GetConnectionString("node-sqlite"));
+        var builder = new SqliteConnectionStringBuilder(connectionString);
+
+        AssertEx.Equal(expected: true, builder.ForeignKeys,
+            "The node's connection string must state Foreign Keys=True, not inherit it from the SQLite build.");
+    }
+
+    /// <summary>
+    ///     Layer two: the applier must TURN enforcement on, not merely find it on. Both connections start from
+    ///     Foreign Keys=False, so only the pragma can flip them; the sync path EF uses is covered as well as the async.
+    /// </summary>
+    [Test]
+    public async Task PragmaApplier_TurnsForeignKeysOn_OnAConnectionThatStartedOff()
+    {
+        var asyncPath = Path.Combine(_dir, "fk-off-async.sqlite");
+        await using (var connection = new SqliteConnection($"Data Source={asyncPath};Foreign Keys=False"))
+        {
+            await NodeSqlitePragmas.OpenAndConfigureAsync(connection, CancellationToken.None);
+            AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "PRAGMA foreign_keys;"),
+                "The async open path must enable enforcement on a connection that asked for it off.");
+        }
+
+        var syncPath = Path.Combine(_dir, "fk-off-sync.sqlite");
+        await using (var connection = new SqliteConnection($"Data Source={syncPath};Foreign Keys=False"))
+        {
+            await connection.OpenAsync();
+            AssertEx.Equal(expected: 0L, await ScalarAsync<long>(connection, "PRAGMA foreign_keys;"),
+                "Precondition: the connection must really start with enforcement off, or this proves nothing.");
+
+            NodeSqlitePragmas.Apply(connection, NodeSqlitePragmaSettings.Default, logger: null);
+
+            AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "PRAGMA foreign_keys;"),
+                "The synchronous apply path — the one EF's ConnectionOpened uses — must enable enforcement too.");
+        }
+    }
+
+    [Test]
+    public async Task ProductionConnectionPath_EnforcesForeignKeys_SoADeclaredCascadeFires()
+    {
+        // Wired the way production is — DesktopBootstrap's own string plus NodeSqliteConnectionInterceptor, not a
+        // string re-typed here — so a declared cascade keeps firing even if the bundled SQLite build stops defaulting on.
+        using var configuration = new ConfigurationManager();
+        // The resolver stands in for %LOCALAPPDATA%, so the bootstrap builds its data directory under this test's own
+        // temp root instead of the real per-user one.
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, _ => _dir);
+        var connectionString = AssertEx.NotNull(configuration.GetConnectionString("node-sqlite"));
+
+        var options = new DbContextOptionsBuilder<ProbeContext>()
+                      .UseSqlite(connectionString)
+                      .AddInterceptors(new NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings.Default, NullLogger<NodeSqliteConnectionInterceptor>.Instance))
+                      .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                      .Options;
+
+        await using var context = new ProbeContext(options);
+        await context.Database.OpenConnectionAsync();
+        var connection = context.Database.GetDbConnection();
+
+        AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "PRAGMA foreign_keys;"));
+
+        // The behavioural consequence, once: a declared cascade really removes the child rows.
+        await ExecuteAsync(connection, "CREATE TABLE parent(id INTEGER PRIMARY KEY);");
+        await ExecuteAsync(connection, "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id) ON DELETE CASCADE);");
+        await ExecuteAsync(connection, "INSERT INTO parent(id) VALUES(1), (2);");
+        await ExecuteAsync(connection, "INSERT INTO child(id, parent_id) VALUES(10, 1), (11, 2);");
+
+        await ExecuteAsync(connection, "DELETE FROM parent WHERE id = 1;");
+
+        // Unfiltered child total plus a surviving control row belonging to the other parent.
+        AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM child;"));
+        AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM child WHERE parent_id = 2;"));
+
+        await context.Database.CloseConnectionAsync();
     }
 
     [Test]

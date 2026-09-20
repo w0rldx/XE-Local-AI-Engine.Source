@@ -77,7 +77,7 @@ function renderPanel() {
 	});
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<McpServerKeyPanel />
 			</MantineProvider>
 		</QueryClientProvider>,

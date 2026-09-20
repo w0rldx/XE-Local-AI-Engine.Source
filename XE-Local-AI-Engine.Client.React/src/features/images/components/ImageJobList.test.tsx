@@ -46,7 +46,7 @@ function renderList({ jobs = [job("job-1")], totalCount, page, pageSize = 10, on
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	const view = render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ImageJobList
 					jobs={jobs}
 					totalCount={totalCount}

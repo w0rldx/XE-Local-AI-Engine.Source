@@ -60,7 +60,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 }));
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function download(overrides: Partial<ImageModelDownloadView> = {}): ImageModelDownloadView {

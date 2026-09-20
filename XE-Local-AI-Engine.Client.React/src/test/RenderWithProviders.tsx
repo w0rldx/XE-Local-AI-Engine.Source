@@ -11,6 +11,10 @@ import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
 // `en` bundle with no <I18nextProvider> in the tree, in every file. This helper therefore provides only Mantine, a
 // QueryClient, the jsdom stubs and an optional memory router.
 //
+// `env="test"` on the provider is Mantine's own test switch: it disables every transition and renders what would be
+// portalled inline. Both are teardown hazards under `afterEach(cleanup)` — a dropdown's close timer fires after its
+// tree is gone, and a portal's node outlives the render it belonged to — and neither is something a test asserts.
+//
 // A file that `vi.mock("react-i18next")`s the module wholesale MAY now use this helper: the mock applies to the
 // components' own imports, while the real instance initialised in setup is untouched (the setup import runs before the
 // hoisted mock and stays cached, so nothing calls `i18next.use(undefined)`). Verified with a throwaway probe that
@@ -90,7 +94,7 @@ export function renderWithProviders(
 
 	const result = render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>{content}</MantineProvider>
+			<MantineProvider env="test">{content}</MantineProvider>
 		</QueryClientProvider>,
 	);
 
@@ -113,7 +117,9 @@ export function createProvidersWrapper(options: RenderWithProvidersOptions = {})
 	function Wrapper({ children }: { children: ReactNode }): ReactElement {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider>{withRouter ? renderInMemoryRouter(children, options.route ?? "/") : children}</MantineProvider>
+				<MantineProvider env="test">
+					{withRouter ? renderInMemoryRouter(children, options.route ?? "/") : children}
+				</MantineProvider>
 			</QueryClientProvider>
 		);
 	}

@@ -3,9 +3,10 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-///     Single source of truth for the complete DB footprint of a conversation. The node-sqlite runtime connection does
-///     not enable <c>PRAGMA foreign_keys=ON</c>, so <c>ON DELETE CASCADE</c> never fires and every child table must be
-///     deleted explicitly or its rows orphan (a privacy gap). Both the interactive immediate-purge path and the
+///     Single source of truth for the complete DB footprint of a conversation. Messages, tool events and uploaded-file
+///     rows declare a cascade that the node connection does enforce, but most of the footprint — feedback, tombstones,
+///     <c>agent_execution_logs</c>, and the work-session and integration families — is keyed by conversation id with no
+///     foreign key on purpose, so those tables go only when this list names them, or their rows orphan (a privacy gap). Both the interactive immediate-purge path and the
 ///     retention sweeper delete through here so the table set can never drift between them.
 /// </summary>
 /// <remarks>

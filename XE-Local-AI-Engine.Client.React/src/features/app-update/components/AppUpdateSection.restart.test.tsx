@@ -74,7 +74,7 @@ describe("AppUpdateSection restart polling", () => {
 		});
 		render(
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider>
+				<MantineProvider env="test">
 					<AppUpdateSection />
 				</MantineProvider>
 			</QueryClientProvider>,

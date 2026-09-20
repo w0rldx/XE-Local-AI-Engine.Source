@@ -113,7 +113,10 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         var commandsWithheld = !commandsIsolated
                                && request.AllowedActions.Contains(AgentHomeAllowedActions.RunCommands, StringComparer.Ordinal);
 
-        var gateway = new ToolGateway(this, request, _timeProvider.GetUtcNow().AddSeconds(_options.MaxRunSeconds));
+        // Taken once the loop will really run (a refusal above executed nothing, so it has no duration to report), and
+        // ONE reading: the elapsed time and the deadline share it, so neither can contradict the other.
+        var startedAt = _timeProvider.GetUtcNow();
+        var gateway = new ToolGateway(this, request, startedAt.AddSeconds(_options.MaxRunSeconds));
         var tools = BuildTools(gateway, request.AllowedActions, commandsIsolated);
         if (tools.Count == 0)
         {
@@ -201,6 +204,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         return new AgentHomeGoalOutcome
         {
             Status = status,
+            Elapsed = _timeProvider.GetUtcNow() - startedAt,
             ToolCallCount = gateway.ToolCallCount,
             RefusedCallCount = gateway.RefusedCallCount,
             WrittenFiles = gateway.WrittenFiles,

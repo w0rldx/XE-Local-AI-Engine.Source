@@ -10,7 +10,7 @@ import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapability
 import type { ChatUiCapabilities, ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function installJsdomEnvironmentMocks(): void {

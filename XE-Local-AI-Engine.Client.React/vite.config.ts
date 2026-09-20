@@ -203,8 +203,8 @@ export default defineConfig(({ command, mode }) => {
 			// src/test/PinLocale.ts for the failure this prevents on a non-en-US packaging box.
 			// NoNetwork.ts replaces the suite-wide MSW server that used to sit here: it stubs fetch,
 			// XMLHttpRequest, WebSocket and node:http/https to fail, so a request no test stubbed still fails loudly
-			// instead of hitting the network. The 14 files that stub HTTP routes install MSW themselves with
-			// `setupMswServer()` (src/test/UseMswServer.ts), so the other 325 no longer pay for it.
+			// instead of hitting the network. The files that stub HTTP routes install MSW themselves with
+			// `setupMswServer()` (src/test/UseMswServer.ts), so the rest no longer pay for it.
 			// Cleanup.ts unmounts every React tree a test mounted; without globals RTL never registers its own
 			// afterEach(cleanup), so mounted components used to survive into the next test — see src/test/Cleanup.ts.
 			//

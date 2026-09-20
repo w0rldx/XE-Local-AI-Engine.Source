@@ -6,9 +6,10 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IKnowledgeDocumentPurgeService" />. Because foreign-key enforcement is OFF on the runtime
-///     connection, the schema cascade cannot be relied upon: every dependent row is deleted explicitly in
-///     child-to-parent order inside one transaction. The chunk delete fires the FTS delete trigger so the external-content
+///     Default <see cref="IKnowledgeDocumentPurgeService" />. Every dependent row is deleted explicitly in
+///     child-to-parent order inside one transaction rather than left to the declared cascades: the chunk delete is
+///     what fires the FTS sync trigger (and whether a cascade would fire it is unmeasured), and chunks must precede
+///     sections because that relationship is SET NULL. The chunk delete fires the FTS delete trigger so the external-content
 ///     <c>chunk_fts</c> index stays aligned; the vectors are deleted first because they reference the chunk rows. Only
 ///     after the rows commit are the on-disk encrypted bytes removed, with the path derived from the document id plus its
 ///     stored extension — never from the display-only <c>storage_path</c> column.

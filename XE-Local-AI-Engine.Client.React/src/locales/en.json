@@ -170,7 +170,36 @@
 			"approvalPrompt": "This tool needs your approval to run.",
 			"approve": "Approve",
 			"deny": "Deny",
-			"approveSession": "Approve for this session"
+			"approveSession": "Approve for this session",
+			"patchApply": {
+				"prompt": "This run produced changes you can apply to your folders.",
+				"review": "Review and apply changes",
+				"title": "Review and apply changes",
+				"intro": "These changes were produced in a sandbox copy. Applying them writes to the folders on this computer.",
+				"runLabel": "Run",
+				"loading": "Checking the changes against your folders…",
+				"recheck": "Check again",
+				"apply": "Apply to my folders",
+				"tableLabel": "Files this patch changes",
+				"columns": {
+					"folder": "Folder",
+					"file": "File",
+					"change": "Change",
+					"lines": "Lines"
+				},
+				"lineCounts": "+{{added}} −{{removed}}",
+				"noFiles": "This run's patch changes no files.",
+				"binaryTitle": "Contains binary changes",
+				"binaryBody": "Binary files cannot be reviewed here, and this node does not apply them unless it has been configured to.",
+				"rejectedTitle": "These changes cannot be applied",
+				"appliedTitle": "Applied to your folders",
+				"applyFailedTitle": "Nothing was applied",
+				"applyFailedHint": "Check again to read the current state of the changes before trying once more.",
+				"errors": {
+					"preview": "Could not read the changes for this run.",
+					"apply": "The changes could not be applied."
+				}
+			}
 		},
 		"askUser": {
 			"title": "The assistant needs your input",
@@ -1577,26 +1606,8 @@
 					"dismiss": "Dismiss"
 				},
 				"cudaBuild": {
-					"title": "CUDA (build from source)",
-					"devBadge": "Dev",
-					"description": "Build a CUDA-accelerated llama.cpp runtime from source on this Linux host. Upstream ships no Linux CUDA prebuilt, so this is the no-build-knowledge path to GPU acceleration.",
-					"loading": "Checking build prerequisites…",
-					"prereqError": "Could not check the CUDA build prerequisites.",
-					"notLinux": "The in-app CUDA build is available on Linux only. The checklist below shows what this host is missing.",
-					"build": "Build CUDA",
-					"rebuild": "Rebuild",
-					"remove": "Remove",
-					"cancel": "Cancel build",
-					"activeBadge": "Managed CUDA runtime active",
-					"rebuildAvailable": "A newer pinned source tag is available — rebuild to update the managed CUDA runtime.",
-					"runningNotice": "{{count}} llama.cpp model(s) running — eject them before rebuilding or removing the runtime.",
-					"openLoadedModels": "Open Loaded models",
 					"phaseLabel": "Phase",
-					"logEmpty": "Waiting for build output…",
-					"startError": "Could not start the CUDA build.",
-					"cancelError": "Could not cancel the CUDA build.",
-					"removeError": "Could not remove the CUDA build.",
-					"removed": "Managed CUDA build removed."
+					"logEmpty": "Waiting for build output…"
 				},
 				"sourceBuild": {
 					"title": "llama.cpp build from source",

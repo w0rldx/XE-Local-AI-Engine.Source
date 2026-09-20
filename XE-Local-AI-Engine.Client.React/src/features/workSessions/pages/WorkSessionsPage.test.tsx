@@ -10,8 +10,6 @@ import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-setupMswServer(capabilityRoute());
-
 const navigate = vi.hoisted(() => vi.fn());
 
 // The app router is built from routeTree.gen.ts; a unit test only needs the navigate CALL, not a real route match.
@@ -60,6 +58,11 @@ function agentsRoute() {
 function capabilityRoute(enabled = true) {
 	return jsonRoute("get", "work-sessions/capability", { enabled });
 }
+
+// Below the fixtures both routes close over, not at the top of the file: the arguments are evaluated where the call
+// stands. The agent list feeds the create dialog's picker and is read on mount whatever the capability says —
+// ambient to every case here, including the two that assert the page is gated or errored.
+setupMswServer(capabilityRoute(), agentsRoute());
 
 function summary(overrides: Record<string, unknown> = {}) {
 	return {

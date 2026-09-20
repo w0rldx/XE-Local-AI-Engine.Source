@@ -57,7 +57,7 @@ import { Setup } from "@/core/auth/pages/Setup";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("node auth pages", () => {

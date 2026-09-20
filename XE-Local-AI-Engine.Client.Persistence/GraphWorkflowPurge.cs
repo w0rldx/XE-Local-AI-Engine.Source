@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-///     Single source of truth for the complete DB footprint of one Graph Workflow run. The node-sqlite runtime
-///     connection does not enable <c>PRAGMA foreign_keys=ON</c>, so <c>ON DELETE CASCADE</c> never fires and every
-///     child table must be deleted explicitly or its rows orphan.
+///     Single source of truth for the complete DB footprint of one Graph Workflow run. Node runs and run events
+///     declare a cascade the node connection enforces; they are still deleted here so the whole footprint of a run is
+///     stated in one place and stays in step with the tables that carry no foreign key to it.
 /// </summary>
 /// <remarks>
 ///     Deletes DB rows only; the caller owns the enclosing transaction. Deleting rows that are already gone is a

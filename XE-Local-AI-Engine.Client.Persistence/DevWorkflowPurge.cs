@@ -3,9 +3,10 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-///     Single source of truth for the complete DB footprint of a dev-workflow work item and of one run. The node-sqlite
-///     runtime connection does not enable <c>PRAGMA foreign_keys=ON</c>, so <c>ON DELETE CASCADE</c> never fires and
-///     every child table must be deleted explicitly or its rows orphan.
+///     Single source of truth for the complete DB footprint of a dev-workflow work item and of one run. The run's own
+///     children declare a cascade the node connection enforces, so listing them here is belt-and-braces; what the
+///     schema cannot do is reach the rows that hang off a work item through other families, which is why the whole
+///     footprint is enumerated in one place rather than left to the database.
 /// </summary>
 /// <remarks>
 ///     Deletes DB rows only; the caller owns the enclosing transaction, the on-disk artifact-blob teardown

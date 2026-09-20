@@ -37,7 +37,7 @@ async function renderWithProviders(ui: ReactElement) {
 	const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={qc}>
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ConfirmProvider>{ui}</ConfirmProvider>
 			</MantineProvider>
 		</QueryClientProvider>,

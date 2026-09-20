@@ -103,7 +103,7 @@ import { SourceBuildCard } from "@/features/node-settings/components/SourceBuild
 
 function renderCard(): void {
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<SourceBuildCard />
 		</MantineProvider>,
 	);

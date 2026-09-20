@@ -100,6 +100,13 @@ internal sealed record AgentHomeGoalOutcome
     /// <summary>Why the loop never started, when <see cref="Status" /> is <see cref="AgentHomeGoalStatus.NotRun" />.</summary>
     public string? NotRunReason { get; init; }
 
+    /// <summary>
+    ///     Wall clock the loop ran for, from the same <c>GetUtcNow()</c> reading the
+    ///     <see cref="AgentHomeOptions.MaxRunSeconds" /> deadline is computed from, so the two cannot disagree.
+    ///     <see cref="TimeSpan.Zero" /> when the loop never started.
+    /// </summary>
+    public TimeSpan Elapsed { get; init; }
+
     /// <summary>How many inner tool calls were made (refused ones included — they cost a turn).</summary>
     public int ToolCallCount { get; init; }
 

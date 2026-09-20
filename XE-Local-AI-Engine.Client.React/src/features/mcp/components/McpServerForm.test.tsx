@@ -60,7 +60,7 @@ function renderForm(onSubmit: (values: McpServerFormValues) => void) {
 	};
 
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<McpServerForm initialValues={initialValues} isSubmitting={false} onSubmit={onSubmit} onCancel={vi.fn()} />
 		</MantineProvider>,
 	);

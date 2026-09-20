@@ -52,5 +52,5 @@ export function installJsdomEnvironmentMocks(): void {
 
 // Renders a component inside a bare MantineProvider, the minimum context every Mantine component needs.
 export function renderWithMantine(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }

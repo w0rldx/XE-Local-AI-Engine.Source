@@ -13,7 +13,13 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        // Scoped to THIS database, never the process-global ClearAllPools: that one closes the pooled handle a
+        // parallel sibling's in-flight command is using. Clearing this pool is what lets Windows delete the file.
+        using (var poolKey = new SqliteConnection($"Data Source={_databasePath}"))
+        {
+            SqliteConnection.ClearPool(poolKey);
+        }
+
         if (File.Exists(_databasePath))
         {
             File.Delete(_databasePath);

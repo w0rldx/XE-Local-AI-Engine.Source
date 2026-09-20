@@ -12,7 +12,7 @@ import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 
 function renderWithProviders(ui: ReactElement) {
 	return render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<ConfirmProvider>{ui}</ConfirmProvider>
 		</MantineProvider>,
 	);

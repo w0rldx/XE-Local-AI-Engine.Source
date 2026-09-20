@@ -254,6 +254,53 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         AssertEx.True(IssuesArgument(gitCommands, "commit"), "git commit must run for the baseline");
     }
 
+    /// <summary>
+    ///     The baseline's git runs during PREPARE, before a run id or log exists, so it hands its records back to be
+    ///     flushed once the log opens. Otherwise the audit file starts at the model's first command and reads as if
+    ///     no baseline was taken.
+    /// </summary>
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_HandsTheBaselineCommandsBack_AttributedToTheNodeAndWithoutOutput()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        // Scripted output the collector must NOT pick up: the record is argv, exit code and duration, never bytes.
+        provider.RegisterCommand(BaselineCommandKey("init"), exitCode: 0, "Initialized empty Git repository");
+        var service = CreateService(provider);
+
+        var baselineCommands = new List<AgentHomeCommandLogRecord>();
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)], baselineCommands);
+
+        AssertEx.Equal("agent-home-baseline-init,agent-home-baseline-add,agent-home-baseline-commit",
+            string.Join(separator: ',', baselineCommands.Select(record => record.ExecutionId)),
+            "all three baseline commands come back, in the order they ran");
+        AssertEx.True(baselineCommands.TrueForAll(record => string.Equals(record.Actor, AgentHomeCommandActors.Node, StringComparison.Ordinal)),
+            "the node ran them, not the model");
+        AssertEx.True(baselineCommands.TrueForAll(record => string.Equals(record.Executable, "git", StringComparison.Ordinal) && record.ExitCode == 0 && record.Completed),
+            "each record carries the real executable and exit status");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenNoCollectorIsSupplied_StillCreatesTheBaseline()
+    {
+        // The chat attachment re-stage and the MCP workspace session have no run to attribute the baseline to and
+        // pass nothing; that must not change what prepare does.
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
+
+        AssertEx.True(provider.ExecutedCommands.Any(command => command.ExecutionId == "agent-home-baseline-commit"),
+            "the baseline is created whether or not anyone is collecting its commands");
+    }
+
     [Test]
     public async Task PrepareSelectedFoldersAsync_WhenBaselineCommandFails_Throws()
     {
@@ -386,6 +433,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
             isolation,
             new SensitiveFileExclusionService(),
             runtimeSettings,
+            TimeProvider.System,
             NullLogger<AgentHomeWorkspaceService>.Instance);
     }
 

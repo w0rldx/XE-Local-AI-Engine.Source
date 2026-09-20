@@ -31,7 +31,7 @@ function withProviders(ui: ReactNode): ReactElement {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 	return (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider>{ui}</MantineProvider>
+			<MantineProvider env="test">{ui}</MantineProvider>
 		</QueryClientProvider>
 	);
 }

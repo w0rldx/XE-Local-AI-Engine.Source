@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Integrations;
 
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -220,6 +221,39 @@ public sealed class IntegrationSessionStoreTests
         AssertEx.False(await store.DeleteAsync(sessionId),
             "The conversation purge is the mechanism; this is the backstop, so a second call is the ordinary no-op.");
         AssertEx.Null(await store.GetByIdAsync(sessionId));
+    }
+
+    /// <summary>
+    ///     The backstop delete must take the session's executions and their events: no foreign key on their
+    ///     session_id, so the schema will not. Unfiltered totals plus an untouched second session catch an over-broad
+    ///     delete too.
+    /// </summary>
+    [Test]
+    public async Task DeleteAsync_AlsoRemovesTheSessionsExecutionsAndEvents_LeavingAnotherSessionIntact()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture);
+
+        await using var context = fixture.CreateContext();
+        var (doomedSessionId, _) = await AcceptWithIdsAsync(context, seed);
+        var (survivingSessionId, survivingExecutionId) = await AcceptWithIdsAsync(context, seed);
+        var store = new IntegrationSessionStore(context);
+
+        AssertEx.Equal(expected: 2, await context.IntegrationExecutions.CountAsync());
+        AssertEx.Equal(expected: 2, await context.IntegrationExecutionEvents.CountAsync());
+
+        AssertEx.True(await store.DeleteAsync(doomedSessionId));
+
+        AssertEx.Equal(expected: 1, await context.IntegrationExecutions.CountAsync(),
+            "The deleted session's execution must go with it — no foreign key removes it.");
+        AssertEx.Equal(expected: 1, await context.IntegrationExecutionEvents.CountAsync(),
+            "The deleted session's execution events must go with it.");
+
+        AssertEx.Equal(expected: 1, await context.IntegrationExecutions.CountAsync(row => row.SessionId == survivingSessionId),
+            "The session that was never named keeps its execution.");
+        AssertEx.Equal(expected: 1, await context.IntegrationExecutionEvents.CountAsync(row => row.ExecutionId == survivingExecutionId),
+            "The session that was never named keeps its execution events.");
+        AssertEx.NotNull(await store.GetByIdAsync(survivingSessionId), "The other session row must survive.");
     }
 
     private static async Task<Guid> AcceptAsync(NodeChatDbContext context, SeedState seed) =>

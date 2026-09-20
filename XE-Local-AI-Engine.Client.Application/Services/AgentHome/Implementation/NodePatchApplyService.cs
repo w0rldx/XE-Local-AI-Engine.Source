@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -29,6 +31,13 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     private const string AgentHomeDirectoryName = "agent-home";
     private const string DiffHeaderPrefix = "diff --git ";
     private const string ProviderName = "host-patch-apply";
+
+    /// <summary>
+    ///     Node-wide single-flight around the mutating half of <see cref="ApplyApprovedAsync" />. Static because the
+    ///     service is scoped: a per-instance gate is a gate per request, which is no gate. Applies are not
+    ///     transactional against each other, so they serialize.
+    /// </summary>
+    private static readonly SemaphoreSlim ApplyGate = new(initialCount: 1, maxCount: 1);
 
     private readonly string _dataDirectoryRoot;
     private readonly IAgentHomeIdentityProvider _identityProvider;
@@ -69,7 +78,9 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 CanApply = false,
                 Files = plan.Files,
                 Rejections = plan.Rejections,
-                ContainsBinary = plan.ContainsBinary
+                ContainsBinary = plan.ContainsBinary,
+                PatchSha256 = plan.PatchSha256,
+                PatchMissing = plan.PatchMissing
             };
         }
 
@@ -98,7 +109,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             CanApply = rejections.Count == 0,
             Files = ApplyNumstat(plan.Files, numstat),
             Rejections = rejections,
-            ContainsBinary = plan.ContainsBinary
+            ContainsBinary = plan.ContainsBinary,
+            PatchSha256 = plan.PatchSha256
         };
     }
 
@@ -106,6 +118,21 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Everything below is held under the node-wide gate, re-validation included: the --check that clears an apply
+        // is only worth anything if no other apply writes into the same folder between it and the write it cleared.
+        await ApplyGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await ApplyApprovedCoreAsync(request, cancellationToken);
+        }
+        finally
+        {
+            _ = ApplyGate.Release();
+        }
+    }
+
+    private async Task<NodePatchApplyResult> ApplyApprovedCoreAsync(NodePatchApplyRequest request, CancellationToken cancellationToken)
+    {
         // Re-run the full validation + dry-run check (TOCTOU defense; never blind-apply).
         var plan = await BuildPlanAsync(request, cancellationToken);
         var rejections = new List<string>(plan.Rejections);
@@ -131,7 +158,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             {
                 Applied = false,
                 AppliedFiles = [],
-                Rejections = rejections
+                Rejections = rejections,
+                PatchMissing = plan.PatchMissing
             };
         }
 
@@ -141,7 +169,25 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         {
             // Residual TOCTOU: --check passed for this alias and the write runs immediately after. A symlink swap in an
             // intermediate directory between the two is bounded — git rejects it, and the host folder is user-trusted.
-            var apply = await ApplySubPatchAsync(runner, alias, cancellationToken);
+            HostGitResult? apply;
+            try
+            {
+                apply = await ApplySubPatchAsync(runner, alias, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // git is not transactional across files, so a cancelled apply can leave this alias half written.
+                // Logged on an uncancelled token, or the run log keeps no record that the apply ever started.
+                var cancelled = new List<string>(rejections)
+                {
+                    string.Create(CultureInfo.InvariantCulture,
+                        $"alias '{alias.Alias}': the apply was cancelled while running; this folder may be partly written.")
+                };
+                await LogRejectionAsync(request.RunId, cancelled, CancellationToken.None);
+                throw;
+            }
+
+
             if (apply is null || apply.ExitCode != 0)
             {
                 // A clean --check passed for every alias above, so a non-zero apply here is a rare race. Report the
@@ -240,7 +286,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var tempPatch = Path.Combine(Path.GetTempPath(), "agenthome-apply-" + Guid.NewGuid().ToString("N") + ".patch");
         try
         {
-            await File.WriteAllTextAsync(tempPatch, alias.SubPatch, cancellationToken);
+            await WriteSubPatchAsync(tempPatch, alias.SubPatch, cancellationToken);
             var fullArguments = arguments.Append(tempPatch).ToArray();
             return await runner.RunAsync(alias.ResolvedRoot, fullArguments, cancellationToken);
         }
@@ -254,8 +300,39 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
         finally
         {
+            // Every exit path, cancellation included: the `finally` covers the OperationCanceledException that
+            // propagates out of the write or out of the runner, so a cancelled apply leaves no copy behind.
             TryDeleteFile(tempPatch);
         }
+    }
+
+    /// <summary>
+    ///     Writes one alias's sub-patch to the system temp directory, owner-only. The mode rides on the CREATE
+    ///     rather than being narrowed afterwards, which would leave a window for another local user to read it.
+    ///     <see cref="SecureFilePermissions.Apply" /> follows for the Windows ACL.
+    /// </summary>
+    private static async Task WriteSubPatchAsync(string path, string subPatch, CancellationToken cancellationToken)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+            Options = FileOptions.Asynchronous
+        };
+
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        var stream = new FileStream(path, options);
+        await using (stream)
+        {
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(subPatch), cancellationToken);
+        }
+
+        SecureFilePermissions.Apply(path);
     }
 
     private async Task<ApplyPlan> BuildPlanAsync(NodePatchApplyRequest request, CancellationToken cancellationToken)
@@ -271,12 +348,12 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var fileInfo = new FileInfo(patchPath);
         if (!fileInfo.Exists)
         {
-            return ApplyPlan.Invalid("no exported patch is available for this run.");
+            return ApplyPlan.Missing("no exported patch is available for this run.");
         }
 
         if (fileInfo.Length == 0)
         {
-            return ApplyPlan.Invalid("the exported patch is empty.");
+            return ApplyPlan.Missing("the exported patch is empty.");
         }
 
         var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken);
@@ -285,10 +362,12 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return ApplyPlan.Invalid("the exported patch exceeds the maximum allowed size.");
         }
 
-        string patchText;
+        // ONE read: the bytes hashed, parsed and cut into sub-patches are the same buffer. A second read would
+        // re-open the window the caller's expected hash exists to close.
+        byte[] patchBytes;
         try
         {
-            patchText = await File.ReadAllTextAsync(patchPath, cancellationToken);
+            patchBytes = await File.ReadAllBytesAsync(patchPath, cancellationToken);
         }
         catch (IOException)
         {
@@ -299,10 +378,26 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return ApplyPlan.Invalid("the exported patch could not be read.");
         }
 
+        var patchSha256 = Convert.ToHexStringLower(SHA256.HashData(patchBytes));
+        if (request.ExpectedPatchSha256 is { Length: > 0 } expected
+            && !string.Equals(expected, patchSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            // Deliberately not echoing either hash: the caller already holds the one it sent, and the one on disk
+            // describes a patch it was never shown.
+            return ApplyPlan.Invalid("the exported patch changed since it was previewed.") with
+            {
+                PatchSha256 = patchSha256
+            };
+        }
+
+        var patchText = DecodePatch(patchBytes);
         var blocks = SplitBlocks(patchText);
         if (blocks.Count == 0)
         {
-            return ApplyPlan.Invalid("the exported patch contains no file changes.");
+            return ApplyPlan.Invalid("the exported patch contains no file changes.") with
+            {
+                PatchSha256 = patchSha256
+            };
         }
 
         var rejections = new List<string>();
@@ -333,7 +428,10 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         if (rejections.Count != 0)
         {
-            return ApplyPlan.WithRejections(rejections, containsBinary);
+            return ApplyPlan.WithRejections(rejections, containsBinary) with
+            {
+                PatchSha256 = patchSha256
+            };
         }
 
         var aliasPlans = new List<AliasPlan>();
@@ -352,7 +450,10 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         if (rejections.Count != 0)
         {
-            return ApplyPlan.WithRejections(rejections, containsBinary);
+            return ApplyPlan.WithRejections(rejections, containsBinary) with
+            {
+                PatchSha256 = patchSha256
+            };
         }
 
         return new ApplyPlan
@@ -361,7 +462,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             Aliases = aliasPlans,
             Files = files,
             Rejections = rejections,
-            ContainsBinary = containsBinary
+            ContainsBinary = containsBinary,
+            PatchSha256 = patchSha256
         };
     }
 
@@ -444,6 +546,18 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         return false;
     }
 
+    /// <summary>
+    ///     Decodes the patch bytes as <see cref="File.ReadAllTextAsync(string, CancellationToken)" /> would: UTF-8,
+    ///     BOM honoured. Invalid sequences become replacement characters, so a malformed patch is rejected by the
+    ///     guards instead of throwing.
+    /// </summary>
+    private static string DecodePatch(byte[] patchBytes)
+    {
+        return patchBytes.Length >= 3 && patchBytes[0] == 0xEF && patchBytes[1] == 0xBB && patchBytes[2] == 0xBF
+            ? Encoding.UTF8.GetString(patchBytes, index: 3, patchBytes.Length - 3)
+            : Encoding.UTF8.GetString(patchBytes);
+    }
+
     private static bool IsValidRunId(string runId)
     {
         return !string.IsNullOrEmpty(runId) && RunIdRegex().IsMatch(runId);
@@ -521,12 +635,27 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         public bool ContainsBinary { get; init; }
 
+        public string? PatchSha256 { get; init; }
+
+        public bool PatchMissing { get; init; }
+
         public static ApplyPlan Invalid(string reason)
         {
             return new ApplyPlan
             {
                 IsValid = false,
                 Rejections = [reason]
+            };
+        }
+
+        /// <summary>There is no patch to review at all, as opposed to one that will not apply.</summary>
+        public static ApplyPlan Missing(string reason)
+        {
+            return new ApplyPlan
+            {
+                IsValid = false,
+                Rejections = [reason],
+                PatchMissing = true
             };
         }
 

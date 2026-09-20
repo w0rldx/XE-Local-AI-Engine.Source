@@ -9,7 +9,7 @@ import { ConversationList } from "@/features/chat/components/ConversationList";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 function conversation(overrides: Partial<ChatConversationModel> = {}): ChatConversationModel {
@@ -275,7 +275,7 @@ describe("ConversationList management actions", () => {
 		expect(screen.queryByTestId("conversation-item-archived-1")).toBeNull();
 
 		rerender(
-			<MantineProvider>
+			<MantineProvider env="test">
 				<ConversationList
 					conversations={[archivedConversation]}
 					showArchived={true}

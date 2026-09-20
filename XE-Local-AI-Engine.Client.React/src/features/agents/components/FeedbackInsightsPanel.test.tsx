@@ -81,7 +81,7 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(<MantineProvider env="test">{ui}</MantineProvider>);
 }
 
 describe("FeedbackInsightsPanel", () => {

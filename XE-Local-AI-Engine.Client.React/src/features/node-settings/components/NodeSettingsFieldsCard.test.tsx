@@ -80,7 +80,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 	const onDownloadEmbedding = overrides.onDownloadRecommendedEmbedding ?? vi.fn();
 	const onChange = overrides.onChange ?? vi.fn();
 	render(
-		<MantineProvider>
+		<MantineProvider env="test">
 			<NodeSettingsFieldsCard
 				form={overrides.form ?? toNodeSettingsFieldsForm(undefined)}
 				bounds={toNodeSettingsFieldBounds(undefined)}
