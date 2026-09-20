@@ -160,7 +160,7 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversationId, assistantMessageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId };
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId, CreatedAtUtc = 12, Model = "model-x" });
         await persistence.MarkAssistantQueuedAsync(correlation, NowMs());
         await persistence.MarkAssistantStreamingAsync(correlation, NowMs());

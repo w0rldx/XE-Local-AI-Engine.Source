@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class ChatStreamEventSinkTests
 {
-    private static readonly NodeChatMessageCorrelation Correlation = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+    private static readonly NodeChatMessageCorrelation Correlation = new() { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
     [Test]
     public async Task TryWrite_PastQueueCapacity_DropsTheEventAndLatchesAReconcile()

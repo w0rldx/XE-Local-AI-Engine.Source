@@ -197,9 +197,12 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
             ? next
             : new StepScript { EventTypes = [ChatStreamEventTypes.AssistantCompleted] };
 
-        var correlation = new NodeChatMessageCorrelation(request.ConversationId,
-            request.MessageId.GetValueOrDefault(Guid.NewGuid()),
-            request.RequestId.GetValueOrDefault(Guid.NewGuid()));
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = request.ConversationId,
+            MessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid()),
+            RequestId = request.RequestId.GetValueOrDefault(Guid.NewGuid())
+        };
         // Linked so a caller that DOES cancel the enumeration still ends the turn; the supervisor deliberately does not.
         using var turn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var registration = _cancellationRegistry.Register(correlation, turn.Cancel);

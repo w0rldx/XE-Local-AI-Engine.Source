@@ -29,12 +29,15 @@ public sealed class LlamaCppRuntimeEndpointTests
     {
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
-            RecommendedTag: "b9700",
-            UpstreamLatestTag: "b9777",
-            UpdateAvailable: true,
-            IsOffline: false,
-            CheckedAtUtc: DateTimeOffset.UtcNow));
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = "b9692",
+            RecommendedTag = "b9700",
+            UpstreamLatestTag = "b9777",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow
+        });
 
         await using var factory = CreateFactory(binaryManager, updateState);
         using var client = factory.CreateClient();
@@ -76,12 +79,15 @@ public sealed class LlamaCppRuntimeEndpointTests
         // exceeded sixty seconds. The snapshot was then genuinely stale, the throttle correctly permitted a refresh,
         // and the unconfigured catalog substitute returned a null Task — surfacing as a 500 that looked like an
         // endpoint defect rather than a fixture that had aged out its own precondition.
-        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
-            RecommendedTag: "b9700",
-            UpstreamLatestTag: "b9777",
-            UpdateAvailable: true,
-            IsOffline: false,
-            CheckedAtUtc: DateTimeOffset.UtcNow));
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = "b9692",
+            RecommendedTag = "b9700",
+            UpstreamLatestTag = "b9777",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow
+        });
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
         factory.AddNodeBearerToken(request);
@@ -103,12 +109,15 @@ public sealed class LlamaCppRuntimeEndpointTests
                .Returns(LlamaCppReleaseResult.ForTag("b9777"));
 
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
-            RecommendedTag: "b9700",
-            UpstreamLatestTag: "b9777",
-            UpdateAvailable: true,
-            IsOffline: false,
-            CheckedAtUtc: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5)));
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = "b9692",
+            RecommendedTag = "b9700",
+            UpstreamLatestTag = "b9777",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5)
+        });
 
         await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), updateState, catalog);
         using var client = factory.CreateClient();
@@ -174,12 +183,15 @@ public sealed class LlamaCppRuntimeEndpointTests
     {
         // The runtime-status surface must reflect the supervisor's running-process count so the UI can gate the update.
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
-            RecommendedTag: "b9700",
-            UpstreamLatestTag: "b9777",
-            UpdateAvailable: true,
-            IsOffline: false,
-            CheckedAtUtc: DateTimeOffset.UtcNow));
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = "b9692",
+            RecommendedTag = "b9700",
+            UpstreamLatestTag = "b9777",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow
+        });
         var supervisor = new FakeProcessSupervisor(FakeProcessSupervisor.RunningChat("a"), FakeProcessSupervisor.RunningChat("b"));
 
         await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), updateState, supervisor: supervisor);
@@ -298,12 +310,15 @@ public sealed class LlamaCppRuntimeEndpointTests
                .Returns(LlamaCppReleaseResult.ForTag("b9777"));
 
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
-            RecommendedTag: "b9700",
-            UpstreamLatestTag: "b9777",
-            UpdateAvailable: true,
-            IsOffline: false,
-            CheckedAtUtc: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5)));
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = "b9692",
+            RecommendedTag = "b9700",
+            UpstreamLatestTag = "b9777",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5)
+        });
 
         await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(),
             updateState,

@@ -947,7 +947,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             var started = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionStarted, contentType: null, payload: null);
             await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = started.Sequence, EventType = started.Type, DetailJson = null, OccurredAtUtc = started.OccurredAtUtc }, runToken);
 
-            var correlation = new NodeChatMessageCorrelation(session.ConversationId, messageId, executionId);
+            var correlation = new NodeChatMessageCorrelation { ConversationId = session.ConversationId, MessageId = messageId, RequestId = executionId };
             _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
             {
                 ConversationId = session.ConversationId,

@@ -214,10 +214,14 @@ public sealed class NodeChatCreateAssistantPlaceholderRequest
     public string? ReasoningEffort { get; init; }
 }
 
-public sealed record NodeChatMessageCorrelation(
-    Guid ConversationId,
-    Guid MessageId,
-    Guid RequestId);
+public sealed record NodeChatMessageCorrelation
+{
+    public required Guid ConversationId { get; init; }
+
+    public required Guid MessageId { get; init; }
+
+    public required Guid RequestId { get; init; }
+}
 
 public sealed class NodeChatPartialFlushRequest
 {

@@ -583,7 +583,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = createdAtUtc, AgentDefinitionId = agentDefinitionId });
-        return new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+        return new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
     }
 
     private static async Task<NodeChatMessageCorrelation> CreateRemoteAssistantPlaceholderAsync(NodeChatPersistenceService persistence,
@@ -600,7 +600,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
             CreatedAtUtc = createdAtUtc,
             Origin = NodeChatOriginValues.Remote
         });
-        return new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+        return new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
     }
 
     private string GetDatabasePath(string fileName)

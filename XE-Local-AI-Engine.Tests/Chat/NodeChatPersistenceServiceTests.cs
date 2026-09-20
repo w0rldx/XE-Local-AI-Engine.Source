@@ -37,7 +37,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var userMessageId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = requestId };
 
         var user = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversation.ConversationId, MessageId = userMessageId, Content = " hello ", CreatedAtUtc = 11 });
         var placeholder = await service
@@ -89,7 +89,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Parts", UserId = "node", CreatedAtUtc = 2000 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 2001 });
 
         // reasoning -> tool -> reasoning: a tool call between two reasoning runs is the Option A interleave that
@@ -138,7 +138,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Legacy", UserId = "node", CreatedAtUtc = 2100 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 2101 });
 
         // Terminalize WITHOUT parts (the pre-parts shape): the serialized metadata omits the parts key entirely.
@@ -169,7 +169,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Attribution", UserId = "node", CreatedAtUtc = 3000 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         var agentDefinitionId = Guid.NewGuid();
 
         // The placeholder is stamped with the per-response agent attribution at send time; it must survive the
@@ -212,7 +212,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Legacy attribution", UserId = "node", CreatedAtUtc = 3100 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 3101 });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -242,7 +242,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Reasoning effort", UserId = "node", CreatedAtUtc = 3200 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         // The placeholder is stamped with the reasoning effort used to drive the turn; it must survive the
         // streaming/terminalize updates (which preserve it from current) and reload off the metadata blob.
@@ -282,7 +282,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Legacy reasoning effort", UserId = "node", CreatedAtUtc = 3300 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 3301 });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -311,7 +311,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Knowledge sources", UserId = "node", CreatedAtUtc = 3400 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         var sources = new[]
         {
             new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Deployment Runbook", "Rollback", 0.91d),
@@ -367,7 +367,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Legacy sources", UserId = "node", CreatedAtUtc = 3450 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 3451 });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -396,7 +396,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Generation duration", UserId = "node", CreatedAtUtc = 3400 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
         {
@@ -436,7 +436,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Legacy generation duration", UserId = "node", CreatedAtUtc = 3500 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 3501 });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -466,8 +466,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel", UserId = null, CreatedAtUtc = 20 });
         var targetMessageId = Guid.NewGuid();
         var otherMessageId = Guid.NewGuid();
-        var targetCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, targetMessageId, Guid.NewGuid());
-        var otherCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, otherMessageId, Guid.NewGuid());
+        var targetCorrelation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = targetMessageId, RequestId = Guid.NewGuid() };
+        var otherCorrelation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = otherMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = targetMessageId, RequestId = targetCorrelation.RequestId, CreatedAtUtc = 21 });
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = otherMessageId, RequestId = otherCorrelation.RequestId, CreatedAtUtc = 22 });
@@ -492,7 +492,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel terminal", UserId = null, CreatedAtUtc = 50 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 51 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 52);
@@ -526,7 +526,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel streaming", UserId = null, CreatedAtUtc = 60 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 61 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 62);
@@ -551,7 +551,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel idempotent", UserId = null, CreatedAtUtc = 70 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 71 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 72);
@@ -580,7 +580,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel then complete", UserId = null, CreatedAtUtc = 80 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 81 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 82);
@@ -615,7 +615,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel then interrupt", UserId = null, CreatedAtUtc = 90 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 91 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 92);
@@ -646,7 +646,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Double terminalize", UserId = null, CreatedAtUtc = 100 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 101 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 102);
@@ -678,7 +678,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Late flush", UserId = null, CreatedAtUtc = 110 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 111 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 112);
@@ -712,7 +712,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         for (var index = 0; index < iterations; index++)
         {
             var messageId = Guid.NewGuid();
-            var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, messageId, Guid.NewGuid());
+            var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = messageId, RequestId = Guid.NewGuid() };
             correlations.Add(correlation);
             await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = messageId, RequestId = correlation.RequestId, CreatedAtUtc = 121 });
             await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 122);
@@ -745,7 +745,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel before queued", UserId = null, CreatedAtUtc = 130 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 131 });
         await service.CancelMessageAsync(new NodeChatCancelRequest { Correlation = correlation, CancelledAtUtc = 132 });
@@ -774,7 +774,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Cancel before streaming", UserId = null, CreatedAtUtc = 140 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 141 });
         await service.MarkAssistantQueuedAsync(correlation, updatedAtUtc: 142);
@@ -807,7 +807,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Mark after terminal", UserId = null, CreatedAtUtc = 150 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 151 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 152);
@@ -833,7 +833,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Platform streaming", UserId = null, CreatedAtUtc = 170 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 171 });
 
@@ -857,7 +857,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         for (var index = 0; index < iterations; index++)
         {
             var messageId = Guid.NewGuid();
-            var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, messageId, Guid.NewGuid());
+            var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = messageId, RequestId = Guid.NewGuid() };
             correlations.Add(correlation);
             await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = messageId, RequestId = correlation.RequestId, CreatedAtUtc = 181 });
             await service.MarkAssistantQueuedAsync(correlation, updatedAtUtc: 182);
@@ -886,7 +886,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var service = CreateService(provider);
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Failure", UserId = null, CreatedAtUtc = 24 });
         var assistantMessageId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 25 });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 26);
@@ -1086,7 +1086,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Chat", UserId = "node", CreatedAtUtc = 1 });
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = requestId };
 
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = requestId, CreatedAtUtc = 2, Model = "llama" });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 3);
@@ -1602,7 +1602,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                              }));
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
-            Correlation = new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
+            Correlation = new NodeChatMessageCorrelation { ConversationId = source.ConversationId, MessageId = variantMessageId, RequestId = variantRequestId },
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 1204,
             Content = "REV-NEWER"
@@ -1644,7 +1644,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
               .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest { ConversationId = source.ConversationId, OriginalMessageId = originalAssistantId, NewMessageId = variantMessageId, RequestId = variantRequestId, CreatedAtUtc = 1303 });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
-            Correlation = new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
+            Correlation = new NodeChatMessageCorrelation { ConversationId = source.ConversationId, MessageId = variantMessageId, RequestId = variantRequestId },
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 1304,
             Content = "REV-NEWER"
@@ -1694,7 +1694,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                              }));
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
-            Correlation = new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
+            Correlation = new NodeChatMessageCorrelation { ConversationId = source.ConversationId, MessageId = lateSiblingId, RequestId = lateSiblingRequestId },
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 1506,
             Content = "EARLY-REGEN"
@@ -1737,7 +1737,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest { ConversationId = source.ConversationId, OriginalMessageId = earlyAssistantId, NewMessageId = lateSiblingId, RequestId = lateSiblingRequestId, CreatedAtUtc = 1605 });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
-            Correlation = new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
+            Correlation = new NodeChatMessageCorrelation { ConversationId = source.ConversationId, MessageId = lateSiblingId, RequestId = lateSiblingRequestId },
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 1606,
             Content = "EARLY-REGEN"
@@ -1781,7 +1781,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                                        }));
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
-            Correlation = new NodeChatMessageCorrelation(source.ConversationId, downSiblingId, downSiblingRequestId),
+            Correlation = new NodeChatMessageCorrelation { ConversationId = source.ConversationId, MessageId = downSiblingId, RequestId = downSiblingRequestId },
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 1706,
             Content = "DOWN-REGEN"
@@ -1850,7 +1850,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = createdAtUtc });
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
-            Correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId),
+            Correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId },
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = createdAtUtc,
             Content = content

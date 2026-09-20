@@ -737,7 +737,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         {
             Requested = true;
 
-            return Task.FromResult(new ComputePythonRuntime("/never/used", ["/never/used"]));
+            return Task.FromResult(new ComputePythonRuntime { InterpreterPath = "/never/used", ReadOnlyTrees = ["/never/used"] });
         }
     }
 }

@@ -622,7 +622,7 @@ public sealed class ConversationStepContextBoundTests
             _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = turn });
             _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
             {
-                Correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId),
+                Correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId },
                 Status = NodeChatMessageStatusValues.Completed,
                 UpdatedAtUtc = turn,
                 Content = new string('a', contentChars),

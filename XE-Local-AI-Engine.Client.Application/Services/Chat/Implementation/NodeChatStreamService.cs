@@ -143,7 +143,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
         var assistantMessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
         var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
-        var correlation = new NodeChatMessageCorrelation(request.ConversationId, assistantMessageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = request.ConversationId, MessageId = assistantMessageId, RequestId = requestId };
         var sequence = new NodeChatStreamSequence();
         var startedAtUtc = NowUnixMilliseconds();
 

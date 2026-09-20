@@ -1070,7 +1070,7 @@ public sealed class InvocationRunnerTests
             return requestId is not null;
         }, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the runner must re-invoke the agent threadlessly after the approval decision");
@@ -1106,7 +1106,7 @@ public sealed class InvocationRunnerTests
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "an approval-required ClientLocal tool must still drive the fold-and-resume segment");
@@ -1129,12 +1129,12 @@ public sealed class InvocationRunnerTests
             RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent($"unmatched-{Guid.NewGuid():N}", Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = $"unmatched-{Guid.NewGuid():N}", Approved = true });
 
         AssertEx.False(runTask.IsCompleted, "an unmatched approval response must not resume the held invocation");
         AssertEx.Equal(expected: 1, segment, "an unmatched approval response must not start the resume segment");
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the matching approval response must resume the invocation");
@@ -1163,8 +1163,8 @@ public sealed class InvocationRunnerTests
             RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build());
 
         await AssertEx.EventuallyAsync(() => requestId is not null, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: false));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = false });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = true });
         await runTask;
 
         var response = AssertEx.NotNull(resumeMessages)
@@ -1185,7 +1185,7 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         // A SECOND turn in the SAME conversation, on the same skill at the same version: the memo answers it.
@@ -1212,12 +1212,12 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "script execution is outside the memo allow-list and must be approved every single time");
@@ -1260,7 +1260,7 @@ public sealed class InvocationRunnerTests
 
         var turn = RunAsync(runner, package.Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await turn;
 
         return published.Single().SessionScopeEligible;
@@ -1506,7 +1506,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an operator weighing an approval must not be pre-empted by the model's own turn budget");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1538,7 +1538,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an attached operator weighing an approval must keep the full park budget");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1600,7 +1600,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the re-attached park must get the full budget back from the moment of re-attach");
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(expected: 2, segment);
@@ -1647,9 +1647,9 @@ public sealed class InvocationRunnerTests
 
         // The transport presents approvals one at a time, so answer each as it arrives (present-each-in-turn).
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[0].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[0].RequestId, Approved = true });
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the runner must resume only after BOTH approvals resolve");
@@ -1681,7 +1681,7 @@ public sealed class InvocationRunnerTests
         // The whole segment (both chunks) drains before approvals are presented, so a bypassed dedup would already have
         // enqueued two; wait for the single presentation, resolve it, and confirm no second one follows.
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[0].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[0].RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 1, approvals.Count, "a CallId-less approval re-emitted across chunks must be presented exactly once");
@@ -1771,7 +1771,7 @@ public sealed class InvocationRunnerTests
             return requestId is not null;
         }, TimeSpan.FromSeconds(5));
 
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId!, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = requestId!, Approved = true });
         await runTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
@@ -1903,7 +1903,7 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 1, segment, "the resume segment must never start once the round is rejected as over budget");
@@ -1938,7 +1938,7 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "the approved resume must run instead of the turn failing");
@@ -2866,7 +2866,7 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true });
         await runTask;
 
         AssertEx.Equal(expected: 2, segment, "The resume segment must actually run, or this proves nothing.");
@@ -3981,12 +3981,12 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "one approval must cover ONE resource, not every resource the skill carries");
@@ -4001,7 +4001,7 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         // A SECOND turn in the SAME conversation, same Fixed custom tool at the same version: the memo answers it.
@@ -4019,14 +4019,14 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         // A Parameterized custom tool is once-or-deny only: a session approval must NOT be remembered, so the next turn
         // re-prompts even though the operator clicked "approve for session".
         var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, isFixed: false).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "a Parameterized custom tool must never be session-approvable — one click must not grant open-ended model-chosen execution");
@@ -4041,12 +4041,12 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: false), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = false }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: false));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = false });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "a DENY must never be remembered, whatever scope the operator sent");
@@ -4061,13 +4061,13 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 1, isFixed: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         // The operator edited the custom tool mid-conversation: same name, new version. The memo is bound to the version.
         var secondTurn = RunAsync(runner, CustomToolPackage(conversationId, version: 2, isFixed: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "an edit that bumps the custom tool version must invalidate the memo and re-prompt");
@@ -4086,12 +4086,12 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "the operator's always-prompt switch must turn session scope off entirely");
@@ -4106,12 +4106,12 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         var secondTurn = RunAsync(runner, SkillPackage(conversationId, imported: true).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "third-party skill names are attacker-chosen; a durable approval on one must not be available");
@@ -4126,13 +4126,13 @@ public sealed class InvocationRunnerTests
 
         var firstTurn = RunAsync(runner, SkillPackage(conversationId).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals.Single().RequestId, Approved: true), ApprovalScope.Session);
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals.Single().RequestId, Approved = true }, ApprovalScope.Session);
         await firstTurn;
 
         // The operator edited the skill (or an import Replaced it) mid-conversation: same name, new content, new version.
         var secondTurn = RunAsync(runner, SkillPackage(conversationId, version: 2).Build());
         await AssertEx.EventuallyAsync(() => approvals.Count == 2, TimeSpan.FromSeconds(5));
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvals[1].RequestId, Approved: true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent { RequestId = approvals[1].RequestId, Approved = true });
         await secondTurn;
 
         AssertEx.Equal(expected: 2, approvals.Count, "a content change must invalidate the memo — the approval is bound to the version the operator saw");

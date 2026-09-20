@@ -62,6 +62,11 @@ A test ends in an explicit assertion and is binary green/red with no human step 
   CA1416 platform analyzer, so a method that calls a Linux-only API also carries
   `[UnsupportedOSPlatform("windows")]`. Proof: `XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs`.
 - A test that logs a problem and stays green has the same defect as one with no assertion at all.
+- A **structural** equality assertion — `AssertEx.Equal(expected, actual)` on a whole object rather than on one of
+  its members — is an assertion only while the type has value semantics. Convert that type from a record to a class
+  and the same line becomes a reference comparison that the compiler accepts and the test keeps passing on nothing.
+  Which shape a type is allowed to take, and the guards that pin it, are in
+  [Code Conventions](16-code-conventions.md).
 
 ### Mocking policy
 

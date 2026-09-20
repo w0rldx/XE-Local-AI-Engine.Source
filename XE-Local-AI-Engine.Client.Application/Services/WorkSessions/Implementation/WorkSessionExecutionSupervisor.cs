@@ -404,7 +404,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 CancellationToken.None));
         await _publisher.PublishAsync(sessionId, started.Sequence, WorkSessionChangeKind.Step, CancellationToken.None);
 
-        var correlation = new NodeChatMessageCorrelation(state.Session.ConversationId, Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = state.Session.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         using var guard = new StepCancellationGuard(_cancellationRegistry, correlation, _timeProvider);
         run.Correlation = correlation;
         if (_options.StepTimeoutSeconds > 0)

@@ -209,7 +209,7 @@ types — everything whose job is to carry named values across a boundary.
 A **`record`** is for a type that genuinely wants **value semantics**: it is used as a dictionary or `HashSet` key,
 it is copied with `with`, or it is compared structurally (including by a test's equality assertion). When a record
 is right, declare it **non-positional** — properties in a body, not a parameter list — so the member list, its
-docs and its attributes stay where a reader expects them. **Positional records are avoided** everywhere.
+docs and its attributes stay where a reader expects them.
 
 EF entities are classes: an entity has identity, not value equality.
 
@@ -233,9 +233,51 @@ stricter contract. Route and query members are worse than that: the JSON body is
 values are overlaid, so a `required` route-bound member rejects every request, including the correct ones. Request
 DTOs therefore stay plain `init` members with initializers for their defaults.
 
-*Migration status:* the existing records convert area by area behind a guard that rejects new positional records.
-The trap it exists to catch: converting a record to a class silently turns a structural `AssertEx.Equal` into a
-reference comparison, so every sub-slice runs the full gate.
+**`required` is wrong wherever something the host did not write fills the object.** The modifier promises that
+whoever builds the instance sets the member, and it holds only while this build is also the writer — which is why a
+response DTO above takes it and everything below does not. Each failure below is a deserializer being held to a
+promise a different writer made:
+
+- A type `JsonSerializer` **reads back** from something persisted or foreign — a stored SQLite row, a journal or
+  catalog file on disk, a response body from an external API, a `[JsonSerializable]` entry on a source-generated
+  context that reads a request, or a type argument that reaches `Deserialize<T>` through a generic base class or
+  generic method. That last one is the dangerous shape: at the call site the type is `T`, so nothing at the
+  declaration says the type is deserialized at all. A document an older build wrote lacks the member, and a read
+  that used to default it throws instead.
+- An EF **`SqlQuery<T>`/`SqlQueryRaw<T>` row type**, which EF materializes by reflection, binding columns to
+  members by name. `required` is a promise C# enforces at construction sites and reflection never reaches one, so
+  the modifier is decoration — and because no C# code assigns the members, the type as a class fails the Release
+  build with `S1144` on every unused accessor. The tell is `S1144: Remove the unused private set accessor` on a
+  type you only ever see come out of a query.
+- A SignalR **client** `On<T>`/`InvokeAsync<T>`/`StreamAsync<T>` registration against a hub **this build does not
+  also write** — the hub protocol materializes `T` with the connection's own JSON options, which the node leaves
+  unconfigured, and a missing `required` member throws inside the protocol, so the handler never runs and the event
+  is dropped with no log line and no failing test. A client reading this host's own server-push payload is the
+  opposite case and is fine: the host writes every member.
+- Anything **nested inside** such a type, reached through one of its members: the same old document arrives there.
+- A FastEndpoints **request** type or an inbound **hub-method argument**, per the paragraph above.
+- A member the serializer may leave out — `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting…)]` — which
+  `RequiredMemberSerializationTests` refuses outright.
+
+Only the last of those is caught by a gate; the others are caught by this rule or not at all. A type in that
+position keeps a shape where every member is optional at the deserializer, which is what the positional `record`
+form already gives it, so such a type stays positional and says so in the allowlist below.
+
+**A positional `record` needs a reason, and the reason is written down.**
+`PositionalRecordConventionTests` fails on any `record` of class kind that carries a parameter list unless
+`XE-Local-AI-Engine.Tests/Architecture/PositionalRecordAllowlist.txt` lists that declaration; it reads source over
+the same roots as the primary-constructor guard, because the positional form leaves nothing in IL that a
+non-positional record does not. `record struct` is out of scope — a value type is what the positional form is for.
+The allowlist is grouped by reason, and those groups are the whole set of reasons: the type is read back by a
+serializer or nested in one that is, code **deconstructs** it positionally, it belongs to a **record inheritance
+hierarchy** that converts as a unit or not at all, it hand-writes **`PrintMembers`** so `ToString()` keeps secrets
+out of logs, it is a **request or hub contract**, or its **body reads a positional parameter** — legal in a record,
+`CS0236` in a class. The list is shrink-only in both directions: an unreasoned declaration and an entry that no
+longer matches a positional record fail the same test, so a conversion deletes its line in the same commit.
+
+Converting a record to a class degrades a structural `AssertEx.Equal` on that type into a reference comparison
+with no compiler warning, so such a conversion is judged on the full backend gate, never on the classes it
+touched.
 
 ### `ConfigureAwait` is contextual
 

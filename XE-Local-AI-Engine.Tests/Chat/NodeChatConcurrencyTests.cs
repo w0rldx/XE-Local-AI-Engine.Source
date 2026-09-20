@@ -70,7 +70,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         {
             var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Delete race", UserId = "node", CreatedAtUtc = iteration });
             var assistantMessageId = Guid.NewGuid();
-            var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+            var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = Guid.NewGuid() };
             await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = assistantMessageId, RequestId = correlation.RequestId, CreatedAtUtc = 1 });
             await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
@@ -116,7 +116,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         for (var index = 0; index < 100; index++)
         {
             var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = $"c{index}", UserId = "node", CreatedAtUtc = index });
-            var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, Guid.NewGuid(), Guid.NewGuid());
+            var correlation = new NodeChatMessageCorrelation { ConversationId = conversation.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
             await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversation.ConversationId, MessageId = correlation.MessageId, RequestId = correlation.RequestId, CreatedAtUtc = 1 });
             await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         }

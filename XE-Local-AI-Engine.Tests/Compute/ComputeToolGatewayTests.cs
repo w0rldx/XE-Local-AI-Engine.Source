@@ -681,12 +681,12 @@ public sealed class ComputeToolGatewayTests
 
         public StubEnvironment(string interpreter, IReadOnlyList<string>? readOnlyTrees = null)
         {
-            _runtime = new ComputePythonRuntime(interpreter, readOnlyTrees ?? ["/provisioned/venv", "/provisioned/pythons"]);
+            _runtime = new ComputePythonRuntime { InterpreterPath = interpreter, ReadOnlyTrees = readOnlyTrees ?? ["/provisioned/venv", "/provisioned/pythons"] };
         }
 
         public StubEnvironment(ComputeEnvironmentException failure)
         {
-            _runtime = new ComputePythonRuntime(string.Empty, []);
+            _runtime = new ComputePythonRuntime { InterpreterPath = string.Empty, ReadOnlyTrees = [] };
             _failure = failure;
         }
 

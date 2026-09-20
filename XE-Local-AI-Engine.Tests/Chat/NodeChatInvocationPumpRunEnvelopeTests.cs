@@ -29,7 +29,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var invocationId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
 
         var state = new InvocationState
         {
@@ -73,7 +73,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // its source, so a value above int.MaxValue must survive this hop intact.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         const long wideEstimate = (long)int.MaxValue + 1;
 
         var state = new InvocationState
@@ -102,7 +102,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // labels onto the envelope metadata, unchanged.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var state = new InvocationState
         {
@@ -130,7 +130,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // `authored_effort IS NULL` the pre-`auto` population of the measurement.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var state = new InvocationState
         {
@@ -157,7 +157,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // cold arm and a warm arm cannot be compared at all.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var state = new InvocationState
         {
@@ -185,7 +185,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // proved a warm start", which is the one thing an unmeasured turn must not claim.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var state = new InvocationState
         {
@@ -213,7 +213,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // three-round turn as 10,722 tokens of context it never held.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var state = new InvocationState
         {
@@ -253,7 +253,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // write to keep using the message's own tokens, so those rows read exactly as they always have.
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var state = new InvocationState
         {
@@ -283,7 +283,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // than being manufactured as zero — which is what lets a reader tell "not measured" from "measured as none".
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
 
@@ -300,7 +300,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var state = new InvocationState
         {
             InvocationId = Guid.NewGuid(),
@@ -329,7 +329,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var state = new InvocationState
         {
             InvocationId = Guid.NewGuid(),
@@ -353,7 +353,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var state = new InvocationState
         {
             InvocationId = Guid.NewGuid(),
@@ -376,7 +376,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var state = new InvocationState
         {
             InvocationId = Guid.NewGuid(),
@@ -400,7 +400,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var cursor = new NodeChatPumpCursor("partial", string.Empty);
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled: false);
@@ -419,7 +419,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var persistence = CreatePersistence();
         var pump = ChatPumpTestFactory.Create(persistence);
 
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor(string.Empty, string.Empty), wasCancelled: true);
 
@@ -435,7 +435,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // Simulate the transition guard rejecting an Interrupted write against an already-Cancelled row: the persistence
         // seam returns the Cancelled winning row. The returned status and event type must reflect that persisted state
         // rather than the requested Interrupted (the envelope's own status is derived inside the terminalize command).
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
                    .Returns(new NodeChatPersistedMessageDto
@@ -478,7 +478,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var pump = new NodeChatInvocationPump(persistence, resolver, TimeProvider.System);
 
         var conversationId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversationId, Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var state = new InvocationState
         {
             InvocationId = Guid.NewGuid(),

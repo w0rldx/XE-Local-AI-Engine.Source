@@ -323,7 +323,7 @@ public sealed class CatalogRecommendationServiceTests
         catalogProvider.GetCatalogAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(snapshot));
 
         var updateState = Substitute.For<ILlamaCppUpdateState>();
-        updateState.Current.Returns(new LlamaCppUpdateSnapshot(installedTag, RecommendedTag: null, UpstreamLatestTag: null, UpdateAvailable: false, IsOffline: false, CheckedAtUtc: null));
+        updateState.Current.Returns(new LlamaCppUpdateSnapshot { InstalledTag = installedTag, RecommendedTag = null, UpstreamLatestTag = null, UpdateAvailable = false, IsOffline = false, CheckedAtUtc = null });
 
         return new CatalogRecommendationService(catalogProvider, discovery, new MemoryFitEstimator(), updateState, NullLogger<CatalogRecommendationService>.Instance);
     }

@@ -82,7 +82,14 @@ internal enum AgentHomeGoalStatus
 }
 
 /// <summary>One command the goal loop ran, as the model-facing result reports it.</summary>
-internal sealed record AgentHomeCommandOutcome(string Executable, int ExitCode, bool Completed);
+internal sealed class AgentHomeCommandOutcome
+{
+    public required string Executable { get; init; }
+
+    public required int ExitCode { get; init; }
+
+    public required bool Completed { get; init; }
+}
 
 /// <summary>What a goal-execution loop actually did. Every field is model-safe: no host path, no captured output.</summary>
 internal sealed record AgentHomeGoalOutcome

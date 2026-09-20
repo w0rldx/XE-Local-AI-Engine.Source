@@ -60,7 +60,7 @@ public sealed class NodeChatPersistenceContractTests
     [Test]
     public void CorrelatedOperations_RequireConversationMessageAndRequestIds()
     {
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var cancel = new NodeChatCancelRequest { Correlation = correlation, CancelledAtUtc = 42 };
         var flush = new NodeChatPartialFlushRequest { Correlation = correlation, Content = "partial", Reasoning = "thinking", UpdatedAtUtc = 43 };
         var terminal = new NodeChatTerminalizeMessageRequest { Correlation = correlation, Status = NodeChatMessageStatusValues.Completed, UpdatedAtUtc = 44 };

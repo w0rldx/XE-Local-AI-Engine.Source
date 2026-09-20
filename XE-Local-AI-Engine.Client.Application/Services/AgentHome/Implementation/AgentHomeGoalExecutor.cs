@@ -565,7 +565,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             catch (OperationCanceledException) when (commandCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
                 await LogCommandAsync(executionId, executable, arguments, completed: false, exitCode: -1, startedTimestamp, nameof(OperationCanceledException));
-                _commands.Add(new AgentHomeCommandOutcome(executable, ExitCode: -1, Completed: false));
+                _commands.Add(new AgentHomeCommandOutcome { Executable = executable, ExitCode = -1, Completed = false });
                 return Refuse(string.Create(CultureInfo.InvariantCulture,
                     $"run_command timed out after {_executor._options.CommandTimeoutSeconds}s and was terminated."));
             }
@@ -575,7 +575,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             }
 
             await LogCommandAsync(executionId, executable, arguments, result.Completed, result.ExitCode, startedTimestamp, errorClass: null);
-            _commands.Add(new AgentHomeCommandOutcome(executable, result.ExitCode, result.Completed));
+            _commands.Add(new AgentHomeCommandOutcome { Executable = executable, ExitCode = result.ExitCode, Completed = result.Completed });
 
             return RenderCommandResult(result);
         }

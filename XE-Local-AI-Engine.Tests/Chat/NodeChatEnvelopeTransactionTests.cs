@@ -486,7 +486,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
     private static async Task<NodeChatMessageCorrelation> CreatePlaceholderAsync(NodeChatPersistenceService persistence, Guid conversationId)
     {
-        var correlation = new NodeChatMessageCorrelation(conversationId, Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = correlation.MessageId, RequestId = correlation.RequestId, CreatedAtUtc = 1 });
         return correlation;
     }

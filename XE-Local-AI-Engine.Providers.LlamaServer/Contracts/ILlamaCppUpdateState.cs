@@ -6,27 +6,29 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     recommended tag, the optional upstream-latest tag, and whether a newer recommended runtime is available — so the
 ///     status endpoint can answer "is there an update?" without re-hitting the live catalog on every poll.
 /// </summary>
-/// <param name="InstalledTag">The currently-installed release tag, or <see langword="null" /> on a fresh node.</param>
-/// <param name="RecommendedTag">The resolved recommended release tag, or <see langword="null" /> when unresolved.</param>
-/// <param name="UpstreamLatestTag">The true upstream latest tag (developer mode), or <see langword="null" /> when not resolved.</param>
-/// <param name="UpdateAvailable">
-///     <see langword="true" /> only when a newer recommended tag is resolvable AND it differs from the installed tag.
-/// </param>
-/// <param name="IsOffline">
-///     <see langword="true" /> when the live catalog was unreachable/rate-limited at the time of the snapshot.
-/// </param>
-/// <param name="CheckedAtUtc">When the snapshot was computed (UTC), or <see langword="null" /> before the first check.</param>
-public sealed record LlamaCppUpdateSnapshot(
-    string? InstalledTag,
-    string? RecommendedTag,
-    string? UpstreamLatestTag,
-    bool UpdateAvailable,
-    bool IsOffline,
-    DateTimeOffset? CheckedAtUtc)
+public sealed class LlamaCppUpdateSnapshot
 {
+    /// <summary>The currently-installed release tag, or <see langword="null" /> on a fresh node.</summary>
+    public required string? InstalledTag { get; init; }
+
+    /// <summary>The resolved recommended release tag, or <see langword="null" /> when unresolved.</summary>
+    public required string? RecommendedTag { get; init; }
+
+    /// <summary>The true upstream latest tag (developer mode), or <see langword="null" /> when not resolved.</summary>
+    public required string? UpstreamLatestTag { get; init; }
+
+    /// <summary><see langword="true" /> only when a newer recommended tag is resolvable AND it differs from the installed tag.</summary>
+    public required bool UpdateAvailable { get; init; }
+
+    /// <summary><see langword="true" /> when the live catalog was unreachable/rate-limited at the time of the snapshot.</summary>
+    public required bool IsOffline { get; init; }
+
+    /// <summary>When the snapshot was computed (UTC), or <see langword="null" /> before the first check.</summary>
+    public required DateTimeOffset? CheckedAtUtc { get; init; }
+
     /// <summary>The empty pre-check snapshot: nothing resolved yet, no update advertised, not flagged offline.</summary>
     public static LlamaCppUpdateSnapshot Empty { get; } =
-        new(InstalledTag: null, RecommendedTag: null, UpstreamLatestTag: null, UpdateAvailable: false, IsOffline: false, CheckedAtUtc: null);
+        new() { InstalledTag = null, RecommendedTag = null, UpstreamLatestTag = null, UpdateAvailable = false, IsOffline = false, CheckedAtUtc = null };
 }
 
 /// <summary>

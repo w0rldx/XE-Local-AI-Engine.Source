@@ -144,7 +144,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         var resolution = await ResolveTurnAsync(conversation, original, cancellationToken);
 
         var placeholder = await MintVariantAsync(conversationId, originalMessageId, newMessageId, requestId, startedAtUtc, resolution, reasoningEffort, cancellationToken);
-        var correlation = new NodeChatMessageCorrelation(conversationId, placeholder.MessageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = placeholder.MessageId, RequestId = requestId };
         var sequence = new NodeChatStreamSequence();
 
         // The variant row now exists as Pending, but run ownership (the pump + runner + their protective finally) is not

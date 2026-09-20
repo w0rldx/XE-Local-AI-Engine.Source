@@ -1995,7 +1995,7 @@ public sealed class NodeChatStreamServiceTests
         {
             if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
             {
-                AssertEx.True(cancellationRegistry.TryCancel(new NodeChatMessageCorrelation(conversationId, assistantMessageId, requestId)),
+                AssertEx.True(cancellationRegistry.TryCancel(new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = assistantMessageId, RequestId = requestId }),
                     "Expected the active stream to be registered for cancellation.");
             }
         }

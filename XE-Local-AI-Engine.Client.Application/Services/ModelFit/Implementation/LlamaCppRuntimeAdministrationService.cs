@@ -348,12 +348,15 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         var recommendedResult = await _releaseCatalog.ResolveRecommendedAsync(recommendedTag, cancellationToken);
         var upstreamResult = await _releaseCatalog.ResolveUpstreamLatestAsync(cancellationToken);
         var resolvedRecommended = recommendedResult.Tag;
-        var snapshot = new LlamaCppUpdateSnapshot(installedTag,
-            resolvedRecommended ?? recommendedTag,
-            upstreamResult.Tag,
-            LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended),
-            recommendedResult.IsOffline || recommendedResult.IsRateLimited,
-            _timeProvider.GetUtcNow());
+        var snapshot = new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = installedTag,
+            RecommendedTag = resolvedRecommended ?? recommendedTag,
+            UpstreamLatestTag = upstreamResult.Tag,
+            UpdateAvailable = LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended),
+            IsOffline = recommendedResult.IsOffline || recommendedResult.IsRateLimited,
+            CheckedAtUtc = _timeProvider.GetUtcNow()
+        };
         _updateState.Store(snapshot);
         return snapshot;
     }
@@ -364,12 +367,15 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
         var effectiveInstalledTag = installed?.Tag ?? installedTag;
         var previous = _updateState.Current;
-        _updateState.Store(new LlamaCppUpdateSnapshot(effectiveInstalledTag,
-            recommendedTag,
-            previous.UpstreamLatestTag,
-            LlamaCppRuntimeTag.IsUpdateAvailable(effectiveInstalledTag, recommendedTag),
-            IsOffline: false,
-            _timeProvider.GetUtcNow()));
+        _updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = effectiveInstalledTag,
+            RecommendedTag = recommendedTag,
+            UpstreamLatestTag = previous.UpstreamLatestTag,
+            UpdateAvailable = LlamaCppRuntimeTag.IsUpdateAvailable(effectiveInstalledTag, recommendedTag),
+            IsOffline = false,
+            CheckedAtUtc = _timeProvider.GetUtcNow()
+        });
     }
 
     private static bool IsStale(DateTimeOffset? checkedAtUtc, DateTimeOffset now) =>

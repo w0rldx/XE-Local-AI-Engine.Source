@@ -39,7 +39,7 @@ public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessa
 
     public override async Task HandleAsync(CancelNodeChatMessageRequest req, CancellationToken ct)
     {
-        var correlation = new NodeChatMessageCorrelation(req.ConversationId, req.MessageId, req.RequestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = req.ConversationId, MessageId = req.MessageId, RequestId = req.RequestId };
 
         // The guard runs OUTSIDE the try below on purpose: NodeChatReadOnlyConversationException derives from
         // InvalidOperationException, so inside it the generic -> NotFound arm would swallow the 409 the global

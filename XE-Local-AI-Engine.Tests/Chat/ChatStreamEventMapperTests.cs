@@ -87,7 +87,7 @@ public sealed class ChatStreamEventMapperTests
     [Test]
     public void MessageEvent_MapsPersistedFieldsAndPrefersTokenOverrides()
     {
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var message = NewMessage(correlation, content: "answer", reasoning: "because", status: NodeChatMessageStatusValues.Completed, model: "model-x", inputCount: 11, outputCount: 22);
 
         // No token overrides -> the persisted counts flow through.
@@ -114,7 +114,7 @@ public sealed class ChatStreamEventMapperTests
     {
         // A terminal is one frame per turn, so carrying the whole message on it costs nothing — and it is the backstop
         // that converges a client whose delta stream fell behind. Only the DELTA path lost its content.
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var message = NewMessage(correlation, content: "the whole answer", reasoning: "the whole reasoning", status: NodeChatMessageStatusValues.Completed, model: "model-x", inputCount: 1,
             outputCount: 2);
 
@@ -135,7 +135,7 @@ public sealed class ChatStreamEventMapperTests
         // The load-bearing assertion of the delta-only protocol: a live frame must never carry the accumulated text.
         // Populating Content here is exactly what made the wire cost of a turn quadratic in its output length, and the
         // client is built to APPEND this event rather than replace from it.
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var delta = ChatStreamEventMapper.DeltaEvent(correlation, Timestamp, sequence: 8, contentDelta: " world", reasoningDelta: "…therefore", contentOffset: 5, reasoningOffset: 12);
 
@@ -165,7 +165,7 @@ public sealed class ChatStreamEventMapperTests
     {
         // A stalled side confirms its position rather than going silent, so the client's gap detector can tell
         // "reasoning did not advance" apart from "a reasoning delta was lost".
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var delta = ChatStreamEventMapper.DeltaEvent(correlation, Timestamp, sequence: 1, contentDelta: "abc", reasoningDelta: null, contentOffset: 0, reasoningOffset: 40);
 

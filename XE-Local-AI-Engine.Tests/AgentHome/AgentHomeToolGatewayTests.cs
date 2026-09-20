@@ -108,7 +108,7 @@ public sealed class AgentHomeToolGatewayTests
                     ToolCallCount = 4,
                     RefusedCallCount = 1,
                     WrittenFiles = ["project/README.md"],
-                    Commands = [new AgentHomeCommandOutcome("dotnet", ExitCode: 0, Completed: true)]
+                    Commands = [new AgentHomeCommandOutcome { Executable = "dotnet", ExitCode = 0, Completed = true }]
                 }
             }),
             GatewayOptions);

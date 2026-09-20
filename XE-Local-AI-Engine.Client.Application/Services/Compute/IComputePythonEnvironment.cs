@@ -23,17 +23,22 @@ internal interface IComputePythonEnvironment
 ///     The provisioned interpreter, plus the host trees a filesystem-isolated sandbox has to bind read-only for it to
 ///     run at all.
 /// </summary>
-/// <param name="InterpreterPath">
-///     The absolute host path of the venv's own interpreter — deliberately NOT the managed CPython it links to. The
-///     venv path is what makes <c>sys.prefix</c> the provisioned closure; exec'ing the real binary directly would
-///     resolve <c>import numpy</c> against the bare interpreter's own (empty) site-packages instead.
-/// </param>
-/// <param name="ReadOnlyTrees">
-///     The trees to bind, at their own canonical paths. Deliberately the two smallest that make the interpreter work
-///     — the venv and the managed-CPython root it links into — and never the directory above them, which also holds
-///     the uv cache and the lockfile state a later call would otherwise inherit.
-/// </param>
-internal sealed record ComputePythonRuntime(string InterpreterPath, IReadOnlyList<string> ReadOnlyTrees);
+internal sealed class ComputePythonRuntime
+{
+    /// <summary>
+    ///     The absolute host path of the venv's own interpreter — deliberately NOT the managed CPython it links to. The
+    ///     venv path is what makes <c>sys.prefix</c> the provisioned closure; exec'ing the real binary directly would
+    ///     resolve <c>import numpy</c> against the bare interpreter's own (empty) site-packages instead.
+    /// </summary>
+    public required string InterpreterPath { get; init; }
+
+    /// <summary>
+    ///     The trees to bind, at their own canonical paths. Deliberately the two smallest that make the interpreter work
+    ///     — the venv and the managed-CPython root it links into — and never the directory above them, which also holds
+    ///     the uv cache and the lockfile state a later call would otherwise inherit.
+    /// </summary>
+    public required IReadOnlyList<string> ReadOnlyTrees { get; init; }
+}
 
 /// <summary>
 ///     A compute-environment failure whose message is model-safe <b>by contract</b>: every construction site phrases it

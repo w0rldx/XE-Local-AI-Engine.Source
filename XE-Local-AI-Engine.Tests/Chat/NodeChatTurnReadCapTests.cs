@@ -179,7 +179,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = conversationId, MessageId = Guid.NewGuid(), Content = "user-one", CreatedAtUtc = 11 });
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = 12, Model = "llama" });
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
@@ -306,7 +306,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         var newerSiblingId = Guid.NewGuid();
         var variantRequestId = Guid.NewGuid();
         await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest { ConversationId = conversationId, OriginalMessageId = oldSiblingId, NewMessageId = newerSiblingId, RequestId = variantRequestId, CreatedAtUtc = 15 });
-        var variantCorrelation = new NodeChatMessageCorrelation(conversationId, newerSiblingId, variantRequestId);
+        var variantCorrelation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = newerSiblingId, RequestId = variantRequestId };
         await service.MarkAssistantStreamingAsync(variantCorrelation, updatedAtUtc: 16);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -348,7 +348,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     {
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+        var correlation = new NodeChatMessageCorrelation { ConversationId = conversationId, MessageId = messageId, RequestId = requestId };
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest { ConversationId = conversationId, MessageId = messageId, RequestId = requestId, CreatedAtUtc = createdAtUtc, Model = "llama" });
         await service.MarkAssistantStreamingAsync(correlation, createdAtUtc);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest

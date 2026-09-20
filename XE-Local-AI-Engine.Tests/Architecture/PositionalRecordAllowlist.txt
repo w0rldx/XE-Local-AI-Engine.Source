@@ -1,0 +1,369 @@
+# Positional record classes with a reason — the allowlist for PositionalRecordConventionTests.
+#
+# Format: <repository-relative file>|<declared type name>, one line per DECLARATION. Two declarations that
+# share a file and a name (there is one such pair) therefore take two identical lines. Blank lines and lines
+# starting with '#' are ignored.
+#
+# The list is SHRINK-ONLY. An entry that no longer matches a positional record class fails the guard as stale,
+# so a conversion deletes its line in the same commit. Adding a line is a decision, not a formality: the target
+# shape is a sealed class with required/init members (or a non-positional record where value semantics are
+# wanted), and every group below is a reason why that shape is wrong for those types. Rule and hazards:
+# docs/wiki/16-code-conventions.md.
+
+# --- json-read-back (119) ---------------------------------------------------------
+# Handed to JsonSerializer somewhere: directly, through a generic conduit (a type argument that flows into
+# Deserialize<T> through a generic base class or method), or a [JsonSerializable] entry on a source-generated
+# context. The list is of the forms that count, not of the forms these entries happen to use. A positional record
+# gives a missing JSON member the parameter's default; the same member as required on a class throws, so the read
+# of a payload or file an older build wrote starts failing and no gate sees it.
+XE-Local-AI-Engine.AI.Agent.Tests/Tools/ListToolsFunctionTests.cs|HiddenToolView
+XE-Local-AI-Engine.Client.Application/Services/Agents/Implementation/AgentTemplateCatalog.cs|AgentTemplateSeedDocument
+XE-Local-AI-Engine.Client.Application/Services/Analysis/Implementation/DefaultPlaybookAnalysisAgent.cs|AnalysisEnvelope
+XE-Local-AI-Engine.Client.Application/Services/Auth/Implementation/TokenStore.cs|StoredWorkerCredentials
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkExecutionContracts.cs|BenchmarkOutputPart
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgePolicyContracts.cs|BenchmarkJudgePolicyV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeRuntimeResolver.cs|BenchmarkJudgeRuntimeV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeScoringContracts.cs|BenchmarkJudgeResultV2
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeVerifierContracts.cs|BenchmarkConstraintConfigV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeVerifierContracts.cs|BenchmarkPythonTestsConfigV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeVerifierContracts.cs|ExactConfig
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeVerifierContracts.cs|RegexConfig
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkNiahGenerator.cs|BenchmarkNiahCaseV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkNiahGenerator.cs|BenchmarkNiahConfigV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkRuntimeSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/PythonTests/BenchmarkPythonTestsHarness.cs|HarnessVerdict
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/RuntimeEnvironmentFacts.cs|RuntimeEnvironmentFactsV1
+XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/NodeChatMessageMetadata.cs|NodeChatMessageMetadata
+XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CommandConfig
+XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolParameter
+XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|HttpFetchConfig
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowNodeRunDocuments.cs|StoredRoute
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowRulePolicyResolver.cs|DevWorkflowAppliedRuleSet
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowRulePolicyResolver.cs|StoredScope
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowStateMachine.cs|DevWorkflowRoute
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowDevTaskExecutor.cs|DevTaskBrief
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowMaterializer.cs|TaskPackageItem
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowToolCommands.cs|DevWorkflowValidationReport
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfile.cs|DevelopmentCommandProfile
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfileImport.cs|DevelopmentProfileImportDocument
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentReviewerAttemptRunnerModels.cs|DevelopmentReviewReport
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentValidationRunnerModels.cs|DevelopmentValidationReport
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentWorkspaceProvider.cs|WorkspaceManifest
+XE-Local-AI-Engine.Client.Application/Services/Drafting/GenerationProvenance.cs|GenerationMetadataView
+XE-Local-AI-Engine.Client.Application/Services/Drafting/Implementation/DraftEnvelopes.cs|AgentDraftEnvelope
+XE-Local-AI-Engine.Client.Application/Services/Drafting/Implementation/DraftEnvelopes.cs|SkillDraftEnvelope
+XE-Local-AI-Engine.Client.Application/Services/Eval/Implementation/DefaultPlaybookEvalJudge.cs|JudgeVerdict
+XE-Local-AI-Engine.Client.Application/Services/Eval/Implementation/GoldenAssertion.cs|RawAssertion
+XE-Local-AI-Engine.Client.Application/Services/Eval/Implementation/GoldenInputTurns.cs|RawTurn
+XE-Local-AI-Engine.Client.Application/Services/Eval/PlaybookEvalResult.cs|PlaybookEvalResult
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ExternalAppCatalogDocument
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Import/CanvasWorkflowImport.cs|CanvasGraph
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Import/CanvasWorkflowImport.cs|CanvasWorkflowRow
+XE-Local-AI-Engine.Client.Application/Services/Images/Catalog/ImageModelCatalogContracts.cs|ImageModelCatalogDocument
+XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceBenchmarkHttpProtocol.cs|EmbeddingResponse
+XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceBenchmarkHttpProtocol.cs|RerankResponse
+XE-Local-AI-Engine.Client.Application/Services/Integrations/IntegrationInvokeContracts.cs|IntegrationInvokeRequest
+XE-Local-AI-Engine.Client.Application/Services/Integrations/Tools/Implementation/EmitOutputToolHandler.cs|EmitOutputRequest
+XE-Local-AI-Engine.Client.Application/Services/Interaction/UserQuestionParser.cs|AskUserArguments
+XE-Local-AI-Engine.Client.Application/Services/Memory/Implementation/DefaultMemoryExtractionAgent.cs|ExtractionEnvelope
+XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/IModelCatalogCacheStore.cs|StoredModelCatalogCache
+XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/ModelCatalogContracts.cs|ModelCatalogDocument
+XE-Local-AI-Engine.Client.Application/Services/Models/LocalModelDeletionCoordinator.cs|DeletionJournal
+XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeChatContentEncryptionBackfillService.cs|LegacyMessageRow
+XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeChatTitleEncryptionBackfillService.cs|MessageIdAndContent
+XE-Local-AI-Engine.Client.Application/Services/Training/BaseArtifacts/BaseArtifactContracts.cs|BaseArtifactFileView
+XE-Local-AI-Engine.Client.Application/Services/Training/BaseArtifacts/BaseArtifactContracts.cs|BaseArtifactLicenseView
+XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|ToolMockVerificationV1
+XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|TrainingSamplePartV1
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/CompleteWorkSessionToolHandler.cs|CompleteWorkSessionRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/RecordFindingToolHandler.cs|RecordFindingRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/SaveArtifactToolHandler.cs|SaveArtifactRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/UpdateWorkPlanToolHandler.cs|UpdateWorkPlanRequest
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionCheckpointState.cs|WorkSessionCheckpointState
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionModels.cs|WorkSessionCompletionDetail
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/WorkSessionModels.cs|WorkSessionStepConsumptionDetail
+XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/GoldenConversationEndpointDtos.cs|GoldenAssertionDto
+XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/GoldenConversationEndpointDtos.cs|GoldenTurnDto
+XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/PlaybookActionEndpointDtos.cs|PlaybookEvalResultResponse
+XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraph
+XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraph
+XE-Local-AI-Engine.Client/Hosting/DesktopPortStore.cs|ReadyInfo
+XE-Local-AI-Engine.Providers.CodexOAuth/Auth/CodexTokens.cs|CodexTokens
+XE-Local-AI-Engine.Providers.LlamaServer/Contracts/IInstalledRuntimeStore.cs|InstalledRuntimeState
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|GitHubRelease
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppSourceBuildService.cs|SourceBuildManifest
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerLaunchFallbackStore.cs|LlamaServerLaunchFallbackState
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerRerankerClient.cs|RerankResponse
+XE-Local-AI-Engine.Providers.StableDiffusionCpp/Contracts/IStableDiffusionInstalledRuntimeStore.cs|StableDiffusionInstalledRuntimeState
+XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionCppRuntimeAdoption.cs|StableDiffusionCppAdoptionJournal
+XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs|DesiredRuntimeState
+XE-Local-AI-Engine.Providers.Training/Contracts/ITrainingRuntimeService.cs|InstalledTrainingRuntimeState
+XE-Local-AI-Engine.Providers.WhisperCpp/Contracts/IWhisperInstalledRuntimeStore.cs|WhisperInstalledRuntimeState
+XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperCppRuntimeAdoption.cs|WhisperCppAdoptionJournal
+XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperInstalledRuntimeStore.cs|DesiredRuntimeState
+XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaFailureRequest.cs|FakeOllamaFailureRequest
+XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaRequest.cs|FakeOllamaRequest
+XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaScriptRequest.cs|FakeOllamaScriptRequest
+XE-Local-AI-Engine.Tests/ApiFoundation/ConflictExceptionHandlerTests.cs|ConflictProblemBody
+XE-Local-AI-Engine.Tests/Auth/Integration/NodeLoginLockoutIntegrationTests.cs|LockedOutBody
+XE-Local-AI-Engine.Tests/Auth/NodeAuthEndpointTests.cs|AuthStatusResponse
+XE-Local-AI-Engine.Tests/Auth/NodeAuthEndpointTests.cs|AuthTokenResponse
+XE-Local-AI-Engine.Tests/Auth/NodeAuthPasswordResetTests.cs|AccessTokenBody
+XE-Local-AI-Engine.Tests/Auth/NodeChangePasswordEndpointTests.cs|AccessTokenBody
+XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|ConflictProblemBody
+XE-Local-AI-Engine.Tests/Chat/NodeChatTitleEncryptionBackfillQueryTests.cs|MessageIdAndContent
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|GeneratedIntegrationApiKeyBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|IntegrationApiKeyListBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|IntegrationTriggerBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|IntegrationTriggerListBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationExecutionEndpointTests.cs|ExecutionDetailBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationExecutionEndpointTests.cs|ExecutionListBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationSessionEndpointTests.cs|SessionBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationSessionEndpointTests.cs|SessionListBody
+XE-Local-AI-Engine.Tests/Endpoints/LocalModels/LocalModelEndpointTests.cs|DeleteConflictProblemBody
+XE-Local-AI-Engine.Tests/Endpoints/Workspaces/WorkspaceEndpointTests.cs|WorkspaceBody
+XE-Local-AI-Engine.Tests/Endpoints/Workspaces/WorkspaceEndpointTests.cs|WorkspaceConflictBody
+XE-Local-AI-Engine.Tests/Endpoints/Workspaces/WorkspaceEndpointTests.cs|WorkspaceListBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationApiRouteTests.cs|SessionStatusBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationApiRouteTests.cs|StatusBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSessionEndToEndTests.cs|AcceptedBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSessionEndToEndTests.cs|ErrorBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSessionEndToEndTests.cs|StatusBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSseRoutesTests.cs|EventBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSseRoutesTests.cs|EventListBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSseRoutesTests.cs|StatusLinksBody
+XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs|GeneratedKeyBody
+XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs|KeyStatusBody
+XE-Local-AI-Engine.Tests/Proxy/LocalModelProxyInboundAuthTests.cs|KeyStatusBody
+
+# --- nested-in-read-back (75) -----------------------------------------------------
+# Reached from a type in the group above, so the same old payload reaches it and the same constraint holds.
+# The parenthesised member in the census entry names the path.
+XE-Local-AI-Engine.Client.Application/Models/ResolvedCustomTool.cs|ResolvedCustomTool
+XE-Local-AI-Engine.Client.Application/Models/ResolvedSkill.cs|ResolvedSkill
+XE-Local-AI-Engine.Client.Application/Models/ResolvedSkill.cs|ResolvedSkillResource
+XE-Local-AI-Engine.Client.Application/Services/Agents/IAgentDefinitionResolver.cs|ResolvedAgentRuntime
+XE-Local-AI-Engine.Client.Application/Services/Agents/IAgentTemplateCatalog.cs|AgentTemplate
+XE-Local-AI-Engine.Client.Application/Services/Analysis/Implementation/DefaultPlaybookAnalysisAgent.cs|AnalysisProposal
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgePolicyContracts.cs|BenchmarkJudgePolicyModelV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgePolicyContracts.cs|BenchmarkJudgePolicySamplingV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgePolicyContracts.cs|BenchmarkJudgeRubricCriterionV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgePolicyContracts.cs|BenchmarkJudgeRubricV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeScoringContracts.cs|BenchmarkJudgeCriterionScoreV2
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeScoringContracts.cs|BenchmarkJudgeVerifierResultV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeVerifierContracts.cs|BenchmarkVerifierNormalizeV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkFreezeDependencySetV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkInstalledModelSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkLlamaRuntimeSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkPhysicalMemberSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkRegistryAliasSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRuntimeSnapshotContracts.cs|BenchmarkSamplingSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/RuntimeEnvironmentFacts.cs|BenchmarkGpuFactsV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/RuntimeEnvironmentFacts.cs|BenchmarkHardwareFactsV1
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/RuntimeEnvironmentFacts.cs|BenchmarkLlamaRuntimeFactsV1
+XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatDtos.cs|NodeChatMessagePart
+XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatDtos.cs|NodeChatMessageSource
+XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolEnvironmentVariable
+XE-Local-AI-Engine.Client.Application/Services/CustomTools/CustomToolContracts.cs|CustomToolHeader
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowToolCommands.cs|DevWorkflowValidationBasedOn
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentCommandProfile.cs|DevelopmentProfileCommand
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentReviewerModel.cs|DevelopmentReviewFinding
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentTestResultAdapter.cs|DevelopmentTestOutcome
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentWorkspaceTools.cs|DevelopmentCommandEvidence
+XE-Local-AI-Engine.Client.Application/Services/Eval/PlaybookEvalResult.cs|PlaybookEvalCaseResult
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationDependency
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationFile
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationHealthcheck
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationPermissions
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationPort
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationResources
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationService
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationStorage
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationVariable
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationVariableValidation
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Import/CanvasWorkflowImport.cs|CanvasEdge
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Import/CanvasWorkflowImport.cs|CanvasNode
+XE-Local-AI-Engine.Client.Application/Services/Images/Catalog/ImageModelCatalogContracts.cs|ImageModelCatalogEntry
+XE-Local-AI-Engine.Client.Application/Services/Images/Catalog/ImageModelCatalogContracts.cs|ImageModelCatalogPart
+XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceBenchmarkHttpProtocol.cs|EmbeddingResult
+XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceBenchmarkHttpProtocol.cs|RerankResult
+XE-Local-AI-Engine.Client.Application/Services/Inference/RuntimeBundleIdentityCalculator.cs|RuntimeBundleFactsV1
+XE-Local-AI-Engine.Client.Application/Services/Inference/RuntimeBundleIdentityCalculator.cs|RuntimeBundleFileFactsV1
+XE-Local-AI-Engine.Client.Application/Services/Integrations/IntegrationInvokeContracts.cs|IntegrationInvokeInput
+XE-Local-AI-Engine.Client.Application/Services/Interaction/UserQuestionParser.cs|AskUserOption
+XE-Local-AI-Engine.Client.Application/Services/Interaction/UserQuestionParser.cs|AskUserQuestion
+XE-Local-AI-Engine.Client.Application/Services/Memory/Implementation/DefaultMemoryExtractionAgent.cs|ExtractionCandidate
+XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/ModelCatalogContracts.cs|ModelCatalogEntry
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|ProviderMapMutationReceipt
+XE-Local-AI-Engine.Client.Application/Services/Models/InstalledModelCoordination.cs|InstalledModelSnapshot
+XE-Local-AI-Engine.Client.Application/Services/Models/LocalModelDeletionCoordinator.cs|DeletionAliasMapping
+XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/UpdateWorkPlanToolHandler.cs|WorkPlanOperationRequest
+XE-Local-AI-Engine.Client.Persistence/ModelProviderMapRecord.cs|ModelProviderMapRecord
+XE-Local-AI-Engine.Client.Persistence/Stores/IDevelopmentStore.cs|DevelopmentWorkflowRuleSetReference
+XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/PlaybookActionEndpointDtos.cs|PlaybookEvalCaseResultResponse
+XE-Local-AI-Engine.Providers.Abstractions/Gguf/InstalledGgufSnapshotContracts.cs|GgufDeletionStageReceipt
+XE-Local-AI-Engine.Providers.Abstractions/Gguf/InstalledGgufSnapshotContracts.cs|GgufDeletionStagedMember
+XE-Local-AI-Engine.Providers.Abstractions/Gguf/InstalledGgufSnapshotContracts.cs|GgufRegistryAliasMutationReceipt
+XE-Local-AI-Engine.Providers.Abstractions/Gguf/InstalledGgufSnapshotContracts.cs|InstalledGgufRegistryValue
+XE-Local-AI-Engine.Providers.Abstractions/Gguf/InstalledGgufSnapshotContracts.cs|InstalledModelPhysicalMember
+XE-Local-AI-Engine.Providers.Abstractions/Gguf/InstalledGgufSnapshotContracts.cs|InstalledModelRegistryAliasSnapshot
+XE-Local-AI-Engine.Providers.LlamaServer/Contracts/LlamaServerBenchmarkLaunchPolicy.cs|LlamaServerBenchmarkLaunchPolicy
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|GitHubAsset
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerRerankerClient.cs|RerankResult
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|IntegrationApiKeyBody
+XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationExecutionEndpointTests.cs|ExecutionSummaryBody
+XE-Local-AI-Engine.Tests/Integrations/IntegrationSseRoutesTests.cs|LinksBody
+XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs|KeyMetadataBody
+
+# --- deconstruction (46) ----------------------------------------------------------
+# Production or test code deconstructs the type positionally (var (a, b) = x, or a positional pattern).
+# A class has no Deconstruct, so converting one of these is a compile error at every such site.
+XE-Local-AI-Engine.Client.Application/Common/Telemetry/NodeMetrics.cs|GpuAdmissionGauges
+XE-Local-AI-Engine.Client.Application/Services/AgentHome/Implementation/NodePatchApplyService.Parsing.cs|AliasPath
+XE-Local-AI-Engine.Client.Application/Services/AgentHome/Implementation/NodePatchApplyService.Parsing.cs|BodyPath
+XE-Local-AI-Engine.Client.Application/Services/Auth/AccessTokenResult.cs|AccessTokenResult
+XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeRuntimeResolver.cs|KvCacheResolution
+XE-Local-AI-Engine.Client.Application/Services/Capacity/RuntimeDeviceAuditService.cs|DeviceAuditComputation
+XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/CloudRoutingClassifier.cs|CloudRoutingClassification
+XE-Local-AI-Engine.Client.Application/Services/Chat/ModelIdentity.cs|ModelIdentity
+XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/EntraDeviceCodeSignInCoordinator.cs|DeviceCodeFlowHandle
+XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/PkceGenerator.cs|PkcePair
+XE-Local-AI-Engine.Client.Application/Services/CloudProviders/ResolvedCustomHeader.cs|ResolvedCustomHeader
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentEvidenceServiceModels.cs|DevelopmentArtifactWith
+XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentWorkspaceProvider.cs|ConfigurationFile
+XE-Local-AI-Engine.Client.Application/Services/DocumentIngestion/DocumentTextExtractor.cs|ExtractedDocument
+XE-Local-AI-Engine.Client.Application/Services/DocumentIngestion/Extraction/HtmlDocumentReader.cs|ParsedTag
+XE-Local-AI-Engine.Client.Application/Services/Invocation/Implementation/InvocationFailureClassifier.cs|FailureClassification
+XE-Local-AI-Engine.Client.Application/Services/Knowledge/KnowledgeSearchService.cs|QueryEmbedding
+XE-Local-AI-Engine.Client.Application/Services/Knowledge/KnowledgeVectorNormalizationBackfillService.cs|EmbeddingRow
+XE-Local-AI-Engine.Client.Application/Services/Mcp/Implementation/McpServerConnectionManager.cs|ConnectResult
+XE-Local-AI-Engine.Client.Application/Services/ModelFit/GgufFileSelector.cs|SelectedGgufFile
+XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeOrchestrationService.cs|LlamaCppRuntimeRemovalOutcome
+XE-Local-AI-Engine.Client.Application/Services/Models/LocalModelCatalogService.cs|OllamaModelListing
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/Implementation/DockerDotNetRuntimeClient.cs|ExecOutput
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Fake/FakeSandboxRuntimeProvider.cs|VirtualFile
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|NetworkIsolationProbe
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|ResourceLimitProbe
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Reaping/SandboxMarkerEntry.cs|SandboxMarkerEntry
+XE-Local-AI-Engine.Client.Application/Services/Training/Export/TrainingExportService.cs|FileDigest
+XE-Local-AI-Engine.Client.Application/Services/Training/Export/TrainingExportService.cs|PlanOrRefusal
+XE-Local-AI-Engine.Client.Application/Services/Training/Runs/TrainingOptionDefaultsCalculator.cs|CheckpointFacts
+XE-Local-AI-Engine.Client.Application/Services/Workspace/WorkspaceFileScanner.cs|ScannedDirectory
+XE-Local-AI-Engine.Client.Persistence/Cryptography/AeadCiphertext.cs|AeadCiphertext
+XE-Local-AI-Engine.Client/Hosting/BrowserLauncher.cs|OpenCommand
+XE-Local-AI-Engine.Client/Hosting/DesktopBootstrap.cs|UnwrappedSecret
+XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs|AdapterListCommand
+XE-Local-AI-Engine.Providers.CodexOAuth/Implementation/CodexStoreDisabledChatClient.cs|CodexRequest
+XE-Local-AI-Engine.Providers.HuggingFace/Implementation/GgufHeaderReader.cs|ParsedHeader
+XE-Local-AI-Engine.Providers.HuggingFace/Implementation/GgufModelImporter.cs|CopiedFile
+XE-Local-AI-Engine.Providers.HuggingFace/Implementation/GgufModelRegistry.cs|SidecarReconciliation
+XE-Local-AI-Engine.Providers.HuggingFace/Implementation/HuggingFaceGgufDiscovery.cs|UsableFile
+XE-Local-AI-Engine.Providers.HuggingFace/Implementation/HuggingFaceGgufStore.cs|ResolvedTarget
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|ArchiveName
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|ReleaseLookup
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessCaptureRunner.cs|ProcessCaptureResult
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/ProcessGpuVendorProbe.cs|AdapterListCommand
+XE-Local-AI-Engine.Tests/CodexOAuth/CodexAuthServiceTests.cs|BoundLogin
+
+# --- record-hierarchy (23) --------------------------------------------------------
+# Part of a record inheritance hierarchy. A record can only derive from a record, and the derived declarations
+# chain to the positional primary constructor: the hierarchy converts as a unit or not at all.
+XE-Local-AI-Engine.Client.Application/Services/ExternalProviders/IExternalProviderStore.cs|Committed
+XE-Local-AI-Engine.Client.Application/Services/ExternalProviders/IExternalProviderStore.cs|Loaded
+XE-Local-AI-Engine.Client.Application/Services/ExternalProviders/IExternalProviderStore.cs|Superseded
+XE-Local-AI-Engine.Client.Application/Services/ExternalProviders/IExternalProviderStore.cs|Unreadable
+XE-Local-AI-Engine.Client.Application/Services/ExternalProviders/IExternalProviderStore.cs|UnsupportedSchema
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowAgentConfig
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowConditionConfig
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowEndConfig
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowPauseConfig
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowStartConfig
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowToolConfig
+XE-Local-AI-Engine.Client.Application/Services/Mcp/Server/McpAdminToolResponses.cs|McpWorkflowRunDetail
+XE-Local-AI-Engine.Client.Application/Services/Mcp/Server/McpAdminToolResponses.cs|McpWorkflowRunSummary
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|CompatibleExisting
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Conflict
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Created
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Mutated
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Removed
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Superseded
+XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|Superseded
+XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|External
+XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Gguf
+XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Ollama
+
+# --- stored-row-read-back (18) ----------------------------------------------------
+# Deserialized from JSON stored in a SQLite row, or projected by EF SqlQuery/SqlQueryRaw. required would reject
+# a row written before the member existed; as a class, an EF raw-SQL row type also trips S1144 (Release error).
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/Implementation/DevWorkflowDispatcher.cs|ReasonDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/AgentSkillStore.cs|SkillFrontmatter
+XE-Local-AI-Engine.Client.Persistence/Implementation/AgentWorkSessionStore.cs|ArtifactReplacementDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/AgentWorkSessionStore.cs|ReasonDetailPayload
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|ArtifactSupersessionDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|ArtifactUseDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|MaterializationDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|ReasonDetailPayload
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|StaleMarkDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevWorkflowStore.cs|WorkSessionAttachedDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevelopmentStore.Queries.cs|ReasonDetail
+XE-Local-AI-Engine.Client.Persistence/Implementation/DevelopmentStore.Queries.cs|WorkflowPolicyDetail
+XE-Local-AI-Engine.Client.Persistence/Stores/BenchmarkPairwiseStoreContracts.cs|BenchmarkPairwiseScoreEntry
+XE-Local-AI-Engine.Client.Persistence/Stores/GraphWorkflowStore.cs|GateDecidedDetailPayload
+XE-Local-AI-Engine.Client.Persistence/Stores/GraphWorkflowStore.cs|ReasonDetailPayload
+XE-Local-AI-Engine.Client.Persistence/Stores/IDevelopmentStore.cs|DevelopmentApprovedApplySubject
+XE-Local-AI-Engine.Client.Persistence/Stores/IDevelopmentStore.cs|DevelopmentOperationResult
+XE-Local-AI-Engine.Client.Persistence/Stores/ITrainingEvaluationStore.cs|TrainingEvaluationKindTally
+
+# --- printmembers-redaction (14) --------------------------------------------------
+# Hand-writes PrintMembers so ToString() keeps secrets out of logs. A class has no such hook: the redaction
+# would simply disappear.
+XE-Local-AI-Engine.Client.Application/Services/Containers/Bridge/ContainerBridgeGrant.cs|ContainerBridgeGrant
+XE-Local-AI-Engine.Client.Application/Services/DevWorkflows/DevWorkflowGraphModels.cs|DevWorkflowGraphEdge
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationManifest
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ExternalAppCatalogSnapshot
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/IExternalAppCatalogCacheStore.cs|StoredExternalAppCatalogCache
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/ExternalAppServiceContracts.cs|InstallCommand
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/ExternalAppServiceContracts.cs|UpdateCommand
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlanner.cs|DeploymentPlan
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlanner.cs|ServiceDeployment
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraphModels.cs|GraphWorkflowGraphEdge
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowValidationException.cs|GraphWorkflowValidationError
+XE-Local-AI-Engine.Client.Persistence/Stores/IExternalAppInstanceStore.cs|ExternalAppInstanceCreate
+XE-Local-AI-Engine.Client.Persistence/Stores/IExternalAppInstanceStore.cs|ExternalAppInstanceSnapshot
+XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSegmenterTests.cs|SubmittedWindow
+
+# --- request-contract (13) --------------------------------------------------------
+# A FastEndpoints request type or a SignalR hub-method argument. FastEndpoints binds the JSON body before it
+# overlays route and query values, so required on a bound member turns a tolerated omission into a new 400,
+# and an inbound hub frame that omits the member is rejected. Nothing in the gate or openapi:check sees either.
+XE-Local-AI-Engine.Client.Application/Services/Chat/NodeChatStreamDtos.cs|NodeChatStreamRequest
+XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|DatasetSampleKindTargetV1
+XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|DatasetToolSnapshotV1
+XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|ToolMockRuleV1
+XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowEdgeCondition
+XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraphEdge
+XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraphNode
+XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowMaterialization
+XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowRuleScope
+XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowEdgeCondition
+XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraphEdge
+XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraphNode
+XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowNodePosition
+
+# --- manual-hand-decision (4) -----------------------------------------------------
+# Decided by hand by the operator during the S5 series. In each of these the record body reads a positional
+# parameter (CS0236 as a class member initializer), re-declares one as a member, or chains a second constructor
+# to the primary one; the census entry carries the parameter name.
+XE-Local-AI-Engine.Client.Application/Services/Containers/Bridge/ContainerBridgeEndpoint.cs|ResolvedContainerBridgeEndpoint
+XE-Local-AI-Engine.Client.Persistence.Tests/Knowledge/RetrievalEval/RetrievalEvalHarness.cs|LabeledQuery
+XE-Local-AI-Engine.Providers.Abstractions/External/ExternalProviderBindingPin.cs|ExternalProviderBindingPin
+XE-Local-AI-Engine.Providers.LlamaServer/Contracts/LlamaServerProfilingContext.cs|LlamaServerProfilingContext
+
+# --- outside-the-solution generator (3) ------------------------------------
+# tools/AgentTemplateGenerator is a hand-run seed generator that XE-Local-AI-Engine.slnx does not reference, so
+# no compilation in the solution ever sees these three. The source scan does reach them, and the shapes here
+# ship nothing; they are listed rather than excluded so a positional record added to tools/ still has to be
+# decided here.
+tools/AgentTemplateGenerator/Program.cs|SeedDocument
+tools/AgentTemplateGenerator/Program.cs|SourceInfo
+tools/AgentTemplateGenerator/Program.cs|Template

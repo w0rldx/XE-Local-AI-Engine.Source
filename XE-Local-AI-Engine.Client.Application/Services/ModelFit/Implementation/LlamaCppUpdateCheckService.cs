@@ -107,12 +107,15 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
             // No live data (offline / rate-limited / unresolved) — record an offline snapshot, advertise no update.
             if (recommendedResult.HasNoLiveData || recommendedResult.Tag is null)
             {
-                _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
-                    RecommendedTag: recommendedTag,
-                    UpstreamLatestTag: upstreamResult.Tag,
-                    UpdateAvailable: false,
-                    IsOffline: recommendedResult.IsOffline || recommendedResult.IsRateLimited,
-                    CheckedAtUtc: _timeProvider.GetUtcNow()));
+                _updateState.Store(new LlamaCppUpdateSnapshot
+                {
+                    InstalledTag = installedTag,
+                    RecommendedTag = recommendedTag,
+                    UpstreamLatestTag = upstreamResult.Tag,
+                    UpdateAvailable = false,
+                    IsOffline = recommendedResult.IsOffline || recommendedResult.IsRateLimited,
+                    CheckedAtUtc = _timeProvider.GetUtcNow()
+                });
                 return;
             }
 
@@ -123,12 +126,15 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
             // helper encodes both rules (and never advertises a downgrade when installed > recommended).
             var updateAvailable = LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended);
 
-            _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
-                RecommendedTag: resolvedRecommended,
-                UpstreamLatestTag: upstreamResult.Tag,
-                updateAvailable,
-                IsOffline: false,
-                CheckedAtUtc: _timeProvider.GetUtcNow()));
+            _updateState.Store(new LlamaCppUpdateSnapshot
+            {
+                InstalledTag = installedTag,
+                RecommendedTag = resolvedRecommended,
+                UpstreamLatestTag = upstreamResult.Tag,
+                UpdateAvailable = updateAvailable,
+                IsOffline = false,
+                CheckedAtUtc = _timeProvider.GetUtcNow()
+            });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

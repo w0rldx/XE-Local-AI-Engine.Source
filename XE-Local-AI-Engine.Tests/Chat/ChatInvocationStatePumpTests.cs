@@ -115,7 +115,7 @@ public sealed class ChatInvocationStatePumpTests
     {
         var clock = new SteppingClock(DateTimeOffset.UnixEpoch);
         var recordingPump = new RecordingInvocationPump();
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var states = new List<InvocationState>
         {
@@ -146,7 +146,7 @@ public sealed class ChatInvocationStatePumpTests
         // A real cold load, stamped server-side well before this stream: the wire value must be that stamp, formatted
         // ISO-8601 invariant, not anything derived from the pump's own clock.
         var changedAt = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var states = new List<InvocationState>
         {
@@ -167,7 +167,7 @@ public sealed class ChatInvocationStatePumpTests
     {
         // The emit diff is on the PHASE alone. Widening it to include the timestamp would spam the client with phase
         // events, so this pins the guard: two snapshots in the same phase carrying different stamps are one event.
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
         var firstStamp = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
 
         var states = new List<InvocationState>
@@ -190,7 +190,7 @@ public sealed class ChatInvocationStatePumpTests
     {
         // The cloud/Ollama and legacy shape: a phase with no stamp behind it. The field is optional end to end — the
         // event still goes out, and the client falls back to first-observed time.
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var states = new List<InvocationState>
         {
@@ -212,7 +212,7 @@ public sealed class ChatInvocationStatePumpTests
     {
         var clock = new SteppingClock(DateTimeOffset.UnixEpoch);
         var recordingPump = new RecordingInvocationPump();
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
 
         var states = contentSnapshots.Select(content => NewState(correlation, content, string.Empty, InvocationStatus.Running)).ToList();
         states.Add(NewState(correlation, terminalContent, string.Empty, InvocationStatus.Completed));
